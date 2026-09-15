@@ -36,6 +36,7 @@ import {
 import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
 import {
   firstLivingCircadianActiveTick,
+  livingCircadianPhaseOffsetTicks,
   livingCircadianPersistentStateFromProjection,
   projectLivingCircadian,
 } from "./livingCircadian";
@@ -810,6 +811,92 @@ describe("core Wave-A wildlife actor", () => {
     });
     // Recovery ends at dawn; the remaining hidden daylight ages normally.
     expect(afterDawn.needs.rest).toBeGreaterThan(0);
+
+    // The same shared coarse/save seam also preserves a crepuscular ground
+    // forager across its identity-shifted evening boundary. This is one
+    // representative cross-profile witness, not a species schedule matrix.
+    const rabbitRestTick = 700;
+    let rabbit = advanceCoreWildlifeActorCoarse(actor("marsh-rabbit"), {
+      atTick: rabbitRestTick,
+    });
+    rabbit = replaceCoreWildlifeActorPhysiology(rabbit, {
+      atTick: rabbitRestTick,
+      needs: { hunger: 0, safety: 0, rest: 400_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const rabbitPolicy = coreEcologyCircadianPolicyForSpecies("marsh-rabbit");
+    if (rabbitPolicy === null) throw new Error("Marsh-rabbit routine binding is missing");
+    const rabbitEntering = projectLivingCircadian({
+      subjectId: rabbit.identity.stableId,
+      atTick: rabbitRestTick,
+      mode: "full",
+      policy: rabbitPolicy,
+      current: { state: "awake", enteredAtTick: rabbitRestTick },
+      restDestination: { destinationId: "cover:rabbit-coarse-test", arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: null,
+    });
+    if (rabbitEntering === null) throw new Error("Rabbit coarse rest entry failed");
+    rabbit = replaceCoreWildlifeActorCircadian(rabbit, {
+      atTick: rabbitRestTick,
+      circadian: livingCircadianPersistentStateFromProjection(rabbitEntering),
+    });
+    const rabbitResting = stepCoreWildlifeActor(rabbit, {
+      tick: rabbitRestTick + 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (rabbitResting === null) throw new Error("Rabbit coarse rest cognition failed");
+    const rabbitRestProjection = projectLivingCircadian({
+      subjectId: rabbit.identity.stableId,
+      atTick: rabbitRestTick + 1,
+      mode: "full",
+      policy: rabbitPolicy,
+      current: rabbitEntering.posture,
+      restDestination: { destinationId: "cover:rabbit-coarse-test", arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: null,
+    });
+    if (rabbitRestProjection === null) throw new Error("Rabbit coarse rest commit failed");
+    const savedRabbit = deserializeCoreWildlifeActorState(serializeCoreWildlifeActorState(
+      replaceCoreWildlifeActorCircadian(rabbitResting.actor, {
+        atTick: rabbitRestTick + 1,
+        circadian: livingCircadianPersistentStateFromProjection(rabbitRestProjection),
+      }),
+    ));
+    if (savedRabbit === null) throw new Error("Rabbit coarse save round trip failed");
+    const rabbitWakeTick = firstLivingCircadianActiveTick(
+      savedRabbit.identity.stableId,
+      savedRabbit.updatedAtTick,
+      savedRabbit.updatedAtTick + 1_440,
+      rabbitPolicy,
+    );
+    if (rabbitWakeTick === null) throw new Error("Rabbit coarse fixture omitted twilight");
+    const rabbitPhaseOffset = livingCircadianPhaseOffsetTicks(
+      savedRabbit.identity.stableId,
+      rabbitPolicy.profileId,
+    );
+    if (rabbitPhaseOffset === null) throw new Error("Rabbit coarse fixture lost phase offset");
+    expect(rabbitPhaseOffset).not.toBe(0);
+    expect(rabbitWakeTick % 1_440).toBe(1_080 + rabbitPhaseOffset);
+    const rabbitPosition = savedRabbit.address.position;
+    const wokenRabbit = advanceCoreWildlifeActorCoarse(savedRabbit, {
+      atTick: rabbitWakeTick,
+    });
+    expect(wokenRabbit.identity).toEqual(savedRabbit.identity);
+    expect(wokenRabbit.address.position).toEqual(rabbitPosition);
+    expect(wokenRabbit.circadian?.posture).toEqual({
+      state: "awake",
+      enteredAtTick: rabbitWakeTick,
+    });
+    expect(wokenRabbit.intent).toMatchObject({
+      kind: "observe",
+      cause: { kind: "condition", referenceId: "condition:neutral-watch" },
+    });
   });
 
   it("preserves a known urgent-rest override during active-clock coarse absence", () => {

@@ -2049,6 +2049,161 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   }, 45_000);
 
+  it("composes one regional rabbit's crepuscular cognition with physical land movement", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "alpha49 rabbit circadian runtime",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldDryAndClear(world);
+    let patch = requiredCore(envelope);
+    const rabbit = patch.populations.find(({ species }) => species === "marsh-rabbit")
+      ?.members[0]?.actor;
+    if (rabbit === undefined) throw new Error("Rabbit runtime fixture omitted its rabbit");
+    const firstActivity = projectCoreEcologyActivity(patch, {
+      actorId: rabbit.identity.stableId,
+      atTick: patch.updatedAtTick,
+    });
+    if (firstActivity?.motion.kind !== "target-area") {
+      throw new Error("Rabbit runtime fixture omitted its physical forage target");
+    }
+    expect(firstActivity).toMatchObject({
+      species: "marsh-rabbit",
+      state: "seeking-ground-foraging-area",
+      preferredNeutralIntent: "observe",
+      routine: {
+        clockPreference: "active",
+        effectivePreference: "active",
+        action: "remain-active",
+      },
+      motion: {
+        kind: "target-area",
+        verb: "forage-ground-local",
+        travelMedium: "land",
+      },
+    });
+    const forageTarget = firstActivity.motion.targetArea.center;
+    const rabbitStart = translateWorldPosition(
+      forageTarget,
+      12 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    const staleRestingRabbit = withFixtureRestIntent(repositionCoreWildlifeActor(rabbit, {
+      atTick: patch.updatedAtTick,
+      position: rabbitStart,
+      heading: rabbit.address.heading,
+    }));
+    patch = replaceCoreEcologyAggregatePatchActor(patch, staleRestingRabbit);
+
+    const rabbitGroup = patch.groups.groups.find(({ identity, memberOrdinals }) => (
+      identity.species === rabbit.identity.species
+      && identity.populationKey === rabbit.identity.populationKey
+      && memberOrdinals.includes(rabbit.identity.populationOrdinal)
+    ));
+    const rabbitGroupMemberIds = new Set(patch.populations
+      .find(({ species, populationKey }) => (
+        species === rabbit.identity.species
+        && populationKey === rabbit.identity.populationKey
+      ))?.members
+      .filter(({ populationOrdinal }) => rabbitGroup?.memberOrdinals.includes(populationOrdinal))
+      .map(({ actor }) => actor.identity.stableId) ?? []);
+    let rabbitMateOrdinal = 0;
+    let displacedOrdinal = 0;
+    for (const actor of coreActors(patch)) {
+      if (actor.identity.stableId === rabbit.identity.stableId) continue;
+      const isRabbitMate = rabbitGroupMemberIds.has(actor.identity.stableId);
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: isRabbitMate
+          ? translateWorldPosition(
+              rabbitStart,
+              (rabbitMateOrdinal + 1) * Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 4),
+              Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2),
+            )
+          : translateWorldPosition(
+              forageTarget,
+              (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+              20 * WORLD_POSITION_UNITS_PER_TILE,
+            ),
+        heading: actor.address.heading,
+      }));
+      if (isRabbitMate) rabbitMateOrdinal += 1;
+      else displacedOrdinal += 1;
+    }
+    patch = reconcileFixtureGroupAnchors(patch);
+    patch = promoteFixtureActors(patch, rabbitGroupMemberIds.size === 0
+      ? [rabbit.identity.stableId]
+      : [...rabbitGroupMemberIds]);
+    const stagedActivity = projectCoreEcologyActivity(patch, {
+      actorId: rabbit.identity.stableId,
+      atTick: patch.updatedAtTick,
+    });
+    expect(stagedActivity).toMatchObject({
+      state: "seeking-ground-foraging-area",
+      motion: {
+        kind: "target-area",
+        verb: "forage-ground-local",
+        travelMedium: "land",
+      },
+    });
+    const prepared = resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    });
+    await repository.save(recordWithEnvelope(record, prepared));
+    initial.destroy();
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedRabbit = regionalCoreActors(requiredRegionalEcology(saved)).find(({ identity }) => (
+      identity.stableId === rabbit.identity.stableId
+    ));
+    if (savedRabbit === undefined) throw new Error("Rabbit vanished after regional activity step");
+    const startingDistance = worldPositionDelta(rabbitStart, forageTarget);
+    const currentDistance = worldPositionDelta(savedRabbit.address.position, forageTarget);
+    expect(Math.hypot(currentDistance.x, currentDistance.y)).toBeLessThan(
+      Math.hypot(startingDistance.x, startingDistance.y),
+    );
+    expect(savedRabbit.address.position).not.toEqual(rabbitStart);
+    expect(savedRabbit.intent).toMatchObject({
+      kind: "observe",
+      focusObservationId: null,
+    });
+    expect(savedRabbit.circadian).toMatchObject({
+      policy: { profileId: "twilight-active" },
+      restDestinationArrived: false,
+      posture: { state: "awake" },
+    });
+    expect(requiredRegionalActivityProjection(saved, rabbit.identity.stableId)).toMatchObject({
+      species: "marsh-rabbit",
+      state: "seeking-ground-foraging-area",
+      preferredNeutralIntent: "observe",
+      routine: {
+        profileId: "twilight-active",
+        clockPreference: "active",
+        effectivePreference: "active",
+        action: "remain-active",
+        restDestinationArrived: false,
+      },
+      motion: {
+        kind: "target-area",
+        verb: "forage-ground-local",
+        travelMedium: "land",
+      },
+    });
+    runtime.destroy();
+  }, 45_000);
+
   it("keeps an off-frame materialized crow posture-consistent after leaving its perch", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);

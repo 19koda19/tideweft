@@ -30,6 +30,7 @@ describe("core ecology activity affordance registry", () => {
       "diving-waterbird",
       "perch-forage",
       "amphibious-margin-forager",
+      "ground-cover-forager",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES).toEqual([
       "fish-crow",
@@ -48,6 +49,7 @@ describe("core ecology activity affordance registry", () => {
       "double-crested-cormorant",
       "seaside-sparrow",
       "diamondback-terrapin",
+      "marsh-rabbit",
     ]);
     expect(CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES.map(({ archetypeId }) => archetypeId))
       .toEqual([
@@ -67,6 +69,7 @@ describe("core ecology activity affordance registry", () => {
         "diving-waterbird",
         "perch-forage",
         "amphibious-margin-forager",
+        "ground-cover-forager",
       ]);
     expect(coreEcologyActivityAffordanceProfile("golden-eagle")).toMatchObject({
       archetypeId: "ridge-soar-perch",
@@ -109,6 +112,31 @@ describe("core ecology activity affordance registry", () => {
         "tidal-relocation-flight",
       ],
     });
+    expect(coreEcologyActivityAffordanceProfile("marsh-rabbit")).toMatchObject({
+      archetypeId: "ground-cover-forager",
+      scheduleScope: "circadian-routine",
+      requiredCapabilities: [
+        "actor-address",
+        "circadian-activity",
+        "movement-memory",
+      ],
+      locomotionClass: "terrestrial",
+      allowedTravelMedia: ["land"],
+      destinations: [
+        {
+          semantic: "authenticated-habitat-anchor",
+          authority: "habitat-allocation",
+          allowedTravelMedia: ["land"],
+        },
+        {
+          semantic: "deterministic-local-foraging-area",
+          authority: "deterministic-local-area",
+          allowedTravelMedia: ["land"],
+        },
+      ],
+      observationAffordance: { kind: "none" },
+      presentationSignals: ["ground-foraging", "ground-relocation", "resting"],
+    });
     expect(coreEcologyShoreWaterMotionVocabulary("north-american-river-otter"))
       .toEqual({
         seekForagingWater: "seek-otter-foraging-water",
@@ -127,8 +155,15 @@ describe("core ecology activity affordance registry", () => {
       expect(profile).toMatchObject({
         version: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_VERSION,
         ownerId: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
-        scheduleScope: "bounded-diurnal-window",
       });
+      const scheduleCapability = profile.scheduleScope === "circadian-routine"
+        ? "circadian-activity"
+        : "diurnal-activity";
+      const incompatibleScheduleCapability = scheduleCapability === "circadian-activity"
+        ? "diurnal-activity"
+        : "circadian-activity";
+      expect(profile.requiredCapabilities).toContain(scheduleCapability);
+      expect(profile.requiredCapabilities).not.toContain(incompatibleScheduleCapability);
       expect(profile.requiredCapabilities).toBe(activityArchetype?.requiredCapabilities);
       expect(profile.allowedTravelMedia).toBe(activityArchetype?.allowedTravelMedia);
       expect(profile.destinations).toBe(activityArchetype?.destinations);
@@ -174,7 +209,16 @@ describe("core ecology activity affordance registry", () => {
       expect(new Set(activityArchetype.destinations.map(({ semantic }) => semantic)).size)
         .toBe(activityArchetype.destinations.length);
       expect(activityArchetype.requiredCapabilities).toContain("actor-address");
-      expect(activityArchetype.requiredCapabilities).toContain("diurnal-activity");
+      const scheduleCapability = activityArchetype.scheduleScope === "circadian-routine"
+        ? "circadian-activity"
+        : "diurnal-activity";
+      const incompatibleScheduleCapability = scheduleCapability === "circadian-activity"
+        ? "diurnal-activity"
+        : "circadian-activity";
+      expect(activityArchetype.requiredCapabilities).toContain(scheduleCapability);
+      expect(activityArchetype.requiredCapabilities).not.toContain(
+        incompatibleScheduleCapability,
+      );
       for (const destination of activityArchetype.destinations) {
         expect(destination.allowedTravelMedia.length).toBeGreaterThan(0);
         expect(destination.allowedTravelMedia.every((medium) => (

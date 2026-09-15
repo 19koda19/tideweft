@@ -246,6 +246,7 @@ export interface CoreEcologyRegionalHabitat {
 
 export type CoreEcologyRegionalActivitySpecies =
   | "fish-crow"
+  | "marsh-rabbit"
   | "northern-harrier"
   | "snowy-egret"
   | "american-black-duck"
@@ -1290,6 +1291,7 @@ export function deriveCoreEcologyRegionalActivityAnchors(
   if (population === undefined || population.populationUnits === 0) return null;
   if (
     input.species === "fish-crow"
+    || input.species === "marsh-rabbit"
     || input.species === "northern-harrier"
     || input.species === "gull"
   ) {

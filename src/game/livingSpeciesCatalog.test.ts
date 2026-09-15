@@ -279,12 +279,23 @@ describe("Living Weft species module catalog", () => {
 
   it("publishes current routine rhythms without rewriting released catalog children", () => {
     const currentOtter = livingSpeciesModule("north-american-river-otter");
+    const currentRabbit = livingSpeciesModule("marsh-rabbit");
     expect(currentOtter?.activity.circadian).toEqual({
       status: "active",
       ownerId: "game:core-ecology-species-runtime-policy:v1",
       rhythm: "nocturnal",
       cadenceTicks: 4,
       phaseBias: 800_000,
+    });
+    expect(currentRabbit?.activity).toMatchObject({
+      ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+      circadian: {
+        status: "active",
+        ownerId: "game:core-ecology-species-runtime-policy:v1",
+        rhythm: "crepuscular",
+        cadenceTicks: 5,
+        phaseBias: 0,
+      },
     });
     for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
       expect(livingSpeciesModule(binding.speciesId)?.activity.circadian.rhythm).toBe(
@@ -305,6 +316,9 @@ describe("Living Weft species module catalog", () => {
     const releasedOtters = releasedCatalogs.map((catalog) => (
       catalog.modules.find(({ speciesId }) => speciesId === "north-american-river-otter")
     ));
+    const releasedRabbits = releasedCatalogs.map((catalog) => (
+      catalog.modules.find(({ speciesId }) => speciesId === "marsh-rabbit")
+    ));
     for (const otter of releasedOtters) {
       expect(otter?.activity.circadian).toEqual({
         status: "active",
@@ -317,8 +331,19 @@ describe("Living Weft species module catalog", () => {
         .toEqual(otter);
       expect(Object.isFrozen(otter)).toBe(true);
     }
+    for (const rabbit of releasedRabbits) {
+      expect(rabbit?.activity).toMatchObject({
+        ownerId: "game:core-wildlife-actor:v1",
+        circadian: { status: "unimplemented", ownerId: null },
+      });
+      expect(rabbit === undefined ? null : canonicalizeLivingSpeciesModule(rabbit))
+        .toEqual(rabbit);
+      expect(Object.isFrozen(rabbit)).toBe(true);
+    }
     expect(releasedOtters.every((otter) => otter === releasedOtters[0])).toBe(true);
+    expect(releasedRabbits.every((rabbit) => rabbit === releasedRabbits[0])).toBe(true);
     expect(currentOtter).not.toBe(releasedOtters[0]);
+    expect(currentRabbit).not.toBe(releasedRabbits[0]);
   });
 
   it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
@@ -1338,13 +1363,6 @@ describe("Living Weft species module catalog", () => {
           decisionModel: "individual",
           crossRegion: true,
         },
-        activity: {
-          implementation: "active",
-          ownerId: "game:core-wildlife-actor:v1",
-          decisionModel: "individual",
-          offscreenModel: "individual",
-          circadian: { status: "unimplemented", ownerId: null },
-        },
         social: {
           implementation: "foundation",
           ownerId: "game:core-ecology-perception:v1",
@@ -1391,6 +1409,21 @@ describe("Living Weft species module catalog", () => {
         weather: { status: "unimplemented", ownerId: null },
       });
     }
+
+    expect(rabbit?.activity).toMatchObject({
+      implementation: "active",
+      ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+      decisionModel: "individual",
+      offscreenModel: "individual",
+      circadian: { status: "active", rhythm: "crepuscular" },
+    });
+    expect(fox?.activity).toMatchObject({
+      implementation: "active",
+      ownerId: "game:core-wildlife-actor:v1",
+      decisionModel: "individual",
+      offscreenModel: "individual",
+      circadian: { status: "unimplemented", ownerId: null },
+    });
 
     expect(rabbit).toMatchObject({
       profile: {
@@ -1975,6 +2008,8 @@ describe("Living Weft species module catalog", () => {
             catalogMedia.has("shallow-water") || catalogMedia.has("deep-water"),
             profile.speciesId,
           ).toBe(true);
+        } else if (medium === "land") {
+          expect(catalogMedia.has("land"), profile.speciesId).toBe(true);
         } else {
           expect(catalogMedia.has("land"), profile.speciesId).toBe(true);
           expect(
@@ -2637,6 +2672,7 @@ describe("Living Weft species module catalog", () => {
       });
       expect(module.activity.circadian.status).toBe(
         coreEcologySpeciesHasRuntimeCapability(module.speciesId, "diurnal-activity")
+          || coreEcologySpeciesHasRuntimeCapability(module.speciesId, "circadian-activity")
           ? "active"
           : "unimplemented",
       );

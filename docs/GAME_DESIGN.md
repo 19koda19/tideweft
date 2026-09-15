@@ -921,6 +921,36 @@ carcass, fishing, player harm, dog harm, or human harm. It is not a production
 crepuscular or weather-driven binding, catalog-wide daily life, or Turning Day
 closure.
 
+The local **Twilight at the Marsh Edge** Alpha49 candidate adds one production
+crepuscular example without adding an animal. The existing marsh rabbit binds
+to the shared `twilight-active` policy and a reusable `ground-cover-forager`
+activity. Its stable identity shifts the exact active windows, while the one
+saved civil clock remains authoritative. During an active window, bounded
+deterministic local ground movement can present ordinary foraging activity; it
+creates and consumes no food and does not prove that the rabbit fed.
+
+When rest is preferred, shared terrain locomotion carries that same rabbit
+toward its authenticated habitat cover. Cover is not a generated burrow or den.
+Transit remains Awake, physical arrival permits Resting, and the common
+settling interval permits Asleep. Danger and lawful disturbance, urgent needs,
+and retained commitments still win, and a stale neutral REST suggestion cannot
+suppress the current twilight preference. The registry expresses this through
+the truthful `circadian-activity` capability, `circadian-routine` scope, and
+explicit `land` medium rather than a rabbit-only scheduler or
+pathfinder.
+
+Full-detail activity reauthenticates the current body and habitat cover before
+use. Coarse absence may conserve only an already committed rest bout and cannot
+invent a commute, perception, target, or new choice. The current catalog now
+truthfully calls the rabbit crepuscular and assigns the shared activity owner;
+every authenticated historical catalog snapshot retains its exact earlier
+rabbit record and hash. Outer save version 32, `RegionalEcologyStateV6`, and the
+optional wildlife receipt remain unchanged. Existing exact-contact rabbit
+injury, death, carcass, and finite-resource behavior is unchanged. This adds no
+rabbit, population, density, food, feeding, capture, attack, mortality,
+weather/tide/opportunity driver, broad coarse-time advancement, catalog-wide
+daily life, or Turning Day closure.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1725,6 +1755,22 @@ rematerialization. No bird, population, prey, harm, mortality, or teleport path
 is added.
 Alpha48 remains a local unpublished candidate rather than catalog-wide,
 crepuscular, validated broad coarse-time, or directive-closing coverage.
+Local Alpha49 **Twilight at the Marsh Edge** now binds exactly the existing
+marsh rabbit to the generic ground-cover-forager activity and shared
+twilight-active clock policy. The truthful circadian-activity capability,
+circadian-routine scope, and explicit land medium form one
+validated reusable contract. During the rabbit's stable individual twilight
+windows it can make bounded local ground movement; when rest is preferred it
+physically travels to authenticated habitat cover and only settles or sleeps
+after arrival. The neutral activity creates and consumes no food, and cover is
+not a burrow or den claim. Current danger or disturbance, urgent needs, and
+retained commitments remain stronger. Coarse absence keeps only an already
+committed rest bout, and full detail reauthenticates current cover and body.
+The current catalog becomes crepuscular without changing frozen historical
+catalogs, outer save v32, regional ecology V6, or existing rabbit mortality.
+Alpha49 remains local and unpublished; weather-driven routines, broad coarse
+time, catalog-wide schedules, final parity/performance proof, and Turning Day
+closure remain.
 
 Live through Alpha 39:
 

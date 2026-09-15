@@ -107,6 +107,7 @@ export type CoreEcologyActivityState =
   | "aquatic-foraging"
   | "dabbling"
   | "floating"
+  | "ground-foraging"
   | "hauling-out"
   | "low-foraging"
   | "low-quartering"
@@ -121,6 +122,7 @@ export type CoreEcologyActivityState =
   | "seeking-tidal-refuge"
   | "seeking-dabbling-water"
   | "seeking-foraging-water"
+  | "seeking-ground-foraging-area"
   | "seeking-surface-opportunity"
   | "seeking-wading-ground"
   | "surface-circling"
@@ -159,6 +161,8 @@ export type CoreEcologyActivityMotion =
         | "seek-shore-foraging-water"
         | "seek-dry-haulout"
         | "seek-ridge-perch"
+        | "forage-ground-local"
+        | "seek-ground-cover"
         | "seek-margin-habitat"
         | "soar-ridge-loop"
         | "seek-waterfowl-refuge";
@@ -170,7 +174,7 @@ export interface CoreEcologyActivityProjection {
   readonly version: typeof CORE_ECOLOGY_ACTIVITY_VERSION;
   readonly ownerId: typeof CORE_ECOLOGY_ACTIVITY_OWNER_ID;
   /** The activity affordance remains bounded; `routine` carries full circadian truth. */
-  readonly scheduleScope: "bounded-diurnal-window";
+  readonly scheduleScope: CoreEcologyActivityAffordanceProfile["scheduleScope"];
   readonly actorId: string;
   readonly species: CoreEcologyActivitySpecies;
   readonly atTick: number;
@@ -231,6 +235,11 @@ const HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS = Math.trunc(
   WORLD_POSITION_UNITS_PER_TILE / 2,
 );
 const QUARTERING_TARGET_RADIUS_UNITS = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
+const GROUND_FORAGING_TARGET_RADIUS_UNITS = Math.trunc(
+  WORLD_POSITION_UNITS_PER_TILE / 2,
+);
+/** Ground actors retain one bounded destination long enough to physically reach it. */
+const GROUND_FORAGING_CADENCE_TICKS = 40 as const;
 const SURFACE_OPPORTUNITY_ARRIVAL_RADIUS_UNITS = Math.trunc(
   WORLD_POSITION_UNITS_PER_TILE / 2,
 );
@@ -306,6 +315,10 @@ export function coreEcologyActivityDestinationSemantic(
       return "authenticated-dry-haulout";
     case "seek-ridge-perch":
       return "authenticated-ridge-perch";
+    case "forage-ground-local":
+      return "deterministic-local-foraging-area";
+    case "seek-ground-cover":
+      return "authenticated-habitat-anchor";
     case "seek-margin-habitat":
       return "authenticated-habitat-anchor";
     case "soar-ridge-loop":
@@ -332,6 +345,9 @@ export function validateCoreEcologyActivityProjectionAffordance(
     || actor.identity.species !== projection.species
     || profile.speciesId !== projection.species
   ) errors.push("projection-actor-profile-mismatch");
+  if (projection.scheduleScope !== profile.scheduleScope) {
+    errors.push("projection-schedule-scope-mismatch");
+  }
 
   if (
     projection.presentationSignal !== null
@@ -632,6 +648,86 @@ function projectCanonicalCoreEcologyActivity(
       presentationSignal: null,
       perch,
       motion: Object.freeze({ kind: "defer-to-intent" }),
+    });
+  }
+
+  if (activityProfile.archetypeId === "ground-cover-forager") {
+    const atCover = withinWorldRadius(
+      owned.member.actor.address.position,
+      authority.homeAnchor,
+      HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+    );
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atCover,
+      responsive,
+      "ground-cover-rest-destination-v1",
+      "cover",
+      [],
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
+      return activityProjection(owned, input.atTick, day, {
+        state: atCover ? "resting" : "seeking-habitat-anchor",
+        responsiveToImmediateIntent: false,
+        // A stale neutral REST intent cannot prolong a bout after the shared
+        // clock returns to an active twilight window. Only the routine's
+        // current effective preference and physical arrival own this choice.
+        preferredNeutralIntent: atCover ? "rest" : "observe",
+        routine,
+        presentationSignal: atCover ? "resting" : "ground-relocation",
+        perch: noPerchProjection(),
+        motion: atCover
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-ground-cover",
+              targetArea: frozenArea(
+                authority.homeAnchor,
+                HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+              ),
+              travelMedium: "land",
+            }),
+      });
+    }
+    const target = deterministicGroundForagingTarget(
+      authority.homeAnchor,
+      owned.member.actor.identity.stableId,
+      input.atTick,
+    );
+    const atForagingArea = withinWorldRadius(
+      owned.member.actor.address.position,
+      target,
+      GROUND_FORAGING_TARGET_RADIUS_UNITS,
+    );
+    return activityProjection(owned, input.atTick, day, {
+      state: atForagingArea ? "ground-foraging" : "seeking-ground-foraging-area",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      routine,
+      presentationSignal: atForagingArea ? "ground-foraging" : "ground-relocation",
+      perch: noPerchProjection(),
+      motion: atForagingArea
+        ? Object.freeze({ kind: "hold-position" })
+        : Object.freeze({
+            kind: "target-area",
+            verb: "forage-ground-local",
+            targetArea: frozenArea(target, GROUND_FORAGING_TARGET_RADIUS_UNITS),
+            travelMedium: "land",
+          }),
     });
   }
 
@@ -1454,9 +1550,9 @@ function activityMotionStep(
 }
 
 /**
- * Build-gate diagnostics: every canonical diurnal capability must have a real
- * bounded projection owner. A future species cannot become "active" merely by
- * adding catalog metadata.
+ * Build-gate diagnostics: every canonical bounded-activity capability must
+ * have a real projection owner. A future species cannot become "active"
+ * merely by adding catalog metadata.
  */
 export function validateCoreEcologyActivityPolicies(
   policies: readonly CoreEcologySpeciesRuntimePolicy[] =
@@ -1618,7 +1714,7 @@ function activityProjection(
   const projection = deepFreeze({
     version: CORE_ECOLOGY_ACTIVITY_VERSION,
     ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
-    scheduleScope: "bounded-diurnal-window" as const,
+    scheduleScope: profile.scheduleScope,
     actorId: owned.member.actor.identity.stableId,
     species: owned.species,
     atTick,
@@ -2029,12 +2125,13 @@ function deterministicQuarteringTarget(
   actorId: string,
   atTick: number,
 ): WorldPosition {
-  const cadenceOrdinal = Math.trunc(atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS);
-  const phase = Number.parseInt(hashCanonical([actorId, "quartering-phase-v1"]).slice(0, 8), 16)
-    % QUARTERING_OFFSETS.length;
-  const offset = QUARTERING_OFFSETS[(cadenceOrdinal + phase) % QUARTERING_OFFSETS.length];
-  if (offset === undefined) return anchor;
-  return translateInsideWorld(anchor, offset.x, offset.y);
+  return deterministicLocalActivityTarget(
+    anchor,
+    actorId,
+    atTick,
+    CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS,
+    "quartering-phase-v1",
+  );
 }
 
 function deterministicLocalForagingTarget(
@@ -2042,9 +2139,39 @@ function deterministicLocalForagingTarget(
   actorId: string,
   atTick: number,
 ): WorldPosition {
-  const cadenceOrdinal = Math.trunc(atTick / CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS);
+  return deterministicLocalActivityTarget(
+    anchor,
+    actorId,
+    atTick,
+    CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS,
+    "local-foraging-phase-v1",
+  );
+}
+
+function deterministicGroundForagingTarget(
+  anchor: WorldPosition,
+  actorId: string,
+  atTick: number,
+): WorldPosition {
+  return deterministicLocalActivityTarget(
+    anchor,
+    actorId,
+    atTick,
+    GROUND_FORAGING_CADENCE_TICKS,
+    "ground-foraging-phase-v1",
+  );
+}
+
+function deterministicLocalActivityTarget(
+  anchor: WorldPosition,
+  actorId: string,
+  atTick: number,
+  cadenceTicks: number,
+  domain: string,
+): WorldPosition {
+  const cadenceOrdinal = Math.trunc(atTick / cadenceTicks);
   const phase = Number.parseInt(
-    hashCanonical([actorId, "local-foraging-phase-v1"]).slice(0, 8),
+    hashCanonical([actorId, domain]).slice(0, 8),
     16,
   ) % QUARTERING_OFFSETS.length;
   const offset = QUARTERING_OFFSETS[(cadenceOrdinal + phase) % QUARTERING_OFFSETS.length];

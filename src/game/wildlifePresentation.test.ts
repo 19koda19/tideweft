@@ -16,7 +16,10 @@ import {
   stepCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
-import { stepCoreEcologyActivityMotion } from "./coreEcologyActivity";
+import {
+  projectCoreEcologyActivity,
+  stepCoreEcologyActivityMotion,
+} from "./coreEcologyActivity";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
@@ -555,7 +558,7 @@ function waterfowlActivityFixture(tick = 360) {
 }
 
 function rainActivityFixture(
-  species: "fish-crow" | "gull" | "northern-harrier",
+  species: "fish-crow" | "gull" | "marsh-rabbit" | "northern-harrier",
   tick: number,
 ) {
   const seed = seedFromText("rain chorus bounded diurnal activity owner");
@@ -1098,6 +1101,70 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(projected).not.toHaveProperty("dayPhase");
     },
   );
+
+  it("presents rabbit ground activity without claiming motion or cover it cannot observe", () => {
+    const { actor, patch } = rainActivityFixture("marsh-rabbit", 390);
+    const moving = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor),
+      tileSize: 16,
+      activity: { patch, atTick: 390 },
+    });
+    const movingAtLowClarity = projectWildlifePresentation({
+      actor,
+      observation: directObservation(actor, 90),
+      tileSize: 16,
+      activity: { patch, atTick: 390 },
+    });
+    expect(moving).toMatchObject({
+      species: "marsh-rabbit",
+      behavior: "crossing",
+      behaviorLabel: "Moving on land",
+    });
+    expect(movingAtLowClarity).toMatchObject({
+      species: "marsh-rabbit",
+      behavior: "crossing",
+      behaviorLabel: "Moving",
+    });
+
+    const activity = projectCoreEcologyActivity(patch, {
+      actorId: actor.identity.stableId,
+      atTick: 390,
+    });
+    if (activity?.motion.kind !== "target-area") {
+      throw new Error("Rabbit presentation fixture omitted its ground-foraging target");
+    }
+    const arrived = repositionCoreWildlifeActor(actor, {
+      atTick: 390,
+      position: activity.motion.targetArea.center,
+      heading: actor.address.heading,
+    });
+    const arrivedPatch = replaceCoreEcologyAggregatePatchActor(patch, arrived);
+    const foraging = projectWildlifePresentation({
+      actor: arrived,
+      observation: directObservation(arrived),
+      tileSize: 16,
+      activity: { patch: arrivedPatch, atTick: 390 },
+    });
+    const foragingAtLowClarity = projectWildlifePresentation({
+      actor: arrived,
+      observation: directObservation(arrived, 90),
+      tileSize: 16,
+      activity: { patch: arrivedPatch, atTick: 390 },
+    });
+    expect(foraging).toMatchObject({
+      species: "marsh-rabbit",
+      behavior: "forage",
+      behaviorLabel: "Ground foraging",
+    });
+    expect(foragingAtLowClarity).toMatchObject({
+      species: "marsh-rabbit",
+      behavior: "forage",
+      behaviorLabel: "Still",
+    });
+    expect(JSON.stringify([moving, movingAtLowClarity, foraging, foragingAtLowClarity]))
+      .not.toMatch(/cover|target|routine|clock|phase|restDestination/iu);
+  });
 
   it("presents authenticated fish-crow sleep without exposing circadian internals", () => {
     const { actor, patch } = rainActivityFixture("fish-crow", 1_222);

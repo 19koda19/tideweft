@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.48",
+      version: "0.3.3-alpha.49",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.48",
-      gameplayContractVersion: 46,
-      tutorialVersion: 58,
+      buildIdentity: "0.3.3-alpha.49",
+      gameplayContractVersion: 47,
+      tutorialVersion: 59,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,7 +69,7 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-48 Tide at the Roost and retains the earlier Turning Day slices", () => {
+  it("scopes Alpha-49 Twilight at the Marsh Edge and retains the earlier Turning Day slices", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
@@ -323,41 +323,36 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Tide at the Roost");
-    expect(currentCopy).toContain("existing snowy egret tidal-wader");
-    expect(currentCopy).toContain("adaptive-active policy");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Twilight at the Marsh Edge");
+    expect(currentCopy).toContain("existing marsh rabbit");
+    expect(currentCopy).toContain("twilight-active policy");
     expect(currentCopy).toContain("one saved civil clock");
-    expect(currentCopy).toContain("current authoritative tide");
-    expect(currentCopy).toContain("current lawful anonymous aquatic-activity observation");
-    expect(currentCopy).toContain("ordinary aerial locomotion");
-    expect(currentCopy).toContain("authenticated saved dry refuge");
+    expect(currentCopy).toContain("stable identity-derived variation");
+    expect(currentCopy).toContain("shared terrain pathing surface");
+    expect(currentCopy).toContain("authenticated habitat rest site");
     expect(currentCopy).toContain("Travel remains Awake");
-    expect(currentCopy).toContain("Resting begins only after physical arrival");
-    expect(currentCopy).toContain("Asleep begins only after the shared settling interval");
-    expect(currentCopy).toContain("Immediate danger, urgent needs, and retained commitments outrank");
-    expect(currentCopy).toContain("cannot create prey, knowledge, safety, or a guaranteed feeding outcome");
-    expect(currentCopy).toContain("adds no egret, population unit, aggregate resource");
-    expect(currentCopy).toContain("no capture, injury, death, consumption, carcass, fishing");
-    expect(currentCopy).toContain("directly observable current Resting or Asleep posture");
+    expect(currentCopy).toContain("Resting requires physical arrival");
+    expect(currentCopy).toContain("Asleep requires the common settling interval");
+    expect(currentCopy).toContain("Immediate danger, lawful disturbance, urgent needs, and retained commitments");
+    expect(currentCopy).toContain("does not create food, consume a resource, guarantee safety, or resolve feeding");
+    expect(currentCopy).toContain("circadian-activity capability");
+    expect(currentCopy).toContain("circadian-routine activity scope");
+    expect(currentCopy).toContain("explicit land travel");
+    expect(currentCopy).toContain("adds no rabbit, species, population unit");
+    expect(currentCopy).toContain("adds no attack, injury, death, carcass, consumption, reproduction");
+    expect(currentCopy).toContain("currently observable ground activity, relocation, Resting, or Asleep posture");
     expect(currentCopy).toContain("Outer save version 32 and RegionalEcologyStateV6 remain unchanged");
     expect(currentCopy).toContain("optional version-1 wildlife circadian receipt");
-    expect(currentCopy).toContain("cannot remain an activating driver");
-    expect(currentCopy).toContain("clock or priority authority may still independently prefer activity");
-    expect(currentCopy).toContain("actor identity remains separately stable");
-    expect(currentCopy).toContain("phase is deterministically rederived from that identity and policy");
-    expect(currentCopy).toContain("receipt stores policy, the authenticated rest-destination receipt, and posture with its entered tick");
-    expect(currentCopy).toContain("phase is deterministically rederived from identity plus policy rather than serialized in the receipt");
-    expect(currentCopy).toContain("Before behavioral use, the full-detail activity projection reauthenticates");
-    expect(currentCopy).toContain("raw save parsing does not prove the live refuge or current body location");
-    expect(currentCopy).toContain("while coarse, it conserves only an already committed bounded rest bout");
-    expect(currentCopy).toContain("does not resample tide or opportunity");
-    expect(currentCopy).toContain("evaluates current environmental drivers after rematerialization");
-    expect(currentCopy).not.toContain("cannot keep the actor active");
-    expect(currentCopy).not.toContain("receipt's canonical stable identity");
-    expect(currentCopy).toContain("Legacy worlds and egret actors without a receipt remain valid");
-    expect(currentLimitations).toContain("not a new species, broader population pass, production crepuscular profile");
-    expect(currentLimitations).toContain("validated broad coarse-time advancement");
-    expect(currentLimitations).toContain("Turning Day directive closure remain unfinished");
+    expect(currentCopy).toContain("Stable actor identity remains separately owned");
+    expect(currentCopy).toContain("phase is rederived from identity plus policy");
+    expect(currentCopy).toContain("Full detail reauthenticates those facts");
+    expect(currentCopy).toContain("coarse absence may conserve only an already committed bounded rest bout");
+    expect(currentCopy).toContain("invents no commute, forage route, observation, or new decision");
+    expect(currentCopy).toContain("Legacy rabbit actors without a receipt remain valid");
+    expect(currentCopy).toContain("Released historical species-catalog snapshots preserve their exact earlier unbound activity declarations");
+    expect(currentLimitations).toContain("not a new species, population expansion, weather-driven routine");
+    expect(currentLimitations).toContain("broader coarse-time validation");
+    expect(currentLimitations).toContain("Turning Day closure remain unfinished");
     expect(alpha47Release?.summary).toContain("Rest and Rise");
     expect(alpha47Copy).toContain("REST 30 MIN");
     expect(alpha47Copy).toContain("exactly three hundred ordinary player steps");

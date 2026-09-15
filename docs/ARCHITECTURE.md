@@ -355,6 +355,40 @@ This is one tide/opportunity binding for one existing actor, not a new
 population, teleport path, crepuscular or weather-driven policy, catalog-wide
 conversion, harm/mortality extension, or Turning Day closure.
 
+The local Alpha49 **Twilight at the Marsh Edge** candidate adds the first
+production crepuscular composition by binding the existing marsh rabbit to the
+shared `ground-cover-forager` activity and `twilight-active` clock policy. The
+generic runtime policy declares `circadian-activity`; the activity profile
+declares `circadian-routine`; and both cover travel and bounded local activity
+declare the `land` medium. Registry validation requires that
+capability, scope, and medium to agree, so an unbound species cannot inherit the
+schedule and a terrestrial actor cannot fall through to the aerial default.
+
+The rabbit's existing authenticated habitat home anchor is cover and its
+physical rest destination; this slice does not infer a burrow or den. During an
+individual's stable shifted twilight windows, the shared activity owner may
+select a bounded deterministic local ground-foraging destination and route the
+same body through ordinary terrain locomotion. This neutral activity creates
+and consumes no food and proves no feeding result. Outside the active window,
+the same owner physically returns the rabbit toward cover. Travel stays Awake,
+arrival permits Resting, and the common settling interval permits Asleep.
+Immediate danger and lawful disturbance, urgent needs, and retained active
+commitments remain authoritative. A stale neutral REST intent cannot override a
+new current active preference.
+
+The optional wildlife circadian receipt and outer save v32 remain unchanged.
+Full-detail projection reauthenticates the actor, current location, profile,
+and habitat cover before behavioral use. Coarse absence conserves only an
+already committed rest bout; it cannot invent a commute, perception, target, or
+new decision. The current catalog reports the rabbit's active crepuscular
+rhythm and shared activity owner, while the historical compatibility adapter
+restores every authenticated prior rabbit record exactly, preserving all
+released catalog hashes. Existing exact-contact rabbit injury, death, carcass,
+and finite-resource owners are unchanged. This slice adds no actor, population,
+density, food, feeding, capture, attack, mortality, weather driver, tide driver,
+opportunity driver, catalog-wide schedule, broad coarse-time advancement, or
+Turning Day closure.
+
 ## Authoritative tick
 
 One world tick:
@@ -1293,10 +1327,20 @@ shared posture may settle or sleep. This is one production tide/opportunity
 binding. Its coarse representation conserves an already committed bounded rest
 bout without evaluating new tide or opportunity; full-detail rematerialization
 reauthenticates the live destination/location and evaluates current drivers.
-Production crepuscular and weather-driven bindings, validated broad coarse-time
-advancement, other animal routines, and catalog-wide daily life remain absent.
+Alpha49 adds marsh rabbit + `ground-cover-forager` + `twilight-active` as the
+first production crepuscular composition. Its clock-only row is admitted by
+the truthful `circadian-activity` capability, the profile's
+`circadian-routine` scope, and explicit `land` movement. Active
+twilight projects only bounded neutral ground activity; rest projects physical
+travel to authenticated habitat cover, never an inferred burrow or den. Danger,
+lawful disturbance, urgent needs, and retained commitments still outrank that
+routine. Coarse absence conserves only an already committed rest bout and does
+not invent travel or a new choice. Current catalog truth changes without
+rewriting any historical catalog snapshot. Weather-driven bindings, validated
+broad coarse-time advancement, other animal routines, and catalog-wide daily
+life remain absent.
 
-`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
+`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Alpha49 makes the already shared ordinary-terrain route explicit as `land` for rabbit cover and neutral ground activity, avoiding an implicit aerial fallback without introducing a rabbit-only pathfinder. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful ordinary intent-owned rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors and Alpha49's routine-owned travel cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
 When the habitat assemblage contains a bear, the runtime seeds one exact loose dried-fish parcel near it. Visual evidence can make that parcel a food opportunity for an eligible bear, gull, fish crow, or river otter, but only an identified, directly confirmed, accessible whole unit may produce a claim. The cargo owner rechecks exact segmented contact, payload kind, quantity, and current existence before atomically committing one custody path and any lawful ordinary-food consumption. Sorted claims, replay protection, and exact custody ensure a second actor or reload cannot consume another copy. The otter is deliberately only another consumer of this generic seam, not an owner of private loot or cargo rules. A malformed claim, partial stack, consumed item, or out-of-reach seam case leaves both cargo and ecology unchanged. Aggregate attraction never consumes, moves, aliases, or duplicates one. Player-facing narration is emitted only when the event-time actor was directly visible; otherwise authoritative history remains silent to the player.
 
@@ -1929,6 +1973,24 @@ rest bout until rematerialization. This adds no actor, population, prey,
 teleport, harm, mortality, crepuscular or weather binding, validated broad
 coarse-time advancement, catalog conversion, release evidence, or
 directive-closure claim.
+
+The local Alpha49 **Twilight at the Marsh Edge** candidate binds the existing
+marsh rabbit to `ground-cover-forager` + `twilight-active` through the generic
+registry. `circadian-activity`, `circadian-routine`, and explicit `land` travel
+form one validated capability/profile/locomotion contract.
+The shared activity owner physically moves the rabbit within a bounded local
+area during its shifted twilight windows and toward its authenticated habitat
+cover when rest is preferred. Travel remains Awake; Resting and Asleep remain
+arrival- and settling-gated. Neutral activity proves no food or feeding, and
+cover does not imply a burrow or den. Current danger or lawful disturbance,
+urgent needs, and retained commitments retain priority, including over a stale
+REST suggestion. Full-detail projection reauthenticates the cover and body;
+coarse absence preserves only an already committed rest bout. Current catalog
+truth becomes crepuscular without changing any frozen historical catalog hash.
+Outer save v32 and `RegionalEcologyStateV6` remain unchanged, as do the existing
+exact-contact rabbit mortality and carcass owners. This is local unpublished
+source-candidate behavior, not release evidence, a weather-driven binding,
+catalog-wide schedules, validated broad coarse time, or directive closure.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

@@ -25,6 +25,7 @@ export const CORE_WILDLIFE_LOCOMOTION_PROFILE_VERSION = 1 as const;
 export type CoreWildlifeTravelMedium =
   | "air"
   | "amphibious"
+  | "land"
   | "surface-water";
 
 interface DampCoverPreference {
@@ -610,6 +611,12 @@ export function coreWildlifeTraversabilityCell(
     if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
       return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost });
     }
+  }
+  if (
+    medium === "land"
+    && coreEcologySpeciesRuntimePolicy(species)?.locomotionClass !== "terrestrial"
+  ) {
+    throw new Error(`Species ${species} lacks a land locomotion profile`);
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
     return Object.freeze({ access: "deep-water", travelCost: 0 });

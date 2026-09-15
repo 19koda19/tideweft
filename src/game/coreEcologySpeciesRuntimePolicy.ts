@@ -32,6 +32,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "carcass-feeding",
   "carcass-guarding",
   "chorus",
+  "circadian-activity",
   "diurnal-activity",
   "food-investigation",
   "ground-movement-evidence",
@@ -341,6 +342,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       aggregateResponseVerbs: [],
       capabilities: [
         "actor-address",
+        "circadian-activity",
         "ground-movement-evidence",
         "movement-memory",
         "physical-body-resource",

@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.49 — 2026-09-15
+
+Build: `0.3.3-alpha.49` · Gameplay contract: 47 · Tutorial: 59
+
+Twilight at the Marsh Edge is the local unpublished Alpha 49 source candidate: the existing marsh rabbit now composes the shared twilight-active circadian policy with the one saved civil clock, authenticated habitat cover, and ordinary terrestrial movement.
+
+### Gameplay
+
+- The existing marsh rabbit is the first production crepuscular wildlife consumer of the shared living-circadian kernel. Its clock-only twilight-active policy reads the one saved civil clock and favors ordinary activity around dawn and dusk with stable identity-derived variation; it creates no second clock or rabbit-specific scheduler.
+- Outside its active windows, the same rabbit travels through the shared terrain pathing surface toward its authenticated habitat rest site. Travel remains Awake, Resting requires physical arrival, and Asleep requires the common settling interval; no burrow, den, or teleport is invented.
+- During an active preference, bounded deterministic local ground activity composes with the rabbit's existing perception, needs, threat response, and locomotion. It does not create food, consume a resource, guarantee safety, or resolve feeding.
+
+### Fixes
+
+- A truthful circadian-activity capability and circadian-routine activity scope now let terrestrial species reuse the shared activity owner without falsely declaring a diurnal rhythm. The new generic ground-cover-forager profile uses explicit land travel and remains fail-closed for incompatible species, media, destinations, or signals.
+- Full-detail activity reauthenticates the rabbit's exact actor, tick, current body position, shared twilight policy, and habitat-owned rest destination before the routine can move or rest. Losing arrival wakes stale rest posture instead of repairing it into sleep.
+- A stale neutral REST intent cannot keep the rabbit resting after its individual twilight window becomes active. Immediate danger, lawful disturbance, urgent needs, and retained commitments still override routine preference through the existing shared priority path.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Twilight changes preference, not awareness or immunity: predators, terrain, weather, hunger, rest pressure, and current commitments retain their ordinary authority.
+- This slice binds exactly the already-admitted marsh rabbit. It adds no rabbit, species, population unit, habitat allocation, materialization allowance, encounter density, item, cargo, or reward.
+- The separate existing exact-contact rabbit mortality path is unchanged. This routine adds no attack, injury, death, carcass, consumption, reproduction, or new predator relationship.
+
+### Interface
+
+- Chart, Relief, quick inspection, and ABOUT may present only the rabbit's currently observable ground activity, relocation, Resting, or Asleep posture when ordinary player knowledge permits it.
+- Presentation never exposes the hidden twilight windows, stable phase offset, wake threshold, opaque rest-site identity, private target, or unseen schedule state.
+- Field Manual version 59 explains the representative rabbit's shared-clock twilight rhythm, physical cover requirement, override priority, unchanged population boundary, persistence law, and deliberately narrow Turning Day scope.
+
+### Save changes
+
+- Outer save version 32 and RegionalEcologyStateV6 remain unchanged. Twilight at the Marsh Edge adds no migration, parallel ecology root, new actor schema, or rewritten habitat allocation.
+- The existing optional version-1 wildlife circadian receipt stores the bound policy, authenticated rest-destination receipt, and posture with its entered tick only after lawful current projection. Stable actor identity remains separately owned, and phase is rederived from identity plus policy.
+- Serialization preserves canonical receipt fields without treating them as proof of live position or destination. Full detail reauthenticates those facts; coarse absence may conserve only an already committed bounded rest bout and invents no commute, forage route, observation, or new decision.
+- Legacy rabbit actors without a receipt remain valid. Released historical species-catalog snapshots preserve their exact earlier unbound activity declarations rather than being rewritten by the current crepuscular binding.
+
+### Known limitations
+
+- Alpha 49 Twilight at the Marsh Edge is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This is one production crepuscular binding for the already-admitted marsh rabbit, not a new species, population expansion, weather-driven routine, catalog-wide schedule conversion, or complete autonomous animal-life simulation.
+- The independent dog, bonded/player companions, remaining humans and wildlife, weather-driven routines, broader coarse-time validation, final parity and performance evidence, and Turning Day closure remain unfinished before Living Voice.
+
 ## 0.3.3-alpha.48 — 2026-09-15
 
 Build: `0.3.3-alpha.48` · Gameplay contract: 46 · Tutorial: 58

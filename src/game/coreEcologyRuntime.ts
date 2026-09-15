@@ -11,14 +11,16 @@ import {
   type CoreEcologyPopulationMemberState,
   type CoreEcologyPopulationState,
 } from "./coreEcology";
-import type { CoreEcologyActivityAuthorityReceipt } from "./coreEcologyActivity";
+import {
+  coreEcologySpeciesHasBoundedActivityProjection,
+  type CoreEcologyActivityAuthorityReceipt,
+} from "./coreEcologyActivity";
 import { coreEcologyGroupComponentForMember } from "./coreEcologyGroups";
 import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
 import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
-  coreEcologySpeciesHasRuntimeCapability,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
 import type { CoreWildlifeActorState } from "./coreWildlifeActor";
@@ -298,7 +300,7 @@ export function projectCoreEcologyWildlife(
         observation: { window, perception: input.perception },
         tileSize: input.tileSize,
         selected: targetMatchesActor(selectedTarget, member.actor),
-        ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
+        ...(coreEcologySpeciesHasBoundedActivityProjection(population.species)
           ? {
               activity: {
                 patch,
@@ -343,7 +345,7 @@ export function projectCoreEcologyWildlife(
       observation: { window, perception: input.perception, visibleAggregateCount },
       tileSize: input.tileSize,
       selected: targetMatchesActor(selectedTarget, member.actor),
-      ...(coreEcologySpeciesHasRuntimeCapability(population.species, "diurnal-activity")
+      ...(coreEcologySpeciesHasBoundedActivityProjection(population.species)
         ? {
             activity: {
               patch,

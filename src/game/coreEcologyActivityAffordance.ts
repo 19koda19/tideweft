@@ -31,6 +31,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPE_IDS = Object.freeze([
   "diving-waterbird",
   "perch-forage",
   "amphibious-margin-forager",
+  "ground-cover-forager",
 ] as const);
 
 export type CoreEcologyActivityArchetypeId =
@@ -66,6 +67,8 @@ export const CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS = Object.freeze([
   "dabbling-forage",
   "low-quartering-flight",
   "low-foraging-flight",
+  "ground-foraging",
+  "ground-relocation",
   "perched",
   "resting",
   "ridge-soaring-flight",
@@ -81,7 +84,9 @@ export const CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS = Object.freeze([
 export type CoreEcologyActivityPresentationSignal =
   (typeof CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS)[number];
 
-export type CoreEcologyActivityScheduleScope = "bounded-diurnal-window";
+export type CoreEcologyActivityScheduleScope =
+  | "bounded-diurnal-window"
+  | "circadian-routine";
 
 export interface CoreEcologyActivityDestinationAffordance {
   readonly semantic: CoreEcologyActivityDestinationSemantic;
@@ -132,6 +137,7 @@ export const CORE_ECOLOGY_ACTIVITY_AFFORDANCE_SPECIES = Object.freeze([
   "double-crested-cormorant",
   "seaside-sparrow",
   "diamondback-terrapin",
+  "marsh-rabbit",
 ] as const satisfies readonly CoreWildlifeSpecies[]);
 
 export type CoreEcologyActivityAffordanceSpecies =
@@ -179,12 +185,14 @@ function archetype(
   value: Omit<
     CoreEcologyActivityArchetype,
     "ownerId" | "scheduleScope" | "version"
-  >,
+  > & Readonly<{
+    readonly scheduleScope?: CoreEcologyActivityScheduleScope;
+  }>,
 ): CoreEcologyActivityArchetype {
   return deepFreeze({
     version: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_VERSION,
     ownerId: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
-    scheduleScope: "bounded-diurnal-window" as const,
+    scheduleScope: value.scheduleScope ?? "bounded-diurnal-window",
     ...value,
   });
 }
@@ -490,6 +498,31 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
       observationAffordance: NONE_OBSERVATION,
       presentationSignals: ["aquatic-foraging", "resting", "shore-water-relocation"],
     }),
+    archetype({
+      archetypeId: "ground-cover-forager",
+      scheduleScope: "circadian-routine",
+      requiredCapabilities: [
+        "actor-address",
+        "circadian-activity",
+        "movement-memory",
+      ],
+      locomotionClass: "terrestrial",
+      allowedTravelMedia: ["land"],
+      destinations: [
+        destination(
+          "authenticated-habitat-anchor",
+          "habitat-allocation",
+          ["land"],
+        ),
+        destination(
+          "deterministic-local-foraging-area",
+          "deterministic-local-area",
+          ["land"],
+        ),
+      ],
+      observationAffordance: NONE_OBSERVATION,
+      presentationSignals: ["ground-foraging", "ground-relocation", "resting"],
+    }),
   ]);
 
 const ARCHETYPE_BY_ID = new Map<CoreEcologyActivityArchetypeId, CoreEcologyActivityArchetype>(
@@ -515,6 +548,7 @@ const ARCHETYPE_ASSIGNMENTS: Readonly<
   "double-crested-cormorant": "diving-waterbird",
   "seaside-sparrow": "perch-forage",
   "diamondback-terrapin": "amphibious-margin-forager",
+  "marsh-rabbit": "ground-cover-forager",
 });
 
 const SHORE_WATER_MOTION_VOCABULARY: Readonly<Partial<Record<
@@ -561,7 +595,12 @@ const DESTINATION_SEMANTIC_SET = new Set<string>(
   CORE_ECOLOGY_ACTIVITY_DESTINATION_SEMANTICS,
 );
 const PRESENTATION_SIGNAL_SET = new Set<string>(CORE_ECOLOGY_ACTIVITY_PRESENTATION_SIGNALS);
-const TRAVEL_MEDIUM_SET = new Set<string>(["air", "amphibious", "surface-water"]);
+const TRAVEL_MEDIUM_SET = new Set<string>([
+  "air",
+  "amphibious",
+  "land",
+  "surface-water",
+]);
 const LOCOMOTION_CLASS_SET = new Set<string>([
   "aerial",
   "amphibious",
@@ -706,6 +745,18 @@ export function validateCoreEcologyActivityAffordances(
     if (profile.locomotionClass !== policy.locomotionClass) {
       errors.push(`${speciesId}:locomotion-class-policy-mismatch`);
     }
+    const policyHasDiurnalActivity = policy.capabilities.includes("diurnal-activity");
+    const policyHasCircadianActivity = policy.capabilities.includes("circadian-activity");
+    if (
+      (
+        profile.scheduleScope === "bounded-diurnal-window"
+        && (!policyHasDiurnalActivity || policyHasCircadianActivity)
+      )
+      || (
+        profile.scheduleScope === "circadian-routine"
+        && (!policyHasCircadianActivity || policyHasDiurnalActivity)
+      )
+    ) errors.push(`${speciesId}:schedule-capability-mismatch`);
     for (const capability of profile.requiredCapabilities) {
       if (!policy.capabilities.includes(capability)) {
         errors.push(`${speciesId}:missing-${capability}`);
@@ -723,6 +774,10 @@ export function validateCoreEcologyActivityAffordances(
       policy.capabilities.includes("diurnal-activity")
       && !profileBySpecies.has(policy.speciesId as CoreEcologyActivityAffordanceSpecies)
     ) errors.push(`${policy.speciesId}:diurnal-activity-has-no-affordance-profile`);
+    if (
+      policy.capabilities.includes("circadian-activity")
+      && !profileBySpecies.has(policy.speciesId as CoreEcologyActivityAffordanceSpecies)
+    ) errors.push(`${policy.speciesId}:circadian-activity-has-no-affordance-profile`);
   }
 
   return Object.freeze([...new Set(errors)].sort(compareText));
@@ -765,9 +820,15 @@ function validateArchetypes(
     if (!value.requiredCapabilities.includes("actor-address")) {
       errors.push(`${value.archetypeId}:missing-actor-address`);
     }
-    if (!value.requiredCapabilities.includes("diurnal-activity")) {
-      errors.push(`${value.archetypeId}:missing-diurnal-activity`);
-    }
+    const diurnalActivity = value.requiredCapabilities.includes("diurnal-activity");
+    const circadianActivity = value.requiredCapabilities.includes("circadian-activity");
+    if (
+      (value.scheduleScope === "bounded-diurnal-window" && (!diurnalActivity || circadianActivity))
+      || (
+        value.scheduleScope === "circadian-routine"
+        && (!circadianActivity || diurnalActivity)
+      )
+    ) errors.push(`${value.archetypeId}:schedule-capability-mismatch`);
     const destinationSemantics = value.destinations.map(({ semantic }) => semantic);
     if (!uniqueStrings(destinationSemantics)) {
       errors.push(`${value.archetypeId}:duplicate-destination-semantic`);
@@ -807,6 +868,9 @@ function policySupportsTravelMedium(
     return policy.capabilities.includes("aquatic-locomotion")
       && (policy.locomotionClass === "aquatic" || policy.locomotionClass === "amphibious");
   }
+  if (medium === "land") {
+    return policy.locomotionClass === "terrestrial";
+  }
   return policy.locomotionClass === "amphibious"
     && coreEcologySpeciesCanUseAmphibiousRoute(policy.speciesId);
 }
@@ -820,6 +884,9 @@ function classCanUseTravelMedium(
   }
   if (medium === "surface-water") {
     return locomotionClass === "aquatic" || locomotionClass === "amphibious";
+  }
+  if (medium === "land") {
+    return locomotionClass === "terrestrial";
   }
   return locomotionClass === "amphibious";
 }
@@ -856,7 +923,10 @@ function isActivityArchetypeShape(
     !plainRecord(value)
     || value.version !== CORE_ECOLOGY_ACTIVITY_AFFORDANCE_VERSION
     || value.ownerId !== CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID
-    || value.scheduleScope !== "bounded-diurnal-window"
+    || (
+      value.scheduleScope !== "bounded-diurnal-window"
+      && value.scheduleScope !== "circadian-routine"
+    )
     || typeof value.archetypeId !== "string"
     || !ARCHETYPE_ID_SET.has(value.archetypeId)
     || !LOCOMOTION_CLASS_SET.has(String(value.locomotionClass))

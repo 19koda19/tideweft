@@ -62,6 +62,12 @@ export const CORE_ECOLOGY_CIRCADIAN_BINDINGS: readonly CoreEcologyCircadianBindi
       profileId: "adaptive-active",
       drivers: ["clock", "tide", "opportunity"],
     }),
+    binding({
+      speciesId: "marsh-rabbit",
+      activityArchetypeId: "ground-cover-forager",
+      profileId: "twilight-active",
+      drivers: ["clock"],
+    }),
   ]);
 
 if (new Set(CORE_ECOLOGY_CIRCADIAN_BINDINGS.map(({ speciesId }) => speciesId)).size

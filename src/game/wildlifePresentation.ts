@@ -19,6 +19,7 @@ import {
   type CoreEcologyAggregateEvidenceKind,
 } from "./coreEcology";
 import {
+  coreEcologySpeciesHasBoundedActivityProjection,
   projectCoreEcologyActivity,
   type CoreEcologyActivityAuthorityReceipt,
   type CoreEcologyActivityProjection,
@@ -1874,7 +1875,7 @@ function resolvePresentationActivity(
   actor: CoreWildlifeActorState,
   value: WildlifePresentationInput["activity"],
 ): PresentationActivityResolution {
-  if (!coreEcologySpeciesHasRuntimeCapability(actor.identity.species, "diurnal-activity")) {
+  if (!coreEcologySpeciesHasBoundedActivityProjection(actor.identity.species)) {
     return Object.freeze({ valid: true, projection: null });
   }
   if (value === undefined) return Object.freeze({ valid: true, projection: null });
@@ -1946,6 +1947,8 @@ function activityBehavior(
   switch (activity?.presentationSignal) {
     case "perched": return "perch";
     case "low-foraging-flight": return "flight";
+    case "ground-foraging": return "forage";
+    case "ground-relocation": return "crossing";
     case "low-quartering-flight": return "quarter";
     case "ridge-soaring-flight": return "flight";
     case "resting": return "rest";
@@ -2006,6 +2009,8 @@ function observableBehavior(
     return "Moving between shore and water";
   }
   if (activity?.presentationSignal === "surface-diving") return "Diving";
+  if (activity?.presentationSignal === "ground-foraging") return "Ground foraging";
+  if (activity?.presentationSignal === "ground-relocation") return "Moving on land";
   if (activity?.presentationSignal === "ridge-soaring-flight") {
     return "Soaring along the ridge";
   }
@@ -2034,6 +2039,7 @@ function coarseMotion(
   intent: CoreWildlifeIntentKind,
   activity: CoreEcologyActivityProjection | null,
 ): string {
+  if (activity?.presentationSignal === "ground-foraging") return "Still";
   if (
     activity?.presentationSignal === "dabbling-forage"
     || activity?.presentationSignal === "surface-swimming"
@@ -2041,6 +2047,7 @@ function coarseMotion(
     || activity?.presentationSignal === "aquatic-foraging"
     || activity?.presentationSignal === "shore-water-relocation"
     || activity?.presentationSignal === "surface-diving"
+    || activity?.presentationSignal === "ground-relocation"
   ) return "Moving";
   const projected = activityBehavior(activity);
   if (projected === "quarter" || projected === "forage" || projected === "flight") {

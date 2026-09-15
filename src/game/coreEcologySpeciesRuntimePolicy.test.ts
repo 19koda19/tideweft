@@ -129,11 +129,18 @@ describe("core ecology species runtime policy", () => {
         carcassFeeding: false,
         carcassGuarding: false,
       },
-      capabilities: expect.arrayContaining(["physical-body-resource"]),
+      capabilities: expect.arrayContaining([
+        "circadian-activity",
+        "physical-body-resource",
+      ]),
     });
     expect(coreEcologySpeciesPhysicalBodySizeUnits("marsh-rabbit")).toBe(3);
     expect(coreEcologySpeciesPhysicalBodyResourceUnits("marsh-rabbit")).toBe(4);
     expect(coreEcologySpeciesPredatorContact("marsh-rabbit")).toBeNull();
+    expect(coreEcologySpeciesHasRuntimeCapability("marsh-rabbit", "circadian-activity"))
+      .toBe(true);
+    expect(coreEcologySpeciesHasRuntimeCapability("marsh-rabbit", "diurnal-activity"))
+      .toBe(false);
 
     expect(coreEcologySpeciesRuntimePolicy("fish-crow")).toMatchObject({
       mortality: {

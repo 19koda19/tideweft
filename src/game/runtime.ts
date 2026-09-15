@@ -9396,9 +9396,8 @@ export async function createTideweftRuntime(
     const selectedWildlifeOwner = selectedWildlifeOwners[0] ?? null;
     const selectedWildlife = selectedWildlifeOwner?.actor ?? null;
     const selectedWildlifeActivity = selectedWildlife !== null
-      && coreEcologySpeciesHasRuntimeCapability(
+      && coreEcologySpeciesHasBoundedActivityProjection(
         selectedWildlife.identity.species,
-        "diurnal-activity",
       )
       && selectedWildlifeOwner !== null
       ? {

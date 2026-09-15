@@ -1353,7 +1353,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     behaviorOwnerId: "game:core-wildlife-actor:v1",
     locomotionOwnerId: "game:core-wildlife-locomotion-profile:v1",
     socialOwnerId: "game:core-ecology-perception:v1",
-    activityOwnerId: "game:core-wildlife-actor:v1",
+    activityOwnerId: "game:core-ecology-activity:v1",
     dynamicOverlays: ["visible-condition"],
     morphologyDimensions: ["life-stage-size"],
     appearanceTraits: ["life-stage", "morph", "sex", "temperament"],
@@ -4673,6 +4673,23 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
   const physicalBodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
   const physicalBodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(species);
   const circadianPolicy = coreEcologyCircadianPolicyForSpecies(species);
+  const ownsLegacyDiurnalActivity = coreEcologySpeciesHasRuntimeCapability(
+    species,
+    "diurnal-activity",
+  );
+  const ownsCircadianActivity = coreEcologySpeciesHasRuntimeCapability(
+    species,
+    "circadian-activity",
+  );
+  if (ownsCircadianActivity && circadianPolicy === null) {
+    throw new Error(`Circadian activity species lacks a binding: ${species}`);
+  }
+  if (ownsLegacyDiurnalActivity && ownsCircadianActivity) {
+    throw new Error(`Species cannot own both activity schedule capabilities: ${species}`);
+  }
+  const boundCircadianProfile = ownsCircadianActivity && circadianPolicy !== null
+    ? livingCircadianProfile(circadianPolicy.profileId)
+    : null;
   const ownsPhysicalBody = physicalBodySizeUnits > 0
     && physicalBodyResourceUnits > 0
     && coreEcologySpeciesHasRuntimeCapability(species, "physical-body-resource");
@@ -4905,20 +4922,27 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
       decisionModel: identityForm,
       decisionCadenceTicks: 1,
       offscreenModel: identityForm,
-      circadian: coreEcologySpeciesHasRuntimeCapability(species, "diurnal-activity")
+      circadian: ownsLegacyDiurnalActivity
         ? {
             status: "active",
             ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
-            // This v1 catalog block still describes the established bounded
-            // activity owner/cadence. A physically bound routine may refine
-            // only its truthful broad rhythm without rewriting that lineage.
             rhythm: circadianPolicy === null
               ? "diurnal"
               : livingCircadianProfile(circadianPolicy.profileId).rhythm,
             cadenceTicks: 4,
             phaseBias: 800_000,
           }
-        : noCircadianSchedule(),
+        : boundCircadianProfile === null
+          ? noCircadianSchedule()
+          : {
+              status: "active",
+              ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+              rhythm: boundCircadianProfile.rhythm,
+              cadenceTicks: boundCircadianProfile.evaluationCadenceTicks,
+              // Shared physical routines use a symmetric stable-ID offset;
+              // unlike the legacy daylight window they have no directional bias.
+              phaseBias: 0,
+            },
     },
     social: {
       implementation: implementation === "active" && runtimePolicy.groupOrganization !== null
@@ -5642,11 +5666,18 @@ function historicalCircadianCompatibilityModule(
   const historicalCircadian = legacyBoundedCircadian(
     module.speciesId as CoreWildlifeSpecies,
   );
-  if (sameData(module.activity.circadian, historicalCircadian)) return module;
+  const historicalActivityOwnerId = module.speciesId === "marsh-rabbit"
+    ? "game:core-wildlife-actor:v1"
+    : module.activity.ownerId;
+  if (
+    module.activity.ownerId === historicalActivityOwnerId
+    && sameData(module.activity.circadian, historicalCircadian)
+  ) return module;
   const historical = canonicalizeLivingSpeciesModule({
     ...module,
     activity: {
       ...module.activity,
+      ownerId: historicalActivityOwnerId,
       circadian: historicalCircadian,
     },
   });

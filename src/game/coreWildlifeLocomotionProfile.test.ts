@@ -305,10 +305,30 @@ describe("core wildlife locomotion profiles", () => {
   it("makes real damp rough terrain a rabbit route advantage rather than a private map", () => {
     const cover = tile({ terrain: "marsh", moisture: 850_000, roughness: 700_000 });
     const ridge = tile({ terrain: "ridge", moisture: 150_000, roughness: 700_000 });
-    expect(coreWildlifeTraversabilityCell("marsh-rabbit", cover).travelCost)
+    expect(coreWildlifeTraversabilityCell("marsh-rabbit", cover, "land").travelCost)
       .toBeLessThan(coreWildlifeTraversabilityCell("marsh-fox", cover).travelCost);
-    expect(coreWildlifeTraversabilityCell("marsh-rabbit", cover).travelCost)
-      .toBeLessThan(coreWildlifeTraversabilityCell("marsh-rabbit", ridge).travelCost);
+    expect(coreWildlifeTraversabilityCell("marsh-rabbit", cover, "land").travelCost)
+      .toBeLessThan(coreWildlifeTraversabilityCell(
+        "marsh-rabbit",
+        ridge,
+        "land",
+      ).travelCost);
+    expect(coreWildlifeTraversabilityCell("marsh-rabbit", cover, "land"))
+      .toEqual(coreWildlifeTraversabilityCell("marsh-rabbit", cover));
+    expect(coreWildlifeTraversabilityCell("marsh-rabbit", tile({
+      terrain: "deep-water",
+      waterDepth: ADRIFT_STAND_DEPTH + 1,
+    }), "land")).toEqual({ access: "deep-water", travelCost: 0 });
+    expect(() => coreWildlifeTraversabilityCell(
+      "north-american-river-otter",
+      cover,
+      "land",
+    )).toThrow("lacks a land locomotion profile");
+    expect(() => coreWildlifeTraversabilityCell(
+      "gull",
+      cover,
+      "land",
+    )).toThrow("lacks a land locomotion profile");
   });
 
   it("gives fleeing rabbits a bounded cadence and foxes a finite pursuit gait", () => {

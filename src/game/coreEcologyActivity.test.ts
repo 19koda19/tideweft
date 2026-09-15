@@ -111,6 +111,7 @@ describe("core ecology bounded activity", () => {
         "double-crested-cormorant",
         "seaside-sparrow",
         "diamondback-terrapin",
+        "marsh-rabbit",
       ]);
     expect(CORE_ECOLOGY_ACTIVITY_SPECIES).not.toContain("owl");
 
@@ -145,6 +146,12 @@ describe("core ecology bounded activity", () => {
         activityArchetypeId: "tidal-wader",
         profileId: "adaptive-active",
         drivers: ["clock", "tide", "opportunity"],
+      },
+      {
+        speciesId: "marsh-rabbit",
+        activityArchetypeId: "ground-cover-forager",
+        profileId: "twilight-active",
+        drivers: ["clock"],
       },
     ]);
     for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
@@ -1977,6 +1984,279 @@ describe("core ecology bounded activity", () => {
         posture: { state: "asleep", enteredAtTick: 741 },
         action: "sleep-at-rest-destination",
       },
+    });
+  });
+
+  it("lets one marsh rabbit forage at twilight and physically return to authenticated cover", () => {
+    const twilightPatch = activityPatch(390);
+    const twilightRabbit = memberFor(twilightPatch, "marsh-rabbit").actor;
+    const foraging = projectCoreEcologyActivity(twilightPatch, {
+      actorId: twilightRabbit.identity.stableId,
+      atTick: 390,
+    });
+    expect(foraging).toMatchObject({
+      scheduleScope: "circadian-routine",
+      state: "seeking-ground-foraging-area",
+      preferredNeutralIntent: "observe",
+      presentationSignal: "ground-relocation",
+      routine: {
+        profileId: "twilight-active",
+        clockPreference: "active",
+        effectivePreference: "active",
+        posture: { state: "awake" },
+        action: "remain-active",
+      },
+      motion: {
+        kind: "target-area",
+        verb: "forage-ground-local",
+        travelMedium: "land",
+      },
+    });
+    expect(foraging === null ? null : coreEcologyActivityTravelMedium(foraging.motion))
+      .toBe("land");
+    expect(foraging === null ? null : coreEcologyActivityDestinationSemantic(foraging.motion))
+      .toBe("deterministic-local-foraging-area");
+    const sameForagingLease = projectCoreEcologyActivity(twilightPatch, {
+      actorId: twilightRabbit.identity.stableId,
+      atTick: 399,
+    });
+    const nextForagingLease = projectCoreEcologyActivity(twilightPatch, {
+      actorId: twilightRabbit.identity.stableId,
+      atTick: 400,
+    });
+    expect(sameForagingLease?.motion).toEqual(foraging?.motion);
+    expect(nextForagingLease?.motion).not.toEqual(foraging?.motion);
+    expect(stepCoreEcologyActivityMotion(twilightPatch, {
+      actorId: twilightRabbit.identity.stableId,
+      atTick: 390,
+      maximumStepUnits: 650,
+    })).toBeNull();
+    const foragingSurface = createLivingActorTraversabilitySurface({
+      forActorId: twilightRabbit.identity.stableId,
+      sampledAtTick: 390,
+      origin: createWorldPosition(ORIGIN, 0, 0),
+      widthTiles: WORLD_WIDTH,
+      heightTiles: WORLD_HEIGHT,
+      cells: Array.from(
+        { length: WORLD_WIDTH * WORLD_HEIGHT },
+        () => ({ access: "open" as const, travelCost: 300_000 }),
+      ),
+    });
+    const foragingStep = stepCoreEcologyActivityMotion(twilightPatch, {
+      actorId: twilightRabbit.identity.stableId,
+      atTick: 390,
+      maximumStepUnits: 650,
+      surface: foragingSurface,
+    });
+    expect(foragingStep?.resolution).toBe("moved");
+    if (foraging?.motion.kind !== "target-area" || foragingStep === null) {
+      throw new Error("Rabbit twilight foraging did not produce a physical target step");
+    }
+    const foragingBefore = worldPositionDelta(
+      twilightRabbit.address.position,
+      foraging.motion.targetArea.center,
+    );
+    const foragingAfter = worldPositionDelta(
+      memberFor(foragingStep.patch, "marsh-rabbit").actor.address.position,
+      foraging.motion.targetArea.center,
+    );
+    expect(Math.hypot(foragingAfter.x, foragingAfter.y))
+      .toBeLessThan(Math.hypot(foragingBefore.x, foragingBefore.y));
+
+    const restPatch = activityPatch(720);
+    const restingRabbit = memberFor(restPatch, "marsh-rabbit").actor;
+    const cover = restingRabbit.address.position;
+    expect(projectCoreEcologyActivity(restPatch, {
+      actorId: restingRabbit.identity.stableId,
+      atTick: 720,
+    })).toMatchObject({
+      scheduleScope: "circadian-routine",
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      presentationSignal: "resting",
+      routine: {
+        profileId: "twilight-active",
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        posture: { state: "resting", enteredAtTick: 720 },
+        action: "settle-at-rest-destination",
+        restDestinationArrived: true,
+      },
+      motion: { kind: "hold-position" },
+    });
+
+    const displacedRabbit = repositionCoreWildlifeActor(restingRabbit, {
+      atTick: 720,
+      position: translateWorldPosition(
+        cover,
+        4 * WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      heading: restingRabbit.address.heading,
+    });
+    const displacedPatch = replaceCoreEcologyAggregatePatchActor(
+      restPatch,
+      displacedRabbit,
+    );
+    const returning = projectCoreEcologyActivity(displacedPatch, {
+      actorId: displacedRabbit.identity.stableId,
+      atTick: 720,
+    });
+    expect(returning).toMatchObject({
+      state: "seeking-habitat-anchor",
+      preferredNeutralIntent: "observe",
+      presentationSignal: "ground-relocation",
+      routine: {
+        profileId: "twilight-active",
+        effectivePreference: "rest",
+        posture: { state: "awake" },
+        action: "travel-to-rest-destination",
+        restDestinationArrived: false,
+      },
+      motion: {
+        kind: "target-area",
+        verb: "seek-ground-cover",
+        targetArea: { center: cover },
+        travelMedium: "land",
+      },
+    });
+    expect(returning === null ? null : coreEcologyActivityDestinationSemantic(returning.motion))
+      .toBe("authenticated-habitat-anchor");
+    expect(stepCoreEcologyActivityMotion(displacedPatch, {
+      actorId: displacedRabbit.identity.stableId,
+      atTick: 720,
+      maximumStepUnits: 650,
+    })).toBeNull();
+    const coverSurface = createLivingActorTraversabilitySurface({
+      forActorId: displacedRabbit.identity.stableId,
+      sampledAtTick: 720,
+      origin: createWorldPosition(ORIGIN, 0, 0),
+      widthTiles: WORLD_WIDTH,
+      heightTiles: WORLD_HEIGHT,
+      cells: Array.from(
+        { length: WORLD_WIDTH * WORLD_HEIGHT },
+        () => ({ access: "open" as const, travelCost: 300_000 }),
+      ),
+    });
+    const returnStep = stepCoreEcologyActivityMotion(displacedPatch, {
+      actorId: displacedRabbit.identity.stableId,
+      atTick: 720,
+      maximumStepUnits: 650,
+      surface: coverSurface,
+    });
+    expect(returnStep?.resolution).toBe("moved");
+    if (returnStep === null) throw new Error("Rabbit cover return did not move");
+    const coverAfter = worldPositionDelta(
+      memberFor(returnStep.patch, "marsh-rabbit").actor.address.position,
+      cover,
+    );
+    expect(Math.hypot(coverAfter.x, coverAfter.y))
+      .toBeLessThan(4 * WORLD_POSITION_UNITS_PER_TILE);
+
+    const arrivedPatch = replaceCoreEcologyAggregatePatchActor(
+      displacedPatch,
+      repositionCoreWildlifeActor(displacedRabbit, {
+        atTick: 720,
+        position: cover,
+        heading: displacedRabbit.address.heading,
+      }),
+    );
+    const committed = stepCoreEcologyActivityMotion(arrivedPatch, {
+      actorId: displacedRabbit.identity.stableId,
+      atTick: 720,
+      maximumStepUnits: 1,
+    });
+    if (committed === null) throw new Error("Rabbit cover rest did not commit");
+    const reloaded = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(committed.patch),
+    );
+    if (reloaded === null) throw new Error("Rabbit cover rest did not reload");
+    expect(memberFor(reloaded, "marsh-rabbit").actor.identity.stableId)
+      .toBe(displacedRabbit.identity.stableId);
+    expect(projectCoreEcologyActivity(reloaded, {
+      actorId: displacedRabbit.identity.stableId,
+      atTick: 741,
+    })).toMatchObject({
+      state: "resting",
+      routine: {
+        profileId: "twilight-active",
+        posture: { state: "asleep", enteredAtTick: 741 },
+        action: "sleep-at-rest-destination",
+      },
+    });
+  });
+
+  it("lets immediate danger and urgent rest override the rabbit's twilight clock", () => {
+    const activePatch = activityPatch(390);
+    const rabbit = memberFor(activePatch, "marsh-rabbit").actor;
+    const threat = createActorObservation({
+      id: "rabbit-twilight-threat:391",
+      observerId: rabbit.identity.stableId,
+      observedAtTick: 391,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "FOX-rabbit-twilight-threat",
+      area: { center: rabbit.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Rabbit threat fixture failed");
+    const alarmed = stepCoreWildlifeActor(rabbit, {
+      tick: 391,
+      observations: [threat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (alarmed === null) throw new Error("Rabbit threat response failed");
+    expect(projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(activePatch, alarmed.actor),
+      { actorId: alarmed.actor.identity.stableId, atTick: 391 },
+    )).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: true,
+      routine: {
+        profileId: "twilight-active",
+        effectivePreference: "active",
+        posture: { state: "startled" },
+        transitionCause: "disturbance",
+      },
+      motion: { kind: "defer-to-intent" },
+    });
+
+    const tired = replaceCoreWildlifeActorPhysiology(rabbit, {
+      atTick: 390,
+      needs: { ...rabbit.needs, rest: 500_000 },
+      condition: rabbit.condition,
+    });
+    const restIntent = stepCoreWildlifeActor(tired, {
+      tick: 391,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (restIntent === null) throw new Error("Rabbit urgent-rest response failed");
+    expect(restIntent.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+    });
+    expect(projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(activePatch, restIntent.actor),
+      { actorId: restIntent.actor.identity.stableId, atTick: 391 },
+    )).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: {
+        profileId: "twilight-active",
+        clockPreference: "active",
+        effectivePreference: "rest",
+        posture: { state: "resting" },
+        action: "settle-at-rest-destination",
+      },
+      motion: { kind: "hold-position" },
     });
   });
 
