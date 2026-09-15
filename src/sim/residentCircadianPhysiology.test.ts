@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   createActorObservation,
+  createActorPerceptionState,
+  stepActorPerception,
   type ActorObservation,
 } from "./actorPerception";
 import {
@@ -352,6 +354,36 @@ describe("resident circadian physiology", () => {
     expect(residentById(world, bound.id).condition.exhaustion).toBe(BASE_EXHAUSTION);
     expect(residentById(world, bound.id).needs.rest)
       .toBe(BASE_REST_PRESSURE + 24_000);
+    assertWorldInvariants(world);
+  });
+
+  it("denies a stale sleep-recovery tick while the resident owns an active watch", () => {
+    const world = worldBeforeNeedsTick(
+      "an identified resident is still on watch",
+      NIGHT_NEEDS_TICK,
+    );
+    const resident = world.residents.find(({ activeContractId }) => activeContractId === null);
+    if (resident === undefined) throw new Error("watch fixture needs an available resident");
+    resident.location = { kind: "settlement", settlementId: resident.homeSettlementId };
+    preparePhysiology(resident);
+    const observedAtTick = NIGHT_NEEDS_TICK - 1;
+    const observation = currentVisualObservation(resident, observedAtTick, "active-watch");
+    const perception = stepActorPerception(
+      createActorPerceptionState(resident.identity.stableId, observedAtTick - 1),
+      { tick: observedAtTick, observations: [observation] },
+    );
+    if (perception === null || perception.suspicion !== "identified") {
+      throw new Error("watch fixture did not establish current identified attention");
+    }
+    resident.perception = perception;
+    bindCircadian(world, resident.id, "asleep");
+
+    stepWorld(world, [], completePerceptionFrame(world, NIGHT_NEEDS_TICK, new Map()));
+
+    const watched = residentById(world, resident.id);
+    expect(["identified", "searching"]).toContain(watched.perception.suspicion);
+    expect(watched.condition.exhaustion).toBe(BASE_EXHAUSTION);
+    expect(watched.needs.rest).toBe(BASE_REST_PRESSURE + 24_000);
     assertWorldInvariants(world);
   });
 

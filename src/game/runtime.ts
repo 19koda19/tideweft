@@ -683,7 +683,8 @@ import {
   type PorterResponseInput,
   type PorterResponseState,
 } from "./porterResponse";
-import { projectSettlementKeeperCircadian } from "./settlementKeeperCircadian";
+import { planSettlementKeeperCircadian } from "./settlementKeeperCircadian";
+import { planResidentCircadian } from "./residentCircadian";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
 import {
   LIVING_ACTOR_PLAYER_CHOICE_VERSION,
@@ -7365,13 +7366,13 @@ function stepRuntimePorterResponse(
 }
 
 /**
- * Commits the representative keeper's routine only after every human-owned
- * perception, location, contract, and porter-response owner has reached the
- * same authoritative tick. A legacy keeper first encountered away from home
- * remains unbound until a later physical home arrival; no schedule fact is
- * invented remotely.
+ * Commits one shared routine across every current human only after perception,
+ * location, contracts, weather, and the keeper's separate response owner have
+ * reached the same authoritative tick. Legacy humans first encountered away
+ * from home remain unbound until a later physical home arrival; no house,
+ * commute, or remote schedule history is invented.
  */
-function advanceRuntimeSettlementKeeperCircadian(
+export function advanceRuntimeResidentCircadian(
   currentWorld: WorldState,
   settlement: SettlementEcologyState,
   response: PorterResponseState,
@@ -7386,33 +7387,38 @@ function advanceRuntimeSettlementKeeperCircadian(
     || response.tick !== atTick
   ) return null;
   const keeper = matchingResidents[0]!;
-  const physicallyHome = keeper.location.kind === "settlement"
-    && keeper.location.settlementId === keeper.homeSettlementId
-    && keeper.activeContractId === null;
-  const projection = projectSettlementKeeperCircadian({
-    resident: keeper,
-    settlementEcology: settlement,
-    porterResponse: response,
-    weather: currentWorld.weather,
-    atTick,
-  });
-  if (projection === null) {
-    return keeper.circadian === undefined && !physicallyHome
-      ? currentWorld
-      : null;
+  const replacements: ResidentState[] = [];
+  for (const resident of currentWorld.residents) {
+    const plan = resident.identity.stableId === keeper.identity.stableId
+      ? planSettlementKeeperCircadian({
+          resident,
+          settlementEcology: settlement,
+          porterResponse: response,
+          weather: currentWorld.weather,
+          atTick,
+        })
+      : planResidentCircadian({
+          resident,
+          duty: null,
+          weather: currentWorld.weather,
+          atTick,
+        });
+    if (plan === null) return null;
+    if (plan.kind === "unbound-deferred") {
+      replacements.push(resident);
+      continue;
+    }
+    try {
+      replacements.push(replaceResidentCircadian(resident, {
+        atTick,
+        circadian: plan.projection.receipt,
+      }));
+    } catch {
+      return null;
+    }
   }
-  let replacement: ResidentState;
-  try {
-    replacement = replaceResidentCircadian(keeper, {
-      atTick,
-      circadian: projection.receipt,
-    });
-  } catch {
-    return null;
-  }
-  const residentIndex = currentWorld.residents.indexOf(keeper);
-  if (residentIndex < 0) return null;
-  currentWorld.residents[residentIndex] = replacement;
+  if (replacements.length !== currentWorld.residents.length) return null;
+  currentWorld.residents = replacements;
   return currentWorld;
 }
 
@@ -11369,13 +11375,13 @@ export async function createTideweftRuntime(
       physicalCargo = resolvedRegionalResources.physicalCargo;
       settlementEcology = settlementEcologyAfterAggregate;
       porterResponse = acceptedPorterResponse;
-      const circadianWorld = advanceRuntimeSettlementKeeperCircadian(
+      const circadianWorld = advanceRuntimeResidentCircadian(
         world,
         settlementEcology,
         porterResponse,
       );
       if (circadianWorld === null) {
-        throw new Error("Settlement keeper circadian state could not commit");
+        throw new Error("Resident circadian states could not commit atomically");
       }
       world = circadianWorld;
       clearPlayerSenseSamples();

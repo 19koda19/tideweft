@@ -435,6 +435,43 @@ profiles, not all 45 core-wildlife records. People/companion breadth,
 multi-day/package performance evidence, cumulative validation, and final
 Turning Day release verification remain later work.
 
+The local Alpha51 **A Day Shared** source candidate generalizes the Alpha46
+keeper bridge across all 42 current original-estuary residents without adding a
+second human scheduler. `src/game/residentCircadian.ts` validates each human's
+stable identity, same-tick perception, needs, condition, location, optional
+receipt, and fresh authoritative weather before projecting the existing shared
+day-active policy. Home-settlement presence with no active contract is the only
+current rest destination. Promise work and route travel remain owned by the
+simulation; only the existing keeper wrapper may contribute its separately
+authenticated non-neutral porter-response duty. The generic resident
+`intention` value is not treated as a work shift because it is also the neutral
+low-need fallback.
+
+Current `identified`, `alert`, or `searching` cognition is active watch;
+`noticed` or `suspicious` alone does not prevent settling, while a current
+strong lawful interruption still uses STARTLED. Routine projection and resident
+rest physiology share that exact watch rule, preventing a stale sleeping
+receipt from granting one recovery tick before cognition wakes the person.
+Storms and urgent needs retain their existing precedence, and dusk never forces
+sleep.
+
+The runtime stages replacements for the complete 42-resident roster and commits
+only after every eligible projection validates. Loading and saving alone keeps
+legacy receipt absence byte-stable. An unbound human adopts on an ordinary tick
+only while physically home; a visitor already at a foreign settlement remains
+unbound, and a bound visitor wakes with home arrival false. No guest bed,
+return commute, house, interior, teleport, or movement owner is invented to hide
+that current gap. Existing resident identity, relationships, contracts,
+perception, physiology, and presentation remain separately authoritative.
+
+The Alpha45 kennel-bound working dog remains the truthful current
+relationship-bearing domestic-animal continuity witness: its stable identity,
+custody, caretaker, guardian assignment, kennel journey, needs, sleep, reload,
+and dawn wake remain intact. The independent dog has no authenticated rest
+place and remains unbound. No bonded player companion exists yet, so Alpha51
+does not fabricate or advertise one. Outer save version 32, simulation format
+4, Regional Ecology V6, and both dog roots remain unchanged.
+
 ## Authoritative tick
 
 One world tick:
@@ -460,7 +497,7 @@ The playable slice uses:
 - One segmented continuous world addressed by exact signed storage-region coordinates plus normalized fixed-point local coordinates. The original 96 × 72 seeded Perlin/fBm estuary is embedded unchanged at its established global address, and migrated Alpha 0.1 saves preserve their serialized 64 × 48 terrain there. Outside that authored extent, terrain, water, biome, current, and weather inputs come from call-order-independent global sampling.
 - A bounded 120 × 120 spatial frame projects the nearby world for traversal and rendering. It slides by 16 tiles before the player leaves its 52-tile safety band; presentation coordinates, routes, cameras, pointer targets, terrain memory, and projected objects rebase by one exact delta while authoritative world positions do not change. Internal 96 × 72 regions remain persistence and streaming partitions only and never become player geography.
 - Seven specialized settlements with five-resource inventories, recipes, stress, inter-settlement trust, sourced knowledge, and one civic project each.
-- 42 original-estuary human residents with immutable semantic origin identity, deterministic display identity, roles, traits, needs, relationships, condition, bounded memories, player knowledge, intention, location, and optional active contract.
+- 42 original-estuary human residents with immutable semantic origin identity, deterministic display identity, roles, traits, needs, relationships, condition, bounded memories, player knowledge, intention, location, optional active contract, and an optional shared home-anchored circadian receipt projected atomically across the current roster.
 - Exactly one independently generated domestic dog, paired deterministically with one existing porter for a bounded food-and-rain interaction without making either actor the other's owner or companion.
 - Exactly one separate seed-stable settlement working dog in a bounded roster, with its own kennel custody and one generic persisted guardian assignment tied to the existing keeper, two-goat herd, and pen worksite. It does not rewrite the original dog's independent relationship.
 - One canonical bounded forty-seven-record living-species catalog containing
@@ -2083,6 +2120,20 @@ unchanged. Alpha50 is local and unpublished. It does not bind the other 28
 wildlife profiles, other 41 humans, the independent dog, or a not-yet-existing
 player-bonded companion, and it does not supply final multi-day/package proof
 or close Turning Day.
+
+The local Alpha51 **A Day Shared** source candidate adds one bounded generic
+resident adapter over the already-optional human receipt and commits the entire
+42-person roster atomically. Home location authorizes rest; existing route and
+Promise state authorizes travel/work; only the keeper wrapper contributes a
+validated external duty. Current identified/alert/searching cognition owns
+watchfulness, and the simulation's recovery gate consumes the same rule. The
+adapter creates no occupational schedule, movement, lodging, or knowledge.
+Legacy humans adopt only at home on an ordinary tick, so a foreign visitor stays
+without a circadian receipt rather than teleporting or being presented as
+Resting/Asleep. Alpha45's relationship-bearing
+working dog remains the existing kennel continuity proof. The independent dog
+has no valid rest anchor, and no bonded player companion is claimed. Save v32,
+simulation v4, resident identity/relationships, and dog roots remain unchanged.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

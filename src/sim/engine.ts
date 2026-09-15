@@ -41,6 +41,7 @@ import {
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
   residentCircadianUrgentPreference,
+  residentCircadianWatchReference,
 } from "./livingCircadian";
 
 const WEATHER_DOMAIN = 0x5745_4154;
@@ -993,7 +994,11 @@ function residentCircadianRestIsRestorative(
     && belief.strongInterrupt
     && belief.salience >= circadian.policy.wakeSensitivity
   ));
-  if (currentStrongSignal || world.weather.kind === "storm") return false;
+  if (
+    currentStrongSignal
+    || residentCircadianWatchReference(resident.perception) !== null
+    || world.weather.kind === "storm"
+  ) return false;
 
   const clockPreference = projectLivingCircadianClockPreference(
     resident.identity.stableId,

@@ -169,7 +169,7 @@ export const RESIDENT_CIRCADIAN_URGENT_REST_NEED = 750_000 as const;
 export const RESIDENT_CIRCADIAN_URGENT_BELONGING_NEED = 760_000 as const;
 export const RESIDENT_CIRCADIAN_URGENT_EXHAUSTION = 720_000 as const;
 
-/** The representative compatibility-human binding uses the shared diurnal profile. */
+/** The current compatibility-human roster uses the shared diurnal profile. */
 export const RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY: LivingCircadianPolicy = deepFreeze({
   version: LIVING_CIRCADIAN_VERSION,
   ownerId: LIVING_CIRCADIAN_OWNER_ID,
@@ -181,6 +181,28 @@ export const RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY: LivingCircadianPolicy = deepF
 export interface ResidentCircadianUrgentPreference {
   readonly referenceId: "need:food" | "need:rest" | "condition:exhaustion" | "need:belonging";
   readonly preference: LivingCircadianPreference;
+}
+
+/**
+ * Current cognition states that amount to active watch/search work. Weak
+ * noticed or suspicious states remain compatible with settling; a resident
+ * does not lose an entire night merely for hearing something uncertain.
+ */
+export function residentCircadianWatchReference(
+  perceptionValue: unknown,
+): string | null {
+  const perception = canonicalizeActorPerceptionState(perceptionValue);
+  if (perception === null) return null;
+  switch (perception.suspicion) {
+    case "identified":
+    case "alert":
+    case "searching":
+      return `perception:${perception.suspicion}`;
+    case "unaware":
+    case "noticed":
+    case "suspicious":
+      return null;
+  }
 }
 
 export interface ResidentCircadianBinding {

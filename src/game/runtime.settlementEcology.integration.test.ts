@@ -139,7 +139,11 @@ import {
   regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
-import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import {
+  advanceRuntimeResidentCircadian,
+  createTideweftRuntime,
+  type TideweftRuntime,
+} from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import {
   canonicalizeSettlementEcologyState,
@@ -4133,7 +4137,7 @@ describe("runtime settlement ecology integration", () => {
     reloaded.destroy();
   }, 180_000);
 
-  it("gives the existing keeper one persistent home rest bout and wakes the same human at dawn", async () => {
+  it("adopts every current home resident atomically while preserving the keeper's exact dawn wake", async () => {
     const world = createWorld("settlement keeper home night continuity", "wild");
     const startingSettlementId = world.contracts.find(({ status }) => status === "offered")
       ?.originSettlementId ?? world.settlements[0]?.id;
@@ -4213,6 +4217,12 @@ describe("runtime settlement ecology integration", () => {
       kind: "settlement",
       settlementId: keeper.homeSettlementId,
     });
+    const residentContinuity = migratedWorld.residents.map((resident) => ({
+      id: resident.id,
+      identity: resident.identity,
+      homeSettlementId: resident.homeSettlementId,
+      relationships: resident.relationships,
+    }));
 
     keeper.condition.exhaustion = 360_000;
     keeper.needs.rest = 480_000;
@@ -4224,6 +4234,24 @@ describe("runtime settlement ecology integration", () => {
       ...createPorterResponseState(keeper.identity.stableId, startingTick),
       nextThinkTick: startingTick + WORLD_TICKS_PER_DAY,
     };
+    const invalidRosterWorld = deserializeWorld(serializeWorld(migratedWorld));
+    const invalidIndex = invalidRosterWorld.residents.at(-1)?.identity.stableId
+      === keeper.identity.stableId
+      ? invalidRosterWorld.residents.length - 2
+      : invalidRosterWorld.residents.length - 1;
+    const invalidResident = invalidRosterWorld.residents[invalidIndex];
+    if (invalidResident === undefined) throw new Error("atomic roster fixture is incomplete");
+    invalidResident.perception = createActorPerceptionState(
+      invalidResident.identity.stableId,
+      startingTick - 1,
+    );
+    const invalidRosterBefore = stableStringify(invalidRosterWorld.residents);
+    expect(advanceRuntimeResidentCircadian(
+      invalidRosterWorld,
+      migratedSettlement,
+      quietResponse,
+    )).toBeNull();
+    expect(stableStringify(invalidRosterWorld.residents)).toBe(invalidRosterBefore);
     const preparedRecord = withCurrentEnvelopeFields(migratedRecord, {
       world: serializeWorld(migratedWorld),
       porterResponse: quietResponse,
@@ -4253,6 +4281,20 @@ describe("runtime settlement ecology integration", () => {
     }
     const restingTick = savedWorld.meta.completedTick;
     expect(restingTick).toBe(startingTick + 1);
+    expect(savedWorld.residents).toHaveLength(42);
+    expect(savedWorld.residents.every((resident) => (
+      resident.circadian !== undefined
+      && resident.circadian.restDestinationArrived
+    ))).toBe(true);
+    expect(savedWorld.residents.map((resident) => ({
+      id: resident.id,
+      identity: resident.identity,
+      homeSettlementId: resident.homeSettlementId,
+      relationships: resident.relationships,
+    }))).toEqual(residentContinuity);
+    expect(new Set(savedWorld.residents.map((resident) => (
+      resident.circadian?.restDestinationId
+    ))).size).toBe(savedWorld.residents.length);
     expect(restingKeeper.identity).toEqual(keeper.identity);
     expect(restingKeeper.location).toEqual(keeper.location);
     expect(restingKeeper.circadian).toMatchObject({

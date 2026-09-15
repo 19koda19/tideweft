@@ -81,7 +81,7 @@ Each seed creates:
 
 - One continuous deterministic terrain world. The original 96 × 72 seeded estuary remains unchanged at its established coordinates, including five authoritative terrain families, tidal water depth, and seven derived biome identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. A bounded 120 × 120 presentation frame moves quietly through the world as the courier travels; stored Alpha 0.1 worlds retain their original 64 × 48 terrain inside it.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
-- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, and a world location.
+- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, a world location, and one shared home-anchored day/night routine whose real work, travel, weather, need, and watch overrides preserve individual continuity.
 - Exactly one independent domestic dog generated from stable seed and origin inputs, paired with one existing porter for a bounded food-and-rain interaction without ownership or a companion bond.
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.
@@ -984,6 +984,37 @@ complete only for the seventeen current addressable activity profiles, not all
 performance evidence, cumulative validation, publication, and Turning Day
 closure remain later work.
 
+The local **A Day Shared** Alpha51 source candidate applies the same human
+routine to all 42 current original-estuary residents. A contract-free person at
+their real home settlement can settle, become Asleep, and wake through the one
+saved clock with stable individual timing. Actual Promise contracts and route
+travel remain work; the food-store keeper's non-neutral porter response remains
+the only separately authenticated current duty. A resident's generic `work`
+intention is not promoted into a fictional occupational shift.
+
+Human attention matters without becoming omniscience. A person currently
+`identified`, `alert`, or `searching` remains awake on watch. Merely noticing or
+being suspicious does not by itself erase sleep, while a sufficiently strong
+lawful interruption can still produce STARTLED. Storms, urgent food or
+belonging, and genuine rest pressure/exhaustion retain their ordinary rules.
+Dusk expresses preference; it never commands every person to sleep.
+
+The whole bounded resident roster is prepared before any new receipt commits.
+Eligible legacy residents adopt only on an ordinary tick at their real home;
+loading alone changes nothing. A courier already at a foreign settlement is not
+teleported home or granted a fabricated guest bed and remains an explicit
+future visitor/recovery problem. Existing ABOUT and both world views can show
+Resting or Asleep only when the person is directly visible and the receipt is
+currently physical; hidden timing, needs, destinations, and attention remain
+private.
+
+The existing kennel-bound working dog preserves the current honest
+relationship-bearing continuity case across sleep and dawn. Its identity,
+custody, caretaker, assignment, kennel, needs, and relationships do not change.
+The independent dog has no authenticated den, and there is no bonded or named
+player companion yet. Alpha51 adds neither one. It changes no population,
+occupational production, human movement owner, save version, or dog schema.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1823,6 +1854,18 @@ does not fabricate a sleeping frog. Alpha50 remains local and unpublished; it
 does not schedule the other 28 wildlife profiles, the other 41 humans, the
 independent dog, or an absent player-bonded companion, and it does not yet
 supply final multi-day/package evidence or close Turning Day.
+Local Alpha51 **A Day Shared** now processes all 42 current original-estuary
+residents through one generic home-anchored routine transaction. Promise
+contracts, route travel, the keeper's authenticated response duty, storms,
+urgent needs, and lawful identified/alert/searching attention retain priority;
+weak uncertainty does not itself erase rest, and the shared physiology gate
+uses the same watch rule. Loading alone preserves receipt absence, each eligible
+home resident adopts on an ordinary tick, and the roster commits atomically.
+Foreign visitors gain no fictional lodging or commute. The kennel-bound working
+dog keeps its exact identity, custody, assignment, and sleep continuity; the
+independent dog remains unbound and no player companion is invented. Alpha51 is
+local and unpublished and still lacks the final multi-day/package evidence and
+Turning Day closure gate.
 
 Live through Alpha 39:
 

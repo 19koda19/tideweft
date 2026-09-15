@@ -4,6 +4,51 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.51 — 2026-09-15
+
+Build: `0.3.3-alpha.51` · Gameplay contract: 49 · Tutorial: 61
+
+A Day Shared is the local unpublished Alpha 51 source candidate: all forty-two current original-estuary residents now use the same saved, home-anchored day/night routine while real work, travel, weather, needs, and lawful attention retain priority.
+
+### Gameplay
+
+- All forty-two current original-estuary human residents now share the one day-active living-circadian contract with stable identity-derived timing. A contract-free resident at their real home settlement may settle, become Asleep, and wake through the same saved civil clock.
+- Active Promise contracts and route travel keep their existing resident awake. The starting-harbor keeper's authenticated porter response remains a real duty override rather than becoming a generic invented work shift.
+- Current identified, alert, or searching perception counts as active watch. Weak noticed or suspicious information does not by itself erase rest, while a sufficiently strong current sensory interruption still produces STARTLED through the shared routine.
+- The existing settlement working dog retains its physical kennel sleep/wake path, custody relationship, guardian assignment, stable identity, and needs. This is the current relationship-bearing domestic-dog continuity witness; no bonded player companion is fabricated.
+
+### Fixes
+
+- The former one-keeper runtime commit now prepares every eligible resident replacement, explicitly validates any lawful unbound deferral, and applies the roster only when the complete bounded transaction validates, preventing partial human schedule updates.
+- Human rest physiology and routine projection now share one watch/search rule, so a stale sleeping receipt cannot grant recovery immediately before current cognition wakes the resident.
+- A legacy human adopts routine state only while physically home and free of a contract. A resident already away remains without a circadian receipt or Resting/Asleep presentation until a lawful home arrival; the clock does not teleport them or invent a commute.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Dusk does not force sleep: danger, work, travel, storms, hunger, belonging, exhaustion, rest pressure, and perception continue to determine what a person does.
+- This slice adds no settlement, human, dog, species, population unit, cargo, item, reward, occupational production shift, house, bed, interior, or movement owner.
+- Resident routines are evaluated through one bounded shared abstraction and representative population witnesses, not forty bespoke schedules or an interaction matrix.
+
+### Interface
+
+- Chart, Relief, quick inspection, and ABOUT already consume the generic resident projection and may now truthfully show Resting or Asleep for any directly observed bound resident.
+- Presentation still hides schedule timing, phase offsets, wake thresholds, destination digests, exact needs, private attention targets, and unseen actors.
+- Field Manual version 61 explains the current forty-two-resident boundary, honest work/watch overrides, relationship-bearing working-dog continuity, and systems that remain future work.
+
+### Save changes
+
+- Outer save version 32 and simulation save format 4 remain unchanged. ResidentState already supported the optional version-1 shared circadian receipt, so no migration or parallel human save root is added.
+- Loading and saving alone preserves historical receipt absence. The next ordinary authoritative tick adopts each eligible at-home resident atomically; away legacy residents remain absent without fabricated history.
+- Stable human identity, home, relationships, needs, perception, location, contracts, and existing dog custody/assignment records remain separately authoritative across sleep, wake, save, and reload.
+
+### Known limitations
+
+- Alpha 51 A Day Shared is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- Current human breadth is the existing forty-two residents in the original compatibility region, not infinite regional population generation, autonomous occupational shifts, houses, interiors, or physical commutes.
+- A courier who finishes at a foreign settlement has no invented guest bed or return commute in this slice and receives no authenticated circadian rest there. That physical visitor/recovery gap stays explicit.
+- The independent dog still has no authenticated den or companion bond. A bonded, named player companion does not yet exist; the existing kennel-bound working dog is not reclassified as one.
+- Final multi-day CPU/save-growth evidence, packaged desktop/mobile parity, cumulative validation, and Turning Day closure remain before Living Voice.
+
 ## 0.3.3-alpha.50 — 2026-09-15
 
 Build: `0.3.3-alpha.50` · Gameplay contract: 48 · Tutorial: 60

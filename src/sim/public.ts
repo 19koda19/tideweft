@@ -37,6 +37,7 @@ export {
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
   residentCircadianUrgentPreference,
+  residentCircadianWatchReference,
   residentHomeRestDestinationId,
 } from "./livingCircadian";
 export type {

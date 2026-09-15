@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.50",
+      version: "0.3.3-alpha.51",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.50",
-      gameplayContractVersion: 48,
-      tutorialVersion: 60,
+      buildIdentity: "0.3.3-alpha.51",
+      gameplayContractVersion: 49,
+      tutorialVersion: 61,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-50 Many Rhythms and retains the earlier Turning Day slices", () => {
-    const currentCopy = PATCH_NOTE_CATEGORIES
+  it("scopes Alpha-51 A Day Shared and retains the earlier Turning Day slices", () => {
+    const alpha51Copy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
-    const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha51Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha50Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.50",
+    );
+    const currentCopy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha50Release?.categories[category] ?? [])
+      .join(" ");
+    const currentLimitations = alpha50Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha49Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.49",
     );
@@ -331,8 +339,31 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Many Rhythms");
-    expect(LATEST_PATCH_NOTE.summary).toContain("all seventeen existing wildlife species with declared activity profiles");
+    expect(LATEST_PATCH_NOTE.summary).toContain("A Day Shared");
+    expect(LATEST_PATCH_NOTE.summary).toContain("all forty-two current original-estuary residents");
+    expect(alpha51Copy).toContain("All forty-two current original-estuary human residents");
+    expect(alpha51Copy).toContain("contract-free resident at their real home settlement may settle, become Asleep, and wake");
+    expect(alpha51Copy).toContain("Active Promise contracts and route travel");
+    expect(alpha51Copy).toContain("authenticated porter response remains a real duty override");
+    expect(alpha51Copy).toContain("identified, alert, or searching perception counts as active watch");
+    expect(alpha51Copy).toContain("Weak noticed or suspicious information does not by itself erase rest");
+    expect(alpha51Copy).toContain("settlement working dog retains its physical kennel sleep/wake path");
+    expect(alpha51Copy).toContain("no bonded player companion is fabricated");
+    expect(alpha51Copy).toContain("applies the roster only when the complete bounded transaction validates");
+    expect(alpha51Copy).toContain("stale sleeping receipt cannot grant recovery");
+    expect(alpha51Copy).toContain("does not teleport them or invent a commute");
+    expect(alpha51Copy).toContain("Dusk does not force sleep");
+    expect(alpha51Copy).toContain("adds no settlement, human, dog, species, population unit");
+    expect(alpha51Copy).toContain("not forty bespoke schedules or an interaction matrix");
+    expect(alpha51Copy).toContain("Field Manual version 61");
+    expect(alpha51Copy).toContain("Outer save version 32 and simulation save format 4 remain unchanged");
+    expect(alpha51Copy).toContain("Loading and saving alone preserves historical receipt absence");
+    expect(alpha51Limitations).toContain("original compatibility region");
+    expect(alpha51Limitations).toContain("no invented guest bed or return commute");
+    expect(alpha51Limitations).toContain("bonded, named player companion does not yet exist");
+    expect(alpha51Limitations).toContain("Turning Day closure remain before Living Voice");
+    expect(alpha50Release?.summary).toContain("Many Rhythms");
+    expect(alpha50Release?.summary).toContain("all seventeen existing wildlife species with declared activity profiles");
     expect(currentCopy).toContain("exactly covers all seventeen current wildlife activity profiles");
     expect(currentCopy).toContain("Fourteen are day-active");
     expect(currentCopy).toContain("North American river otter remains night-active");
