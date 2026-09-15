@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.47",
+      version: "0.3.3-alpha.48",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.47",
-      gameplayContractVersion: 45,
-      tutorialVersion: 57,
+      buildIdentity: "0.3.3-alpha.48",
+      gameplayContractVersion: 46,
+      tutorialVersion: 58,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-47 Rest and Rise and retains the earlier Turning Day slices", () => {
+  it("scopes Alpha-48 Tide at the Roost and retains the earlier Turning Day slices", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha47Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.47",
+    );
+    const alpha47Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha47Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha47Limitations = alpha47Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha46Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.46",
     );
@@ -315,25 +323,49 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Rest and Rise");
-    expect(currentCopy).toContain("REST 30 MIN");
-    expect(currentCopy).toContain("exactly three hundred ordinary player steps");
-    expect(currentCopy).toContain("SLEEP TO DAWN");
-    expect(currentCopy).toContain("first authoritative 06:00 boundary");
-    expect(currentCopy).toContain("Weather, tide, cargo, actors, ecology, Promises, deadlines");
-    expect(currentCopy).toContain("Sleep ignores visual-only interruption");
-    expect(currentCopy).toContain("withholds new actor, item, label, and interaction detail");
-    expect(currentCopy).toContain("event-observation cursor still crosses elapsed sleeping time");
-    expect(currentCopy).toContain("at most one ordinary world minute per presented frame");
-    expect(currentCopy).toContain("REST is unavailable at full stamina and requires stable dry footing");
-    expect(currentCopy).toContain("one labeled floating recovery control beside WAIT");
-    expect(currentCopy).toContain("Quiet Hour's return-to-title action is now labeled Save & return");
-    expect(currentCopy).toContain("Outer save version 32 adds one nullable version-1 player time-action receipt");
-    expect(currentCopy).toContain("starting partial player-step phase");
-    expect(currentCopy).toContain("version-31 save adopts version 32 with no active recovery action");
-    expect(currentCopy).toContain("persists across save and reload at the exact committed step");
-    expect(currentCopy).toContain("never applies closed-app or background elapsed time");
-    expect(currentLimitations).toContain("no new fatigue, hunger, thirst, player health, injury, shelter, camp, bed, house, interior, dream");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Tide at the Roost");
+    expect(currentCopy).toContain("existing snowy egret tidal-wader");
+    expect(currentCopy).toContain("adaptive-active policy");
+    expect(currentCopy).toContain("one saved civil clock");
+    expect(currentCopy).toContain("current authoritative tide");
+    expect(currentCopy).toContain("current lawful anonymous aquatic-activity observation");
+    expect(currentCopy).toContain("ordinary aerial locomotion");
+    expect(currentCopy).toContain("authenticated saved dry refuge");
+    expect(currentCopy).toContain("Travel remains Awake");
+    expect(currentCopy).toContain("Resting begins only after physical arrival");
+    expect(currentCopy).toContain("Asleep begins only after the shared settling interval");
+    expect(currentCopy).toContain("Immediate danger, urgent needs, and retained commitments outrank");
+    expect(currentCopy).toContain("cannot create prey, knowledge, safety, or a guaranteed feeding outcome");
+    expect(currentCopy).toContain("adds no egret, population unit, aggregate resource");
+    expect(currentCopy).toContain("no capture, injury, death, consumption, carcass, fishing");
+    expect(currentCopy).toContain("directly observable current Resting or Asleep posture");
+    expect(currentCopy).toContain("Outer save version 32 and RegionalEcologyStateV6 remain unchanged");
+    expect(currentCopy).toContain("optional version-1 wildlife circadian receipt");
+    expect(currentCopy).toContain("cannot remain an activating driver");
+    expect(currentCopy).toContain("clock or priority authority may still independently prefer activity");
+    expect(currentCopy).toContain("actor identity remains separately stable");
+    expect(currentCopy).toContain("phase is deterministically rederived from that identity and policy");
+    expect(currentCopy).toContain("receipt stores policy, the authenticated rest-destination receipt, and posture with its entered tick");
+    expect(currentCopy).toContain("phase is deterministically rederived from identity plus policy rather than serialized in the receipt");
+    expect(currentCopy).toContain("Before behavioral use, the full-detail activity projection reauthenticates");
+    expect(currentCopy).toContain("raw save parsing does not prove the live refuge or current body location");
+    expect(currentCopy).toContain("while coarse, it conserves only an already committed bounded rest bout");
+    expect(currentCopy).toContain("does not resample tide or opportunity");
+    expect(currentCopy).toContain("evaluates current environmental drivers after rematerialization");
+    expect(currentCopy).not.toContain("cannot keep the actor active");
+    expect(currentCopy).not.toContain("receipt's canonical stable identity");
+    expect(currentCopy).toContain("Legacy worlds and egret actors without a receipt remain valid");
+    expect(currentLimitations).toContain("not a new species, broader population pass, production crepuscular profile");
+    expect(currentLimitations).toContain("validated broad coarse-time advancement");
+    expect(currentLimitations).toContain("Turning Day directive closure remain unfinished");
+    expect(alpha47Release?.summary).toContain("Rest and Rise");
+    expect(alpha47Copy).toContain("REST 30 MIN");
+    expect(alpha47Copy).toContain("exactly three hundred ordinary player steps");
+    expect(alpha47Copy).toContain("SLEEP TO DAWN");
+    expect(alpha47Copy).toContain("first authoritative 06:00 boundary");
+    expect(alpha47Copy).toContain("Outer save version 32 adds one nullable version-1 player time-action receipt");
+    expect(alpha47Copy).toContain("never applies closed-app or background elapsed time");
+    expect(alpha47Limitations).toContain("no new fatigue, hunger, thirst, player health, injury, shelter, camp, bed, house, interior, dream");
     expect(alpha46Release?.summary).toContain("The Keeper Sleeps");
     expect(alpha46Copy).toContain("Exactly one existing human");
     expect(alpha46Copy).toContain("stable food-store keeper");

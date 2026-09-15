@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(57);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(58);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -56,8 +56,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.shortTitle).toBe("What's New");
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "whats-new-rest-and-rise",
-        title: "Rest without stopping the living world",
+        id: "whats-new-tide-at-the-roost",
+        title: "The tide reaches the roost",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,28 +70,35 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 47 · Rest and Rise is a local unpublished source candidate");
-    expect(copy).toContain("REST 30 MIN applies neutral input for exactly three hundred ordinary player steps");
-    expect(copy).toContain("stamina is not already full");
-    expect(copy).toContain("SLEEP TO DAWN");
-    expect(copy).toContain("first authoritative 06:00 boundary");
-    expect(copy).toContain("Storm weather blocks or interrupts sleep");
-    expect(copy).toContain("never forces sleep at dusk");
-    expect(copy).toContain("Weather, tides, cargo, actors, ecology, Promises, deadlines, exposure, and hazards");
-    expect(copy).toContain("qualifying current lawful disturbance can interrupt only after the triggering step commits");
-    expect(copy).toContain("new actor, item, label, and interaction detail is withheld in both Chart and Relief");
-    expect(copy).toContain("visual-only events cannot wake or become retroactive player knowledge");
-    expect(copy).toContain(
-      "strong lawful hearing or scent and physical consequences remain live",
-    );
-    expect(copy).toContain("outer save version 32");
-    expect(copy).toContain("resumes after reload");
-    expect(copy).toContain("accrues no closed-app or background time");
-    expect(copy).toContain("version-31 save adopts with no active recovery action");
-    expect(copy).toContain("Quiet Hour now says Save & return");
-    expect(copy).toContain("no fatigue, hunger, thirst, health, injury, physical camp, bed, house, interior, or dream system");
+    expect(copy).toContain("Alpha 48 · Tide at the Roost is a local unpublished source candidate");
+    expect(copy).toContain("existing snowy egret now composes the shared adaptive-active circadian policy");
+    expect(copy).toContain("same saved civil clock");
+    expect(copy).toContain("current authoritative tide");
+    expect(copy).toContain("current lawful anonymous AQUATIC ACTIVITY observation");
+    expect(copy).toContain("usable depth-safe wading edge or lawful opportunity can favor activity");
+    expect(copy).toContain("ordinary aerial locomotion");
+    expect(copy).toContain("authenticated saved dry refuge");
+    expect(copy).toContain("Travel remains Awake");
+    expect(copy).toContain("Resting begins only after physical arrival");
+    expect(copy).toContain("Asleep begins only after the shared settling interval");
+    expect(copy).toContain("Immediate danger, urgent needs, and retained commitments still win");
+    expect(copy).toContain("no routine signal creates prey, knowledge, safety, or a feeding result");
+    expect(copy).toContain("adds no egret, population unit, density, cargo, item, capture, injury, death");
+    expect(copy).toContain("Direct inspection may show only current observable posture");
+    expect(copy).toContain("egret actor's identity remains separately stable");
+    expect(copy).toContain("phase is deterministically rederived from identity plus policy");
+    expect(copy).toContain("optional wildlife circadian receipt stores only policy, the authenticated rest-destination receipt, and posture with its entered tick");
+    expect(copy).toContain("Raw save parsing preserves those canonical receipt fields but does not prove the live refuge or current body location");
+    expect(copy).toContain("full-detail activity projection reauthenticates those world facts before behavioral use");
+    expect(copy).toContain("While coarse, the egret conserves only an already committed bounded rest bout");
+    expect(copy).toContain("does not resample tide or opportunity");
+    expect(copy).toContain("evaluated again after full-detail rematerialization");
+    expect(copy).toContain("Outer save version 32 and RegionalEcologyStateV6 remain unchanged");
+    expect(copy).toContain("Alpha 47 REST 30 MIN and settlement SLEEP TO DAWN remain live");
+    expect(copy).toContain("one representative adaptive tide-and-opportunity binding");
+    expect(copy).toContain("not validated broad coarse-time advancement");
+    expect(copy).toContain("a production crepuscular profile, full catalog schedule");
     expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("Broader schedules and final Turning Day closure remain unfinished");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
 
@@ -108,11 +115,16 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("WAIT 10 MIN, REST 30 MIN, and settlement SLEEP TO DAWN all advance this same clock");
     expect(copy).toContain("one settlement working dog uses its stable-identity day-active boundary");
     expect(copy).toContain("one food-store keeper uses the same clock for a home-settlement rest");
+    expect(copy).toContain("existing snowy egret combines it with current tide and lawful aquatic opportunity");
     expect(copy).toContain(
-      "Remaining humans, the independent dog, bonded/player companions, catalog-wide actor schedules, and validated coarse-time advancement remain later",
+      "Remaining humans, the independent dog, bonded/player companions, production crepuscular and weather-driven bindings, catalog-wide actor schedules, and validated coarse-time advancement remain later",
     );
     expect(liveBoundary?.title).toBe("Present in this source candidate");
     expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
+    expect(liveBoundary?.body).toContain("existing snowy egret with an adaptive clock-, tide-, and opportunity-driven physical dry-refuge routine");
+    expect(liveBoundary?.body).toContain("Raw parsing preserves canonical receipt data without proving current location or refuge");
+    expect(liveBoundary?.body).toContain("Coarse absence conserves an already committed bounded rest bout without sampling new tide or opportunity");
+    expect(liveBoundary?.body).toContain("Alpha 48 Tide at the Roost remains a local unpublished source candidate");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -658,8 +670,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("one conserved non-addressable area aggregate");
     expect(copy).toContain("Fish evacuate a drying anchor into saved wet refuge immediately");
     expect(copy).toContain("Surface dimples, brief school glints, burrow openings, and feeding scrapes");
-    expect(copy).toContain("shared vision gives it a current anonymous AQUATIC ACTIVITY observation");
-    expect(copy).toContain("only then can shared locomotion carry it toward that observed edge");
+    expect(copy).toContain("shared adaptive-active routine combines the one civil clock with current authoritative tide");
+    expect(copy).toContain("current anonymous AQUATIC ACTIVITY learned through shared vision");
+    expect(copy).toContain("usable wading edge or lawful opportunity can favor activity");
+    expect(copy).toContain("physically returns to refuge, becomes Resting only after arrival");
+    expect(copy).toContain("Immediate danger, urgent needs, and retained commitments still win");
     expect(copy).toContain("cannot capture, injure, kill, consume, create a carcass, or implement fishing");
     expect(copy).toContain("two saved dabbling-water destinations, and one dry refuge");
     expect(copy).toContain("FLOATING, WATER SCAN, DABBLING, RESTING, SURFACE SWIMMING, or RELOCATION FLIGHT");

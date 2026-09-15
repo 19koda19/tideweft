@@ -126,16 +126,25 @@ describe("core ecology bounded activity", () => {
       speciesId: binding.speciesId,
       activityArchetypeId: binding.activityArchetypeId,
       profileId: binding.policy.profileId,
+      drivers: binding.policy.drivers,
     }))).toEqual([
       {
         speciesId: "fish-crow",
         activityArchetypeId: "perch-watch",
         profileId: "day-active",
+        drivers: ["clock"],
       },
       {
         speciesId: "north-american-river-otter",
         activityArchetypeId: "shore-water-forager",
         profileId: "night-active",
+        drivers: ["clock"],
+      },
+      {
+        speciesId: "snowy-egret",
+        activityArchetypeId: "tidal-wader",
+        profileId: "adaptive-active",
+        drivers: ["clock", "tide", "opportunity"],
       },
     ]);
     for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
@@ -1171,7 +1180,7 @@ describe("core ecology bounded activity", () => {
       preferredNeutralIntent: "rest",
       routine: {
         effectivePreference: "rest",
-        posture: { state: "resting", enteredAtTick: 722 },
+        posture: { state: "resting", enteredAtTick: 721 },
         action: "settle-at-rest-destination",
       },
     });
@@ -1195,11 +1204,11 @@ describe("core ecology bounded activity", () => {
         atTick: 722,
       },
     )).toMatchObject({
-      routine: { posture: { state: "resting", enteredAtTick: 722 } },
+      routine: { posture: { state: "resting", enteredAtTick: 721 } },
     });
   });
 
-  it("holds without prey evidence and returns from wading ground to its dry refuge", () => {
+  it("composes lawful tide and opportunity drivers with the egret's physical refuge", () => {
     let highPatch = tidalActivityPatch(360);
     const highEgret = memberFor(highPatch, "snowy-egret").actor;
     const highTide = projectCoreEcologyTidalTable(highPatch, 360)?.snowyEgret;
@@ -1222,6 +1231,11 @@ describe("core ecology bounded activity", () => {
       state: "waiting-on-tide",
       presentationSignal: null,
       sourceObservationId: null,
+      routine: {
+        profileId: "adaptive-active",
+        activatingDriver: "tide",
+        effectivePreference: "active",
+      },
       motion: { kind: "hold-position" },
     });
     const moved = stepCoreEcologyActivityMotion(highPatch, {
@@ -1246,46 +1260,269 @@ describe("core ecology bounded activity", () => {
       state: "wading-scan",
       presentationSignal: "wading-scan",
       sourceObservationId: null,
+      routine: {
+        activatingDriver: "tide",
+        effectivePreference: "active",
+      },
       motion: { kind: "hold-position" },
     });
 
-    let restPatch = tidalActivityPatch(0);
+    const departureOpportunity = createActorObservation({
+      id: "egret-refuge-departure:361",
+      observerId: highEgret.identity.stableId,
+      observedAtTick: 361,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: highTide.wadingTarget.targetPosition, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (departureOpportunity === null) {
+      throw new Error("Egret refuge-departure observation fixture failed");
+    }
+    const departing = stepCoreWildlifeActor(memberFor(highPatch, "snowy-egret").actor, {
+      tick: 361,
+      observations: [departureOpportunity],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (departing === null) throw new Error("Egret refuge-departure cognition failed");
+    const departurePatch = replaceCoreEcologyAggregatePatchActor(highPatch, departing.actor);
+    expect(projectCoreEcologyActivity(departurePatch, {
+      actorId: highEgret.identity.stableId,
+      atTick: 361,
+    })).toMatchObject({
+      state: "seeking-wading-ground",
+      routine: { restDestinationArrived: true },
+      motion: { kind: "target-area", verb: "seek-wading-ground" },
+    });
+    const departed = stepCoreEcologyActivityMotion(departurePatch, {
+      actorId: highEgret.identity.stableId,
+      atTick: 361,
+      maximumStepUnits: WORLD_POSITION_UNITS_PER_TILE,
+    });
+    expect(departed?.resolution).toBe("moved");
+    expect(memberFor(departed!.patch, "snowy-egret").actor.circadian)
+      .toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+
+    let restPatch = tidalActivityPatch(50);
     const restingEgret = memberFor(restPatch, "snowy-egret").actor;
-    const restTide = projectCoreEcologyTidalTable(restPatch, 0)?.snowyEgret;
-    if (restTide?.wadingTarget === null || restTide?.wadingTarget === undefined) {
-      throw new Error("Fixture lacks a low-tide egret edge");
+    const restTide = projectCoreEcologyTidalTable(restPatch, 50)?.snowyEgret;
+    if (restTide === null || restTide === undefined || restTide.wadingTarget !== null) {
+      throw new Error("Fixture does not close its depth-safe wading window");
     }
     restPatch = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
       restingEgret,
       {
-        atTick: 0,
-        position: restTide.wadingTarget.targetPosition,
+        atTick: 50,
+        position: highTide.wadingTarget.targetPosition,
         heading: restingEgret.address.heading,
       },
     ));
     expect(projectCoreEcologyActivity(restPatch, {
       actorId: restingEgret.identity.stableId,
-      atTick: 0,
+      atTick: 50,
     })).toMatchObject({
       state: "seeking-tidal-refuge",
       presentationSignal: "tidal-relocation-flight",
+      routine: {
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        activatingDriver: null,
+      },
       motion: { kind: "target-area", verb: "seek-tidal-refuge" },
     });
     const atRefuge = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
       restingEgret,
       {
-        atTick: 0,
+        atTick: 50,
         position: restTide.refugeTarget.targetPosition,
         heading: restingEgret.address.heading,
       },
     ));
     expect(projectCoreEcologyActivity(atRefuge, {
       actorId: restingEgret.identity.stableId,
-      atTick: 0,
+      atTick: 50,
     })).toMatchObject({
       state: "resting",
       preferredNeutralIntent: "rest",
       presentationSignal: "resting",
+      routine: {
+        effectivePreference: "rest",
+        posture: { state: "resting", enteredAtTick: 50 },
+        action: "settle-at-rest-destination",
+      },
+      motion: { kind: "hold-position" },
+    });
+
+    const committedRest = stepCoreEcologyActivityMotion(atRefuge, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 50,
+      maximumStepUnits: 1,
+    });
+    if (committedRest === null) throw new Error("Egret rest routine did not commit");
+    expect(committedRest.resolution).toBe("held");
+    const restDecision = stepCoreWildlifeActor(
+      memberFor(committedRest.patch, "snowy-egret").actor,
+      {
+        tick: 51,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "rest",
+      },
+    );
+    if (restDecision === null) throw new Error("Egret rest cognition did not commit");
+    expect(restDecision.actor.intent.kind).toBe("rest");
+    const restingPatch = replaceCoreEcologyAggregatePatchActor(
+      committedRest.patch,
+      restDecision.actor,
+    );
+    const beforeOpportunity = projectCoreEcologyActivity(restingPatch, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 52,
+    });
+    expect(beforeOpportunity).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: { posture: { state: "resting" }, effectivePreference: "rest" },
+    });
+
+    const opportunity = createActorObservation({
+      id: "egret-aquatic-opportunity:52",
+      observerId: restingEgret.identity.stableId,
+      observedAtTick: 52,
+      channel: "vision",
+      perceivedClass: "aquatic-activity",
+      subjectId: null,
+      area: { center: highTide.wadingTarget.targetPosition, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "classified",
+      interrupt: "none",
+    });
+    if (opportunity === null) throw new Error("Egret opportunity fixture failed");
+    const observing = stepCoreWildlifeActor(restDecision.actor, {
+      tick: 52,
+      observations: [opportunity],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: beforeOpportunity?.preferredNeutralIntent ?? "observe",
+    });
+    if (observing === null) throw new Error("Egret rejected lawful aquatic opportunity");
+    expect(observing.actor.intent.kind).toBe("rest");
+    const observedPatch = replaceCoreEcologyAggregatePatchActor(restingPatch, observing.actor);
+    expect(projectCoreEcologyActivity(observedPatch, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 52,
+    })).toMatchObject({
+      state: "waiting-on-tide",
+      preferredNeutralIntent: "observe",
+      sourceObservationId: opportunity.id,
+      routine: {
+        clockPreference: "rest",
+        effectivePreference: "active",
+        activatingDriver: "opportunity",
+        causeReferenceId: opportunity.id,
+        posture: { state: "awake", enteredAtTick: 52 },
+      },
+      motion: { kind: "hold-position" },
+    });
+    const awakened = stepCoreEcologyActivityMotion(observedPatch, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 52,
+      maximumStepUnits: 1,
+    });
+    if (awakened === null) throw new Error("Egret opportunity wake did not commit");
+    expect(memberFor(awakened.patch, "snowy-egret").actor.circadian?.posture)
+      .toEqual({ state: "awake", enteredAtTick: 52 });
+    expect(projectCoreEcologyActivity(awakened.patch, {
+      actorId: restingEgret.identity.stableId,
+      atTick: 53,
+    })).toMatchObject({
+      sourceObservationId: null,
+      routine: {
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        activatingDriver: null,
+      },
+    });
+
+    const threat = createActorObservation({
+      id: "egret-roost-threat:53",
+      observerId: restingEgret.identity.stableId,
+      observedAtTick: 53,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "PREDATOR-egret-roost",
+      area: { center: restTide.refugeTarget.targetPosition, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Egret roost threat fixture failed");
+    const responding = stepCoreWildlifeActor(
+      memberFor(awakened.patch, "snowy-egret").actor,
+      {
+        tick: 53,
+        observations: [threat],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "observe",
+      },
+    );
+    if (responding === null) throw new Error("Egret roost response failed");
+    expect(projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(awakened.patch, responding.actor),
+      { actorId: restingEgret.identity.stableId, atTick: 53 },
+    )).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: true,
+      preferredNeutralIntent: null,
+      routine: {
+        effectivePreference: "active",
+        posture: { state: "startled", enteredAtTick: 53 },
+        action: "respond-to-disturbance",
+        transitionCause: "disturbance",
+        causeReferenceId: threat.id,
+      },
+      motion: { kind: "defer-to-intent" },
+    });
+
+    let urgentPatch = tidalActivityPatch(150);
+    const urgentEgret = memberFor(urgentPatch, "snowy-egret").actor;
+    const urgentTide = projectCoreEcologyTidalTable(urgentPatch, 150)?.snowyEgret;
+    if (urgentTide?.wadingTarget === null || urgentTide?.wadingTarget === undefined) {
+      throw new Error("Urgent-rest fixture lacks a depth-safe tide driver");
+    }
+    const urgentAtRefuge = repositionCoreWildlifeActor(urgentEgret, {
+      atTick: 150,
+      position: urgentTide.refugeTarget.targetPosition,
+      heading: urgentEgret.address.heading,
+    });
+    const tired = replaceCoreWildlifeActorPhysiology(urgentAtRefuge, {
+      atTick: 150,
+      needs: { ...urgentAtRefuge.needs, rest: 500_000 },
+      condition: urgentAtRefuge.condition,
+    });
+    urgentPatch = replaceCoreEcologyAggregatePatchActor(urgentPatch, tired);
+    expect(projectCoreEcologyActivity(urgentPatch, {
+      actorId: tired.identity.stableId,
+      atTick: 150,
+    })).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: {
+        activatingDriver: "tide",
+        effectivePreference: "rest",
+        transitionCause: "priority-override",
+        causeReferenceId: "need:rest",
+      },
       motion: { kind: "hold-position" },
     });
   });

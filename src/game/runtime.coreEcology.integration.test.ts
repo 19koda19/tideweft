@@ -1243,8 +1243,17 @@ describe("runtime core-ecology vertical slice", () => {
       beforeEgret.identity.stableId,
     )).toMatchObject({
       species: "snowy-egret",
-      state: "waiting-on-tide",
-      preferredNeutralIntent: "observe",
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: {
+        profileId: "adaptive-active",
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        activatingDriver: null,
+        restDestinationArrived: true,
+        posture: { state: "resting" },
+        action: "settle-at-rest-destination",
+      },
       motion: { kind: "hold-position" },
     });
 
@@ -1263,8 +1272,8 @@ describe("runtime core-ecology vertical slice", () => {
     expect(afterEgret.updatedAtTick).toBe(afterWorld.meta.completedTick);
     expect(afterEgret.address.position).toEqual(beforeEgret.address.position);
     expect(afterEgret.intent).toMatchObject({
-      kind: "observe",
-      cause: { kind: "condition", referenceId: "condition:neutral-watch" },
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
       focusObservationId: null,
     });
     expect(requiredRegionalActivityProjection(
@@ -1272,8 +1281,17 @@ describe("runtime core-ecology vertical slice", () => {
       afterEgret.identity.stableId,
     )).toMatchObject({
       species: "snowy-egret",
-      state: "waiting-on-tide",
-      preferredNeutralIntent: "observe",
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: {
+        profileId: "adaptive-active",
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        activatingDriver: null,
+        restDestinationArrived: true,
+        posture: { state: "resting" },
+        action: "settle-at-rest-destination",
+      },
       motion: { kind: "hold-position" },
     });
     expect(afterEgret.perception.beliefs.length).toBeGreaterThan(0);
@@ -3258,9 +3276,14 @@ describe("runtime core-ecology vertical slice", () => {
       identity.species === "cougar" || identity.species === "brown-bear"
     ))).toBe(false);
     expectHistoricalBodyAdoption(adoptedEnvelope, alpha30Core, foxActorId, rabbitActorId);
+    expect(stableStringify(adoptedEnvelope.player))
+      .toBe(stableStringify({ ...alpha30Base.player, timeAction: null }));
 
     for (const key of Object.keys(alpha30Base).filter((key) => (
-      key !== "version" && key !== "coreEcology" && key !== "session"
+      key !== "version"
+      && key !== "coreEcology"
+      && key !== "session"
+      && key !== "player"
     ))) {
       expect(stableStringify(adoptedEnvelope[key]), key)
         .toBe(stableStringify(alpha30Base[key as keyof typeof alpha30Base]));

@@ -890,6 +890,37 @@ Hour's **Save & return** remains a zero-time stopping surface. This slice adds
 no fatigue, hunger, thirst, player health, physical camp, bed, interior, dream,
 or broader schedule system and does not by itself close Turning Day.
 
+The local **Tide at the Roost** Alpha48 candidate adds a third representative
+wildlife composition by binding exactly the existing snowy egret +
+`tidal-wader` pair to the shared `adaptive-active` policy. Its ordinary clock
+preference can be activated by a current authoritative tide signal when the
+saved tidal anchors provide a usable depth-safe wading edge, or by a current
+lawful anonymous aquatic-activity observation. Those signals do not create
+prey, knowledge, safety, or a feeding result; immediate danger, urgent needs,
+and retained commitments keep their higher priority.
+
+When rest is preferred, ordinary aerial locomotion carries that same bird to
+its authenticated saved dry refuge. Transit remains Awake, Resting begins only
+after physical arrival, and Asleep begins only after the shared settling
+interval. Loss of arrival wakes the egret. Save/load preserves the separately
+stable actor identity and the receipt's policy, authenticated rest-destination
+receipt, and posture with its entered tick. Phase is deterministically
+rederived from actor identity plus policy rather than serialized in that
+receipt. Raw save parsing preserves those canonical receipt fields but does not
+prove the live refuge or current body location; full-detail
+activity projection reauthenticates those facts before behavioral use. During
+coarse absence the egret conserves only an already committed bounded rest bout
+and does not resample tide or opportunity. Current environmental drivers are
+evaluated again after full-detail rematerialization. Chart, Relief, quick
+inspection, and ABOUT may expose only directly observable current posture and
+the existing wading behavior. Outer save version 32 and
+`RegionalEcologyStateV6` remain unchanged; legacy actors without an optional
+circadian receipt remain valid until a lawful current projection commits one.
+This adds no egret, population, density, capture, injury, death, consumption,
+carcass, fishing, player harm, dog harm, or human harm. It is not a production
+crepuscular or weather-driven binding, catalog-wide daily life, or Turning Day
+closure.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1677,6 +1708,23 @@ The exact in-progress receipt persists in outer save v32 with no offline time,
 while v31 adopts with no active action. Quiet Hour now says **Save & return**
 and remains zero-time. Alpha47 is likewise local and unpublished; broader
 schedules, final parity/performance proof, and Turning Day closure remain.
+Local Alpha48 **Tide at the Roost** now binds exactly the existing snowy-egret
+tidal-wader to the shared adaptive-active policy. Current tide and a current
+lawful anonymous aquatic opportunity can activate the routine beside the one
+civil clock; otherwise the same bird physically returns to its authenticated
+dry refuge and may Rest or become Asleep only after arrival and settling.
+Danger, urgent needs, and retained commitments still win. The optional
+wildlife receipt persists without changing outer save v32 or regional ecology
+V6; it stores policy, the authenticated rest-destination receipt, and posture
+with its entered tick. Actor identity remains separately stable and phase is
+deterministically rederived rather than stored there. Raw parsing does not
+authenticate live refuge/location; full-detail
+activity reauthenticates before use, and coarse absence retains only a bounded
+committed rest bout until environmental drivers are evaluated after
+rematerialization. No bird, population, prey, harm, mortality, or teleport path
+is added.
+Alpha48 remains a local unpublished candidate rather than catalog-wide,
+crepuscular, validated broad coarse-time, or directive-closing coverage.
 
 Live through Alpha 39:
 

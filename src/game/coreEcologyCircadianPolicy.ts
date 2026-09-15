@@ -56,6 +56,12 @@ export const CORE_ECOLOGY_CIRCADIAN_BINDINGS: readonly CoreEcologyCircadianBindi
       profileId: "night-active",
       drivers: ["clock"],
     }),
+    binding({
+      speciesId: "snowy-egret",
+      activityArchetypeId: "tidal-wader",
+      profileId: "adaptive-active",
+      drivers: ["clock", "tide", "opportunity"],
+    }),
   ]);
 
 if (new Set(CORE_ECOLOGY_CIRCADIAN_BINDINGS.map(({ speciesId }) => speciesId)).size

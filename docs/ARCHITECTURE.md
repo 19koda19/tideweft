@@ -323,6 +323,38 @@ add no offline elapsed time. WAIT remains transient and separate. This slice
 adds no new fatigue, hunger, thirst, health, shelter, camp, bed, interior, or
 dream system, and it does not close Turning Day by itself.
 
+The local Alpha48 **Tide at the Roost** candidate extends the exact
+species/activity circadian registry with snowy egret + `tidal-wader` +
+`adaptive-active`. The policy retains the one authoritative clock and accepts
+only two additional current driver receipts: an authoritative-environment tide
+signal backed by the current saved-anchor depth projection, and a
+lawful-observation opportunity signal backed by the egret's current anonymous
+aquatic-activity observation. Driver references are derived from authenticated
+current facts; they never mint prey, population, knowledge, or a result.
+Immediate intent, urgent need, and active commitment retain priority.
+
+The tidal-wader owner passes its saved dry refuge through the same physical
+rest adapter used by the earlier representative wildlife. Ordinary aerial
+locomotion owns travel, so the egret remains Awake until the body reaches that
+exact refuge; only arrival permits Resting and the generic settling interval
+permits Asleep. Loss of arrival wakes it. Every wading, waiting, refuge,
+observed-opportunity, and immediate-response projection carries the same
+optional version-1 routine receipt. Serialization preserves only its policy,
+authenticated rest-destination receipt, and posture with its entered tick. The
+actor identity remains separately stable, and its phase is deterministically
+rederived from identity plus policy rather than serialized in the receipt. The
+raw save parser does not prove the live refuge or current body location. Before
+behavioral use, the full-detail activity projection
+reauthenticates stable actor, policy, tick, location, and destination. Legacy
+receipt absence remains valid until a lawful current projection commits it.
+During coarse absence the egret conserves only an already committed bounded
+rest bout and does not resample tide or opportunity; current environmental
+drivers are evaluated after full-detail rematerialization. Outer save v32,
+`RegionalEcologyStateV6`, and wildlife actor schema/version 1 remain unchanged.
+This is one tide/opportunity binding for one existing actor, not a new
+population, teleport path, crepuscular or weather-driven policy, catalog-wide
+conversion, harm/mortality extension, or Turning Day closure.
+
 ## Authoritative tick
 
 One world tick:
@@ -1233,10 +1265,10 @@ The registry qualifies an exact species/archetype pair rather than binding a
 whole archetype. Harbor seal therefore keeps its prior unbound
 `shore-water-forager` daylight/rest-window behavior, and every other activity
 profile keeps its preceding bounded behavior. The current catalog declares the
-otter nocturnal while all historical frozen catalog roots remain exact. This is
-not denning, a catalog-wide routine conversion, a production crepuscular or
-tide-driven binding, or the complete circadian system; humans, dogs, and player
-REST/SLEEP remain outside it. Alpha44's bounded player WAIT reuses the ordinary
+otter nocturnal while all historical frozen catalog roots remain exact. At the
+Alpha43 boundary this was not denning, a catalog-wide routine conversion, a
+production crepuscular or tide-driven binding, or the complete circadian
+system; humans, dogs, and player REST/SLEEP remained outside it. Alpha44's bounded player WAIT reuses the ordinary
 runtime fixed-step path independently of those still-unfinished actor routines.
 Alpha45 then adds one separate adapter for the existing settlement-custodied
 working dog only: its shared day-active preference can lead it physically to
@@ -1249,6 +1281,20 @@ Resting/Asleep and recovery, same-tick work and other current priorities wake
 them, and the post-command human sensory boundary removes only sleeping vision.
 It does not bind the other 41 humans, invent an interior, or add player
 REST/SLEEP.
+
+Alpha48 adds exactly one further registry composition: snowy egret +
+`tidal-wader` + `adaptive-active`, with declared `clock`, `tide`, and
+`opportunity` drivers. The tide signal exists only while the authoritative
+current anchor projection supplies a usable depth-safe wading target; the
+opportunity signal exists only from a current lawful anonymous aquatic
+observation. Either can favor activity, while neutral rest still requires
+physical arrival at the egret's existing authenticated dry refuge before the
+shared posture may settle or sleep. This is one production tide/opportunity
+binding. Its coarse representation conserves an already committed bounded rest
+bout without evaluating new tide or opportunity; full-detail rematerialization
+reauthenticates the live destination/location and evaluates current drivers.
+Production crepuscular and weather-driven bindings, validated broad coarse-time
+advancement, other animal routines, and catalog-wide daily life remain absent.
 
 `src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
@@ -1865,6 +1911,24 @@ world tick and partial player-step phase with no offline advance. Quiet Hour's
 `Save & return` remains a separate zero-time stopping action. Alpha47 has no
 push, CI, Pages, live-verification, new fatigue/needs/health, physical camp,
 interior, or Turning Day closure claim.
+
+The local Alpha48 **Tide at the Roost** candidate adds the exact snowy-egret +
+`tidal-wader` + `adaptive-active` registry composition. Current tide and a
+current lawful anonymous aquatic-opportunity receipt can activate the routine;
+ordinary aerial locomotion still owns movement to its saved dry refuge, and
+Resting/Asleep remain arrival- and settling-gated. Priority overrides remain
+authoritative, the optional wildlife receipt preserves the same committed
+bout by storing policy, the authenticated rest-destination receipt, and posture
+with its entered tick. Actor identity remains separately stable and phase is
+deterministically rederived from identity plus policy. Outer save v32 plus
+`RegionalEcologyStateV6` remain unchanged. Raw
+parsing preserves canonical data without authenticating live refuge/location;
+full-detail activity does that before behavioral use. Coarse absence does not
+resample tide or opportunity and retains only the already committed bounded
+rest bout until rematerialization. This adds no actor, population, prey,
+teleport, harm, mortality, crepuscular or weather binding, validated broad
+coarse-time advancement, catalog conversion, release evidence, or
+directive-closure claim.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

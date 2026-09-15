@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.48 — 2026-09-15
+
+Build: `0.3.3-alpha.48` · Gameplay contract: 46 · Tutorial: 58
+
+Tide at the Roost is the local unpublished Alpha 48 source candidate: the existing snowy egret now composes the shared adaptive-active circadian policy with the authoritative clock, current tide, and lawful aquatic opportunity while ordinary movement still owns every trip between wading water and its saved dry refuge.
+
+### Gameplay
+
+- The existing snowy egret tidal-wader is now a third representative wildlife consumer of the shared living-circadian kernel. Its adaptive-active policy composes the one saved civil clock with current authoritative tide and a current lawful anonymous aquatic-activity observation; it creates no second clock or species-specific scheduler.
+- When the routine prefers rest, the same egret travels through ordinary aerial locomotion toward its authenticated saved dry refuge. Travel remains Awake, Resting begins only after physical arrival, and Asleep begins only after the shared settling interval; the routine never teleports the bird or fabricates a refuge.
+- In full-detail activity, a currently usable depth-safe wading edge or lawful aquatic opportunity can activate the egret through its established tidal-wader behavior. Waiting on tide, wading scan, observed forage travel, immediate response, and refuge return now carry one coherent routine receipt instead of bypassing daily continuity.
+
+### Fixes
+
+- During full-detail activity, tide authority is derived from the current saved tidal anchors and target tick, while opportunity authority requires the egret's current lawful observation. After rematerialization, stale water depth, a missing anchor, or an expired observation cannot remain an activating driver or disclose a hidden target; clock or priority authority may still independently prefer activity.
+- Before behavioral use, the full-detail activity projection reauthenticates the exact egret identity, adaptive policy, cognition tick, current body location, and dry-refuge destination. Losing physical arrival wakes a resting bird, and contradictory routine state fails closed instead of repairing into sleep, movement, or another destination.
+- The egret's actor identity remains separately stable and its phase is deterministically rederived from that identity and policy. The receipt stores policy, the authenticated rest-destination receipt, and posture with its entered tick through save, reload, and bounded coarse absence; while coarse, it conserves only an already committed bounded rest bout and does not resample tide or opportunity.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Immediate danger, urgent needs, and retained commitments outrank neutral circadian preference; a current lawful opportunity may favor activity but cannot create prey, knowledge, safety, or a guaranteed feeding outcome.
+- This slice binds exactly the already-admitted snowy egret. It adds no egret, population unit, aggregate resource, materialization allowance, encounter density, cargo, item, or reward, and it does not make unsupported habitat less empty.
+- The egret's established interaction remains conserved and nonlethal: no capture, injury, death, consumption, carcass, fishing, player harm, dog harm, or human harm is added by its tide-aware routine.
+
+### Interface
+
+- Chart, Relief, quick inspection, and ABOUT may describe only a directly observable current Resting or Asleep posture alongside the egret's established visible wading, waiting, and relocation behavior.
+- Presentation never exposes the hidden circadian profile, stable phase, driver score, refuge identity, wake threshold, raw tide internals, or an aquatic opportunity the player did not lawfully observe.
+- Field Manual version 58 explains the egret's clock-, tide-, and opportunity-aware rhythm, physical refuge requirement, override priority, unchanged population boundary, persistence law, and deliberately narrow Turning Day scope.
+
+### Save changes
+
+- Outer save version 32 and RegionalEcologyStateV6 remain unchanged. Tide at the Roost adds no migration, parallel ecology root, new actor schema, or rewritten tidal-anchor record.
+- The existing optional version-1 wildlife circadian receipt stores the adaptive-active policy, authenticated rest-destination receipt, and posture with its entered tick after a lawful current projection. The egret actor's stable identity remains in its separate actor state, and phase is deterministically rederived from identity plus policy rather than serialized in the receipt.
+- Serialization preserves those canonical receipt fields, but raw save parsing does not prove the live refuge or current body location. The full-detail activity projection reauthenticates those world facts before the receipt can affect behavior and evaluates current environmental drivers after rematerialization.
+- Legacy worlds and egret actors without a receipt remain valid and gain no invented sleep history during parsing. The existing bird may bind only when ordinary current simulation lawfully processes its real refuge and tide state.
+
+### Known limitations
+
+- Alpha 48 Tide at the Roost is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This is one adaptive tide-and-opportunity binding for the existing snowy egret, not a new species, broader population pass, production crepuscular profile, weather-driven routine, catalog-wide schedule conversion, or full autonomous animal life simulation.
+- Remaining human routines, the independent dog, bonded/player companions, broader animal schedules, production crepuscular and weather-driven coverage, validated broad coarse-time advancement, final parity and performance evidence, and Turning Day directive closure remain unfinished before Living Voice.
+
 ## 0.3.3-alpha.47 — 2026-09-15
 
 Build: `0.3.3-alpha.47` · Gameplay contract: 45 · Tutorial: 57
