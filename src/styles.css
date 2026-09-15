@@ -2787,6 +2787,12 @@ button:focus-visible .keycap {
     color: var(--foam-muted);
   }
 
+  .mobile-field-strip__clock {
+    color: var(--tide-bright);
+    font-weight: 750;
+    letter-spacing: 0.05em;
+  }
+
   .mobile-field-strip__actions {
     color: var(--tide-bright);
   }

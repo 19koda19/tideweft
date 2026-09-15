@@ -125,6 +125,8 @@ export interface ClockUIView {
   readonly day: number;
   readonly timeLabel: string;
   readonly dayLabel?: string;
+  /** Production projections provide the phase; optional for legacy fixtures. */
+  readonly phase?: "dawn" | "day" | "dusk" | "night";
   readonly paused: boolean;
 }
 

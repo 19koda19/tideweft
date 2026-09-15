@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(49);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(50);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,22 +63,23 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
-    expect(copy).toContain("Cumulative CI, Pages deployment, and exact five-file live verification passed");
-    expect(copy).toContain("exact Alpha-38 forty-three-record prefix");
-    expect(copy).toContain("eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44 through 47");
-    expect(copy).toContain("Mosquitoes and periwinkles remain conserved non-addressable aggregates over at most two authenticated anchors");
-    expect(copy).toContain("Seaside sparrows form one group-atomic flock of two to four");
-    expect(copy).toContain("terrapin is solitary");
-    expect(copy).toContain("Sparrows require the local mosquito substrate and terrapins require periwinkle");
-    expect(copy).toContain("unsupported country remains honestly empty");
-    expect(copy).toContain("Chart, Relief, quick inspection, and ABOUT expose only lawful current actors or aggregate evidence");
-    expect(copy).toContain("unchanged outer save version 30 and RegionalEcologyStateV6");
-    expect(copy).toContain("preserving epochs 1 and 2 as an exact prefix and adopting the final cohort once without reload rerolls");
-    expect(copy).toContain("forty-five core-wildlife profiles plus the separate human and domestic-dog foundations");
-    expect(copy).toContain("Shared performance, seamless-crossing, conservation, and representative emergence coverage");
-    expect(copy).toContain("adds no bites, disease, exact insect or snail actors, capture, consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight");
-    expect(copy).toContain("The bounded biodiversity work is closed at the 45 / 47 target; The Turning Day is next, followed by Living Voice");
+    expect(copy).toContain("Alpha 40 One Clock is a local unpublished source candidate");
+    expect(copy).toContain("no renderer, actor system, region, device clock, or timezone owns a second clock");
+    expect(copy).toContain("Chart, Relief, event history, continue summaries");
+    expect(copy).toContain("released 06:00 through 20:00 behavior window");
+    expect(copy).toContain("outer save version 30");
+    expect(copy).toContain("Closing the game adds no offline time");
+    expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
+    expect(copy).toContain("Smooth outdoor light, complete actor schedules, player sleep/wait");
+    expect(copy).toContain("The Turning Day directive remains open");
+  });
+
+  it("describes the shared world clock without claiming unfinished Turning Day systems", () => {
+    const views = tutorialSectionById("views-and-hud");
+    const copy = views?.steps.map((step) => `${step.title} ${step.body}`).join(" ") ?? "";
+    expect(copy).toContain("One clock turns the whole world");
+    expect(copy).toContain("every 1,440 ticks begins a new day");
+    expect(copy).toContain("Smooth outdoor light, complete schedules, and player sleep/wait are still being connected");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

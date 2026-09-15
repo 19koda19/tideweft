@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.40 — 2026-09-14
+
+Build: `0.3.3-alpha.40` · Gameplay contract: 38 · Tutorial: 50
+
+One Clock is the local unpublished Alpha 40 source candidate: the first Turning Day slice gives existing world-time consumers one deterministic civil-day projection and adds an exact phase cue to the HUD.
+
+### Gameplay
+
+- One versioned civil-day contract now derives Day 1 onward from the existing authoritative completed world tick. One world tick remains one displayed minute; each 1,440-tick day is divided into Night, Dawn, Day, Dusk, and Night without a second mutable clock.
+- The established wildlife daylight/rest preference and resident rest-pressure window now consume that shared projection while preserving their released 06:00 through 20:00 behavior exactly.
+- Tide and weather retain their own existing tick-derived cycles. Midnight advances the civil day without resetting, delaying, or rerolling either system.
+
+### Fixes
+
+- HUD time, event timestamps, continue summaries, bounded wildlife activity, and resident rest pressure no longer maintain separate day-length arithmetic.
+- The same saved tick now produces the same day, minute, and phase in Chart 2D, Relief 3D, event history, and continue summaries regardless of frame rate, platform clock, timezone, loaded region, or view changes.
+- Malformed time input fails closed, while the largest safe persisted tick remains projectable without a coordinate- or region-dependent clock reset.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. This slice changes no world-time pacing, stamina rate, weather cadence, tide cadence, Promise deadline, animal density, or recovery outcome.
+- Dawn runs from 06:00 to 07:00, Day from 07:00 to 19:00, Dusk from 19:00 to 20:00, and Night fills the remaining hours. The broader 06:00 through 20:00 compatibility window prevents the first clock slice from silently changing released wildlife or resident behavior.
+- Closing, pausing, or leaving the game adds no offline elapsed time; deterministic world advancement remains the only way the clock moves.
+
+### Interface
+
+- The compact HUD clock now shows the exact time together with Dawn, Day, Dusk, or Night. Desktop, touch, Chart 2D, and Relief 3D read the same projected phase.
+- Render projections now carry the shared phase and normalized day position as presentation-safe data, without granting either renderer an independent clock.
+- Field Manual version 50 explains the shared clock and explicitly distinguishes this first slice from unfinished smooth outdoor light, complete actor schedules, and player sleep or wait.
+
+### Save changes
+
+- Outer save version 30 remains unchanged. Civil time is derived from the already-persisted completed tick, so this slice adds no mutable sidecar, migration, clock transaction, or per-region time record.
+- Save and reload preserve the exact tick and therefore reproduce the exact day, minute, phase, wildlife compatibility window, and resident rest-pressure result without rerolling.
+- Signed-region streaming, floating-origin rebasing, and extreme-distance travel cannot create another clock or reset the current day.
+
+### Known limitations
+
+- Alpha 40 One Clock is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED.
+- This slice does not yet change outdoor brightness, vision range, Chart or Relief terrain lighting, real light sources, weather transmission, or night readability. Its projected open-sky signal is groundwork for the next complete illumination slice, not a claim that darkness is live.
+- This candidate adds no complete circadian routines, physical sleeping destinations, asleep or startled actor state, human home or work schedule, dog sleep, player WAIT, REST, or SLEEP action, Living Voice, astronomy, seasons, new species, or mortality path. The Turning Day directive remains open.
+
 ## 0.3.3-alpha.39 — 2026-09-14
 
 Build: `0.3.3-alpha.39` · Gameplay contract: 37 · Tutorial: 49

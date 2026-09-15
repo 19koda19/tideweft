@@ -16,6 +16,7 @@ import {
   handleTideweftUIShortcut,
   mobileHudCopy,
   mobileHudDisclosureState,
+  mobileClockCopy,
   navigationTelemetryCopy,
   residentAboutActionPresentation,
   residentAboutSurfaceState,
@@ -29,6 +30,18 @@ import {
   titleWorldCreationState,
   wayknotActionButtonState,
 } from "./createTideweftUI";
+
+describe("compact clock parity", () => {
+  it("uses the same projected day, exact time, and phase on mobile", () => {
+    expect(mobileClockCopy({
+      day: 3,
+      dayLabel: "Day 3",
+      timeLabel: "19:00 · Dusk",
+      phase: "dusk",
+      paused: false,
+    })).toBe("Day 3 · 19:00 · Dusk");
+  });
+});
 
 class FakeForm extends EventTarget {
   hidden = false;

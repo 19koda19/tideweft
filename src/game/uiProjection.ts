@@ -12,6 +12,7 @@ import { residentKnowsFact } from "../sim/npcIdentity";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
 import { regionLocalToGlobalTile } from "../sim/regions";
+import { projectWorldTime } from "../sim/worldTime";
 import {
   fieldResourceStockUnits,
   type FieldResourceCatalog,
@@ -318,10 +319,8 @@ export function projectUIView(
   const report = reportObjective(economy, world, player);
   const spatialCenter = regionalWorldCenter(world);
   const navigation = projectNavigationCoordinates(world, player);
-  const minute = world.completedTick % 1_440;
-  const day = Math.floor(world.completedTick / 1_440) + 1;
-  const hour = Math.floor(minute / 60);
-  const minutes = minute % 60;
+  const worldTime = projectWorldTime(world.completedTick);
+  if (worldTime === null) throw new RangeError("UI projection received an invalid world tick");
   const tidePhase = tidePhaseName(world.tide.phase);
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
@@ -380,9 +379,10 @@ export function projectUIView(
     posture: session.posture,
     sessionShape: session.sessionShape,
     clock: {
-      day,
-      dayLabel: `Day ${day}`,
-      timeLabel: `${String(hour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+      day: worldTime.dayNumber,
+      dayLabel: `Day ${worldTime.dayNumber}`,
+      timeLabel: `${clockTimeLabel(worldTime.hour, worldTime.minute)} · ${titleCase(worldTime.phase)}`,
+      phase: worldTime.phase,
       paused: session.paused,
     },
     tide: {
@@ -1878,7 +1878,9 @@ function splitOnce(value: string, separator: string): readonly [string, string?]
 }
 
 function eventTimeLabel(tick: number): string {
-  return `D${Math.floor(tick / 1_440) + 1} ${String(Math.floor(tick % 1_440 / 60)).padStart(2, "0")}:${String(tick % 60).padStart(2, "0")}`;
+  const time = projectWorldTime(tick);
+  if (time === null) return "Time unknown";
+  return `D${time.dayNumber} ${clockTimeLabel(time.hour, time.minute)}`;
 }
 
 function projectChronicle(event: SimEvent, world: WorldView): ChronicleEntryUIView {
@@ -2283,9 +2285,13 @@ function routeDistance(route: WorldView["routes"][number], world: WorldView): nu
 }
 
 function formatWorldMoment(tick: number): string {
-  const minute = ((tick % 1_440) + 1_440) % 1_440;
-  const day = Math.floor(tick / 1_440) + 1;
-  return `D${day} ${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+  const time = projectWorldTime(tick);
+  if (time === null) return "Time unknown";
+  return `D${time.dayNumber} ${clockTimeLabel(time.hour, time.minute)}`;
+}
+
+function clockTimeLabel(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function formatMinutes(minutes: number): string {

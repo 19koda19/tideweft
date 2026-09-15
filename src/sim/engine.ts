@@ -20,6 +20,7 @@ import {
 } from "./types";
 import { clampInteger, compareText } from "./util";
 import { createInitialWorld, findRouteBetween, pressureMultiplier } from "./world";
+import { projectWorldTime } from "./worldTime";
 import { findAutonomousRoutePlan } from "./network";
 import {
   MAX_RESIDENT_MEMORIES,
@@ -1119,8 +1120,9 @@ function runProduction(world: WorldState, tick: number): void {
 function updateResidentNeeds(world: WorldState, tick: number): void {
   if (tick % 60 !== 0) return;
   const pressure = pressureMultiplier(world.meta.pressureMode);
-  const dayPhase = tick % 1_440;
-  const isRestPeriod = dayPhase < 360 || dayPhase >= 1_200;
+  const time = projectWorldTime(tick);
+  if (time === null) throw new RangeError("Resident needs received an invalid world tick");
+  const isRestPeriod = !time.establishedDaylight;
 
   for (const settlement of world.settlements) {
     // Presence, not home ownership, determines who can eat, rest, and think at

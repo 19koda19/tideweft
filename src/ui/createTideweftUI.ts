@@ -180,6 +180,11 @@ export interface MobileHudCopy {
   readonly actions: string;
 }
 
+/** Compact HUD uses the same already-projected clock as the desktop bar. */
+export function mobileClockCopy(clock: TideweftUIView["clock"]): string {
+  return `${clock.dayLabel ?? `Day ${clock.day}`} · ${clock.timeLabel}`;
+}
+
 export interface UnderfootTerrainSample {
   readonly terrainLabel: string;
   readonly isWater: boolean;
@@ -848,6 +853,7 @@ interface UIRefs {
   mobileFieldStrip: HTMLElement;
   mobileHudToggle: HTMLButtonElement;
   mobileKitButton: HTMLButtonElement;
+  mobileClock: HTMLSpanElement;
   mobileObjective: HTMLSpanElement;
   mobileStamina: HTMLProgressElement;
   mobileStaminaValue: HTMLSpanElement;
@@ -1238,7 +1244,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const clock = createElement("div", "clock-readout");
   clock.setAttribute("aria-label", "Estuary time");
   const clockDay = createElement("span", "clock-readout__day", "Day 1");
-  const clockTime = createElement("span", "clock-readout__time", "Dawn");
+  const clockTime = createElement("span", "clock-readout__time", "00:00 · Night");
   clock.append(clockDay, clockTime);
 
   const tideReadout = createElement("div", "condition-readout condition-readout--tide");
@@ -1323,6 +1329,11 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   mobileKitButton.setAttribute("aria-controls", KIT_DIALOG_ID);
   mobileKitButton.setAttribute("aria-expanded", "false");
   const mobileFieldCopy = createElement("div", "mobile-field-strip__copy");
+  const mobileClock = createElement(
+    "span",
+    "mobile-field-strip__line mobile-field-strip__clock",
+    "Day 1 · 00:00 · Night",
+  );
   const mobileObjective = createElement(
     "span",
     "mobile-field-strip__line mobile-field-strip__objective",
@@ -1380,6 +1391,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     "E? · N? · FPS —",
   );
   mobileFieldCopy.append(
+    mobileClock,
     mobileObjective,
     mobileVitals,
     mobileSafety,
@@ -1910,6 +1922,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     mobileFieldStrip,
     mobileHudToggle,
     mobileKitButton,
+    mobileClock,
     mobileObjective,
     mobileStamina,
     mobileStaminaValue,
@@ -2722,6 +2735,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.location.textContent = view.player.locationLabel ?? "Between harbors";
     refs.clockDay.textContent = view.clock.dayLabel ?? `Day ${view.clock.day}`;
     refs.clockTime.textContent = view.clock.timeLabel;
+    refs.mobileClock.textContent = mobileClockCopy(view.clock);
     refs.tideReadout.dataset.phase = view.tide.phase;
     refs.tideSymbol.textContent = tideSymbol(view.tide.phase);
     refs.tideLabel.textContent = view.tide.label;

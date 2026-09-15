@@ -68,6 +68,19 @@ export type {
 } from "./fieldResources";
 export { createWorldView } from "./view";
 export {
+  WORLD_DAWN_START_TICK,
+  WORLD_DAY_ILLUMINATION,
+  WORLD_DAY_START_TICK,
+  WORLD_DUSK_START_TICK,
+  WORLD_NIGHT_ILLUMINATION,
+  WORLD_NIGHT_START_TICK,
+  WORLD_TICKS_PER_DAY,
+  WORLD_TIME_CONTRACT_VERSION,
+  WORLD_TIME_EPOCH,
+  projectWorldTime,
+} from "./worldTime";
+export type { WorldDayPhase, WorldTimeProjection } from "./worldTime";
+export {
   MAX_RESIDENT_MEMORIES,
   NPC_GENERATION_VERSION,
   createResidentCondition,

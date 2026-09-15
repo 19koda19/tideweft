@@ -5,6 +5,7 @@ import {
   createWorldView,
   deserializeWorld,
   FIXED_POINT,
+  projectWorldTime,
   residentKnowsFact,
   serializeWorld,
   STRAND_AUTOMATION_THRESHOLD,
@@ -16257,7 +16258,9 @@ function discoveredCount(player: PlayerState): number {
 
 function continueSummary(world: WorldView, player: PlayerState): string {
   const here = settlementAtPlayer(player, world);
-  return `Day ${Math.floor(world.completedTick / 1_440) + 1} · ${here === null ? "between harbors" : settlementName(world, here)} · ${player.completedJourneys} promises kept`;
+  const time = projectWorldTime(world.completedTick);
+  if (time === null) throw new RangeError("Continue summary received an invalid world tick");
+  return `Day ${time.dayNumber} · ${here === null ? "between harbors" : settlementName(world, here)} · ${player.completedJourneys} promises kept`;
 }
 
 function tutorialAdvanceMessage(stage: GameSessionState["tutorial"]["stage"]): string {

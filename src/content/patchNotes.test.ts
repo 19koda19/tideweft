@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.39",
+      version: "0.3.3-alpha.40",
       releaseDate: "2026-09-14",
-      buildIdentity: "0.3.3-alpha.39",
-      gameplayContractVersion: 37,
-      tutorialVersion: 49,
+      buildIdentity: "0.3.3-alpha.40",
+      gameplayContractVersion: 38,
+      tutorialVersion: 50,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,10 +69,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the released Alpha-39 directive boundary and retains earlier internal candidate records", () => {
-    const activeCopy = PATCH_NOTE_CATEGORIES
+  it("scopes the Alpha-40 one-clock candidate and retains the released Alpha-39 boundary plus earlier candidates", () => {
+    const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const alpha39Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.39",
+    );
+    const alpha39Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha39Release?.categories[category] ?? [])
       .join(" ");
     const marshRelease = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.38",
@@ -253,25 +260,35 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(activeCopy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
-    expect(LATEST_PATCH_NOTE.summary).toContain("Saltmarsh Small Worlds");
-    expect(activeCopy).toContain("Eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append as records 44 through 47");
-    expect(activeCopy).toContain("exactly forty-five core-wildlife profiles plus the separate human and domestic-dog foundation records");
-    expect(activeCopy).toContain("Mosquitoes and periwinkles remain conserved non-addressable aggregates with at most two authenticated anchors each");
-    expect(activeCopy).toContain("Seaside sparrows form one group-atomic flock of two to four persistent members");
-    expect(activeCopy).toContain("diamondback terrapin is one solitary persistent reptile");
-    expect(activeCopy).toContain("seaside sparrows require the admitted mosquito aggregate");
-    expect(activeCopy).toContain("terrapin requires the admitted periwinkle aggregate");
-    expect(activeCopy).toContain("advances append-only to epoch 3 without changing outer save version 30 or RegionalEcologyStateV6");
-    expect(activeCopy).toContain("adopted once at the saved tick");
-    expect(activeCopy).toContain("reuses shared aggregate, activity, perception, locomotion, group, knowledge, and presentation owners");
-    expect(activeCopy).toContain("clear-versus-ridge-occluded terrapin and periwinkle interaction");
-    expect(activeCopy).toContain("without padding this directive or requiring bespoke tests for every species and pair");
-    expect(activeCopy).toContain("group-atomic cap of twenty-four actors");
-    expect(activeCopy).toContain("Chart 2D and Relief 3D");
-    expect(activeCopy).toContain("Quick inspection and ABOUT");
-    expect(activeCopy).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
-    expect(activeCopy).toContain("forty-seven records");
+    expect(LATEST_PATCH_NOTE.summary).toContain("One Clock");
+    expect(currentCopy).toContain("One versioned civil-day contract");
+    expect(currentCopy).toContain("one displayed minute");
+    expect(currentCopy).toContain("each 1,440-tick day");
+    expect(currentCopy).toContain("06:00 through 20:00 behavior exactly");
+    expect(currentCopy).toContain("HUD time, event timestamps, continue summaries");
+    expect(currentCopy).toContain("Chart 2D, Relief 3D");
+    expect(currentCopy).toContain("adds no offline elapsed time");
+    expect(currentCopy).toContain("Outer save version 30 remains unchanged");
+    expect(currentCopy).not.toMatch(/outdoor darkness is live|actor schedules are live|player sleep is live/iu);
+    expect(alpha39Copy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
+    expect(alpha39Release?.summary).toContain("Saltmarsh Small Worlds");
+    expect(alpha39Copy).toContain("Eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append as records 44 through 47");
+    expect(alpha39Copy).toContain("exactly forty-five core-wildlife profiles plus the separate human and domestic-dog foundation records");
+    expect(alpha39Copy).toContain("Mosquitoes and periwinkles remain conserved non-addressable aggregates with at most two authenticated anchors each");
+    expect(alpha39Copy).toContain("Seaside sparrows form one group-atomic flock of two to four persistent members");
+    expect(alpha39Copy).toContain("diamondback terrapin is one solitary persistent reptile");
+    expect(alpha39Copy).toContain("seaside sparrows require the admitted mosquito aggregate");
+    expect(alpha39Copy).toContain("terrapin requires the admitted periwinkle aggregate");
+    expect(alpha39Copy).toContain("advances append-only to epoch 3 without changing outer save version 30 or RegionalEcologyStateV6");
+    expect(alpha39Copy).toContain("adopted once at the saved tick");
+    expect(alpha39Copy).toContain("reuses shared aggregate, activity, perception, locomotion, group, knowledge, and presentation owners");
+    expect(alpha39Copy).toContain("clear-versus-ridge-occluded terrapin and periwinkle interaction");
+    expect(alpha39Copy).toContain("without padding this directive or requiring bespoke tests for every species and pair");
+    expect(alpha39Copy).toContain("group-atomic cap of twenty-four actors");
+    expect(alpha39Copy).toContain("Chart 2D and Relief 3D");
+    expect(alpha39Copy).toContain("Quick inspection and ABOUT");
+    expect(alpha39Copy).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
+    expect(alpha39Copy).toContain("forty-seven records");
     expect(marshRelease?.summary).toContain("Marsh Channel Web");
     expect(marshCopy).toContain("Atlantic menhaden, mummichog, grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-crested cormorant append as records 37 through 43");
     expect(marshCopy).toContain("Menhaden, mummichog, grass shrimp, and blue crab remain conserved non-addressable aggregates");
@@ -383,19 +400,19 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("Securing the door removes that opportunity");
     expect(yardCopy).toContain("hidden activity remains world truth without becoming player narration");
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse breadth root");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("released living catalog contains forty-seven records");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Every ecology owner remains inside one atomic projection and conservation commit");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("split the sparrow flock");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("LIVE_VERIFIED cumulative Directive 04_1 release");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes the chosen 45 / 47 breadth boundary");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no mosquito bite or disease, exact insect or snail actor");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice, full circadian behavior, continuous 3D flight");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Cumulative CI, Pages deployment, and exact five-file live verification passed");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("version-1 sparse breadth root");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("released living catalog contains forty-seven records");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("Every ecology owner remains inside one atomic projection and conservation commit");
+    expect(alpha39Release?.categories.saves.join(" ")).toContain("split the sparrow flock");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("LIVE_VERIFIED cumulative Directive 04_1 release");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("closes the chosen 45 / 47 breadth boundary");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("no mosquito bite or disease, exact insect or snail actor");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("no audible Living Voice, full circadian behavior, continuous 3D flight");
+    expect(alpha39Release?.categories.knownLimitations.join(" ")).toContain("Cumulative CI, Pages deployment, and exact five-file live verification passed");
     expect(breathRelease?.categories.saves.join(" ")).toContain("outer session advances to version 29");
     expect(breathRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 5");
     expect(breathRelease?.categories.knownLimitations.join(" ")).toContain("bounded Wave-F role coverage, not Wave G, Directive 04_1");
@@ -601,7 +618,7 @@ describe("canonical offline patch notes", () => {
     expect(wildlifeCopy).toContain("WAIT AND WATCH");
     expect(wildlifeCopy).toContain("leaves the prior route intact");
     expect(wildlifeCopy).toContain("same stable actors cross between full and coarse representation");
-    expect(activeCopy).not.toMatch(/complete universal perception|\blethal pursuit|worldwide populations are live/iu);
+    expect(currentCopy).not.toMatch(/complete universal perception|\blethal pursuit|worldwide populations are live/iu);
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("not a full bestiary");
     expect(wildlifeRelease?.categories.knownLimitations.join(" ")).toContain("do not attack, receive injuries, die, or leave carcasses");
     expect(allCategoryCopy("gameplay")).toContain("Stability now resolves directly");

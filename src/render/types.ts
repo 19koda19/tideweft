@@ -134,6 +134,21 @@ export interface WeatherView {
   readonly forecast?: string;
 }
 
+/** Presentation-safe projection of the authoritative simulation day. */
+export interface WorldTimeView {
+  readonly version: 1;
+  readonly dayNumber: number;
+  readonly dayTick: number;
+  readonly phase: "dawn" | "day" | "dusk" | "night";
+  /** Normalized progress through the current phase and complete day. */
+  readonly phaseProgress: number;
+  readonly cycleProgress: number;
+  /** Normalized dawn-to-night solar path; absent at night. */
+  readonly solarProgress: number | null;
+  /** Normalized open-sky illumination before weather, cover, or local lights. */
+  readonly illumination: number;
+}
+
 export type SettlementStatus =
   | "steady"
   | "watchful"
@@ -639,6 +654,8 @@ export interface TideweftView {
   /** Changes only when floating-origin coordinates are reinterpreted. */
   readonly spatialEpoch?: number | string;
   readonly tick: number;
+  /** Production projections provide this; optional only for legacy view fixtures. */
+  readonly worldTime?: WorldTimeView;
   readonly worldName?: string;
   readonly terrain: TerrainGridView;
   readonly tide: TideView;

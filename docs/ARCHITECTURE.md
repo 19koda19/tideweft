@@ -46,6 +46,20 @@ Random decisions use a keyed generator derived from the root seed plus domain, t
 
 The interactive host advances player motion at 100 ms fixed steps and advances the authoritative world once per ten player steps. There is no manual in-play pause command: ordinary field play advances continuously. Opening the title or Quiet Hour sets the internal paused state, saves, and halts both clocks until the player continues. A capped accumulator prevents a hidden or stalled tab from applying an unbounded catch-up burst.
 
+`src/sim/worldTime.ts` is the single versioned civil-day projection over that
+persisted world tick. Version 1 fixes tick zero at Day 1 00:00, one tick as one
+displayed minute, and 1,440 ticks per day. Night runs 00:00–06:00, dawn
+06:00–07:00, day 07:00–19:00, dusk 19:00–20:00, and night resumes through
+midnight. The already-released ecology and resident-needs daylight window
+remains exactly 06:00–20:00 while later Turning Day work consumes the finer
+phases. HUD, event, continue-summary, wildlife, and resident projections derive
+from this contract rather than maintaining their own modulo arithmetic. The
+projection also supplies fixed-point open-sky illumination and solar progress;
+render readability remains a separate presentation concern. Time has no mutable
+clock sidecar, needs no save migration, and cannot depend on frame rate, device
+time, timezone, locale, or the loaded signed region. Tide and weather retain
+their independent tick-derived rules and are not reset at midnight.
+
 ## Authoritative tick
 
 One world tick:

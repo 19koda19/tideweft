@@ -416,10 +416,10 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Opening Patch Notes dispatches no simulation or save command. From the active field, the world continues underneath; from the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
       {
-        id: "whats-new-saltmarsh-small-worlds",
+        id: "whats-new-one-clock",
         audience: "all",
-        title: "Small worlds complete the bounded catalog",
-        body: "Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint. Cumulative CI, Pages deployment, and exact five-file live verification passed for this release. It preserves the exact Alpha-38 forty-three-record prefix and appends eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44 through 47. Mosquitoes and periwinkles remain conserved non-addressable aggregates over at most two authenticated anchors. Seaside sparrows form one group-atomic flock of two to four, while the terrapin is solitary. Sparrows require the local mosquito substrate and terrapins require periwinkle; unsupported country remains honestly empty. Chart, Relief, quick inspection, and ABOUT expose only lawful current actors or aggregate evidence. Breadth epoch 3 uses unchanged outer save version 30 and RegionalEcologyStateV6, preserving epochs 1 and 2 as an exact prefix and adopting the final cohort once without reload rerolls. The bounded catalog now contains forty-five core-wildlife profiles plus the separate human and domestic-dog foundations. Shared performance, seamless-crossing, conservation, and representative emergence coverage exercise the architecture instead of a species-by-species matrix. The release adds no bites, disease, exact insect or snail actors, capture, consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight. The bounded biodiversity work is closed at the 45 / 47 target; The Turning Day is next, followed by Living Voice.",
+        title: "One clock, one saved day",
+        body: "Alpha 40 One Clock is a local unpublished source candidate and the first Turning Day slice. One versioned projection now derives civil day, exact minute, Dawn, Day, Dusk, and Night from the existing saved world tick; no renderer, actor system, region, device clock, or timezone owns a second clock. The HUD names the current phase, and Chart, Relief, event history, continue summaries, the established wildlife daylight/rest preference, and resident rest pressure agree. The released 06:00 through 20:00 behavior window, world-time pacing, tides, weather, outer save version 30, and A CHALLENGING HARD remain unchanged. Closing the game adds no offline time, and streaming or view changes cannot reset the day. This candidate has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED. Smooth outdoor light, complete actor schedules, player sleep/wait, Living Voice, new species, and broader mortality remain unfinished; The Turning Day directive remains open.",
       },
     ],
     callouts: [
@@ -1314,7 +1314,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     title: "Two views, one simulation",
     shortTitle: "Views & HUD",
     summary: "Chart 2D and Relief 3D read and command the same world state. Switching presentation cannot fork the simulation or turn momentary sight into permanent map knowledge.",
-    keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera", "compass", "north", "twist", "spin", "j", "l"],
+    keywords: ["chart", "2d", "relief", "3d", "view", "hud", "promises", "mobile", "inspector", "camera", "compass", "north", "twist", "spin", "clock", "time", "dawn", "day", "dusk", "night", "j", "l"],
     controlIds: ["view-key", "view-button", "relief-orbit", "relief-touch-orbit", "world-zoom", "promises-sheet", "kit-button"],
     steps: [
       {
@@ -1335,6 +1335,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         title: "Actor sounds and system causes stay separate",
         body: "A stumble, fall, or sweep puts only its small voiced sound above the courier. The floating EVENTS readout carries the complete cause and cargo consequence. It includes events you directly caused or could observe; it is not a god's-ear report of distant settlements.",
+      },
+      {
+        id: "views-world-time",
+        audience: "all",
+        title: "One clock turns the whole world",
+        body: "The HUD clock now names Dawn, Day, Dusk, or Night beside the exact time. One saved world tick is one displayed minute, and every 1,440 ticks begins a new day. Wildlife's existing bounded daylight/rest preference, resident rest pressure, event times, and both views read that same clock; loading a region or changing views cannot reset it. Closing or pausing the game adds no offline time, and midnight does not reset the tide or weather. Smooth outdoor light, complete schedules, and player sleep/wait are still being connected by The Turning Day rather than being implied by this first clock slice.",
       },
       {
         id: "views-coordinates-fps",
@@ -1564,7 +1570,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 49 as const;
+export const TUTORIAL_CONTENT_VERSION = 50 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

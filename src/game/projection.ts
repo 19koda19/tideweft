@@ -17,6 +17,7 @@ import {
   classifyBiome,
   deriveBaselineBiomeClimate,
   deriveMagicalWaterInfluence,
+  projectWorldTime,
   seedFromText,
   type BiomeClimate,
   type BiomeId,
@@ -455,6 +456,8 @@ export function projectGameView(
   player: PlayerState,
   options: ProjectionOptions = {},
 ): TideweftView {
+  const worldTime = projectWorldTime(world.completedTick);
+  if (worldTime === null) throw new RangeError("Game projection received an invalid world tick");
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
@@ -673,6 +676,18 @@ export function projectGameView(
       ? `g:${regionalWindow.origin.x}:${regionalWindow.origin.y}`
       : regionKey(regionalWorldCenter(world)),
     tick: world.completedTick,
+    worldTime: {
+      version: worldTime.version,
+      dayNumber: worldTime.dayNumber,
+      dayTick: worldTime.dayTick,
+      phase: worldTime.phase,
+      phaseProgress: worldTime.phaseProgress / FIXED_POINT,
+      cycleProgress: worldTime.cycleProgress / FIXED_POINT,
+      solarProgress: worldTime.solarProgress === null
+        ? null
+        : worldTime.solarProgress / FIXED_POINT,
+      illumination: worldTime.illumination / FIXED_POINT,
+    },
     worldName: `The ${titleCase(world.seedText)} Estuary`,
     terrain: {
       columns: world.terrain.width,

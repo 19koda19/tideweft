@@ -3,6 +3,12 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { tideAtTick } from "../sim/terrain";
 import { hashCanonical } from "../sim/util";
 import {
+  WORLD_DAWN_START_TICK,
+  WORLD_NIGHT_START_TICK,
+  WORLD_TICKS_PER_DAY,
+  projectWorldTime,
+} from "../sim/worldTime";
+import {
   CORE_ECOLOGY_MAX_STEP_TICKS,
   canonicalizeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
@@ -69,10 +75,10 @@ import {
 export const CORE_ECOLOGY_ACTIVITY_VERSION = 1 as const;
 export const CORE_ECOLOGY_ACTIVITY_OWNER_ID = "game:core-ecology-activity:v1" as const;
 
-/** The simulation's existing day convention: 1,440 ticks, with daylight 360..<1,200. */
-export const CORE_ECOLOGY_DAY_LENGTH_TICKS = 1_440 as const;
-export const CORE_ECOLOGY_DAYLIGHT_START_TICK = 360 as const;
-export const CORE_ECOLOGY_DAYLIGHT_END_TICK = 1_200 as const;
+/** Compatibility aliases for the released bounded activity contract. */
+export const CORE_ECOLOGY_DAY_LENGTH_TICKS = WORLD_TICKS_PER_DAY;
+export const CORE_ECOLOGY_DAYLIGHT_START_TICK = WORLD_DAWN_START_TICK;
+export const CORE_ECOLOGY_DAYLIGHT_END_TICK = WORLD_NIGHT_START_TICK;
 
 /** Activity targets remain stable for four ticks to avoid one-frame flight jitter. */
 export const CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS = 4 as const;
@@ -232,14 +238,11 @@ const QUARTERING_OFFSETS = Object.freeze([
 export function projectCoreEcologyDayPhase(
   atTick: unknown,
 ): CoreEcologyDayPhaseProjection | null {
-  if (!nonnegativeSafeInteger(atTick)) return null;
-  const dayTick = atTick % CORE_ECOLOGY_DAY_LENGTH_TICKS;
+  const time = projectWorldTime(atTick);
+  if (time === null) return null;
   return Object.freeze({
-    dayTick,
-    phase: dayTick >= CORE_ECOLOGY_DAYLIGHT_START_TICK
-      && dayTick < CORE_ECOLOGY_DAYLIGHT_END_TICK
-      ? "daylight"
-      : "rest-window",
+    dayTick: time.dayTick,
+    phase: time.establishedDaylight ? "daylight" : "rest-window",
   });
 }
 
