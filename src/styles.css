@@ -2212,6 +2212,12 @@ button:focus-visible .keycap {
   transform: none;
 }
 
+.action-button--wait[aria-disabled="true"]:hover {
+  color: var(--foam-muted);
+  background: transparent;
+  border-color: var(--line);
+}
+
 .continue-card__kicker {
   color: var(--tide-bright);
   align-self: center;
@@ -2875,7 +2881,7 @@ button:focus-visible .keycap {
     z-index: 18;
     top: calc(var(--ui-gap) + 3.55rem);
     right: max(var(--ui-gap), env(safe-area-inset-right));
-    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem);
+    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
     left: max(var(--ui-gap), env(safe-area-inset-left));
     flex: 1 1 auto;
     width: auto;
@@ -2892,10 +2898,10 @@ button:focus-visible .keycap {
     z-index: 15;
     top: calc(var(--ui-gap) + 3.55rem);
     right: max(var(--ui-gap), env(safe-area-inset-right));
-    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 3.65rem);
+    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
     left: max(var(--ui-gap), env(safe-area-inset-left));
     width: auto;
-    max-height: calc(100% - 10.75rem);
+    max-height: calc(100% - 13.75rem);
   }
 
   .action-dock {
@@ -2905,6 +2911,8 @@ button:focus-visible .keycap {
     max-width: none;
     min-height: 0;
     padding: 0.18rem;
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+    display: grid;
     transform: none;
   }
 
@@ -2997,6 +3005,13 @@ button:focus-visible .keycap {
   .left-rail > .contract-rail,
   .settlement-inspector {
     top: calc(var(--ui-gap) + 3.55rem);
+  }
+
+  /* The compact field copy already carries the delivery-condition guidance.
+     Repeating it inside a short landscape sheet steals an entire touch row
+     from the actionable Promise list. */
+  .contract-rail__guide {
+    display: none;
   }
 }
 
@@ -3361,6 +3376,15 @@ body {
   background: transparent;
   border-color: var(--line-strong);
   box-shadow: none;
+}
+
+.action-button--wait[data-active="true"] {
+  color: var(--gold);
+}
+
+.action-button--wait[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .action-button:hover:not(:disabled),
@@ -3821,7 +3845,9 @@ body {
   #game-ui .resident-about {
     top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem);
     right: max(0.55rem, env(safe-area-inset-right));
-    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 4rem);
+    /* The compact journey dock is two rows once WAIT joins the four existing
+       field actions. Keep ABOUT wholly above those live survival controls. */
+    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
     left: max(0.55rem, env(safe-area-inset-left));
     width: auto;
   }

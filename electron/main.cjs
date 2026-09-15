@@ -26,8 +26,8 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.43';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 41;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.44';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 42;
 const SMOKE_EXPECTED_SAVE_VERSION = 31;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
@@ -586,6 +586,7 @@ function rendererProbeScript() {
         Math.max(objectiveRect.top, contractRect.top) < Math.min(objectiveRect.bottom, contractRect.bottom)
       : null;
     const interactButton = document.querySelector('.action-button--interact');
+    const waitButton = document.querySelector('.action-button--wait');
     const wayknotButton = document.querySelector('.action-button--wayknot');
     const braceButton = document.querySelector('.brace-button');
     const stabilityDetail = document.querySelector('.vital__detail[data-bracing]');
@@ -838,6 +839,19 @@ function rendererProbeScript() {
         ? {
             label: interactButton.childNodes[0]?.textContent?.trim() || interactButton.textContent?.trim() || null,
             disabled: interactButton instanceof HTMLButtonElement ? interactButton.disabled : null,
+          }
+        : null,
+      wait: waitButton
+        ? {
+            label: waitButton.querySelector('.action-button__label')?.textContent?.trim() || null,
+            title: waitButton.getAttribute('title'),
+            ariaDisabled: waitButton.getAttribute('aria-disabled'),
+            ariaPressed: waitButton.getAttribute('aria-pressed'),
+            visible: visiblyIntersectsViewport(waitButton),
+            insideViewport: whollyInsideViewport(waitButton),
+            rect: rectOf(waitButton),
+            controlAvailable: uiView?.controls?.canWait ?? null,
+            controlActive: uiView?.controls?.waitActive ?? null,
           }
         : null,
       wayknots: {
@@ -1156,7 +1170,7 @@ function rendererProbeScript() {
           controlsInsideViewport: actionControls
             .filter((control) => visiblyIntersectsViewport(control))
             .every((control) => whollyInsideViewport(control)),
-          coreControlsVisibleAndInside: [scanButton, interactButton, wayknotButton]
+          coreControlsVisibleAndInside: [scanButton, interactButton, waitButton, wayknotButton]
             .every((control) => visiblyIntersectsViewport(control) && whollyInsideViewport(control)),
           brace: braceButton
             ? {
@@ -1611,9 +1625,22 @@ async function exerciseSmokeResidentAbout(
     (probe) => probeHasActiveRenderer(probe, 'chart-2d'),
     SMOKE_TEST.timeoutMs,
   );
-  // focusWorld keeps this resident at Chart center for 1.8 seconds. Give the
-  // eased camera enough time to settle before the OS-level pointer click.
-  await new Promise((resolve) => setTimeout(resolve, 760));
+  // Keep refreshing the focus from the actor's current authoritative position
+  // while the eased Chart camera settles. A moving porter can otherwise leave
+  // a static focus point before a low-FPS packaged renderer reaches it, making
+  // this physical click select a former target instead of testing ABOUT.
+  for (let focusSample = 0; focusSample < 10; focusSample += 1) {
+    await contents.executeJavaScript(`(() => {
+      const bridge = window.__TIDEWEFT__;
+      const porter = bridge?.runtime?.getRenderView?.()?.porters?.find(
+        (candidate) => String(candidate?.id) === ${JSON.stringify(String(target.id))},
+      );
+      if (!porter?.position) return false;
+      bridge.renderer?.focusWorld?.(porter.position, 1.65);
+      return true;
+    })()`, true);
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  }
   const chartTarget = await contents.executeJavaScript(`(() => {
     const canvas = document.querySelector('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])');
     if (!(canvas instanceof HTMLCanvasElement)) return null;
@@ -2935,6 +2962,15 @@ function probeHasMobileHudFrame(probe) {
     mobile.actionDock.insideViewport === true &&
     mobile.actionDock.controlsInsideViewport === true &&
     mobile.actionDock.coreControlsVisibleAndInside === true &&
+    probe.wait?.visible === true &&
+    probe.wait.insideViewport === true &&
+    probe.wait.rect?.width >= 44 &&
+    probe.wait.rect?.height >= 44 &&
+    probe.wait.label === 'Wait 10 min' &&
+    probe.wait.ariaDisabled === 'false' &&
+    probe.wait.ariaPressed === 'false' &&
+    probe.wait.controlAvailable === true &&
+    probe.wait.controlActive === false &&
     mobile.actionDock.brace?.visible === true &&
     mobile.actionDock.brace.insideViewport === true &&
     mobile.actionDock.brace.rect?.width >= 44 &&

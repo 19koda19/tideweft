@@ -165,9 +165,32 @@ not mutable views of the current catalog.
 These two representative bindings are not catalog-wide circadian adoption.
 The other 43 core-wildlife profiles—including the unbound harbor seal—do not
 acquire a physical routine from this registry. Human work/home/watch schedules,
-both dogs' settling and waking, player WAIT/REST/SLEEP elapsed-time actions,
-and complete Turning Day closure remain absent. Later consumers must reuse the
-same kernel and physical authority rather than add species schedulers.
+both dogs' settling and waking, player REST/SLEEP, and complete Turning Day
+closure remain absent. Later consumers must reuse the same kernel and physical
+authority rather than add species schedulers.
+
+The local Alpha44 **Ten Minutes** candidate adds one bounded player `WAIT 10
+MIN` action owned by `src/game/runtime.ts`. A wait receipt records the starting
+world tick, the existing partial-minute player-step phase, successful steps,
+and the fixed total of one hundred. The animation driver admits at most one
+ordinary 100-ms player step per presented frame through `runTickFailClosed()`
+and the normal `tick()` path; every tenth step advances the authoritative world
+minute. Completion therefore advances exactly ten displayed minutes and ends
+at the same partial-minute phase without assigning the clock, calling the
+headless coarse-time path, or creating a second simulation.
+
+While waiting, player control is neutral but all ordinary player, weather,
+tide, cargo, Promise, resident, wildlife, ecology, perception, and traversal
+rules continue. Movement, a new destination or deliberate field action,
+Escape, current loss, a physical traversal incident, or a lawfully perceived
+strong disturbance interrupts only after the current successful transaction
+commits. The consequence produced by a final step keeps announcement priority.
+WAIT adds no special healing, replenishment, protection, or hazard immunity.
+Its visible receipt is deliberately session-local: page hiding, app closure, or
+reload ends the action while the existing version-31 envelope preserves every
+completed root and the exact partial-minute carry. Reload cannot resume,
+replay, skip, or reroll the remainder. Player REST/SLEEP and validated longer
+or coarse elapsed-time actions remain later Turning Day work.
 
 ## Authoritative tick
 
@@ -1082,7 +1105,8 @@ profile keeps its preceding bounded behavior. The current catalog declares the
 otter nocturnal while all historical frozen catalog roots remain exact. This is
 not denning, a catalog-wide routine conversion, a production crepuscular or
 tide-driven binding, or the complete circadian system; humans, dogs, and player
-WAIT/REST/SLEEP remain outside it.
+REST/SLEEP remain outside it. Alpha44's bounded player WAIT reuses the ordinary
+runtime fixed-step path independently of those still-unfinished actor routines.
 
 `src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 

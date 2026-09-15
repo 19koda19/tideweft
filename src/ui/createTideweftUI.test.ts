@@ -14,6 +14,7 @@ import {
   handleActorAboutEscape,
   handleResidentAboutEscape,
   handleTideweftUIShortcut,
+  handleWaitEscape,
   mobileHudCopy,
   mobileHudDisclosureState,
   mobileClockCopy,
@@ -28,6 +29,7 @@ import {
   tideHarpFieldStatus,
   titleSeedRequirement,
   titleWorldCreationState,
+  waitActionButtonState,
   wayknotActionButtonState,
 } from "./createTideweftUI";
 
@@ -520,6 +522,49 @@ describe("Wayknot UI accessibility", () => {
 
 });
 
+describe("bounded WAIT UI accessibility", () => {
+  it("keeps ready, active, and blocked visible and spoken states truthful", () => {
+    expect(waitActionButtonState({
+      canWait: true,
+      waitActive: false,
+      waitLabel: "Wait 10 min",
+      waitHint: "Let ten minutes pass through the living world.",
+    })).toEqual({
+      disabled: false,
+      active: false,
+      label: "Wait 10 min",
+      hint: "Let ten minutes pass through the living world.",
+      ariaLabel: "Wait 10 min. Let ten minutes pass through the living world.",
+    });
+
+    expect(waitActionButtonState({
+      canWait: true,
+      waitActive: true,
+      waitLabel: "Cancel · 7 min",
+      waitHint: "Break the wait now. Every minute already elapsed remains part of the world.",
+    })).toEqual({
+      disabled: false,
+      active: true,
+      label: "Cancel · 7 min",
+      hint: "Break the wait now. Every minute already elapsed remains part of the world.",
+      ariaLabel: "Cancel · 7 min. Break the wait now. Every minute already elapsed remains part of the world.",
+    });
+
+    expect(waitActionButtonState({
+      canWait: false,
+      waitActive: false,
+      waitLabel: "Wait 10 min",
+      waitHint: "ADRIFT — paddle or float toward shallow water before waiting.",
+    })).toEqual({
+      disabled: true,
+      active: false,
+      label: "Wait 10 min",
+      hint: "ADRIFT — paddle or float toward shallow water before waiting.",
+      ariaLabel: "Wait 10 min. ADRIFT — paddle or float toward shallow water before waiting.",
+    });
+  });
+});
+
 describe("mobile field HUD accessibility", () => {
   it("requires an explicit recovery seed without exposing the ordinary restart gate", () => {
     expect(titleSeedRequirement({ hasSave: false, requiresSeed: true }, false)).toEqual({
@@ -639,7 +684,7 @@ describe("mobile field HUD accessibility", () => {
     expect(copy.objective).toContain("then deliver to Latchmere");
     expect(copy.safety).toBe("↓ exposed to cross-current · STAB 63% · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.terrain).toBe("WATER · Tidal channel · Deep water · Heavy stamina use");
-    expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Lay Tide anchor");
+    expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Wait 10 min · Lay Tide anchor");
   });
 
   it("states the recoverable sweep trigger when either deep-water resource reaches zero", () => {
@@ -820,5 +865,33 @@ describe("resident ABOUT behavior", () => {
       action: "close",
       target,
     });
+  });
+
+  it("gives active WAIT the first non-modal Escape before an open ABOUT surface", () => {
+    const dispatch = vi.fn();
+    const escape = {
+      key: "Escape",
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+
+    expect(handleWaitEscape(escape, true, false, dispatch)).toBe(true);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({ type: "wait", action: "cancel" });
+
+    dispatch.mockClear();
+    expect(handleWaitEscape(
+      { ...escape, preventDefault: vi.fn() },
+      false,
+      false,
+      dispatch,
+    )).toBe(false);
+    expect(handleWaitEscape(
+      { ...escape, preventDefault: vi.fn() },
+      true,
+      true,
+      dispatch,
+    )).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

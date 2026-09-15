@@ -170,6 +170,7 @@ export interface MobileHudCopyInput {
   readonly fieldHint: string;
   readonly canScan: boolean | undefined;
   readonly interactLabel: string | undefined;
+  readonly waitLabel?: string | undefined;
   readonly wayknotLabel: string | undefined;
 }
 
@@ -323,6 +324,7 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
   const actions = [
     input.interactLabel?.trim() || "Interact",
     input.canScan === false ? "Scan recharging" : "Sound / Scan",
+    input.waitLabel?.trim() || "Wait 10 min",
     input.wayknotLabel?.trim() || "Place Wayknot",
   ].join(" · ");
   return { objective, safety, terrain, actions };
@@ -334,6 +336,14 @@ export interface WayknotActionButtonState {
   readonly hint: string;
   readonly ariaLabel: string;
   readonly ariaKeyShortcuts: typeof WAYKNOT_KEY_SHORTCUT;
+}
+
+export interface WaitActionButtonState {
+  readonly disabled: boolean;
+  readonly active: boolean;
+  readonly label: string;
+  readonly hint: string;
+  readonly ariaLabel: string;
 }
 
 export interface TideHarpFieldStatus {
@@ -767,6 +777,25 @@ export function wayknotActionButtonState(
   };
 }
 
+/** One source keeps WAIT's visible, touch, and assistive state in lockstep. */
+export function waitActionButtonState(
+  controls: TideweftUIView["controls"],
+): WaitActionButtonState {
+  const active = controls?.waitActive === true;
+  const label = controls?.waitLabel ?? (active ? "Cancel wait" : "Wait 10 min");
+  const hint = controls?.waitHint
+    ?? (active
+      ? "Break the wait now. Every elapsed minute remains part of the world."
+      : "Let ten minutes pass through the living world.");
+  return {
+    disabled: controls?.canWait === false,
+    active,
+    label,
+    hint,
+    ariaLabel: `${label}. ${hint}`,
+  };
+}
+
 interface UIShortcutEvent {
   readonly code: string;
   readonly key: string;
@@ -817,6 +846,24 @@ export function handleTideweftUIShortcut(
   if (event.code !== "KeyF" || !canWayknot) return false;
   event.preventDefault();
   dispatch({ type: "wayknot" });
+  return true;
+}
+
+/** Escape breaks an active elapsed-time action before closing field disclosures. */
+export function handleWaitEscape(
+  event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
+  waitActive: boolean,
+  modalDialogOpen: boolean,
+  dispatch: (command: TideweftUICommand) => void,
+): boolean {
+  if (
+    event.defaultPrevented
+    || event.key !== "Escape"
+    || !waitActive
+    || modalDialogOpen
+  ) return false;
+  event.preventDefault();
+  dispatch({ type: "wait", action: "cancel" });
   return true;
 }
 
@@ -955,6 +1002,8 @@ interface UIRefs {
   chronicleList: HTMLOListElement;
   scanButton: HTMLButtonElement;
   interactButton: HTMLButtonElement;
+  waitButton: HTMLButtonElement;
+  waitButtonLabel: HTMLSpanElement;
   wayknotButton: HTMLButtonElement;
   wayknotButtonLabel: HTMLSpanElement;
   braceButton: HTMLButtonElement;
@@ -1639,6 +1688,13 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   scanButton.append(createElement("kbd", "keycap", "Space"));
   const interactButton = createButton("action-button action-button--interact", "Interact");
   interactButton.append(createElement("kbd", "keycap", "E"));
+  const waitButton = createButton(
+    "action-button action-button--wait",
+    "",
+    "Let ten minutes pass through the living world",
+  );
+  const waitButtonLabel = createElement("span", "action-button__label", "Wait 10 min");
+  waitButton.append(waitButtonLabel);
   const wayknotButton = createButton(
     "action-button action-button--wayknot",
     "",
@@ -1685,6 +1741,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     scanButton,
     interactButton,
     braceButton,
+    waitButton,
     wayknotButton,
     kitButton,
     quietButton,
@@ -2024,6 +2081,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     chronicleList,
     scanButton,
     interactButton,
+    waitButton,
+    waitButtonLabel,
     wayknotButton,
     wayknotButtonLabel,
     braceButton,
@@ -2166,6 +2225,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const openKit = (tab: KitTabId = "pack", trigger?: HTMLElement | null): void => {
     mobileBrace.release();
     if (refs.titleDialog.open || refs.quietDialog.open || refs.patchNotes.isOpen()) return;
+    // KIT hides the journey dock. Interrupt the runtime-owned elapsed action
+    // before removing its only guaranteed touch cancellation surface.
+    options.dispatch({ type: "wait", action: "cancel" });
     refs.tutorial.close(false);
     setMobileHudExpanded(false);
     refs.kit.open(tab, trigger);
@@ -2183,6 +2245,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const openHelp = (trigger?: HTMLElement | null): void => {
     mobileBrace.release();
     if (refs.patchNotes.isOpen()) return;
+    options.dispatch({ type: "wait", action: "cancel" });
     refs.kit.close(false);
     setMobileHudExpanded(false);
     refs.tutorial.open(trigger);
@@ -2207,6 +2270,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     source: PatchNotesOpenSource = "field",
   ): void => {
     mobileBrace.release();
+    options.dispatch({ type: "wait", action: "cancel" });
     refs.kit.close(false);
     setMobileHudExpanded(false);
     const titlePresented = latestView
@@ -2844,6 +2908,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.interactButton.textContent = view.controls?.interactLabel ?? "Interact";
     refs.interactButton.append(createElement("kbd", "keycap", "E"));
     refs.interactButton.title = view.controls?.interactHint ?? "Interact with the current harbor";
+    const waitAction = waitActionButtonState(view.controls);
+    // Keep a blocked WAIT focusable/activatable so touch and assistive users
+    // receive the runtime's truthful reason instead of an inaccessible title.
+    refs.waitButton.disabled = false;
+    refs.waitButton.setAttribute("aria-disabled", String(waitAction.disabled));
+    refs.waitButton.dataset.active = String(waitAction.active);
+    refs.waitButton.setAttribute("aria-pressed", String(waitAction.active));
+    refs.waitButtonLabel.textContent = waitAction.label;
+    refs.waitButton.title = waitAction.hint;
+    refs.waitButton.setAttribute("aria-label", waitAction.ariaLabel);
     const wayknotAction = wayknotActionButtonState(view.controls);
     refs.wayknotButton.disabled = wayknotAction.disabled;
     refs.wayknotButtonLabel.textContent = wayknotAction.label;
@@ -2866,6 +2940,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       fieldHint: view.field.hint,
       canScan: view.controls?.canScan,
       interactLabel: view.controls?.interactLabel,
+      waitLabel: view.controls?.waitLabel,
       wayknotLabel: wayknotAction.label,
     });
     refs.mobileObjective.textContent = compactHud.objective;
@@ -2942,6 +3017,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   window.addEventListener("pointercancel", cancelSignedReportPointer);
   refs.scanButton.addEventListener("click", () => options.dispatch({ type: "scan" }));
   refs.interactButton.addEventListener("click", () => options.dispatch({ type: "interact" }));
+  refs.waitButton.addEventListener("click", () => options.dispatch({
+    type: "wait",
+    action: latestView?.controls?.waitActive === true ? "cancel" : "begin",
+  }));
   refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
   refs.kitButton.addEventListener("click", () => toggleKit("pack", refs.kitButton));
   refs.mobileKitButton.addEventListener("click", () => toggleKit("pack", refs.mobileKitButton));
@@ -3043,6 +3122,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   });
 
   const onGlobalKeyDown = (event: KeyboardEvent): void => {
+    // WAIT owns the first non-modal Escape so an open ABOUT surface cannot
+    // consume the promised cancellation input while world time keeps moving.
+    if (handleWaitEscape(
+      event,
+      latestView?.controls?.waitActive === true,
+      document.querySelector("dialog[open]") !== null,
+      options.dispatch,
+    )) {
+      return;
+    }
     if (handleActorAboutEscape(
       event,
       currentActorAbout()?.closeCommand,

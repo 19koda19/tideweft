@@ -113,9 +113,16 @@ async function boot(): Promise<void> {
       runtime.dispatchUI(command);
       const returnsToPlay = command.type === "resume-world"
         || command.type === "new-world"
+        || (command.type === "wait" && command.action !== "suspend")
         || (command.type === "quiet-hour" && command.action === "continue");
       if (returnsToPlay) {
-        requestAnimationFrame(() => renderer.canvas()?.focus({ preventScroll: true }));
+        requestAnimationFrame(() => {
+          // Opening KIT, the Field Manual, or Patch Notes first cancels WAIT.
+          // Do not steal focus back from the newly opened modal in that case.
+          if (document.querySelector("dialog[open]") === null) {
+            renderer.canvas()?.focus({ preventScroll: true });
+          }
+        });
       }
     },
     ...(announcer ? { announcer } : {}),
@@ -141,7 +148,10 @@ async function boot(): Promise<void> {
   };
   window.addEventListener("pagehide", shutdown, { once: true });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") void runtime.save().catch(() => undefined);
+    if (document.visibilityState === "hidden") {
+      runtime.dispatchUI({ type: "wait", action: "suspend" });
+      void runtime.save().catch(() => undefined);
+    }
   });
 
   Object.assign(window, {

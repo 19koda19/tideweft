@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.43",
+      version: "0.3.3-alpha.44",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.43",
-      gameplayContractVersion: 41,
-      tutorialVersion: 53,
+      buildIdentity: "0.3.3-alpha.44",
+      gameplayContractVersion: 42,
+      tutorialVersion: 54,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-43 two-rhythms candidate and retains First Roost and earlier releases", () => {
+  it("scopes the Alpha-44 bounded WAIT candidate and retains Two Rhythms and earlier releases", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha43Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.43",
+    );
+    const alpha43Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha43Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha43Limitations = alpha43Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha42Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.42",
     );
@@ -283,28 +291,42 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Two Rhythms");
-    expect(currentCopy).toContain("declarative species-to-activity registry");
-    expect(currentCopy).toContain("day-active fish crow");
-    expect(currentCopy).toContain("night-active North American river otter");
-    expect(currentCopy).toContain("authenticated foraging water");
-    expect(currentCopy).toContain("authenticated dry haulout");
-    expect(currentCopy).toContain("shared amphibious route");
-    expect(currentCopy).toContain("rest physiology in transit");
-    expect(currentCopy).toContain("Historical actors still receive no invented routine state");
-    expect(currentCopy).toContain("Harbor seal behavior is unchanged");
-    expect(currentCopy).toContain("forty-seven records total");
-    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, and core wildlife actor schema/version 1 remain unchanged");
-    expect(currentCopy).toContain("frozen 24-, 27-, 28-, 29-, 31-, 36-, 43-, and 47-record Alpha 32 through Alpha 39 catalog snapshots retain their exact bytes and hashes");
-    expect(currentCopy).toContain("Only the current forty-seven-record catalog declares the otter nocturnal");
-    expect(currentLimitations).toContain("not catalog-wide circadian or sleep coverage");
-    expect(currentLimitations).toContain("Player WAIT, REST, and SLEEP actions");
-    expect(currentLimitations).toContain("human schedules");
-    expect(currentLimitations).toContain("companion-dog settling and waking");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Ten Minutes");
+    expect(currentCopy).toContain("exactly one hundred ordinary player fixed steps");
+    expect(currentCopy).toContain("ten displayed minutes");
+    expect(currentCopy).toContain("weather, tide, cargo, actor, ecology, Promise, deadline, perception, and traversal authority");
+    expect(currentCopy).toContain("one successful fixed step per presented frame");
+    expect(currentCopy).toContain("lawfully perceived strong disturbance");
+    expect(currentCopy).toContain("final fixed step keeps announcement priority");
+    expect(currentCopy).toContain("grants no special healing");
+    expect(currentCopy).toContain("same fixed-step phase");
+    expect(currentCopy).toContain("shared Journey action dock on desktop and touch");
+    expect(currentCopy).toContain("Outer save version 31 remains unchanged");
+    expect(currentCopy).toContain("intentionally session-local");
+    expect(currentLimitations).toContain("not player REST or SLEEP");
+    expect(currentLimitations).toContain("Human and companion routines");
     expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
     expect(currentLimitations).toContain("not been pushed, published, deployed");
     expect(currentLimitations).toContain("LIVE_VERIFIED");
-    expect(currentCopy).not.toMatch(/all wildlife.*(?:sleep|circadian)|player sleep is live|human schedules are live/iu);
+    expect(currentCopy).not.toMatch(/player sleep is live|human schedules are live|grants free healing/iu);
+    expect(alpha43Release?.summary).toContain("Two Rhythms");
+    expect(alpha43Copy).toContain("declarative species-to-activity registry");
+    expect(alpha43Copy).toContain("day-active fish crow");
+    expect(alpha43Copy).toContain("night-active North American river otter");
+    expect(alpha43Copy).toContain("authenticated foraging water");
+    expect(alpha43Copy).toContain("authenticated dry haulout");
+    expect(alpha43Copy).toContain("shared amphibious route");
+    expect(alpha43Copy).toContain("rest physiology in transit");
+    expect(alpha43Copy).toContain("Historical actors still receive no invented routine state");
+    expect(alpha43Copy).toContain("Harbor seal behavior is unchanged");
+    expect(alpha43Copy).toContain("forty-seven records total");
+    expect(alpha43Copy).toContain("Outer save version 31, RegionalEcologyStateV6, and core wildlife actor schema/version 1 remain unchanged");
+    expect(alpha43Copy).toContain("frozen 24-, 27-, 28-, 29-, 31-, 36-, 43-, and 47-record Alpha 32 through Alpha 39 catalog snapshots retain their exact bytes and hashes");
+    expect(alpha43Copy).toContain("Only the current forty-seven-record catalog declares the otter nocturnal");
+    expect(alpha43Limitations).toContain("not catalog-wide circadian or sleep coverage");
+    expect(alpha43Limitations).toContain("Player WAIT, REST, and SLEEP actions");
+    expect(alpha43Limitations).toContain("human schedules");
+    expect(alpha43Limitations).toContain("companion-dog settling and waking");
     expect(alpha42Release?.summary).toContain("First Roost");
     expect(alpha42Copy).toContain("A versioned species-neutral living-routine kernel");
     expect(alpha42Copy).toContain("existing fish-crow perch-watch behavior");

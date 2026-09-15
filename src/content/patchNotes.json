@@ -2,6 +2,46 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.44",
+      "releaseDate": "2026-09-15",
+      "buildIdentity": "0.3.3-alpha.44",
+      "summary": "Ten Minutes is the local unpublished Alpha 44 source candidate: one bounded WAIT action now advances the same authoritative living world by exactly ten displayed minutes without assigning time, pausing hazards, or granting special recovery.",
+      "gameplayContractVersion": 42,
+      "tutorialVersion": 54,
+      "categories": {
+        "gameplay": [
+          "WAIT 10 MIN advances exactly one hundred ordinary player fixed steps: ten player steps per world minute and ten displayed minutes through the same weather, tide, cargo, actor, ecology, Promise, deadline, perception, and traversal authority as ordinary play.",
+          "The runtime owns one bounded, interruptible elapsed-time receipt and forces neutral player control while it advances one successful fixed step per presented frame. It never assigns a destination clock, invokes a separate fast simulation, or bypasses fail-closed transaction handling.",
+          "WAIT is deliberately distinct from pause, Quiet Hour, REST, SLEEP, and the brief living-actor choice WAIT AND WATCH. It creates no new sleep destination, physiology rule, actor schedule, or hidden offline time."
+        ],
+        "fixes": [
+          "Movement, a new field destination, deliberate world actions, Escape, physical sweep or traversal incidents, and lawfully perceived strong disturbance can interrupt WAIT only between committed steps. Every already-completed step and consequence remains authoritative.",
+          "A consequence generated on WAIT's final fixed step keeps announcement priority, so Promise, cargo, ecology, civic, or tutorial information is never hidden beneath a generic completion message.",
+          "Opening KIT, the Field Manual, or Patch Notes cancels an active WAIT before hiding its shared cancellation control, while modal focus remains with the surface the player intentionally opened."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. WAIT grants no special healing, replenishment, cargo protection, threat immunity, free scan charge, or skipped hazard; only ordinary neutral-step consequences and recovery apply while the rest of the world advances too.",
+          "A WAIT begun partway through a world minute finishes ten world ticks later at the same fixed-step phase. Duplicate starts cannot restart, extend, stack, or accelerate the action.",
+          "No wildlife profile, population, actor capacity, routine binding, mortality rule, item quantity, Promise value, or settlement economy changes in this slice."
+        ],
+        "interface": [
+          "One stable WAIT 10 MIN control lives in the shared Journey action dock on desktop and touch. While active it becomes a remaining-minute CANCEL control with synchronized visible, tooltip, pressed, and assistive state.",
+          "Blocked WAIT remains focusable so touch and assistive players can receive the runtime's truthful reason. Compact layouts use a two-row action dock rather than shrinking controls below the forty-four-pixel target.",
+          "Field Manual version 54 explains exact elapsed time, ordinary world consequences, interruption, and the boundary between WAIT, pause, Quiet Hour, REST, SLEEP, and WAIT AND WATCH."
+        ],
+        "saves": [
+          "Outer save version 31 remains unchanged. WAIT itself is intentionally session-local; all successfully completed world, player, cargo, Promise, actor, ecology, tide, weather, and partial-minute state already persist through the existing authenticated envelope.",
+          "Saving preserves every completed WAIT step without interrupting the visible action. Leaving the foreground, reloading, or closing the app ends that transient action at its latest committed boundary; reload returns explicit control and cannot replay, skip, reroll, or invisibly finish the remaining steps.",
+          "RegionalEcologyStateV6, core wildlife actor schema/version 1, habitat version 11, core-ecology patch version 3, aggregate record version 5, settlement ecology version 4, working-animal state version 2, and all historical catalog snapshots remain exact."
+        ],
+        "knownLimitations": [
+          "Alpha 44 Ten Minutes is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+          "This is one fixed ten-minute WAIT action, not player REST or SLEEP, destination-time waiting, long or coarse elapsed-time acceleration, offline simulation, a universal schedule, or complete Turning Day closure.",
+          "Human and companion routines, broader wildlife bindings, production crepuscular, tide-, weather-, and opportunity-driven routines, player REST and SLEEP, multi-day validation, Living Voice, new species, and new mortality remain unfinished."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.43",
       "releaseDate": "2026-09-15",
       "buildIdentity": "0.3.3-alpha.43",

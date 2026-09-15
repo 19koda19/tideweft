@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(53);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(54);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -61,24 +61,29 @@ describe("TIDEWEFT field-manual content", () => {
     });
     expect(copy).toContain("CHANGELOG.md");
     expect(copy).toContain("A CHALLENGING HARD");
-    expect(copy).toContain("dispatches no simulation or save command");
+    expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 43 Two Rhythms is a local unpublished source candidate");
-    expect(copy).toContain("The shared living-routine kernel");
-    expect(copy).toContain("AWAKE, RESTING, ASLEEP, or STARTLED posture");
+    expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
+    expect(copy).toContain("Alpha 44 · Ten Minutes is a local unpublished source candidate");
+    expect(copy).toContain("carries forward Alpha 43's shared living-routine kernel");
     expect(copy).toContain("a day-active fish crow returns to its authenticated perch at night");
     expect(copy).toContain(
       "a night-active North American river otter returns to its authenticated dry haulout by day",
     );
-    expect(copy).toContain("Neither animal can receive rest physiology while still travelling");
+    expect(copy).toContain("Neither animal receives rest physiology while travelling");
     expect(copy).toContain(
-      "The same compact optional routine state survives save, reload, and bounded coarse absence",
+      "compact optional routine state still survives save, reload, and bounded coarse absence",
     );
-    expect(copy).toContain("old otters acquire it only after a lawful current activity commit");
+    expect(copy).toContain("WAIT 10 MIN control advances exactly ten displayed minutes");
+    expect(copy).toContain("same authoritative fixed-step world simulation as ordinary play");
+    expect(copy).toContain("grants no special healing or replenishment");
+    expect(copy).toContain("committed fixed-step boundary");
+    expect(copy).toContain("Every completed step, elapsed minute, and consequence remains authoritative");
+    expect(copy).toContain("not a pause, REST, SLEEP, Quiet Hour");
+    expect(copy).toContain("WAIT AND WATCH");
     expect(copy).toContain("all released catalog snapshots remain exact");
-    expect(copy).toContain("current catalog now truthfully identifies the otter's broad rhythm as nocturnal");
     expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("Humans, dogs, other wildlife bindings, player WAIT, REST, or SLEEP");
+    expect(copy).toContain("Player REST and SLEEP, validated longer or coarse-time acceleration");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
 
@@ -92,7 +97,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain(
       "completed beacon projects light nearby unobstructed ground and blue water after dusk",
     );
-    expect(copy).toContain("Complete actor schedules and player WAIT, REST, or SLEEP remain later");
+    expect(copy).toContain("WAIT 10 MIN deliberately advances exactly ten displayed minutes");
+    expect(copy).toContain(
+      "complete actor schedules, player REST and SLEEP, and validated longer or coarse-time advancement remain later",
+    );
     expect(liveBoundary?.title).toBe("Present in this source candidate");
     expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
   });
@@ -118,6 +126,12 @@ describe("TIDEWEFT field-manual content", () => {
       input: "?",
       audience: "mobile",
       detail: expect.stringContaining("Open tutorial"),
+    });
+    expect(tutorialControlById("wait-button")).toMatchObject({
+      input: "WAIT 10 MIN",
+      audience: "all",
+      action: expect.stringContaining("exactly ten displayed minutes"),
+      detail: expect.stringContaining("committed step"),
     });
     expect(tutorialControlById("pace-buttons")).toBeUndefined();
     expect(tutorialControlById("pace-keys")).toBeUndefined();
@@ -163,6 +177,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileCopy).toContain("place two fingers on the world and twist");
     expect(mobileCopy).toContain("cannot accidentally set a destination");
     expect(mobileCopy).toContain("always points toward world north");
+    expect(mobileCopy).toContain("WAIT 10 MIN");
     expect(mobileCopy).toContain("dedicated Tutorial control");
     expect(mobileCopy).not.toContain("Shift-click appends");
     expect(mobileCopy).not.toContain("Right-drag or Alt-drag");
@@ -173,6 +188,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileControls.some((control) => control.id === "tutorial-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "kit-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "brace-button")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "wait-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "relief-touch-orbit")).toBe(true);
     expect(mobileControls.some((control) => control.id === "relief-orbit")).toBe(false);
     expect(mobileControls.some((control) => control.id === "brace-key")).toBe(false);
@@ -228,6 +244,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("disabled button says why");
     expect(copy).toContain("not stored stamina and not a gauge that keeps draining");
     expect(copy).toContain("Pace has no selector");
+    expect(copy).toContain("REST on the pace readout");
+    expect(copy).toContain("not a player REST action or recovery choice");
     expect(copy).toContain("Sparse streamlines, foam, and real water ambience");
     expect(copy).toContain("stamina or stability reaching zero");
     expect(copy).toContain("durable traversal ordinal");
@@ -280,6 +298,52 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("cannot reroll a regional, Alpine, polar-shore, cold-shore, polar-consumer, or breadth lineage");
     expect(copy).toContain("Pristine signed-region, Alpine, polar-shore, cold-shore, polar-consumer, and breadth baselines are rederived instead of saved");
     expect(copy).toContain("Alpha-35 adoption, Alpha-36 adoption, working-animal transition, and domestic recovery remain exact and cannot replay");
+  });
+
+  it("teaches bounded player WAIT as elapsed hazardous world time, not rest or pause", () => {
+    const saves = tutorialSectionById("saves-and-quiet-hour");
+    const waitStep = saves?.steps.find((step) => step.id === "saves-wait-ten-minutes");
+    const boundaries = tutorialSectionById("build-boundaries");
+    const liveBoundary = boundaries?.steps.find((step) => step.id === "boundaries-live-weather");
+    const plannedBoundary = boundaries?.steps.find((step) => step.id === "boundaries-planned-ecology");
+
+    expect(saves).toMatchObject({
+      title: "Wait or stop without holding the world",
+      shortTitle: "Wait & saves",
+    });
+    expect(saves?.controlIds).toContain("wait-button");
+    expect(waitStep).toMatchObject({
+      audience: "all",
+      controlId: "wait-button",
+    });
+    expect(waitStep?.body).toContain("advance exactly ten displayed minutes");
+    expect(waitStep?.body).toContain("stop any current charted route or pending arrival action");
+    expect(waitStep?.body).toContain("same authoritative world simulation and fixed-step rules as ordinary play");
+    expect(waitStep?.body).toContain("Weather, tides, cargo, actors, Promises, deadlines, and every applicable hazard continue");
+    expect(waitStep?.body).toContain("no special healing or replenishment");
+    expect(waitStep?.body).toContain("button shows Cancel · plus the remaining minutes");
+    expect(waitStep?.body).toContain("current sweep, physical mishap, or lawfully perceived strong disturbance");
+    expect(waitStep?.body).toContain("Cancellation or disturbance takes effect at a committed fixed-step boundary");
+    expect(waitStep?.body).toContain("every completed step, elapsed minute, and consequence remains part of the world");
+    expect(waitStep?.body).toContain("Leaving the foreground ends the transient wait and saves completed state");
+    expect(waitStep?.body).toContain("loading returns explicit control instead of resuming it");
+    expect(waitStep?.body).toContain("WAIT is not a pause");
+    expect(waitStep?.body).toContain("title and Quiet Hour stop simulation");
+    expect(waitStep?.body).toContain("player REST and SLEEP are not yet available");
+    expect(waitStep?.body).toContain("actor ABOUT choice's WAIT AND WATCH");
+    expect(waitStep?.body).toContain("only stops the current automatic route briefly");
+    expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(
+      "Rest here label means saved stopping only",
+    );
+    expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(
+      "does not perform a player REST or SLEEP action and advances no world time",
+    );
+    expect(liveBoundary?.body).toContain("a bounded ten-displayed-minute player WAIT");
+    expect(plannedBoundary?.body).not.toContain("player sleep/wait");
+    expect(plannedBoundary?.body).not.toContain("player WAIT");
+    expect(plannedBoundary?.body).toContain("player REST and SLEEP");
+    expect(plannedBoundary?.body).toContain("validated longer or coarse-time advancement");
+    expect(plannedBoundary?.body).toContain("longer or coarse-time continuity");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -633,5 +697,6 @@ describe("TIDEWEFT field-manual content", () => {
       "accessibility",
     ]);
     expect(searchTutorialGuide("right-drag", "desktop").map((section) => section.id)).toContain("views-and-hud");
+    expect(searchTutorialGuide("WAIT 10 MIN", "mobile").map((section) => section.id)).toContain("saves-and-quiet-hour");
   });
 });

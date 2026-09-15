@@ -794,9 +794,22 @@ catalog now names the otter's broad rhythm as nocturnal, while every historical
 catalog snapshot keeps its exact authenticated record. Outer save v31, strict
 v30/V6 adoption, nested ecology V6, and wildlife actor schema/version 1 remain
 unchanged. This is two representative physical routines, not catalog-wide
-sleep: humans, both dogs, other wildlife bindings, player WAIT/REST/SLEEP,
+sleep: humans, both dogs, other wildlife bindings, player REST/SLEEP,
 production crepuscular/tide-driven routines, and complete Turning Day closure
 remain unfinished.
+
+The local **Ten Minutes** Alpha44 candidate adds one explicit field action:
+`WAIT 10 MIN`. It advances exactly ten displayed world minutes through the same
+ordinary fixed-step simulation as standing still, so weather, tides, cargo,
+actors, ecology, Promises, deadlines, exposure, and hazards do not pause. The
+button becomes a remaining-minute cancel control while active. Movement, a new
+destination or deliberate field action, Escape, a sweep or traversal mishap,
+and lawfully perceived strong disturbance can stop it at the next committed
+step boundary; elapsed time and consequences remain real. It grants no special
+healing or replenishment and is not pause, Quiet Hour, REST, SLEEP, or the
+living-actor choice **WAIT AND WATCH**. Leaving the page ends the transient
+action at its last completed step; save version 31 already preserves that exact
+world and partial-minute state, and reload never invisibly finishes the rest.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -1555,7 +1568,9 @@ legacy daylight/rest behavior. The current catalog truth calls the otter
 nocturnal without rewriting any historical catalog, and outer save v31,
 regional ecology V6, and wildlife actor version 1 remain unchanged. This is not
 catalog-wide sleep. Humans, both dogs, other wildlife bindings, player
-WAIT/REST/SLEEP, and complete Turning Day closure remain unfinished.
+REST/SLEEP, and complete Turning Day closure remain unfinished. Local Alpha44
+**Ten Minutes** now supplies the bounded player WAIT described above through
+ordinary runtime steps; it does not imply those broader routines or sleep.
 
 Live through Alpha 39:
 

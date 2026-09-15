@@ -686,6 +686,9 @@ import {
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
 const MAX_STEPS_PER_FRAME = 6;
+/** One bounded WAIT advances ten real world-minutes through ordinary fixed steps. */
+const PLAYER_WAIT_MINUTES = 10;
+const PLAYER_WAIT_TOTAL_STEPS = PLAYER_WAIT_MINUTES * PLAYER_STEPS_PER_WORLD_TICK;
 const AUTOSAVE_INTERVAL_TICKS = 600;
 const AUTOSAVE_SLOT = "autosave";
 const SAVE_RETRY_BASE_DELAY_MS = 2_000;
@@ -800,6 +803,13 @@ export interface TideweftRuntime {
   readonly playTitleCrescendo: (openingOrdinal: number) => Promise<void>;
   readonly save: () => Promise<void>;
   readonly setFocusHandler: (handler: ((point: WorldPoint, zoom?: number) => void) | undefined) => void;
+}
+
+interface PendingPlayerWait {
+  readonly startedAtWorldTick: number;
+  readonly startedAtPlayerStepPhase: number;
+  readonly completedSteps: number;
+  readonly totalSteps: typeof PLAYER_WAIT_TOTAL_STEPS;
 }
 
 type Bio0PorterAddress = LivingActorAddress & { readonly species: "human" };
@@ -8573,6 +8583,10 @@ export async function createTideweftRuntime(
   let nextPlayerSenseSampleOrdinal = 0;
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
+  // WAIT is intentionally session-local: save/page interruption preserves every
+  // completed ordinary step and returns control on reload instead of silently
+  // continuing an action the player can no longer see or cancel.
+  let pendingPlayerWait: PendingPlayerWait | null = null;
   let adriftTapControl: PlayerControl | null = null;
   let adriftTapTicksRemaining = 0;
   let lastAdriftControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
@@ -9139,8 +9153,7 @@ export async function createTideweftRuntime(
       selectedWildlifeTarget = null;
     }
     const wildlifeEvidenceSelection = aggregateEvidenceProjection.selectedAbout;
-    uiView = {
-      ...projectUIView(worldView, player, session, {
+    const projectedUIView = projectUIView(worldView, player, session, {
         economyWorld: economyView,
         selectedResidentId,
         fieldResourceCatalog: fieldResourceProjection.catalog,
@@ -9205,7 +9218,24 @@ export async function createTideweftRuntime(
                 },
               }
             : {}),
-      }),
+      });
+    uiView = {
+      ...projectedUIView,
+      // Runtime-only WAIT progress must participate in UI invalidation even on
+      // sub-minute steps where the persisted world tick has not changed.
+      revision: `${projectedUIView.revision}:wait:${pendingPlayerWait === null
+        ? "idle"
+        : Math.max(
+            1,
+            Math.ceil(
+              (pendingPlayerWait.totalSteps - pendingPlayerWait.completedSteps)
+              / PLAYER_STEPS_PER_WORLD_TICK,
+            ),
+          )}`,
+      controls: {
+        ...projectedUIView.controls,
+        ...playerWaitControlView(),
+      },
       ...(wildlifeSelection !== null
         ? { selectedLivingActor: wildlifeSelection }
         : dogSelection === null ? {} : { selectedLivingActor: dogSelection }),
@@ -9258,7 +9288,174 @@ export async function createTideweftRuntime(
       || pendingReportDelivery !== null;
   }
 
+  function playerWaitBlockReason(): string | null {
+    if (runtimeIntegrityFailure !== null) return "The simulation is paused at an integrity boundary.";
+    if (saveRecoveryBlocked) return "Resolve the local save boundary before waiting.";
+    if (session.titleVisible || session.quietHourVisible || session.paused) {
+      return "Return to the living world before waiting.";
+    }
+    if (physicalReceiptPending()) {
+      return "Let the current physical handoff settle before waiting.";
+    }
+    if (player.mode === "swept") {
+      return "ADRIFT — paddle or float toward shallow water before waiting.";
+    }
+    if (player.mode === "rescued") {
+      return "Secure your footing before choosing to wait.";
+    }
+    if (traversalFeedback.incident !== null) {
+      return "Regain your footing before choosing to wait.";
+    }
+    return null;
+  }
+
+  function playerWaitControlView(): Pick<
+    NonNullable<TideweftUIView["controls"]>,
+    "canWait" | "waitActive" | "waitLabel" | "waitHint"
+  > {
+    if (pendingPlayerWait !== null) {
+      const remainingSteps = Math.max(
+        0,
+        pendingPlayerWait.totalSteps - pendingPlayerWait.completedSteps,
+      );
+      const remainingMinutes = Math.max(
+        1,
+        Math.ceil(remainingSteps / PLAYER_STEPS_PER_WORLD_TICK),
+      );
+      return {
+        canWait: true,
+        waitActive: true,
+        waitLabel: `Cancel · ${remainingMinutes} min`,
+        waitHint: "Break the wait now. Every minute already elapsed remains part of the world.",
+      };
+    }
+    const blocked = playerWaitBlockReason();
+    return {
+      canWait: blocked === null,
+      waitActive: false,
+      waitLabel: "Wait 10 min",
+      waitHint: blocked
+        ?? "Let ten minutes pass through ordinary weather, tides, cargo, actors, and Promises.",
+    };
+  }
+
+  function beginPlayerWait(): void {
+    if (pendingPlayerWait !== null) return;
+    const blocked = playerWaitBlockReason();
+    if (blocked !== null) {
+      announce(session, blocked, true);
+      soundscape.play("warning", 0.3);
+      return;
+    }
+    stopAutomaticLivingActorRoute();
+    manualControl = { moveX: 0, moveY: 0, brace: false };
+    adriftTapControl = null;
+    adriftTapTicksRemaining = 0;
+    lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
+    pendingPlayerWait = {
+      startedAtWorldTick: world.meta.completedTick,
+      startedAtPlayerStepPhase: playerStepsSinceWorldTick,
+      completedSteps: 0,
+      totalSteps: PLAYER_WAIT_TOTAL_STEPS,
+    };
+    // Discard only presentation-time debt. The action itself advances through
+    // the exact same fail-closed step path as ordinary play.
+    accumulator = 0;
+    soundscape.play("rest", 0.42);
+  }
+
+  function cancelPlayerWait(announceCancellation: boolean): void {
+    const wait = pendingPlayerWait;
+    if (wait === null) return;
+    pendingPlayerWait = null;
+    accumulator = 0;
+    if (announceCancellation) {
+      const elapsedMinutes = Math.floor(wait.completedSteps / PLAYER_STEPS_PER_WORLD_TICK);
+      announce(
+        session,
+        elapsedMinutes === 0
+          ? "You break the wait before a full minute passes."
+          : `You break the wait after ${elapsedMinutes} ${elapsedMinutes === 1 ? "minute" : "minutes"}. The elapsed world time remains.`,
+      );
+    }
+  }
+
+  function completePlayerWait(
+    wait: PendingPlayerWait,
+    finalStepAnnouncementChanged: boolean,
+  ): void {
+    pendingPlayerWait = null;
+    accumulator = 0;
+    const elapsedWorldMinutes = world.meta.completedTick - wait.startedAtWorldTick;
+    const phaseMatches = playerStepsSinceWorldTick === wait.startedAtPlayerStepPhase;
+    if (elapsedWorldMinutes !== PLAYER_WAIT_MINUTES || !phaseMatches) {
+      throw new Error("Bounded wait did not preserve the authoritative fixed-step phase");
+    }
+    const time = projectWorldTime(world.meta.completedTick);
+    if (time === null) throw new Error("Bounded wait reached an invalid world time");
+    const clockLabel = `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
+    const change = `Waited ten minutes; the world reached Day ${time.dayNumber} ${clockLabel}.`;
+    session.sessionChanges.push(change);
+    if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+    // A Promise, cargo, ecology, or tutorial consequence on the hundredth
+    // ordinary step remains the player's most important message. Completion is
+    // still recorded in the session history, but never talks over that cause.
+    if (!finalStepAnnouncementChanged) {
+      announce(
+        session,
+        `Ten minutes pass. It is ${clockLabel}; weather, tide, cargo, actors, and Promises kept moving.`,
+      );
+      soundscape.play("rest", 0.7);
+    }
+  }
+
+  function advancePlayerWaitStep(): void {
+    if (pendingPlayerWait === null) return;
+    const blocked = playerWaitBlockReason();
+    if (blocked !== null) {
+      cancelPlayerWait(false);
+      refreshViews();
+      return;
+    }
+    if (!runTickFailClosed()) {
+      return;
+    }
+    if (pendingPlayerWait === null) {
+      saveInBackground();
+    }
+  }
+
+  function rendererCommandInterruptsPlayerWait(command: RendererCommand): boolean {
+    if (command.type === "movement") {
+      return command.vector.x !== 0 || command.vector.y !== 0;
+    }
+    if (command.type === "brace") return command.active;
+    return true;
+  }
+
+  function uiCommandInterruptsPlayerWait(command: TideweftUICommand): boolean {
+    switch (command.type) {
+      case "wait":
+      case "set-session-shape":
+      case "aggregate-wildlife-evidence":
+        return false;
+      case "settlement":
+        return command.action === "focus";
+      case "contract":
+        return true;
+      case "resident":
+        return command.action === "greet";
+      case "living-actor":
+        return command.action === "interact";
+      default:
+        return true;
+    }
+  }
+
   function currentControl(): PlayerControl {
+    if (pendingPlayerWait !== null) {
+      return { moveX: 0, moveY: 0, brace: false };
+    }
     if (player.mode === "swept") {
       if (manualControl.moveX || manualControl.moveY) return manualControl;
       if (adriftTapControl && adriftTapTicksRemaining > 0) {
@@ -9589,6 +9786,10 @@ export async function createTideweftRuntime(
 
   function tick(): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    const announcementIdBeforePlayerWaitStep = pendingPlayerWait === null
+      ? null
+      : session.announcement?.id ?? null;
+    let playerWaitDisturbedThisStep = false;
     advancePendingParcelTarget();
     const beforeX = player.x;
     const beforeY = player.y;
@@ -9875,6 +10076,9 @@ export async function createTideweftRuntime(
         || playerCoreObservations === null
       ) {
         throw new Error("Core ecology observations could not enter living-actor cognition");
+      }
+      if (playerCoreObservations.some(({ interrupt }) => interrupt === "strong")) {
+        playerWaitDisturbedThisStep = true;
       }
       const porterWorldObservations = canonicalizeActorObservations([
         ...canonicalDogVisualObservations,
@@ -10635,6 +10839,7 @@ export async function createTideweftRuntime(
         observation.channel === "hearing"
         && observation.perceivedClass === "animal-alarm"
       ));
+      if (lawfullyHeardAlarm) playerWaitDisturbedThisStep = true;
       const heardAggregateCues = [...finalRegionalPatches.values()].flatMap((patch) => {
         const projected = projectCoreEcologyAggregateHeardCues({
           patch,
@@ -10669,6 +10874,7 @@ export async function createTideweftRuntime(
               ? `${attacker.identityLabel} brings down ${victimLabel}. The body remains where it fell.`
               : `${attacker.identityLabel} strikes ${victimLabel}. The animal is hurt.`,
         );
+        playerWaitDisturbedThisStep = true;
         ecologyConsequenceAnnounced = true;
       }
       if (
@@ -10991,6 +11197,29 @@ export async function createTideweftRuntime(
       announce(session, tutorialAdvanceMessage(session.tutorial.stage));
       soundscape.play("strand", 0.45);
     }
+    if (pendingPlayerWait !== null) {
+      const advancedWait: PendingPlayerWait = {
+        ...pendingPlayerWait,
+        completedSteps: pendingPlayerWait.completedSteps + 1,
+      };
+      pendingPlayerWait = advancedWait;
+      // Current loss, a physical mishap, or a lawfully perceived strong alarm
+      // interrupts between committed fixed steps. The causal event keeps its
+      // own stronger announcement; no hidden danger detector is introduced.
+      if (
+        player.mode === "swept"
+        || player.mode === "rescued"
+        || traversalFeedback.incident !== null
+        || playerWaitDisturbedThisStep
+      ) {
+        cancelPlayerWait(false);
+      } else if (advancedWait.completedSteps >= advancedWait.totalSteps) {
+        completePlayerWait(
+          advancedWait,
+          (session.announcement?.id ?? null) !== announcementIdBeforePlayerWaitStep,
+        );
+      }
+    }
     const ambiencePerception = projectPerception(worldView, player);
     soundscape.updateAmbience(
       worldView.tide.level / 1_000_000,
@@ -11265,6 +11494,9 @@ export async function createTideweftRuntime(
     void soundscape.unlock();
     const perceivedCommand = validatePerceivedEntityCommand(renderView, command);
     if (!perceivedCommand) return;
+    if (pendingPlayerWait !== null && rendererCommandInterruptsPlayerWait(perceivedCommand)) {
+      cancelPlayerWait(true);
+    }
     if (player.mode === "swept") {
       const adriftPoint = (() => {
         switch (perceivedCommand.type) {
@@ -11713,6 +11945,11 @@ export async function createTideweftRuntime(
 
   function dispatchUI(command: TideweftUICommand): void {
     void soundscape.unlock();
+    if (pendingPlayerWait !== null && uiCommandInterruptsPlayerWait(command)) {
+      // Menu/action changes are deliberate interruptions. Title/Quiet Hour
+      // will save the exact partial world state through their ordinary paths.
+      cancelPlayerWait(false);
+    }
     switch (command.type) {
       case "resume-world":
         if (saveRecoveryBlocked) {
@@ -11773,6 +12010,22 @@ export async function createTideweftRuntime(
         break;
       case "interact":
         interact();
+        break;
+      case "wait":
+        if (command.action === "begin") {
+          beginPlayerWait();
+        } else if (command.action === "cancel") {
+          cancelPlayerWait(true);
+        } else {
+          const wasWaiting = pendingPlayerWait !== null;
+          cancelPlayerWait(false);
+          if (wasWaiting) {
+            announce(
+              session,
+              "The wait stops as Tideweft leaves the foreground. Every completed world step remains.",
+            );
+          }
+        }
         break;
       case "wayknot":
         toggleWayknot();
@@ -12442,6 +12695,7 @@ export async function createTideweftRuntime(
     lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
     lastAdriftPaddleSoundMs = Number.NEGATIVE_INFINITY;
     pendingGatherNodeId = null;
+    pendingPlayerWait = null;
     pendingParcelTargetId = null;
     pendingParcelRecoverOnArrival = false;
     pendingAcceptance = null;
@@ -13633,6 +13887,7 @@ export async function createTideweftRuntime(
 
   function noteStaleSave(): void {
     if (destroyed) return;
+    cancelPlayerWait(false);
     recoverableSaveIssue = null;
     staleSaveDetected = true;
     newerSaveUnavailable = false;
@@ -13971,6 +14226,7 @@ export async function createTideweftRuntime(
       pendingResidentGreeting: structuredClone(pendingResidentGreeting),
       residentSpeech: new Map(residentSpeech),
       autopilotPath: [...autopilotPath],
+      pendingPlayerWait: structuredClone(pendingPlayerWait),
       lastAutosaveTick,
       lastCargoDamageNoticeMs,
     };
@@ -14024,12 +14280,17 @@ export async function createTideweftRuntime(
         residentSpeech.set(residentId, speech);
       }
       autopilotPath = prior.autopilotPath;
+      pendingPlayerWait = prior.pendingPlayerWait;
       lastAutosaveTick = prior.lastAutosaveTick;
       lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;
       manualControl = { moveX: 0, moveY: 0, brace: false };
       adriftTapControl = null;
       adriftTapTicksRemaining = 0;
       lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
+      // An integrity halt always returns to explicit player control. Every
+      // already-accepted elapsed step was rolled back above or committed before
+      // this failed step; the transient WAIT receipt is never left inaccessible.
+      pendingPlayerWait = null;
       rebuildRegionalWorldView();
       runtimeIntegrityFailure = `INTEGRITY HALT — ${errorMessage(error)}.`;
       session.paused = true;
@@ -14043,6 +14304,17 @@ export async function createTideweftRuntime(
 
   function frame(now: number): void {
     if (!running) return;
+    if (pendingPlayerWait !== null) {
+      // One ordinary fixed step per animation frame makes acceleration bounded,
+      // visible, cancellable, and naturally suspended when the page cannot
+      // present it. Authoritative results never depend on display frame rate.
+      previousFrame = now;
+      accumulator = 0;
+      advancePlayerWaitStep();
+      if (!running) return;
+      animationFrame = requestAnimationFrame(frame);
+      return;
+    }
     if (previousFrame === 0) previousFrame = now;
     accumulator += Math.min(500, Math.max(0, now - previousFrame));
     previousFrame = now;
@@ -14071,6 +14343,7 @@ export async function createTideweftRuntime(
 
   function destroy(): void {
     destroyed = true;
+    pendingPlayerWait = null;
     if (saveRetryTimer !== undefined) {
       clearTimeout(saveRetryTimer);
       saveRetryTimer = undefined;

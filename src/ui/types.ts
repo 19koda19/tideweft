@@ -479,6 +479,11 @@ export interface ControlAvailabilityUIView {
   readonly canInteract?: boolean;
   readonly interactLabel?: string;
   readonly interactHint?: string;
+  /** Bounded elapsed-world-time action; active state makes the same control cancel it. */
+  readonly canWait?: boolean;
+  readonly waitActive?: boolean;
+  readonly waitLabel?: string;
+  readonly waitHint?: string;
   readonly canWayknot?: boolean;
   readonly wayknotLabel?: string;
   readonly wayknotHint?: string;
@@ -530,6 +535,7 @@ export type TideweftUICommand =
     }
   | { readonly type: "scan" }
   | { readonly type: "interact" }
+  | { readonly type: "wait"; readonly action: "begin" | "cancel" | "suspend" }
   | { readonly type: "wayknot" }
   | { readonly type: "set-session-shape"; readonly sessionShape: SessionShape }
   | {
