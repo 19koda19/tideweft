@@ -8,7 +8,7 @@ Newest release first. Patch notes are bundled into the game and remain available
 
 Build: `0.3.3-alpha.39` · Gameplay contract: 37 · Tutorial: 49
 
-Saltmarsh Small Worlds is the local unpublished Alpha 39 source candidate: one final four-profile cohort reaches the bounded Directive 04\_1 catalog target through the existing shared ecology architecture.
+Saltmarsh Small Worlds is the LIVE\_VERIFIED Alpha 39 cumulative Directive 04\_1 release: one final four-profile cohort closes the bounded catalog target through the existing shared ecology architecture.
 
 ### Gameplay
 
@@ -32,20 +32,20 @@ Saltmarsh Small Worlds is the local unpublished Alpha 39 source candidate: one f
 
 - Chart 2D and Relief 3D present the same lawful seaside-sparrow and diamondback-terrapin identities. Sparrow groups use a readable flock silhouette and terrapins use a low shelled form; these bounded states do not claim continuously simulated 3D flight.
 - Mosquito and periwinkle signs expose only directly observable aggregate evidence. Quick inspection and ABOUT do not reveal exact units, hidden anchors, dependencies, or private actor state on desktop or touch.
-- Field Manual version 49 teaches the compact distinction between population evidence and persistent actors, habitat-dependent absence, append-only epoch-3 adoption, and the exact 45 / 47 candidate boundary without becoming a bestiary dump.
+- Field Manual version 49 teaches the compact distinction between population evidence and persistent actors, habitat-dependent absence, append-only epoch-3 adoption, and the released 45 / 47 boundary without becoming a bestiary dump.
 
 ### Save changes
 
-- Outer save version 30 and RegionalEcologyStateV6 remain unchanged. Their version-1 sparse breadth root now records append-only epochs 1, 2, and 3; the local candidate living catalog contains forty-seven records.
+- Outer save version 30 and RegionalEcologyStateV6 remain unchanged. Their version-1 sparse breadth root now records append-only epochs 1, 2, and 3; the released living catalog contains forty-seven records.
 - A valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation. The complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact, and repeated load is a no-op.
 - Every ecology owner remains inside one atomic projection and conservation commit. Save, reload, interruption, signed-region streaming, seamless boundary crossing, and extreme distance cannot duplicate an actor or aggregate unit, split the sparrow flock, or select another cohort outcome.
 
 ### Known limitations
 
-- Alpha 39 Saltmarsh Small Worlds is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED. It reaches the chosen 45 / 47 breadth boundary, while Directive 04\_1 still requires its cumulative release-checkpoint validation and publication gates before completion.
-- This candidate adds no mosquito bite or disease, exact insect or snail actor, capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, or population recovery.
-- The cohort adds no audible Living Voice, full circadian behavior, continuous 3D flight, authored migration, or new offscreen narrative feed. Full day-and-night life belongs to the next authorized Turning Day directive; broader voice work follows in Living Voice.
-- Only local source-candidate validation may be claimed here. Remote CI, Pages publication, exact-live comparison, and LIVE\_VERIFIED status remain pending.
+- Alpha 39 Saltmarsh Small Worlds is the LIVE\_VERIFIED cumulative Directive 04\_1 release. It closes the chosen 45 / 47 breadth boundary without claiming worldwide ecology or a complete bestiary.
+- This release adds no mosquito bite or disease, exact insect or snail actor, capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path, player harm, dog harm, human harm, reproduction, recruitment, or population recovery.
+- The release adds no audible Living Voice, full circadian behavior, continuous 3D flight, authored migration, or new offscreen narrative feed. Full day-and-night life belongs to the next authorized Turning Day directive; broader voice work follows in Living Voice.
+- Cumulative CI, Pages deployment, and exact five-file live verification passed for this release checkpoint.
 
 ## 0.3.3-alpha.38 — 2026-09-14
 

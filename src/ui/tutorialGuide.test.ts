@@ -63,8 +63,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 39 Saltmarsh Small Worlds is this local unpublished SOURCE_CANDIDATE");
-    expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
+    expect(copy).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
+    expect(copy).toContain("Cumulative CI, Pages deployment, and exact five-file live verification passed");
     expect(copy).toContain("exact Alpha-38 forty-three-record prefix");
     expect(copy).toContain("eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44 through 47");
     expect(copy).toContain("Mosquitoes and periwinkles remain conserved non-addressable aggregates over at most two authenticated anchors");
@@ -78,7 +78,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("forty-five core-wildlife profiles plus the separate human and domestic-dog foundations");
     expect(copy).toContain("Shared performance, seamless-crossing, conservation, and representative emergence coverage");
     expect(copy).toContain("adds no bites, disease, exact insect or snail actors, capture, consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight");
-    expect(copy).toContain("Directive 04_1 still requires its cumulative release-checkpoint gate before completion");
+    expect(copy).toContain("The bounded biodiversity work is closed at the 45 / 47 target; The Turning Day is next, followed by Living Voice");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

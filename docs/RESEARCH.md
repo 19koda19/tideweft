@@ -525,8 +525,9 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, performance, and visual audits. A cache-bypassed
 comparison matched all 5/5 live production files byte-for-byte.
 
-The **unpublished local** `0.3.3-alpha.34 — Coldwater Glint` candidate tests
-the next narrow scaling question without changing that release truth. It keeps
+The **preserved internal Alpha34 checkpoint, cumulatively released only through
+Alpha39**, `0.3.3-alpha.34 — Coldwater Glint`, tests the next narrow scaling
+question. It keeps
 all 27 Alpha33 catalog records as an exact compatibility prefix and appends
 Atlantic capelin as record 28. Capelin occur only where a separate deterministic
 cold, saline polar-shore habitat admits them; lawful absence remains common.
@@ -565,10 +566,11 @@ size of the infinite world.
 
 Coldwater Glint deliberately adds no Arctic fox, polar bear, seal, new seabird,
 snow or ice behavior, mortality, live-prey capture, reproduction, audible
-Living Voice, or Wave-F completion. It has no push, CI, Pages, deployment, or
-live-build attestation; Alpha33 remains the latest LIVE_VERIFIED public release.
+Living Voice, or Wave-F completion. Alpha34 was never a standalone public or
+LIVE_VERIFIED release; this checkpoint is preserved as cumulative lineage in
+the Alpha39 release.
 
-The preserved unpublished Alpha35 candidate adds one Arctic fox only where
+The preserved internal Alpha35 checkpoint adds one Arctic fox only where
 that authenticated capelin substrate overlaps suitable all-tide-dry cold shore.
 It deliberately treats the fox as an ordinary solitary actor using shared
 identity, perception, attention, locomotion, evidence, ABOUT, rendering, sparse
@@ -577,7 +579,8 @@ is intentionally narrow: current direct sight may pressure the conserved school,
 while an occluding ridge removes both knowledge and response. No exact fish,
 capture, consumption, mortality, or physical body is inferred.
 
-The **unpublished local** `0.3.3-alpha.36 — Breath Between Tides` candidate
+The **preserved internal Alpha36 checkpoint, cumulatively released only through
+Alpha39**, `0.3.3-alpha.36 — Breath Between Tides`,
 tests the final bounded Wave-F role combination: one addressable harbor seal and
 one rarer polar bear over the exact existing capelin/cold-shore chain. NOAA
 describes harbor seals using rocks, reefs, beaches, and glacial ice as haulouts
@@ -613,11 +616,11 @@ they do not receive a private visibility budget or a species-local controller.
 Passing this slice closes the directive's bounded Wave-F role checklist and
 opens Wave G breadth, but it does not itself add sea ice, snow, reproduction,
 population recovery, full scent, audible Living Voice, worldwide polar ecology,
-or the 45-profile core-wildlife closure target. Alpha36 remains local and
-unpublished.
+or the 45-profile core-wildlife closure target. Alpha36 was never a standalone
+LIVE_VERIFIED release; it is preserved as cumulative lineage in Alpha39.
 
-The preserved unpublished local
-`0.3.3-alpha.37 — Estuary Surface Break` candidate opens Wave G with one
+The **preserved internal Alpha37 checkpoint, cumulatively released only through
+Alpha39**, `0.3.3-alpha.37 — Estuary Surface Break`, opens Wave G with one
 coherent five-profile estuary cohort. It preserves the exact 31-record
 Alpha36/`RegionalEcologyStateV5`/outer-v29 child and appends bay anchovy,
 Atlantic ghost crab, great blue heron, common tern, and osprey as records 32–36
@@ -643,12 +646,12 @@ ridge removes the observation and response. Both branches conserve every
 anchovy unit and create no exact fish, capture, consumption, injury, mortality,
 body, item, cargo, player, or dog outcome. `RegionalEcologyStateV6` retains the
 exact V5 child beside the breadth root, and outer save v30 adopts one sealed
-outer-v29 Alpha36 save exactly once. This is local source evidence only. It has
-no push, remote CI, Pages, deployment, or exact-live attestation, and dedicated
-Wave-G performance and seamless actor-crossing proof remain open.
+outer-v29 Alpha36 save exactly once. This was an internal checkpoint, not a
+standalone public release; its lineage and the later Wave-G performance and
+seamless actor-crossing closure proofs ship cumulatively in Alpha39.
 
-The **preserved unpublished local**
-`0.3.3-alpha.38 — Marsh Channel Web` candidate preserves that exact 36-record
+The **preserved internal Alpha38 checkpoint, cumulatively released only through
+Alpha39**, `0.3.3-alpha.38 — Marsh Channel Web`, preserves that exact 36-record
 catalog and epoch-1 breadth prefix, then appends Atlantic menhaden, mummichog,
 grass shrimp, blue crab, greater yellowlegs, belted kingfisher, and double-
 crested cormorant as records 37–43 through breadth epoch 2. The first four are
@@ -674,15 +677,13 @@ appends epoch 2 exactly once at its saved tick, preserving its complete prefix;
 an already-current load is a no-op.
 
 Alpha38 reaches 41 core-wildlife profiles / 43 total living records. One final
-coherent four-profile cohort reaches the 45 / 47 catalog boundary before
-directive closure. The candidate has no push, remote CI, Pages, deployment, or
-exact-live attestation. Dedicated Wave-G performance and seamless actor-
-crossing closure evidence, sound, capture/consumption, new mortality/bodies,
+coherent four-profile cohort reaches the 45 / 47 catalog boundary. Alpha38 was
+never a standalone public or LIVE_VERIFIED release; it is preserved in the
+Alpha39 lineage. Sound, capture/consumption, new mortality/bodies,
 reproduction, full circadian life, and continuously simulated 3D flight remain
-open or absent.
+later-owner work.
 
-The **current unpublished local**
-`0.3.3-alpha.39 — Saltmarsh Small Worlds` candidate preserves the exact
+The **LIVE_VERIFIED** `0.3.3-alpha.39 — Saltmarsh Small Worlds` release preserves the exact
 forty-three-record Alpha38 catalog and both earlier breadth epochs, then appends
 eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback
 terrapin as records 44–47 through epoch 3. Mosquitoes and periwinkles remain
@@ -709,13 +710,16 @@ conservation commit. Shared performance and seamless-crossing closure coverage
 tests the architecture as a whole instead of every species and pair.
 
 Alpha39 reaches the chosen Directive 04_1 boundary of 45 core-wildlife profiles
-/ 47 total living records. It remains a local `SOURCE_CANDIDATE` with no push,
-remote-CI, Pages, deployment, exact-live, or LIVE_VERIFIED evidence until the
-cumulative directive gate passes. It adds no bite or disease, capture or
-consumption, new mortality or bodies, reproduction, sound/Living Voice, full
-circadian behavior, or continuous 3D flight. After Directive 04_1 closes, the
-next authorized directive is 04_1A The Turning Day; 04_2 The Living Voice
-follows.
+/ 47 total living records. Exact gameplay commit
+`40bfeebde94729ffb1034764ffba3e18100ac1fc` and release/test-correction head
+`c67f30b10066f60372d2cf84e1e6eacae1cbd31f` passed main CI `34905718204` and
+Pages `34905718214`: 275 test files / 2,633 tests passed, and a cache-bypassed
+comparison matched all 5/5 live production files exactly. Gameplay contract 37,
+Field Manual 49, outer save v30, and `RegionalEcologyStateV6` are current
+released authority. This closes bounded Directive 04_1. It adds no bite or
+disease, capture or consumption, new mortality or bodies, reproduction,
+sound/Living Voice, full circadian behavior, or continuous 3D flight. The next
+authorized directive is 04_1A The Turning Day; 04_2 The Living Voice follows.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -738,21 +742,21 @@ regional breadth release, Alpha 31 is the verified solitary-predator append,
 Alpha 32 is the verified signed-region distribution closure for its frozen
 24-record prefix, and Alpha 33 is the verified first bounded Alpine/Wave-F
 slice, extending the catalog to 27 records through a separate sparse sibling.
-Alpha 34–36 are preserved unpublished local polar-shore, cold-shore, and
-polar-consumer candidates extending that lineage to 31 records. Alpha37 is the
-preserved first Wave-G breadth candidate at 34 core-wildlife profiles / 36
-living records. Alpha38 is the preserved epoch-2 candidate at 41 / 43;
-Alpha39 is the current unpublished local candidate at the 45 / 47 closure
-boundary through epoch 3 without quota padding. None is part of the verified
-release sequence yet.
+Alpha34–36 are preserved internal polar-shore, cold-shore, and polar-consumer
+checkpoints extending that lineage to 31 records. Alpha37 is the preserved
+internal first Wave-G breadth checkpoint at 34 core-wildlife profiles / 36
+living records, and Alpha38 is the preserved internal epoch-2 checkpoint at
+41 / 43. None was a standalone LIVE_VERIFIED release. Alpha39 cumulatively
+ships that exact lineage and is the current LIVE_VERIFIED closure at 45 / 47
+through epoch 3 without quota padding.
 None completes broader aquatic or settlement ecology, broad
 attacks or mortality, population recovery, decomposition, body transport or
 harvesting, full circadian life, complete scent, worldwide species breadth, or the
 full bestiary. Broader species, reproduction, ecological migration, those
 absent physical systems, wider settlement ecology, and wider sound/evidence
 tracking still require their own authoritative owners. Alpha39's shared
-performance and seamless-crossing closure evidence remains local until the
-complete directive gate is finished.
+performance and seamless-crossing evidence closes the bounded Directive 04_1
+gate; Turning Day is the next authorized owner.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

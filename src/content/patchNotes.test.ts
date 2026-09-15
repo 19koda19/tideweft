@@ -69,7 +69,7 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the unpublished Alpha-39 directive-boundary cohort and retains earlier habitat releases", () => {
+  it("scopes the released Alpha-39 directive boundary and retains earlier internal candidate records", () => {
     const activeCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
@@ -385,19 +385,17 @@ describe("canonical offline patch notes", () => {
     expect(yardCopy).toContain("replace a bespoke suite for every species or an animal-pair matrix");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Outer save version 30 and RegionalEcologyStateV6 remain unchanged");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("version-1 sparse breadth root");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("local candidate living catalog contains forty-seven records");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("released living catalog contains forty-seven records");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("valid outer-v30 epoch-2 state authenticates before deterministic epoch-3 activation");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("complete earlier activation, resident, identity, aggregate, saved-tick, and genuine-deviation prefix remains exact");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("Every ecology owner remains inside one atomic projection and conservation commit");
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain("split the sparrow flock");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("local unpublished SOURCE_CANDIDATE");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("reaches the chosen 45 / 47 breadth boundary");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Directive 04_1 still requires its cumulative release-checkpoint validation and publication gates before completion");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("LIVE_VERIFIED cumulative Directive 04_1 release");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("closes the chosen 45 / 47 breadth boundary");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no mosquito bite or disease, exact insect or snail actor");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("capture, live-prey consumption, fishing, harvesting, new injury, mortality or body path");
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("no audible Living Voice, full circadian behavior, continuous 3D flight");
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Remote CI, Pages publication, exact-live comparison, and LIVE_VERIFIED status remain pending");
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain("Cumulative CI, Pages deployment, and exact five-file live verification passed");
     expect(breathRelease?.categories.saves.join(" ")).toContain("outer session advances to version 29");
     expect(breathRelease?.categories.saves.join(" ")).toContain("regional ecology advances to root version 5");
     expect(breathRelease?.categories.knownLimitations.join(" ")).toContain("bounded Wave-F role coverage, not Wave G, Directive 04_1");
