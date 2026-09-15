@@ -20,7 +20,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 31;
+  readonly version: 32;
   readonly world: string;
   readonly session: GameSessionState;
   readonly perceptionCarry: {
@@ -127,9 +127,9 @@ function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
 
 function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
-  expect(record.payloadVersion).toBe(31);
+  expect(record.payloadVersion).toBe(32);
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(31);
+  expect(envelope.version).toBe(32);
   expect(Object.keys(envelope).sort()).toEqual(CURRENT_ENVELOPE_KEYS);
   const { integrity, ...unsealed } = envelope;
   expect(integrity).toBe(gameSaveEnvelopeIntegrity(unsealed));
@@ -256,7 +256,7 @@ describe("bounded runtime WAIT", () => {
     );
   });
 
-  it("preserves partial progress on cancel and reloads v31 idle without auto-resuming", async () => {
+  it("preserves partial progress on cancel and reloads current saves idle without auto-resuming", async () => {
     const repository = new MemoryRepository();
     const runtime = await beginFreshWorld(
       repository,

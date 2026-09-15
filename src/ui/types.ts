@@ -484,6 +484,12 @@ export interface ControlAvailabilityUIView {
   readonly waitActive?: boolean;
   readonly waitLabel?: string;
   readonly waitHint?: string;
+  /** Voluntary player recovery; active state makes the same control cancel it. */
+  readonly canRecover?: boolean;
+  readonly recoveryActive?: boolean;
+  readonly recoveryKind?: "rest" | "sleep";
+  readonly recoveryLabel?: string;
+  readonly recoveryHint?: string;
   readonly canWayknot?: boolean;
   readonly wayknotLabel?: string;
   readonly wayknotHint?: string;
@@ -536,6 +542,7 @@ export type TideweftUICommand =
   | { readonly type: "scan" }
   | { readonly type: "interact" }
   | { readonly type: "wait"; readonly action: "begin" | "cancel" | "suspend" }
+  | { readonly type: "recover"; readonly action: "begin" | "cancel" | "suspend" | "resume" }
   | { readonly type: "wayknot" }
   | { readonly type: "set-session-shape"; readonly sessionShape: SessionShape }
   | {

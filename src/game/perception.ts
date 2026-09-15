@@ -592,6 +592,40 @@ export function hasValidPerceptionSignature(
   );
 }
 
+/**
+ * Preserves broad terrain awareness while withholding actor, item, label, and
+ * interaction detail. Sleeping uses this at the authoritative disclosure
+ * boundary so elapsed visual events never become player knowledge.
+ */
+export function suppressPerceptionDetail(
+  result: PerceptionResult,
+  columns: number,
+  rows: number,
+): PerceptionResult | null {
+  const dimensions = validatedDimensions(columns, rows);
+  if (
+    !dimensions
+    || !hasValidPerceptionSignature(result, dimensions.columns, dimensions.rows)
+  ) return null;
+  const hiddenDetail = new Uint8Array(dimensions.count);
+  return Object.freeze({
+    ...result,
+    detailVisibilityGrades: hiddenDetail,
+    detailVisibleTileIndices: Object.freeze([] as number[]),
+    detailDirectTileIndices: Object.freeze([] as number[]),
+    detailPeripheralTileIndices: Object.freeze([] as number[]),
+    signature: visibilitySignature(
+      result.valid,
+      dimensions.columns,
+      dimensions.rows,
+      result.playerTileIndex,
+      result.visibilityGrades,
+      result.terrainVisibilityStrengths,
+      hiddenDetail,
+    ),
+  });
+}
+
 function failedResult(
   columns: number,
   rows: number,

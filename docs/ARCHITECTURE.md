@@ -281,6 +281,48 @@ destination identity, wake threshold, raw need, or unseen observation. This is
 one representative keeper, not every-human home life, a physical interior,
 player REST/SLEEP, or Turning Day closure.
 
+The local Alpha47 **Rest and Rise** candidate adds player recovery without a
+second clock or a direct time assignment. On stable dry footing and below full
+stamina, `REST 30 MIN` creates a version-1 player time-action receipt for
+exactly three hundred ordinary 100-ms player steps. At an exact current
+settlement during Dusk or Night, the same control becomes `SLEEP TO DAWN`; it
+targets the first authoritative 06:00 boundary after the action begins and is
+unavailable during a storm. Neither action is forced by the clock. Existing
+stillness owns stamina recovery, while weather, tide, cargo, actors, ecology,
+Promises, deadlines, exposure, traversal, and incidents retain their ordinary
+owners.
+
+The receipt stores action kind, starting world tick and partial player-step
+phase, exact target, total and completed steps, and the settlement anchor that
+sleep requires. Each committed step must reconcile that receipt exactly with
+the authoritative clock; arbitrary replay, omission, phase loss, foreign
+settlement, or invalid footing fails closed. Presentation may batch at most ten
+ordinary steps—one displayed world minute—per animation frame and refresh once
+after the batch, but each step still passes through the existing
+`runTickFailClosed` transaction. Movement or another deliberate field action,
+loss of footing or settlement authority, storm, a physical incident, and
+qualifying current lawful disturbance can interrupt only after the triggering
+step commits.
+
+Sleep suppresses the player's new detail-perception field while preserving
+broad terrain awareness. Actor, item, label, and interaction detail therefore
+remain absent from both Chart and Relief; visual-only contacts do not wake the
+player, while strong lawful hearing or scent and physical consequences still
+can. The event
+observation cursor advances through sleeping time under that same suppressed
+snapshot, preventing an unseen past event from becoming known merely because
+the player wakes near its former locus.
+
+Alpha47 advances outer `GAME_SAVE_VERSION` from 31 to 32. `PlayerState` gains
+one required nullable `timeAction`; the strict version-31 reader authenticates
+the old envelope, inserts `null`, and preserves the existing world and
+`RegionalEcologyStateV6` authority. A current in-progress action saves and
+reloads at its exact committed step and physical anchor. Page hiding suspends
+only presentation acceleration, and title, Quiet Hour, app closure, and reload
+add no offline elapsed time. WAIT remains transient and separate. This slice
+adds no new fatigue, hunger, thirst, health, shelter, camp, bed, interior, or
+dream system, and it does not close Turning Day by itself.
+
 ## Authoritative tick
 
 One world tick:
@@ -1809,6 +1851,20 @@ ordinary visual admission. Direct inspection exposes only Resting/Asleep.
 Legacy absence remains byte-stable until a lawful home tick, outer save v31 is
 unchanged, and the slice claims no other human schedule, interior, autonomous
 commute, player REST/SLEEP, push, CI, Pages, or live verification.
+
+The local Alpha47 **Rest and Rise** candidate closes that player-action gap
+without claiming broader daily life. `REST 30 MIN` is available on stable dry
+footing when stamina is below full; `SLEEP TO DAWN` replaces it only at a
+settlement during Dusk or Night and outside storm weather. Both execute
+ordinary authoritative fixed steps, preserve all world consequences, and can
+be interrupted at a committed boundary by deliberate action, physical loss of
+eligibility, or lawful strong disturbance. Sleep withholds new visual detail
+but not terrain awareness, lawful hearing, or physical consequences. Its
+version-1 receipt is durable in outer save v32 and resumes at the exact saved
+world tick and partial player-step phase with no offline advance. Quiet Hour's
+`Save & return` remains a separate zero-time stopping action. Alpha47 has no
+push, CI, Pages, live-verification, new fatigue/needs/health, physical camp,
+interior, or Turning Day closure claim.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

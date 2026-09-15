@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.46",
+      version: "0.3.3-alpha.47",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.46",
-      gameplayContractVersion: 44,
-      tutorialVersion: 56,
+      buildIdentity: "0.3.3-alpha.47",
+      gameplayContractVersion: 45,
+      tutorialVersion: 57,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-46 Keeper Sleeps candidate and retains Kennel Night and earlier releases", () => {
+  it("scopes Alpha-47 Rest and Rise and retains the earlier Turning Day slices", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha46Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.46",
+    );
+    const alpha46Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha46Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha46Limitations = alpha46Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha45Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.45",
     );
@@ -307,30 +315,49 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("The Keeper Sleeps");
-    expect(currentCopy).toContain("Exactly one existing human");
-    expect(currentCopy).toContain("stable food-store keeper");
-    expect(currentCopy).toContain("same version-1 day-active living-circadian policy");
-    expect(currentCopy).toContain("No second clock, human scheduler, duplicate resident, house, bed, or invented interior");
-    expect(currentCopy).toContain("authoritative home settlement");
-    expect(currentCopy).toContain("Resting and then Asleep");
-    expect(currentCopy).toContain("stable identity-derived boundary");
-    expect(currentCopy).toContain("non-neutral porter response");
-    expect(currentCopy).toContain("authoritative post-command resident perception boundary suppresses new visual observations");
-    expect(currentCopy).toContain("hearing and scent can still carry lawful wake evidence");
-    expect(currentCopy).toContain("accepting work on that same tick permits ordinary vision");
-    expect(currentCopy).toContain("exhaustion and rest-need recovery only while their canonical body is actually at its authenticated home settlement");
-    expect(currentCopy).toContain("Merely being sheltered, idle, travelling, or carrying a stale sleep receipt grants no restorative physiology");
-    expect(currentCopy).toContain("one stale healing tick at dawn");
-    expect(currentCopy).toContain("directly observable keeper as Resting or Asleep");
-    expect(currentCopy).toContain("An asleep resident does not produce ordinary state speech");
-    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4");
-    expect(currentCopy).toContain("Resident state gains one additive optional shared circadian receipt");
-    expect(currentCopy).toContain("Legacy residents without that property remain valid");
-    expect(currentCopy).toContain("legacy keeper encountered away remains unbound until a real home tick");
-    expect(currentLimitations).toContain("exactly one existing food-store keeper");
-    expect(currentLimitations).toContain("not a physical house, bed, interior routine");
-    expect(currentLimitations).toContain("player REST and SLEEP");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Rest and Rise");
+    expect(currentCopy).toContain("REST 30 MIN");
+    expect(currentCopy).toContain("exactly three hundred ordinary player steps");
+    expect(currentCopy).toContain("SLEEP TO DAWN");
+    expect(currentCopy).toContain("first authoritative 06:00 boundary");
+    expect(currentCopy).toContain("Weather, tide, cargo, actors, ecology, Promises, deadlines");
+    expect(currentCopy).toContain("Sleep ignores visual-only interruption");
+    expect(currentCopy).toContain("withholds new actor, item, label, and interaction detail");
+    expect(currentCopy).toContain("event-observation cursor still crosses elapsed sleeping time");
+    expect(currentCopy).toContain("at most one ordinary world minute per presented frame");
+    expect(currentCopy).toContain("REST is unavailable at full stamina and requires stable dry footing");
+    expect(currentCopy).toContain("one labeled floating recovery control beside WAIT");
+    expect(currentCopy).toContain("Quiet Hour's return-to-title action is now labeled Save & return");
+    expect(currentCopy).toContain("Outer save version 32 adds one nullable version-1 player time-action receipt");
+    expect(currentCopy).toContain("starting partial player-step phase");
+    expect(currentCopy).toContain("version-31 save adopts version 32 with no active recovery action");
+    expect(currentCopy).toContain("persists across save and reload at the exact committed step");
+    expect(currentCopy).toContain("never applies closed-app or background elapsed time");
+    expect(currentLimitations).toContain("no new fatigue, hunger, thirst, player health, injury, shelter, camp, bed, house, interior, dream");
+    expect(alpha46Release?.summary).toContain("The Keeper Sleeps");
+    expect(alpha46Copy).toContain("Exactly one existing human");
+    expect(alpha46Copy).toContain("stable food-store keeper");
+    expect(alpha46Copy).toContain("same version-1 day-active living-circadian policy");
+    expect(alpha46Copy).toContain("No second clock, human scheduler, duplicate resident, house, bed, or invented interior");
+    expect(alpha46Copy).toContain("authoritative home settlement");
+    expect(alpha46Copy).toContain("Resting and then Asleep");
+    expect(alpha46Copy).toContain("stable identity-derived boundary");
+    expect(alpha46Copy).toContain("non-neutral porter response");
+    expect(alpha46Copy).toContain("authoritative post-command resident perception boundary suppresses new visual observations");
+    expect(alpha46Copy).toContain("hearing and scent can still carry lawful wake evidence");
+    expect(alpha46Copy).toContain("accepting work on that same tick permits ordinary vision");
+    expect(alpha46Copy).toContain("exhaustion and rest-need recovery only while their canonical body is actually at its authenticated home settlement");
+    expect(alpha46Copy).toContain("Merely being sheltered, idle, travelling, or carrying a stale sleep receipt grants no restorative physiology");
+    expect(alpha46Copy).toContain("one stale healing tick at dawn");
+    expect(alpha46Copy).toContain("directly observable keeper as Resting or Asleep");
+    expect(alpha46Copy).toContain("An asleep resident does not produce ordinary state speech");
+    expect(alpha46Copy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4");
+    expect(alpha46Copy).toContain("Resident state gains one additive optional shared circadian receipt");
+    expect(alpha46Copy).toContain("Legacy residents without that property remain valid");
+    expect(alpha46Copy).toContain("legacy keeper encountered away remains unbound until a real home tick");
+    expect(alpha46Limitations).toContain("exactly one existing food-store keeper");
+    expect(alpha46Limitations).toContain("not a physical house, bed, interior routine");
+    expect(alpha46Limitations).toContain("player REST and SLEEP");
     expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
     expect(currentLimitations).toContain("not been pushed, published, deployed");
     expect(currentLimitations).toContain("LIVE_VERIFIED");

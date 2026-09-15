@@ -66,6 +66,7 @@ import {
 } from "./adrift";
 import { deriveWaterFlowProfile } from "./waterFlow";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
+import type { PlayerTimeActionState } from "./playerTimeAction";
 
 /** Shared authoritative sub-tile precision for player and world-position math. */
 export const TILE_UNITS = WORLD_POSITION_UNITS_PER_TILE;
@@ -161,6 +162,8 @@ export interface PlayerState {
   completedJourneys: number;
   rescues: number;
   reportsDelivered: number;
+  /** Durable authority for a player-chosen REST or SLEEP already in progress. */
+  timeAction: PlayerTimeActionState | null;
 }
 
 export interface PlayerControl {
@@ -287,6 +290,7 @@ export function createPlayer(world: WorldView, startSettlementId?: number): Play
     completedJourneys: 0,
     rescues: 0,
     reportsDelivered: 0,
+    timeAction: null,
   };
   discoverAround(player, world, 5);
   return player;

@@ -42,7 +42,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 31;
+  readonly version: 32;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly regionalTravel: string;
@@ -153,8 +153,10 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
     const current = requireCurrent(fixtureRecord);
     const currentState = requireState(current);
     const { integrity: _integrity, ...shared } = current as unknown as Readonly<Record<string, unknown>>;
+    const { timeAction: _futureTimeAction, ...legacyPlayer } = current.player;
     const v25Base = {
       ...shared,
+      player: legacyPlayer,
       version: 25,
       regionalEcology: serializeRegionalEcologyState(currentState.base),
     };
@@ -271,13 +273,13 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 31
-    || record.payloadVersion !== 31
+    || value.version !== 32
+    || record.payloadVersion !== 32
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a current v31 envelope");
+  ) throw new Error("runtime fixture did not produce a current v32 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
-    throw new Error("v31 envelope integrity did not authenticate");
+    throw new Error("v32 envelope integrity did not authenticate");
   }
   return value;
 }

@@ -5905,29 +5905,37 @@ export function createTideweftReliefRenderer(
         cache.mesh.verticalScale,
         true,
       );
-      p.stroke(withAlpha(RELIEF_PALETTE.foam, 225));
-      p.strokeWeight(2.2);
-      p.line(
-        player.position.x, -surface - size * 0.28, player.position.y,
-        facing.x, -facingSurface - size * 0.18, facing.y,
-      );
+      if (player.recoveryKind === undefined) {
+        p.stroke(withAlpha(RELIEF_PALETTE.foam, 225));
+        p.strokeWeight(2.2);
+        p.line(
+          player.position.x, -surface - size * 0.28, player.position.y,
+          facing.x, -facingSurface - size * 0.18, facing.y,
+        );
+      }
       p.push();
       p.noStroke();
       const adriftBob = adrift && !reducedMotion
         ? Math.sin(p.millis() * 0.0042) * size * adrift.bobIntensity * 0.04
         : 0;
-      const bodyLift = size * (0.08 + presentation.heightScale * 0.26) + adriftBob;
+      const bodyLift = player.recoveryKind === undefined
+        ? size * (0.08 + presentation.heightScale * 0.26) + adriftBob
+        : size * (player.recoveryKind === "sleep" ? 0.11 : 0.15);
       p.translate(player.position.x, -surface - bodyLift, player.position.y);
       p.rotateY(-player.facing);
-      p.rotateZ(
-        presentation.leanRadians
+      p.rotateZ(player.recoveryKind === undefined
+        ? presentation.leanRadians
           + (adrift && !reducedMotion
             ? Math.sin(p.millis() * 0.006) * adrift.leanIntensity * 0.12
-            : 0),
-      );
+            : 0)
+        : 0);
       p.emissiveMaterial(0, 0, 0);
       p.ambientMaterial(playerColor);
-      const silhouetteScale = reliefSilhouetteScale(presentation);
+      const silhouetteScale = player.recoveryKind === "sleep"
+        ? ([1.5, 0.34, 0.82] as const)
+        : player.recoveryKind === "rest"
+          ? ([1.18, 0.54, 0.82] as const)
+          : reliefSilhouetteScale(presentation);
       p.scale(...silhouetteScale);
       if (player.mode === "skiff") {
         p.scale(1.45, 0.55, 0.8);
@@ -5942,12 +5950,14 @@ export function createTideweftReliefRenderer(
       }
       p.pop();
 
-      p.push();
-      p.translate(player.position.x, -surface - bodyLift, player.position.y);
-      p.rotateY(-player.facing);
-      p.rotateZ(presentation.leanRadians);
-      drawReliefBalanceMark(presentation, size);
-      p.pop();
+      if (player.recoveryKind === undefined) {
+        p.push();
+        p.translate(player.position.x, -surface - bodyLift, player.position.y);
+        p.rotateY(-player.facing);
+        p.rotateZ(presentation.leanRadians);
+        drawReliefBalanceMark(presentation, size);
+        p.pop();
+      }
 
       const shownCargo = Math.min(5, player.cargo.length);
       for (let index = 0; index < shownCargo; index += 1) {

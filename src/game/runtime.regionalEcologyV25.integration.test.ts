@@ -116,7 +116,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface V28Envelope {
   readonly format: "tideweft-session";
-  readonly version: 31;
+  readonly version: 32;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -804,14 +804,14 @@ function requireV28(record: SaveRecord): V28Envelope {
   const value = JSON.parse(record.worldJson) as V28Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 31
-    || record.payloadVersion !== 31
+    || value.version !== 32
+    || record.payloadVersion !== 32
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("fixture did not produce the current v31 regional ecology envelope");
+  ) throw new Error("fixture did not produce the current v32 regional ecology envelope");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed as Readonly<Record<string, unknown>>)) {
-    throw new Error("v31 outer envelope failed its integrity seal");
+    throw new Error("v32 outer envelope failed its integrity seal");
   }
   return value;
 }
@@ -1023,6 +1023,7 @@ function downgradeToV24(
     format: "tideweft-session",
     version: 24,
     world: envelope.world,
+    player: legacyPlayerWithoutTimeAction(envelope.player),
     physicalCargo: createV24PhysicalCargo(envelope.player, sourcePatch),
     coreEcology: serializeCoreEcologyAggregatePatch(sourcePatch),
   };
@@ -1038,6 +1039,11 @@ function downgradeToV24(
       worldJson: JSON.stringify(legacy),
     },
   };
+}
+
+function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
+  return legacyPlayer as PlayerState;
 }
 
 function createV24PhysicalCargo(

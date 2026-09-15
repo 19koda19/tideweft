@@ -321,7 +321,9 @@ describe("information as physical, sourced progress", () => {
     const player = createPlayer(createWorldView(world));
     const session = createSessionState(world.meta.seedText);
     const phaseAt = (tick: number) => {
-      runTicks(world, tick - world.meta.completedTick);
+      // Fresh Turning Day worlds begin at 07:00 (tick 420). Sample the next
+      // complete 720-minute tide triangle instead of trying to rewind to zero.
+      runTicks(world, 720 + tick - world.meta.completedTick);
       return projectUIView(createWorldView(world), player, session).tide.phase;
     };
     expect(phaseAt(0)).toBe("low");

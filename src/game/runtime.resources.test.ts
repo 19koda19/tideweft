@@ -121,11 +121,12 @@ function v2SaveRecord(
   player: PlayerState,
   ecology = createFieldResourceEcologyState(world.meta.completedTick),
 ): SaveRecord {
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   const envelope: PersistedGameSaveEnvelope = {
     format: "tideweft-session",
     version: 2,
     world: serializeWorld(world),
-    player,
+    player: legacyPlayer as PlayerState,
     session: createSessionState(world.meta.seedText),
     fieldResources: ecology,
   };
@@ -145,11 +146,12 @@ function v1SaveRecord(
   world: WorldState,
   player: PlayerState,
 ): SaveRecord {
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   const envelope: V1GameSaveEnvelope = {
     format: "tideweft-session",
     version: 1,
     world: serializeWorld(world),
-    player,
+    player: legacyPlayer as PlayerState,
     session: createSessionState(world.meta.seedText),
   };
   return {
@@ -469,7 +471,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(31);
+    expect(saved.version).toBe(32);
     expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
@@ -662,7 +664,7 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(31);
+    expect(migrated.version).toBe(32);
     expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,

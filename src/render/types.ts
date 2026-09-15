@@ -265,6 +265,8 @@ export interface PlayerView {
   readonly bracing?: boolean;
   /** Explicit physical pose; renderers must not communicate this by color alone. */
   readonly balanceState?: PlayerBalanceView;
+  /** Voluntary elapsed-time posture; authority remains in the game/save layer. */
+  readonly recoveryKind?: "rest" | "sleep";
   readonly incident?: PlayerIncidentView;
   readonly mode: "foot" | "wading" | "skiff" | "swept" | "camp" | "rescued";
   readonly destination?: WorldPoint;

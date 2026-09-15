@@ -194,7 +194,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 31,
+      version: 32,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 9,
@@ -250,7 +250,11 @@ describe("runtime existing-human perception path", () => {
       livingActorPlayerChoice: _currentLivingActorPlayerChoice,
       ...currentBase
     } = decoded;
-    const v4Base = { ...currentBase, version: 4 };
+    const {
+      timeAction: _futureTimeAction,
+      ...legacyPlayer
+    } = decoded.player as Record<string, unknown>;
+    const v4Base = { ...currentBase, player: legacyPlayer, version: 4 };
     repository.replace({
       ...current,
       payloadVersion: 4,
@@ -264,7 +268,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 31,
+      version: 32,
       perceptionCarry: {
         version: 1,
         playerStepsSinceWorldTick: 0,
@@ -383,11 +387,12 @@ function perceptionFixture(seed: string): {
   session.titleVisible = false;
   session.paused = false;
   session.hasSave = true;
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   const envelope = {
     format: "tideweft-session",
     version: 1,
     world: serializeWorld(world),
-    player,
+    player: legacyPlayer,
     session,
   };
   return {

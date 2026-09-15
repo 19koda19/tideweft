@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorld, createWorldView } from "../sim/public";
+import {
+  FIELD_RESOURCE_LIVING_RESERVE_UNITS,
+  createFieldResourceEcologyState,
+  createWorld,
+  createWorldView,
+  generateFieldResourceCatalog,
+} from "../sim/public";
 import { mobileHudCopy } from "../ui/createTideweftUI";
 import { createCraftingInventory } from "./crafting";
 import {
@@ -9,8 +15,9 @@ import {
   createLooseCargoWorld,
   dropLooseCargo,
 } from "./looseCargo";
-import { TILE_UNITS, createPlayer, loadContractCargo } from "./player";
-import { projectGameView } from "./projection";
+import { TILE_UNITS, createPlayer, loadContractCargo, playerTileIndex } from "./player";
+import { suppressPerceptionDetail } from "./perception";
+import { projectGameView, projectPerception } from "./projection";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 
@@ -96,6 +103,18 @@ describe("active Promise recovery guidance", () => {
     expect(objective?.description).toContain(`${expected} · resting`);
     expect(objective?.description).toContain("press E within reach on desktop");
     expect(objective?.description).toContain("tap its parcel marker on mobile");
+
+    const sleeping = projectUIView(world, player, session, {
+      looseCargoCarrier: dropped.carrier,
+      looseCargoWorld: dropped.world,
+      suppressDetailPerception: true,
+    });
+    expect(sleeping.objective?.description).toContain("outside the current visible landscape");
+    expect(sleeping.objective?.description).not.toContain(expected);
+    expect(sleeping.controls).toMatchObject({
+      canInteract: false,
+      interactLabel: "Wake to interact",
+    });
   });
 
   it("keeps remote active-contract identity and recovery guidance without rendering unseen cargo", () => {
@@ -172,5 +191,129 @@ describe("active Promise recovery guidance", () => {
     ].join(" · "));
     expect(deliveryObjective?.progressLabel).toMatch(/tiles remaining · \d+% condition/u);
     expect(compactObjective(deliveryView)).not.toContain(" · resting");
+  });
+});
+
+describe("sleeping UI disclosure", () => {
+  it("withholds a directly visible settlement, resident, and store action", () => {
+    const state = createWorld("sleep closes the inspector");
+    const world = createWorldView(state);
+    const player = createPlayer(world);
+    const settlement = world.settlements.find(({ tileIndex }) => (
+      tileIndex === playerTileIndex(player)
+    ));
+    if (!settlement) throw new Error("fixture needs the starting settlement");
+    const resident = world.residents.find(({ location }) => (
+      location.kind === "settlement" && location.settlementId === settlement.id
+    ));
+    if (!resident) throw new Error("fixture needs a resident at the starting settlement");
+    const session = createSessionState(world.seedText);
+    session.tutorial.dismissed = true;
+    session.selectedSettlementId = settlement.id;
+    const storeAction = {
+      id: "sleep-store-fixture:0",
+      label: "Warn the store keeper",
+      hint: "The open store can be reported while awake.",
+    } as const;
+    const ordinaryPerception = projectPerception(world, player);
+    const ordinary = projectUIView(world, player, session, {
+      selectedResidentId: resident.id,
+      settlementFoodStoreAction: storeAction,
+      perception: ordinaryPerception,
+    });
+
+    expect(ordinary.selectedSettlement?.id).toBe(String(settlement.id));
+    expect(ordinary.selectedResident?.id).toBe(String(resident.id));
+    expect(ordinary.controls).toMatchObject({
+      canInteract: true,
+      interactLabel: storeAction.label,
+      interactHint: storeAction.hint,
+    });
+
+    const sleepingPerception = suppressPerceptionDetail(
+      ordinaryPerception,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    if (!sleepingPerception) throw new Error("fixture could not seal sleeping perception");
+    const sleeping = projectUIView(world, player, session, {
+      selectedResidentId: resident.id,
+      settlementFoodStoreAction: storeAction,
+      perception: sleepingPerception,
+      suppressDetailPerception: true,
+    });
+
+    expect(sleeping.selectedSettlement).toBeUndefined();
+    expect(sleeping.selectedResident).toBeUndefined();
+    expect(sleeping.controls).toMatchObject({
+      canInteract: false,
+      interactLabel: "Wake to interact",
+    });
+    expect(sleeping.controls?.interactHint).not.toContain(storeAction.hint);
+  });
+
+  it("withholds nearby parcel and underfoot resource interactions until waking", () => {
+    const state = createWorld("sleep does not inspect the ground");
+    const world = createWorldView(state);
+    const catalog = generateFieldResourceCatalog(state.meta.rootSeed, state.terrain);
+    const node = catalog.nodes.find(({ capacityUnits }) => (
+      capacityUnits > FIELD_RESOURCE_LIVING_RESERVE_UNITS
+    ));
+    if (!node) throw new Error("fixture needs a harvestable field resource");
+    const player = createPlayer(world);
+    player.x = node.x * TILE_UNITS + TILE_UNITS / 2;
+    player.y = node.y * TILE_UNITS + TILE_UNITS / 2;
+    player.discovered[node.tileIndex] = 1_000_000;
+    const session = createSessionState(world.seedText);
+    session.tutorial.dismissed = true;
+    const ecology = createFieldResourceEcologyState(world.completedTick);
+    const perception = projectPerception(world, player);
+    const resourceOptions = {
+      fieldResourceCatalog: catalog,
+      fieldResourceEcology: ecology,
+      perception,
+    } as const;
+
+    const ordinaryResource = projectUIView(world, player, session, resourceOptions);
+    expect(ordinaryResource.controls).toMatchObject({
+      canInteract: true,
+      interactLabel: expect.stringMatching(/^Gather /u),
+    });
+
+    const dropped = dropLooseCargo(
+      createLooseCargoWorld(world.terrain.width, world.terrain.height),
+      createLooseCargoCarrier(
+        PORTER,
+        createCraftingInventory(100_000, { cordreed: 1 }),
+      ),
+      {
+        lotId: "crafting-stack:cordreed",
+        quantity: 1,
+        x: node.x * LOOSE_CARGO_TILE_UNITS + LOOSE_CARGO_TILE_UNITS / 2,
+        y: node.y * LOOSE_CARGO_TILE_UNITS + LOOSE_CARGO_TILE_UNITS / 2,
+      },
+    );
+    if (!dropped.ok) throw new Error(`failed nearby parcel fixture: ${dropped.reason}`);
+    const ordinaryParcel = projectUIView(world, player, session, {
+      ...resourceOptions,
+      looseCargoCarrier: dropped.carrier,
+      looseCargoWorld: dropped.world,
+    });
+    expect(ordinaryParcel.controls).toMatchObject({
+      canInteract: true,
+      interactLabel: "Recover parcel",
+    });
+
+    const sleeping = projectUIView(world, player, session, {
+      ...resourceOptions,
+      looseCargoCarrier: dropped.carrier,
+      looseCargoWorld: dropped.world,
+      suppressDetailPerception: true,
+    });
+    expect(sleeping.controls).toMatchObject({
+      canInteract: false,
+      interactLabel: "Wake to interact",
+    });
+    expect(sleeping.controls?.interactHint).not.toMatch(/parcel|underfoot|gather/iu);
   });
 });

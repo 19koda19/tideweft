@@ -91,7 +91,11 @@ import {
   regionalTileIndexInView,
   regionalWorldCenter,
 } from "./regionalWorldView";
-import { VISIBILITY_DIRECT, type PerceptionResult } from "./perception";
+import {
+  VISIBILITY_DIRECT,
+  suppressPerceptionDetail,
+  type PerceptionResult,
+} from "./perception";
 import {
   isCurrentPerceptionSnapshot,
   observableResidentRestState,
@@ -132,6 +136,8 @@ export interface UIProjectionOptions {
   readonly adriftControl?: AdriftProjectionControl;
   /** The same disclosure snapshot used by both renderers this refresh. */
   readonly perception?: PerceptionResult;
+  /** Preserve broad terrain awareness while withholding sleeping-time detail. */
+  readonly suppressDetailPerception?: boolean;
   /** Direct physical feedback becomes an observed system entry, not overhead prose. */
   readonly traversalFeedback?: TraversalFeedbackState;
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
@@ -282,10 +288,11 @@ export function projectUIView(
   options: UIProjectionOptions = {},
 ): TideweftUIView {
   const economy = options.economyWorld ?? world;
-  const currentPerception = options.perception === undefined
+  const suppressDetail = options.suppressDetailPerception === true;
+  const currentPerception = options.perception === undefined && !suppressDetail
     ? undefined
     : projectPerception(world, player);
-  const perception = currentPerception
+  const ordinaryPerception = currentPerception
     && isCurrentPerceptionSnapshot(
       options.perception,
       currentPerception,
@@ -294,11 +301,23 @@ export function projectUIView(
     )
     ? options.perception
     : currentPerception;
+  let perception: PerceptionResult | undefined = ordinaryPerception;
+  if (suppressDetail && ordinaryPerception) {
+    const sleepingPerception = suppressPerceptionDetail(
+      ordinaryPerception,
+      world.terrain.width,
+      world.terrain.height,
+    );
+    if (sleepingPerception === null) {
+      throw new Error("Sleeping UI perception could not be sealed");
+    }
+    perception = sleepingPerception;
+  }
   const adrift = projectAdriftFieldView(world, player, options.adriftControl);
   const selectedSettlementCandidate = session.selectedSettlementId === null
     ? undefined
     : economy.settlements.find((settlement) => settlement.id === session.selectedSettlementId);
-  const selectedSettlement = selectedSettlementCandidate
+  const selectedSettlement = !suppressDetail && selectedSettlementCandidate
     && settlementIsDirectlyObserved(
       selectedSettlementCandidate.id,
       world,
@@ -306,13 +325,15 @@ export function projectUIView(
     )
     ? selectedSettlementCandidate
     : undefined;
-  const selectedResident = projectResidentAbout(
-    world,
-    economy,
-    player,
-    perception,
-    options.selectedResidentId,
-  );
+  const selectedResident = suppressDetail
+    ? undefined
+    : projectResidentAbout(
+        world,
+        economy,
+        player,
+        perception ?? undefined,
+        options.selectedResidentId,
+      );
   const playerSettlementId = settlementAtPlayer(player, world);
   const localOffers = playerSettlementId === null
     ? []
@@ -334,13 +355,15 @@ export function projectUIView(
   const tidePhase = tidePhaseName(world.tide.phase);
   const worldName = `The ${titleCase(world.seedText)} Estuary`;
   const wayknotControl = projectWayknotControl(world, player);
-  const localResource = resourceUnderfoot(player, options);
+  const localResource = suppressDetail ? undefined : resourceUnderfoot(player, options);
   const looseCargoWorlds = [
     ...(options.looseCargoWorld ? [options.looseCargoWorld] : []),
     ...(options.inactiveLooseCargoWorlds ?? []),
   ];
-  const nearbyParcel = nearestLooseParcel(player, world, looseCargoWorlds, 2);
-  const activeCustody = activeContract
+  const nearbyParcel = suppressDetail
+    ? undefined
+    : nearestLooseParcel(player, world, looseCargoWorlds, 2);
+  const projectedActiveCustody = activeContract
     ? promiseCustody(
         activeContract,
         player,
@@ -352,6 +375,12 @@ export function projectUIView(
           : undefined,
       )
     : undefined;
+  const activeCustody = suppressDetail && projectedActiveCustody
+    ? {
+        carriedQuantity: projectedActiveCustody.carriedQuantity,
+        looseQuantity: projectedActiveCustody.looseQuantity,
+      }
+    : projectedActiveCustody;
 
   return {
     revision: [
@@ -369,8 +398,8 @@ export function projectUIView(
       player.cargo[0]?.condition ?? FIXED_POINT,
       player.pace,
       options.bracing === true,
-      session.selectedSettlementId ?? "none",
-      options.selectedResidentId ?? "no-resident",
+      suppressDetail ? "sleep-selection-hidden" : session.selectedSettlementId ?? "none",
+      suppressDetail ? "sleep-resident-hidden" : options.selectedResidentId ?? "no-resident",
       session.trackedContractId ?? "none",
       session.nextAnnouncementId,
       session.titleVisible,
@@ -381,7 +410,10 @@ export function projectUIView(
       options.looseCargoWorld?.revision ?? "no-loose-world",
       options.activePromiseCustody?.carriedQuantity ?? "no-carried-promise",
       options.activePromiseCustody?.looseQuantity ?? "no-loose-promise",
-      options.settlementFoodStoreAction?.id ?? "no-store-action",
+      suppressDetail
+        ? "sleep-store-action-hidden"
+        : options.settlementFoodStoreAction?.id ?? "no-store-action",
+      suppressDetail ? "detail-suppressed" : "detail-awake",
       ...(options.inactiveLooseCargoWorlds ?? []).map((cargoWorld) =>
         `${cargoWorld.region.x},${cargoWorld.region.y}:${cargoWorld.revision}`),
     ].join(":"),
@@ -501,9 +533,12 @@ export function projectUIView(
     ...(options.saveWarning ? { saveWarning: options.saveWarning } : {}),
     controls: {
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,
-      canInteract: player.mode !== "swept"
+      canInteract: !suppressDetail
+        && player.mode !== "swept"
         && (nearbyParcel !== undefined || localResource !== undefined || playerSettlementId !== null),
-      interactLabel: player.mode === "swept"
+      interactLabel: suppressDetail
+        ? "Wake to interact"
+        : player.mode === "swept"
         ? "ADRIFT · paddle / float"
         : nearbyParcel
           ? "Recover parcel"
@@ -518,7 +553,9 @@ export function projectUIView(
           : player.activeContractId === null && player.report === null && localOffers.length === 1
             ? "Pick up cargo"
             : "Inspect harbor",
-      interactHint: player.mode === "swept"
+      interactHint: suppressDetail
+        ? "Wake before inspecting or interacting with nearby people, places, cargo, or resources."
+        : player.mode === "swept"
         ? "MOVE / TAP to paddle toward shallow water · release movement to catch your breath."
         : nearbyParcel
           ? `A physical ${nearbyParcel.payload.kind === "promise" ? "Promise parcel" : "field item"} is within reach. Desktop: press E. Mobile: tap the parcel.`

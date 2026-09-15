@@ -112,6 +112,15 @@ import {
   type TravelPace,
 } from "./player";
 import {
+  PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE,
+  advancePlayerTimeActionOneStep,
+  canonicalizePlayerTimeAction,
+  createPlayerTimeAction,
+  remainingPlayerTimeActionWorldMinutes,
+  type PlayerTimeActionKind,
+  type PlayerTimeActionState,
+} from "./playerTimeAction";
+import {
   acknowledgeIncidentCue,
   canonicalizeTraversalFeedback,
   createTraversalFeedbackState,
@@ -153,6 +162,7 @@ import {
 import {
   VISIBILITY_DIRECT,
   evaluateVisualContact,
+  suppressPerceptionDetail,
 } from "./perception";
 import {
   buildOutdoorIlluminationField,
@@ -695,6 +705,8 @@ import {
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
 const MAX_STEPS_PER_FRAME = 6;
+/** One world minute per presented frame keeps long recovery bounded and cancellable. */
+const PLAYER_TIME_ACTION_MAX_STEPS_PER_FRAME = PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE;
 /** One bounded WAIT advances ten real world-minutes through ordinary fixed steps. */
 const PLAYER_WAIT_MINUTES = 10;
 const PLAYER_WAIT_TOTAL_STEPS = PLAYER_WAIT_MINUTES * PLAYER_STEPS_PER_WORLD_TICK;
@@ -705,7 +717,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 31;
+const GAME_SAVE_VERSION = 32;
+const TURNING_DAY_GAME_SAVE_VERSION = 31;
 const REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION = 30;
 const REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION = 29;
 const REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION = 28;
@@ -8822,6 +8835,7 @@ export async function createTideweftRuntime(
         looseCargoWorld: physicalCargo.looseWorld,
         looseCargoWorlds: initialCargoPartitions,
         perception,
+        suppressDetailPerception: player.timeAction?.kind === "sleep",
       }),
       dogs: initialDogPresentations,
     },
@@ -8838,6 +8852,7 @@ export async function createTideweftRuntime(
     inactiveLooseCargoWorlds: inactiveCargoPartitions(physicalCargo, initialCargoPartitions),
     traversalFeedback,
     perception,
+    suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
   const soundscape = new TideweftSoundscape();
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
@@ -8856,6 +8871,9 @@ export async function createTideweftRuntime(
   // completed ordinary step and returns control on reload instead of silently
   // continuing an action the player can no longer see or cancel.
   let pendingPlayerWait: PendingPlayerWait | null = null;
+  // REST/SLEEP authority lives on the player and survives save/load. This flag
+  // only pauses presentation-time acceleration while the page is backgrounded.
+  let playerTimeActionSuspended = false;
   let adriftTapControl: PlayerControl | null = null;
   let adriftTapTicksRemaining = 0;
   let lastAdriftControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
@@ -9094,8 +9112,26 @@ export async function createTideweftRuntime(
     return dx * dx + dy * dy <= maximumDistance * maximumDistance ? keeper : null;
   }
 
+  function playerIsSleeping(): boolean {
+    return player.timeAction?.kind === "sleep";
+  }
+
+  function projectPlayerPerception(): ReturnType<typeof projectPerception> {
+    const ordinary = projectPerception(worldView, player);
+    if (!playerIsSleeping()) return ordinary;
+    const sleeping = suppressPerceptionDetail(
+      ordinary,
+      worldView.terrain.width,
+      worldView.terrain.height,
+    );
+    if (sleeping === null) {
+      throw new Error("Sleeping player perception could not be sealed");
+    }
+    return sleeping;
+  }
+
   function refreshViews(): void {
-    perception = projectPerception(worldView, player);
+    perception = projectPlayerPerception();
     captureNewlyObservedEvents();
     const actorWindow = {
       origin: regionalTravel.window.origin,
@@ -9275,6 +9311,7 @@ export async function createTideweftRuntime(
           bracing: manualControl.brace,
           adriftControl: lastAdriftControl,
           perception,
+          suppressDetailPerception: playerIsSleeping(),
           paused: session.paused || session.titleVisible || session.quietHourVisible,
         }),
         dogs: dogPresentations,
@@ -9437,6 +9474,7 @@ export async function createTideweftRuntime(
         adriftControl: lastAdriftControl,
         traversalFeedback,
         perception,
+        suppressDetailPerception: playerIsSleeping(),
         ...(settlementStoreKeeper === null
           ? {}
           : {
@@ -9500,10 +9538,13 @@ export async function createTideweftRuntime(
               (pendingPlayerWait.totalSteps - pendingPlayerWait.completedSteps)
               / PLAYER_STEPS_PER_WORLD_TICK,
             ),
-          )}`,
+          )}:recover:${player.timeAction === null
+            ? "idle"
+            : `${player.timeAction.kind}:${remainingPlayerTimeActionWorldMinutes(player.timeAction) ?? "invalid"}`}`,
       controls: {
         ...projectedUIView.controls,
         ...playerWaitControlView(),
+        ...playerRecoveryControlView(),
       },
       ...(wildlifeSelection !== null
         ? { selectedLivingActor: wildlifeSelection }
@@ -9514,12 +9555,19 @@ export async function createTideweftRuntime(
     };
   }
 
-  function captureNewlyObservedEvents(): void {
+  function captureNewlyObservedEvents(
+    currentPerception: ReturnType<typeof projectPerception> = perception,
+  ): void {
     let nextCursor = eventObservationCursor;
     for (const event of economyView.events) {
       if (event.sequence <= eventObservationCursor) continue;
       nextCursor = Math.max(nextCursor, event.sequence);
-      if (!eventIsDirectlyObservableAtLocus(event, economyView, worldView, perception)) continue;
+      if (!eventIsDirectlyObservableAtLocus(
+        event,
+        economyView,
+        worldView,
+        currentPerception,
+      )) continue;
       for (const events of [world.events, economyView.events, worldView.events]) {
         const match = events.find((candidate) => candidate.sequence === event.sequence);
         if (match) match.data.playerObserved = true;
@@ -9557,6 +9605,14 @@ export async function createTideweftRuntime(
       || pendingReportDelivery !== null;
   }
 
+  function playerIssuedInteractionPending(): boolean {
+    return commandQueue.length > 0
+      || pendingReinforcement !== null
+      || pendingChoir !== null
+      || pendingResidentObservation !== null
+      || pendingResidentGreeting !== null;
+  }
+
   function playerWaitBlockReason(): string | null {
     if (runtimeIntegrityFailure !== null) return "The simulation is paused at an integrity boundary.";
     if (saveRecoveryBlocked) return "Resolve the local save boundary before waiting.";
@@ -9574,6 +9630,11 @@ export async function createTideweftRuntime(
     }
     if (traversalFeedback.incident !== null) {
       return "Regain your footing before choosing to wait.";
+    }
+    if (player.timeAction !== null) {
+      return player.timeAction.kind === "sleep"
+        ? "Wake before choosing a separate wait."
+        : "Finish or cancel the current rest before waiting.";
     }
     return null;
   }
@@ -9694,7 +9755,222 @@ export async function createTideweftRuntime(
     }
   }
 
+  function playerRecoveryKindHere(): PlayerTimeActionKind {
+    const time = projectWorldTime(world.meta.completedTick);
+    const atSettlement = settlementAtPlayer(player, worldView) !== null;
+    return atSettlement && (time?.phase === "dusk" || time?.phase === "night")
+      ? "sleep"
+      : "rest";
+  }
+
+  function playerHasStableDryFooting(): boolean {
+    const tile = worldView.terrain.tiles[playerTileIndex(player)];
+    return tile !== undefined
+      && tile.waterDepth <= 35_000
+      && tile.terrain !== "deep-water"
+      && (player.mode === "foot" || player.mode === "camp");
+  }
+
+  function playerRecoveryBlockReason(kind: PlayerTimeActionKind): string | null {
+    if (runtimeIntegrityFailure !== null) return "The simulation is paused at an integrity boundary.";
+    if (saveRecoveryBlocked) return "Resolve the local save boundary before recovering.";
+    if (session.titleVisible || session.quietHourVisible || session.paused) {
+      return "Return to the living world before recovering.";
+    }
+    if (pendingPlayerWait !== null) return "Finish or cancel the current wait first.";
+    if (physicalReceiptPending()) {
+      return "Let the current physical handoff settle before recovering.";
+    }
+    if (playerIssuedInteractionPending()) {
+      return "Let the current interaction settle before recovering.";
+    }
+    if (player.mode === "swept") {
+      return "ADRIFT — paddle or float toward shallow water before recovering.";
+    }
+    if (player.mode === "rescued") return "Secure your footing before recovering.";
+    if (traversalFeedback.incident !== null) return "Regain your footing before recovering.";
+    if (!playerHasStableDryFooting()) return "Reach stable dry ground before recovering.";
+    if (kind === "rest") {
+      return player.stamina >= FIXED_POINT
+        ? "Your stamina is already full; keep moving or wait if you only need time to pass."
+        : null;
+    }
+    const settlementId = settlementAtPlayer(player, worldView);
+    if (settlementId === null) return "Reach a settlement before sleeping through the night.";
+    const time = projectWorldTime(world.meta.completedTick);
+    if (time === null || (time.phase !== "dusk" && time.phase !== "night")) {
+      return "Sleep to dawn becomes available at a settlement after dusk begins.";
+    }
+    if (worldView.weather.kind === "storm") {
+      return "The storm is too severe for an uninterrupted night's sleep.";
+    }
+    return null;
+  }
+
+  function formatRecoveryRemaining(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainder = minutes % 60;
+    return remainder === 0 ? `${hours} hr` : `${hours} hr ${remainder} min`;
+  }
+
+  function playerRecoveryControlView(): Pick<
+    NonNullable<TideweftUIView["controls"]>,
+    "canRecover" | "recoveryActive" | "recoveryKind" | "recoveryLabel" | "recoveryHint"
+  > {
+    const active = player.timeAction;
+    if (active !== null) {
+      const remaining = remainingPlayerTimeActionWorldMinutes(active);
+      if (remaining === null) throw new Error("Player recovery receipt lost its time authority");
+      return {
+        canRecover: true,
+        recoveryActive: true,
+        recoveryKind: active.kind,
+        recoveryLabel: active.kind === "sleep"
+          ? `Wake · ${formatRecoveryRemaining(remaining)}`
+          : `Cancel · ${remaining} min`,
+        recoveryHint: active.kind === "sleep"
+          ? "Wake at the last committed world boundary. Every elapsed consequence remains."
+          : "End the rest at the last committed world boundary. Every elapsed consequence remains.",
+      };
+    }
+    const kind = playerRecoveryKindHere();
+    const blocked = playerRecoveryBlockReason(kind);
+    return {
+      canRecover: blocked === null,
+      recoveryActive: false,
+      recoveryKind: kind,
+      recoveryLabel: kind === "sleep" ? "SLEEP TO DAWN" : "REST 30 MIN",
+      recoveryHint: blocked ?? (kind === "sleep"
+        ? "Sleep at this settlement until 06:00 while weather, cargo, actors, and Promises keep moving."
+        : "Recover stamina for thirty minutes while weather, cargo, actors, and Promises keep moving."),
+    };
+  }
+
+  function clearPlayerDetailSelections(): void {
+    session.selectedSettlementId = null;
+    selectedResidentId = null;
+    selectedDogActorId = null;
+    selectedWildlifeTarget = null;
+    selectedWildlifeEvidenceTarget = null;
+  }
+
+  function beginPlayerRecovery(): void {
+    if (player.timeAction !== null) return;
+    const kind = playerRecoveryKindHere();
+    const blocked = playerRecoveryBlockReason(kind);
+    if (blocked !== null) {
+      announce(session, blocked, true);
+      soundscape.play("warning", 0.3);
+      return;
+    }
+    const settlementId = settlementAtPlayer(player, worldView);
+    const state = createPlayerTimeAction({
+      kind,
+      startedAtWorldTick: world.meta.completedTick,
+      startedAtPlayerStepPhase: playerStepsSinceWorldTick,
+      anchorSettlementId: kind === "sleep" ? settlementId : null,
+    });
+    if (state === null) {
+      announce(session, "The recovery interval could not be sealed to the world clock.", true);
+      soundscape.play("warning", 0.4);
+      return;
+    }
+    stopAutomaticLivingActorRoute();
+    manualControl = { moveX: 0, moveY: 0, brace: false };
+    adriftTapControl = null;
+    adriftTapTicksRemaining = 0;
+    lastAdriftControl = { moveX: 0, moveY: 0, brace: false };
+    clearPlayerDetailSelections();
+    player.timeAction = state;
+    playerTimeActionSuspended = false;
+    accumulator = 0;
+    if (kind === "sleep") {
+      const settlementNameHere = settlementId === null
+        ? "the settlement"
+        : settlementName(economyView, settlementId);
+      announce(
+        session,
+        `You settle at ${settlementNameHere} until dawn. The world, weather, cargo, actors, and Promises keep moving.`,
+      );
+    } else {
+      announce(
+        session,
+        "You settle on stable ground for thirty minutes. Ordinary stillness restores stamina; the living world keeps moving.",
+      );
+    }
+    soundscape.play("rest", 0.5);
+    saveInBackground();
+  }
+
+  function cancelPlayerRecovery(announceCancellation: boolean): void {
+    const active = player.timeAction;
+    if (active === null) return;
+    player.timeAction = null;
+    playerTimeActionSuspended = false;
+    accumulator = 0;
+    if (announceCancellation) {
+      const elapsedMinutes = Math.floor(
+        active.completedSteps / PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE,
+      );
+      const time = projectWorldTime(world.meta.completedTick);
+      const clock = time === null
+        ? "the current moment"
+        : `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
+      announce(
+        session,
+        active.kind === "sleep"
+          ? `You wake at ${clock}. ${elapsedMinutes} ${elapsedMinutes === 1 ? "minute has" : "minutes have"} elapsed, and every consequence remains.`
+          : elapsedMinutes === 0
+            ? "You end the rest before a full minute passes."
+            : `You end the rest after ${elapsedMinutes} ${elapsedMinutes === 1 ? "minute" : "minutes"}. Every elapsed consequence remains.`,
+      );
+    }
+    saveInBackground();
+  }
+
+  function completePlayerRecovery(
+    completed: PlayerTimeActionState,
+    finalStepAnnouncementChanged: boolean,
+  ): void {
+    player.timeAction = null;
+    playerTimeActionSuspended = false;
+    accumulator = 0;
+    const time = projectWorldTime(world.meta.completedTick);
+    if (time === null) throw new Error("Player recovery reached an invalid world time");
+    const clock = `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
+    const change = completed.kind === "sleep"
+      ? `Slept at ${settlementName(economyView, completed.anchorSettlementId!)} until Day ${time.dayNumber} ${clock}; the world never stopped.`
+      : `Rested thirty minutes; the world reached Day ${time.dayNumber} ${clock}.`;
+    session.sessionChanges.push(change);
+    if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
+    if (!finalStepAnnouncementChanged) {
+      announce(
+        session,
+        completed.kind === "sleep"
+          ? `Dawn reaches the settlement at ${clock}. You wake to the world that continued around you.`
+          : `Thirty minutes pass. It is ${clock}; ordinary stillness restored only what your current condition allowed.`,
+      );
+      soundscape.play("rest", completed.kind === "sleep" ? 0.82 : 0.68);
+    }
+  }
+
+  function recoveryReceiptStillPhysicallyValid(state: PlayerTimeActionState): boolean {
+    if (!playerHasStableDryFooting()) return false;
+    if (state.kind === "rest") return true;
+    return settlementAtPlayer(player, worldView) === state.anchorSettlementId
+      && worldView.weather.kind !== "storm";
+  }
+
   function rendererCommandInterruptsPlayerWait(command: RendererCommand): boolean {
+    if (command.type === "movement") {
+      return command.vector.x !== 0 || command.vector.y !== 0;
+    }
+    if (command.type === "brace") return command.active;
+    return true;
+  }
+
+  function rendererCommandInterruptsPlayerRecovery(command: RendererCommand): boolean {
     if (command.type === "movement") {
       return command.vector.x !== 0 || command.vector.y !== 0;
     }
@@ -9721,8 +9997,30 @@ export async function createTideweftRuntime(
     }
   }
 
+  function uiCommandInterruptsPlayerRecovery(command: TideweftUICommand): boolean {
+    switch (command.type) {
+      case "recover":
+      case "resume-world":
+      case "open-title":
+      case "quiet-hour":
+      case "set-session-shape":
+      case "aggregate-wildlife-evidence":
+        return false;
+      case "wait":
+        return command.action !== "suspend";
+      case "settlement":
+        return command.action === "focus";
+      case "resident":
+        return command.action === "greet";
+      case "living-actor":
+        return command.action === "interact";
+      default:
+        return true;
+    }
+  }
+
   function currentControl(): PlayerControl {
-    if (pendingPlayerWait !== null) {
+    if (pendingPlayerWait !== null || player.timeAction !== null) {
       return { moveX: 0, moveY: 0, brace: false };
     }
     if (player.mode === "swept") {
@@ -10053,12 +10351,14 @@ export async function createTideweftRuntime(
     if (job.complete) terrainPrefetchJobs.shift();
   }
 
-  function tick(): void {
+  function tick(present = true): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
-    const announcementIdBeforePlayerWaitStep = pendingPlayerWait === null
+    const announcementIdBeforePlayerTimeStep = pendingPlayerWait === null
+      && player.timeAction === null
       ? null
       : session.announcement?.id ?? null;
     let playerWaitDisturbedThisStep = false;
+    let playerRecoveryDisturbedThisStep = false;
     advancePendingParcelTarget();
     const beforeX = player.x;
     const beforeY = player.y;
@@ -10348,6 +10648,12 @@ export async function createTideweftRuntime(
       }
       if (playerCoreObservations.some(({ interrupt }) => interrupt === "strong")) {
         playerWaitDisturbedThisStep = true;
+      }
+      if (playerCoreObservations.some((observation) => (
+        observation.interrupt === "strong"
+        && (player.timeAction?.kind !== "sleep" || observation.channel !== "vision")
+      ))) {
+        playerRecoveryDisturbedThisStep = true;
       }
       const porterWorldObservations = canonicalizeActorObservations([
         ...canonicalDogVisualObservations,
@@ -11052,7 +11358,7 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
-      const eventPerception = projectPerception(worldView, player);
+      const eventPerception = projectPlayerPerception();
       const coreEventObservation = {
         window: {
           origin: regionalTravel.window.origin,
@@ -11116,7 +11422,15 @@ export async function createTideweftRuntime(
         observation.channel === "hearing"
         && observation.perceivedClass === "animal-alarm"
       ));
-      if (lawfullyHeardAlarm) playerWaitDisturbedThisStep = true;
+      const lawfullyHeardStrongAlarm = canonicalPlayerEventTimeAlarms.some((observation) => (
+        observation.channel === "hearing"
+        && observation.perceivedClass === "animal-alarm"
+        && observation.interrupt === "strong"
+      ));
+      if (lawfullyHeardStrongAlarm) {
+        playerWaitDisturbedThisStep = true;
+        playerRecoveryDisturbedThisStep = true;
+      }
       const heardAggregateCues = [...finalRegionalPatches.values()].flatMap((patch) => {
         const projected = projectCoreEcologyAggregateHeardCues({
           patch,
@@ -11152,6 +11466,7 @@ export async function createTideweftRuntime(
               : `${attacker.identityLabel} strikes ${victimLabel}. The animal is hurt.`,
         );
         playerWaitDisturbedThisStep = true;
+        playerRecoveryDisturbedThisStep = true;
         ecologyConsequenceAnnounced = true;
       }
       if (
@@ -11493,10 +11808,51 @@ export async function createTideweftRuntime(
       } else if (advancedWait.completedSteps >= advancedWait.totalSteps) {
         completePlayerWait(
           advancedWait,
-          (session.announcement?.id ?? null) !== announcementIdBeforePlayerWaitStep,
+          (session.announcement?.id ?? null) !== announcementIdBeforePlayerTimeStep,
         );
       }
     }
+    if (player.timeAction?.kind === "sleep") {
+      // The cursor crosses sleeping-time events while detail perception is
+      // still withheld. Waking on this same step can never reveal them later
+      // merely because their old locus is now in view.
+      captureNewlyObservedEvents(projectPlayerPerception());
+    }
+    if (player.timeAction !== null) {
+      const beforeAdvance = player.timeAction;
+      const advanced = advancePlayerTimeActionOneStep(
+        beforeAdvance,
+        world.meta.completedTick,
+        playerStepsSinceWorldTick,
+      );
+      if (advanced === null) {
+        throw new Error("Player recovery did not preserve its authoritative fixed-step receipt");
+      }
+      const interrupted = player.mode === "swept"
+        || player.mode === "rescued"
+        || traversalFeedback.incident !== null
+        || playerRecoveryDisturbedThisStep
+        || !recoveryReceiptStillPhysicallyValid(beforeAdvance);
+      if (interrupted) {
+        cancelPlayerRecovery(false);
+      } else if (advanced.status === "complete") {
+        completePlayerRecovery(
+          beforeAdvance,
+          (session.announcement?.id ?? null) !== announcementIdBeforePlayerTimeStep,
+        );
+      } else {
+        player.timeAction = advanced.state;
+      }
+    }
+    if (present) refreshRuntimePresentation();
+
+    if (world.meta.completedTick - lastAutosaveTick >= AUTOSAVE_INTERVAL_TICKS) {
+      lastAutosaveTick = world.meta.completedTick;
+      saveInBackground();
+    }
+  }
+
+  function refreshRuntimePresentation(): void {
     const ambiencePerception = projectPerception(worldView, player);
     soundscape.updateAmbience(
       worldView.tide.level / 1_000_000,
@@ -11505,11 +11861,6 @@ export async function createTideweftRuntime(
       localWaterAmbience(worldView, player),
     );
     refreshViews();
-
-    if (world.meta.completedTick - lastAutosaveTick >= AUTOSAVE_INTERVAL_TICKS) {
-      lastAutosaveTick = world.meta.completedTick;
-      saveInBackground();
-    }
   }
 
   function reconcileContract(): void {
@@ -11773,6 +12124,12 @@ export async function createTideweftRuntime(
     if (!perceivedCommand) return;
     if (pendingPlayerWait !== null && rendererCommandInterruptsPlayerWait(perceivedCommand)) {
       cancelPlayerWait(true);
+    }
+    if (
+      player.timeAction !== null
+      && rendererCommandInterruptsPlayerRecovery(perceivedCommand)
+    ) {
+      cancelPlayerRecovery(true);
     }
     if (player.mode === "swept") {
       const adriftPoint = (() => {
@@ -12227,6 +12584,9 @@ export async function createTideweftRuntime(
       // will save the exact partial world state through their ordinary paths.
       cancelPlayerWait(false);
     }
+    if (player.timeAction !== null && uiCommandInterruptsPlayerRecovery(command)) {
+      cancelPlayerRecovery(true);
+    }
     switch (command.type) {
       case "resume-world":
         if (saveRecoveryBlocked) {
@@ -12302,6 +12662,17 @@ export async function createTideweftRuntime(
               "The wait stops as Tideweft leaves the foreground. Every completed world step remains.",
             );
           }
+        }
+        break;
+      case "recover":
+        if (command.action === "begin") {
+          beginPlayerRecovery();
+        } else if (command.action === "cancel") {
+          cancelPlayerRecovery(true);
+        } else if (command.action === "suspend") {
+          playerTimeActionSuspended = true;
+        } else {
+          playerTimeActionSuspended = false;
         }
         break;
       case "wayknot":
@@ -12973,6 +13344,7 @@ export async function createTideweftRuntime(
     lastAdriftPaddleSoundMs = Number.NEGATIVE_INFINITY;
     pendingGatherNodeId = null;
     pendingPlayerWait = null;
+    playerTimeActionSuspended = false;
     pendingParcelTargetId = null;
     pendingParcelRecoverOnArrival = false;
     pendingAcceptance = null;
@@ -14235,6 +14607,21 @@ export async function createTideweftRuntime(
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
     const sessionSnapshot = structuredClone(session);
+    if (playerSnapshot.timeAction !== null) {
+      const canonicalTimeAction = canonicalizePlayerTimeAction(
+        playerSnapshot.timeAction,
+        worldSnapshot.meta.completedTick,
+        playerStepsSinceWorldTick,
+      );
+      if (
+        canonicalTimeAction === null
+        || stableStringify(canonicalTimeAction) !== stableStringify(playerSnapshot.timeAction)
+        || !loadedPlayerTimeActionMatchesPosition(playerSnapshot, worldView)
+      ) {
+        throw new Error("Refusing to save inconsistent player recovery authority");
+      }
+      playerSnapshot.timeAction = canonicalTimeAction;
+    }
     // Runtime custody is an immutable persistent graph. Keep structural
     // sharing while reconciling the snapshot, then flatten its regional AVL
     // exactly once at the persistence boundary below.
@@ -14457,7 +14844,7 @@ export async function createTideweftRuntime(
     }
   }
 
-  function runTickFailClosed(): boolean {
+  function runTickFailClosed(present = true): boolean {
     const worldWillAdvance = playerStepsSinceWorldTick + 1 >= PLAYER_STEPS_PER_WORLD_TICK;
     const priorWorld = worldWillAdvance ? structuredClone(world) : null;
     const prior = {
@@ -14508,7 +14895,7 @@ export async function createTideweftRuntime(
       lastCargoDamageNoticeMs,
     };
     try {
-      tick();
+      tick(present);
       return true;
     } catch (error) {
       if (priorWorld) {
@@ -14568,6 +14955,8 @@ export async function createTideweftRuntime(
       // already-accepted elapsed step was rolled back above or committed before
       // this failed step; the transient WAIT receipt is never left inaccessible.
       pendingPlayerWait = null;
+      player.timeAction = null;
+      playerTimeActionSuspended = false;
       rebuildRegionalWorldView();
       runtimeIntegrityFailure = `INTEGRITY HALT — ${errorMessage(error)}.`;
       session.paused = true;
@@ -14588,6 +14977,33 @@ export async function createTideweftRuntime(
       previousFrame = now;
       accumulator = 0;
       advancePlayerWaitStep();
+      if (!running) return;
+      animationFrame = requestAnimationFrame(frame);
+      return;
+    }
+    if (player.timeAction !== null) {
+      // Recovery advances only through the ordinary fail-closed fixed step.
+      // Presentation is refreshed once per bounded batch so a long night is
+      // practical without assigning the clock or skipping simulation work.
+      previousFrame = now;
+      accumulator = 0;
+      if (
+        !playerTimeActionSuspended
+        && !session.paused
+        && !session.titleVisible
+        && !session.quietHourVisible
+      ) {
+        let steps = 0;
+        while (
+          player.timeAction !== null
+          && steps < PLAYER_TIME_ACTION_MAX_STEPS_PER_FRAME
+        ) {
+          if (!runTickFailClosed(false)) break;
+          steps += 1;
+        }
+        if (running) refreshRuntimePresentation();
+        if (player.timeAction === null) saveInBackground();
+      }
       if (!running) return;
       animationFrame = requestAnimationFrame(frame);
       return;
@@ -14903,6 +15319,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
+        && decoded.version !== TURNING_DAY_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -14924,6 +15341,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
@@ -15244,6 +15662,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
       || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
     )
       ? (() => {
@@ -15264,6 +15683,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
       )
       && persistedRegionalEcologyV6 === null
@@ -15826,6 +16246,32 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const rawSession = structuredClone(decoded.session);
     const rawPlayer = structuredClone(decoded.player);
+    if (decoded.version < GAME_SAVE_VERSION) {
+      if (Object.hasOwn(decoded.player, "timeAction")) {
+        throw new Error("Older save version contains future player recovery authority");
+      }
+      decoded.player.timeAction = null;
+      rawPlayer.timeAction = null;
+    } else {
+      if (!Object.hasOwn(decoded.player, "timeAction")) {
+        throw new Error("Current save is missing player recovery authority");
+      }
+      if (decoded.player.timeAction !== null) {
+        const canonicalTimeAction = canonicalizePlayerTimeAction(
+          decoded.player.timeAction,
+          world.meta.completedTick,
+          perceptionCarry.playerStepsSinceWorldTick,
+        );
+        if (
+          canonicalTimeAction === null
+          || stableStringify(canonicalTimeAction) !== stableStringify(decoded.player.timeAction)
+        ) {
+          throw new Error("Current save contains invalid player recovery authority");
+        }
+        decoded.player.timeAction = canonicalTimeAction;
+        rawPlayer.timeAction = canonicalTimeAction;
+      }
+    }
     const loadedSession = normalizeLoadedSession(
       decoded.session,
       world.meta.seedText,
@@ -15939,6 +16385,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       normalizePlayerForRuntime(runtimeCanonicalPlayer, restoredView, compatibilityView);
       if (stableStringify(runtimeCanonicalPlayer) !== stableStringify(decoded.player)) {
         throw new Error("Current save contains noncanonical runtime player state");
+      }
+      if (!loadedPlayerTimeActionMatchesPosition(decoded.player, restoredView)) {
+        throw new Error("Current save player recovery authority does not match its physical position");
       }
       regionalTravel = restored;
       promiseJourney = restoredJourney;
@@ -16741,6 +17190,24 @@ function validatePlayer(
       throw new Error("Save contains an invalid signed report");
     }
   }
+}
+
+function loadedPlayerTimeActionMatchesPosition(
+  player: PlayerState,
+  world: WorldView,
+): boolean {
+  const action = player.timeAction;
+  if (action === null) return true;
+  const tile = world.terrain.tiles[playerTileIndex(player)];
+  if (
+    tile === undefined
+    || tile.waterDepth > 35_000
+    || tile.terrain === "deep-water"
+    || (player.mode !== "foot" && player.mode !== "camp")
+  ) return false;
+  if (action.kind === "rest") return action.anchorSettlementId === null;
+  return world.weather.kind !== "storm"
+    && settlementAtPlayer(player, world) === action.anchorSettlementId;
 }
 
 function hasExactObjectKeys(

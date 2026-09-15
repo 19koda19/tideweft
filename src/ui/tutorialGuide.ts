@@ -44,6 +44,7 @@ export const TUTORIAL_CONTROL_IDS = [
   "interact-key",
   "interact-button",
   "wait-button",
+  "recovery-button",
   "gather-key",
   "kit-key",
   "make-key",
@@ -188,6 +189,13 @@ export const TUTORIAL_CONTROLS = [
     input: "WAIT 10 MIN",
     action: "Let exactly ten displayed minutes pass",
     detail: "The same control shows Cancel · [remaining minutes] while the authoritative world continues through each committed step.",
+  },
+  {
+    id: "recovery-button",
+    audience: "all",
+    input: "REST 30 MIN / SLEEP TO DAWN",
+    action: "Recover through ordinary elapsed world time",
+    detail: "The same control shows Cancel or Wake with truthful time remaining; every completed consequence stays in the world.",
   },
   {
     id: "gather-key",
@@ -424,10 +432,10 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Opening Patch Notes never advances simulation or starts a save. From the active field, the world continues underneath; if WAIT is active, opening the notes first cancels that transient action at its committed boundary. From the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
       {
-        id: "whats-new-keeper-sleeps",
+        id: "whats-new-rest-and-rise",
         audience: "all",
-        title: "One keeper has a physical home night",
-        body: "Alpha 46 · The Keeper Sleeps is a local unpublished source candidate. Exactly one existing human—the starting-harbor food-store keeper—now composes the shared clock-driven day-active circadian policy with their authoritative home settlement. Neutral night preference can become Resting and then Asleep only while that same body is actually home; dawn wakes the keeper at a stable identity-derived boundary. Route work, an active Promise contract, a non-neutral porter response, storm, urgent needs, or qualifying current strong lawful disturbance still override rest. Sleep closes new vision at the authoritative post-command human-perception boundary while hearing and scent remain able to carry lawful wake evidence; accepting work on that same tick permits ordinary vision. Rest need and exhaustion recover only from an authenticated home Resting or Asleep posture, not from shelter, idleness, travel, or a stale receipt. Chart, Relief, quick inspection, and directly observable ABOUT may say Resting or Asleep, but reveal no schedule, phase offset, threshold, destination identity, needs value, or unseen information. Resident state gains an optional routine receipt; legacy humans without it remain valid, and outer save version 31 and RegionalEcologyStateV6 remain unchanged. This is one keeper using a settlement-level home anchor, not a house, bed, interior commute, every-human schedule, or player REST/SLEEP. Alpha 45's working dog still uses its physical kennel routine, and Alpha 44's WAIT 10 MIN still advances ten displayed minutes through ordinary authoritative fixed steps without special healing. Player REST and SLEEP, validated longer or coarse-time acceleration, remaining human and companion schedules, broader wildlife bindings, Living Voice, new species, and new mortality remain unfinished. This candidate has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+        title: "Rest without stopping the living world",
+        body: "Alpha 47 · Rest and Rise is a local unpublished source candidate. On stable dry footing, REST 30 MIN applies neutral input for exactly three hundred ordinary player steps when stamina is not already full; existing stillness rules decide the recovery. At a settlement during Dusk or Night, the same control becomes SLEEP TO DAWN and advances to the first authoritative 06:00 boundary after sleep begins. Storm weather blocks or interrupts sleep, and the game never forces sleep at dusk. Weather, tides, cargo, actors, ecology, Promises, deadlines, exposure, and hazards all keep their ordinary authority. Movement, another deliberate field action, physical instability, or qualifying current lawful disturbance can interrupt only after the triggering step commits. While asleep, broad terrain remains readable but new actor, item, label, and interaction detail is withheld in both Chart and Relief; visual-only events cannot wake or become retroactive player knowledge, while strong lawful hearing or scent and physical consequences remain live. An in-progress REST or SLEEP is stored in outer save version 32 at its exact world tick and partial fixed-step phase, resumes after reload, and accrues no closed-app or background time; an authenticated version-31 save adopts with no active recovery action. Quiet Hour now says Save & return and remains a zero-time stopping surface. This adds no fatigue, hunger, thirst, health, injury, physical camp, bed, house, interior, or dream system. Broader schedules and final Turning Day closure remain unfinished before Living Voice. The candidate has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
       },
     ],
     callouts: [
@@ -681,7 +689,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "meters-derived-pace",
         audience: "all",
         title: "Pace follows the ground",
-        body: "Pace has no selector. REST on the pace readout means you are still, exhausted, floating ADRIFT, or physically recovering; it describes current motion and is not a player REST action or recovery choice. STEADY covers ordinary controlled travel and an active paddle stroke; SWIFT appears automatically when gravity carries you downhill. The same deterministic rule applies on keyboard and touch.",
+        body: "Pace has no selector. REST on the pace readout means you are still, exhausted, floating ADRIFT, or physically recovering; it describes current motion rather than starting the separate REST 30 MIN recovery action. STEADY covers ordinary controlled travel and an active paddle stroke; SWIFT appears automatically when gravity carries you downhill. The same deterministic rule applies on keyboard and touch.",
       },
       {
         id: "meters-brace-desktop",
@@ -1360,7 +1368,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-world-time",
         audience: "all",
         title: "One clock carries first light into night",
-        body: "The HUD clock names Dawn, Day, Dusk, or Night beside the exact time. One saved world tick is one displayed minute, and every 1,440 ticks begins a new day. Fresh expeditions begin at 07:00; existing saves keep their exact recorded tick. Sky color, Relief sunlight direction, ambient light, bounded wildlife activity, resident rest pressure, event times, and both views read the same clock. Weather and terrain filter physical outdoor illumination; completed beacon projects light nearby unobstructed ground and blue water after dusk, and that currently observed pool is visible in both views. Ridges or substantial structures block the same light through the line-of-sight geometry used for perception. Loading a region, changing views, stopping at the title or Quiet Hour, or closing the game cannot advance or reset the day, and midnight does not reset tide or weather. WAIT 10 MIN deliberately advances exactly ten displayed minutes through that clock. The one settlement working dog uses its stable-identity day-active boundary for an arrival-gated kennel routine, and the one food-store keeper now uses the same clock for a home-settlement rest that work, needs, weather, or lawful disturbance can override. Remaining humans, the independent dog, bonded/player companions, catalog-wide actor schedules, player REST and SLEEP, and validated longer or coarse-time advancement remain later Turning Day work.",
+        body: "The HUD clock names Dawn, Day, Dusk, or Night beside the exact time. One saved world tick is one displayed minute, and every 1,440 ticks begins a new day. Fresh expeditions begin at 07:00; existing saves keep their exact recorded tick. Sky color, Relief sunlight direction, ambient light, bounded wildlife activity, resident rest pressure, event times, and both views read the same clock. Weather and terrain filter physical outdoor illumination; completed beacon projects light nearby unobstructed ground and blue water after dusk, and that currently observed pool is visible in both views. Ridges or substantial structures block the same light through the line-of-sight geometry used for perception. Loading a region, changing views, stopping at the title or Quiet Hour, or closing the game cannot advance or reset the day, and midnight does not reset tide or weather. WAIT 10 MIN, REST 30 MIN, and settlement SLEEP TO DAWN all advance this same clock through ordinary fixed steps. The one settlement working dog uses its stable-identity day-active boundary for an arrival-gated kennel routine, and the one food-store keeper uses the same clock for a home-settlement rest that work, needs, weather, or lawful disturbance can override. Remaining humans, the independent dog, bonded/player companions, catalog-wide actor schedules, and validated coarse-time advancement remain later Turning Day work.",
       },
       {
         id: "views-coordinates-fps",
@@ -1398,7 +1406,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "views-mobile-strip",
         audience: "mobile",
         title: "The compact strip is the travel HUD",
-        body: "Its floating overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters directly above the map without a card or edge shelf. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, hold-to-BRACE, Scan, WAIT 10 MIN, and Wayknot controls without keyboard-instruction clutter.",
+        body: "Its floating overlay keeps the active PICK UP / DELIVER route plus labeled Stamina, Stability, Loom, and Cargo meters directly above the map without a card or edge shelf. The terrain line names the biome, depth, effort, and current risk; the large touch dock below supplies the contextual action, hold-to-BRACE, Scan, WAIT 10 MIN, REST 30 MIN or SLEEP TO DAWN, and Wayknot controls without keyboard-instruction clutter.",
       },
       {
         id: "views-mobile-sheets",
@@ -1421,11 +1429,11 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   {
     id: "saves-and-quiet-hour",
     iconText: "14",
-    title: "Wait or stop without holding the world",
-    shortTitle: "Wait & saves",
-    summary: "WAIT advances the living world by ten displayed minutes; the perpetual world autosaves locally and never advances while closed. Quiet Hour is a voluntary recap and stopping surface, not a timer or quota.",
+    title: "Wait, recover, or stop without holding the world",
+    shortTitle: "Time & saves",
+    summary: "WAIT, REST, and SLEEP advance the same living world through ordinary fixed steps; the perpetual world autosaves locally and accrues no time while closed. Quiet Hour is a voluntary zero-time stopping surface.",
     keywords: ["save", "autosave", "local", "indexeddb", "offline", "wait", "ten minutes", "quiet hour", "continue", "seed", "pause", "rest", "sleep", "retry", "warning", "capacity"],
-    controlIds: ["wait-button", "quiet-hour"],
+    controlIds: ["wait-button", "recovery-button", "quiet-hour"],
     steps: [
       {
         id: "saves-local",
@@ -1433,7 +1441,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         title: "The save stays on this device",
         body: [
           "The game maintains one local autosave, using browser storage with a fallback. It saves periodically, when the page hides or closes, when the title opens, and when Quiet Hour begins.",
-          "Outer save version 31 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority. The exact RegionalEcologyStateV5 Alpha-36 child preserves the complete V5 base, Alpine, polar-shore, cold-shore, and polar-consumer lineage and, through it, every exact earlier Open Country Ledger and Coldwater Glint adoption. Habitat version 11 remains sealed compatibility authority, core-ecology patch version 3, aggregate ecology record version 5, settlement ecology version 4, and working-animal state version 2 remain unchanged. One separate version-1 sparse breadth root owns append-only cohort activations and genuine resident deviations for Estuary Surface Break at epoch 1, Marsh Channel Web at epoch 2, and Saltmarsh Small Worlds at epoch 3; the exact V5 child still owns capelin, Arctic fox, harbor seal, and polar bear.",
+          "Outer save version 32 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority. Version 32 adds only the nullable player time-action receipt described below. The exact RegionalEcologyStateV5 Alpha-36 child preserves the complete V5 base, Alpine, polar-shore, cold-shore, and polar-consumer lineage and, through it, every exact earlier Open Country Ledger and Coldwater Glint adoption. Habitat version 11 remains sealed compatibility authority, core-ecology patch version 3, aggregate ecology record version 5, settlement ecology version 4, and working-animal state version 2 remain unchanged. One separate version-1 sparse breadth root owns append-only cohort activations and genuine resident deviations for Estuary Surface Break at epoch 1, Marsh Channel Web at epoch 2, and Saltmarsh Small Worlds at epoch 3; the exact V5 child still owns capelin, Arctic fox, harbor seal, and polar bear.",
           "A sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once into version 30. Its complete RegionalEcologyStateV5 child and original outer integrity remain the adoption witness; the breadth lineage is derived alongside it without rewriting, renumbering, redistributing, retiring, or relabeling any base, Alpine, polar-shore, cold-shore, or polar-consumer wildlife. Supported older paths perform their existing exact adoptions before this wrapper is applied. All six ecology layers enter one deterministic group-atomic materialization and conservation commit capped at 24 addressable actors.",
           "A valid outer-v30 epoch-2 save authenticates before appending epoch 3 exactly once at its saved tick. The complete epoch-1 and epoch-2 activations, residents, identities, aggregates, and deviations remain an exact prefix; repeated load is a no-op rather than another activation. Re-saving and reloading cannot reroll a regional, Alpine, polar-shore, cold-shore, polar-consumer, or breadth lineage; duplicate or renumber an actor, aggregate, population, group, allocation, body, item, or claim; rewrite an existing injury or death; restore consumed resource; replay a meal; or turn an unseen incident into player knowledge. Pristine signed-region, Alpine, polar-shore, cold-shore, polar-consumer, and breadth baselines are rederived instead of saved, while only actual deviations, promoted or migrated identities, bodies, claims, and transaction receipts consume regional storage. The existing Open Country Ledger disposition, Alpine adoption, Coldwater Glint adoption, Alpha-35 adoption, Alpha-36 adoption, working-animal transition, and domestic recovery remain exact and cannot replay.",
         ].join(" "),
@@ -1466,14 +1474,21 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "saves-wait-ten-minutes",
         audience: "all",
         title: "Wait without freezing the world",
-        body: "Choose WAIT 10 MIN in the journey dock to stop any current charted route or pending arrival action, then advance exactly ten displayed minutes through the same authoritative world simulation and fixed-step rules as ordinary play. Weather, tides, cargo, actors, Promises, deadlines, and every applicable hazard continue. The action supplies no special healing or replenishment. Its button shows Cancel · plus the remaining minutes while it runs; Escape or another deliberate field action can break the wait, and a current sweep, physical mishap, or lawfully perceived strong disturbance can interrupt it. Cancellation or disturbance takes effect at a committed fixed-step boundary, so every completed step, elapsed minute, and consequence remains part of the world. Leaving the foreground ends the transient wait and saves completed state; loading returns explicit control instead of resuming it. WAIT is not a pause: the title and Quiet Hour stop simulation, while player REST and SLEEP are not yet available. It is also distinct from an actor ABOUT choice's WAIT AND WATCH, which only stops the current automatic route briefly and does not advance ten displayed minutes.",
+        body: "Choose WAIT 10 MIN in the journey dock to stop any current charted route or pending arrival action, then advance exactly ten displayed minutes through the same authoritative world simulation and fixed-step rules as ordinary play. Weather, tides, cargo, actors, Promises, deadlines, and every applicable hazard continue. The action supplies no special healing or replenishment. Its button shows Cancel · plus the remaining minutes while it runs; Escape or another deliberate field action can break the wait, and a current sweep, physical mishap, or lawfully perceived strong disturbance can interrupt it. Cancellation or disturbance takes effect at a committed fixed-step boundary, so every completed step, elapsed minute, and consequence remains part of the world. Leaving the foreground ends the transient wait and saves completed state; loading returns explicit control instead of resuming it. WAIT is neither recovery nor pause: title and Quiet Hour stop simulation, while REST and SLEEP use the separate recovery control below. It is also distinct from an actor ABOUT choice's WAIT AND WATCH, which only stops the current automatic route briefly and does not advance ten displayed minutes.",
         controlId: "wait-button",
+      },
+      {
+        id: "saves-rest-and-sleep",
+        audience: "all",
+        title: "Rest or sleep through real consequences",
+        body: "On stable dry footing with stamina below full, choose REST 30 MIN to apply neutral input for exactly three hundred ordinary fixed steps. Existing stillness recovery decides what your current condition can restore; REST directly grants no health, food, water, safety, or cargo protection. At a settlement during Dusk or Night, the same control becomes SLEEP TO DAWN and runs to the first 06:00 dawn after it begins; a storm blocks or interrupts sleep, and dusk never forces it. Both actions show truthful remaining time and can be ended with the same Cancel or Wake control. Deliberate movement or field action, unstable footing, a physical incident, or qualifying current lawful disturbance can interrupt only after its triggering step commits. During sleep, broad terrain remains readable but exact actors, items, labels, interactions, and unseen events do not become player knowledge; strong lawful hearing or scent and physical consequences remain active. Unlike transient WAIT, an in-progress REST or SLEEP is saved in outer version 32 at its exact world tick and partial fixed-step phase and resumes after reload. A hidden or closed app advances nothing; returning continues from the exact saved step.",
+        controlId: "recovery-button",
       },
       {
         id: "saves-quiet-hour",
         audience: "all",
         title: "Take Quiet Hour whenever you choose",
-        body: "Quiet Hour saves and summarizes time, distance, deliveries, strands, reports, discoveries, and causal changes. Choose “One more tide” to continue or “Rest here” to return to the title. That Rest here label means saved stopping only: it does not perform a player REST or SLEEP action and advances no world time.",
+        body: "Quiet Hour saves and summarizes time, distance, deliveries, strands, reports, discoveries, and causal changes. Choose “One more tide” to continue or “Save & return” to return to the title. Save & return is a saved stopping action only: it does not perform REST or SLEEP and advances no world time.",
         controlId: "quiet-hour",
       },
       {
@@ -1566,17 +1581,17 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         audience: "all",
         title: "Present in this source candidate",
         body: [
-          "One continuous deterministic world, seamless signed-region travel, one saved civil clock, a bounded ten-displayed-minute player WAIT through the ordinary authoritative simulation, smooth Chart and Relief outdoor light, physical low-light perception, completed-beacon settlement lamps, terrain-aware stability, tides, weather, downward Relief rain, river turbulence and ADRIFT recovery, fog and brief terrain memory, deterministic resources, physical cargo, crafting, equipment, Promises, projects, observation-safe EVENTS, persistent humans, ABOUT inspection, one independent dog, one settlement working dog with an arrival-gated day-active kennel routine, and one existing food-store keeper with an overrideable home-settlement night routine are present in this source candidate.",
+          "One continuous deterministic world, seamless signed-region travel, one saved civil clock, a bounded ten-displayed-minute player WAIT, thirty-minute REST, and settlement-anchored SLEEP TO DAWN through the ordinary authoritative simulation, smooth Chart and Relief outdoor light, physical low-light perception, completed-beacon settlement lamps, terrain-aware stability, tides, weather, downward Relief rain, river turbulence and ADRIFT recovery, fog and brief terrain memory, deterministic resources, physical cargo, crafting, equipment, Promises, projects, observation-safe EVENTS, persistent humans, ABOUT inspection, one independent dog, one settlement working dog with an arrival-gated day-active kennel routine, and one existing food-store keeper with an overrideable home-settlement night routine are present in this source candidate.",
           "The forty-seven-record living catalog contains exactly forty-five core-wildlife profiles plus the human and domestic-dog foundations. The exact Alpha-38 prefix remains intact; eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append through breadth epoch 3. Habitat and exact local substrate decide admission, so unsupported country remains empty.",
           "Mosquitoes and periwinkles remain conserved non-addressable aggregates over at most two anchors. The sparrow flock is one group-atomic unit of two to four persistent actors, and the terrapin is solitary. Every owner shares the same 24-addressable-actor global cap and atomic conservation commit. Chart, Relief, quick inspection, ABOUT, and EVENTS reveal only current lawful actors or aggregate evidence.",
-          "Outer save version 31 is current; RegionalEcologyStateV6 remains unchanged inside it. Exact authenticated outer-v30/V6 worlds preserve their nested ecology bytes when adopted and resave as version 31. A valid epoch-2 state authenticates before epoch 3 appends once at its saved tick; earlier epochs remain an exact prefix and reload cannot reroll the result. Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint; the bounded catalog closes at exactly forty-five core-wildlife profiles and forty-seven living records.",
+          "Outer save version 32 is current; RegionalEcologyStateV6 remains unchanged inside it. Exact authenticated outer-v30/V6 worlds preserve their nested ecology bytes when adopted through version 31; version 31 then adopts once with no active player recovery action. A valid epoch-2 state authenticates before epoch 3 appends once at its saved tick; earlier epochs remain an exact prefix and reload cannot reroll the result. Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint; Alpha 47 Rest and Rise remains a local unpublished source candidate.",
         ].join(" "),
       },
       {
         id: "boundaries-planned-ecology",
         audience: "all",
         title: "Broader ecology is planned",
-        body: "The seven named biomes and their weather, tide, habitat, and magical-water signals are visible now. Rain modifies current visibility, hearing, scent, dog exposure, rat pressure, and frog activity; tide changes conserved aquatic activity and lawful habitat without rerolling populations. The bounded 45 / 47 catalog is not worldwide ecology or a complete bestiary. Shared invariants, signed and extreme-coordinate properties, conservation, performance, seamless crossing, and representative visible-versus-occluded scenarios exercise the reusable scaffold rather than species-by-species or N² pair tests. Fire and lantern light, independent canopy and interior cover, shadow maps, astronomy, sea ice, snow behavior, tactical pack combat, ecological migration, broader mortality and capture, reproduction, population recovery, live-time decomposition, body drift, harvesting, fishing, complete scent and evidence, remaining-human, independent-dog, bonded/player companion, and catalog-wide schedules and autonomous home life, player REST and SLEEP, validated longer or coarse-time advancement, audible Living Voice for the newest species, foliage consumption, and continuous 3D flight remain planned. The Turning Day must still connect those remaining schedules, physical rest and sleep, longer or coarse-time continuity, and human and companion life before Living Voice begins. Absent systems do not alter a delivery behind the HUD's back.",
+        body: "The seven named biomes and their weather, tide, habitat, and magical-water signals are visible now. Rain modifies current visibility, hearing, scent, dog exposure, rat pressure, and frog activity; tide changes conserved aquatic activity and lawful habitat without rerolling populations. The bounded 45 / 47 catalog is not worldwide ecology or a complete bestiary. Shared invariants, signed and extreme-coordinate properties, conservation, performance, seamless crossing, and representative visible-versus-occluded scenarios exercise the reusable scaffold rather than species-by-species or N² pair tests. Fire and lantern light, independent canopy and interior cover, shadow maps, astronomy, sea ice, snow behavior, tactical pack combat, ecological migration, broader mortality and capture, reproduction, population recovery, live-time decomposition, body drift, harvesting, fishing, complete scent and evidence, remaining-human, independent-dog, bonded/player companion, catalog-wide schedules and autonomous home life, validated coarse-time advancement, audible Living Voice for the newest species, foliage consumption, and continuous 3D flight remain planned. The Turning Day must still connect those remaining schedules, human and companion continuity, parity/performance proof, and its directive-level gate before Living Voice begins. Absent systems do not alter a delivery behind the HUD's back.",
       },
       {
         id: "boundaries-planned-physics",
@@ -1597,7 +1612,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 56 as const;
+export const TUTORIAL_CONTENT_VERSION = 57 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

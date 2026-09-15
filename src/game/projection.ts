@@ -88,6 +88,7 @@ import {
   VISIBILITY_PERIPHERAL,
   evaluatePerception,
   hasValidPerceptionSignature,
+  suppressPerceptionDetail,
   type PerceptionCell,
   type PerceptionResult,
 } from "./perception";
@@ -181,6 +182,8 @@ export interface ProjectionOptions {
   adriftControl?: AdriftProjectionControl;
   /** Shared current perception snapshot; production computes it once per refresh. */
   perception?: PerceptionResult;
+  /** Preserve terrain shape while withholding actor/item/interaction detail. */
+  suppressDetailPerception?: boolean;
 }
 
 export interface AdriftProjectionControl {
@@ -536,7 +539,7 @@ export function projectGameView(
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
   const currentPerception = projectPerception(world, player);
-  const perception = isCurrentPerceptionSnapshot(
+  const ordinaryPerception = isCurrentPerceptionSnapshot(
     suppliedPerception,
     currentPerception,
     world.terrain.width,
@@ -544,6 +547,13 @@ export function projectGameView(
   )
     ? suppliedPerception
     : currentPerception;
+  const perception = options.suppressDetailPerception
+    ? suppressPerceptionDetail(
+        ordinaryPerception,
+        world.terrain.width,
+        world.terrain.height,
+      ) ?? ordinaryPerception
+    : ordinaryPerception;
   const outdoorCells = buildWorldPerceptionCells(world);
   const outdoorIllumination = outdoorCells === null
     ? null
@@ -907,6 +917,7 @@ export function projectGameView(
       ],
       pace: player.pace,
       bracing: options.bracing === true,
+      ...(player.timeAction === null ? {} : { recoveryKind: player.timeAction.kind }),
       mode: player.mode,
       active: !options.paused,
       ...(options.traversalFeedback

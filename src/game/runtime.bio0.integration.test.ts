@@ -217,8 +217,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(31);
-    expect(firstRepository.snapshot().payloadVersion).toBe(31);
+    expect(firstEnvelope.version).toBe(32);
+    expect(firstRepository.snapshot().payloadVersion).toBe(32);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
 
@@ -344,7 +344,13 @@ describe("runtime BIO0 ecology persistence", () => {
       integrity: _integrity,
       ...priorBase
     } = current;
-    const v5Base = { ...priorBase, version: 5 };
+    const v5Base = {
+      ...priorBase,
+      player: legacyPlayerWithoutTimeAction(
+        current.player as ReturnType<typeof createPlayer>,
+      ),
+      version: 5,
+    };
     repository.replace({
       ...currentRecord,
       payloadVersion: 5,
@@ -360,7 +366,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(31);
+    expect(migratedEnvelope.version).toBe(32);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -391,7 +397,13 @@ describe("runtime BIO0 ecology persistence", () => {
       integrity: _integrity,
       ...priorBase
     } = current;
-    const v6Base = { ...priorBase, version: 6 };
+    const v6Base = {
+      ...priorBase,
+      player: legacyPlayerWithoutTimeAction(
+        current.player as ReturnType<typeof createPlayer>,
+      ),
+      version: 6,
+    };
     repository.replace({
       ...currentRecord,
       payloadVersion: 6,
@@ -407,7 +419,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(31);
+    expect(envelope.version).toBe(32);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -433,7 +445,13 @@ describe("runtime BIO0 ecology persistence", () => {
       integrity: _integrity,
       ...priorBase
     } = current;
-    const v7Base = { ...priorBase, version: 7 };
+    const v7Base = {
+      ...priorBase,
+      player: legacyPlayerWithoutTimeAction(
+        current.player as ReturnType<typeof createPlayer>,
+      ),
+      version: 7,
+    };
     const v7Record: SaveRecord = {
       ...currentRecord,
       payloadVersion: 7,
@@ -456,8 +474,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(31);
-    expect(firstRepository.snapshot().payloadVersion).toBe(31);
+    expect(firstEnvelope.version).toBe(32);
+    expect(firstRepository.snapshot().payloadVersion).toBe(32);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
     const ecology = requiredRegionalEcology(firstEnvelope);
     const home = ecology.settlementHome.patch;
@@ -529,8 +547,8 @@ describe("runtime BIO0 ecology persistence", () => {
     if (adoption === null || cohort === null) {
       throw new Error("v9 migration omitted its one-way regional adoption receipt");
     }
-    expect(firstEnvelope.version).toBe(31);
-    expect(firstRepository.snapshot().payloadVersion).toBe(31);
+    expect(firstEnvelope.version).toBe(32);
+    expect(firstRepository.snapshot().payloadVersion).toBe(32);
     expect(firstEnvelope.regionalEcology).toBe(secondEnvelope.regionalEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
@@ -619,9 +637,9 @@ describe("runtime BIO0 ecology persistence", () => {
     if (cohort === null || migrated.root.adoption === null) {
       throw new Error("legacy-fixed v9 migration omitted regional adoption authority");
     }
-    expect(firstEnvelope.version).toBe(31);
+    expect(firstEnvelope.version).toBe(32);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
-    expect(firstEnvelope.player).toEqual(v9Envelope.player);
+    expect(firstEnvelope.player).toEqual({ ...v9Envelope.player, timeAction: null });
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(v9Envelope.promiseJourney);
     expect(firstEnvelope.bio0Ecology).toBe(v9Envelope.bio0Ecology);
@@ -1109,7 +1127,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v31 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v32 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1122,7 +1140,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed current v31 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed current v32 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1303,7 +1321,7 @@ function legacyRecord(
     format: "tideweft-session",
     version: 1,
     world: serializeWorld(world),
-    player,
+    player: legacyPlayerWithoutTimeAction(player),
     session,
   };
   return {
@@ -1657,6 +1675,7 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
   } = decoded;
   const v9Base = {
     ...currentBase,
+    player: legacyPlayerWithoutTimeAction(envelope.player),
     version: 9,
     coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
@@ -1730,6 +1749,7 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
   } = decoded;
   const v9Base = {
     ...currentBase,
+    player: legacyPlayerWithoutTimeAction(envelope.player),
     version: 9,
     coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
@@ -1742,6 +1762,13 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
       integrity: gameSaveEnvelopeIntegrity(v9Base),
     }),
   };
+}
+
+function legacyPlayerWithoutTimeAction(
+  player: ReturnType<typeof createPlayer>,
+): ReturnType<typeof createPlayer> {
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
+  return legacyPlayer as ReturnType<typeof createPlayer>;
 }
 
 function currentEnvelope(repository: MemoryRepository): CurrentEnvelope {

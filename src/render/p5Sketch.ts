@@ -5165,6 +5165,13 @@ export function createTideweftRenderer(
         p.vertex(-radius * 1.15, 0);
         p.vertex(-radius * 0.8, radius * 0.72);
         p.endShape(p.CLOSE);
+      } else if (player.recoveryKind !== undefined) {
+        p.ellipse(
+          0,
+          0,
+          radius * (player.recoveryKind === "sleep" ? 3.05 : 2.62),
+          radius * (player.recoveryKind === "sleep" ? 0.68 : 0.96),
+        );
       } else {
         switch (presentation.silhouette) {
           case "upright":
@@ -5189,7 +5196,11 @@ export function createTideweftRenderer(
         }
       }
 
-      if (presentation.silhouette !== "low" && presentation.silhouette !== "afloat") {
+      if (
+        player.recoveryKind === undefined
+        && presentation.silhouette !== "low"
+        && presentation.silhouette !== "afloat"
+      ) {
         p.noStroke();
         p.fill(presentation.outline);
         p.triangle(
@@ -5201,7 +5212,7 @@ export function createTideweftRenderer(
           radius * 0.3,
         );
       }
-      drawPlayerBalanceMark(presentation, radius);
+      if (player.recoveryKind === undefined) drawPlayerBalanceMark(presentation, radius);
     };
 
     const drawPlayerIncident = (view: TideweftView, now: number): void => {

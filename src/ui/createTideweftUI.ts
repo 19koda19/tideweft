@@ -58,6 +58,7 @@ export const TITLE_SURFACE_COPY = {
   start: "START",
   patchNotes: "PATCH NOTES",
 } as const;
+export const QUIET_HOUR_RETURN_LABEL = "Save & return" as const;
 
 export interface ResidentAboutSurfaceState {
   readonly hidden: boolean;
@@ -171,6 +172,7 @@ export interface MobileHudCopyInput {
   readonly canScan: boolean | undefined;
   readonly interactLabel: string | undefined;
   readonly waitLabel?: string | undefined;
+  readonly recoveryLabel?: string | undefined;
   readonly wayknotLabel: string | undefined;
 }
 
@@ -325,6 +327,7 @@ export function mobileHudCopy(input: MobileHudCopyInput): MobileHudCopy {
     input.interactLabel?.trim() || "Interact",
     input.canScan === false ? "Scan recharging" : "Sound / Scan",
     input.waitLabel?.trim() || "Wait 10 min",
+    ...(input.recoveryLabel?.trim() ? [input.recoveryLabel.trim()] : []),
     input.wayknotLabel?.trim() || "Place Wayknot",
   ].join(" · ");
   return { objective, safety, terrain, actions };
@@ -341,6 +344,15 @@ export interface WayknotActionButtonState {
 export interface WaitActionButtonState {
   readonly disabled: boolean;
   readonly active: boolean;
+  readonly label: string;
+  readonly hint: string;
+  readonly ariaLabel: string;
+}
+
+export interface RecoveryActionButtonState {
+  readonly disabled: boolean;
+  readonly active: boolean;
+  readonly kind: "rest" | "sleep";
   readonly label: string;
   readonly hint: string;
   readonly ariaLabel: string;
@@ -796,6 +808,44 @@ export function waitActionButtonState(
   };
 }
 
+/** One source keeps REST/SLEEP visible, touch, and assistive state in lockstep. */
+export function recoveryActionButtonState(
+  controls: TideweftUIView["controls"],
+): RecoveryActionButtonState {
+  const active = controls?.recoveryActive === true;
+  const kind = controls?.recoveryKind ?? "rest";
+  const label = controls?.recoveryLabel?.trim()
+    || (active
+      ? kind === "sleep" ? "Wake" : "Cancel rest"
+      : kind === "sleep" ? "SLEEP" : "REST 30 MIN");
+  const hint = controls?.recoveryHint?.trim()
+    || (active
+      ? kind === "sleep"
+        ? "Wake at the last committed world boundary."
+        : "Break the rest at the last committed world boundary."
+      : kind === "sleep"
+        ? "Sleep through ordinary world time until waking or interruption."
+        : "Rest for thirty minutes while the living world continues.");
+  return {
+    disabled: controls?.canRecover === false,
+    active,
+    kind,
+    label,
+    hint,
+    ariaLabel: `${label}. ${hint}`,
+  };
+}
+
+/** The native recovery button toggles one command without owning action state. */
+export function recoveryActionButtonCommand(
+  controls: TideweftUIView["controls"],
+): Extract<TideweftUICommand, { readonly type: "recover" }> {
+  return {
+    type: "recover",
+    action: controls?.recoveryActive === true ? "cancel" : "begin",
+  };
+}
+
 interface UIShortcutEvent {
   readonly code: string;
   readonly key: string;
@@ -864,6 +914,24 @@ export function handleWaitEscape(
   ) return false;
   event.preventDefault();
   dispatch({ type: "wait", action: "cancel" });
+  return true;
+}
+
+/** Escape wakes or ends active recovery before any field disclosure closes. */
+export function handleRecoveryEscape(
+  event: Pick<UIShortcutEvent, "key" | "defaultPrevented" | "preventDefault">,
+  recoveryActive: boolean,
+  modalDialogOpen: boolean,
+  dispatch: (command: TideweftUICommand) => void,
+): boolean {
+  if (
+    event.defaultPrevented
+    || event.key !== "Escape"
+    || !recoveryActive
+    || modalDialogOpen
+  ) return false;
+  event.preventDefault();
+  dispatch({ type: "recover", action: "cancel" });
   return true;
 }
 
@@ -1004,6 +1072,8 @@ interface UIRefs {
   interactButton: HTMLButtonElement;
   waitButton: HTMLButtonElement;
   waitButtonLabel: HTMLSpanElement;
+  recoveryButton: HTMLButtonElement;
+  recoveryButtonLabel: HTMLSpanElement;
   wayknotButton: HTMLButtonElement;
   wayknotButtonLabel: HTMLSpanElement;
   braceButton: HTMLButtonElement;
@@ -1695,6 +1765,13 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   );
   const waitButtonLabel = createElement("span", "action-button__label", "Wait 10 min");
   waitButton.append(waitButtonLabel);
+  const recoveryButton = createButton(
+    "action-button action-button--recovery",
+    "",
+    "Rest for thirty minutes while the living world continues",
+  );
+  const recoveryButtonLabel = createElement("span", "action-button__label", "REST 30 MIN");
+  recoveryButton.append(recoveryButtonLabel);
   const wayknotButton = createButton(
     "action-button action-button--wayknot",
     "",
@@ -1742,6 +1819,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     interactButton,
     braceButton,
     waitButton,
+    recoveryButton,
     wayknotButton,
     kitButton,
     quietButton,
@@ -1880,7 +1958,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const quietQuote = createElement("q", "quiet-dialog__quote");
   const quietActions = createElement("div", "dialog-actions");
   const quietContinue = createButton("text-button", "One more tide");
-  const quietFinish = createButton("text-button text-button--primary", "Rest here");
+  const quietFinish = createButton("text-button text-button--primary", QUIET_HOUR_RETURN_LABEL);
   const quietPatchNotes = createButton(
     "text-button patch-notes-trigger",
     "PATCH NOTES",
@@ -2083,6 +2161,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     interactButton,
     waitButton,
     waitButtonLabel,
+    recoveryButton,
+    recoveryButtonLabel,
     wayknotButton,
     wayknotButtonLabel,
     braceButton,
@@ -2228,6 +2308,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     // KIT hides the journey dock. Interrupt the runtime-owned elapsed action
     // before removing its only guaranteed touch cancellation surface.
     options.dispatch({ type: "wait", action: "cancel" });
+    options.dispatch({ type: "recover", action: "cancel" });
     refs.tutorial.close(false);
     setMobileHudExpanded(false);
     refs.kit.open(tab, trigger);
@@ -2246,6 +2327,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     mobileBrace.release();
     if (refs.patchNotes.isOpen()) return;
     options.dispatch({ type: "wait", action: "cancel" });
+    options.dispatch({ type: "recover", action: "cancel" });
     refs.kit.close(false);
     setMobileHudExpanded(false);
     refs.tutorial.open(trigger);
@@ -2271,6 +2353,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   ): void => {
     mobileBrace.release();
     options.dispatch({ type: "wait", action: "cancel" });
+    options.dispatch({ type: "recover", action: "cancel" });
     refs.kit.close(false);
     setMobileHudExpanded(false);
     const titlePresented = latestView
@@ -2918,6 +3001,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.waitButtonLabel.textContent = waitAction.label;
     refs.waitButton.title = waitAction.hint;
     refs.waitButton.setAttribute("aria-label", waitAction.ariaLabel);
+    const recoveryAction = recoveryActionButtonState(view.controls);
+    // As with WAIT, retain a blocked recovery action in the focus order so its
+    // authoritative reason remains available to touch and assistive players.
+    refs.recoveryButton.disabled = false;
+    refs.recoveryButton.setAttribute("aria-disabled", String(recoveryAction.disabled));
+    refs.recoveryButton.dataset.active = String(recoveryAction.active);
+    refs.recoveryButton.dataset.kind = recoveryAction.kind;
+    refs.recoveryButton.setAttribute("aria-pressed", String(recoveryAction.active));
+    refs.recoveryButtonLabel.textContent = recoveryAction.label;
+    refs.recoveryButton.title = recoveryAction.hint;
+    refs.recoveryButton.setAttribute("aria-label", recoveryAction.ariaLabel);
     const wayknotAction = wayknotActionButtonState(view.controls);
     refs.wayknotButton.disabled = wayknotAction.disabled;
     refs.wayknotButtonLabel.textContent = wayknotAction.label;
@@ -2941,6 +3035,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       canScan: view.controls?.canScan,
       interactLabel: view.controls?.interactLabel,
       waitLabel: view.controls?.waitLabel,
+      recoveryLabel: recoveryAction.label,
       wayknotLabel: wayknotAction.label,
     });
     refs.mobileObjective.textContent = compactHud.objective;
@@ -3021,6 +3116,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     type: "wait",
     action: latestView?.controls?.waitActive === true ? "cancel" : "begin",
   }));
+  refs.recoveryButton.addEventListener("click", () => options.dispatch(
+    recoveryActionButtonCommand(latestView?.controls),
+  ));
   refs.wayknotButton.addEventListener("click", () => options.dispatch({ type: "wayknot" }));
   refs.kitButton.addEventListener("click", () => toggleKit("pack", refs.kitButton));
   refs.mobileKitButton.addEventListener("click", () => toggleKit("pack", refs.mobileKitButton));
@@ -3122,8 +3220,16 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   });
 
   const onGlobalKeyDown = (event: KeyboardEvent): void => {
-    // WAIT owns the first non-modal Escape so an open ABOUT surface cannot
-    // consume the promised cancellation input while world time keeps moving.
+    // Elapsed-time actions own the first non-modal Escape so an open ABOUT
+    // surface cannot consume the promised cancellation input while time moves.
+    if (handleRecoveryEscape(
+      event,
+      latestView?.controls?.recoveryActive === true,
+      document.querySelector("dialog[open]") !== null,
+      options.dispatch,
+    )) {
+      return;
+    }
     if (handleWaitEscape(
       event,
       latestView?.controls?.waitActive === true,

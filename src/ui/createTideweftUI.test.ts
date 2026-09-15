@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MOBILE_INSPECTOR_PANEL_ID,
   MOBILE_PROMISES_PANEL_ID,
+  QUIET_HOUR_RETURN_LABEL,
   SAVE_WARNING_SURFACES,
   RECOVERY_SEED_REQUIRED_MESSAGE,
   WORLD_CREATION_BLOCKED_MESSAGE,
@@ -12,6 +13,7 @@ import {
   bindTitleRestartFlow,
   createUnderfootTerrainStabilizer,
   handleActorAboutEscape,
+  handleRecoveryEscape,
   handleResidentAboutEscape,
   handleTideweftUIShortcut,
   handleWaitEscape,
@@ -21,6 +23,8 @@ import {
   navigationTelemetryCopy,
   residentAboutActionPresentation,
   residentAboutSurfaceState,
+  recoveryActionButtonCommand,
+  recoveryActionButtonState,
   saveWarningPresentation,
   setProgress,
   shouldRefreshSignedReportActions,
@@ -565,6 +569,64 @@ describe("bounded WAIT UI accessibility", () => {
   });
 });
 
+describe("player recovery UI accessibility", () => {
+  it("keeps default, active sleep, and blocked rest states visibly and verbally synchronized", () => {
+    expect(recoveryActionButtonState(undefined)).toEqual({
+      disabled: false,
+      active: false,
+      kind: "rest",
+      label: "REST 30 MIN",
+      hint: "Rest for thirty minutes while the living world continues.",
+      ariaLabel: "REST 30 MIN. Rest for thirty minutes while the living world continues.",
+    });
+
+    expect(recoveryActionButtonState({
+      canRecover: true,
+      recoveryActive: true,
+      recoveryKind: "sleep",
+      recoveryLabel: "Wake · 3 hr",
+      recoveryHint: "Wake at the last committed world boundary.",
+    })).toEqual({
+      disabled: false,
+      active: true,
+      kind: "sleep",
+      label: "Wake · 3 hr",
+      hint: "Wake at the last committed world boundary.",
+      ariaLabel: "Wake · 3 hr. Wake at the last committed world boundary.",
+    });
+
+    expect(recoveryActionButtonState({
+      canRecover: false,
+      recoveryActive: false,
+      recoveryKind: "rest",
+      recoveryLabel: "REST 30 MIN",
+      recoveryHint: "Reach stable dry ground before resting.",
+    })).toEqual({
+      disabled: true,
+      active: false,
+      kind: "rest",
+      label: "REST 30 MIN",
+      hint: "Reach stable dry ground before resting.",
+      ariaLabel: "REST 30 MIN. Reach stable dry ground before resting.",
+    });
+  });
+
+  it("keeps Quiet Hour stopping language distinct from player recovery", () => {
+    expect(QUIET_HOUR_RETURN_LABEL).toBe("Save & return");
+  });
+
+  it("uses the same native button to begin and cancel recovery", () => {
+    expect(recoveryActionButtonCommand({ recoveryActive: false })).toEqual({
+      type: "recover",
+      action: "begin",
+    });
+    expect(recoveryActionButtonCommand({ recoveryActive: true })).toEqual({
+      type: "recover",
+      action: "cancel",
+    });
+  });
+});
+
 describe("mobile field HUD accessibility", () => {
   it("requires an explicit recovery seed without exposing the ordinary restart gate", () => {
     expect(titleSeedRequirement({ hasSave: false, requiresSeed: true }, false)).toEqual({
@@ -677,6 +739,7 @@ describe("mobile field HUD accessibility", () => {
       fieldHint: "Sound the water before crossing.",
       canScan: true,
       interactLabel: "Pick up cargo here",
+      recoveryLabel: "REST 30 MIN",
       wayknotLabel: "Lay Tide anchor",
     });
 
@@ -684,7 +747,7 @@ describe("mobile field HUD accessibility", () => {
     expect(copy.objective).toContain("then deliver to Latchmere");
     expect(copy.safety).toBe("↓ exposed to cross-current · STAB 63% · DEEP: STAM/STAB 0 → ADRIFT");
     expect(copy.terrain).toBe("WATER · Tidal channel · Deep water · Heavy stamina use");
-    expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Wait 10 min · Lay Tide anchor");
+    expect(copy.actions).toBe("Pick up cargo here · Sound / Scan · Wait 10 min · REST 30 MIN · Lay Tide anchor");
   });
 
   it("states the recoverable sweep trigger when either deep-water resource reaches zero", () => {
@@ -887,6 +950,34 @@ describe("resident ABOUT behavior", () => {
       dispatch,
     )).toBe(false);
     expect(handleWaitEscape(
+      { ...escape, preventDefault: vi.fn() },
+      true,
+      true,
+      dispatch,
+    )).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("gives active REST or SLEEP the first non-modal Escape before an open ABOUT surface", () => {
+    const dispatch = vi.fn();
+    const escape = {
+      key: "Escape",
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+
+    expect(handleRecoveryEscape(escape, true, false, dispatch)).toBe(true);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledWith({ type: "recover", action: "cancel" });
+
+    dispatch.mockClear();
+    expect(handleRecoveryEscape(
+      { ...escape, preventDefault: vi.fn() },
+      false,
+      false,
+      dispatch,
+    )).toBe(false);
+    expect(handleRecoveryEscape(
       { ...escape, preventDefault: vi.fn() },
       true,
       true,

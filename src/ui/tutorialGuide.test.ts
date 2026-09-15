@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(56);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(57);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -56,8 +56,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.shortTitle).toBe("What's New");
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "whats-new-keeper-sleeps",
-        title: "One keeper has a physical home night",
+        id: "whats-new-rest-and-rise",
+        title: "Rest without stopping the living world",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,28 +70,28 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 46 · The Keeper Sleeps is a local unpublished source candidate");
-    expect(copy).toContain("Exactly one existing human");
-    expect(copy).toContain("starting-harbor food-store keeper");
-    expect(copy).toContain("shared clock-driven day-active circadian policy");
-    expect(copy).toContain("authoritative home settlement");
-    expect(copy).toContain("Neutral night preference can become Resting and then Asleep only while that same body is actually home");
-    expect(copy).toContain("dawn wakes the keeper at a stable identity-derived boundary");
-    expect(copy).toContain("non-neutral porter response");
-    expect(copy).toContain("Sleep closes new vision at the authoritative post-command human-perception boundary");
-    expect(copy).toContain("hearing and scent remain able to carry lawful wake evidence");
-    expect(copy).toContain("accepting work on that same tick permits ordinary vision");
-    expect(copy).toContain("Rest need and exhaustion recover only from an authenticated home Resting or Asleep posture");
-    expect(copy).toContain("not from shelter, idleness, travel, or a stale receipt");
-    expect(copy).toContain("reveal no schedule, phase offset, threshold, destination identity, needs value, or unseen information");
-    expect(copy).toContain("legacy humans without it remain valid");
-    expect(copy).toContain("outer save version 31 and RegionalEcologyStateV6 remain unchanged");
-    expect(copy).toContain("not a house, bed, interior commute, every-human schedule, or player REST/SLEEP");
-    expect(copy).toContain("Alpha 45's working dog still uses its physical kennel routine");
-    expect(copy).toContain("Alpha 44's WAIT 10 MIN still advances ten displayed minutes");
-    expect(copy).toContain("without special healing");
+    expect(copy).toContain("Alpha 47 · Rest and Rise is a local unpublished source candidate");
+    expect(copy).toContain("REST 30 MIN applies neutral input for exactly three hundred ordinary player steps");
+    expect(copy).toContain("stamina is not already full");
+    expect(copy).toContain("SLEEP TO DAWN");
+    expect(copy).toContain("first authoritative 06:00 boundary");
+    expect(copy).toContain("Storm weather blocks or interrupts sleep");
+    expect(copy).toContain("never forces sleep at dusk");
+    expect(copy).toContain("Weather, tides, cargo, actors, ecology, Promises, deadlines, exposure, and hazards");
+    expect(copy).toContain("qualifying current lawful disturbance can interrupt only after the triggering step commits");
+    expect(copy).toContain("new actor, item, label, and interaction detail is withheld in both Chart and Relief");
+    expect(copy).toContain("visual-only events cannot wake or become retroactive player knowledge");
+    expect(copy).toContain(
+      "strong lawful hearing or scent and physical consequences remain live",
+    );
+    expect(copy).toContain("outer save version 32");
+    expect(copy).toContain("resumes after reload");
+    expect(copy).toContain("accrues no closed-app or background time");
+    expect(copy).toContain("version-31 save adopts with no active recovery action");
+    expect(copy).toContain("Quiet Hour now says Save & return");
+    expect(copy).toContain("no fatigue, hunger, thirst, health, injury, physical camp, bed, house, interior, or dream system");
     expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("Player REST and SLEEP, validated longer or coarse-time acceleration");
+    expect(copy).toContain("Broader schedules and final Turning Day closure remain unfinished");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
 
@@ -105,11 +105,11 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain(
       "completed beacon projects light nearby unobstructed ground and blue water after dusk",
     );
-    expect(copy).toContain("WAIT 10 MIN deliberately advances exactly ten displayed minutes");
+    expect(copy).toContain("WAIT 10 MIN, REST 30 MIN, and settlement SLEEP TO DAWN all advance this same clock");
     expect(copy).toContain("one settlement working dog uses its stable-identity day-active boundary");
-    expect(copy).toContain("one food-store keeper now uses the same clock for a home-settlement rest");
+    expect(copy).toContain("one food-store keeper uses the same clock for a home-settlement rest");
     expect(copy).toContain(
-      "Remaining humans, the independent dog, bonded/player companions, catalog-wide actor schedules, player REST and SLEEP, and validated longer or coarse-time advancement remain later",
+      "Remaining humans, the independent dog, bonded/player companions, catalog-wide actor schedules, and validated coarse-time advancement remain later",
     );
     expect(liveBoundary?.title).toBe("Present in this source candidate");
     expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
@@ -142,6 +142,12 @@ describe("TIDEWEFT field-manual content", () => {
       audience: "all",
       action: expect.stringContaining("exactly ten displayed minutes"),
       detail: expect.stringContaining("committed step"),
+    });
+    expect(tutorialControlById("recovery-button")).toMatchObject({
+      input: "REST 30 MIN / SLEEP TO DAWN",
+      audience: "all",
+      action: expect.stringContaining("ordinary elapsed world time"),
+      detail: expect.stringContaining("Cancel or Wake"),
     });
     expect(tutorialControlById("pace-buttons")).toBeUndefined();
     expect(tutorialControlById("pace-keys")).toBeUndefined();
@@ -188,6 +194,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileCopy).toContain("cannot accidentally set a destination");
     expect(mobileCopy).toContain("always points toward world north");
     expect(mobileCopy).toContain("WAIT 10 MIN");
+    expect(mobileCopy).toContain("SLEEP TO DAWN");
     expect(mobileCopy).toContain("dedicated Tutorial control");
     expect(mobileCopy).not.toContain("Shift-click appends");
     expect(mobileCopy).not.toContain("Right-drag or Alt-drag");
@@ -199,6 +206,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(mobileControls.some((control) => control.id === "kit-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "brace-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "wait-button")).toBe(true);
+    expect(mobileControls.some((control) => control.id === "recovery-button")).toBe(true);
     expect(mobileControls.some((control) => control.id === "relief-touch-orbit")).toBe(true);
     expect(mobileControls.some((control) => control.id === "relief-orbit")).toBe(false);
     expect(mobileControls.some((control) => control.id === "brace-key")).toBe(false);
@@ -255,7 +263,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("not stored stamina and not a gauge that keeps draining");
     expect(copy).toContain("Pace has no selector");
     expect(copy).toContain("REST on the pace readout");
-    expect(copy).toContain("not a player REST action or recovery choice");
+    expect(copy).toContain("rather than starting the separate REST 30 MIN recovery action");
     expect(copy).toContain("Sparse streamlines, foam, and real water ambience");
     expect(copy).toContain("stamina or stability reaching zero");
     expect(copy).toContain("durable traversal ordinal");
@@ -298,7 +306,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 31");
+    expect(copy).toContain("Outer save version 32");
     expect(copy).toContain("RegionalEcologyStateV6");
     expect(copy).toContain("sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once into version 30");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
@@ -310,18 +318,20 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Alpha-35 adoption, Alpha-36 adoption, working-animal transition, and domestic recovery remain exact and cannot replay");
   });
 
-  it("teaches bounded player WAIT as elapsed hazardous world time, not rest or pause", () => {
+  it("distinguishes bounded WAIT, durable recovery, and zero-time Quiet Hour", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const waitStep = saves?.steps.find((step) => step.id === "saves-wait-ten-minutes");
+    const recoveryStep = saves?.steps.find((step) => step.id === "saves-rest-and-sleep");
     const boundaries = tutorialSectionById("build-boundaries");
     const liveBoundary = boundaries?.steps.find((step) => step.id === "boundaries-live-weather");
     const plannedBoundary = boundaries?.steps.find((step) => step.id === "boundaries-planned-ecology");
 
     expect(saves).toMatchObject({
-      title: "Wait or stop without holding the world",
-      shortTitle: "Wait & saves",
+      title: "Wait, recover, or stop without holding the world",
+      shortTitle: "Time & saves",
     });
     expect(saves?.controlIds).toContain("wait-button");
+    expect(saves?.controlIds).toContain("recovery-button");
     expect(waitStep).toMatchObject({
       audience: "all",
       controlId: "wait-button",
@@ -337,23 +347,40 @@ describe("TIDEWEFT field-manual content", () => {
     expect(waitStep?.body).toContain("every completed step, elapsed minute, and consequence remains part of the world");
     expect(waitStep?.body).toContain("Leaving the foreground ends the transient wait and saves completed state");
     expect(waitStep?.body).toContain("loading returns explicit control instead of resuming it");
-    expect(waitStep?.body).toContain("WAIT is not a pause");
+    expect(waitStep?.body).toContain("WAIT is neither recovery nor pause");
     expect(waitStep?.body).toContain("title and Quiet Hour stop simulation");
-    expect(waitStep?.body).toContain("player REST and SLEEP are not yet available");
+    expect(waitStep?.body).toContain("REST and SLEEP use the separate recovery control");
     expect(waitStep?.body).toContain("actor ABOUT choice's WAIT AND WATCH");
     expect(waitStep?.body).toContain("only stops the current automatic route briefly");
+    expect(recoveryStep).toMatchObject({
+      audience: "all",
+      controlId: "recovery-button",
+    });
+    expect(recoveryStep?.body).toContain("stable dry footing with stamina below full");
+    expect(recoveryStep?.body).toContain("exactly three hundred ordinary fixed steps");
+    expect(recoveryStep?.body).toContain("first 06:00 dawn after it begins");
+    expect(recoveryStep?.body).toContain("storm blocks or interrupts sleep");
+    expect(recoveryStep?.body).toContain("never forces it");
+    expect(recoveryStep?.body).toContain("Cancel or Wake");
+    expect(recoveryStep?.body).toContain("physical incident, or qualifying current lawful disturbance");
+    expect(recoveryStep?.body).toContain("broad terrain remains readable but exact actors, items, labels, interactions, and unseen events do not become player knowledge");
+    expect(recoveryStep?.body).toContain("in-progress REST or SLEEP is saved in outer version 32");
+    expect(recoveryStep?.body).toContain("resumes after reload");
+    expect(recoveryStep?.body).toContain("hidden or closed app advances nothing");
     expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(
-      "Rest here label means saved stopping only",
+      "Save & return",
     );
     expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(
-      "does not perform a player REST or SLEEP action and advances no world time",
+      "does not perform REST or SLEEP and advances no world time",
     );
     expect(liveBoundary?.body).toContain("a bounded ten-displayed-minute player WAIT");
+    expect(liveBoundary?.body).toContain("thirty-minute REST");
+    expect(liveBoundary?.body).toContain("settlement-anchored SLEEP TO DAWN");
     expect(plannedBoundary?.body).not.toContain("player sleep/wait");
     expect(plannedBoundary?.body).not.toContain("player WAIT");
-    expect(plannedBoundary?.body).toContain("player REST and SLEEP");
-    expect(plannedBoundary?.body).toContain("validated longer or coarse-time advancement");
-    expect(plannedBoundary?.body).toContain("longer or coarse-time continuity");
+    expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
+    expect(plannedBoundary?.body).toContain("validated coarse-time advancement");
+    expect(plannedBoundary?.body).toContain("parity/performance proof");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -684,7 +711,8 @@ describe("TIDEWEFT field-manual content", () => {
   it("teaches the v6 breadth wrapper without rewriting the exact v5 ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 31 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
+    expect(copy).toContain("Outer save version 32 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
+    expect(copy).toContain("Version 32 adds only the nullable player time-action receipt");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
     expect(copy).toContain("complete V5 base, Alpine, polar-shore, cold-shore, and polar-consumer lineage");
     expect(copy).toContain("every exact earlier Open Country Ledger and Coldwater Glint adoption");

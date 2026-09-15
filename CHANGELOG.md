@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.47 — 2026-09-15
+
+Build: `0.3.3-alpha.47` · Gameplay contract: 45 · Tutorial: 57
+
+Rest and Rise is the local unpublished Alpha 47 source candidate: the player can now choose a thirty-minute rest on stable dry footing or sleep at a settlement from dusk until the next 06:00 dawn while the same authoritative world keeps moving.
+
+### Gameplay
+
+- One contextual recovery control now offers REST 30 MIN when the player has stamina to recover and stable dry footing. It applies neutral input for exactly three hundred ordinary player steps; existing stillness rules—not a new heal command—decide how much stamina the current condition can restore.
+- At a settlement during Dusk or Night, that same control becomes SLEEP TO DAWN. Sleep advances to the first authoritative 06:00 boundary after it begins, remains unavailable during a storm, and never forces the player to sleep merely because evening arrived.
+- REST and SLEEP advance the same fixed-step world as travel and WAIT. Weather, tide, cargo, actors, ecology, Promises, deadlines, exposure, incidents, and every other applicable consequence retain their ordinary owners instead of being skipped by a clock assignment.
+
+### Fixes
+
+- Movement, another deliberate field action, loss of stable footing, a physical incident, or qualifying current strong lawful disturbance can end recovery only after the triggering step commits. Sleep ignores visual-only interruption the player could not lawfully perceive, while strong lawful hearing or scent and physical consequences remain able to wake them.
+- Sleeping withholds new actor, item, label, and interaction detail in Chart and Relief while retaining broad terrain awareness. The event-observation cursor still crosses elapsed sleeping time, so waking cannot retroactively grant knowledge of an unseen event merely because its old location is now visible.
+- Long recovery remains responsive by executing at most one ordinary world minute per presented frame and refreshing presentation after each bounded batch. This changes rendering cadence only; every authoritative player and world step still executes in order.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Recovery grants no threat immunity, direct health restoration, free food or water, cargo protection, Promise protection, weather reset, tide reset, teleportation, or skipped danger.
+- REST is unavailable at full stamina and requires stable dry footing. SLEEP requires the player's exact current settlement, Dusk or Night, stable dry footing, and non-storm weather; leaving that physical anchor or entering a storm interrupts the action.
+- The separate WAIT 10 MIN action remains a bounded time-passing choice rather than recovery. REST is exactly thirty minutes; SLEEP ends at the next dawn unless the player wakes or a lawful consequence interrupts it.
+
+### Interface
+
+- Desktop and touch share one labeled floating recovery control beside WAIT. It says REST 30 MIN or SLEEP TO DAWN when available, explains a blocked state without hiding the control, and becomes Cancel or Wake with truthful time remaining while active.
+- Beginning recovery waits for any player-issued observation or interaction receipt to settle, then clears current detail inspection so sleep cannot complete a queued greeting or leave an obsolete actor panel on screen. Chart and Relief use the same sleeping disclosure boundary, and foreground suspension pauses acceleration without consuming offline time.
+- Quiet Hour's return-to-title action is now labeled Save & return. Quiet Hour remains a saved stopping surface that advances no world time and is distinct from REST or SLEEP. Field Manual version 57 explains all three elapsed-time choices and their different persistence rules.
+
+### Save changes
+
+- Outer save version 32 adds one nullable version-1 player time-action receipt while retaining RegionalEcologyStateV6 and every established world, ecology, resident, dog, item, cargo, Promise, and perception root.
+- The receipt records REST or SLEEP, starting world tick, starting partial player-step phase, exact target tick, total and completed ordinary steps, and the settlement anchor required by sleep. Every value must agree exactly with the authoritative clock and physical player position.
+- An authenticated version-31 save adopts version 32 with no active recovery action. A current in-progress REST or SLEEP persists across save and reload at the exact committed step; reopening resumes from there and never applies closed-app or background elapsed time.
+- Malformed, replayed, future-dated, wrong-settlement, wet, swept, or otherwise physically inconsistent recovery authority fails closed instead of being repaired into free time, stamina, safety, or another destination.
+
+### Known limitations
+
+- Alpha 47 Rest and Rise is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This slice adds player-controlled REST and settlement-anchored SLEEP over existing stamina and world consequences. It adds no new fatigue, hunger, thirst, player health, injury, shelter, camp, bed, house, interior, dream, or offline simulation system.
+- Broader human routines, the independent dog, bonded/player companions, other animal bindings, production crepuscular, tide-, weather-, and opportunity-driven routines, remaining performance/parity evidence, and Turning Day directive closure remain unfinished before Living Voice.
+
 ## 0.3.3-alpha.46 — 2026-09-15
 
 Build: `0.3.3-alpha.46` · Gameplay contract: 44 · Tutorial: 56

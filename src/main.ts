@@ -150,7 +150,10 @@ async function boot(): Promise<void> {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
       runtime.dispatchUI({ type: "wait", action: "suspend" });
+      runtime.dispatchUI({ type: "recover", action: "suspend" });
       void runtime.save().catch(() => undefined);
+    } else {
+      runtime.dispatchUI({ type: "recover", action: "resume" });
     }
   });
 

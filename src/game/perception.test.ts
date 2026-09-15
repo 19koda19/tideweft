@@ -10,6 +10,8 @@ import {
   evaluateAudibleContact,
   evaluateLineTransmission,
   evaluatePerception,
+  hasValidPerceptionSignature,
+  suppressPerceptionDetail,
   type AudibleContactInput,
   type PerceptionCell,
   type PerceptionInput,
@@ -57,6 +59,23 @@ function sightInput(
 }
 
 describe("deterministic visual perception", () => {
+  it("can withhold every detail channel while preserving sealed terrain awareness", () => {
+    const ordinary = evaluatePerception(sightInput(9, 1, 4));
+    const sleeping = suppressPerceptionDetail(ordinary, 9, 1);
+
+    expect(sleeping).not.toBeNull();
+    expect(sleeping?.visibilityGrades).toEqual(ordinary.visibilityGrades);
+    expect(sleeping?.terrainVisibilityStrengths).toEqual(
+      ordinary.terrainVisibilityStrengths,
+    );
+    expect([...sleeping!.detailVisibilityGrades]).toEqual(Array(9).fill(VISIBILITY_HIDDEN));
+    expect(sleeping?.detailVisibleTileIndices).toEqual([]);
+    expect(hasValidPerceptionSignature(sleeping!, 9, 1)).toBe(true);
+    expect(sleeping?.signature).not.toBe(ordinary.signature);
+    expect(suppressPerceptionDetail({ ...ordinary, signature: "tampered" }, 9, 1))
+      .toBeNull();
+  });
+
   it("handles the one-cell boundary and reports exact stable index partitions", () => {
     const result = evaluatePerception(sightInput(1, 1, 0, {
       cells: [{ elevation: 1, obstruction: 1 }],

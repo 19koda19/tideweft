@@ -3378,11 +3378,13 @@ body {
   box-shadow: none;
 }
 
-.action-button--wait[data-active="true"] {
+.action-button--wait[data-active="true"],
+.action-button--recovery[data-active="true"] {
   color: var(--gold);
 }
 
-.action-button--wait[aria-disabled="true"] {
+.action-button--wait[aria-disabled="true"],
+.action-button--recovery[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.45;
 }
@@ -3845,8 +3847,8 @@ body {
   #game-ui .resident-about {
     top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem);
     right: max(0.55rem, env(safe-area-inset-right));
-    /* The compact journey dock is two rows once WAIT joins the four existing
-       field actions. Keep ABOUT wholly above those live survival controls. */
+    /* The compact journey dock stays two rows with the dedicated WAIT and
+       recovery controls. Keep ABOUT wholly above those live survival controls. */
     bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
     left: max(0.55rem, env(safe-area-inset-left));
     width: auto;
@@ -4907,7 +4909,7 @@ body {
 }
 
 @media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem) {
-  /* Quiet Hour already provides the saved Rest here -> title path on touch.
+  /* Quiet Hour already provides the saved Save & return -> title path on touch.
      Reserve this scarce header slot for the forthcoming KIT inventory. */
   .title-menu-button {
     display: none;

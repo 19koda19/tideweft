@@ -862,6 +862,34 @@ save version 31 and RegionalEcologyStateV6 remain unchanged. This is not an
 every-human schedule, autonomous settlement life, player REST/SLEEP, or
 Turning Day closure.
 
+The local **Rest and Rise** Alpha47 candidate adds two explicit player recovery
+choices through that same day and ordinary simulation. On stable dry footing
+with stamina below full, **REST 30 MIN** applies neutral control for exactly
+three hundred fixed player steps. At a settlement during Dusk or Night, the
+same floating control becomes **SLEEP TO DAWN** and targets the first 06:00
+boundary after sleep begins; storm weather blocks or interrupts it. The game
+never forces either choice at a clock edge.
+
+Existing stillness owns stamina recovery. Neither action grants direct health,
+food, water, safety, cargo protection, or a weather/tide reset. Weather, tide,
+cargo, ecology, actors, Promises, deadlines, exposure, and hazards continue
+through their ordinary rules. Movement and deliberate field actions, unstable
+footing or loss of the sleep settlement, physical incidents, storms, and
+qualifying current lawful disturbance can end recovery only after the
+triggering step commits. The control then reads **Cancel** or **Wake** with
+truthful time remaining.
+
+While the player sleeps, Chart and Relief retain broad terrain shape but hide
+new actor, item, label, and interaction detail. Visual-only events neither wake
+the player nor become retroactive knowledge; strong lawful hearing or scent and
+physical consequences remain active. An in-progress action persists at its exact world
+tick and partial fixed-step phase in outer save version 32. Reload continues
+that same interval, while a hidden or closed app adds no time. Version 31 saves
+adopt with no active action. WAIT remains transient and separate, and Quiet
+Hour's **Save & return** remains a zero-time stopping surface. This slice adds
+no fatigue, hunger, thirst, player health, physical camp, bed, interior, dream,
+or broader schedule system and does not by itself close Turning Day.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1636,10 +1664,19 @@ disturbance override rest; bound recovery requires actual home Resting/Asleep.
 Post-command sensory admission blocks new vision only while sleep remains
 valid, preserving hearing and scent and permitting same-tick work to wake and
 see normally. Direct inspection exposes posture but no private schedule or
-needs. All other humans, the independent dog, bonded/player companion routines,
-broader animal bindings, and player REST/SLEEP remain unfinished. Alpha46 is an
-unpublished local candidate, not a pushed, CI-verified, Pages-verified, or live
-release.
+needs. At the Alpha46 boundary, all other humans, the independent dog,
+bonded/player companion routines, broader animal bindings, and player
+REST/SLEEP remain unfinished. Alpha46 is an unpublished local candidate, not a
+pushed, CI-verified, Pages-verified, or live release. Local Alpha47 **Rest and
+Rise** now adds the separate player recovery
+control: thirty-minute REST on stable dry footing below full stamina and
+settlement-only Dusk/Night SLEEP to the next 06:00 outside storm weather. Both
+advance ordinary fixed steps and consequences; sleep withholds new visual
+detail while retaining broad terrain, lawful hearing, and physical wake causes.
+The exact in-progress receipt persists in outer save v32 with no offline time,
+while v31 adopts with no active action. Quiet Hour now says **Save & return**
+and remains zero-time. Alpha47 is likewise local and unpublished; broader
+schedules, final parity/performance proof, and Turning Day closure remain.
 
 Live through Alpha 39:
 
