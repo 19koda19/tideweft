@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.45",
+      version: "0.3.3-alpha.46",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.45",
-      gameplayContractVersion: 43,
-      tutorialVersion: 55,
+      buildIdentity: "0.3.3-alpha.46",
+      gameplayContractVersion: 44,
+      tutorialVersion: 56,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-45 Kennel Night candidate and retains Ten Minutes and earlier releases", () => {
+  it("scopes the Alpha-46 Keeper Sleeps candidate and retains Kennel Night and earlier releases", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha45Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.45",
+    );
+    const alpha45Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha45Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha45Limitations = alpha45Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha44Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.44",
     );
@@ -299,35 +307,59 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Kennel Night");
-    expect(currentCopy).toContain("Exactly one existing starting-harbor settlement-custodied working dog");
-    expect(currentCopy).toContain("shared living-circadian kernel");
-    expect(currentCopy).toContain("clock-driven day-active policy");
-    expect(currentCopy).toContain("actual kennel already authenticated by its settlement custody");
-    expect(currentCopy).toContain("stays awake and receives no restorative physiology while travelling");
-    expect(currentCopy).toContain("only physical arrival permits Resting and then Asleep");
-    expect(currentCopy).toContain("wakes at its stable-ID active boundary");
-    expect(currentCopy).toContain("retained investigation or return work");
-    expect(currentCopy).toContain("kennel keeps its physical weather shelter while the dog is awake");
-    expect(currentCopy).toContain("Shelter alone, low-exertion watch, and travel toward the kennel now reduce neither exhaustion nor rest need");
-    expect(currentCopy).toContain("both recovery paths require the committed restorative posture after authenticated kennel arrival");
-    expect(currentCopy).toContain("working-animal deferral now records its actual current intent instead of substituting a retreat cause");
-    expect(currentCopy).toContain("directly visible ABOUT inspection can label the current posture Resting or Asleep");
-    expect(currentCopy).toContain("hidden schedule, phase offset, wake threshold");
-    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and working-animal state version 2 remain unchanged");
-    expect(currentCopy).toContain("Dog actor schema/version 1 gains an additive optional shared circadian receipt");
-    expect(currentCopy).toContain("Legacy dog actor records without the optional field remain valid and byte-stable");
-    expect(currentCopy).toContain("recovers accepted pending working-animal transactions exactly once before play resumes");
-    expect(currentCopy).toContain("already-present routine receipt is reprojected against the recovered assignment at the same saved tick");
-    expect(currentCopy).toContain("legacy absent receipt remains absent rather than being invented");
-    expect(currentLimitations).toContain("exactly one existing settlement-custodied working dog's kennel routine");
-    expect(currentLimitations).toContain("not a routine for the independent porter-scene dog, all dogs, humans");
-    expect(currentLimitations).toContain("bonded/player companion routines");
+    expect(LATEST_PATCH_NOTE.summary).toContain("The Keeper Sleeps");
+    expect(currentCopy).toContain("Exactly one existing human");
+    expect(currentCopy).toContain("stable food-store keeper");
+    expect(currentCopy).toContain("same version-1 day-active living-circadian policy");
+    expect(currentCopy).toContain("No second clock, human scheduler, duplicate resident, house, bed, or invented interior");
+    expect(currentCopy).toContain("authoritative home settlement");
+    expect(currentCopy).toContain("Resting and then Asleep");
+    expect(currentCopy).toContain("stable identity-derived boundary");
+    expect(currentCopy).toContain("non-neutral porter response");
+    expect(currentCopy).toContain("authoritative post-command resident perception boundary suppresses new visual observations");
+    expect(currentCopy).toContain("hearing and scent can still carry lawful wake evidence");
+    expect(currentCopy).toContain("accepting work on that same tick permits ordinary vision");
+    expect(currentCopy).toContain("exhaustion and rest-need recovery only while their canonical body is actually at its authenticated home settlement");
+    expect(currentCopy).toContain("Merely being sheltered, idle, travelling, or carrying a stale sleep receipt grants no restorative physiology");
+    expect(currentCopy).toContain("one stale healing tick at dawn");
+    expect(currentCopy).toContain("directly observable keeper as Resting or Asleep");
+    expect(currentCopy).toContain("An asleep resident does not produce ordinary state speech");
+    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4");
+    expect(currentCopy).toContain("Resident state gains one additive optional shared circadian receipt");
+    expect(currentCopy).toContain("Legacy residents without that property remain valid");
+    expect(currentCopy).toContain("legacy keeper encountered away remains unbound until a real home tick");
+    expect(currentLimitations).toContain("exactly one existing food-store keeper");
+    expect(currentLimitations).toContain("not a physical house, bed, interior routine");
     expect(currentLimitations).toContain("player REST and SLEEP");
     expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
     expect(currentLimitations).toContain("not been pushed, published, deployed");
     expect(currentLimitations).toContain("LIVE_VERIFIED");
-    expect(currentCopy).not.toMatch(/player sleep is live|human schedules are live|all dogs|grants free healing/iu);
+    expect(currentCopy).not.toMatch(/player sleep is live|all human schedules are live|all dogs|grants free healing/iu);
+    expect(alpha45Release?.summary).toContain("Kennel Night");
+    expect(alpha45Copy).toContain("Exactly one existing starting-harbor settlement-custodied working dog");
+    expect(alpha45Copy).toContain("shared living-circadian kernel");
+    expect(alpha45Copy).toContain("clock-driven day-active policy");
+    expect(alpha45Copy).toContain("actual kennel already authenticated by its settlement custody");
+    expect(alpha45Copy).toContain("stays awake and receives no restorative physiology while travelling");
+    expect(alpha45Copy).toContain("only physical arrival permits Resting and then Asleep");
+    expect(alpha45Copy).toContain("wakes at its stable-ID active boundary");
+    expect(alpha45Copy).toContain("retained investigation or return work");
+    expect(alpha45Copy).toContain("kennel keeps its physical weather shelter while the dog is awake");
+    expect(alpha45Copy).toContain("Shelter alone, low-exertion watch, and travel toward the kennel now reduce neither exhaustion nor rest need");
+    expect(alpha45Copy).toContain("both recovery paths require the committed restorative posture after authenticated kennel arrival");
+    expect(alpha45Copy).toContain("working-animal deferral now records its actual current intent instead of substituting a retreat cause");
+    expect(alpha45Copy).toContain("directly visible ABOUT inspection can label the current posture Resting or Asleep");
+    expect(alpha45Copy).toContain("hidden schedule, phase offset, wake threshold");
+    expect(alpha45Copy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and working-animal state version 2 remain unchanged");
+    expect(alpha45Copy).toContain("Dog actor schema/version 1 gains an additive optional shared circadian receipt");
+    expect(alpha45Copy).toContain("Legacy dog actor records without the optional field remain valid and byte-stable");
+    expect(alpha45Copy).toContain("recovers accepted pending working-animal transactions exactly once before play resumes");
+    expect(alpha45Copy).toContain("already-present routine receipt is reprojected against the recovered assignment at the same saved tick");
+    expect(alpha45Copy).toContain("legacy absent receipt remains absent rather than being invented");
+    expect(alpha45Limitations).toContain("exactly one existing settlement-custodied working dog's kennel routine");
+    expect(alpha45Limitations).toContain("not a routine for the independent porter-scene dog, all dogs, humans");
+    expect(alpha45Limitations).toContain("bonded/player companion routines");
+    expect(alpha45Limitations).toContain("player REST and SLEEP");
     expect(alpha44Release?.summary).toContain("Ten Minutes");
     expect(alpha44Copy).toContain("exactly one hundred ordinary player fixed steps");
     expect(alpha44Copy).toContain("ten displayed minutes");

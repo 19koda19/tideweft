@@ -18,6 +18,7 @@ import {
 } from "./npcIdentity";
 import { stableRegionObjectId } from "./regions";
 import { canonicalizeActorPerceptionState } from "./actorPerception";
+import { canonicalizeResidentCircadianState } from "./livingCircadian";
 import { stableStringify } from "./util";
 
 function invariant(condition: unknown, message: string): asserts condition {
@@ -323,6 +324,22 @@ export function assertWorldInvariants(world: WorldState): void {
       stableStringify(canonicalPerception) === stableStringify(resident.perception),
       `resident ${resident.id} perception is not canonical`,
     );
+    if (Object.hasOwn(resident, "circadian")) {
+      const arrivedHome = resident.location.kind === "settlement"
+        && resident.location.settlementId === resident.homeSettlementId
+        && resident.activeContractId === null;
+      const canonicalCircadian = canonicalizeResidentCircadianState(resident.circadian, {
+        residentStableId: resident.identity.stableId,
+        homeSettlementId: resident.homeSettlementId,
+        atTick: world.meta.completedTick,
+        arrivedHome,
+      });
+      invariant(canonicalCircadian !== null, `resident ${resident.id} circadian state is malformed or unbound`);
+      invariant(
+        stableStringify(canonicalCircadian) === stableStringify(resident.circadian),
+        `resident ${resident.id} circadian state is not canonical`,
+      );
+    }
     invariant(
       resident.identity.heightCm >= 145 && resident.identity.heightCm <= 200,
       `resident ${resident.id} height is invalid`,

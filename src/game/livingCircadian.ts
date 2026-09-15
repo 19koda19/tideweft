@@ -1,161 +1,58 @@
 import { FIXED_POINT } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
-  WORLD_DAWN_START_TICK,
-  WORLD_DAY_START_TICK,
-  WORLD_DUSK_START_TICK,
-  WORLD_NIGHT_START_TICK,
-  WORLD_TICKS_PER_DAY,
+  LIVING_CIRCADIAN_DRIVERS,
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_PROFILE_IDS,
+  LIVING_CIRCADIAN_PROFILES,
+  LIVING_CIRCADIAN_STATES,
+  LIVING_CIRCADIAN_VERSION,
+  canonicalizeLivingCircadianPersistentState,
+  canonicalizeLivingCircadianPolicy,
+  firstLivingCircadianActiveTick,
+  livingCircadianPhaseOffsetTicks,
+  livingCircadianProfile,
+  projectLivingCircadianClockPreference,
+  type LivingCircadianDriver,
+  type LivingCircadianPersistentState,
+  type LivingCircadianPolicy,
+  type LivingCircadianPosture,
+  type LivingCircadianPreference,
+  type LivingCircadianProfileId,
+  type LivingCircadianState,
+} from "../sim/livingCircadian";
+import {
   projectWorldTime,
   type WorldTimeProjection,
 } from "../sim/worldTime";
 
-export const LIVING_CIRCADIAN_VERSION = 1 as const;
-export const LIVING_CIRCADIAN_OWNER_ID = "game:living-circadian:v1" as const;
+export {
+  LIVING_CIRCADIAN_DRIVERS,
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_PROFILE_IDS,
+  LIVING_CIRCADIAN_PROFILES,
+  LIVING_CIRCADIAN_STATES,
+  LIVING_CIRCADIAN_VERSION,
+  canonicalizeLivingCircadianPersistentState,
+  canonicalizeLivingCircadianPolicy,
+  firstLivingCircadianActiveTick,
+  livingCircadianPhaseOffsetTicks,
+  livingCircadianProfile,
+  projectLivingCircadianClockPreference,
+} from "../sim/livingCircadian";
+export type {
+  LivingCircadianDriver,
+  LivingCircadianPersistentState,
+  LivingCircadianPolicy,
+  LivingCircadianPosture,
+  LivingCircadianPreference,
+  LivingCircadianProfile,
+  LivingCircadianProfileId,
+  LivingCircadianRhythm,
+  LivingCircadianState,
+} from "../sim/livingCircadian";
 
-export const LIVING_CIRCADIAN_PROFILE_IDS = Object.freeze([
-  "day-active",
-  "night-active",
-  "twilight-active",
-  "adaptive-active",
-] as const);
-export type LivingCircadianProfileId = (typeof LIVING_CIRCADIAN_PROFILE_IDS)[number];
-
-export const LIVING_CIRCADIAN_DRIVERS = Object.freeze([
-  "clock",
-  "tide",
-  "weather",
-  "opportunity",
-] as const);
-export type LivingCircadianDriver = (typeof LIVING_CIRCADIAN_DRIVERS)[number];
-
-export const LIVING_CIRCADIAN_STATES = Object.freeze([
-  "awake",
-  "resting",
-  "asleep",
-  "startled",
-] as const);
-export type LivingCircadianState = (typeof LIVING_CIRCADIAN_STATES)[number];
-
-export type LivingCircadianRhythm = "diurnal" | "nocturnal" | "crepuscular" | "adaptive";
 export type LivingCircadianSimulationMode = "full" | "coarse";
-export type LivingCircadianPreference = "active" | "rest";
-
-interface LivingCircadianWindow {
-  readonly startTick: number;
-  /** May be below startTick to represent a window crossing midnight. */
-  readonly endTick: number;
-}
-
-export interface LivingCircadianProfile {
-  readonly id: LivingCircadianProfileId;
-  readonly rhythm: LivingCircadianRhythm;
-  readonly evaluationCadenceTicks: number;
-  readonly settleTicks: number;
-  readonly startledHoldTicks: number;
-  readonly defaultWakeSensitivity: number;
-  /** Stable per-subject displacement around authored clock windows. */
-  readonly phaseVariationTicks: number;
-  readonly schedule:
-    | Readonly<{
-        readonly kind: "active-windows";
-        readonly windows: readonly LivingCircadianWindow[];
-      }>
-    | Readonly<{
-        readonly kind: "staggered-rest-window";
-        readonly durationTicks: number;
-      }>;
-}
-
-/**
- * Four shared routines, not species schedulers. Species bindings select one
- * profile and add orthogonal tide/weather/opportunity drivers.
- */
-export const LIVING_CIRCADIAN_PROFILES: readonly LivingCircadianProfile[] = deepFreeze([
-  {
-    id: "day-active",
-    rhythm: "diurnal",
-    evaluationCadenceTicks: 7,
-    settleTicks: 21,
-    startledHoldTicks: 4,
-    defaultWakeSensitivity: 450_000,
-    phaseVariationTicks: 30,
-    schedule: {
-      kind: "active-windows",
-      windows: [{ startTick: WORLD_DAWN_START_TICK, endTick: WORLD_NIGHT_START_TICK }],
-    },
-  },
-  {
-    id: "night-active",
-    rhythm: "nocturnal",
-    evaluationCadenceTicks: 7,
-    settleTicks: 21,
-    startledHoldTicks: 4,
-    defaultWakeSensitivity: 400_000,
-    phaseVariationTicks: 30,
-    schedule: {
-      kind: "active-windows",
-      windows: [{ startTick: WORLD_NIGHT_START_TICK, endTick: WORLD_DAWN_START_TICK }],
-    },
-  },
-  {
-    id: "twilight-active",
-    rhythm: "crepuscular",
-    evaluationCadenceTicks: 5,
-    settleTicks: 20,
-    startledHoldTicks: 4,
-    defaultWakeSensitivity: 425_000,
-    phaseVariationTicks: 20,
-    schedule: {
-      kind: "active-windows",
-      windows: [
-        { startTick: WORLD_DAWN_START_TICK - 60, endTick: WORLD_DAY_START_TICK + 60 },
-        { startTick: WORLD_DUSK_START_TICK - 60, endTick: WORLD_NIGHT_START_TICK + 60 },
-      ],
-    },
-  },
-  {
-    id: "adaptive-active",
-    rhythm: "adaptive",
-    evaluationCadenceTicks: 11,
-    settleTicks: 22,
-    startledHoldTicks: 4,
-    defaultWakeSensitivity: 400_000,
-    phaseVariationTicks: 0,
-    // Flexible actors retain a real rest window, but stable-ID staggering
-    // spreads it across the day instead of manufacturing one mass transition.
-    schedule: { kind: "staggered-rest-window", durationTicks: 300 },
-  },
-]);
-
-export interface LivingCircadianPolicy {
-  readonly version: typeof LIVING_CIRCADIAN_VERSION;
-  readonly ownerId: typeof LIVING_CIRCADIAN_OWNER_ID;
-  readonly profileId: LivingCircadianProfileId;
-  readonly drivers: readonly LivingCircadianDriver[];
-  /** Fixed-point disturbance strength required to wake/startle this binding. */
-  readonly wakeSensitivity: number;
-}
-
-/**
- * Small durable posture record embedded by a physical actor owner.  It stores
- * no clock, coordinates, perception, or needs; those remain authoritative in
- * their existing owners and are supplied again for every projection.
- */
-export interface LivingCircadianPersistentState {
-  readonly version: typeof LIVING_CIRCADIAN_VERSION;
-  readonly ownerId: typeof LIVING_CIRCADIAN_OWNER_ID;
-  readonly policy: LivingCircadianPolicy;
-  readonly restDestinationId: string;
-  readonly restDestinationArrived: boolean;
-  readonly posture: LivingCircadianPosture;
-}
-
-export interface LivingCircadianPosture {
-  readonly state: LivingCircadianState;
-  /** Reuses an actor's existing persisted intent/activity entered-at tick. */
-  readonly enteredAtTick: number;
-}
 
 export interface LivingCircadianRestDestination {
   /** Stable authenticated destination/anchor identity supplied by the physical owner. */
@@ -237,21 +134,14 @@ export interface LivingCircadianProjection {
   readonly nextEvaluationTick: number;
 }
 
-const PROFILE_BY_ID = new Map(LIVING_CIRCADIAN_PROFILES.map((profile) => [profile.id, profile]));
 const DRIVER_ORDER = new Map(LIVING_CIRCADIAN_DRIVERS.map((driver, index) => [driver, index]));
-
-export function livingCircadianProfile(
-  profileId: LivingCircadianProfileId,
-): LivingCircadianProfile {
-  return PROFILE_BY_ID.get(profileId)!;
-}
 
 export function createLivingCircadianPolicy(input: Readonly<{
   profileId: LivingCircadianProfileId;
   drivers: readonly LivingCircadianDriver[];
   wakeSensitivity?: number;
 }>): LivingCircadianPolicy | null {
-  const profile = PROFILE_BY_ID.get(input.profileId);
+  const profile = LIVING_CIRCADIAN_PROFILES.find(({ id }) => id === input.profileId);
   if (profile === undefined || !Array.isArray(input.drivers)) return null;
   const drivers = [...input.drivers];
   if (
@@ -272,19 +162,6 @@ export function createLivingCircadianPolicy(input: Readonly<{
   });
 }
 
-/** Stable variation is derived from identity, never call order, wall time, or loaded state. */
-export function livingCircadianPhaseOffsetTicks(
-  subjectId: string,
-  profileId: LivingCircadianProfileId,
-): number | null {
-  const profile = PROFILE_BY_ID.get(profileId);
-  if (!validId(subjectId) || profile === undefined) return null;
-  const sample = stableWord("phase", subjectId, profileId);
-  if (profile.schedule.kind === "staggered-rest-window") return sample % WORLD_TICKS_PER_DAY;
-  const range = profile.phaseVariationTicks;
-  return range === 0 ? 0 : (sample % (range * 2 + 1)) - range;
-}
-
 /**
  * Pure species-neutral circadian projection. It consumes lawful current inputs
  * and an existing persisted actor posture/enteredAtTick; it owns no save schema.
@@ -293,15 +170,19 @@ export function projectLivingCircadian(
   input: ProjectLivingCircadianInput,
 ): LivingCircadianProjection | null {
   if (!validInput(input)) return null;
-  const profile = PROFILE_BY_ID.get(input.policy.profileId)!;
+  const profile = livingCircadianProfile(input.policy.profileId);
   const worldTime = projectWorldTime(input.atTick);
   const phaseOffsetTicks = livingCircadianPhaseOffsetTicks(
     input.subjectId,
     input.policy.profileId,
   );
-  if (worldTime === null || phaseOffsetTicks === null) return null;
+  const clockPreference = projectLivingCircadianClockPreference(
+    input.subjectId,
+    input.atTick,
+    input.policy,
+  );
+  if (worldTime === null || phaseOffsetTicks === null || clockPreference === null) return null;
 
-  const clockPreference = projectClockPreference(profile, worldTime.dayTick, phaseOffsetTicks);
   const activeSignal = [...input.driverSignals].sort(compareSignals)[0] ?? null;
   const effectivePreference = input.priorityOverride?.preference
     ?? (activeSignal === null ? clockPreference : "active");
@@ -417,80 +298,6 @@ export function livingCircadianPersistentStateFromProjection(
   });
 }
 
-export function canonicalizeLivingCircadianPersistentState(
-  value: unknown,
-): LivingCircadianPersistentState | null {
-  if (!plainRecord(value) || !exactKeys(value, [
-    "ownerId",
-    "policy",
-    "posture",
-    "restDestinationArrived",
-    "restDestinationId",
-    "version",
-  ])) return null;
-  const policy = plainRecord(value.policy)
-    ? canonicalPolicy(value.policy)
-    : null;
-  if (
-    value.version !== LIVING_CIRCADIAN_VERSION
-    || value.ownerId !== LIVING_CIRCADIAN_OWNER_ID
-    || policy === null
-    || !validId(value.restDestinationId)
-    || typeof value.restDestinationArrived !== "boolean"
-    || !plainRecord(value.posture)
-    || !exactKeys(value.posture, ["enteredAtTick", "state"])
-    || !LIVING_CIRCADIAN_STATES.includes(value.posture.state as LivingCircadianState)
-    || !nonnegativeSafeInteger(value.posture.enteredAtTick)
-    || (
-      value.restDestinationArrived === false
-      && (value.posture.state === "resting" || value.posture.state === "asleep")
-    )
-  ) return null;
-  return deepFreeze({
-    version: LIVING_CIRCADIAN_VERSION,
-    ownerId: LIVING_CIRCADIAN_OWNER_ID,
-    policy,
-    restDestinationId: value.restDestinationId,
-    restDestinationArrived: value.restDestinationArrived,
-    posture: Object.freeze({
-      state: value.posture.state as LivingCircadianState,
-      enteredAtTick: value.posture.enteredAtTick,
-    }),
-  });
-}
-
-/**
- * Returns the first clock-owned active tick after `fromTick`, bounded to one
- * civil day.  A current sleeping/resting bout must end at this boundary; coarse
- * simulation must not silently carry recovery through daylight or another
- * full cycle.
- */
-export function firstLivingCircadianActiveTick(
-  subjectId: string,
-  fromTick: number,
-  throughTick: number,
-  policy: LivingCircadianPolicy,
-): number | null {
-  if (
-    !validId(subjectId)
-    || !nonnegativeSafeInteger(fromTick)
-    || !nonnegativeSafeInteger(throughTick)
-    || throughTick <= fromTick
-    || !validPolicy(policy)
-  ) return null;
-  const profile = PROFILE_BY_ID.get(policy.profileId)!;
-  const offset = livingCircadianPhaseOffsetTicks(subjectId, policy.profileId);
-  if (offset === null) return null;
-  const maximumDelta = Math.min(WORLD_TICKS_PER_DAY, throughTick - fromTick);
-  for (let delta = 1; delta <= maximumDelta; delta += 1) {
-    const tick = fromTick + delta;
-    if (!Number.isSafeInteger(tick)) return null;
-    const dayTick = tick % WORLD_TICKS_PER_DAY;
-    if (projectClockPreference(profile, dayTick, offset) === "active") return tick;
-  }
-  return null;
-}
-
 function validInput(input: ProjectLivingCircadianInput): boolean {
   if (
     !validId(input.subjectId)
@@ -516,35 +323,7 @@ function validInput(input: ProjectLivingCircadianInput): boolean {
 }
 
 function validPolicy(policy: LivingCircadianPolicy): boolean {
-  return canonicalPolicy(policy) !== null;
-}
-
-function canonicalPolicy(value: unknown): LivingCircadianPolicy | null {
-  if (
-    !plainRecord(value)
-    || !exactKeys(value, ["drivers", "ownerId", "profileId", "version", "wakeSensitivity"])
-    || value.version !== LIVING_CIRCADIAN_VERSION
-    || value.ownerId !== LIVING_CIRCADIAN_OWNER_ID
-    || !LIVING_CIRCADIAN_PROFILE_IDS.includes(value.profileId as LivingCircadianProfileId)
-    || !Array.isArray(value.drivers)
-    || !value.drivers.every((driver) => (
-      typeof driver === "string"
-      && LIVING_CIRCADIAN_DRIVERS.includes(driver as LivingCircadianDriver)
-    ))
-    || !fixedPoint(value.wakeSensitivity)
-    || value.wakeSensitivity === 0
-  ) return null;
-  const policy = createLivingCircadianPolicy({
-    profileId: value.profileId as LivingCircadianProfileId,
-    drivers: value.drivers as LivingCircadianDriver[],
-    wakeSensitivity: value.wakeSensitivity,
-  });
-  if (
-    policy === null
-    || policy.drivers.length !== value.drivers.length
-    || policy.drivers.some((driver, index) => driver !== value.drivers[index])
-  ) return null;
-  return policy;
+  return canonicalizeLivingCircadianPolicy(policy) !== null;
 }
 
 function validDriverSignal(
@@ -590,30 +369,6 @@ function validOverride(value: LivingCircadianPriorityOverride | null): boolean {
   return value.kind !== "active-commitment" || value.preference === "active";
 }
 
-function projectClockPreference(
-  profile: LivingCircadianProfile,
-  dayTick: number,
-  phaseOffsetTicks: number,
-): LivingCircadianPreference {
-  if (profile.schedule.kind === "staggered-rest-window") {
-    return inWindow(dayTick, phaseOffsetTicks, (
-      phaseOffsetTicks + profile.schedule.durationTicks
-    ) % WORLD_TICKS_PER_DAY) ? "rest" : "active";
-  }
-  const shiftedTick = wrapDayTick(dayTick - phaseOffsetTicks);
-  return profile.schedule.windows.some((window) => (
-    inWindow(shiftedTick, window.startTick, window.endTick)
-  )) ? "active" : "rest";
-}
-
-function inWindow(dayTick: number, startTick: number, endTick: number): boolean {
-  const start = wrapDayTick(startTick);
-  const end = wrapDayTick(endTick);
-  return start < end
-    ? dayTick >= start && dayTick < end
-    : dayTick >= start || dayTick < end;
-}
-
 function actionFor(
   posture: LivingCircadianPosture,
   arrived: boolean,
@@ -651,10 +406,6 @@ function compareSignals(left: LivingCircadianDriverSignal, right: LivingCircadia
 
 function stableWord(domain: string, subjectId: string, profileId: string): number {
   return Number.parseInt(hashCanonical({ domain, owner: LIVING_CIRCADIAN_OWNER_ID, profileId, subjectId }).slice(0, 8), 16) >>> 0;
-}
-
-function wrapDayTick(value: number): number {
-  return ((value % WORLD_TICKS_PER_DAY) + WORLD_TICKS_PER_DAY) % WORLD_TICKS_PER_DAY;
 }
 
 function validId(value: unknown): value is string {

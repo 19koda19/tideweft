@@ -7,12 +7,21 @@ import {
   stepActorPerception,
 } from "../sim/actorPerception";
 import {
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_VERSION,
+  RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+  WORLD_DAWN_START_TICK,
+  WORLD_NIGHT_START_TICK,
   WORLD_TICKS_PER_DAY,
+  assertWorldInvariants,
   createWorld,
   createWorldView,
   deserializeWorld,
+  replaceResidentCircadian,
+  residentHomeRestDestinationId,
   runTicks,
   serializeWorld,
+  stepWorld,
   type WorldState,
 } from "../sim/public";
 import {
@@ -78,6 +87,7 @@ import {
   serializeDogActorRoster,
 } from "./dogActorRoster";
 import { firstLivingCircadianActiveTick } from "./livingCircadian";
+import { createPorterResponseState } from "./porterResponse";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
   repositionCoreWildlifeActor,
@@ -2231,9 +2241,57 @@ describe("runtime settlement ecology integration", () => {
         ),
       },
     );
-    const repository = new MemoryRepository(preparedRecord);
+    const preparedEnvelope = JSON.parse(preparedRecord.worldJson) as Record<string, unknown>;
+    const sleepingWorld = deserializeWorld(String(preparedEnvelope.world));
+    const caretakerIndex = sleepingWorld.residents.findIndex(({ identity }) => (
+      identity.stableId === custody.caretakerActorId
+    ));
+    const sleepingCaretaker = sleepingWorld.residents[caretakerIndex];
+    const restDestinationId = sleepingCaretaker === undefined
+      ? null
+      : residentHomeRestDestinationId(
+          sleepingCaretaker.identity.stableId,
+          sleepingCaretaker.homeSettlementId,
+        );
+    if (
+      sleepingCaretaker === undefined
+      || restDestinationId === null
+      || sleepingCaretaker.location.kind !== "settlement"
+      || sleepingCaretaker.location.settlementId !== sleepingCaretaker.homeSettlementId
+      || sleepingCaretaker.activeContractId !== null
+    ) throw new Error("recovery fixture could not bind the sleeping caretaker at home");
+    sleepingWorld.residents[caretakerIndex] = replaceResidentCircadian(sleepingCaretaker, {
+      atTick: sleepingWorld.meta.completedTick,
+      circadian: {
+        version: LIVING_CIRCADIAN_VERSION,
+        ownerId: LIVING_CIRCADIAN_OWNER_ID,
+        policy: RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+        restDestinationId,
+        restDestinationArrived: true,
+        posture: {
+          state: "asleep",
+          enteredAtTick: sleepingWorld.meta.completedTick,
+        },
+      },
+    });
+    assertWorldInvariants(sleepingWorld);
+    const repository = new MemoryRepository(withCurrentEnvelopeFields(preparedRecord, {
+      world: serializeWorld(sleepingWorld),
+    }));
     const runtime = await createTideweftRuntime(repository);
-    advancePlayerSteps(runtime, 20);
+    // The harness presents current direct goat images to the raw collector.
+    // Final sim admission removes them while the keeper is asleep, so the
+    // secondary recovery system cannot bypass cognition and notice the split.
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const sleepingRecovery = deserializeSettlementDomesticAnimalRecoveryState(
+      savedEnvelope(repository).settlementDomesticAnimalRecovery,
+    );
+    expect(sleepingRecovery?.currentCase?.phase).toBe("unnoticed");
+
+    // Day-active projection lawfully wakes the same keeper after that tick;
+    // the next admitted direct sight may then advance the existing case.
+    advancePlayerSteps(runtime, 10);
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     await runtime.save();
     const searchingRecord = repository.snapshot();
@@ -4046,6 +4104,183 @@ describe("runtime settlement ecology integration", () => {
       enteredAtTick: wakeTick,
     });
     expect(awakeDog?.address.position).toEqual(restingPosition);
+    reloaded.destroy();
+  }, 180_000);
+
+  it("gives the existing keeper one persistent home rest bout and wakes the same human at dawn", async () => {
+    const world = createWorld("settlement keeper home night continuity", "wild");
+    const startingSettlementId = world.contracts.find(({ status }) => status === "offered")
+      ?.originSettlementId ?? world.settlements[0]?.id;
+    const expectedKeeper = world.residents
+      .filter((resident) => (
+        resident.location.kind === "settlement"
+        && resident.location.settlementId === startingSettlementId
+      ))
+      .sort((left, right) => (
+        left.identity.stableId < right.identity.stableId
+          ? -1
+          : left.identity.stableId > right.identity.stableId
+            ? 1
+            : left.id - right.id
+      ))[0];
+    if (expectedKeeper === undefined) throw new Error("keeper fixture has no bootstrap human");
+    const wakeTick = firstLivingCircadianActiveTick(
+      expectedKeeper.identity.stableId,
+      WORLD_NIGHT_START_TICK + 31,
+      WORLD_TICKS_PER_DAY + WORLD_DAWN_START_TICK + 31,
+      RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+    );
+    if (wakeTick === null) throw new Error("keeper fixture has no bounded dawn wake tick");
+    const startingTick = wakeTick - 2;
+    // This test owns only the runtime/save routine seam, not the already-proven
+    // complete clock journey. Rebase the otherwise untouched deterministic
+    // fixture immediately before this keeper's stable dawn edge so setup does
+    // not simulate a day of unrelated contracts and ecology.
+    world.meta.completedTick = startingTick - 1;
+    for (const resident of world.residents) {
+      resident.perception = createActorPerceptionState(
+        resident.identity.stableId,
+        startingTick - 1,
+      );
+    }
+    for (const contract of world.contracts) {
+      if (contract.status !== "offered") continue;
+      contract.playerExclusiveUntilTick = startingTick + WORLD_TICKS_PER_DAY;
+      contract.dueTick = startingTick + WORLD_TICKS_PER_DAY * 2;
+    }
+    for (const settlement of world.settlements) {
+      for (const recipe of settlement.recipes) {
+        recipe.nextRunTick = startingTick + recipe.intervalTicks;
+      }
+    }
+    world.weather = {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: startingTick + WORLD_TICKS_PER_DAY,
+    };
+    stepWorld(world);
+    expect(world.meta.completedTick).toBe(startingTick);
+    assertWorldInvariants(world);
+
+    const migrationRepository = new MemoryRepository(legacyRuntimeSaveRecord(world));
+    const migration = await createTideweftRuntime(migrationRepository);
+    expect(migration.getUIView().saveWarning).toBeUndefined();
+    await migration.save();
+    const migratedRecord = migrationRepository.snapshot();
+    const migratedEnvelope = savedEnvelope(migrationRepository);
+    const migratedWorld = deserializeWorld(String(migratedEnvelope.world));
+    const migratedSettlement = deserializeSettlementEcologyState(
+      migratedEnvelope.settlementEcology,
+    );
+    const keeperIndex = migratedWorld.residents.findIndex(({ identity }) => (
+      identity.stableId === migratedSettlement.identity.keeperActorId
+    ));
+    const keeper = migratedWorld.residents[keeperIndex];
+    if (keeper === undefined) throw new Error("keeper night fixture lost its human owner");
+    expect(keeper.identity.stableId).toBe(expectedKeeper.identity.stableId);
+    expect(migratedWorld.meta.completedTick).toBe(startingTick);
+    expect(keeper.circadian).toBeUndefined();
+    expect(keeper.activeContractId).toBeNull();
+    expect(keeper.location).toEqual({
+      kind: "settlement",
+      settlementId: keeper.homeSettlementId,
+    });
+
+    keeper.condition.exhaustion = 360_000;
+    keeper.needs.rest = 480_000;
+    keeper.perception = createActorPerceptionState(
+      keeper.identity.stableId,
+      startingTick,
+    );
+    const quietResponse = {
+      ...createPorterResponseState(keeper.identity.stableId, startingTick),
+      nextThinkTick: startingTick + WORLD_TICKS_PER_DAY,
+    };
+    const preparedRecord = withCurrentEnvelopeFields(migratedRecord, {
+      world: serializeWorld(migratedWorld),
+      porterResponse: quietResponse,
+    });
+    migration.destroy();
+
+    guardianPerceptionHarness.observerId = keeper.identity.stableId;
+    guardianPerceptionHarness.handlerId = "TEST-NO-KEEPER-NIGHT-SUBJECT";
+    const repository = new MemoryRepository(preparedRecord);
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+
+    // Loading and saving alone preserves the legacy absence exactly. The
+    // first lawful ordinary world tick is the adoption boundary.
+    await runtime.save();
+    let envelope = savedEnvelope(repository);
+    let savedWorld = deserializeWorld(String(envelope.world));
+    expect(savedWorld.residents[keeperIndex]?.circadian).toBeUndefined();
+
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    envelope = savedEnvelope(repository);
+    savedWorld = deserializeWorld(String(envelope.world));
+    const restingKeeper = savedWorld.residents[keeperIndex];
+    if (restingKeeper?.circadian === undefined) {
+      throw new Error("runtime did not bind the keeper's first home rest posture");
+    }
+    const restingTick = savedWorld.meta.completedTick;
+    expect(restingTick).toBe(startingTick + 1);
+    expect(restingKeeper.identity).toEqual(keeper.identity);
+    expect(restingKeeper.location).toEqual(keeper.location);
+    expect(restingKeeper.circadian).toMatchObject({
+      policy: { profileId: "day-active", drivers: ["clock"] },
+      restDestinationArrived: true,
+      posture: { state: "resting", enteredAtTick: restingTick },
+    });
+    expect(restingTick).toBe(wakeTick - 1);
+
+    // The generic kernel already proves the 21-tick settle transition. Stage
+    // its canonical resulting receipt at this same physical/tick authority so
+    // this expensive runtime test stays focused on persistence and exact wake.
+    const restingRecord = repository.snapshot();
+    const asleepWorld = deserializeWorld(String(envelope.world));
+    const asleepKeeper = replaceResidentCircadian(restingKeeper, {
+      atTick: restingTick,
+      circadian: {
+        ...restingKeeper.circadian,
+        posture: {
+          state: "asleep",
+          enteredAtTick: Math.max(0, restingTick - 21),
+        },
+      },
+    });
+    asleepWorld.residents[keeperIndex] = asleepKeeper;
+    assertWorldInvariants(asleepWorld);
+    const asleepWorldBytes = serializeWorld(asleepWorld);
+    const asleepRecord = withCurrentEnvelopeFields(restingRecord, {
+      world: asleepWorldBytes,
+    });
+    runtime.destroy();
+
+    const asleepRepository = new MemoryRepository(asleepRecord);
+    const reloaded = await createTideweftRuntime(asleepRepository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    await reloaded.save();
+    expect(savedEnvelope(asleepRepository).world).toBe(asleepWorldBytes);
+    expect(wakeTick % WORLD_TICKS_PER_DAY).toBeGreaterThanOrEqual(
+      WORLD_DAWN_START_TICK - 30,
+    );
+    expect(wakeTick % WORLD_TICKS_PER_DAY).toBeLessThanOrEqual(
+      WORLD_DAWN_START_TICK + 30,
+    );
+
+    advancePlayerSteps(reloaded, 10);
+    await reloaded.save();
+    const awakeWorld = deserializeWorld(String(savedEnvelope(asleepRepository).world));
+    expect(awakeWorld.meta.completedTick).toBe(wakeTick);
+    expect(awakeWorld.residents[keeperIndex]?.circadian?.posture).toEqual({
+      state: "awake",
+      enteredAtTick: wakeTick,
+    });
+    expect(awakeWorld.residents[keeperIndex]?.identity).toEqual(keeper.identity);
+    expect(awakeWorld.residents[keeperIndex]?.location).toEqual(keeper.location);
     reloaded.destroy();
   }, 180_000);
 

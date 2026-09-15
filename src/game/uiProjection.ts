@@ -94,6 +94,7 @@ import {
 import { VISIBILITY_DIRECT, type PerceptionResult } from "./perception";
 import {
   isCurrentPerceptionSnapshot,
+  observableResidentRestState,
   projectAdriftView,
   projectPerception,
   projectResidentRoutePosition,
@@ -143,6 +144,9 @@ export interface UIProjectionOptions {
 
 function residentConditionLabels(resident: ResidentState): string[] {
   const labels: string[] = [];
+  const restState = observableResidentRestState(resident);
+  if (restState === "asleep") labels.push("Asleep");
+  else if (restState === "resting") labels.push("Resting");
   if (resident.condition.wetness >= 660_000) labels.push("Soaked");
   else if (resident.condition.wetness >= 260_000) labels.push("Wet");
   if (resident.condition.coldStress >= 660_000) labels.push("Cold");
@@ -154,6 +158,9 @@ function residentConditionLabels(resident: ResidentState): string[] {
 }
 
 function observableResidentEmotion(resident: ResidentState): string {
+  if (observableResidentRestState(resident) === "asleep") {
+    return "Hard to read while asleep";
+  }
   if (resident.perception.suspicion === "alert") return "Appears alert";
   if (resident.perception.suspicion === "searching") return "Appears wary";
   if (
@@ -171,6 +178,8 @@ function observableResidentEmotion(resident: ResidentState): string {
 }
 
 function observableResidentBehavior(resident: ResidentState): string {
+  const restState = observableResidentRestState(resident);
+  if (restState === "asleep") return "Asleep here";
   switch (resident.perception.suspicion) {
     case "noticed": return "Listening toward a nearby sound";
     case "suspicious": return "Investigating something nearby";
@@ -179,6 +188,7 @@ function observableResidentBehavior(resident: ResidentState): string {
     case "searching": return "Searching the nearby area";
     case "unaware": break;
   }
+  if (restState === "resting") return "Resting here";
   return resident.condition.sheltering
     ? "Holding position in unsafe weather"
     : resident.activeContractId !== null

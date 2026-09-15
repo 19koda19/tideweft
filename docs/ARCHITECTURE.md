@@ -105,17 +105,20 @@ misleading green/yellow ground color. Independent canopy/interior cover, fire
 and carried lantern sources, shadow maps, astronomy, and complete circadian
 schedules are not claimed by this first outdoor-light slice.
 
-`src/game/livingCircadian.ts` is the version-1 species-neutral routine kernel.
-It projects AWAKE, RESTING, ASLEEP, and STARTLED from the one world clock, a
-stable identity-derived phase offset, an authenticated rest destination,
-lawful current disturbance, and explicit priority inputs. Each profile also
-projects a stable bounded next-evaluation hint; runtime scheduling does not yet
-consume that hint.
-Its four reusable policies are day-active, night-active, twilight-active, and
-adaptive-active; orthogonal driver vocabulary is clock, tide, weather, and
-opportunity. A policy owns a fixed-point wake-sensitivity threshold rather than
-making every nearby observation an automatic wake event. Rendering, wall time,
-array order, and region loading are not routine inputs.
+`src/sim/livingCircadian.ts` owns the version-1 species-neutral persistence,
+profile, canonical clock-preference, resident-home binding, and observation-
+admission contracts. `src/game/livingCircadian.ts` consumes and re-exports that
+lower authority while retaining the higher routine projection and action
+logic. Together they project AWAKE, RESTING, ASLEEP, and STARTLED from the one
+world clock, a stable identity-derived phase offset, an authenticated rest
+destination, lawful current disturbance, and explicit priority inputs. Each
+profile also projects a stable bounded next-evaluation hint; runtime scheduling
+does not yet consume that hint. Their four reusable policies are day-active,
+night-active, twilight-active, and adaptive-active; orthogonal driver
+vocabulary is clock, tide, weather, and opportunity. A policy owns a fixed-
+point wake-sensitivity threshold rather than making every nearby observation
+an automatic wake event. Rendering, wall time, array order, and region loading
+are not routine inputs.
 
 `src/game/coreEcologyCircadianPolicy.ts` owns a frozen declarative binding
 registry whose key is the combination of species and existing activity
@@ -164,10 +167,12 @@ not mutable views of the current catalog.
 
 These two representative bindings are not catalog-wide circadian adoption.
 The other 43 core-wildlife profiles—including the unbound harbor seal—do not
-acquire a physical routine from this registry. Human work/home/watch schedules,
-both dogs' settling and waking, player REST/SLEEP, and complete Turning Day
-closure remain absent. Later consumers must reuse the same kernel and physical
-authority rather than add species schedulers.
+acquire a physical routine from this registry. The bounded working-dog and
+food-store-keeper adapters described below reuse the kernel without widening
+that wildlife registry. The independent dog, bonded/player companions, the
+other 41 humans, player REST/SLEEP, and complete Turning Day closure remain
+absent. Later consumers must reuse the same kernel and physical authority rather
+than add species or human schedulers.
 
 The local Alpha44 **Ten Minutes** candidate adds one bounded player `WAIT 10
 MIN` action owned by `src/game/runtime.ts`. A wait receipt records the starting
@@ -232,6 +237,49 @@ may label Resting or Asleep; neither exposes the schedule, phase offset, wake
 threshold, destination ID, kennel custody graph, or assignment internals. This
 is not a human routine, independent-dog routine, bonded/player companion
 routine, or player REST/SLEEP.
+
+The local Alpha46 **The Keeper Sleeps** candidate lowers the persistent
+circadian contract far enough for the existing resident simulation to own one
+human receipt without creating another human root. A fail-closed adapter in
+`src/game/settlementKeeperCircadian.ts` authenticates exactly the resident whose
+stable identity already equals the starting-harbor food-store keeper named by
+settlement ecology. The resident's existing home-settlement ID is the complete
+physical rest anchor for this slice; no house, bed, interior coordinate, shop
+hours, or commute is invented.
+
+Neutral night preference can commit RESTING and then ASLEEP only while that
+same resident is physically at the home settlement and has no contract. Route
+location, accepted work, non-neutral porter response, storm, urgent resident
+needs, and qualifying current strong lawful disturbance override rest. The
+sim owner admits all human observations only after same-tick commands have
+applied: an authenticated sleeping resident at home receives hearing and scent
+but no new vision, while a same-tick accepted contract makes ordinary vision
+eligible and the stale sleeping posture is reconciled awake. The complete
+batch is canonicalized before channel filtering, so filtering cannot launder a
+malformed or forged observation. Downstream systems that require current
+keeper sight—including domestic-animal recovery—consume the admitted current
+perception record rather than the raw pre-gate observation batch.
+
+Resident exhaustion and rest-need recovery now require the bound receipt,
+physical home arrival, a Resting or Asleep posture, a current rest preference,
+and no qualifying disturbance, storm, or active work. Shelter, idleness,
+travel, stale posture at dawn, and low-exertion route presence are not
+restorative. Existing explicit drying, cold moderation, clinic/medicine rules,
+and every legacy unbound resident retain their prior owners. Contract
+advancement reauthenticates a present receipt after location changes, and loss
+of home arrival wakes it.
+
+`ResidentState` gains only an additive optional shared circadian receipt.
+Legacy absence stays absent through serialization until the exact keeper is
+lawfully processed at home; an older keeper encountered away remains unbound.
+Outer save version 31, `RegionalEcologyStateV6`, and settlement ecology version
+4 do not change. Present state must match stable human identity, home
+settlement, current location/contract, cognition tick, destination digest, and
+the shared day-active policy. Chart, Relief, quick inspection, and ABOUT may
+show current Resting or Asleep posture, but expose no schedule, phase,
+destination identity, wake threshold, raw need, or unseen observation. This is
+one representative keeper, not every-human home life, a physical interior,
+player REST/SLEEP, or Turning Day closure.
 
 ## Authoritative tick
 
@@ -1153,7 +1201,12 @@ working dog only: its shared day-active preference can lead it physically to
 its authenticated kennel, but travel remains awake, restorative posture begins
 only on arrival, and danger, needs, and retained work remain authoritative.
 The independent dog, humans, bonded/player companions, and player REST/SLEEP
-remain outside that adapter.
+remain outside that dog adapter. Alpha46 adds a separate lower resident adapter
+for the one existing food-store keeper: their actual home settlement gates
+Resting/Asleep and recovery, same-tick work and other current priorities wake
+them, and the post-command human sensory boundary removes only sleeping vision.
+It does not bind the other 41 humans, invent an interior, or add player
+REST/SLEEP.
 
 `src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
@@ -1741,8 +1794,21 @@ startled deferral, optional dog-record persistence, post-recovery routine
 reprojection, and direct-detail Resting/Asleep presentation are covered without
 changing outer save v31, settlement ecology v4, or working-animal state v2.
 Humans, the independent dog, bonded/player companions, and player REST/SLEEP
-remain excluded, and this local candidate has no push, CI, Pages, or live-
-verification evidence.
+remain excluded from Alpha45, and that local candidate has no push, CI, Pages,
+or live-verification evidence.
+
+The local Alpha46 **The Keeper Sleeps** candidate connects exactly the existing
+starting-harbor food-store keeper to the same shared day-active authority. Its
+home settlement is an authenticated rest anchor, not an invented house or bed;
+route work, contracts, current response, storm, urgent needs, and lawful strong
+disturbance retain priority. The lower simulation owns the optional resident
+receipt, posture-gated recovery, post-contract reconciliation, and the final
+post-command sensory gate: an asleep keeper cannot acquire new vision, while
+hearing and scent remain lawful wake channels and same-tick work restores
+ordinary visual admission. Direct inspection exposes only Resting/Asleep.
+Legacy absence remains byte-stable until a lawful home tick, outer save v31 is
+unchanged, and the slice claims no other human schedule, interior, autonomous
+commute, player REST/SLEEP, push, CI, Pages, or live verification.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

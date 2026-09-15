@@ -1,5 +1,10 @@
 import { waterDepthAt } from "./terrain";
-import { FIXED_POINT, type WorldState, type WorldView } from "./types";
+import {
+  FIXED_POINT,
+  type ResidentState,
+  type WorldState,
+  type WorldView,
+} from "./types";
 import { copyInventory } from "./util";
 import { currentInventoryTotals } from "./world";
 import { calculateNetworkMetrics } from "./network";
@@ -7,10 +12,31 @@ import {
   canonicalizeActorPerceptionState,
   type ActorPerceptionState,
 } from "./actorPerception";
+import {
+  canonicalizeResidentCircadianState,
+  type LivingCircadianPersistentState,
+} from "./livingCircadian";
 
 function copyActorPerception(state: ActorPerceptionState): ActorPerceptionState {
   const copy = canonicalizeActorPerceptionState(state);
   if (copy === null) throw new Error("Cannot project malformed actor perception state");
+  return copy;
+}
+
+function copyResidentCircadian(
+  resident: ResidentState,
+  atTick: number,
+): LivingCircadianPersistentState {
+  const arrivedHome = resident.location.kind === "settlement"
+    && resident.location.settlementId === resident.homeSettlementId
+    && resident.activeContractId === null;
+  const copy = canonicalizeResidentCircadianState(resident.circadian, {
+    residentStableId: resident.identity.stableId,
+    homeSettlementId: resident.homeSettlementId,
+    atTick,
+    arrivedHome,
+  });
+  if (copy === null) throw new Error("Cannot project malformed resident circadian state");
   return copy;
 }
 
@@ -58,6 +84,9 @@ export function createWorldView(world: WorldState): WorldView {
         history: resident.identity.history.map((event) => ({ ...event })),
       },
       perception: copyActorPerception(resident.perception),
+      ...(Object.hasOwn(resident, "circadian")
+        ? { circadian: copyResidentCircadian(resident, world.meta.completedTick) }
+        : {}),
       condition: { ...resident.condition },
       playerKnowledge: {
         ...resident.playerKnowledge,

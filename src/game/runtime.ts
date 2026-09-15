@@ -6,6 +6,7 @@ import {
   deserializeWorld,
   FIXED_POINT,
   projectWorldTime,
+  replaceResidentCircadian,
   residentKnowsFact,
   serializeWorld,
   STRAND_AUTOMATION_THRESHOLD,
@@ -672,6 +673,7 @@ import {
   type PorterResponseInput,
   type PorterResponseState,
 } from "./porterResponse";
+import { projectSettlementKeeperCircadian } from "./settlementKeeperCircadian";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
 import {
   LIVING_ACTOR_PLAYER_CHOICE_VERSION,
@@ -3518,26 +3520,26 @@ function commitRuntimeSettlementDomesticAnimalRecovery(
   return resolved?.state ?? null;
 }
 
-function runtimeDirectAnimalObservations(
-  observations: readonly ActorObservation[],
+function runtimeCurrentDirectAnimalObservations(
+  perception: ActorPerceptionState,
   observerActorId: string,
   actorIds: readonly string[],
   expectedSpecies: CoreWildlifeSpecies,
   atTick: number,
 ): readonly ActorObservation[] {
-  const eligible = new Set(actorIds);
-  return Object.freeze(observations.filter((observation) => (
-    observation.observerId === observerActorId
-    && observation.subjectId !== null
-    && eligible.has(observation.subjectId)
-    && observation.observedAtTick === atTick
-    && observation.channel === "vision"
-    && observation.perceivedClass === expectedSpecies
-    && observation.identification === "identified"
-    && observation.area.radiusUnits === 0
-    && observation.confidence > 0
-    && observation.salience > 0
-  )).slice().sort((left, right) => (
+  if (perception.actorId !== observerActorId || perception.tick !== atTick) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(actorIds.flatMap((actorId) => {
+    const observation = runtimeRetainedDirectAnimalObservation(
+      perception,
+      observerActorId,
+      actorId,
+      expectedSpecies,
+      atTick,
+    );
+    return observation === null ? [] : [observation];
+  }).sort((left, right) => (
     compareText(left.subjectId!, right.subjectId!) || compareText(left.id, right.id)
   )));
 }
@@ -3619,7 +3621,6 @@ function advanceRuntimeDomesticRecoveryFromCaretakerSight(input: Readonly<{
   core: CoreEcologyAggregatePatchState;
   caretakerActorId: string;
   caretakerPerception: ActorPerceptionState;
-  observations: readonly ActorObservation[];
   atTick: number;
 }>): SettlementDomesticAnimalRecoveryState | null {
   const current = input.state.currentCase;
@@ -3628,8 +3629,8 @@ function advanceRuntimeDomesticRecoveryFromCaretakerSight(input: Readonly<{
     identity.stableId === current.groupId
   ));
   if (group === undefined || current.caretakerActorId !== input.caretakerActorId) return null;
-  const direct = runtimeDirectAnimalObservations(
-    input.observations,
+  const direct = runtimeCurrentDirectAnimalObservations(
+    input.caretakerPerception,
     input.caretakerActorId,
     current.memberActorIds,
     group.identity.species,
@@ -7322,6 +7323,58 @@ function stepRuntimePorterResponse(
   return applied.ok && applied.state !== null ? applied.state : null;
 }
 
+/**
+ * Commits the representative keeper's routine only after every human-owned
+ * perception, location, contract, and porter-response owner has reached the
+ * same authoritative tick. A legacy keeper first encountered away from home
+ * remains unbound until a later physical home arrival; no schedule fact is
+ * invented remotely.
+ */
+function advanceRuntimeSettlementKeeperCircadian(
+  currentWorld: WorldState,
+  settlement: SettlementEcologyState,
+  response: PorterResponseState,
+): WorldState | null {
+  const atTick = currentWorld.meta.completedTick;
+  const matchingResidents = currentWorld.residents.filter(({ identity }) => (
+    identity.stableId === settlement.identity.keeperActorId
+  ));
+  if (
+    matchingResidents.length !== 1
+    || response.actorId !== settlement.identity.keeperActorId
+    || response.tick !== atTick
+  ) return null;
+  const keeper = matchingResidents[0]!;
+  const physicallyHome = keeper.location.kind === "settlement"
+    && keeper.location.settlementId === keeper.homeSettlementId
+    && keeper.activeContractId === null;
+  const projection = projectSettlementKeeperCircadian({
+    resident: keeper,
+    settlementEcology: settlement,
+    porterResponse: response,
+    weather: currentWorld.weather,
+    atTick,
+  });
+  if (projection === null) {
+    return keeper.circadian === undefined && !physicallyHome
+      ? currentWorld
+      : null;
+  }
+  let replacement: ResidentState;
+  try {
+    replacement = replaceResidentCircadian(keeper, {
+      atTick,
+      circadian: projection.receipt,
+    });
+  } catch {
+    return null;
+  }
+  const residentIndex = currentWorld.residents.indexOf(keeper);
+  if (residentIndex < 0) return null;
+  currentWorld.residents[residentIndex] = replacement;
+  return currentWorld;
+}
+
 function runtimeActionableLivingActorRequests(
   state: LivingActorPlayerChoiceState,
   tick: number,
@@ -10328,7 +10381,6 @@ export async function createTideweftRuntime(
         core: coreEcologyForStep,
         caretakerActorId: porter.address.actorId,
         caretakerPerception: porter.resident.perception,
-        observations: porterCoreObservations,
         atTick: world.meta.completedTick,
       });
       if (sightAdvancedRecovery === null) {
@@ -10982,6 +11034,15 @@ export async function createTideweftRuntime(
       physicalCargo = resolvedRegionalResources.physicalCargo;
       settlementEcology = settlementEcologyAfterAggregate;
       porterResponse = acceptedPorterResponse;
+      const circadianWorld = advanceRuntimeSettlementKeeperCircadian(
+        world,
+        settlementEcology,
+        porterResponse,
+      );
+      if (circadianWorld === null) {
+        throw new Error("Settlement keeper circadian state could not commit");
+      }
+      world = circadianWorld;
       clearPlayerSenseSamples();
       commandQueue = [];
       fieldResourceEcology = advanceFieldResourceEcology(

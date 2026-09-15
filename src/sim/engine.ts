@@ -34,6 +34,14 @@ import {
   type ActorObservation,
   type ActorPerceptionState,
 } from "./actorPerception";
+import {
+  canonicalizeLivingCircadianPersistentState,
+  canonicalizeResidentCircadianState,
+  gateResidentCircadianObservations,
+  projectLivingCircadianClockPreference,
+  replaceResidentCircadian,
+  residentCircadianUrgentPreference,
+} from "./livingCircadian";
 
 const WEATHER_DOMAIN = 0x5745_4154;
 const MAX_EVENT_HISTORY = 512;
@@ -853,13 +861,12 @@ function canonicalResidentPerceptionFrame(
       || residentIds.has(residentId)
       || entry.actorId !== resident.identity.stableId
     ) return empty;
-    const canonical = canonicalizeActorObservations(entry.observations);
-    if (
-      canonical.length !== entry.observations.length
-      || canonical.some((observation) =>
-        observation.observerId !== resident.identity.stableId
-        || observation.observedAtTick !== tick)
-    ) return empty;
+    const canonical = gateResidentCircadianObservations({
+      resident,
+      targetTick: tick,
+      observations: entry.observations,
+    });
+    if (canonical === null) return empty;
     residentIds.add(residentId);
     canonicalEntries.push({ residentId, observations: canonical });
   }
@@ -948,6 +955,109 @@ function activeContractForResident(world: WorldState, resident: ResidentState): 
   );
 }
 
+function residentHasCircadianBinding(resident: ResidentState): boolean {
+  return Object.hasOwn(resident, "circadian");
+}
+
+/**
+ * A clock preference is never itself restorative physiology. A bound human
+ * recovers only from the canonical receipt proving that this body has arrived
+ * home, is actually resting or asleep, and is free of route work.
+ */
+function residentCircadianRestIsRestorative(
+  world: WorldState,
+  resident: ResidentState,
+): boolean {
+  if (!residentHasCircadianBinding(resident)) return false;
+  const arrivedHome = resident.location.kind === "settlement"
+    && resident.location.settlementId === resident.homeSettlementId
+    && resident.activeContractId === null;
+  const circadian = canonicalizeResidentCircadianState(resident.circadian, {
+    residentStableId: resident.identity.stableId,
+    homeSettlementId: resident.homeSettlementId,
+    atTick: resident.perception.tick,
+    arrivedHome,
+  });
+  if (
+    circadian === null
+    || !circadian.restDestinationArrived
+    || (circadian.posture.state !== "resting" && circadian.posture.state !== "asleep")
+    || !arrivedHome
+  ) return false;
+
+  // Runtime response projection follows this pure sim step. Fail closed on
+  // every current cognition/weather signal that can make that response active,
+  // so a prior-tick sleeping receipt cannot grant stale recovery first.
+  const currentStrongSignal = resident.perception.beliefs.some((belief) => (
+    belief.lastObservedTick === resident.perception.tick
+    && belief.strongInterrupt
+    && belief.salience >= circadian.policy.wakeSensitivity
+  ));
+  if (currentStrongSignal || world.weather.kind === "storm") return false;
+
+  const clockPreference = projectLivingCircadianClockPreference(
+    resident.identity.stableId,
+    resident.perception.tick,
+    circadian.policy,
+  );
+  if (clockPreference === null) return false;
+  const urgentPreference = residentCircadianUrgentPreference({
+    needs: resident.needs,
+    exhaustion: resident.condition.exhaustion,
+  });
+  return (urgentPreference?.preference ?? clockPreference) === "rest";
+}
+
+/**
+ * Contract advancement owns coarse resident location. Keep an existing routine
+ * receipt cross-root honest after that owner commits, but leave all clock and
+ * sleep/settle decisions to the game adapter.
+ */
+function reconcileResidentCircadianAfterContractAdvance(
+  world: WorldState,
+  tick: number,
+): void {
+  for (let index = 0; index < world.residents.length; index += 1) {
+    const resident = world.residents[index];
+    if (resident === undefined || !residentHasCircadianBinding(resident)) continue;
+    const current = canonicalizeLivingCircadianPersistentState(resident.circadian);
+    if (current === null) {
+      throw new Error(`Resident ${resident.id} has malformed circadian state`);
+    }
+    const arrivedHome = resident.location.kind === "settlement"
+      && resident.location.settlementId === resident.homeSettlementId
+      && resident.activeContractId === null;
+    const lostRestDestination = !arrivedHome
+      && (current.posture.state === "resting" || current.posture.state === "asleep");
+    const posture = lostRestDestination
+      ? { state: "awake" as const, enteredAtTick: tick }
+      : current.posture;
+    if (
+      current.restDestinationArrived === arrivedHome
+      && !lostRestDestination
+    ) {
+      const authenticated = canonicalizeResidentCircadianState(current, {
+        residentStableId: resident.identity.stableId,
+        homeSettlementId: resident.homeSettlementId,
+        atTick: tick,
+        arrivedHome,
+      });
+      if (authenticated === null) {
+        throw new Error(`Resident ${resident.id} has unbound circadian state`);
+      }
+      continue;
+    }
+    world.residents[index] = replaceResidentCircadian(resident, {
+      atTick: tick,
+      circadian: {
+        ...current,
+        restDestinationArrived: arrivedHome,
+        posture,
+      },
+    });
+  }
+}
+
 function residentRouteEventLocus(resident: ResidentState): Record<string, SimEventDatum> {
   return resident.location.kind === "route"
     ? {
@@ -989,11 +1099,15 @@ function updateResidentConditions(world: WorldState, tick: number): void {
         condition.coldStress = clampInteger(
           condition.coldStress + Math.max(100, Math.trunc((windPressure * exposure) / FIXED_POINT / 90)),
         );
-        condition.exhaustion = Math.max(0, condition.exhaustion - 1_000);
+        if (!residentHasCircadianBinding(resident)) {
+          condition.exhaustion = Math.max(0, condition.exhaustion - 1_000);
+        }
       } else {
         condition.wetness = Math.max(0, condition.wetness - 22_000);
         condition.coldStress = Math.max(0, condition.coldStress - 16_000);
-        condition.exhaustion = Math.max(0, condition.exhaustion - 5_000);
+        if (!residentHasCircadianBinding(resident)) {
+          condition.exhaustion = Math.max(0, condition.exhaustion - 5_000);
+        }
       }
       if (!weatherStillUnsafe && condition.coldStress < 320_000) {
         condition.sheltering = false;
@@ -1078,7 +1192,12 @@ function updateResidentConditions(world: WorldState, tick: number): void {
     } else {
       condition.wetness = Math.max(0, condition.wetness - 28_000);
       condition.coldStress = Math.max(0, condition.coldStress - 20_000);
-      condition.exhaustion = Math.max(0, condition.exhaustion - 2_500);
+      if (
+        !residentHasCircadianBinding(resident)
+        || residentCircadianRestIsRestorative(world, resident)
+      ) {
+        condition.exhaustion = Math.max(0, condition.exhaustion - 2_500);
+      }
     }
     if (condition.exhaustion >= 720_000) {
       condition.emotion = "tired";
@@ -1154,7 +1273,10 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
     for (const resident of residents) {
       const hungerGrowth = Math.trunc((34_000 * pressure) / FIXED_POINT);
       resident.needs.food = clampInteger(resident.needs.food + hungerGrowth - (foodServed ? 68_000 : 0) - (waterServed ? 8_000 : 0));
-      resident.needs.rest = clampInteger(resident.needs.rest + (isRestPeriod ? -52_000 : 24_000));
+      const restDelta = residentHasCircadianBinding(resident)
+        ? residentCircadianRestIsRestorative(world, resident) ? -52_000 : 24_000
+        : isRestPeriod ? -52_000 : 24_000;
+      resident.needs.rest = clampInteger(resident.needs.rest + restDelta);
       const relationshipTrust = resident.relationships.reduce((sum, relationship) => sum + relationship.trust, 0);
       const averageTrust = resident.relationships.length === 0 ? 0 : Math.trunc(relationshipTrust / resident.relationships.length);
       resident.needs.belonging = clampInteger(resident.needs.belonging + 18_000 - Math.trunc(averageTrust / 18));
@@ -1176,7 +1298,10 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
     resident.needs.food = clampInteger(
       resident.needs.food + Math.trunc((34_000 * pressure) / FIXED_POINT),
     );
-    resident.needs.rest = clampInteger(resident.needs.rest + (isRestPeriod ? -18_000 : 24_000));
+    const restDelta = residentHasCircadianBinding(resident)
+      ? 24_000
+      : isRestPeriod ? -18_000 : 24_000;
+    resident.needs.rest = clampInteger(resident.needs.rest + restDelta);
     resident.intention = resident.activeContractId !== null ? "carry" : "work";
     resident.nextThinkTick = tick + 15 + (resident.identity.originActorOrdinal % 31);
   }
@@ -1775,6 +1900,7 @@ export function stepWorld(
   updateProjects(world, tick);
   if (tick % 60 === 0) generateDemandContracts(world, tick);
   advanceContracts(world, tick);
+  reconcileResidentCircadianAfterContractAdvance(world, tick);
   decayRoutes(world, tick);
   pruneTerminalContracts(world);
   world.meta.completedTick = tick;

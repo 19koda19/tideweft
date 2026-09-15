@@ -794,9 +794,11 @@ catalog now names the otter's broad rhythm as nocturnal, while every historical
 catalog snapshot keeps its exact authenticated record. Outer save v31, strict
 v30/V6 adoption, nested ecology V6, and wildlife actor schema/version 1 remain
 unchanged. This is two representative physical routines, not catalog-wide
-sleep: humans, both dogs, other wildlife bindings, player REST/SLEEP,
-production crepuscular/tide-driven routines, and complete Turning Day closure
-remain unfinished.
+sleep: the other 43 wildlife profiles, the independent dog, bonded/player
+companions, the other 41 humans, player REST/SLEEP, production
+crepuscular/tide-driven routines, and complete Turning Day closure remain
+unfinished. The bounded working-dog and food-store-keeper routines described
+below reuse the shared kernel rather than changing that wildlife registry.
 
 The local **Ten Minutes** Alpha44 candidate adds one explicit field action:
 `WAIT 10 MIN`. It advances exactly ten displayed world minutes through the same
@@ -830,6 +832,35 @@ phase offset, wake threshold, stable database identity, kennel destination ID,
 or assignment graph. The compact optional routine receipt persists in the
 existing dog actor record without changing outer save version 31, settlement
 ecology version 4, or working-animal state version 2.
+
+The local **The Keeper Sleeps** Alpha46 candidate gives exactly one existing
+human the same bounded daily continuity: the starting-harbor food-store keeper
+already identified by settlement ecology. Their existing home settlement is
+the physical rest anchor in this slice. It does not invent a house, bed,
+interior, shop-hours schedule, or commute. Neutral night preference can become
+Resting and then Asleep only while the exact resident is home and free of an
+active Promise contract; dawn wakes the same stable person. Route work,
+contracts, a non-neutral porter response, storm, urgent needs, and qualifying
+current strong lawful disturbance still win.
+
+Sleep has a sensory consequence. Human observation is finalized after
+same-tick commands: a keeper who remains asleep receives no new vision, while
+hearing and scent can still carry lawful wake evidence. If the keeper accepts
+work on that tick, vision remains available and the invalidated rest posture
+wakes instead of erasing the observation. Exhaustion and rest need recover
+only from the authenticated home Resting or Asleep posture; shelter, idleness,
+travel, and stale state do not count. Existing drying, temperature, clinic,
+medicine, contract, need, and intention owners remain unchanged.
+
+Directly observable Chart, Relief, quick inspection, and ABOUT can say Resting
+or Asleep without revealing schedule timing, phase, destination identity,
+thresholds, exact needs, or unseen facts. An asleep keeper does not emit
+ordinary state speech. One optional resident circadian receipt persists the
+same stable identity and bout; legacy residents without it remain valid and an
+older keeper away from home remains unbound until a lawful home tick. Outer
+save version 31 and RegionalEcologyStateV6 remain unchanged. This is not an
+every-human schedule, autonomous settlement life, player REST/SLEEP, or
+Turning Day closure.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -1596,10 +1627,19 @@ working dog to the same shared day-active policy and its actual kennel. The dog
 remains awake while physically travelling there, can Rest or become Asleep only
 after arrival, and wakes at its stable-identity active boundary; lawful danger,
 needs, and retained work still win. Visible direct inspection may show Resting
-or Asleep without disclosing schedule internals. Humans, the independent dog,
-bonded/player companion routines, broader animal bindings, and player
-REST/SLEEP remain unfinished. Alpha45 is an unpublished local candidate, not a
-pushed, CI-verified, Pages-verified, or live release.
+or Asleep without disclosing schedule internals. Humans remain outside that
+Alpha45 adapter. Local Alpha46 **The Keeper Sleeps** adds exactly the existing
+starting-harbor food-store keeper through a lower shared resident receipt and
+the real home settlement, with no house, bed, interior, commute, or second
+human scheduler. Work, contracts, storm, urgent needs, and lawful strong
+disturbance override rest; bound recovery requires actual home Resting/Asleep.
+Post-command sensory admission blocks new vision only while sleep remains
+valid, preserving hearing and scent and permitting same-tick work to wake and
+see normally. Direct inspection exposes posture but no private schedule or
+needs. All other humans, the independent dog, bonded/player companion routines,
+broader animal bindings, and player REST/SLEEP remain unfinished. Alpha46 is an
+unpublished local candidate, not a pushed, CI-verified, Pages-verified, or live
+release.
 
 Live through Alpha 39:
 

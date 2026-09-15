@@ -5,7 +5,16 @@ import {
   queryActorSearch,
   type ActorObservation,
 } from "../sim/actorPerception";
-import { createWorld, createWorldView, stepWorld } from "../sim/public";
+import {
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_VERSION,
+  RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+  createWorld,
+  createWorldView,
+  replaceResidentCircadian,
+  residentHomeRestDestinationId,
+  stepWorld,
+} from "../sim/public";
 import type { ResidentState, WorldState, WorldView } from "../sim/types";
 import {
   TILE_UNITS,
@@ -38,6 +47,66 @@ interface PresentationFixture {
 }
 
 describe("existing-human perception presentation", () => {
+  it("shows only a directly observed keeper's present rest posture", () => {
+    const state = createWorld("keeper sleep is observable, not omniscient", "standard");
+    const initial = createWorldView(state);
+    const player = createPlayer(initial);
+    const settlementId = initial.settlements.find(({ tileIndex }) => (
+      tileIndex === playerTileIndex(player)
+    ))?.id;
+    const residentIndex = state.residents.findIndex((resident) => (
+      resident.location.kind === "settlement"
+      && resident.location.settlementId === settlementId
+      && resident.homeSettlementId === settlementId
+    ));
+    const resident = state.residents[residentIndex];
+    if (resident === undefined) throw new Error("fixture needs a local human resident");
+    const restDestinationId = residentHomeRestDestinationId(
+      resident.identity.stableId,
+      resident.homeSettlementId,
+    );
+    if (restDestinationId === null) throw new Error("fixture needs a valid home destination");
+    state.residents[residentIndex] = replaceResidentCircadian(resident, {
+      atTick: state.meta.completedTick,
+      circadian: {
+        version: LIVING_CIRCADIAN_VERSION,
+        ownerId: LIVING_CIRCADIAN_OWNER_ID,
+        policy: RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+        restDestinationId,
+        restDestinationArrived: true,
+        posture: { state: "asleep", enteredAtTick: state.meta.completedTick },
+      },
+    });
+
+    const world = createWorldView(state);
+    const projectedResident = world.residents[residentIndex]!;
+    const perception = projectPerception(world, player);
+    const porter = projectGameView(world, player, {
+      selectedResidentId: projectedResident.id,
+      perception,
+    }).porters.find(({ id }) => id === String(projectedResident.id));
+    const about = projectUIView(world, player, createSessionState(world.seedText), {
+      selectedResidentId: projectedResident.id,
+      perception,
+    }).selectedResident;
+
+    expect(porter).toMatchObject({
+      quickLabel: expect.stringContaining(" · asleep"),
+      state: "resting",
+      conditionLabels: expect.arrayContaining(["Asleep"]),
+    });
+    expect(porter).not.toHaveProperty("speech");
+    expect(about?.observed).toContainEqual({
+      label: "Emotion",
+      value: "Hard to read while asleep",
+    });
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Asleep here" });
+    expect(about?.observed.find(({ label }) => label === "Current state")?.value)
+      .toContain("Asleep");
+    expect(about?.known.some(({ label }) => label === "Home")).toBe(false);
+    expect(JSON.stringify({ porter, about })).not.toContain(restDestinationId);
+  });
+
   it.each([
     {
       cognition: "noticed" as const,
@@ -212,9 +281,15 @@ describe("existing-human perception presentation", () => {
 
 function presentationFixture(
   cognition: PresentedCognition,
-  finalTick = cognition === "searching" ? 2 : 1,
+  finalTickOffset = cognition === "searching" ? 2 : 1,
 ): PresentationFixture {
-  const state = createWorld(`presentation ${cognition} ${finalTick}`, "standard");
+  const state = createWorld(
+    `presentation ${cognition} ${finalTickOffset}`,
+    "standard",
+  );
+  const initialTick = state.meta.completedTick;
+  const observationTick = initialTick + 1;
+  const finalTick = initialTick + finalTickOffset;
   const initial = createWorldView(state);
   const player = createPlayer(initial);
   const resident = state.residents[0];
@@ -230,10 +305,14 @@ function presentationFixture(
   if (!placement) throw new Error("fixture needs a resident placement");
   const observedPoint = translateWorldPosition(placement.position, 4_000, 0);
   const observation = cognition === "identified" || cognition === "searching"
-    ? identifiedObservation(resident, observedPoint, 1)
-    : heardObservation(resident, observedPoint, cognition, 1);
-  stepWorld(state, [], perceptionFrame(state, resident, observation, 1));
-  for (let tick = 2; tick <= finalTick; tick += 1) stepWorld(state);
+    ? identifiedObservation(resident, observedPoint, observationTick)
+    : heardObservation(resident, observedPoint, cognition, observationTick);
+  stepWorld(
+    state,
+    [],
+    perceptionFrame(state, resident, observation, observationTick),
+  );
+  for (let tick = observationTick + 1; tick <= finalTick; tick += 1) stepWorld(state);
 
   const world = createWorldView(state);
   const projectedResident = world.residents.find(({ id }) => id === resident.id);

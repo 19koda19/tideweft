@@ -15,6 +15,44 @@ export type {
 } from "./engine";
 export { assertWorldInvariants } from "./invariants";
 export { deserializeWorld, hashWorld, serializeWorld } from "./persistence";
+export {
+  LIVING_CIRCADIAN_DRIVERS,
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_PROFILE_IDS,
+  LIVING_CIRCADIAN_PROFILES,
+  LIVING_CIRCADIAN_STATES,
+  LIVING_CIRCADIAN_VERSION,
+  RESIDENT_CIRCADIAN_URGENT_BELONGING_NEED,
+  RESIDENT_CIRCADIAN_URGENT_EXHAUSTION,
+  RESIDENT_CIRCADIAN_URGENT_FOOD_NEED,
+  RESIDENT_CIRCADIAN_URGENT_REST_NEED,
+  RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+  RESIDENT_HOME_REST_DESTINATION_OWNER_ID,
+  canonicalizeLivingCircadianPersistentState,
+  canonicalizeLivingCircadianPolicy,
+  canonicalizeResidentCircadianState,
+  firstLivingCircadianActiveTick,
+  livingCircadianPhaseOffsetTicks,
+  livingCircadianProfile,
+  projectLivingCircadianClockPreference,
+  replaceResidentCircadian,
+  residentCircadianUrgentPreference,
+  residentHomeRestDestinationId,
+} from "./livingCircadian";
+export type {
+  LivingCircadianDriver,
+  LivingCircadianPersistentState,
+  LivingCircadianPolicy,
+  LivingCircadianPosture,
+  LivingCircadianPreference,
+  LivingCircadianProfile,
+  LivingCircadianProfileId,
+  LivingCircadianRhythm,
+  LivingCircadianState,
+  ReplaceResidentCircadianInput,
+  ResidentCircadianBinding,
+  ResidentCircadianUrgentPreference,
+} from "./livingCircadian";
 export { keyedChance, keyedRandomInt, keyedRandomU32, mixUint32, seedFromText } from "./rng";
 export type { RootSeed } from "./rng";
 export {

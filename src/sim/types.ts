@@ -1,4 +1,5 @@
 import type { ActorPerceptionState } from "./actorPerception";
+import type { LivingCircadianPersistentState } from "./livingCircadian";
 
 export const WORLD_WIDTH = 96;
 export const WORLD_HEIGHT = 72;
@@ -298,6 +299,8 @@ export interface ResidentState {
   identity: ResidentIdentity;
   /** Authoritative knowledge-honest sensing, attention, and search state. */
   perception: ActorPerceptionState;
+  /** Present only after an authenticated human routine first commits posture. */
+  circadian?: LivingCircadianPersistentState;
   condition: ResidentCondition;
   playerKnowledge: ResidentPlayerKnowledge;
   memories: ResidentMemory[];

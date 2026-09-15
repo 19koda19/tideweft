@@ -14,6 +14,7 @@ import {
 } from "../render/looseCargoPresentation";
 import {
   applyWeatherToBiomeClimate,
+  canonicalizeResidentCircadianState,
   classifyBiome,
   deriveBaselineBiomeClimate,
   deriveMagicalWaterInfluence,
@@ -283,6 +284,33 @@ function porterPerceptionLabel(suspicion: ActorSuspicionState): string | null {
   }
 }
 
+/**
+ * Knowledge-honest present posture only. Schedule, phase, destination identity,
+ * and wake thresholds never cross the presentation boundary.
+ */
+export function observableResidentRestState(
+  resident: ResidentState,
+): "resting" | "asleep" | null {
+  if (
+    resident.activeContractId !== null
+    || resident.location.kind !== "settlement"
+    || resident.location.settlementId !== resident.homeSettlementId
+  ) return null;
+  const circadian = resident.circadian === undefined
+    ? null
+    : canonicalizeResidentCircadianState(resident.circadian, {
+        residentStableId: resident.identity.stableId,
+        homeSettlementId: resident.homeSettlementId,
+        atTick: resident.perception.tick,
+        arrivedHome: true,
+      });
+  return circadian !== null
+    && circadian.restDestinationArrived
+    && (circadian.posture.state === "resting" || circadian.posture.state === "asleep")
+    ? circadian.posture.state
+    : null;
+}
+
 function projectResidentPlacement(
   world: WorldView,
   placement: ResidentWorldPlacement,
@@ -312,6 +340,9 @@ function projectResidentPlacement(
 
 function porterConditionLabels(resident: ResidentState): string[] {
   const labels: string[] = [];
+  const restState = observableResidentRestState(resident);
+  if (restState === "asleep") labels.push("Asleep");
+  else if (restState === "resting") labels.push("Resting");
   if (resident.condition.wetness >= 660_000) labels.push("Soaked");
   else if (resident.condition.wetness >= 260_000) labels.push("Wet");
   if (resident.condition.coldStress >= 660_000) labels.push("Cold");
@@ -350,6 +381,11 @@ function porterStateSpeech(resident: ResidentState, tick: number, selected: bool
   // transcript or off-screen identity leak.
   const ambientWindow = (tick + resident.id * 17) % 180 < 14;
   if (!selected && !ambientWindow) return undefined;
+  const restState = observableResidentRestState(resident);
+  // A weak retained observation cannot make an authoritative sleeping body
+  // stand up or speak. A lawful waking disturbance first changes the receipt
+  // to STARTLED/AWAKE, after which ordinary perception presentation resumes.
+  if (restState === "asleep") return undefined;
   switch (resident.perception.suspicion) {
     case "noticed": return "Thought I heard something.";
     case "suspicious": return "Who's there?";
@@ -358,6 +394,7 @@ function porterStateSpeech(resident: ResidentState, tick: number, selected: bool
     case "searching": return "I saw someone here.";
     case "unaware": break;
   }
+  if (restState === "resting") return selected ? "Taking a rest." : undefined;
   if (resident.condition.sheltering) return "Holding here until this eases.";
   if (resident.condition.coldStress >= 720_000) return "This cold bites.";
   if (resident.condition.wetness >= 700_000) return "Soaked through.";
@@ -929,21 +966,30 @@ export function projectGameView(
           : "Unknown resident";
       const perceptionLabel = porterPerceptionLabel(resident.perception.suspicion);
       const perceptionState = porterPerceptionState(resident.perception.suspicion);
+      const restState = observableResidentRestState(resident);
       return [
         {
           id: String(resident.id),
           ...(knowsName ? { name: resident.name } : {}),
-          quickLabel: perceptionLabel
-            ? `${identityLabel} · ${perceptionLabel}`
-            : identityLabel,
+          quickLabel: restState === "asleep"
+            ? `${identityLabel} · asleep`
+            : perceptionLabel
+              ? `${identityLabel} · ${perceptionLabel}`
+              : restState
+                ? `${identityLabel} · ${restState}`
+                : identityLabel,
           position: routeProjection.position,
           facing: routeProjection.facing,
-          state: perceptionState
-            ?? (resident.condition.sheltering
+          state: restState === "asleep"
+            ? "resting" as const
+            : perceptionState
+              ?? (resident.condition.sheltering
               ? "resting" as const
-              : resident.intention === "carry"
-                ? "traveling" as const
-                : "waiting" as const),
+              : restState
+                ? "resting" as const
+                : resident.intention === "carry"
+                  ? "traveling" as const
+                  : "waiting" as const),
           appearance: {
             heightScale: resident.identity.heightCm / 171,
             build: resident.identity.build,

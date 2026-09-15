@@ -7,6 +7,14 @@ import {
   stepActorPerception,
   type ActorPerceptionState,
 } from "../sim/actorPerception";
+import {
+  LIVING_CIRCADIAN_OWNER_ID,
+  LIVING_CIRCADIAN_VERSION,
+  RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+  gateResidentCircadianObservations,
+  replaceResidentCircadian,
+  residentHomeRestDestinationId,
+} from "../sim/livingCircadian";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
@@ -26,7 +34,8 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
-import { createWorldPosition } from "./worldPosition";
+import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { createWorldPosition, type WorldPosition } from "./worldPosition";
 
 const OBSERVER_X = 24;
 const OBSERVER_Y = 24;
@@ -117,6 +126,82 @@ describe("existing-human sensory bridge", () => {
     });
     expect(heard?.area.radiusUnits).toBeGreaterThanOrEqual(250);
     expect(heard?.area.center).not.toEqual(sample.position);
+  });
+
+  it("closes only authenticated sleeping vision while preserving audible contact", () => {
+    const legacy = homeFixture("sleeping sight gate", "legacy");
+    const awake = homeFixture("sleeping sight gate", "awake");
+    const sleeping = homeFixture("sleeping sight gate", "asleep");
+    const legacyObservations = observationsFor(
+      legacy,
+      [residentStimulus(legacy, "obvious-and-audible")],
+      1,
+    );
+    const rawAwakeObservations = observationsFor(
+      awake,
+      [residentStimulus(awake, "obvious-and-audible")],
+      1,
+    );
+    const rawSleepingObservations = observationsFor(
+      sleeping,
+      [residentStimulus(sleeping, "obvious-and-audible")],
+      1,
+    );
+    const awakeObservations = gateResidentCircadianObservations({
+      resident: awake.resident,
+      targetTick: fixtureTick(awake, 1),
+      observations: rawAwakeObservations,
+    });
+    const sleepingObservations = gateResidentCircadianObservations({
+      resident: sleeping.resident,
+      targetTick: fixtureTick(sleeping, 1),
+      observations: rawSleepingObservations,
+    });
+    if (awakeObservations === null || sleepingObservations === null) {
+      throw new Error("fixture observations must pass the resident channel gate");
+    }
+
+    expect(legacyObservations.some(({ channel }) => channel === "vision")).toBe(true);
+    expect(legacyObservations.some(({ channel }) => channel === "hearing")).toBe(true);
+    expect(awakeObservations).toEqual(legacyObservations);
+    expect(rawSleepingObservations).toEqual(legacyObservations);
+    expect(sleepingObservations.some(({ channel }) => channel === "vision")).toBe(false);
+    expect(sleepingObservations).toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      identification: "anonymous",
+      subjectId: null,
+    }));
+
+    const lawfulHearing = rawSleepingObservations.find(({ channel }) => (
+      channel === "hearing"
+    ));
+    const lawfulVision = rawSleepingObservations.find(({ channel }) => (
+      channel === "vision"
+    ));
+    if (lawfulHearing === undefined || lawfulVision === undefined) {
+      throw new Error("sleeping gate fixture omitted its two sensory channels");
+    }
+    expect(gateResidentCircadianObservations({
+      resident: sleeping.resident,
+      targetTick: fixtureTick(sleeping, 1),
+      observations: [
+        lawfulHearing,
+        { ...lawfulVision, observerId: "HUMAN-TAMPERED-VISUAL" },
+      ],
+    })).toBeNull();
+
+    const malformed = {
+      ...awake.resident,
+      circadian: {
+        ...awake.resident.circadian!,
+        restDestinationId: "resident-home:tampered",
+      },
+    };
+    expect(gateResidentCircadianObservations({
+      resident: malformed,
+      targetTick: fixtureTick(awake, 1),
+      observations: awakeObservations,
+    })).toBeNull();
   });
 
   it("is independent of resident and stimulus array order", () => {
@@ -389,7 +474,48 @@ function fixture(
   return buildFixture(state, resident);
 }
 
-function buildFixture(state: WorldState, resident: ResidentState): Fixture {
+function homeFixture(
+  seed: string,
+  posture: "legacy" | "awake" | "asleep",
+): Fixture {
+  const state = createWorld(seed, "standard");
+  const residentIndex = 0;
+  let resident = state.residents[residentIndex];
+  if (!resident) throw new Error("home fixture needs a resident");
+  resident.location = { kind: "settlement", settlementId: resident.homeSettlementId };
+  resident.activeContractId = null;
+  if (posture !== "legacy") {
+    const restDestinationId = residentHomeRestDestinationId(
+      resident.identity.stableId,
+      resident.homeSettlementId,
+    );
+    if (restDestinationId === null) throw new Error("home fixture needs a rest destination");
+    resident = replaceResidentCircadian(resident, {
+      atTick: resident.perception.tick,
+      circadian: {
+        version: LIVING_CIRCADIAN_VERSION,
+        ownerId: LIVING_CIRCADIAN_OWNER_ID,
+        policy: RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+        restDestinationId,
+        restDestinationArrived: true,
+        posture: { state: posture, enteredAtTick: resident.perception.tick },
+      },
+    });
+    state.residents[residentIndex] = resident;
+  }
+  const settlement = state.settlements.find(({ id }) => id === resident.homeSettlementId);
+  if (!settlement) throw new Error("home fixture needs its settlement");
+  return buildFixture(state, resident, {
+    x: settlement.tileIndex % state.terrain.width,
+    y: Math.floor(settlement.tileIndex / state.terrain.width),
+  });
+}
+
+function buildFixture(
+  state: WorldState,
+  resident: ResidentState,
+  focus: { readonly x: number; readonly y: number } = { x: OBSERVER_X, y: OBSERVER_Y },
+): Fixture {
   const economy = createWorldView(state);
   const stream = createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed });
   const window = createRegionalTerrainWindow(
@@ -397,8 +523,8 @@ function buildFixture(state: WorldState, resident: ResidentState): Fixture {
     stream,
     regionalFrameOriginAtAddress({
       region: createRegionCoord(0, 0),
-      localX: OBSERVER_X,
-      localY: OBSERVER_Y,
+      localX: focus.x,
+      localY: focus.y,
     }),
   );
   const world = createRegionalWorldView(
@@ -473,10 +599,24 @@ function soundSample(
   });
 }
 
+function residentStimulus(current: Fixture, id: string): PlayerSenseSample {
+  const placement = resolveResidentWorldPlacement(current.economy, current.resident);
+  if (placement === null) throw new Error("resident stimulus needs a lawful placement");
+  return createSample({
+    id,
+    sampleOrdinal: 0,
+    position: placement.position,
+    movementSalience: FIXED_POINT,
+    lightVisibility: FIXED_POINT,
+    soundLoudness: FIXED_POINT,
+    soundRangeUnits: 12_000,
+  });
+}
+
 function createSample(input: {
   readonly id: string;
   readonly sampleOrdinal: number;
-  readonly position: ReturnType<typeof worldPoint>;
+  readonly position: WorldPosition;
   readonly movementSalience: number;
   readonly lightVisibility: number;
   readonly soundLoudness: number;

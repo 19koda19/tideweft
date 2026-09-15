@@ -2,6 +2,47 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.46",
+      "releaseDate": "2026-09-15",
+      "buildIdentity": "0.3.3-alpha.46",
+      "summary": "The Keeper Sleeps is the local unpublished Alpha 46 source candidate: the existing starting-harbor food-store keeper now follows the shared day-active circadian policy through an overrideable, physically authenticated home-settlement routine.",
+      "gameplayContractVersion": 44,
+      "tutorialVersion": 56,
+      "categories": {
+        "gameplay": [
+          "Exactly one existing human—the stable food-store keeper already named by starting-harbor settlement ecology—now composes the same version-1 day-active living-circadian policy used by earlier representative actors. No second clock, human scheduler, duplicate resident, house, bed, or invented interior is created.",
+          "At the keeper's authoritative home settlement, neutral night preference can become Resting and then Asleep after the shared settling interval. Dawn wakes that same person at a stable identity-derived boundary; being away, accepting route work, an active Promise contract, non-neutral porter response, dangerous storm, urgent needs, or qualifying current strong lawful disturbance overrides rest.",
+          "Sleep now affects perception rather than existing only as a label. The authoritative post-command resident perception boundary suppresses new visual observations while the keeper remains asleep, but hearing and scent can still carry lawful wake evidence; accepting work on that same tick permits ordinary vision and wakes the stale rest posture."
+        ],
+        "fixes": [
+          "A bound human receives exhaustion and rest-need recovery only while their canonical body is actually at its authenticated home settlement in Resting or Asleep posture. Merely being sheltered, idle, travelling, or carrying a stale sleep receipt grants no restorative physiology.",
+          "The simulation checks current clock, urgent needs, dangerous weather, active work, location, and qualifying current disturbance before applying recovery, so a sleeping receipt cannot award one stale healing tick at dawn or after a same-tick commitment change.",
+          "Contract travel and completion reauthenticate an existing routine receipt against the resident's actual post-contract location. Losing home arrival wakes the person; returning through ordinary world ownership can make later rest possible without teleporting them or fabricating a destination."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Human sleep grants no threat immunity, teleportation, automatic shelter, free food or water, Promise protection, special healing, skipped weather, or mortality change.",
+          "Weak retained attention does not secretly erase valid rest, while a fresh strong observation must meet the keeper's authored wake threshold. Hearing and scent remain available during sleep so danger can emerge through the shared sensory system instead of an omniscient schedule switch.",
+          "Legacy humans without a committed routine retain their previous physiology and behavior. This slice changes no resident count, human identity, settlement count, species catalog, animal routine, player capacity, item, cargo, Promise value, or ten-minute WAIT timing."
+        ],
+        "interface": [
+          "Chart, Relief, quick inspection, and ABOUT can describe the directly observable keeper as Resting or Asleep and use the resting body state. An asleep resident does not produce ordinary state speech until lawful simulation wakes them.",
+          "Presentation exposes only current posture. It never reveals hidden schedule windows, phase offset, wake threshold, opaque home-destination identity, contract internals, needs values, or observations the player did not lawfully obtain.",
+          "Field Manual version 56 explains the representative keeper's home-settlement rest, real override priority, sleep sensory boundary, restorative requirements, unchanged save envelope, and strict boundary around other humans, interiors, companions, and player REST or SLEEP."
+        ],
+        "saves": [
+          "Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and every existing ecology wrapper remain unchanged. The Keeper Sleeps adds no outer migration or parallel human root.",
+          "Resident state gains one additive optional shared circadian receipt containing the existing keeper's bound policy, deterministic resident-plus-home-settlement destination identity, physical-arrival fact, posture, and entry tick. Legacy residents without that property remain valid and serialize without an invented field.",
+          "A present receipt is reauthenticated against stable human identity, home settlement, actual location, contract ownership, current cognition tick, and exact day-active policy. Save and reload preserve the same bout; malformed, future-dated, foreign, or physically contradictory state fails closed instead of being repaired into a different history.",
+          "The existing keeper can lawfully acquire the receipt on a current home tick after an older save loads. A legacy keeper encountered away remains unbound until a real home tick, and reloading cannot reroll dawn, duplicate the resident, or manufacture home arrival."
+        ],
+        "knownLimitations": [
+          "Alpha 46 The Keeper Sleeps is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+          "This is exactly one existing food-store keeper using their authoritative settlement as a bounded home-rest anchor. It is not a physical house, bed, interior routine, shop-hours system, autonomous commute, every-human schedule, or settlement-wide daily life simulation.",
+          "Other human routines, the independent dog, bonded/player companions, broader animal bindings, player REST and SLEEP, validated longer or coarse-time player advancement, production crepuscular, tide-, weather-, and opportunity-driven routines, Living Voice, new species, and new mortality remain unfinished. The Turning Day directive remains open."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.45",
       "releaseDate": "2026-09-15",
       "buildIdentity": "0.3.3-alpha.45",
