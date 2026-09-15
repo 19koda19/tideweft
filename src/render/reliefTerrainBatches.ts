@@ -23,18 +23,21 @@ export interface ReliefMaterialBatch {
 export interface ReliefPerceptionMaterialBatch extends ReliefMaterialBatch {
   /** Eased current sensory strength. This is never folded into the durable mesh key. */
   readonly currentVisibility: number;
+  /** Observation-gated local light reaching this surface, quantized for bounded draws. */
+  readonly currentLocalIllumination: number;
 }
 
 /** Transient sight uses a small, visibly smooth set of lightness steps. */
 export const RELIEF_PERCEPTION_VISIBILITY_BANDS = TERRAIN_PERCEPTION_MEMORY_BANDS;
+export const RELIEF_LOCAL_ILLUMINATION_BANDS = 3;
 
 /**
- * One transient batch for every possible visible material identity and lightness
- * band: ten TerrainKind values plus seven BiomeId values, across eight bands.
- * Durable terrain keeps its finer environmental material identity.
+ * One transient batch for every possible visible material identity, sensory
+ * lightness band, and bounded local-light band: ten TerrainKind values plus
+ * seven BiomeId values. Durable terrain keeps its finer environmental identity.
  */
 export const MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK =
-  RELIEF_PERCEPTION_VISIBILITY_BANDS * 17;
+  RELIEF_PERCEPTION_VISIBILITY_BANDS * 17 * (RELIEF_LOCAL_ILLUMINATION_BANDS + 1);
 
 /**
  * Groups one chunk's triangles by material without ever drawing uncharted land.
@@ -107,6 +110,7 @@ export function buildReliefPerceptionMaterialBatches(
     environment: number;
     visibility: number;
     currentVisibility: number;
+    currentLocalIllumination: number;
     indices: number[];
   }>();
 
@@ -123,6 +127,16 @@ export function buildReliefPerceptionMaterialBatches(
     const current = Math.round(rawCurrent * RELIEF_PERCEPTION_VISIBILITY_BANDS)
       / RELIEF_PERCEPTION_VISIBILITY_BANDS;
     if (current <= 0) continue;
+    const rawLocalIllumination = source?.currentLocalIllumination;
+    const currentLocalIllumination = Math.round(
+      Math.max(
+        0,
+        Math.min(
+          1,
+          Number.isFinite(rawLocalIllumination) ? rawLocalIllumination! : 0,
+        ),
+      ) * RELIEF_LOCAL_ILLUMINATION_BANDS,
+    ) / RELIEF_LOCAL_ILLUMINATION_BANDS;
     // Current sight and durable chart knowledge are deliberately independent.
     // The sensory mesh may show an uncharted ridge while it is in view, then
     // return it to possibility-darkness without writing new map memory.
@@ -149,13 +163,14 @@ export function buildReliefPerceptionMaterialBatches(
     // prevents live perception from multiplying draw calls by climate bucket.
     const environment = 0.5;
     const materialIdentity = biome ? `biome:${biome}` : `kind:${kind}`;
-    const key = `${materialIdentity}:${current}`;
+    const key = `${materialIdentity}:${current}:${currentLocalIllumination}`;
     const group = groups.get(key) ?? {
       kind,
       ...(biome ? { biome } : {}),
       environment,
       visibility,
       currentVisibility: current,
+      currentLocalIllumination,
       indices: [],
     };
     group.indices.push(...tileIndices);
@@ -163,6 +178,7 @@ export function buildReliefPerceptionMaterialBatches(
   }
   return [...groups.values()].sort((left, right) =>
     left.currentVisibility - right.currentVisibility
+      || left.currentLocalIllumination - right.currentLocalIllumination
       || (left.biome ?? left.kind).localeCompare(right.biome ?? right.kind)
       || left.environment - right.environment
       || left.visibility - right.visibility

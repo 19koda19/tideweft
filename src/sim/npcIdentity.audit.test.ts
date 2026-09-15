@@ -50,6 +50,7 @@ describe("independent resident identity and persistence audit", () => {
 
   it("preserves learned identity and bounded memories through the exact save envelope", () => {
     const world = createWorld("knowledge survives reload", "standard");
+    const observedTick = world.meta.completedTick + 1;
     const resident = world.residents[0];
     if (!resident) throw new Error("fixture needs a resident");
 
@@ -62,7 +63,7 @@ describe("independent resident identity and persistence audit", () => {
       id: "audit-greeting",
       type: "greet-resident",
       residentId: resident.id,
-      observedTick: 1,
+      observedTick,
     }]);
     const before = structuredClone(resident);
     const restored = deserializeWorld(serializeWorld(world));

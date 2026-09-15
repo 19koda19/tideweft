@@ -4,6 +4,7 @@ import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT, type TerrainTileView, type WeatherKind, type WorldView } from "../sim/types";
+import { WORLD_DAY_START_TICK } from "../sim/worldTime";
 import {
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES,
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES,
@@ -67,6 +68,8 @@ import {
   stageSettlementFoodLoss,
 } from "./settlementEcology";
 
+const TEST_DAYLIGHT_TICK = WORLD_DAY_START_TICK + 300;
+
 export const ALPHA33_ALPINE_EAGLE_PIKA_EMERGENCE_OWNER_INTENT =
   "test:alpha33-alpine-eagle-pika-emergence:v1" as const;
 
@@ -115,7 +118,11 @@ describe("aggregate ecology shared-perception adapter", () => {
     ));
     expect(influenceAt(pressure, occupied.anchorOrdinal)).toBeGreaterThan(0);
 
-    const resolved = stepCoreEcologySettlementShadows(clear.patch, 0, visible);
+    const resolved = stepCoreEcologySettlementShadows(
+      clear.patch,
+      clear.patch.updatedAtTick,
+      visible,
+    );
     const pikaAfter = resolved?.patch.aggregatePopulations.find(({ aggregateId }) => (
       aggregateId === pika.aggregateId
     ));
@@ -289,8 +296,16 @@ describe("aggregate ecology shared-perception adapter", () => {
     const attraction = proposeSettlementRatAttraction(store, current.patch, frame);
     expect(attraction).not.toBeNull();
 
-    const first = stepCoreEcologySettlementShadows(current.patch, 0, frame);
-    const replay = stepCoreEcologySettlementShadows(current.patch, 0, frame);
+    const first = stepCoreEcologySettlementShadows(
+      current.patch,
+      current.patch.updatedAtTick,
+      frame,
+    );
+    const replay = stepCoreEcologySettlementShadows(
+      current.patch,
+      current.patch.updatedAtTick,
+      frame,
+    );
     expect(replay).toEqual(first);
     if (first === null || attraction === null) {
       throw new Error("Shared rat resolver rejected the composed frame");
@@ -589,7 +604,11 @@ describe("aggregate ecology shared-perception adapter", () => {
       ]));
     expect(JSON.stringify(foxFrame)).not.toContain("marsh-rabbit");
 
-    const result = stepCoreEcologySettlementShadows(current.patch, 0, foxFrame);
+    const result = stepCoreEcologySettlementShadows(
+      current.patch,
+      current.patch.updatedAtTick,
+      foxFrame,
+    );
     if (result === null) throw new Error("Canonical fox aggregate pressure was rejected");
     expect(result.events.filter(({ sourceKind }) => sourceKind === "marsh-fox"))
       .toEqual(expect.arrayContaining([
@@ -627,6 +646,7 @@ function fixture(
   weatherIntensity = 0,
 ): Fixture {
   const state = createWorld(SEED_TEXT, "standard");
+  state.meta.completedTick = TEST_DAYLIGHT_TICK;
   state.weather = {
     ...state.weather,
     kind: weatherKind,
@@ -642,6 +662,7 @@ function fixture(
     seed: state.meta.rootSeed,
     patchKey: "wave-b:aggregate-perception",
     originRegion: ORIGIN,
+    tick: state.meta.completedTick,
     populations: individualInputs(habitat),
     derivation: { kind: "habitat-v2", habitat },
   });
@@ -665,6 +686,7 @@ function fixture(
 
 function alpineFixture(): Fixture {
   const state = createWorld("alpine resident property", "standard");
+  state.meta.completedTick = TEST_DAYLIGHT_TICK;
   state.weather = {
     ...state.weather,
     kind: "clear",
@@ -705,6 +727,7 @@ function alpineFixture(): Fixture {
 
 function rainChorusFixture(): Fixture {
   const state = createWorld(SEED_TEXT, "standard");
+  state.meta.completedTick = TEST_DAYLIGHT_TICK;
   state.weather = {
     ...state.weather,
     kind: "rain",
@@ -720,6 +743,7 @@ function rainChorusFixture(): Fixture {
     seed: state.meta.rootSeed,
     patchKey: "wave-b:rain-chorus-perception",
     originRegion: ORIGIN,
+    tick: state.meta.completedTick,
     populations: individualInputs(habitat),
     derivation: { kind: "habitat-v4", habitat },
   });

@@ -10,6 +10,9 @@ export const WORLD_DAY_START_TICK = 420 as const;
 export const WORLD_DUSK_START_TICK = 1_140 as const;
 export const WORLD_NIGHT_START_TICK = 1_200 as const;
 
+/** Fresh saves begin at the first full daylight boundary without redefining the epoch. */
+export const WORLD_NEW_GAME_START_TICK = WORLD_DAY_START_TICK;
+
 /** Open-sky night illumination before weather, cover, or presentation tuning. */
 export const WORLD_NIGHT_ILLUMINATION = 100_000 as const;
 export const WORLD_DAY_ILLUMINATION = FIXED_POINT;

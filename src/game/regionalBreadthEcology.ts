@@ -37,8 +37,15 @@ export const REGIONAL_BREADTH_ECOLOGY_DELTA_VERSION = 1 as const;
 export const REGIONAL_BREADTH_ECOLOGY_ACTIVATION_VERSION = 1 as const;
 export const REGIONAL_BREADTH_ECOLOGY_OWNER_ID =
   "game:regional-breadth-ecology:v1" as const;
-export const REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID =
+/** Released Alpha-37–39 roots replay every cohort from civil tick zero. */
+export const REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID =
   CORE_ECOLOGY_BREADTH_DERIVATION_KIND;
+/** New roots begin each cohort at its already-persisted activation tick. */
+export const REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID =
+  "regional-breadth-activation-clock:v1" as const;
+type RegionalBreadthEcologyBaselinePolicyId =
+  | typeof REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID
+  | typeof REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID;
 export const REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS = 32_768 as const;
 export const REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES =
   16 * 1_024 * 1_024;
@@ -86,7 +93,7 @@ export interface RegionalBreadthEcologyRootV1 {
   readonly version: typeof REGIONAL_BREADTH_ECOLOGY_ROOT_VERSION;
   readonly ownerId: typeof REGIONAL_BREADTH_ECOLOGY_OWNER_ID;
   readonly generationVersion: 1;
-  readonly baselinePolicyId: typeof REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID;
+  readonly baselinePolicyId: RegionalBreadthEcologyBaselinePolicyId;
   readonly seedFingerprint: string;
   readonly activeThroughEpoch: number;
   readonly activations: readonly RegionalBreadthEcologyCohortActivationV1[];
@@ -119,14 +126,17 @@ const WORLD_BOUND_ROOTS = new WeakMap<object, string>();
 export function createPristineRegionalBreadthEcologyRoot(
   binding: RegionalBreadthEcologyWorldBinding,
   activeThroughEpoch: number = CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+  baselinePolicyId: RegionalBreadthEcologyBaselinePolicyId =
+    REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
 ): RegionalBreadthEcologyRootV1 {
   requireBinding(binding);
   requireAvailableEpoch(activeThroughEpoch);
+  requireBaselinePolicy(baselinePolicyId);
   return sealAndBindRoot({
     version: REGIONAL_BREADTH_ECOLOGY_ROOT_VERSION,
     ownerId: REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
     generationVersion: 1,
-    baselinePolicyId: REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+    baselinePolicyId,
     seedFingerprint: seedFingerprint(binding.rootSeed),
     activeThroughEpoch,
     activations: createActivations(
@@ -183,6 +193,8 @@ export function createRegionalBreadthEcologyRegionDelta(
   input: Readonly<{
     readonly rootSeed: RootSeed;
     readonly cohortId: CoreEcologyBreadthCohortId;
+    /** Omitted legacy callers preserve the released tick-zero baseline. */
+    readonly baselineTick?: number;
     readonly region: RegionCoord;
     readonly baselineHash: string;
     readonly revision: number;
@@ -192,8 +204,11 @@ export function createRegionalBreadthEcologyRegionDelta(
 ): RegionalBreadthEcologyRegionDeltaV1 {
   requireRootSeed(input.rootSeed);
   const cohort = coreEcologyBreadthCohortDefinition(input.cohortId);
+  const baselineTick = input.baselineTick ?? 0;
   if (
     cohort === null
+    || !nonnegativeSafeInteger(baselineTick)
+    || baselineTick > input.residentPatch.updatedAtTick
     || !isRegionCoord(input.region)
     || !validHash(input.baselineHash)
     || !positiveSafeInteger(input.revision)
@@ -224,6 +239,7 @@ export function createRegionalBreadthEcologyRegionDelta(
       cohortId: cohort.cohortId,
     }),
     tick: patch.updatedAtTick,
+    baselineTick,
   });
   if (stableStringify(pristine) === stableStringify(patch)) {
     throw new RangeError("Regional breadth ecology does not persist pristine baselines");
@@ -255,6 +271,7 @@ export function createRegionalBreadthEcologyRegionDelta(
 export function canonicalizeRegionalBreadthEcologyRegionDelta(
   value: unknown,
   rootSeed?: RootSeed,
+  baselineTick = 0,
 ): RegionalBreadthEcologyRegionDeltaV1 | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "baselineHash",
@@ -318,6 +335,10 @@ export function canonicalizeRegionalBreadthEcologyRegionDelta(
   try {
     requireRootSeed(rootSeed);
     if (
+      !nonnegativeSafeInteger(baselineTick)
+      || baselineTick > delta.residentPatch.updatedAtTick
+    ) return null;
+    if (
       delta.stableId !== stableRegionObjectId(
         rootSeed,
         delta.region,
@@ -344,6 +365,7 @@ export function canonicalizeRegionalBreadthEcologyRegionDelta(
       seed: rootSeed,
       habitat,
       tick: delta.residentPatch.updatedAtTick,
+      baselineTick,
     });
     return stableStringify(pristine) === stableStringify(delta.residentPatch)
       ? null
@@ -377,7 +399,7 @@ export function canonicalizeRegionalBreadthEcologyRoot(
     value.version !== REGIONAL_BREADTH_ECOLOGY_ROOT_VERSION
     || value.ownerId !== REGIONAL_BREADTH_ECOLOGY_OWNER_ID
     || value.generationVersion !== 1
-    || value.baselinePolicyId !== REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID
+    || !isBaselinePolicy(value.baselinePolicyId)
     || !validHash(value.seedFingerprint)
     || !nonnegativeSafeInteger(value.activeThroughEpoch)
     || value.activeThroughEpoch > CORE_ECOLOGY_BREADTH_CURRENT_EPOCH
@@ -419,7 +441,7 @@ export function canonicalizeRegionalBreadthEcologyRoot(
     version: REGIONAL_BREADTH_ECOLOGY_ROOT_VERSION,
     ownerId: REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
     generationVersion: 1 as const,
-    baselinePolicyId: REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+    baselinePolicyId: value.baselinePolicyId,
     seedFingerprint: value.seedFingerprint,
     activeThroughEpoch: value.activeThroughEpoch,
     activations,
@@ -471,9 +493,12 @@ export function canonicalRegionalBreadthEcologyRootForWorld(
     ) return null;
   }
   for (const delta of root.regions) {
+    const baselineTick = breadthCohortBaselineTick(root, delta.cohortId);
+    if (baselineTick === null) return null;
     const bound = canonicalizeRegionalBreadthEcologyRegionDelta(
       delta,
       binding.rootSeed,
+      baselineTick,
     );
     if (bound === null || stableStringify(bound) !== stableStringify(delta)) {
       return null;
@@ -526,9 +551,13 @@ export function putRegionalBreadthEcologyResidentDeviation(
     completedTick: root.updatedAtTick,
   });
   const habitat = habitatFromPatch(activePatch);
+  const baselineTick = habitat === null
+    ? null
+    : breadthCohortBaselineTick(root, habitat.cohortId);
   if (
     activePatch === null
     || habitat === null
+    || baselineTick === null
     || !root.activations.some(({ cohortId }) => cohortId === habitat.cohortId)
   ) throw new RangeError("Regional breadth deviation is unbound or inactive");
   const normalized = setCoreEcologyAggregatePatchMaterializedActors(
@@ -543,6 +572,7 @@ export function putRegionalBreadthEcologyResidentDeviation(
       cohortId: habitat.cohortId,
     }),
     tick: root.updatedAtTick,
+    baselineTick,
   });
   const pristineState = stableStringify(normalized) === stableStringify(pristine);
   const key = deltaKey(habitat.cohortId, normalized.originRegion);
@@ -558,6 +588,7 @@ export function putRegionalBreadthEcologyResidentDeviation(
     regions.push(createRegionalBreadthEcologyRegionDelta({
       rootSeed: input.rootSeed,
       cohortId: habitat.cohortId,
+      baselineTick,
       region: normalized.originRegion,
       baselineHash: habitat.derivationHash,
       revision: (existing?.revision ?? 0) + 1,
@@ -591,6 +622,8 @@ export function regionalBreadthEcologyResidentPatchForRegion(
     root === null
     || !root.activations.some((activation) => activation.cohortId === cohortId)
   ) return null;
+  const baselineTick = breadthCohortBaselineTick(root, cohortId);
+  if (baselineTick === null) return null;
   const delta = root.regions.find((entry) => (
     entry.key === deltaKey(cohortId, region)
   ));
@@ -607,6 +640,7 @@ export function regionalBreadthEcologyResidentPatchForRegion(
         seed: rootSeed,
         habitat,
         tick: root.updatedAtTick,
+        baselineTick,
       });
 }
 
@@ -663,6 +697,8 @@ export function regionalBreadthEcologyResidentsForActiveRegions(
 
   for (const region of activeRegions) {
     for (const activation of root.activations) {
+      const baselineTick = breadthCohortBaselineTick(root, activation.cohortId);
+      if (baselineTick === null) return null;
       const delta = root.regions.find((entry) => (
         entry.key === deltaKey(activation.cohortId, region)
       ));
@@ -680,6 +716,7 @@ export function regionalBreadthEcologyResidentsForActiveRegions(
         seed: rootSeed,
         habitat,
         tick: root.updatedAtTick,
+        baselineTick,
       }))) return null;
     }
   }
@@ -741,6 +778,19 @@ function createActivations(
       activatedAtTick,
     ),
   ));
+}
+
+function breadthCohortBaselineTick(
+  root: RegionalBreadthEcologyRootV1,
+  cohortId: CoreEcologyBreadthCohortId,
+): number | null {
+  const activation = root.activations.find((candidate) => (
+    candidate.cohortId === cohortId
+  ));
+  if (activation === undefined) return null;
+  return root.baselinePolicyId === REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID
+    ? activation.activatedAtTick
+    : 0;
 }
 
 function createActivation(
@@ -908,6 +958,21 @@ function requireAvailableEpoch(value: number): void {
     !nonnegativeSafeInteger(value)
     || value > CORE_ECOLOGY_BREADTH_CURRENT_EPOCH
   ) throw new RangeError("Regional breadth epoch is not in the current registry");
+}
+
+function isBaselinePolicy(
+  value: unknown,
+): value is RegionalBreadthEcologyBaselinePolicyId {
+  return value === REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID
+    || value === REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID;
+}
+
+function requireBaselinePolicy(
+  value: unknown,
+): asserts value is RegionalBreadthEcologyBaselinePolicyId {
+  if (!isBaselinePolicy(value)) {
+    throw new RangeError("Regional breadth baseline policy is unavailable");
+  }
 }
 
 function requireBinding(binding: RegionalBreadthEcologyWorldBinding): void {

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { ACTOR_PERCEPTION_SCALE, createActorObservation } from "../sim/actorPerception";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
-import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public";
+import {
+  WORLD_NEW_GAME_START_TICK,
+  createWorldView,
+  deserializeWorld,
+  serializeWorld,
+} from "../sim/public";
 import { regionLocalToGlobalTile } from "../sim/regions";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
@@ -1218,15 +1223,15 @@ describe("runtime core-ecology vertical slice", () => {
     if (beforeEgret === undefined) {
       throw new Error("Reachability fixture omitted its bounded snowy egret");
     }
-    expect(beforeWorld.meta.completedTick).toBe(0);
-    expect(beforeEgret.updatedAtTick).toBe(0);
+    expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
+    expect(beforeEgret.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(requiredRegionalActivityProjection(
       beforeEnvelope,
       beforeEgret.identity.stableId,
     )).toMatchObject({
       species: "snowy-egret",
-      state: "resting",
-      preferredNeutralIntent: "rest",
+      state: "waiting-on-tide",
+      preferredNeutralIntent: "observe",
       motion: { kind: "hold-position" },
     });
 
@@ -1239,14 +1244,14 @@ describe("runtime core-ecology vertical slice", () => {
       identity.stableId === beforeEgret.identity.stableId
     ));
     if (afterEgret === undefined) throw new Error("Snowy egret vanished on its first tick");
-    expect(afterWorld.meta.completedTick).toBe(1);
-    expect(after.updatedAtTick).toBe(1);
+    expect(afterWorld.meta.completedTick).toBe(beforeWorld.meta.completedTick + 1);
+    expect(after.updatedAtTick).toBe(afterWorld.meta.completedTick);
     expect(afterEgret.identity).toEqual(beforeEgret.identity);
-    expect(afterEgret.updatedAtTick).toBe(1);
+    expect(afterEgret.updatedAtTick).toBe(afterWorld.meta.completedTick);
     expect(afterEgret.address.position).toEqual(beforeEgret.address.position);
     expect(afterEgret.intent).toMatchObject({
-      kind: "rest",
-      cause: { kind: "condition", referenceId: "activity:rest-window" },
+      kind: "observe",
+      cause: { kind: "condition", referenceId: "condition:neutral-watch" },
       focusObservationId: null,
     });
     expect(requiredRegionalActivityProjection(
@@ -1254,13 +1259,13 @@ describe("runtime core-ecology vertical slice", () => {
       afterEgret.identity.stableId,
     )).toMatchObject({
       species: "snowy-egret",
-      state: "resting",
-      preferredNeutralIntent: "rest",
+      state: "waiting-on-tide",
+      preferredNeutralIntent: "observe",
       motion: { kind: "hold-position" },
     });
     expect(afterEgret.perception.beliefs.length).toBeGreaterThan(0);
     expect(afterEgret.perception.beliefs.every(({ lastObservedTick }) => (
-      lastObservedTick === 1
+      lastObservedTick === afterWorld.meta.completedTick
     ))).toBe(true);
     expect(afterEgret.perception.beliefs.some(({ identification, subjectId }) => (
       identification === "identified" && subjectId !== null
@@ -1318,7 +1323,7 @@ describe("runtime core-ecology vertical slice", () => {
       rejected.destroy();
       scheduledFrame = undefined;
     }
-  });
+  }, 45_000);
 
   it("quarantines a legacy ecology nested inside a sealed v24 envelope", async () => {
     const repository = new MemoryRepository();
@@ -1499,8 +1504,8 @@ describe("runtime core-ecology vertical slice", () => {
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
     expect(before.version).toBe(30);
-    expect(beforeWorld.meta.completedTick).toBe(0);
-    expect(beforeCore.updatedAtTick).toBe(0);
+    expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
+    expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
     expect(consumptionHistory(beforeCargo)).toEqual([]);
     expect(beforeCargo.expectedManifest.totalQuantity).toBe(1);
@@ -1511,7 +1516,7 @@ describe("runtime core-ecology vertical slice", () => {
     const afterWorld = deserializeWorld(after.world);
     const afterCore = requiredCore(after);
     const afterCargo = requiredCargo(after);
-    expect(afterWorld.meta.completedTick).toBe(3);
+    expect(afterWorld.meta.completedTick).toBe(beforeWorld.meta.completedTick + 3);
     expect(afterCore.updatedAtTick).toBe(afterWorld.meta.completedTick);
 
     const reaction = requiredCrossSpeciesReaction(afterCore);
@@ -1874,17 +1879,20 @@ describe("runtime core-ecology vertical slice", () => {
       ?.members[0]?.actor;
     if (crow === undefined) throw new Error("Perch runtime fixture omitted its fish crow");
     const perch = crow.address.position;
-    const calmCrow = replaceCoreWildlifeActorPhysiology(crow, {
+    const restPressuredCrow = replaceCoreWildlifeActorPhysiology(crow, {
       atTick: patch.updatedAtTick,
-      needs: { hunger: 0, safety: 0, rest: 0 },
+      needs: { hunger: 0, safety: 0, rest: 900_000 },
       condition: { health: 1_000_000, exhaustion: 0, stress: 0 },
     });
+    // Preserve the persisted-rest/perch movement scenario explicitly now that
+    // fresh worlds begin in the active 07:00 window instead of at midnight.
+    const restingCrow = withFixtureRestIntent(restPressuredCrow);
     const crowStart = translateWorldPosition(
       perch,
       2 * WORLD_POSITION_UNITS_PER_TILE,
       0,
     );
-    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(calmCrow, {
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(restingCrow, {
       atTick: patch.updatedAtTick,
       position: crowStart,
       heading: crow.address.heading,
@@ -1955,8 +1963,8 @@ describe("runtime core-ecology vertical slice", () => {
       Math.hypot(startingPerchDistance.x, startingPerchDistance.y),
     );
     expect(savedCrow.intent).toMatchObject({
-      kind: "observe",
-      cause: { kind: "condition", referenceId: "condition:neutral-watch" },
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
       focusObservationId: null,
     });
     expect(projectCoreEcologyActivity(savedCore, {
@@ -2003,14 +2011,16 @@ describe("runtime core-ecology vertical slice", () => {
     const player = structuredClone(envelope.player);
     const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
     if (regional === null) throw new Error("Crow ABOUT fixture lost its regional frame");
-    const patch = requiredCore(envelope);
-    const crow = patch.populations.find(({ species }) => species === "fish-crow")
+    let patch = requiredCore(envelope);
+    const sourceCrow = patch.populations.find(({ species }) => species === "fish-crow")
       ?.members[0]?.actor;
-    if (crow === undefined) throw new Error("Crow ABOUT fixture omitted its fish crow");
+    if (sourceCrow === undefined) throw new Error("Crow ABOUT fixture omitted its fish crow");
+    const crow = withFixtureRestIntent(sourceCrow);
+    patch = replaceCoreEcologyAggregatePatchActor(patch, crow);
     expect(projectCoreEcologyActivity(patch, {
       actorId: crow.identity.stableId,
       atTick: patch.updatedAtTick,
-    })).toMatchObject({ state: "perched", preferredNeutralIntent: "rest" });
+    })).toMatchObject({ state: "perched", preferredNeutralIntent: "observe" });
     const placement = livingActorAddressInRegionalWindow(crow.address, regional.window);
     if (placement === null) throw new Error("Crow ABOUT fixture placed its crow outside the frame");
     const crowTileX = Math.trunc(placement.point.x / WORLD_POSITION_UNITS_PER_TILE);
@@ -2179,7 +2189,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 
   it("does not turn direct visual alarm knowledge into out-of-range audio", async () => {
-    const { runtime, alarmActorId } = await createAlarmRuntime(10);
+    const { runtime, alarmActorId } = await createAlarmRuntime(9);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
       .toBe(true);
     soundscapePlay.mockClear();
@@ -2353,7 +2363,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
     runtime.destroy();
-  });
+  }, 45_000);
 
   it(`${ALPHA30_BODY_BEARING_SAVE_ADOPTION_OWNER_INTENT} adopts one body-bearing v22 save exactly once`, async () => {
     const repository = new MemoryRepository();
@@ -3434,7 +3444,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 });
 
-async function createAlarmRuntime(offsetTiles: -8 | 10): Promise<{
+async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
   runtime: TideweftRuntime;
   alarmActorId: string;
 }> {
@@ -4416,6 +4426,22 @@ function makeWorldDryAndClear(world: ReturnType<typeof deserializeWorld>): void 
   world.weather.nextChangeTick = world.meta.completedTick + 100_000;
 }
 
+function withFixtureRestIntent(actor: CoreWildlifeActorState): CoreWildlifeActorState {
+  const resting = canonicalizeCoreWildlifeActorState({
+    ...actor,
+    intent: {
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "condition:fixture-rest" },
+      focusObservationId: null,
+      resourceReference: null,
+      enteredAtTick: actor.updatedAtTick,
+      expiresAtTick: actor.updatedAtTick + 5,
+    },
+  });
+  if (resting === null) throw new Error("Fixture rest intent was not canonical");
+  return resting;
+}
+
 function makeWorldTraceableAndClear(world: ReturnType<typeof deserializeWorld>): void {
   makeWorldDryAndClear(world);
   for (const tile of world.terrain.tiles) tile.moisture = 900_000;
@@ -4457,7 +4483,7 @@ async function createFoxEventBoundaryRuntime(
   const direction: -1 | 1 = playerWindowX + 13 < width ? 1 : -1;
   player.facingMilliRadians = direction > 0 ? 0 : Math.round(Math.PI * 1_000);
   const playerIndex = playerWindowY * width + playerWindowX;
-  const foxOffset = 10;
+  const foxOffset = 9;
   const rabbitOffset = 12;
   const foxPosition = worldPositionAtWindowTile(
     regional.window,

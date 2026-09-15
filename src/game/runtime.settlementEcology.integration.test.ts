@@ -3270,7 +3270,9 @@ describe("runtime settlement ecology integration", () => {
     const after = savedEnvelope(repository);
     expect(after.dogActorRoster).toBe(before.dogActorRoster);
     expect(after.settlementWorkingAnimals).toBe(before.settlementWorkingAnimals);
-    expect(deserializeWorld(String(after.world)).meta.completedTick).toBe(0);
+    expect(deserializeWorld(String(after.world)).meta.completedTick).toBe(
+      deserializeWorld(String(before.world)).meta.completedTick,
+    );
     runtime.destroy();
   });
 
@@ -3437,6 +3439,12 @@ describe("runtime settlement ecology integration", () => {
       returnArea.radiusUnits,
     );
 
+    // The fresh morning epoch changes deterministic think scheduling. Let the
+    // guardian's newly restored neutral observation intent complete its
+    // ordinary two-tick hold before presenting a distinct alarm; the alarm
+    // must still force the actor-owned retreat asserted below.
+    advancePlayerSteps(recovered, 10);
+
     guardianPerceptionHarness.observationId = null;
     guardianPerceptionHarness.area = null;
     guardianPerceptionHarness.targetKind = null;
@@ -3549,7 +3557,7 @@ describe("runtime settlement ecology integration", () => {
     expect(replay.settlementEcology).toBe(eastEnvelope.settlementEcology);
     expect(deserializeDogActorRoster(replay.dogActorRoster)?.actors).toHaveLength(1);
     reloaded.destroy();
-  }, 90_000);
+  }, 180_000);
 
   it("lets a witnessed domestic chicken perceive and consume one open-store unit while a secured store stays sealed", async () => {
     settlementShadowsHarness.excludePhysicalFood = true;

@@ -79,6 +79,14 @@ export interface TerrainTileView {
    * must fail closed unless this is direct (1) when a perception view exists.
    */
   readonly currentDetailVisibility?: 0 | 0.5 | 1;
+  /**
+   * Present-tense local outdoor light physically reaching this tile, normalized
+   * to 0..1 and already gated by broad player perception. This is deliberately
+   * separate from open-sky worldTime illumination: renderers may show a lamp's
+   * pool, but cannot use this presentation value to admit an actor or item.
+   * Missing legacy values mean no local light.
+   */
+  readonly currentLocalIllumination?: number;
   /** Strength of incidental foot/wake traffic through this tile. */
   readonly trace?: number;
   readonly shelter?: number;
@@ -100,6 +108,8 @@ export interface TerrainGridView {
   readonly tiles: readonly TerrainTileView[];
   /** Changes whenever static terrain art should be reconsidered. */
   readonly revision: number | string;
+  /** Changes when observation-safe local-light material bands may have changed. */
+  readonly currentLocalIlluminationRevision?: number | string;
 }
 
 export type TidePhase = "ebb" | "low" | "flood" | "high";

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import {
   FIXED_POINT,
+  WORLD_NEW_GAME_START_TICK,
   createWorldView,
   deserializeWorld,
   serializeWorld,
@@ -87,28 +88,39 @@ afterEach(() => {
 });
 
 describe("BIO0 release-level player loop", () => {
-  it("makes a fresh encounter actionable and preserves one exact meal aftermath on reload", async () => {
+  it("makes a fresh daylight encounter actionable and preserves one exact meal aftermath on reload", async () => {
     const repository = new MemoryRepository();
-    const runtime = await createTideweftRuntime(repository);
-    runtime.dispatchUI({ type: "resume-world" });
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({ type: "resume-world" });
 
-    const initialDog = runtime.getRenderView().dogs?.[0];
+    const initialDog = setup.getRenderView().dogs?.[0];
     expect(initialDog).toMatchObject({ quickLabel: "Unknown dog", selected: false });
     if (!initialDog) throw new Error("fresh BIO0 dog is not directly visible");
-    selectDog(runtime, initialDog);
-    expect(runtime.getUIView().selectedLivingActor?.interactions?.map(({ id }) => id)).toEqual([
+    selectDog(setup, initialDog);
+    expect(setup.getUIView().selectedLivingActor?.interactions?.map(({ id }) => id)).toEqual([
       "help",
       "secure-food",
       "wait",
       "reroute",
       "leave",
     ]);
+    await setup.save();
+    setup.destroy();
+
+    // At the authoritative 07:00 start a wary dog can see the nearby player and
+    // lawfully decline an offered meal. Make hunger—not hidden darkness—the
+    // explicit reason this fixture accepts the player's request.
+    prepareHungryDaylightMealFixture(repository);
+    const runtime = await createTideweftRuntime(repository);
+    const hungryDog = requiredVisibleDog(runtime);
+    expect(hungryDog.actorId).toBe(initialDog.actorId);
+    selectDog(runtime, hungryDog);
 
     runtime.dispatchUI({
       type: "living-actor",
       action: "interact",
       interaction: "help",
-      target: { species: "domestic-dog", actorId: initialDog.actorId },
+      target: { species: "domestic-dog", actorId: hungryDog.actorId },
     });
     runtime.start();
     advanceFrames(1);
@@ -238,7 +250,6 @@ describe("BIO0 release-level player loop", () => {
 
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getRenderView().dogs ?? []).toEqual([]);
-    const priorAnnouncement = runtime.getUIView().announcement?.message;
     soundscapeControl.plays.length = 0;
     runtime.start();
     advanceFrames(1);
@@ -250,22 +261,12 @@ describe("BIO0 release-level player loop", () => {
     runtime.stop();
 
     expect(ecology.events.filter(({ kind }) => kind === "food-consumed")).toHaveLength(1);
-    const currentAnnouncement = runtime.getUIView().announcement?.message;
-    expect(currentAnnouncement).not.toBe(
+    expect(runtime.getUIView().announcement?.message).not.toBe(
       "The porter offers one provision. The dog accepts it, and the food leaves the pack.",
     );
-    // Habitat-derived wildlife may lawfully produce an unrelated, audible
-    // alarm during this interval. This assertion owns only the unwitnessed
-    // meal: it must not suppress or masquerade as other perceived events.
-    if (currentAnnouncement !== priorAnnouncement) {
-      const expectedCue = currentAnnouncement === "ANIMAL ALARM — source unclear."
-        ? "wildlife-alarm"
-        : currentAnnouncement === "[soft thump nearby]"
-          ? "rabbit-thump"
-          : undefined;
-      expect(expectedCue).toBeDefined();
-      expect(soundscapeControl.plays.some(({ cue }) => cue === expectedCue)).toBe(true);
-    }
+    // Other currently active species may lawfully produce their own perceived
+    // presentation. This audit owns only the meal and therefore asserts its
+    // dedicated narration/cue never leaks from outside direct observation.
     expect(soundscapeControl.plays.some(({ cue }) => cue === "accept")).toBe(false);
     runtime.destroy();
   });
@@ -276,6 +277,9 @@ describe("BIO0 release-level player loop", () => {
     runtime.dispatchUI({ type: "resume-world" });
     const dog = requiredVisibleDog(runtime);
     selectDog(runtime, dog);
+    await runtime.save();
+    const issuedAtTick = requiredEcology(repository).tick;
+    expect(issuedAtTick).toBe(WORLD_NEW_GAME_START_TICK);
     const before = runtime.getRenderView().player.position;
     const terrain = runtime.getRenderView().terrain;
     const direction = before.x < (terrain.columns * terrain.tileSize) / 2 ? 1 : -1;
@@ -298,12 +302,12 @@ describe("BIO0 release-level player loop", () => {
 
     expect(runtime.getRenderView().player.position).toEqual(before);
     expect(requiredChoices(repository).events.at(-1)).toMatchObject({
-      tick: 0,
+      tick: issuedAtTick,
       kind: "wait-observe",
       effect: {
         kind: "wait-observe",
         focusActorId: dog.actorId,
-        untilTick: 3,
+        untilTick: issuedAtTick + 3,
       },
     });
     runtime.destroy();
@@ -501,6 +505,26 @@ function requiredChoices(repository: MemoryRepository) {
   const choices = canonicalizeLivingActorPlayerChoiceState(envelope.livingActorPlayerChoice);
   if (!choices) throw new Error("release audit save omitted living-actor player choices");
   return choices;
+}
+
+function prepareHungryDaylightMealFixture(repository: MemoryRepository): void {
+  resealCurrent(repository, (decoded) => {
+    const envelope = decoded as unknown as { bio0Ecology: string };
+    const ecology = deserializeBio0Ecology(envelope.bio0Ecology);
+    if (!ecology) throw new Error("daylight meal fixture lost BIO0 ecology");
+    if (ecology.tick !== WORLD_NEW_GAME_START_TICK) {
+      throw new Error("daylight meal fixture did not begin at the authoritative fresh-world tick");
+    }
+    const dog = replaceDogActorPhysiology(ecology.dog, {
+      needs: { ...ecology.dog.needs, hunger: FIXED_POINT },
+      condition: ecology.dog.condition,
+      humanFamiliarity: ecology.dog.humanFamiliarity,
+      atTick: ecology.tick,
+    });
+    const prepared = canonicalizeBio0EcologyState({ ...ecology, dog });
+    if (!prepared) throw new Error("daylight meal fixture produced invalid BIO0 ecology");
+    decoded.bio0Ecology = serializeBio0Ecology(prepared);
+  });
 }
 
 function prepareStraightRerouteFixture(

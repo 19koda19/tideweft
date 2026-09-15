@@ -8,6 +8,7 @@ import {
   VISIBILITY_HIDDEN,
   VISIBILITY_PERIPHERAL,
   evaluateAudibleContact,
+  evaluateLineTransmission,
   evaluatePerception,
   type AudibleContactInput,
   type PerceptionCell,
@@ -21,6 +22,7 @@ function flatCells(count: number): PerceptionCell[] {
 
 interface SightOverrides {
   readonly cells?: readonly PerceptionCell[];
+  readonly detailIllumination?: readonly number[];
   readonly facingRadians?: number;
   readonly weatherVisibility?: number;
   readonly rangeOverrides?: PerceptionRangeOverrides;
@@ -40,6 +42,9 @@ function sightInput(
     playerTileIndex,
     facingRadians: overrides.facingRadians ?? 0,
     weatherVisibility: overrides.weatherVisibility ?? 1,
+    ...(overrides.detailIllumination
+      ? { detailIllumination: overrides.detailIllumination }
+      : {}),
     rangeOverrides: overrides.rangeOverrides ?? {
       closePeripheralRange: 2,
       directSightRange: 8,
@@ -115,6 +120,52 @@ describe("deterministic visual perception", () => {
     expect(result.detailVisibleTileIndices.every(
       (index) => result.visibilityGrades[index] !== VISIBILITY_HIDDEN,
     )).toBe(true);
+  });
+
+  it("scales detail per target with physical illumination while preserving terrain", () => {
+    const columns = 9;
+    const exactRanges = {
+      closePeripheralRange: 0,
+      directSightRange: 8,
+      forwardConeRadians: Math.PI / 2,
+    } as const;
+    const legacy = evaluatePerception(sightInput(columns, 1, 0, {
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+    const daylight = evaluatePerception(sightInput(columns, 1, 0, {
+      detailIllumination: Array(columns).fill(1),
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+    const nightIllumination = Array(columns).fill(0.015625) as number[];
+    const night = evaluatePerception(sightInput(columns, 1, 0, {
+      detailIllumination: nightIllumination,
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+    const lampIllumination = [...nightIllumination];
+    lampIllumination[6] = 0.5625;
+    const lamp = evaluatePerception(sightInput(columns, 1, 0, {
+      detailIllumination: lampIllumination,
+      rangeOverrides: exactRanges,
+      detailRangeOverrides: exactRanges,
+    }));
+
+    // Omission is the backwards-compatible fully lit contract used by legacy
+    // fixtures and callers that have not yet adopted the physical-light field.
+    expect(daylight).toEqual(legacy);
+    // Time/light never erases the known ground shape. It changes only whether
+    // exact actors, items, labels, and interactions can be resolved there.
+    expect(night.visibilityGrades).toEqual(daylight.visibilityGrades);
+    expect(night.terrainVisibilityStrengths).toEqual(daylight.terrainVisibilityStrengths);
+    expect(night.detailVisibilityGrades[1]).toBe(VISIBILITY_DIRECT);
+    expect(night.detailVisibilityGrades[2]).toBe(VISIBILITY_HIDDEN);
+    expect(lamp.detailVisibilityGrades[6]).toBe(VISIBILITY_DIRECT);
+    expect(lamp.detailVisibilityGrades[7]).toBe(VISIBILITY_HIDDEN);
+    expect(daylight.detailVisibilityGrades[8]).toBe(VISIBILITY_DIRECT);
+    expect(night.signature).not.toBe(daylight.signature);
+    expect(lamp.signature).not.toBe(night.signature);
   });
 
   it("keeps rear and side terrain awareness inside the short peripheral field", () => {
@@ -606,6 +657,14 @@ describe("deterministic visual perception", () => {
         ...sightInput(4, 1, 0),
         detailRangeOverrides: { forwardConeRadians: Math.PI },
       },
+      { ...sightInput(2, 1, 0), detailIllumination: [1] },
+      { ...sightInput(2, 1, 0), detailIllumination: [1, Number.NaN] },
+      { ...sightInput(2, 1, 0), detailIllumination: [1, -0.01] },
+      { ...sightInput(2, 1, 0), detailIllumination: [1, 1.01] },
+      {
+        ...sightInput(2, 1, 0),
+        detailIllumination: new Float32Array([1, 1]) as unknown as readonly number[],
+      },
     ];
 
     for (const input of malformed) {
@@ -719,6 +778,80 @@ describe("deterministic visual perception", () => {
     expect(JSON.stringify(input)).toBe(before);
     expect(first.visibleTileIndices).toEqual([...first.visibleTileIndices].sort((a, b) => a - b));
     expect(new Set(first.visibilityGrades)).toEqual(new Set([0, 1, 2]));
+  });
+});
+
+describe("shared physical line transmission", () => {
+  it("uses the detail ray's obstruction, elevation, and diagonal-supercover rules", () => {
+    const open = flatCells(5);
+    expect(evaluateLineTransmission({
+      columns: 5,
+      rows: 1,
+      cells: open,
+      fromTileIndex: 0,
+      toTileIndex: 4,
+    })).toBe(1);
+
+    const blocked = open.map((cell) => ({ ...cell }));
+    blocked[2] = { elevation: 0, obstruction: 1 };
+    expect(evaluateLineTransmission({
+      columns: 5,
+      rows: 1,
+      cells: blocked,
+      fromTileIndex: 0,
+      toTileIndex: 4,
+    })).toBe(0);
+
+    const ridge = open.map((cell) => ({ ...cell }));
+    ridge[2] = { elevation: 0.5, obstruction: 0 };
+    expect(evaluateLineTransmission({
+      columns: 5,
+      rows: 1,
+      cells: ridge,
+      fromTileIndex: 0,
+      toTileIndex: 4,
+    })).toBe(0);
+
+    const diagonal = flatCells(9);
+    diagonal[1] = { elevation: 0, obstruction: 1 };
+    diagonal[3] = { elevation: 0, obstruction: 1 };
+    expect(evaluateLineTransmission({
+      columns: 3,
+      rows: 3,
+      cells: diagonal,
+      fromTileIndex: 0,
+      toTileIndex: 4,
+    })).toBe(0);
+    diagonal[3] = { elevation: 0, obstruction: 0 };
+    expect(evaluateLineTransmission({
+      columns: 3,
+      rows: 3,
+      cells: diagonal,
+      fromTileIndex: 0,
+      toTileIndex: 4,
+    })).toBe(1);
+  });
+
+  it("fails malformed or unbounded rays closed", () => {
+    const valid = {
+      columns: 2,
+      rows: 1,
+      cells: flatCells(2),
+      fromTileIndex: 0,
+      toTileIndex: 1,
+    } as const;
+    expect(evaluateLineTransmission({ ...valid, toTileIndex: 2 })).toBeNull();
+    expect(evaluateLineTransmission({
+      ...valid,
+      cells: [{ elevation: 0, obstruction: Number.NaN }, valid.cells[1]!],
+    })).toBeNull();
+    expect(evaluateLineTransmission({
+      columns: 1,
+      rows: 1,
+      cells: [{ elevation: 0, obstruction: Number.NaN }],
+      fromTileIndex: 0,
+      toTileIndex: 0,
+    })).toBeNull();
   });
 });
 

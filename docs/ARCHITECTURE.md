@@ -60,6 +60,51 @@ clock sidecar, needs no save migration, and cannot depend on frame rate, device
 time, timezone, locale, or the loaded signed region. Tide and weather retain
 their independent tick-derived rules and are not reset at midnight.
 
+Newly created worlds begin at the same clock's Day 1 07:00 tick rather than
+inventing a second scenario clock or rewriting the epoch. Initial tide,
+weather deadline, recipes, residents, routes, contracts, and the world-created
+event are all born at that timestamp. Existing and imported saves retain their
+exact persisted tick, including valid tick-zero midnight worlds; no migration,
+offline fast-forward, or phase offset is applied.
+
+Fresh `RegionalEcologyStateV6` breadth roots use an activation-clock baseline:
+each append-only cohort derives its pristine resident state from its already-
+persisted activation tick, so a 07:00 world does not simulate wildlife through
+420 ticks before that world or cohort existed. Released breadth roots and
+supported older-save reconstruction/migration retain their established
+tick-zero baseline policy exactly. The distinction changes no outer save
+version and does not rewrite or reroll an existing ecology history.
+
+`src/sim/outdoorIllumination.ts` owns version-1 fixed-point physical outdoor
+light. It combines the shared open-sky signal with current weather
+transmission, bounded terrain sky exposure, explicit cover transmission, and
+at most sixteen already-spatially-filtered local sources. The game bridge
+derives one stable dusk/night lamp from each completed beacon civic project,
+addresses it in signed region/local space, and reuses F0's exact elevation,
+obstruction, and diagonal-supercover ray for light transmission. A four-entry
+bounded field cache keys eased light state, weather, persisted beacon identity,
+spatial frame, and immutable terrain geometry rather than renderer frames or a
+raw steady-night tick. Internally constructed regional views freeze one
+validated geometry snapshot and one bounded lamp index for all perception and
+presentation consumers in that world step; caller-owned mutable fixtures are
+still rescanned and fail closed. No lamp sidecar or save migration exists.
+
+F0 consumes that row-major physical field per target. Darkness contracts only
+the shorter actor/item/label/interaction field through a bounded nonlinear
+low-light response; known terrain shape retains its longer weather- and
+geometry-limited horizon. The same sealed perception snapshot gates Chart and
+Relief detail, so a renderer brightness preference cannot reveal an actor or
+change AI knowledge. Chart colors and Relief sky, ambient light, and sunlight
+direction ease from the same projected phase without a screen-darkening pane.
+The local-light component is projected only onto terrain the player currently
+sees, producing bounded Chart and Relief beacon pools without becoming durable
+map memory or another disclosure test. Water uses an independently
+blue-anchored, unlit Relief material and a cool local-light lift so daylight,
+twilight, terrain, fog, camera angle, and nearby lamps cannot composite it into
+misleading green/yellow ground color. Independent canopy/interior cover, fire
+and carried lantern sources, shadow maps, astronomy, and complete circadian
+schedules are not claimed by this first outdoor-light slice.
+
 ## Authoritative tick
 
 One world tick:
@@ -1255,7 +1300,13 @@ closed. Outer version 30 / `RegionalEcologyStateV6` is the LIVE_VERIFIED Alpha39
 save boundary; versions 27–29 and breadth epochs 1–2 remain its authenticated
 internal compatibility lineage.
 
-The runtime currently writes one `autosave` slot on a world-tick interval, page visibility loss, page exit, title return, and Quiet Hour. It loads that slot for the Continue card and never simulates offline time.
+The runtime currently writes one `autosave` slot on a 600-world-tick interval,
+page visibility loss, page exit, title return, and Quiet Hour. The periodic
+interval begins from the authoritative tick present when a world is created,
+continued, or deliberately replaced, rather than measuring from civil epoch
+tick zero. A fresh 07:00 world and a late resumed world therefore each receive
+one complete interval; the lifecycle save triggers remain unchanged. The
+runtime loads that slot for the Continue card and never simulates offline time.
 
 The browser repository is local-first: it prefers IndexedDB and mirrors into localStorage. A compact local version fence stores the newest era/generation/timestamp/tick tuple and full-record fingerprint. Cross-store reads reconcile only after both configured stores are readable: known fence rollback produces `NewerSaveUnavailableError`, equal-version differing records produce `ConflictingSaveCopiesError`, and any partial or total read failure remains an unknown-authority error rather than trusting a plausible survivor. Record writes reject older or equal-version-different snapshots with `StaleSaveWriteError`. Overlapping runtime save requests coalesce to the newest complete snapshot behind the in-flight write, and only success for the latest requested sequence in the active era/generation clears persistent failure UI.
 

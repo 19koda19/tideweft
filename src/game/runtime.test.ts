@@ -147,6 +147,7 @@ import {
   serializeRegionalEcologyStateV6,
 } from "./regionalEcologyStateV6";
 import {
+  REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
   activateRegionalBreadthEcologyThroughEpoch,
   createPristineRegionalBreadthEcologyRoot,
   regionalBreadthEcologyResidentsForActiveRegions,
@@ -1455,7 +1456,7 @@ describe("perpetual new worlds", () => {
     const oldRoot = createPristineRegionalBreadthEcologyRoot({
       rootSeed: world.meta.rootSeed,
       completedTick: world.meta.completedTick,
-    }, 1);
+    }, 1, REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID);
     const oldResidents = regionalBreadthEcologyResidentsForActiveRegions(
       oldRoot,
       world.meta.rootSeed,
@@ -1526,7 +1527,11 @@ describe("perpetual new worlds", () => {
       rootSeed: world.meta.rootSeed,
       completedTick: world.meta.completedTick,
     } as const;
-    const epochOneRoot = createPristineRegionalBreadthEcologyRoot(binding, 1);
+    const epochOneRoot = createPristineRegionalBreadthEcologyRoot(
+      binding,
+      1,
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+    );
     const epochTwoRoot = activateRegionalBreadthEcologyThroughEpoch(
       epochOneRoot,
       binding,

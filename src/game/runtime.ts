@@ -152,8 +152,12 @@ import {
 import {
   VISIBILITY_DIRECT,
   evaluateVisualContact,
-  type PerceptionCell,
 } from "./perception";
+import {
+  buildOutdoorIlluminationField,
+  buildWorldPerceptionCells,
+  type OutdoorIlluminationField,
+} from "./outdoorIllumination";
 import {
   announce,
   captureSessionBaseline,
@@ -429,6 +433,7 @@ import {
   canonicalRegionalEcologyStateV6ForWorld,
   commitRegionalEcologyStateV6ActiveProjection,
   createFreshRegionalEcologyStateV6,
+  createLegacyBaselineRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
   migrateRegionalEcologyStateV5ToV6,
   projectRegionalEcologyStateV6ActiveState,
@@ -5014,7 +5019,11 @@ function runtimeCoreFoodEvidence(
   const observerTileIndex = Math.floor(observerPoint.y / WORLD_POSITION_UNITS_PER_TILE)
     * world.terrain.width
     + Math.floor(observerPoint.x / WORLD_POSITION_UNITS_PER_TILE);
-  const cells = runtimeLivingActorPerceptionCells(world);
+  const cells = buildWorldPerceptionCells(world);
+  const illumination = cells === null
+    ? null
+    : buildOutdoorIlluminationField(world, cells);
+  if (cells === null || illumination === null) return null;
   const candidates: Array<Readonly<{
     entityId: string;
     quantity: number;
@@ -5161,6 +5170,11 @@ function runtimeCoreFoodEvidence(
         continue;
       }
     }
+    const targetIllumination = runtimePhysicalIlluminationAt(
+      illumination,
+      candidate.targetTileIndex,
+    );
+    if (targetIllumination === null) return null;
     const sight = evaluateVisualContact({
       columns: world.terrain.width,
       rows: world.terrain.height,
@@ -5170,7 +5184,7 @@ function runtimeCoreFoodEvidence(
       observerFacingRadians,
       weatherVisibility: clamp(1 - world.weather.intensity / FIXED_POINT * 0.52, 0, 1),
       targetMovementSalience: candidate.motion === "resting" ? 0 : 0.5,
-      targetLightVisibility: 0.72,
+      targetLightVisibility: targetIllumination / FIXED_POINT,
     });
     if (sight === null || !sight.identityEligible) continue;
     const observationId = `food:${hashCanonical([
@@ -6931,20 +6945,17 @@ function canonicalRuntimeLivingActorPlayerChoice(
     : null;
 }
 
-function runtimeLivingActorPerceptionCells(world: WorldView): readonly PerceptionCell[] {
-  const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
-  return world.terrain.tiles.map((tile, index) => ({
-    elevation: tile.elevation / FIXED_POINT,
-    obstruction: occupied.has(index)
-      ? 0.72
-      : tile.terrain === "ridge"
-        ? 0.76
-        : tile.terrain === "marsh"
-          ? 0.34
-          : tile.terrain === "meadow" && tile.roughness >= 880_000
-            ? 0.5
-            : 0,
-  }));
+function runtimePhysicalIlluminationAt(
+  field: OutdoorIlluminationField,
+  tileIndex: number,
+): number | null {
+  const value = field.physicalIllumination[tileIndex];
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && value <= FIXED_POINT
+    ? value
+    : null;
 }
 
 function runtimePorterDogVisualObservations(
@@ -6961,13 +6972,14 @@ function runtimePorterDogVisualObservations(
   // absence of evidence, not a malformed frame. Never flatten a remote dog
   // into this local view merely because the keeper relationship is known.
   if (observer === null || subject === null) return Object.freeze([]);
-  const targetTile = world.terrain.tiles[subject.tileIndex];
-  if (targetTile === undefined) return null;
-  const targetLightVisibility = targetTile.terrain === "marsh"
-    ? 0.55
-    : targetTile.terrain === "ridge" || targetTile.terrain === "deep-water"
-      ? 0.9
-      : 0.72;
+  const cells = buildWorldPerceptionCells(world);
+  const illumination = cells === null
+    ? null
+    : buildOutdoorIlluminationField(world, cells);
+  const targetIllumination = illumination === null
+    ? null
+    : runtimePhysicalIlluminationAt(illumination, subject.tileIndex);
+  if (cells === null || targetIllumination === null) return null;
   let observerFacingRadians = headingToRadians(porterAddress.heading);
   if (knownWorksiteFocus !== null) {
     try {
@@ -6980,7 +6992,7 @@ function runtimePorterDogVisualObservations(
   const sight = evaluateVisualContact({
     columns: world.terrain.width,
     rows: world.terrain.height,
-    cells: runtimeLivingActorPerceptionCells(world),
+    cells,
     observerTileIndex: observer.tileIndex,
     targetTileIndex: subject.tileIndex,
     observerFacingRadians,
@@ -6996,7 +7008,7 @@ function runtimePorterDogVisualObservations(
     // returning dog's gait/posture; ordinary incidental dog visibility keeps
     // the neutral salience used elsewhere.
     targetMovementSalience: knownWorksiteFocus === null ? 0 : 0.5,
-    targetLightVisibility,
+    targetLightVisibility: targetIllumination / FIXED_POINT,
   });
   if (sight === null) return Object.freeze([]);
   const confidence = clamp(Math.round(sight.confidence * FIXED_POINT), 0, FIXED_POINT);
@@ -8357,6 +8369,7 @@ export async function createTideweftRuntime(
     economyView,
     regionalTravel.window,
     { discovered: player.discovered, depthSoundings: player.depthSoundings },
+    { immutable: true },
   );
   let regionalEcology = resumed?.regionalEcology
     ?? createRuntimeRegionalEcologyState(
@@ -8468,7 +8481,9 @@ export async function createTideweftRuntime(
   let pendingResidentGreeting: { residentId: number; commandId: string } | null = null;
   let eventObservationCursor = 0;
   const residentSpeech = new Map<number, { text: string; untilSessionMs: number }>();
-  let lastAutosaveTick = 0;
+  // Autosave cadence is elapsed play time, not distance from the civil epoch.
+  // Fresh daylight worlds begin at 07:00, so their first interval begins now.
+  let lastAutosaveTick = world.meta.completedTick;
   let lastCargoDamageNoticeMs = Number.NEGATIVE_INFINITY;
   let pendingSave: { sequence: number; record: SaveRecord } | undefined;
   let saveWorkerRunning = false;
@@ -8640,6 +8655,7 @@ export async function createTideweftRuntime(
       economyView,
       regionalTravel.window,
       { discovered: player.discovered, depthSoundings: player.depthSoundings },
+      { immutable: true },
     );
     fieldResourceProjection = projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
   }
@@ -9174,12 +9190,17 @@ export async function createTideweftRuntime(
     );
     const moved = movementSalience > 0;
     const inWater = player.mode === "wading" || player.mode === "skiff" || player.mode === "swept";
-    const tile = worldView.terrain.tiles[playerTileIndex(player)];
-    const lightVisibility = tile?.terrain === "marsh"
-      ? 550_000
-      : tile?.terrain === "ridge" || tile?.terrain === "deep-water"
-        ? 900_000
-        : 720_000;
+    const targetTileIndex = playerTileIndex(player);
+    const cells = buildWorldPerceptionCells(worldView);
+    const illumination = cells === null
+      ? null
+      : buildOutdoorIlluminationField(worldView, cells);
+    const lightVisibility = illumination === null
+      ? null
+      : runtimePhysicalIlluminationAt(illumination, targetTileIndex);
+    if (lightVisibility === null) {
+      throw new Error("Player sensory illumination failed validation");
+    }
     const soundLoudness = strongImpact
       ? FIXED_POINT
       : !moved
@@ -9756,6 +9777,7 @@ export async function createTideweftRuntime(
         completedEconomyView,
         regionalTravel.window,
         { discovered: player.discovered, depthSoundings: player.depthSoundings },
+        { immutable: true },
       );
       const porter = runtimeBio0Porter(
         completedEconomyView,
@@ -12316,7 +12338,7 @@ export async function createTideweftRuntime(
     pendingResidentObservation = null;
     pendingResidentGreeting = null;
     residentSpeech.clear();
-    lastAutosaveTick = 0;
+    lastAutosaveTick = world.meta.completedTick;
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
     soundscape.play("strand", 0.9);
     refreshViews();
@@ -15207,6 +15229,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         compatibilityView,
         restored.window,
         { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
+        { immutable: true },
       );
       const playerAddress = regionalAddressAt(restoredView, playerTileIndex(decoded.player));
       if (!playerAddress || regionKey(playerAddress.region) !== regionKey(restored.stream.center)) {
@@ -15242,6 +15265,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       compatibilityView,
       regionalTravel.window,
       { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
+      { immutable: true },
     );
     const activeEcologyRegions = regionalStorageRegionsInView(restoredRegionalView);
     const regionalEcology = persistedRegionalEcology === null
@@ -15339,7 +15363,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             cold,
             world.meta.rootSeed,
           );
-          const breadth = createFreshRegionalEcologyStateV6(
+          const breadth = createLegacyBaselineRegionalEcologyStateV6(
             polarConsumer,
             world.meta.rootSeed,
           );

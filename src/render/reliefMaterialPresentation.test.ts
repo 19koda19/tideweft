@@ -64,4 +64,28 @@ describe("Relief authored ground materials", () => {
     } as const;
     expect(reliefSurfaceMaterialColor(input)).toBe(reliefSurfaceMaterialColor(input));
   });
+
+  it("shows local light only on the present sensory surface, never durable memory", () => {
+    const base = {
+      kind: "meadow" as const,
+      biome: "rain-meadow" as const,
+      environment: 0.5,
+      visibility: 1,
+      fog: 0,
+      currentVisibility: 1,
+    };
+    const unlit = reliefSurfaceMaterialColor(base);
+    const lit = reliefSurfaceMaterialColor({ ...base, currentLocalIllumination: 0.75 });
+    const rememberedLit = reliefSurfaceMaterialColor({
+      ...base,
+      currentLocalIllumination: 0.75,
+      memoryOnly: true,
+    });
+    const rememberedUnlit = reliefSurfaceMaterialColor({ ...base, memoryOnly: true });
+
+    expect(lit).not.toBe(unlit);
+    expect(rgb(lit).reduce((total, channel) => total + channel, 0))
+      .toBeGreaterThan(rgb(unlit).reduce((total, channel) => total + channel, 0));
+    expect(rememberedLit).toBe(rememberedUnlit);
+  });
 });

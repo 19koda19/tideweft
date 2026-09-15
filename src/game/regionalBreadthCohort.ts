@@ -48,6 +48,11 @@ export interface CreateCoreEcologyBreadthResidentPatchInput {
   readonly seed: RootSeed;
   readonly habitat: CoreEcologyBreadthHabitat;
   readonly tick?: number;
+  /**
+   * First authoritative tick at which this append-only cohort existed.
+   * Omitted legacy callers retain the released tick-zero baseline exactly.
+   */
+  readonly baselineTick?: number;
 }
 
 export interface CanonicalCoreEcologyBreadthResidentBinding {
@@ -100,7 +105,12 @@ export function createCoreEcologyBreadthResidentPatch(
     throw new RangeError("Breadth resident habitat belongs to another world");
   }
   const tick = input.tick ?? 0;
+  const baselineTick = input.baselineTick ?? 0;
   requireTick(tick);
+  requireTick(baselineTick);
+  if (baselineTick > tick) {
+    throw new RangeError("Breadth cohort baseline cannot begin after its current tick");
+  }
   const populations = habitat.populations.flatMap(individualPopulation);
   const aggregateCount = habitat.populations.filter(
     ({ actorRepresentation, populationUnits }) => (
@@ -135,7 +145,7 @@ export function createCoreEcologyBreadthResidentPatch(
       groupOrdinal: 0,
       memberOrdinals: population.members.map(({ populationOrdinal }) => populationOrdinal),
       anchor: candidate.anchors[0]!.position,
-      tick: 0,
+      tick: baselineTick,
     })];
   }));
 
@@ -147,22 +157,23 @@ export function createCoreEcologyBreadthResidentPatch(
     seed: input.seed,
     patchKey: coreEcologyBreadthResidentSourceKey(habitat),
     originRegion: habitat.region,
-    tick: 0,
+    tick: baselineTick,
     derivation,
     groups,
     populations,
   });
   const ownsTidalTable = coreEcologyPatchHasTidalTableAuthority(epochPatch);
   const reconciled = ownsTidalTable
-    ? stepCoreEcologyTidalTable(epochPatch, { atTick: 0 })?.patch ?? null
+    ? stepCoreEcologyTidalTable(epochPatch, { atTick: baselineTick })?.patch ?? null
     : epochPatch;
   if (
     reconciled === null
-    || (ownsTidalTable && projectCoreEcologyTidalTable(epochPatch, 0) === null)
+    || (ownsTidalTable
+      && projectCoreEcologyTidalTable(epochPatch, baselineTick) === null)
   ) {
     throw new Error("Shared tidal-table rejected the breadth epoch baseline");
   }
-  if (tick === 0) return reconciled;
+  if (tick === baselineTick) return reconciled;
   const advanced = ownsTidalTable
     ? advanceCoreEcologyDormantAggregateAutonomy(reconciled, { atTick: tick })
     : advanceCoreEcologyDormantAggregatePatch(reconciled, { atTick: tick });

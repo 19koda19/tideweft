@@ -76,10 +76,24 @@ export interface PerceptionInput {
   readonly playerTileIndex: number;
   readonly facingRadians: number;
   readonly weatherVisibility: number;
+  /**
+   * Physical illumination at each target cell, normalized to 0..1. This field
+   * affects actor/item/label detail only: broad terrain remains readable from
+   * geometry and weather. Omission preserves the legacy fully-lit contract.
+   */
+  readonly detailIllumination?: readonly number[];
   /** Terrain/shape visibility overrides. */
   readonly rangeOverrides?: PerceptionRangeOverrides;
   /** Actor/item/label/interaction visibility overrides. */
   readonly detailRangeOverrides?: PerceptionRangeOverrides;
+}
+
+export interface LineTransmissionInput {
+  readonly columns: number;
+  readonly rows: number;
+  readonly cells: readonly PerceptionCell[];
+  readonly fromTileIndex: number;
+  readonly toTileIndex: number;
 }
 
 export interface PerceptionResult {
@@ -191,6 +205,10 @@ interface ValidatedGrid {
   readonly cells: readonly PerceptionCell[];
 }
 
+interface LineValidationState {
+  invalidCell: boolean;
+}
+
 const TAU = 2 * Math.PI;
 const OBSTRUCTION_BLOCKING_THRESHOLD = 0.5;
 const OBSERVER_EYE_HEIGHT = 0.125;
@@ -238,6 +256,15 @@ function clampUnit(value: number): number {
 function smoothstepUnit(value: number): number {
   const clamped = clampUnit(value);
   return clamped * clamped * (3 - 2 * clamped);
+}
+
+/**
+ * Human-scale detail recognition adapts to low light nonlinearly. This is an
+ * observer response curve, not a brighter physical-world value: physical zero
+ * still yields zero range, while moonlight remains useful only nearby.
+ */
+function detailRangeScaleForIllumination(illumination: number): number {
+  return Math.sqrt(illumination);
 }
 
 function featheredStrength(
@@ -422,6 +449,19 @@ function validateDetailRanges(
   return detailRanges;
 }
 
+function validateDetailIllumination(
+  raw: unknown,
+  count: number,
+): readonly number[] | null {
+  if (!Array.isArray(raw) || raw.length !== count) return null;
+  const illumination: number[] = [];
+  for (const value of raw) {
+    if (!isUnit(value)) return null;
+    illumination.push(value);
+  }
+  return illumination;
+}
+
 function appendUint32(hash: number, value: number): number {
   let result = hash;
   const normalized = value >>> 0;
@@ -580,6 +620,7 @@ function hasLineOfSight(
   toIndex: number,
   blockOnObstruction: boolean,
   validateTraversedCells = false,
+  validationState?: LineValidationState,
 ): boolean {
   const fromX = fromIndex % grid.columns;
   const fromY = Math.floor(fromIndex / grid.columns);
@@ -592,7 +633,10 @@ function hasLineOfSight(
   const rawTarget = grid.cells[toIndex];
   const origin = validateTraversedCells ? readPerceptionCell(rawOrigin) : rawOrigin;
   const target = validateTraversedCells ? readPerceptionCell(rawTarget) : rawTarget;
-  if (!origin || !target) return false;
+  if (!origin || !target) {
+    if (validationState) validationState.invalidCell = true;
+    return false;
+  }
   const originEye = origin.elevation + OBSERVER_EYE_HEIGHT;
   const targetEye = target.elevation + OBSERVER_EYE_HEIGHT;
 
@@ -607,7 +651,10 @@ function hasLineOfSight(
   const cellBlocksRay = (cellX: number, cellY: number): boolean => {
     const rawCell = grid.cells[cellY * grid.columns + cellX];
     const cell = validateTraversedCells ? readPerceptionCell(rawCell) : rawCell;
-    if (!cell) return true;
+    if (!cell) {
+      if (validationState) validationState.invalidCell = true;
+      return true;
+    }
     if (blockOnObstruction && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return true;
     const traveled = Math.hypot(cellX - fromX, cellY - fromY);
     const rayHeight = originEye + (targetEye - originEye) * (traveled / totalDistance);
@@ -632,16 +679,54 @@ function hasLineOfSight(
     // flanks meet. One open flank still permits a glance around an edge, while
     // two opaque/elevated flanks form conservative supercover for both terrain
     // and detail disclosure.
-    if (
-      moveX
-      && moveY
-      && cellBlocksRay(x, previousY)
-      && cellBlocksRay(previousX, y)
-    ) return false;
+    if (moveX && moveY) {
+      const horizontalFlankBlocks = cellBlocksRay(x, previousY);
+      const verticalFlankBlocks = cellBlocksRay(previousX, y);
+      if (horizontalFlankBlocks && verticalFlankBlocks) return false;
+    }
     if (x === toX && y === toY) return true;
     if (cellBlocksRay(x, y)) return false;
   }
   return true;
+}
+
+/**
+ * Reuses the exact detail-visibility ray for physical light transmission.
+ * The query returns only binary transmission: callers own light intensity and
+ * falloff, while terrain elevation, opaque obstruction, and diagonal
+ * supercover remain one shared geometry rule.
+ */
+export function evaluateLineTransmission(input: LineTransmissionInput): number | null {
+  const rawInput: unknown = input;
+  if (!isRecord(rawInput)) return null;
+  const dimensions = validatedDimensions(rawInput.columns, rawInput.rows);
+  if (!dimensions) return null;
+  const grid = validateGridShape(rawInput, dimensions);
+  const fromTileIndex = rawInput.fromTileIndex;
+  const toTileIndex = rawInput.toTileIndex;
+  if (
+    !grid
+    || !Number.isSafeInteger(fromTileIndex)
+    || (fromTileIndex as number) < 0
+    || (fromTileIndex as number) >= dimensions.count
+    || !Number.isSafeInteger(toTileIndex)
+    || (toTileIndex as number) < 0
+    || (toTileIndex as number) >= dimensions.count
+  ) return null;
+  if (
+    !readPerceptionCell(grid.cells[fromTileIndex as number])
+    || !readPerceptionCell(grid.cells[toTileIndex as number])
+  ) return null;
+  const validationState: LineValidationState = { invalidCell: false };
+  const transmitted = hasLineOfSight(
+    grid,
+    fromTileIndex as number,
+    toTileIndex as number,
+    true,
+    true,
+    validationState,
+  );
+  return validationState.invalidCell ? null : transmitted ? 1 : 0;
 }
 
 /**
@@ -776,6 +861,9 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
   const detailRanges = ranges
     ? validateDetailRanges(rawInput.detailRangeOverrides, ranges)
     : null;
+  const detailIllumination = rawInput.detailIllumination === undefined
+    ? undefined
+    : validateDetailIllumination(rawInput.detailIllumination, dimensions.count);
   const facingRadians = rawInput.facingRadians;
   const weatherVisibility = rawInput.weatherVisibility;
   if (
@@ -786,6 +874,7 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     || !isUnit(weatherVisibility)
     || !ranges
     || !detailRanges
+    || detailIllumination === null
   ) {
     return failedResult(
       dimensions.columns,
@@ -812,11 +901,11 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     maximumGridDistance,
     ranges.directSightRange * weatherVisibility,
   );
-  const detailPeripheralRange = Math.min(
+  const maximumDetailPeripheralRange = Math.min(
     maximumGridDistance,
     detailRanges.closePeripheralRange * weatherVisibility,
   );
-  const detailDirectRange = Math.min(
+  const maximumDetailDirectRange = Math.min(
     maximumGridDistance,
     detailRanges.directSightRange * weatherVisibility,
   );
@@ -887,8 +976,13 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
         : VISIBILITY_PERIPHERAL;
     }
 
-    const detailInPeripheralRange = distance <= detailPeripheralRange;
-    const detailInDirectRange = distance <= detailDirectRange;
+    const targetIllumination = detailRangeScaleForIllumination(
+      detailIllumination?.[index] ?? 1,
+    );
+    const detailInPeripheralRange = distance
+      <= maximumDetailPeripheralRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
+    const detailInDirectRange = distance
+      <= maximumDetailDirectRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
     const detailInForwardCone = bearingDistance <= detailHalfCone + LINE_OF_SIGHT_EPSILON;
     const detailDirect = detailInDirectRange && detailInForwardCone;
     if (

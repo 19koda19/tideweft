@@ -35,7 +35,9 @@ import {
   type ReplaceRegionalEcologyStateV5ActiveStateInput,
 } from "./regionalEcologyStateV5";
 import {
+  REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
+  REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
   activateRegionalBreadthEcologyThroughEpoch,
   advanceRegionalBreadthEcologyRoot,
@@ -242,12 +244,39 @@ export function createFreshRegionalEcologyStateV6(
   baseValue: unknown,
   rootSeed: RootSeed,
 ): RegionalEcologyStateV6 {
+  return createRegionalEcologyStateV6WithBreadthBaseline(
+    baseValue,
+    rootSeed,
+    REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+  );
+}
+
+/** Pre-v25 reconstruction retains the released tick-zero breadth baseline. */
+export function createLegacyBaselineRegionalEcologyStateV6(
+  baseValue: unknown,
+  rootSeed: RootSeed,
+): RegionalEcologyStateV6 {
+  return createRegionalEcologyStateV6WithBreadthBaseline(
+    baseValue,
+    rootSeed,
+    REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+  );
+}
+
+function createRegionalEcologyStateV6WithBreadthBaseline(
+  baseValue: unknown,
+  rootSeed: RootSeed,
+  baselinePolicyId:
+    | typeof REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID
+    | typeof REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+): RegionalEcologyStateV6 {
   const base = canonicalizeRegionalEcologyStateV5(baseValue);
   if (base === null) throw new TypeError("Fresh regional ecology v6 requires one v5 base");
-  const breadthRoot = createPristineRegionalBreadthEcologyRoot({
-    rootSeed,
-    completedTick: base.updatedAtTick,
-  });
+  const breadthRoot = createPristineRegionalBreadthEcologyRoot(
+    { rootSeed, completedTick: base.updatedAtTick },
+    CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    baselinePolicyId,
+  );
   return createRegionalEcologyStateV6({
     base,
     breadthRoot,
@@ -270,10 +299,14 @@ export function migrateRegionalEcologyStateV5ToV6(
   if (base === null || stableStringify(base) !== stableStringify(baseValue)) {
     throw new TypeError("Regional ecology v29 migration requires an exact v5 child");
   }
-  const breadthRoot = createPristineRegionalBreadthEcologyRoot({
-    rootSeed: input.rootSeed,
-    completedTick: base.updatedAtTick,
-  });
+  const breadthRoot = createPristineRegionalBreadthEcologyRoot(
+    {
+      rootSeed: input.rootSeed,
+      completedTick: base.updatedAtTick,
+    },
+    CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+    REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+  );
   const receiptBase = adoptionReceiptBase({
     sourceEnvelopeIntegrity: input.sourceEnvelopeIntegrity,
     sourceStateIntegrity: base.integrity,

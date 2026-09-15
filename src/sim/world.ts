@@ -38,6 +38,7 @@ import {
   residentRelationshipTrust,
 } from "./npcIdentity";
 import { createActorPerceptionState } from "./actorPerception";
+import { WORLD_NEW_GAME_START_TICK } from "./worldTime";
 
 const SETTLEMENT_NAMES = [
   "Latchmere",
@@ -83,11 +84,16 @@ function makeInventory(seed: RootSeed, settlementIndex: number, specialization: 
   return inventory;
 }
 
-function makeRecipe(id: number, specialization: ResourceKind, settlementIndex: number): Recipe {
+function makeRecipe(
+  id: number,
+  specialization: ResourceKind,
+  settlementIndex: number,
+  startTick: number,
+): Recipe {
   const common = {
     id,
     intervalTicks: 60,
-    nextRunTick: 60 + settlementIndex * 7,
+    nextRunTick: startTick + 60 + settlementIndex * 7,
   };
   switch (specialization) {
     case "food":
@@ -211,6 +217,7 @@ function makeResidents(
   allocator: IdAllocator,
   seed: RootSeed,
   settlements: SettlementState[],
+  startTick: number,
 ): ResidentState[] {
   const residents: ResidentState[] = [];
   for (let settlementIndex = 0; settlementIndex < settlements.length; settlementIndex += 1) {
@@ -237,7 +244,7 @@ function makeResidents(
         homeSettlementId: settlement.id,
         role,
         identity,
-        perception: createActorPerceptionState(identity.stableId),
+        perception: createActorPerceptionState(identity.stableId, startTick),
         condition: createResidentCondition(identityInput),
         playerKnowledge: createResidentPlayerKnowledge(),
         memories: [],
@@ -247,7 +254,7 @@ function makeResidents(
         intention: "work",
         location: { kind: "settlement", settlementId: settlement.id },
         activeContractId: null,
-        nextThinkTick: 10 + (id % 17),
+        nextThinkTick: startTick + 10 + (id % 17),
       };
       residents.push(resident);
       settlement.residentIds.push(id);
@@ -286,6 +293,7 @@ function makeRoutes(
   seed: RootSeed,
   terrain: TerrainState,
   settlements: readonly SettlementState[],
+  startTick: number,
 ): RouteState[] {
   const routes: RouteState[] = [];
   for (let fromIndex = 0; fromIndex < settlements.length; fromIndex += 1) {
@@ -315,7 +323,7 @@ function makeRoutes(
         condition: keyedRandomInt(seed, GENERATION_DOMAIN, 0, from.id, to.id, 720_000, 930_000, 1),
         reliability: keyedRandomInt(seed, GENERATION_DOMAIN, 0, from.id, to.id, 580_000, 850_000, 2),
         traffic: 0,
-        lastUsedTick: 0,
+        lastUsedTick: startTick,
       };
       routes.push(route);
       for (const tileIndex of path) {
@@ -328,6 +336,7 @@ function makeRoutes(
 }
 
 export function createInitialWorld(seedText: string, pressureMode: PressureMode): WorldState {
+  const startTick = WORLD_NEW_GAME_START_TICK;
   const rootSeed = seedFromText(seedText);
   const terrain = generateTerrain(rootSeed);
   const allocator: IdAllocator = { next: 1 };
@@ -343,7 +352,7 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
     if (id === undefined || name === undefined || tileIndex === undefined || specialization === undefined) {
       throw new Error("Missing settlement generation template");
     }
-    const recipe = makeRecipe(allocateId(allocator), specialization, index);
+    const recipe = makeRecipe(allocateId(allocator), specialization, index, startTick);
     settlements.push({
       id,
       originKey: stableRegionObjectId(rootSeed, { x: 0, y: 0 }, "settlement", index),
@@ -367,13 +376,13 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
       .sort((left, right) => left.settlementId - right.settlementId);
   }
   addSettlementKnowledge(allocator, rootSeed, settlements);
-  const residents = makeResidents(allocator, rootSeed, settlements);
-  const routes = makeRoutes(allocator, rootSeed, terrain, settlements);
+  const residents = makeResidents(allocator, rootSeed, settlements, startTick);
+  const routes = makeRoutes(allocator, rootSeed, terrain, settlements, startTick);
   const initial = sumInventories(settlements.map((settlement) => settlement.inventory));
 
   return {
     meta: {
-      completedTick: 0,
+      completedTick: startTick,
       rootSeed: [...rootSeed],
       seedText,
       pressureMode,
@@ -383,13 +392,15 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
       nextEventSequence: 2,
     },
     terrain,
-    tide: tideAtTick(0),
+    tide: tideAtTick(startTick),
     weather: {
+      // This is seed-visible generation identity, not a scheduled weather draw.
+      // Preserve the released key while moving only its first transition.
       kind: keyedRandomU32(rootSeed, GENERATION_DOMAIN, 0, 0, 71) % 3 === 0 ? "mist" : "clear",
       intensity: keyedRandomInt(rootSeed, GENERATION_DOMAIN, 0, 0, 72, 80_000, 260_000),
       windX: keyedRandomInt(rootSeed, GENERATION_DOMAIN, 0, 0, 73, -120_000, 120_000),
       windY: keyedRandomInt(rootSeed, GENERATION_DOMAIN, 0, 0, 74, -120_000, 120_000),
-      nextChangeTick: 180,
+      nextChangeTick: startTick + 180,
     },
     settlements,
     residents,
@@ -404,7 +415,7 @@ export function createInitialWorld(seedText: string, pressureMode: PressureMode)
     processedCommandIds: [],
     events: [
       {
-        tick: 0,
+        tick: startTick,
         sequence: 1,
         type: "world-created",
         subjectId: null,

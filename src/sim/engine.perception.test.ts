@@ -81,25 +81,27 @@ function anonymousSound(
 describe("resident perception world-tick bridge", () => {
   it("admits only resident-local observations and advances everyone once", () => {
     const world = createWorld("resident perception frame");
+    const firstTick = world.meta.completedTick + 1;
     const watched = firstResident(world);
     const unwatched = world.residents[1];
     if (!unwatched) throw new Error("fixture has no second resident");
 
-    stepWorld(world, [], completeFrameFor(world, watched, 1));
+    stepWorld(world, [], completeFrameFor(world, watched, firstTick));
 
-    expect(watched.perception.tick).toBe(1);
+    expect(watched.perception.tick).toBe(firstTick);
     expect(watched.perception.suspicion).toBe("identified");
     expect(watched.perception.beliefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ subjectId: "player:local", lastObservedTick: 1 }),
+      expect.objectContaining({ subjectId: "player:local", lastObservedTick: firstTick }),
     ]));
-    expect(unwatched.perception.tick).toBe(1);
+    expect(unwatched.perception.tick).toBe(firstTick);
     expect(unwatched.perception.suspicion).toBe("unaware");
   });
 
   it("searches saved last-known information, lawfully reacquires, and later gives up", () => {
     const world = createWorld("resident search lifecycle");
+    const startTick = world.meta.completedTick;
     const resident = firstResident(world);
-    stepWorld(world, [], completeFrameFor(world, resident, 1));
+    stepWorld(world, [], completeFrameFor(world, resident, startTick + 1));
 
     stepWorld(world);
     expect(resident.perception.suspicion).toBe("searching");
@@ -111,11 +113,21 @@ describe("resident perception world-tick bridge", () => {
 
     // Hearing something near the last-known area is not lawful identity
     // reacquisition; the resident still knows only an anonymous contact.
-    stepWorld(world, [], completeFrameFor(world, resident, 3, [anonymousSound(resident, 3)]));
+    stepWorld(world, [], completeFrameFor(
+      world,
+      resident,
+      startTick + 3,
+      [anonymousSound(resident, startTick + 3)],
+    ));
     expect(resident.perception.suspicion).toBe("searching");
     expect(resident.perception.search?.subjectId).toBe("player:local");
 
-    stepWorld(world, [], completeFrameFor(world, resident, 4, [playerObservation(resident, 4, "again")]));
+    stepWorld(world, [], completeFrameFor(
+      world,
+      resident,
+      startTick + 4,
+      [playerObservation(resident, startTick + 4, "again")],
+    ));
     expect(resident.perception.suspicion).toBe("identified");
     expect(resident.perception.search).toBeNull();
 
@@ -131,12 +143,13 @@ describe("resident perception world-tick bridge", () => {
 
   it("rejects a malformed frame as a whole instead of admitting a forged subset", () => {
     const world = createWorld("closed resident perception frame");
+    const firstTick = world.meta.completedTick + 1;
     const resident = firstResident(world);
-    const valid = playerObservation(resident, 1);
+    const valid = playerObservation(resident, firstTick);
     const malformed = {
-      ...completeFrameFor(world, resident, 1, [valid]),
+      ...completeFrameFor(world, resident, firstTick, [valid]),
       residents: [
-        ...completeFrameFor(world, resident, 1, [valid]).residents,
+        ...completeFrameFor(world, resident, firstTick, [valid]).residents,
         {
           residentId: Number.MAX_SAFE_INTEGER,
           actorId: "forged:observer",
@@ -147,42 +160,44 @@ describe("resident perception world-tick bridge", () => {
 
     stepWorld(world, [], malformed);
 
-    expect(resident.perception.tick).toBe(1);
+    expect(resident.perception.tick).toBe(firstTick);
     expect(resident.perception.suspicion).toBe("unaware");
     expect(resident.perception.beliefs).toEqual([]);
   });
 
   it("rejects a valid-looking partial roster instead of selectively teaching one resident", () => {
     const world = createWorld("partial resident perception frame");
+    const firstTick = world.meta.completedTick + 1;
     const resident = firstResident(world);
 
     stepWorld(world, [], {
-      tick: 1,
+      tick: firstTick,
       residents: [{
         residentId: resident.id,
         actorId: resident.identity.stableId,
-        observations: [playerObservation(resident, 1)],
+        observations: [playerObservation(resident, firstTick)],
       }],
     });
 
-    expect(world.residents.every((candidate) => candidate.perception.tick === 1)).toBe(true);
+    expect(world.residents.every((candidate) => candidate.perception.tick === firstTick)).toBe(true);
     expect(resident.perception.suspicion).toBe("unaware");
     expect(resident.perception.beliefs).toEqual([]);
   });
 
   it("rejects every entry when one lawful resident carries a malformed observation", () => {
     const world = createWorld("atomic malformed observation frame");
+    const firstTick = world.meta.completedTick + 1;
     const first = world.residents[0];
     const second = world.residents[1];
     if (!first || !second) throw new Error("fixture lacks residents");
     const malformedSound = {
-      ...anonymousSound(second, 1),
+      ...anonymousSound(second, firstTick),
       subjectId: "player:local",
     } as unknown as ActorObservation;
 
-    const frame = completeFrameFor(world, first, 1);
+    const frame = completeFrameFor(world, first, firstTick);
     stepWorld(world, [], {
-      tick: 1,
+      tick: firstTick,
       residents: frame.residents.map((entry) => entry.residentId === second.id
         ? {
             residentId: second.id,
@@ -200,9 +215,10 @@ describe("resident perception world-tick bridge", () => {
 
   it("rejects raw player state instead of admitting it beside observations", () => {
     const world = createWorld("no raw player state");
+    const firstTick = world.meta.completedTick + 1;
     const resident = firstResident(world);
     const leaked = {
-      ...completeFrameFor(world, resident, 1),
+      ...completeFrameFor(world, resident, firstTick),
       playerPosition: {
         region: { x: 0, y: 0 },
         localX: 12_500,
@@ -212,7 +228,7 @@ describe("resident perception world-tick bridge", () => {
 
     stepWorld(world, [], leaked);
 
-    expect(resident.perception.tick).toBe(1);
+    expect(resident.perception.tick).toBe(firstTick);
     expect(resident.perception.suspicion).toBe("unaware");
     expect(resident.perception.beliefs).toEqual([]);
   });
@@ -222,12 +238,13 @@ describe("resident perception world-tick bridge", () => {
     const first = world.residents[0];
     const second = world.residents[1];
     if (!first || !second) throw new Error("fixture lacks residents");
-    second.perception = createActorPerceptionState(second.identity.stableId, 1);
+    const startTick = world.meta.completedTick;
+    second.perception = createActorPerceptionState(second.identity.stableId, startTick + 1);
 
     expect(() => stepWorld(world)).toThrow(/unsynchronized perception state/u);
-    expect(first.perception.tick).toBe(0);
-    expect(second.perception.tick).toBe(1);
-    expect(world.meta.completedTick).toBe(0);
+    expect(first.perception.tick).toBe(startTick);
+    expect(second.perception.tick).toBe(startTick + 1);
+    expect(world.meta.completedTick).toBe(startTick);
   });
 
   it("is independent of frame entry order", () => {
@@ -238,23 +255,24 @@ describe("resident perception world-tick bridge", () => {
     if (leftResidents.length !== 2 || rightResidents.length !== 2) {
       throw new Error("fixture lacks residents");
     }
+    const firstTick = left.meta.completedTick + 1;
     const entries = left.residents.map((resident) => ({
       residentId: resident.id,
       actorId: resident.identity.stableId,
       observations: leftResidents.some((candidate) => candidate.id === resident.id)
-        ? [playerObservation(resident, 1)]
+        ? [playerObservation(resident, firstTick)]
         : [],
     }));
     const mirroredEntries = right.residents.map((resident) => ({
       residentId: resident.id,
       actorId: resident.identity.stableId,
       observations: rightResidents.some((candidate) => candidate.id === resident.id)
-        ? [playerObservation(resident, 1)]
+        ? [playerObservation(resident, firstTick)]
         : [],
     })).reverse();
 
-    stepWorld(left, [], { tick: 1, residents: entries });
-    stepWorld(right, [], { tick: 1, residents: mirroredEntries });
+    stepWorld(left, [], { tick: firstTick, residents: entries });
+    stepWorld(right, [], { tick: firstTick, residents: mirroredEntries });
 
     expect(right).toEqual(left);
   });

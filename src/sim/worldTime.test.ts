@@ -7,11 +7,30 @@ import {
   WORLD_DUSK_START_TICK,
   WORLD_NIGHT_ILLUMINATION,
   WORLD_NIGHT_START_TICK,
+  WORLD_NEW_GAME_START_TICK,
   WORLD_TICKS_PER_DAY,
   projectWorldTime,
 } from "./worldTime";
 
 describe("authoritative world time", () => {
+  it("starts fresh worlds at full morning while preserving the midnight epoch", () => {
+    expect(WORLD_NEW_GAME_START_TICK).toBe(WORLD_DAY_START_TICK);
+    expect(projectWorldTime(WORLD_NEW_GAME_START_TICK)).toMatchObject({
+      dayNumber: 1,
+      dayTick: WORLD_DAY_START_TICK,
+      hour: 7,
+      minute: 0,
+      phase: "day",
+    });
+    expect(projectWorldTime(0)).toMatchObject({
+      dayNumber: 1,
+      dayTick: 0,
+      hour: 0,
+      minute: 0,
+      phase: "night",
+    });
+  });
+
   it("projects the versioned epoch and exact dawn/day/dusk/night boundaries", () => {
     expect(projectWorldTime(0)).toMatchObject({
       version: 1,

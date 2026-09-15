@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { seedFromText } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { hashCanonical, stableStringify } from "../sim/util";
+import { WORLD_NEW_GAME_START_TICK } from "../sim/worldTime";
 import { replaceCoreEcologyAggregatePatchActor } from "./coreEcology";
 import {
   CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
@@ -11,6 +12,8 @@ import {
 } from "./coreEcologyBreadthHabitat";
 import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
 import {
+  REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+  REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
   REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
   activateRegionalBreadthEcologyThroughEpoch,
@@ -37,6 +40,7 @@ export const ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT =
 const SEED = seedFromText("alpha37 estuary breadth shared properties");
 const FOREIGN_SEED = seedFromText("alpha37 foreign breadth root");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
+const TIDAL_FLOCK_REGION = createRegionCoord(-5_179, -89_646);
 const HERON_REGION = createRegionCoord(1_050, 38_043);
 const ABSENT_REGION = createRegionCoord(-1, -1);
 const DESTINATION = createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT);
@@ -181,6 +185,107 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       eventOrdinal: 1,
       residentPatch: heronPatch(),
     })).toThrow(/does not persist pristine baselines/u);
+  });
+
+  it("starts new-policy cohorts at activation while legacy roots retain exact tick-zero replay", () => {
+    const startTick = WORLD_NEW_GAME_START_TICK;
+    const habitat = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: TIDAL_FLOCK_REGION,
+      cohortId: COHORT,
+    });
+    expect(habitat.populations.some(({ species, populationUnits }) => (
+      species === "common-tern" && populationUnits > 0
+    ))).toBe(true);
+
+    const fresh = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: startTick,
+    });
+    expect(fresh.baselinePolicyId).toBe(
+      REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+    );
+    expect(fresh.activations.every(({ activatedAtTick }) => (
+      activatedAtTick === startTick
+    ))).toBe(true);
+    const freshPatch = regionalBreadthEcologyResidentPatchForRegion(
+      fresh,
+      SEED,
+      COHORT,
+      TIDAL_FLOCK_REGION,
+    );
+    if (freshPatch === null) throw new Error("Fresh breadth fixture is absent");
+    expect(freshPatch.updatedAtTick).toBe(startTick);
+    expect(freshPatch.populations.flatMap(({ members }) => members).every(({
+      actor,
+    }) => (
+      actor.updatedAtTick === startTick
+      && actor.perception.tick === startTick
+      && actor.intent.enteredAtTick === startTick
+      && (actor.intent.expiresAtTick === null || actor.intent.expiresAtTick >= startTick)
+    ))).toBe(true);
+    expect(freshPatch.groups.groups.every((group) => (
+      group.updatedAtTick >= startTick
+      && group.nextCoarseTick >= startTick
+      && group.lineage.every(({ atTick }) => atTick >= startTick)
+      && group.aftermath.every(({ atTick }) => atTick >= startTick)
+      && group.signals.every(({ emittedAtTick, lastPropagatedAtTick, expiresAtTick }) => (
+        emittedAtTick >= startTick
+        && lastPropagatedAtTick >= startTick
+        && expiresAtTick >= startTick
+      ))
+    ))).toBe(true);
+    expect(freshPatch.aggregatePopulations.every((population) => (
+      population.updatedAtTick >= startTick
+      && population.activitySignal.updatedAtTick >= startTick
+      && population.evidence.every(({ createdAtTick }) => createdAtTick >= startTick)
+      && population.disturbances.every(({ atTick }) => atTick >= startTick)
+      && (population.lastTidalRedistributionTick === null
+        || population.lastTidalRedistributionTick >= startTick)
+    ))).toBe(true);
+    expect(putRegionalBreadthEcologyResidentDeviation(fresh, {
+      rootSeed: SEED,
+      patch: freshPatch,
+    })).toBe(fresh);
+
+    const legacy = createPristineRegionalBreadthEcologyRoot(
+      { rootSeed: SEED, completedTick: startTick },
+      CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+    );
+    expect(legacy.baselinePolicyId).toBe(
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+    );
+    const legacyText = serializeRegionalBreadthEcologyRoot(legacy);
+    const restoredLegacy = deserializeRegionalBreadthEcologyRoot(legacyText);
+    expect(restoredLegacy).not.toBeNull();
+    expect(serializeRegionalBreadthEcologyRoot(restoredLegacy)).toBe(legacyText);
+    expect(canonicalRegionalBreadthEcologyRootForWorld(restoredLegacy, {
+      rootSeed: SEED,
+      completedTick: startTick,
+    })).toBe(restoredLegacy);
+    const legacyResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      restoredLegacy,
+      SEED,
+      [TIDAL_FLOCK_REGION],
+    );
+    const legacyPatch = legacyResidents?.find(({ cohortId }) => (
+      cohortId === COHORT
+    ))?.patch;
+    expect(legacyPatch).toEqual(createCoreEcologyBreadthResidentPatch({
+      seed: SEED,
+      habitat,
+      tick: startTick,
+    }));
+    expect(legacyPatch?.aggregatePopulations.some((population) => (
+      population.evidence.some(({ createdAtTick }) => createdAtTick < startTick)
+      || population.disturbances.some(({ atTick }) => atTick < startTick)
+    ))).toBe(true);
+    expect(putRegionalBreadthEcologyResidentDeviation(restoredLegacy, {
+      rootSeed: SEED,
+      patch: legacyPatch!,
+    })).toBe(restoredLegacy);
+    expect(legacyPatch).not.toEqual(freshPatch);
   });
 
   it("stores one coarse deviation, finds its extreme physical residence, and reloads without reroll", () => {

@@ -42,6 +42,7 @@ import {
   commitRegionalEcologyStateV6ActiveProjection,
   createRegionalEcologyStateV6,
   createFreshRegionalEcologyStateV6,
+  createLegacyBaselineRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
   migrateRegionalEcologyStateV5ToV6,
   projectRegionalEcologyStateV6ActiveState,
@@ -55,6 +56,8 @@ import {
 } from "./regionalEcologyStateV6";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import {
+  REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+  REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
   createPristineRegionalBreadthEcologyRoot,
   putRegionalBreadthEcologyResidentDeviation,
@@ -409,6 +412,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
     const { homeHabitat, v5 } = fixture();
     const original = stableStringify(v5);
     const fresh = createFreshRegionalEcologyStateV6(v5, SEED);
+    const legacyBaseline = createLegacyBaselineRegionalEcologyStateV6(v5, SEED);
     const sourceEnvelopeIntegrity = hashCanonical("authenticated outer v29 fixture");
     const migrated = migrateRegionalEcologyStateV5ToV6(v5, {
       rootSeed: SEED,
@@ -422,6 +426,15 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
     expect(fresh.base).toBe(v5);
     expect(migrated.base).toBe(v5);
     expect(stableStringify(migrated.base)).toBe(original);
+    expect(fresh.breadthRoot.baselinePolicyId).toBe(
+      REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+    );
+    expect(legacyBaseline.breadthRoot.baselinePolicyId).toBe(
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+    );
+    expect(migrated.breadthRoot.baselinePolicyId).toBe(
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+    );
     expect(fresh.adoption).toBeNull();
     expect(migrated.adoption).toMatchObject({
       policyId: REGIONAL_ECOLOGY_STATE_V6_ADOPTION_POLICY_ID,

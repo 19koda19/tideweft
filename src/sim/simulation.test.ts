@@ -4,20 +4,27 @@ import {
   FIXED_POINT,
   MIN_SETTLEMENT_MANHATTAN_DISTANCE,
   RESOURCE_KINDS,
+  WORLD_DAY_START_TICK,
   WORLD_HEIGHT,
+  WORLD_NEW_GAME_START_TICK,
   WORLD_WIDTH,
   assertWorldInvariants,
   createWorld,
   createWorldView,
   deserializeWorld,
   hashWorld,
+  keyedRandomInt,
+  keyedRandomU32,
+  projectWorldTime,
   runTicks,
+  seedFromText,
   serializeWorld,
   stepWorld,
   type ContractState,
   type SimCommand,
   type WorldState,
 } from "./public";
+import { tideAtTick } from "./terrain";
 
 function totalsIncludingCargo(world: WorldState) {
   const totals = Object.fromEntries(RESOURCE_KINDS.map((resource) => [resource, 0])) as Record<
@@ -43,7 +50,8 @@ afterEach(() => {
 
 describe("deterministic headless world", () => {
   it("generates the required tidal vertical-slice state", () => {
-    const world = createWorld("first lantern");
+    const seedText = "first lantern";
+    const world = createWorld(seedText);
     assertWorldInvariants(world);
     expect(world.terrain.width).toBe(WORLD_WIDTH);
     expect(world.terrain.height).toBe(WORLD_HEIGHT);
@@ -53,10 +61,41 @@ describe("deterministic headless world", () => {
     expect(new Set(world.residents.map((resident) => resident.name)).size).toBe(42);
     expect(world.routes).toHaveLength(21);
     expect(world.contracts.length).toBeGreaterThanOrEqual(3);
-    expect(world.contracts.every((contract) => contract.playerExclusiveUntilTick >= 300)).toBe(true);
+    expect(world.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
+    expect(WORLD_NEW_GAME_START_TICK).toBe(WORLD_DAY_START_TICK);
+    expect(projectWorldTime(world.meta.completedTick)).toMatchObject({
+      dayNumber: 1,
+      hour: 7,
+      minute: 0,
+      phase: "day",
+    });
+    expect(world.tide).toEqual(tideAtTick(WORLD_NEW_GAME_START_TICK));
+    expect(world.weather.nextChangeTick).toBe(WORLD_NEW_GAME_START_TICK + 180);
+    const rootSeed = seedFromText(seedText);
+    const generationDomain = 0x574f_524c;
+    expect(world.weather).toMatchObject({
+      kind: keyedRandomU32(rootSeed, generationDomain, 0, 0, 71) % 3 === 0 ? "mist" : "clear",
+      intensity: keyedRandomInt(rootSeed, generationDomain, 0, 0, 72, 80_000, 260_000),
+      windX: keyedRandomInt(rootSeed, generationDomain, 0, 0, 73, -120_000, 120_000),
+      windY: keyedRandomInt(rootSeed, generationDomain, 0, 0, 74, -120_000, 120_000),
+    });
+    expect(world.settlements.flatMap(({ recipes }) => recipes).map(({ nextRunTick }) => nextRunTick))
+      .toEqual(world.settlements.map((_, index) => WORLD_NEW_GAME_START_TICK + 60 + index * 7));
+    expect(world.residents.every((resident) => (
+      resident.perception.tick === WORLD_NEW_GAME_START_TICK
+      && resident.nextThinkTick === WORLD_NEW_GAME_START_TICK + 10 + (resident.id % 17)
+    ))).toBe(true);
+    expect(world.routes.every(({ lastUsedTick }) => lastUsedTick === WORLD_NEW_GAME_START_TICK)).toBe(true);
+    expect(world.contracts.every((contract) => (
+      contract.createdTick === WORLD_NEW_GAME_START_TICK
+      && contract.playerExclusiveUntilTick === WORLD_NEW_GAME_START_TICK + 300
+      && contract.dueTick === WORLD_NEW_GAME_START_TICK + 720
+    ))).toBe(true);
 
     const worldCreated = world.events.find((event) => event.type === "world-created");
+    expect(worldCreated?.tick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(worldCreated?.data).toMatchObject({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
+    expect(world.events.every(({ tick }) => tick === WORLD_NEW_GAME_START_TICK)).toBe(true);
 
     const view = createWorldView(world);
     expect(view.terrain.tiles.some((tile) => tile.waterDepth > 0)).toBe(true);

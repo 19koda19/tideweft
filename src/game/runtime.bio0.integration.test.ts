@@ -1253,7 +1253,9 @@ describe("runtime BIO0 ecology persistence", () => {
     });
     await runtime.save();
     const after = currentEnvelope(repository);
-    expect(deserializeWorld(after.world).meta.completedTick).toBe(0);
+    expect(deserializeWorld(after.world).meta.completedTick).toBe(
+      deserializeWorld(before.world).meta.completedTick,
+    );
     expect(after.bio0Ecology).toBe(before.bio0Ecology);
     expect(after.livingActorPlayerChoice).toEqual(before.livingActorPlayerChoice);
     expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
@@ -1273,7 +1275,9 @@ describe("runtime BIO0 ecology persistence", () => {
     });
     await runtime.save();
     const after = currentEnvelope(repository);
-    expect(deserializeWorld(after.world).meta.completedTick).toBe(0);
+    expect(deserializeWorld(after.world).meta.completedTick).toBe(
+      deserializeWorld(before.world).meta.completedTick,
+    );
     expect(after.bio0Ecology).toBe(before.bio0Ecology);
     expect(after.porterResponse).toEqual(before.porterResponse);
     expect(after.livingActorPlayerChoice).toEqual(before.livingActorPlayerChoice);

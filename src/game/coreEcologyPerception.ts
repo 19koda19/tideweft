@@ -6,7 +6,7 @@ import {
   type ActorObservation,
 } from "../sim/actorPerception";
 import { CORE_WILDLIFE_SPECIES } from "../sim/coreWildlifeIdentity";
-import { FIXED_POINT, type TerrainTileView, type WorldView } from "../sim/types";
+import { FIXED_POINT, type WorldView } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
@@ -51,6 +51,11 @@ import {
   evaluateVisualContact,
   type PerceptionCell,
 } from "./perception";
+import {
+  buildOutdoorIlluminationField,
+  buildWorldPerceptionCells,
+  type OutdoorIlluminationField,
+} from "./outdoorIllumination";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
 import {
@@ -151,6 +156,7 @@ interface CanonicalPerceptionFrame {
   readonly visualCandidateIndex: PerceptionVisualCandidateIndex;
   readonly spatialFrame: SpatialFrame;
   readonly cells: readonly PerceptionCell[];
+  readonly illumination: OutdoorIlluminationField;
   readonly world: WorldView;
   readonly window: RegionalTerrainWindow;
   readonly tick: number;
@@ -212,6 +218,11 @@ export function collectCoreEcologyVisualObservationBatches(
       if (subjectPlacement === undefined) return null;
       const targetTile = frame.world.terrain.tiles[subjectPlacement.tileIndex];
       if (targetTile === undefined) return null;
+      const targetLightVisibility = physicalLightVisibility(
+        frame.illumination,
+        subjectPlacement.tileIndex,
+      );
+      if (targetLightVisibility === null) return null;
       const sight = evaluateVisualContact({
         columns: frame.world.terrain.width,
         rows: frame.world.terrain.height,
@@ -222,7 +233,7 @@ export function collectCoreEcologyVisualObservationBatches(
         weatherVisibility: coreEcologyWeatherVisibility(frame.world),
         // This bridge has no velocity evidence and never infers motion from intent.
         targetMovementSalience: 0,
-        targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
+        targetLightVisibility,
       });
       if (sight === null) continue;
       const direct = sight.grade === VISIBILITY_DIRECT;
@@ -339,6 +350,11 @@ export function collectCoreEcologyRootAggregateActivityObservationBatches(
         if (targetTileIndex === null) continue;
         const targetTile = frame.world.terrain.tiles[targetTileIndex];
         if (targetTile === undefined) return null;
+        const targetLightVisibility = physicalLightVisibility(
+          frame.illumination,
+          targetTileIndex,
+        );
+        if (targetLightVisibility === null) return null;
         const sight = evaluateVisualContact({
           columns: frame.world.terrain.width,
           rows: frame.world.terrain.height,
@@ -348,7 +364,7 @@ export function collectCoreEcologyRootAggregateActivityObservationBatches(
           observerFacingRadians: headingToRadians(observer.address.heading),
           weatherVisibility: coreEcologyWeatherVisibility(frame.world),
           targetMovementSalience: activity.intensity / FIXED_POINT,
-          targetLightVisibility: coreEcologyTargetLightVisibility(targetTile),
+          targetLightVisibility,
         });
         if (sight === null || sight.grade !== VISIBILITY_DIRECT) continue;
         const confidence = scaleContact(sight.confidence);
@@ -555,9 +571,17 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
     world.terrain.width,
     world.terrain.height,
   );
-  const cells = coreEcologyPerceptionCells(world);
+  const cells = buildWorldPerceptionCells(world);
+  const illumination = cells === null
+    ? null
+    : buildOutdoorIlluminationField(world, cells);
   const spatialFrame = spatialFrameForWorld(world);
-  if (visualCandidateIndex === null || cells === null || spatialFrame === null) return null;
+  if (
+    visualCandidateIndex === null
+    || cells === null
+    || illumination === null
+    || spatialFrame === null
+  ) return null;
   return Object.freeze({
     actors: Object.freeze(actors),
     actorIds: coreIds,
@@ -568,6 +592,7 @@ function canonicalPerceptionFrame(value: unknown): CanonicalPerceptionFrame | nu
     visualCandidateIndex,
     spatialFrame,
     cells,
+    illumination,
     world,
     window,
     tick,
@@ -972,33 +997,7 @@ function coreEcologyCatRainCue(
 export function coreEcologyPerceptionCells(
   world: WorldView,
 ): readonly PerceptionCell[] | null {
-  const occupied = new Set<number>();
-  for (const settlement of world.settlements) {
-    if (
-      !plainRecord(settlement)
-      || !nonnegativeSafeInteger(settlement.tileIndex)
-      || settlement.tileIndex >= world.terrain.tiles.length
-    ) return null;
-    occupied.add(settlement.tileIndex);
-  }
-  const cells: PerceptionCell[] = [];
-  for (let index = 0; index < world.terrain.tiles.length; index += 1) {
-    const tile = world.terrain.tiles[index];
-    if (!validTerrainTile(tile, index, world.terrain.width)) return null;
-    cells.push(Object.freeze({
-      elevation: tile.elevation / FIXED_POINT,
-      obstruction: occupied.has(index)
-        ? 0.72
-        : tile.terrain === "ridge"
-          ? 0.76
-          : tile.terrain === "marsh"
-            ? 0.34
-            : tile.terrain === "meadow" && tile.roughness >= 880_000
-              ? 0.5
-              : 0,
-    }));
-  }
-  return Object.freeze(cells);
+  return buildWorldPerceptionCells(world);
 }
 
 function validRegionalWorld(world: WorldView, window: RegionalTerrainWindow): boolean {
@@ -1035,37 +1034,17 @@ function validWeather(world: WorldView): boolean {
     && nonnegativeSafeInteger(world.weather.nextChangeTick);
 }
 
-function validTerrainTile(
-  tile: TerrainTileView | undefined,
-  expectedIndex: number,
-  width: number,
-): tile is TerrainTileView {
-  return plainRecord(tile)
-    && tile.index === expectedIndex
-    && tile.x === expectedIndex % width
-    && tile.y === Math.floor(expectedIndex / width)
-    && (tile.terrain === "deep-water"
-      || tile.terrain === "tidal-flat"
-      || tile.terrain === "marsh"
-      || tile.terrain === "meadow"
-      || tile.terrain === "ridge")
-    && fixedUnit(tile.elevation)
-    && fixedUnit(tile.roughness)
-    && fixedUnit(tile.waterDepth);
-}
-
-/** Current terrain-light proxy used by bounded core-ecology detail contacts. */
-export function coreEcologyTargetLightVisibility(tile: TerrainTileView): number {
-  return tile.terrain === "marsh"
-    ? 0.55
-    : tile.terrain === "ridge" || tile.terrain === "deep-water"
-      ? 0.9
-      : 0.72;
-}
-
 /** Current weather transmission used by bounded core-ecology sight queries. */
 export function coreEcologyWeatherVisibility(world: WorldView): number {
   return Math.max(0, Math.min(1, 1 - world.weather.intensity / FIXED_POINT * 0.52));
+}
+
+function physicalLightVisibility(
+  field: OutdoorIlluminationField,
+  tileIndex: number,
+): number | null {
+  const value = field.physicalIllumination[tileIndex];
+  return fixedUnit(value) ? value / FIXED_POINT : null;
 }
 
 function alarmUncertaintyRadius(

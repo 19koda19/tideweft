@@ -142,6 +142,25 @@ describe("Relief water material batches", () => {
     expectRecognizablyBlue(deepBlue, "deep");
   });
 
+  it("keeps a bounded observation-gated local-light band on visible water", () => {
+    const batches = buildReliefWaterMaterialBatches(grid([
+      tile({ currentVisibility: 1, currentLocalIllumination: 0 }),
+      tile({ currentVisibility: 1, currentLocalIllumination: 0.51 }),
+      tile({ currentVisibility: 0, currentLocalIllumination: 1 }),
+    ]), 0.5);
+    const byColumn = new Map(
+      batches.flatMap((batch) => batch.cells.map((cell) => [
+        cell.column,
+        batch.currentLocalIllumination,
+      ] as const)),
+    );
+
+    expect(byColumn.get(0)).toBe(0);
+    expect(byColumn.get(1)).toBe(2 / 3);
+    expect(byColumn.has(2)).toBe(false);
+    expect(batches).toHaveLength(2);
+  });
+
   it("still omits hidden water and bounds the quantized partial-discovery alpha", () => {
     const barelySeen = buildReliefWaterMaterialBatches(
       grid([tile({ waterDepth: 0.95, discovered: 0.04 })]),

@@ -14,6 +14,12 @@ import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { visibleWaterPresentation } from "./waterPresentation";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
+  outdoorIlluminationPresentation,
+  outdoorTerrainColor,
+  outdoorWaterColor,
+  type OutdoorIlluminationPresentation,
+} from "./outdoorIllumination";
+import {
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
@@ -1145,12 +1151,19 @@ export function createTideweftRenderer(
       return color;
     };
 
-    const terrainColor = (tile: TerrainTileView): p5.Color => {
+    const terrainColor = (
+      tile: TerrainTileView,
+      outdoorLight: OutdoorIlluminationPresentation,
+    ): p5.Color => {
       const biome = visibleBiomePresentation(tile);
       const base = p.color(
-        tile.kind === "built"
-          ? TERRAIN_COLORS.built
-          : biome?.chartColor ?? TERRAIN_COLORS[tile.kind],
+        outdoorTerrainColor(
+          tile.kind === "built"
+            ? TERRAIN_COLORS.built
+            : biome?.chartColor ?? TERRAIN_COLORS[tile.kind],
+          outdoorLight,
+          tile.currentLocalIllumination,
+        ),
       );
       const lift = clamp((unit(tile.elevation) - 0.45) * 0.22, -0.08, 0.12);
       return p.lerpColor(base, p.color(lift >= 0 ? PALETTE.foam : PALETTE.ink), Math.abs(lift));
@@ -1390,6 +1403,7 @@ export function createTideweftRenderer(
       terrainMemory: TerrainPerceptionMemoryState,
     ): void => {
       const grid = view.terrain;
+      const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = Math.max(0.1, grid.tileSize);
       const halfWidth = p.width / (2 * camera.zoom);
       const halfHeight = p.height / (2 * camera.zoom);
@@ -1431,14 +1445,18 @@ export function createTideweftRenderer(
             row * grid.columns + column,
           );
           if (discovered <= 0 && currentVisibility <= 0) {
-            p.fill(PALETTE.ink);
+            p.fill(outdoorLight.chartBackground);
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
           if (currentVisibility <= 0) {
             // The Chart retains only a dim geographic memory. Live water,
             // climate, surface texture, and status cues never leak through it.
-            p.fill(p.lerpColor(p.color(PALETTE.ink), terrainColor(tile), 0.1 * discovered));
+            p.fill(p.lerpColor(
+              p.color(outdoorLight.chartBackground),
+              terrainColor(tile, outdoorLight),
+              0.1 * discovered,
+            ));
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
@@ -1455,18 +1473,33 @@ export function createTideweftRenderer(
             transientVisibility: liveCurrentVisibility,
           });
           const sensoryStrength = Math.pow(currentVisibility, 1.08);
-          // Distant unsounded water gets one neutral under-surface as well as
-          // one neutral water material. Otherwise translucent water can reveal
-          // raw channel/shallows/deep terrain colors underneath it.
-          const visibleTerrainColor = rememberedWater && !rememberedWater.depthDisclosed
-            ? p.color(TERRAIN_COLORS.channel)
-            : terrainColor(tile);
-          p.fill(p.lerpColor(p.color(PALETTE.ink), visibleTerrainColor, sensoryStrength));
+          // Every visible water cell gets a blue under-surface as well as a
+          // blue water material. Otherwise Chart translucency can composite a
+          // warm biome bed into green/yellow at some discovery strengths.
+          const visibleTerrainColor = rememberedWater
+            ? p.color(outdoorWaterColor(
+                rememberedWater.color,
+                outdoorLight,
+                tile.currentLocalIllumination,
+              ))
+            : terrainColor(tile, outdoorLight);
+          p.fill(p.lerpColor(
+            p.color(outdoorLight.chartBackground),
+            visibleTerrainColor,
+            sensoryStrength,
+          ));
           p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
 
           if (water) {
             const liveSensoryStrength = Math.pow(liveCurrentVisibility, 1.08);
-            p.fill(withAlpha(water.color, water.opacity * liveSensoryStrength));
+            p.fill(withAlpha(
+              outdoorWaterColor(
+                water.color,
+                outdoorLight,
+                tile.currentLocalIllumination,
+              ),
+              water.opacity * liveSensoryStrength,
+            ));
             p.rect(x, y, tileSize + 0.4 / camera.zoom, tileSize + 0.4 / camera.zoom);
             const globalTile = terrainTileGlobalCoordinate(grid, column, row);
             if (
@@ -5564,7 +5597,7 @@ export function createTideweftRenderer(
     };
 
     const drawEmptyEstuary = (now: number): void => {
-      p.background(PALETTE.ink);
+      p.background(outdoorIlluminationPresentation(undefined).chartBackground);
       p.noFill();
       for (let band = 0; band < 14; band += 1) {
         const amount = band / 13;
@@ -5658,7 +5691,7 @@ export function createTideweftRenderer(
         perceptionEnabled: latestView.perception !== undefined,
         reducedMotion,
       });
-      p.background(PALETTE.ink);
+      p.background(outdoorIlluminationPresentation(latestView.worldTime).chartBackground);
       p.push();
       p.translate(
         p.width / 2 + pointerParallax.current.x,

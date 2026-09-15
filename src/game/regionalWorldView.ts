@@ -18,6 +18,16 @@ import {
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
 const REGIONAL_VIEW_METADATA = new WeakMap<object, RegionalTerrainWindow>();
 const REGIONAL_VIEW_COMPATIBILITY = new WeakMap<object, WorldView>();
+const IMMUTABLE_REGIONAL_VIEWS = new WeakSet<object>();
+
+export interface RegionalWorldViewOptions {
+  /**
+   * Runtime-owned views are immutable snapshots and may safely reuse derived
+   * geometry across many consumers. Mutable test/tool views retain the legacy
+   * behavior and are revalidated by downstream systems on every query.
+   */
+  readonly immutable?: boolean;
+}
 
 /**
  * Overlay the live compatibility economy on a deterministic floating terrain
@@ -28,7 +38,9 @@ export function createRegionalWorldView(
   compatibility: WorldView,
   window: RegionalTerrainWindow,
   cartography: RegionalCartographyWindow,
+  options: RegionalWorldViewOptions = {},
 ): WorldView {
+  const immutable = options.immutable === true;
   const count = window.terrain.tiles.length;
   if (
     cartography.discovered.length !== count
@@ -36,7 +48,7 @@ export function createRegionalWorldView(
     || window.addresses.length !== count
   ) throw new RangeError("Regional world projection dimensions do not match");
 
-  const terrainTiles = window.terrain.tiles.map((generated, index) => {
+  const projectedTerrainTiles = window.terrain.tiles.map((generated, index) => {
     const address = window.addresses[index];
     if (!address) throw new RangeError("Regional world projection lost a tile address");
     const compatibilityTile = address.region.x === 0
@@ -48,14 +60,18 @@ export function createRegionalWorldView(
         ]
       : undefined;
     const source = compatibilityTile ?? generated;
-    return {
+    const tile = {
       ...source,
       index,
       x: generated.x,
       y: generated.y,
       waterDepth: compatibilityTile?.waterDepth ?? waterDepthAt(generated, compatibility.tide),
     };
+    return immutable ? Object.freeze(tile) : tile;
   });
+  const terrainTiles = immutable
+    ? Object.freeze(projectedTerrainTiles)
+    : projectedTerrainTiles;
 
   const settlementMappings = compatibility.settlements.flatMap((settlement) => {
     const localX = settlement.tileIndex % compatibility.terrain.width;
@@ -70,10 +86,17 @@ export function createRegionalWorldView(
       ? []
       : [{ source: settlement, tileIndex: point.y * window.terrain.width + point.x }];
   });
-  const settlements = settlementMappings.map(({ source, tileIndex }) => ({
-    ...source,
-    tileIndex,
-  }));
+  const projectedSettlements = settlementMappings.map(({ source, tileIndex }) => {
+    const settlement = {
+      ...source,
+      project: immutable ? Object.freeze({ ...source.project }) : source.project,
+      tileIndex,
+    };
+    return immutable ? Object.freeze(settlement) : settlement;
+  });
+  const settlements = immutable
+    ? Object.freeze(projectedSettlements)
+    : projectedSettlements;
 
   const routes = compatibility.routes.flatMap((route) => {
     const path = route.path.map((tileIndex) => {
@@ -93,9 +116,13 @@ export function createRegionalWorldView(
   const choirs = compatibility.choirs.filter((choir) =>
     choir.routeIds.every((id) => visibleRouteIds.has(id)));
 
-  const view: WorldView = {
+  const projectedView: WorldView = {
     ...compatibility,
-    terrain: {
+    terrain: immutable ? Object.freeze({
+      width: window.terrain.width,
+      height: window.terrain.height,
+      tiles: terrainTiles,
+    }) : {
       width: window.terrain.width,
       height: window.terrain.height,
       tiles: terrainTiles,
@@ -104,9 +131,15 @@ export function createRegionalWorldView(
     routes,
     choirs,
   };
+  const view = immutable ? Object.freeze(projectedView) : projectedView;
   REGIONAL_VIEW_METADATA.set(view, window);
   REGIONAL_VIEW_COMPATIBILITY.set(view, compatibility);
+  if (immutable) IMMUTABLE_REGIONAL_VIEWS.add(view);
   return view;
+}
+
+export function isImmutableRegionalWorldView(world: WorldView): boolean {
+  return IMMUTABLE_REGIONAL_VIEWS.has(world);
 }
 
 /** Stable address of a tile in either a floating or legacy finite view. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK,
+  RELIEF_LOCAL_ILLUMINATION_BANDS,
   RELIEF_PERCEPTION_VISIBILITY_BANDS,
   buildReliefMaterialBatches,
   buildReliefPerceptionMaterialBatches,
@@ -329,7 +330,7 @@ describe("Relief terrain material batches", () => {
     expect(batches[0]?.indices).toHaveLength(12);
   });
 
-  it("hard-caps a chunk at one batch per transient identity and visibility band", () => {
+  it("hard-caps a chunk across transient identity, visibility, and local-light bands", () => {
     const kinds: readonly TerrainKind[] = [
       "deep-water",
       "channel",
@@ -356,18 +357,24 @@ describe("Relief terrain material batches", () => {
       ...biomes.map((biome) => ({ kind: "meadow" as const, biome, discovered: 1 })),
     ];
     const columns = identities.length;
-    const rows = RELIEF_PERCEPTION_VISIBILITY_BANDS;
+    const rows = RELIEF_PERCEPTION_VISIBILITY_BANDS
+      * (RELIEF_LOCAL_ILLUMINATION_BANDS + 1);
     const tiles: TerrainTileView[] = Array.from(
       { length: columns * rows },
       (_, index) => {
-        const row = Math.floor(index / columns);
+        const combination = Math.floor(index / columns);
+        const visibilityBand = combination % RELIEF_PERCEPTION_VISIBILITY_BANDS;
+        const localLightBand = Math.floor(
+          combination / RELIEF_PERCEPTION_VISIBILITY_BANDS,
+        );
         const identity = identities[index % columns];
         if (!identity) throw new Error("fixture lost a material identity");
         return {
           ...identity,
           elevation: 0.2,
           waterDepth: 0,
-          currentVisibility: (row + 1) / RELIEF_PERCEPTION_VISIBILITY_BANDS,
+          currentVisibility: (visibilityBand + 1) / RELIEF_PERCEPTION_VISIBILITY_BANDS,
+          currentLocalIllumination: localLightBand / RELIEF_LOCAL_ILLUMINATION_BANDS,
         };
       },
     );
@@ -379,7 +386,7 @@ describe("Relief terrain material batches", () => {
       tiles,
       revision: "transient-material-ceiling",
     };
-    const chunk = buildTerrainMesh(perceived, { chunkSize: columns }).chunks[0];
+    const chunk = buildTerrainMesh(perceived, { chunkSize: Math.max(columns, rows) }).chunks[0];
     if (!chunk) throw new Error("fixture did not create a terrain chunk");
 
     const batches = buildReliefPerceptionMaterialBatches(chunk, perceived);
@@ -389,5 +396,7 @@ describe("Relief terrain material batches", () => {
     );
     expect(batches.flatMap((batch) => batch.indices)).toHaveLength(tiles.length * 6);
     expect(batches.every((batch) => batch.environment === 0.5)).toBe(true);
+    expect(new Set(batches.map(({ currentLocalIllumination }) => currentLocalIllumination)))
+      .toEqual(new Set([0, 1 / 3, 2 / 3, 1]));
   });
 });

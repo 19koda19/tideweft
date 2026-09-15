@@ -74,12 +74,29 @@ export {
   WORLD_DUSK_START_TICK,
   WORLD_NIGHT_ILLUMINATION,
   WORLD_NIGHT_START_TICK,
+  WORLD_NEW_GAME_START_TICK,
   WORLD_TICKS_PER_DAY,
   WORLD_TIME_CONTRACT_VERSION,
   WORLD_TIME_EPOCH,
   projectWorldTime,
 } from "./worldTime";
 export type { WorldDayPhase, WorldTimeProjection } from "./worldTime";
+export {
+  MAX_OUTDOOR_LOCAL_LIGHT_RADIUS_TILES,
+  MAX_OUTDOOR_LOCAL_LIGHT_SOURCES,
+  OUTDOOR_ILLUMINATION_VERSION,
+  OUTDOOR_LOCAL_LIGHT_KINDS,
+  evaluateOutdoorIllumination,
+  outdoorTerrainTransmission,
+  outdoorWeatherTransmission,
+} from "./outdoorIllumination";
+export type {
+  OutdoorIlluminationInput,
+  OutdoorIlluminationSample,
+  OutdoorIlluminationTerrain,
+  OutdoorLocalLightKind,
+  OutdoorLocalLightSource,
+} from "./outdoorIllumination";
 export {
   MAX_RESIDENT_MEMORIES,
   NPC_GENERATION_VERSION,

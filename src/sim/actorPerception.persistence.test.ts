@@ -20,6 +20,7 @@ import {
 import { hashCanonical } from "./util";
 import { createWorldView } from "./view";
 import { createInitialWorld } from "./world";
+import { WORLD_NEW_GAME_START_TICK } from "./worldTime";
 
 function priorSim5Save(world: WorldState): string {
   const prior = structuredClone(world) as unknown as Record<string, unknown>;
@@ -109,12 +110,12 @@ describe("resident actor-perception persistence", () => {
     expect(world.meta).toMatchObject({
       saveFormatVersion: 4,
       rulesVersion: "tideweft-sim/6",
-      completedTick: 0,
+      completedTick: WORLD_NEW_GAME_START_TICK,
     });
     expect(world.residents).toHaveLength(42);
     expect(world.residents.every((resident) => (
       resident.perception.actorId === resident.identity.stableId
-      && resident.perception.tick === 0
+      && resident.perception.tick === WORLD_NEW_GAME_START_TICK
       && resident.perception.suspicion === "unaware"
       && resident.perception.beliefs.length === 0
       && resident.perception.attentionKeys.length === 0
@@ -128,18 +129,19 @@ describe("resident actor-perception persistence", () => {
   it("migrates authenticated format-3/rules-5 worlds at their prior completed tick without rerolling", () => {
     const source = createInitialWorld("old people wake with honest unknowns", "standard");
     runTicks(source, 37);
+    const priorCompletedTick = source.meta.completedTick;
     const priorText = priorSim5Save(source);
     const first = deserializeWorld(priorText);
     const second = deserializeWorld(priorText);
 
     expect(first.meta).toMatchObject({
-      completedTick: 37,
+      completedTick: priorCompletedTick,
       saveFormatVersion: SAVE_FORMAT_VERSION,
       rulesVersion: RULES_VERSION,
     });
     for (const resident of first.residents) {
       expect(resident.perception).toEqual(
-        createActorPerceptionState(resident.identity.stableId, 37),
+        createActorPerceptionState(resident.identity.stableId, priorCompletedTick),
       );
     }
     expect(second).toEqual(first);

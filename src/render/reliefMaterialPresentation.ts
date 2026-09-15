@@ -23,6 +23,8 @@ export interface ReliefSurfaceMaterialInput {
   readonly fog: number;
   readonly memoryOnly?: boolean;
   readonly currentVisibility?: number;
+  /** Present-tense observation-gated local light; absent for durable memory. */
+  readonly currentLocalIllumination?: number;
 }
 
 /**
@@ -46,10 +48,15 @@ export function reliefSurfaceMaterialColor(input: ReliefSurfaceMaterialInput): s
     clamp(unit(input.fog) * 0.5, 0, 0.58),
   );
   if (input.memoryOnly) return mixHex("#061416", atmospheric, 0.13);
+  const locallyLit = mixHex(
+    atmospheric,
+    "#ffd39a",
+    Math.sqrt(unit(input.currentLocalIllumination ?? 0)) * 0.28,
+  );
   const current = unit(input.currentVisibility ?? 1);
   return current < 1
-    ? mixHex("#061416", atmospheric, Math.pow(current, 1.15))
-    : atmospheric;
+    ? mixHex("#061416", locallyLit, Math.pow(current, 1.15))
+    : locallyLit;
 }
 
 export function reliefTerrainKindIsWater(kind: TerrainKind): boolean {

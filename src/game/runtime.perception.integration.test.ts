@@ -108,13 +108,16 @@ describe("runtime existing-human perception path", () => {
 
     await runtime.save();
     const committedWorld = savedWorld(repository);
+    const committedTick = committedWorld.meta.completedTick;
     expect(committedWorld.residents).toHaveLength(42);
-    expect(committedWorld.residents.every(({ perception }) => perception.tick === 1)).toBe(true);
+    expect(committedWorld.residents.every(({ perception }) => (
+      perception.tick === committedTick
+    ))).toBe(true);
     const resident = committedWorld.residents.find(
       ({ id }) => String(id) === fixture.residentId,
     );
     expect(resident?.perception).toMatchObject({
-      tick: 1,
+      tick: committedTick,
       suspicion: "identified",
       search: null,
     });
@@ -123,7 +126,9 @@ describe("runtime existing-human perception path", () => {
         channel: "vision",
         subjectId: "player:local",
         identification: "identified",
-        sourceObservationId: expect.stringMatching(/^hp-v-1-\d+-p-0-\d+$/u),
+        sourceObservationId: expect.stringMatching(
+          new RegExp(`^hp-v-${committedTick}-\\d+-p-${committedTick - 1}-\\d+$`, "u"),
+        ),
       }),
     ]));
     runtime.destroy();
@@ -168,7 +173,7 @@ describe("runtime existing-human perception path", () => {
     const perception = saved.residents.find(({ id }) => String(id) === fixture.residentId)?.perception;
     const playerBelief = perception?.beliefs.find(({ subjectId }) => subjectId === "player:local");
 
-    expect(playerBelief?.lastObservedTick).toBe(2);
+    expect(playerBelief?.lastObservedTick).toBe(saved.meta.completedTick);
     expect(playerBelief?.area).toEqual({ center: playerPosition, radiusUnits: 0 });
     runtime.destroy();
   }, 30_000);

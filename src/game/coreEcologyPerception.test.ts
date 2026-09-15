@@ -7,6 +7,7 @@ import {
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type WorldState, type WorldView } from "../sim/types";
+import { WORLD_NIGHT_START_TICK } from "../sim/worldTime";
 import {
   CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS,
   CORE_ECOLOGY_CAT_RAIN_CUE_MIN_INTENSITY,
@@ -47,6 +48,53 @@ interface Fixture {
 }
 
 describe("core ecology cross-species perception bridge", () => {
+  it("uses physical night light and one real completed beacon for lawful identity", () => {
+    const targetX = OBSERVER_X + 4;
+    const dark = fixture(
+      "generic unlit night contact",
+      undefined,
+      null,
+      { tick: WORLD_NIGHT_START_TICK },
+    );
+    const lit = fixture(
+      "generic completed beacon night contact",
+      undefined,
+      null,
+      { completedBeaconTileX: targetX, tick: WORLD_NIGHT_START_TICK },
+    );
+    const observer = actorAddress("H-generic-night-observer", "human", OBSERVER_X, OBSERVER_Y, 0);
+    const subject = actorAddress("H-generic-night-subject", "human", targetX, OBSERVER_Y, 0);
+    const participants = [observer, subject].map((address) => ({
+      address,
+      contactScope: "all-participants" as const,
+    }));
+
+    const unlit = collectCoreEcologyVisualObservationBatches({
+      actors: [],
+      participants,
+      world: dark.world,
+      window: dark.window,
+      tick: dark.world.completedTick + 1,
+    });
+    const beaconLit = collectCoreEcologyVisualObservationBatches({
+      actors: [],
+      participants,
+      world: lit.world,
+      window: lit.window,
+      tick: lit.world.completedTick + 1,
+    });
+
+    expect(observationsFor(unlit, observer.actorId)).toEqual([]);
+    expect(observationsFor(beaconLit, observer.actorId)).toEqual([
+      expect.objectContaining({
+        channel: "vision",
+        perceivedClass: "human",
+        subjectId: subject.actorId,
+        identification: "identified",
+      }),
+    ]);
+  });
+
   it("classifies reciprocal predator/prey pressure without declaring grouped mortality", () => {
     const current = fixture("bear deer direct contact");
     const deer = wildlife(current, "deer", OBSERVER_X, OBSERVER_Y, 0, 0);
@@ -627,8 +675,13 @@ function fixture(
   seedText: string,
   ridgeAtX?: number,
   weather: Readonly<{ kind: "rain" | "storm"; intensity: number }> | null = null,
+  light: Readonly<{
+    completedBeaconTileX?: number;
+    tick: number;
+  }> | null = null,
 ): Fixture {
   const state = createWorld(seedText, "standard");
+  if (light !== null) state.meta.completedTick = light.tick;
   state.weather = {
     ...state.weather,
     kind: weather?.kind ?? "clear",
@@ -637,6 +690,12 @@ function fixture(
     windY: 0,
   };
   for (const settlement of state.settlements) settlement.tileIndex = 0;
+  if (light?.completedBeaconTileX !== undefined) {
+    const beacon = state.settlements.find(({ project }) => project.kind === "beacon");
+    if (beacon === undefined) throw new Error("Perception fixture has no beacon project");
+    beacon.tileIndex = OBSERVER_Y * state.terrain.width + light.completedBeaconTileX;
+    beacon.project.status = "complete";
+  }
   for (let x = OBSERVER_X - 1; x <= OBSERVER_X + 24; x += 1) {
     const tile = state.terrain.tiles[OBSERVER_Y * state.terrain.width + x];
     if (tile === undefined) throw new Error("Perception fixture corridor left terrain");

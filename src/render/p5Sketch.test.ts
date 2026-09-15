@@ -9,6 +9,10 @@ import type {
   WildlifeView,
 } from "./types";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
+import {
+  outdoorIlluminationPresentation,
+  outdoorTerrainColor,
+} from "./outdoorIllumination";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
@@ -422,6 +426,95 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("Chart shared outdoor illumination", () => {
+  it("paints the clock-derived sky directly without a screen-darkening pane", () => {
+    const nightTime = {
+      version: 1 as const,
+      dayNumber: 1,
+      dayTick: 0,
+      phase: "night" as const,
+      phaseProgress: 0.4,
+      cycleProgress: 0,
+      solarProgress: null,
+      illumination: 0.1,
+    };
+    let current: TideweftView = { ...view("daylight-chart"), worldTime: nightTime };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const background = p5Harness.instance?.background as ReturnType<typeof vi.fn>;
+    expect(background).toHaveBeenLastCalledWith(
+      outdoorIlluminationPresentation(nightTime).chartBackground,
+    );
+
+    const dayTime = {
+      ...nightTime,
+      dayTick: 720,
+      phase: "day" as const,
+      phaseProgress: 0.5,
+      cycleProgress: 0.5,
+      solarProgress: 0.5,
+      illumination: 1,
+    };
+    current = { ...current, worldTime: dayTime };
+    draw();
+    expect(background).toHaveBeenLastCalledWith(
+      outdoorIlluminationPresentation(dayTime).chartBackground,
+    );
+    expect(outdoorIlluminationPresentation(dayTime).chartBackground)
+      .not.toBe(outdoorIlluminationPresentation(nightTime).chartBackground);
+    renderer.destroy();
+  });
+
+  it("paints a projected local-light pool into visible terrain without a pane", () => {
+    const nightTime = {
+      version: 1 as const,
+      dayNumber: 1,
+      dayTick: 0,
+      phase: "night" as const,
+      phaseProgress: 0.4,
+      cycleProgress: 0,
+      solarProgress: null,
+      illumination: 0.1,
+    };
+    const current: TideweftView = {
+      ...view("chart-local-light", { x: 12, y: 12 }),
+      worldTime: nightTime,
+      terrain: {
+        columns: 1,
+        rows: 1,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "chart-local-light",
+        currentLocalIlluminationRevision: "lamp-on",
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          waterDepth: 0,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1,
+          currentLocalIllumination: 0.78,
+        }],
+      },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    draw();
+    const color = p5Harness.instance?.color as ReturnType<typeof vi.fn>;
+    const outdoor = outdoorIlluminationPresentation(nightTime);
+    expect(color).toHaveBeenCalledWith(outdoorTerrainColor("#3e614f", outdoor, 0.78));
+    expect(color).not.toHaveBeenCalledWith(outdoorTerrainColor("#3e614f", outdoor, 0));
+    renderer.destroy();
+  });
 });
 
 describe("Chart spatial epoch gate", () => {

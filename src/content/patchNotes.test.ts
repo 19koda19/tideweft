@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.40",
-      releaseDate: "2026-09-14",
-      buildIdentity: "0.3.3-alpha.40",
-      gameplayContractVersion: 38,
-      tutorialVersion: 50,
+      version: "0.3.3-alpha.41",
+      releaseDate: "2026-09-15",
+      buildIdentity: "0.3.3-alpha.41",
+      gameplayContractVersion: 39,
+      tutorialVersion: 51,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,10 +69,17 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-40 one-clock candidate and retains the released Alpha-39 boundary plus earlier candidates", () => {
+  it("scopes the Alpha-41 first-light candidate and retains the clock, released biodiversity boundary, and earlier candidates", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const alpha40Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.40",
+    );
+    const alpha40Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha40Release?.categories[category] ?? [])
       .join(" ");
     const alpha39Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.39",
@@ -260,16 +267,22 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("One Clock");
-    expect(currentCopy).toContain("One versioned civil-day contract");
-    expect(currentCopy).toContain("one displayed minute");
-    expect(currentCopy).toContain("each 1,440-tick day");
-    expect(currentCopy).toContain("06:00 through 20:00 behavior exactly");
-    expect(currentCopy).toContain("HUD time, event timestamps, continue summaries");
-    expect(currentCopy).toContain("Chart 2D, Relief 3D");
-    expect(currentCopy).toContain("adds no offline elapsed time");
+    expect(LATEST_PATCH_NOTE.summary).toContain("First Light");
+    expect(currentCopy).toContain("Outdoor illumination is now one deterministic fixed-point world condition");
+    expect(currentCopy).toContain("Darkness now contracts exact actor, item, label, and interaction recognition");
+    expect(currentCopy).toContain("completed beacon civic project");
+    expect(currentCopy).toContain("Chart 2D and Relief 3D");
+    expect(currentCopy).toContain("Fresh worlds begin at Day 1 07:00");
+    expect(currentCopy).toContain("Relief water remains an unlit blue-anchored material");
     expect(currentCopy).toContain("Outer save version 30 remains unchanged");
-    expect(currentCopy).not.toMatch(/outdoor darkness is live|actor schedules are live|player sleep is live/iu);
+    expect(currentCopy).not.toMatch(/actor schedules are live|player sleep is live|fire light is live/iu);
+    expect(alpha40Release?.summary).toContain("One Clock");
+    expect(alpha40Copy).toContain("One versioned civil-day contract");
+    expect(alpha40Copy).toContain("one displayed minute");
+    expect(alpha40Copy).toContain("each 1,440-tick day");
+    expect(alpha40Copy).toContain("06:00 through 20:00 behavior exactly");
+    expect(alpha40Copy).toContain("HUD time, event timestamps, continue summaries");
+    expect(alpha40Copy).toContain("adds no offline elapsed time");
     expect(alpha39Copy).not.toMatch(/wildlife encounters are live|procedural ladder-gated outcrops are live/iu);
     expect(alpha39Release?.summary).toContain("Saltmarsh Small Worlds");
     expect(alpha39Copy).toContain("Eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin append as records 44 through 47");

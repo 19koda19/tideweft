@@ -1754,7 +1754,7 @@ export function createWorld(seedText: string, pressureMode: PressureMode = "stan
     throw new RangeError("Pressure mode must be calm, standard, or wild");
   }
   const world = createInitialWorld(seedText, pressureMode);
-  generateDemandContracts(world, 0);
+  generateDemandContracts(world, world.meta.completedTick);
   return world;
 }
 

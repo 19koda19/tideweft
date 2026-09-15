@@ -50,7 +50,12 @@ import {
   createRegionalTerrainWindow,
   regionalFrameOriginAtAddress,
 } from "./regionalTravel";
-import { createRegionalWorldView, regionalTileIndexInView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalCompatibilityWorldForWorld,
+  regionalTileIndexInView,
+  regionalWindowForWorld,
+} from "./regionalWorldView";
 import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import { createCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import { createCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
@@ -190,16 +195,25 @@ describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selecte
     expect(response?.patch.carcasses).toEqual([]);
     expect(JSON.stringify(response)).not.toMatch(/capture|reproduction/u);
 
-    occludePosition(fixture.world, fixture.gull.address.position);
+    const occludedWorld = occludePosition(
+      fixture.world,
+      fixture.window,
+      fixture.gull.address.position,
+    );
+    const occludedWindow = requireRegionalWindow(occludedWorld);
     const hidden = collectCoreEcologyRootAggregateActivityObservationBatches(
-      perceptionFrame,
+      { ...perceptionFrame, window: occludedWindow, world: occludedWorld },
     );
     expect(hidden?.find(({ observerId }) => (
       observerId === fixture.gull.identity.stableId
     ))?.observations.some((observation) => (
       hasObservationAt([observation], fixture.cuePosition)
     ))).toBe(false);
-    const hiddenStimulus = deriveCoreEcologyAggregateStimulusFrame(responseInput);
+    const hiddenStimulus = deriveCoreEcologyAggregateStimulusFrame({
+      ...responseInput,
+      window: occludedWindow,
+      world: occludedWorld,
+    });
     expect(hiddenStimulus).not.toBeNull();
     expect(hiddenStimulus?.stimuli.some(({ sourceReferenceId }) => (
       sourceReferenceId === fixture.gull.identity.stableId
@@ -266,8 +280,17 @@ describe(`${ALPHA34_POLAR_CROSS_OWNER_EMERGENCE_OWNER_INTENT} capability-selecte
     expect(response?.patch.carcasses).toEqual([]);
     expect(JSON.stringify(response)).not.toMatch(/capture|consumption|reproduction/u);
 
-    occludePosition(fixture.world, fixture.fox.address.position);
-    const hidden = deriveCoreEcologyAggregateStimulusFrame(input);
+    const occludedWorld = occludePosition(
+      fixture.world,
+      fixture.window,
+      fixture.fox.address.position,
+    );
+    const occludedWindow = requireRegionalWindow(occludedWorld);
+    const hidden = deriveCoreEcologyAggregateStimulusFrame({
+      ...input,
+      window: occludedWindow,
+      world: occludedWorld,
+    });
     expect(hidden).not.toBeNull();
     expect(hidden?.stimuli.some(({ sourceReferenceId }) => (
       sourceReferenceId === fixture.fox.identity.stableId
@@ -957,8 +980,10 @@ function polarAerialObserverFixture(tick: number) {
 
 function occludePosition(
   world: WorldView,
+  window: ReturnType<typeof createRegionalTerrainWindow>,
   position: ReturnType<typeof createWorldPosition>,
-) {
+): WorldView {
+  const blockerIndices = new Set<number>();
   for (const [offsetX, offsetY] of [
     [-1, -1], [0, -1], [1, -1],
     [-1, 0], [1, 0],
@@ -977,13 +1002,42 @@ function occludePosition(
       blockerPosition.region,
       storageIndex,
     );
-    const blocker = blockerIndex === null ? undefined : world.terrain.tiles[blockerIndex];
-    if (blocker === undefined) {
+    if (blockerIndex === null || world.terrain.tiles[blockerIndex] === undefined) {
       throw new Error("polar cross-owner occluder left the active frame");
     }
-    blocker.terrain = "ridge";
-    blocker.elevation = FIXED_POINT;
+    blockerIndices.add(blockerIndex);
   }
+  const occludedWindow = Object.freeze({
+    ...window,
+    terrain: {
+      ...window.terrain,
+      tiles: world.terrain.tiles.map((tile, index) => blockerIndices.has(index)
+        ? { ...tile, terrain: "ridge" as const, elevation: FIXED_POINT }
+        : tile),
+    },
+  });
+  const compatibility = regionalCompatibilityWorldForWorld(world);
+  if (compatibility === null) {
+    throw new Error("polar cross-owner occluder lost its compatibility world");
+  }
+  return createRegionalWorldView(
+    compatibility,
+    occludedWindow,
+    projectRegionalCartographyWindow(
+      createRegionalCartography(world.rootSeed ?? seedFromText(world.seedText)),
+      occludedWindow,
+    ),
+  );
+}
+
+function requireRegionalWindow(
+  world: WorldView,
+): ReturnType<typeof createRegionalTerrainWindow> {
+  const window = regionalWindowForWorld(world);
+  if (window === null) {
+    throw new Error("polar cross-owner world lost its regional frame");
+  }
+  return window;
 }
 
 function visibleCueFixture(tick: number): Readonly<{

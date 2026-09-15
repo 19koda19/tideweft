@@ -91,6 +91,11 @@ import {
   type PerceptionResult,
 } from "./perception";
 import {
+  buildOutdoorIlluminationField,
+  buildWorldPerceptionCells,
+  type OutdoorIlluminationField,
+} from "./outdoorIllumination";
+import {
   residentPlacementInCompatibilityWorld,
   residentPlacementInRegionalWindow,
   resolveResidentRouteWorldPlacement,
@@ -132,8 +137,9 @@ const liveBiomeCache = new WeakMap<readonly CachedBiomeTile[], {
   readonly tiles: readonly ProjectedBiomeTile[];
 }>();
 const perceptionCache = new WeakMap<readonly TerrainTileView[], {
-  readonly settlementKey: string;
   readonly cells: readonly PerceptionCell[];
+  illuminationStateKey?: string;
+  detailIllumination?: readonly number[];
   resultKey?: string;
   result?: PerceptionResult;
 }>();
@@ -405,21 +411,24 @@ export function projectPerception(
 ): PerceptionResult {
   const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
     + Math.floor(player.x / TILE_UNITS);
-  const settlementKey = world.settlements
-    .map((settlement) => settlement.tileIndex)
-    .sort((left, right) => left - right)
-    .join(",");
+  const cells = buildWorldPerceptionCells(world) ?? [];
   let cached = perceptionCache.get(world.terrain.tiles);
-  if (!cached || cached.settlementKey !== settlementKey) {
-    const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
+  if (!cached || cached.cells !== cells) {
     cached = {
-      settlementKey,
-      cells: world.terrain.tiles.map((tile, index) => ({
-        elevation: Math.max(0, Math.min(1, tile.elevation / FIXED_POINT)),
-        obstruction: perceptionObstruction(tile, settlementTiles.has(index)),
-      })),
+      cells,
     };
     perceptionCache.set(world.terrain.tiles, cached);
+  }
+  const illuminationField = buildOutdoorIlluminationField(world, cells);
+  const illuminationStateKey = illuminationField?.cacheKey ?? "invalid";
+  if (
+    cached.illuminationStateKey !== illuminationStateKey
+    || cached.detailIllumination === undefined
+  ) {
+    cached.illuminationStateKey = illuminationStateKey;
+    cached.detailIllumination = perceptionDetailIllumination(world, illuminationField);
+    delete cached.resultKey;
+    delete cached.result;
   }
   const weatherVisibility = Math.max(
     0,
@@ -429,6 +438,7 @@ export function projectPerception(
     currentPlayerTileIndex,
     player.facingMilliRadians,
     weatherVisibility,
+    illuminationStateKey,
   ].join(":");
   if (
     cached.resultKey === resultKey
@@ -441,14 +451,38 @@ export function projectPerception(
     cells: cached.cells,
     playerTileIndex: currentPlayerTileIndex,
     facingRadians: player.facingMilliRadians / 1_000,
-    weatherVisibility: Math.max(
-      0,
-      Math.min(1, 1 - (world.weather.intensity / FIXED_POINT) * 0.52),
-    ),
+    weatherVisibility,
+    detailIllumination: cached.detailIllumination,
   });
   cached.resultKey = resultKey;
   cached.result = result;
   return result;
+}
+
+function perceptionDetailIllumination(
+  world: WorldView,
+  field: OutdoorIlluminationField | null,
+): readonly number[] {
+  const illumination = Array(world.terrain.tiles.length).fill(0) as number[];
+  if (
+    field === null
+    || field.columns !== world.terrain.width
+    || field.rows !== world.terrain.height
+    || field.physicalIllumination.length !== illumination.length
+  ) return Object.freeze(illumination);
+  for (let index = 0; index < illumination.length; index += 1) {
+    const fixed = field.physicalIllumination[index];
+    if (
+      typeof fixed !== "number"
+      || !Number.isSafeInteger(fixed)
+      || fixed < 0
+      || fixed > FIXED_POINT
+    ) {
+      return Object.freeze(illumination.fill(0));
+    }
+    illumination[index] = fixed / FIXED_POINT;
+  }
+  return Object.freeze(illumination);
 }
 
 export function projectGameView(
@@ -473,6 +507,10 @@ export function projectGameView(
   )
     ? suppliedPerception
     : currentPerception;
+  const outdoorCells = buildWorldPerceptionCells(world);
+  const outdoorIllumination = outdoorCells === null
+    ? null
+    : buildOutdoorIlluminationField(world, outdoorCells);
   const currentPlayerTileIndex = perception.playerTileIndex;
   const cargoWorlds = options.looseCargoWorlds
     ?? (options.looseCargoWorld ? [options.looseCargoWorld] : []);
@@ -703,8 +741,11 @@ export function projectGameView(
         world.weather.windX,
         world.weather.windY,
       ].join(":"),
+      currentLocalIlluminationRevision: outdoorIllumination?.cacheKey ?? "invalid-unlit",
       tiles: world.terrain.tiles.map((tile, index) => {
         const biome = projectedBiomes[index];
+        const localIllumination = outdoorIllumination?.localIllumination[index];
+        const currentTerrainVisibility = perception.terrainVisibilityStrengths[index] ?? 0;
         return {
           kind: renderTerrain(tile, settlementTiles.has(index)),
           ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
@@ -715,9 +756,19 @@ export function projectGameView(
           depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
           discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
           currentVisibility: terrainVisibilityStrengthValue(
-            perception.terrainVisibilityStrengths[index],
+            currentTerrainVisibility,
           ),
           currentDetailVisibility: visibilityGradeValue(perception.detailVisibilityGrades[index]),
+          // Local-light presentation is never a second disclosure channel. A
+          // physically lit but currently unseen tile projects zero, while F0
+          // has already consumed the authoritative field before this point.
+          currentLocalIllumination: currentTerrainVisibility > 0
+            && typeof localIllumination === "number"
+            && Number.isSafeInteger(localIllumination)
+            && localIllumination >= 0
+            && localIllumination <= FIXED_POINT
+            ? localIllumination / FIXED_POINT
+            : 0,
           trace: tile.traceStrength / FIXED_POINT,
           shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
           blocked: false,
@@ -1166,15 +1217,6 @@ function perceivedWorldPoint(
   const row = Math.floor(point.y / tileSize);
   if (column < 0 || column >= columns || row < 0 || row >= rows) return false;
   return visibilityGrades[row * columns + column] === VISIBILITY_DIRECT;
-}
-
-/** Terrain and substantial structures can block sight; rough ground alone does not. */
-function perceptionObstruction(tile: TerrainTileView, occupied: boolean): number {
-  if (occupied) return 0.72;
-  if (tile.terrain === "ridge") return 0.76;
-  if (tile.terrain === "marsh") return 0.34;
-  if (tile.terrain === "meadow" && tile.roughness >= 880_000) return 0.5;
-  return 0;
 }
 
 function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {

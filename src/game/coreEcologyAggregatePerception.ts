@@ -15,9 +15,12 @@ import {
 } from "./coreEcologyAggregatePolicy";
 import {
   coreEcologyPerceptionCells,
-  coreEcologyTargetLightVisibility,
   coreEcologyWeatherVisibility,
 } from "./coreEcologyPerception";
+import {
+  buildOutdoorIlluminationField,
+  type OutdoorIlluminationField,
+} from "./outdoorIllumination";
 import {
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_MAX_STIMULI,
   CORE_ECOLOGY_SETTLEMENT_SHADOWS_STIMULUS_VERSION,
@@ -209,6 +212,7 @@ interface CanonicalAggregatePerceptionFrame {
   readonly exposedFoodSources: readonly CoreEcologyAggregateExposedFoodSource[];
   readonly frame: SpatialFrame;
   readonly cells: ReturnType<typeof coreEcologyPerceptionCells>;
+  readonly illumination: OutdoorIlluminationField;
 }
 
 interface StimulusCandidate {
@@ -329,6 +333,11 @@ function visualCandidate(
   if (sourceTileIndex === null) return null;
   const sourceTile = input.world.terrain.tiles[sourceTileIndex];
   if (sourceTile === undefined) return null;
+  const targetLightVisibility = physicalLightVisibility(
+    input.illumination,
+    sourceTileIndex,
+  );
+  if (targetLightVisibility === null) return null;
   const profile = livingActorSenseProfile(species);
   const acuity = profile.visionAcuity / FIXED_POINT;
   const anchorInfluences = anchors.map((anchor) => {
@@ -350,7 +359,7 @@ function visualCandidate(
         forwardConeRadians: FULL_CIRCLE_RADIANS,
       },
       targetMovementSalience: source.movementSalience / FIXED_POINT,
-      targetLightVisibility: coreEcologyTargetLightVisibility(sourceTile),
+      targetLightVisibility,
     });
     return influence(anchor.anchorOrdinal, sight === null ? 0 : scaleUnit(sight.confidence));
   });
@@ -474,7 +483,10 @@ function canonicalInput(value: unknown): CanonicalAggregatePerceptionFrame | nul
   if (visualSources === null || exposedFoodSources === null) return null;
   const frame = spatialFrameForWorld(world);
   const cells = coreEcologyPerceptionCells(world);
-  if (frame === null || cells === null) return null;
+  const illumination = cells === null
+    ? null
+    : buildOutdoorIlluminationField(world, cells);
+  if (frame === null || cells === null || illumination === null) return null;
   return Object.freeze({
     patch,
     world,
@@ -484,7 +496,16 @@ function canonicalInput(value: unknown): CanonicalAggregatePerceptionFrame | nul
     exposedFoodSources,
     frame,
     cells,
+    illumination,
   });
+}
+
+function physicalLightVisibility(
+  field: OutdoorIlluminationField,
+  tileIndex: number,
+): number | null {
+  const value = field.physicalIllumination[tileIndex];
+  return fixedPoint(value) ? value / FIXED_POINT : null;
 }
 
 function canonicalVisualSources(value: readonly unknown[]): readonly CoreEcologyAggregateVisualSource[] | null {

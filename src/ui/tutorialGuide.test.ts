@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(50);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(51);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,23 +63,30 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 40 One Clock is a local unpublished source candidate");
-    expect(copy).toContain("no renderer, actor system, region, device clock, or timezone owns a second clock");
-    expect(copy).toContain("Chart, Relief, event history, continue summaries");
-    expect(copy).toContain("released 06:00 through 20:00 behavior window");
+    expect(copy).toContain("Alpha 41 First Light is a local unpublished source candidate");
+    expect(copy).toContain("No renderer, actor system, region, device clock, or timezone owns a second clock");
+    expect(copy).toContain("Player disclosure, wildlife sight, aggregate activity");
+    expect(copy).toContain("Fresh worlds begin at 07:00");
     expect(copy).toContain("outer save version 30");
-    expect(copy).toContain("Closing the game adds no offline time");
+    expect(copy).toContain("closing the game adds no offline time");
     expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("Smooth outdoor light, complete actor schedules, player sleep/wait");
+    expect(copy).toContain("complete actor schedules, player sleep/wait");
     expect(copy).toContain("The Turning Day directive remains open");
   });
 
-  it("describes the shared world clock without claiming unfinished Turning Day systems", () => {
+  it("describes shared outdoor light without claiming unfinished Turning Day systems", () => {
     const views = tutorialSectionById("views-and-hud");
     const copy = views?.steps.map((step) => `${step.title} ${step.body}`).join(" ") ?? "";
-    expect(copy).toContain("One clock turns the whole world");
+    const boundaries = tutorialSectionById("build-boundaries");
+    const liveBoundary = boundaries?.steps.find((step) => step.id === "boundaries-live-weather");
+    expect(copy).toContain("One clock carries first light into night");
     expect(copy).toContain("every 1,440 ticks begins a new day");
-    expect(copy).toContain("Smooth outdoor light, complete schedules, and player sleep/wait are still being connected");
+    expect(copy).toContain(
+      "completed beacon projects light nearby unobstructed ground and blue water after dusk",
+    );
+    expect(copy).toContain("Complete actor schedules and player WAIT, REST, or SLEEP remain later");
+    expect(liveBoundary?.title).toBe("Present in this source candidate");
+    expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

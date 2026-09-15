@@ -7,6 +7,8 @@ import {
   createWorldView,
   FIXED_POINT,
   generateFieldResourceCatalog,
+  WORLD_DAY_START_TICK,
+  WORLD_NIGHT_START_TICK,
 } from "../sim/public";
 import { createCraftingInventory } from "./crafting";
 import {
@@ -52,6 +54,129 @@ describe("shared projection perception cache", () => {
     const obscured = projectPerception(changedWeather, player);
     expect(obscured).not.toBe(turned);
     expect(projectPerception(changedWeather, player)).toBe(obscured);
+  });
+
+  it("invalidates the cache when shared daylight changes without hiding terrain", () => {
+    const state = createWorld("one clock reaches the eyes", "standard");
+    const base = createWorldView(state);
+    const settlements = base.settlements.map((settlement) => ({
+      ...settlement,
+      project: { ...settlement.project, status: "building" as const },
+    }));
+    const dayWorld = {
+      ...base,
+      completedTick: WORLD_DAY_START_TICK,
+      settlements,
+    };
+    const nightWorld = {
+      ...base,
+      completedTick: WORLD_NIGHT_START_TICK,
+      settlements,
+    };
+    const player = createPlayer(dayWorld);
+    player.facingMilliRadians = 0;
+
+    const day = projectPerception(dayWorld, player);
+    expect(projectPerception(dayWorld, player)).toBe(day);
+    const night = projectPerception(nightWorld, player);
+    const steadyNight = projectPerception({
+      ...nightWorld,
+      completedTick: WORLD_NIGHT_START_TICK + 1,
+    }, player);
+
+    expect(night).not.toBe(day);
+    expect(projectPerception(nightWorld, player)).toBe(night);
+    expect(steadyNight).toBe(night);
+    expect(night.visibilityGrades).toEqual(day.visibilityGrades);
+    expect(night.terrainVisibilityStrengths).toEqual(day.terrainVisibilityStrengths);
+    expect(night.detailVisibleTileIndices.length).toBeLessThan(
+      day.detailVisibleTileIndices.length,
+    );
+  });
+
+  it("lets a completed physical beacon reveal nearby night detail and invalidates project cache", () => {
+    const state = createWorld("the beacon reaches only where it shines", "standard");
+    const base = createWorldView(state);
+    const source = base.settlements[0];
+    if (!source) throw new Error("fixture needs a settlement");
+    const unlitSettlements = base.settlements.map((settlement) => ({
+      ...settlement,
+      project: { ...settlement.project, status: "building" as const },
+    }));
+    const unlitWorld = {
+      ...base,
+      completedTick: WORLD_NIGHT_START_TICK,
+      settlements: unlitSettlements,
+    };
+    const litWorld = {
+      ...unlitWorld,
+      settlements: unlitSettlements.map((settlement) => settlement.id === source.id
+        ? {
+            ...settlement,
+            project: {
+              ...settlement.project,
+              kind: "beacon" as const,
+              status: "complete" as const,
+              progress: settlement.project.target,
+            },
+          }
+        : settlement),
+    };
+    const player = createPlayer(unlitWorld, source.id);
+
+    const unlit = projectPerception(unlitWorld, player);
+    expect(projectPerception(unlitWorld, player)).toBe(unlit);
+    const lit = projectPerception(litWorld, player);
+    const lampRevealedIndex = lit.detailVisibleTileIndices.find((index) =>
+      unlit.detailVisibilityGrades[index] === 0
+    );
+
+    expect(lit).not.toBe(unlit);
+    expect(projectPerception(litWorld, player)).toBe(lit);
+    expect(lit.visibilityGrades).toEqual(unlit.visibilityGrades);
+    expect(lit.terrainVisibilityStrengths).toEqual(unlit.terrainVisibilityStrengths);
+    expect(lampRevealedIndex).toBeDefined();
+    expect(lit.detailVisibleTileIndices.length).toBeGreaterThan(
+      unlit.detailVisibleTileIndices.length,
+    );
+  });
+
+  it("projects a beacon pool only onto terrain the player can presently perceive", () => {
+    const state = createWorld("the player sees the light rather than a hidden hash", "standard");
+    const base = createWorldView(state);
+    const source = base.settlements.find(({ project }) => project.kind === "beacon");
+    if (!source) throw new Error("fixture needs a beacon project");
+    const world = {
+      ...base,
+      completedTick: WORLD_NIGHT_START_TICK,
+      settlements: base.settlements.map((settlement) => ({
+        ...settlement,
+        project: {
+          ...settlement.project,
+          status: settlement.id === source.id ? "complete" as const : "building" as const,
+          progress: settlement.id === source.id
+            ? settlement.project.target
+            : settlement.project.progress,
+        },
+      })),
+    };
+    const nearbyPlayer = createPlayer(world, source.id);
+    const nearby = projectGameView(world, nearbyPlayer);
+    const illuminated = nearby.terrain.tiles.filter(({ currentLocalIllumination }) => (
+      (currentLocalIllumination ?? 0) > 0
+    ));
+
+    expect(illuminated.length).toBeGreaterThan(1);
+    expect(illuminated.every(({ currentVisibility }) => (currentVisibility ?? 0) > 0)).toBe(true);
+    expect(nearby.terrain.currentLocalIlluminationRevision).toEqual(expect.any(String));
+
+    const distantPlayer = createPlayer(world, source.id);
+    distantPlayer.x = (world.terrain.width - 1) * TILE_UNITS + Math.floor(TILE_UNITS / 2);
+    distantPlayer.y = (world.terrain.height - 1) * TILE_UNITS + Math.floor(TILE_UNITS / 2);
+    const distant = projectGameView(world, distantPlayer);
+    expect(distant.terrain.tiles.every(({ currentLocalIllumination, currentVisibility }) => (
+      (currentVisibility ?? 0) > 0 || currentLocalIllumination === 0
+    ))).toBe(true);
   });
 
   it("repairs a mutated cached detail mask before it can disclose a hidden actor", () => {

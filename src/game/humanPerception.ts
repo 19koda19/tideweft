@@ -18,8 +18,8 @@ import {
   evaluateAudibleContact,
   evaluateVisualContact,
   type AudibleContact,
-  type PerceptionCell,
 } from "./perception";
+import { buildWorldPerceptionCells } from "./outdoorIllumination";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
@@ -175,7 +175,8 @@ export function collectExistingHumanObservations(
   if (frame === null) return EMPTY_BATCHES;
   const samples = canonicalSamples(input.playerSamples);
   if (samples === null) return EMPTY_BATCHES;
-  const cells = lazyPerceptionCells(world);
+  const cells = buildWorldPerceptionCells(world);
+  if (cells === null) return EMPTY_BATCHES;
 
   const positioned = world.residents.flatMap((resident) => {
     const placement = resolveResidentWorldPlacement(economy, resident);
@@ -461,34 +462,6 @@ function ambientNoiseAt(world: WorldView, listenerTileIndex: number): number | n
     rainIntensity: raining ? world.weather.intensity / FIXED_POINT : 0,
     localWaterTurbulence: Math.max(0, Math.min(1, waterTurbulence)),
   });
-}
-
-function lazyPerceptionCells(world: WorldView): readonly PerceptionCell[] {
-  const settlementTiles = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
-  return new Proxy(world.terrain.tiles as unknown as PerceptionCell[], {
-    get(target, property, receiver) {
-      if (typeof property !== "string" || !/^(0|[1-9]\d*)$/u.test(property)) {
-        return Reflect.get(target, property, receiver);
-      }
-      const index = Number(property);
-      const tile = world.terrain.tiles[index];
-      if (!validTerrainTile(tile, index, world.terrain.width)) {
-        return { elevation: Number.NaN, obstruction: Number.NaN };
-      }
-      return {
-        elevation: tile.elevation / FIXED_POINT,
-        obstruction: perceptionObstruction(tile, settlementTiles.has(index)),
-      } satisfies PerceptionCell;
-    },
-  });
-}
-
-function perceptionObstruction(tile: TerrainTileView, occupied: boolean): number {
-  if (occupied) return 0.72;
-  if (tile.terrain === "ridge") return 0.76;
-  if (tile.terrain === "marsh") return 0.34;
-  if (tile.terrain === "meadow" && tile.roughness >= 880_000) return 0.5;
-  return 0;
 }
 
 function validTerrainTile(

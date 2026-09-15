@@ -13,6 +13,8 @@ export interface ReliefWaterCell {
 
 export interface ReliefWaterMaterialBatch {
   readonly material: WaterPresentation;
+  /** Observation-gated local outdoor light, quantized to keep draw calls bounded. */
+  readonly currentLocalIllumination: number;
   readonly cells: readonly ReliefWaterCell[];
 }
 
@@ -37,6 +39,8 @@ export const RELIEF_WATER_PALETTE = {
   horizon: "#061729",
   tideGlint: "#78bce3",
 } as const;
+
+export const RELIEF_WATER_LOCAL_ILLUMINATION_BANDS = 3 as const;
 
 /**
  * Relief water sits over a warm lit terrain mesh. Any translucency lets that
@@ -82,7 +86,11 @@ export function buildReliefWaterMaterialBatches(
   const lastRow = integerInRange(bounds?.lastRow ?? grid.rows - 1, 0, grid.rows - 1);
   if (firstColumn > lastColumn || firstRow > lastRow) return [];
 
-  const groups = new Map<string, { material: WaterPresentation; cells: ReliefWaterCell[] }>();
+  const groups = new Map<string, {
+    material: WaterPresentation;
+    currentLocalIllumination: number;
+    cells: ReliefWaterCell[];
+  }>();
   for (let row = firstRow; row <= lastRow; row += 1) {
     for (let column = firstColumn; column <= lastColumn; column += 1) {
       const tile = grid.tiles[row * grid.columns + column];
@@ -101,6 +109,9 @@ export function buildReliefWaterMaterialBatches(
       if (!visible) continue;
       const material = quantizeWaterPresentation(visible);
       if (material.visibility <= 0) continue;
+      const currentLocalIllumination = Math.round(
+        unit(tile.currentLocalIllumination) * RELIEF_WATER_LOCAL_ILLUMINATION_BANDS,
+      ) / RELIEF_WATER_LOCAL_ILLUMINATION_BANDS;
       const key = [
         material.band,
         material.biome ?? "legacy",
@@ -110,8 +121,9 @@ export function buildReliefWaterMaterialBatches(
         material.tideLevel,
         material.color,
         material.opacity,
+        currentLocalIllumination,
       ].join(":");
-      const group = groups.get(key) ?? { material, cells: [] };
+      const group = groups.get(key) ?? { material, currentLocalIllumination, cells: [] };
       group.cells.push({ column, row });
       groups.set(key, group);
     }
@@ -122,6 +134,7 @@ export function buildReliefWaterMaterialBatches(
       || (left.material.biome ?? "legacy").localeCompare(right.material.biome ?? "legacy")
       || left.material.depth - right.material.depth
       || left.material.visibility - right.material.visibility
+      || left.currentLocalIllumination - right.currentLocalIllumination
   );
 }
 

@@ -2,6 +2,48 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.41",
+      "releaseDate": "2026-09-15",
+      "buildIdentity": "0.3.3-alpha.41",
+      "summary": "First Light is the local unpublished Alpha 41 source candidate: the shared clock now produces smooth outdoor light, physical night perception, and an earned settlement-beacon light without obscuring readable terrain.",
+      "gameplayContractVersion": 39,
+      "tutorialVersion": 51,
+      "categories": {
+        "gameplay": [
+          "Outdoor illumination is now one deterministic fixed-point world condition derived from the authoritative civil day, current weather, terrain sky exposure, explicit cover input, and bounded local light sources.",
+          "Darkness now contracts exact actor, item, label, and interaction recognition per target while leaving the longer terrain silhouette readable. A bounded nonlinear low-light response preserves nearby awareness without turning night into daylight.",
+          "Each completed beacon civic project now derives one stable settlement lamp that rises through dusk, remains lit at night, fades through dawn, and reaches only nearby targets with a clear physical line through terrain and substantial structures."
+        ],
+        "fixes": [
+          "Chart 2D and Relief 3D now ease their background, sky, ambient light, and Relief sunlight direction from the same saved phase instead of displaying daytime terrain beneath a Night clock.",
+          "Player disclosure, wildlife contacts, aggregate activity sightings, exposed-food sight, keeper-to-dog sight, and new human player-sense samples now consume the same physical illumination field instead of unrelated terrain-color light constants.",
+          "Chart water receives a blue under-surface at every visible depth, and Relief water remains an unlit blue-anchored material, preventing terrain, warm light, zoom, fog, or camera direction from washing it green or yellow.",
+          "Fresh-world regional ecology now begins each append-only wildlife cohort at its recorded activation time instead of replaying a midnight-to-morning prehistory; existing and migrated worlds retain their established ecology history exactly."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. Night reduces visual certainty and identity recognition, but broad terrain and a small adapted nearby detail field remain readable; absolute darkness still produces no visual detail range.",
+          "Fresh worlds begin at Day 1 07:00 on the authoritative clock so the first expedition opens in readable daylight. Existing saves retain their exact tick and phase, including valid midnight saves, without an offset or migration.",
+          "Weather can both reduce available physical light and shorten visual clarity. This slice adds no difficulty toggle, automatic night hostility, night population bonus, player stat drain, or brightness-based detection advantage."
+        ],
+        "interface": [
+          "Both views now express Dawn, Day, Dusk, and Night with smoothly changing outdoor color and light while retaining the pane-free floating interface and the same HUD clock.",
+          "Terrain can remain visible beyond the shorter pool in which exact people, wildlife, cargo, resources, names, and actions are identifiable. Completed beacon light appears as an observation-gated pool on visible ground and blue water in both views, and expands exact detail only where the world says its light physically arrives.",
+          "Field Manual version 51 explains fresh-world morning light, low-light adaptation, physical beacon occlusion, shared Chart/Relief perception, and the remaining Turning Day boundaries."
+        ],
+        "saves": [
+          "Outer save version 30 remains unchanged. Outdoor light and beacon lamps are derived from the existing world tick, weather, terrain, civic-project state, and signed spatial addresses rather than a mutable saved lighting sidecar.",
+          "Fresh-world timestamps begin coherently at tick 420 across tide, weather scheduling, recipes, residents, routes, contracts, and the world-created event. Loading any existing save preserves its original authoritative timestamps exactly.",
+          "Physical-light fields are bounded and cached by actual eased light state, weather, completed beacon identity, current signed spatial frame, and immutable occlusion geometry. One validated regional geometry snapshot and bounded lamp index are shared across current consumers; steady-light ticks reuse the same result without changing save truth.",
+          "Periodic autosave cadence now starts from the authoritative tick present at new-world creation, Continue, or deliberate world replacement instead of measuring from civil tick zero; visibility, exit, title-return, and Quiet Hour saves remain unchanged."
+        ],
+        "knownLimitations": [
+          "Alpha 41 First Light is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+          "Completed beacon projects are the only live local-light source in this slice. Fire, carried lanterns, independent canopy or interior cover, rendered shadow maps, moon or star astronomy, and settlement-interior lighting remain later work.",
+          "This candidate does not complete actor schedules, physical sleep destinations, asleep or startled state, companion sleep, player WAIT, REST, or SLEEP, interrupted time acceleration, Living Voice, seasons, migration, new species, or new mortality. The Turning Day directive remains open."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.40",
       "releaseDate": "2026-09-14",
       "buildIdentity": "0.3.3-alpha.40",

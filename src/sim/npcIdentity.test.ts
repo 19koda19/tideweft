@@ -366,13 +366,16 @@ describe("persistent procedural resident identity", () => {
 
   it("observes and greets without revealing facts early or farming memories", () => {
     const world = createWorld("a greeting becomes history", "standard");
+    const startTick = world.meta.completedTick;
+    const observedTick = startTick + 1;
+    const introducedTick = startTick + 2;
     const resident = world.residents[0];
     if (!resident) throw new Error("fixture needs a resident");
 
     stepWorld(world, [{ id: "observe-once", type: "observe-resident", residentId: resident.id }]);
     expect(resident.playerKnowledge).toMatchObject({
       level: "recognized",
-      firstObservedTick: 1,
+      firstObservedTick: observedTick,
       introducedTick: null,
       facts: [],
     });
@@ -382,12 +385,12 @@ describe("persistent procedural resident identity", () => {
       id: "greet-once",
       type: "greet-resident",
       residentId: resident.id,
-      observedTick: 1,
+      observedTick,
     }]);
     expect(resident.playerKnowledge).toMatchObject({
       level: "acquainted",
-      firstObservedTick: 1,
-      introducedTick: 2,
+      firstObservedTick: observedTick,
+      introducedTick,
       facts: ["name", "occupation", "home"],
     });
     expect(resident.memories).toHaveLength(1);
@@ -397,7 +400,7 @@ describe("persistent procedural resident identity", () => {
       id: "greet-again",
       type: "greet-resident",
       residentId: resident.id,
-      observedTick: 1,
+      observedTick,
     }]);
     expect(resident.memories).toHaveLength(1);
     expect(world.events.filter(({ type, subjectId }) =>
@@ -639,6 +642,7 @@ describe("persistent procedural resident identity", () => {
 
   it("deep-copies hidden identity, condition, knowledge, and memory fields into views", () => {
     const world = createWorld("the view cannot rewrite the person", "standard");
+    const observedTick = world.meta.completedTick + 1;
     const resident = world.residents[0];
     if (!resident) throw new Error("fixture needs a resident");
     stepWorld(world, [{ id: "observe-for-view", type: "observe-resident", residentId: resident.id }]);
@@ -646,7 +650,7 @@ describe("persistent procedural resident identity", () => {
       id: "greet-for-view",
       type: "greet-resident",
       residentId: resident.id,
-      observedTick: 1,
+      observedTick,
     }]);
     const view = createWorldView(world);
     const viewed = view.residents[0];
@@ -666,7 +670,7 @@ describe("persistent procedural resident identity", () => {
     expect(resident.identity.history[0]?.worldDay).not.toBe(999);
     expect(resident.condition.wetness).not.toBe(FIXED_POINT);
     expect(resident.playerKnowledge.facts).toEqual(["name", "occupation", "home"]);
-    expect(resident.memories[0]?.tick).toBe(2);
+    expect(resident.memories[0]?.tick).toBe(observedTick + 1);
   });
 
   it("fails closed on every authored resident enum family", () => {

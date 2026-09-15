@@ -62,6 +62,11 @@ import {
 import { buildWaychordBindings, buildWaychords } from "./wayknots";
 import { buildWindThreadFrame } from "./windPresentation";
 import {
+  outdoorIlluminationPresentation,
+  outdoorLocalLightEmission,
+  outdoorWaterColor,
+} from "./outdoorIllumination";
+import {
   alpineWildlifeAppearancePalette,
   coldShoreWildlifeAppearancePalette,
   domesticGoatAppearancePalette,
@@ -2156,6 +2161,8 @@ export function createTideweftReliefRenderer(
       "perception",
       view.perception.signature,
       terrainMemory.signature,
+      typeof view.terrain.currentLocalIlluminationRevision,
+      String(view.terrain.currentLocalIlluminationRevision ?? "legacy-unlit"),
     ]);
     if (cachedPerception?.key === key) return cachedPerception;
     cachedPerception = {
@@ -2221,6 +2228,7 @@ export function createTideweftReliefRenderer(
       fog: number,
       memoryOnly = false,
       currentVisibility = 1,
+      currentLocalIllumination = 0,
     ): p5.Color => {
       return p.color(reliefSurfaceMaterialColor({
         kind: material.kind,
@@ -2230,6 +2238,7 @@ export function createTideweftReliefRenderer(
         fog,
         memoryOnly,
         currentVisibility,
+        currentLocalIllumination,
       }));
     };
 
@@ -2284,8 +2293,15 @@ export function createTideweftReliefRenderer(
       for (const batch of perception.chunks) {
         if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
         for (const material of batch.materials) {
-          const surfaceColor = materialColor(material, 0, false, material.currentVisibility);
-          p.emissiveMaterial(0, 0, 0);
+          const surfaceColor = materialColor(
+            material,
+            0,
+            false,
+            material.currentVisibility,
+            material.currentLocalIllumination,
+          );
+          const emission = outdoorLocalLightEmission(material.currentLocalIllumination);
+          p.emissiveMaterial(emission.red, emission.green, emission.blue);
           p.fill(surfaceColor);
           p.ambientMaterial(surfaceColor);
           p.beginShape(p.TRIANGLES);
@@ -2298,6 +2314,7 @@ export function createTideweftReliefRenderer(
           p.endShape();
         }
       }
+      p.emissiveMaterial(0, 0, 0);
     };
 
     const drawBiomeDetails = (view: TideweftView, cache: CachedReliefMesh): void => {
@@ -2398,6 +2415,7 @@ export function createTideweftReliefRenderer(
     const drawWater = (view: TideweftView, cache: CachedReliefMesh): void => {
       if (!cache.mesh.waterPlane && !cache.perceptionMesh.waterPlane) return;
       const grid = view.terrain;
+      const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = grid.tileSize;
       const reach = orbit.distance * 1.45;
       const startColumn = clampInteger(Math.floor((orbit.x - reach - grid.origin.x) / tileSize), 0, grid.columns - 1);
@@ -2429,7 +2447,11 @@ export function createTideweftReliefRenderer(
           p.ambientMaterial(0, 0, 0);
           // Emissive here is an unlit albedo, not a glow. The blue-only Relief
           // palette remains independent of fog and directional lighting.
-          p.emissiveMaterial(reliefWaterSurfaceColor(batch.material));
+          p.emissiveMaterial(outdoorWaterColor(
+            reliefWaterSurfaceColor(batch.material),
+            outdoorLight,
+            batch.currentLocalIllumination,
+          ));
           p.beginShape(p.TRIANGLES);
           for (const cell of batch.cells) {
             const { column, row } = cell;
@@ -3601,7 +3623,8 @@ export function createTideweftReliefRenderer(
           -surface - baseRadius * appearance.heightScale,
           porter.position.y,
         );
-        p.emissiveMaterial(appearance.color);
+        p.emissiveMaterial(0, 0, 0);
+        p.ambientMaterial(appearance.color);
         p.ellipsoid(
           baseRadius * appearance.widthScale,
           baseRadius * appearance.heightScale,
@@ -3679,6 +3702,7 @@ export function createTideweftReliefRenderer(
         p.translate(dog.position.x, -bodyCenterY, dog.position.y);
         p.rotateY(-dog.facing);
         p.noStroke();
+        p.emissiveMaterial(0, 0, 0);
 
         if (!resting) {
           p.ambientMaterial(RELIEF_PALETTE.ink);
@@ -3692,12 +3716,12 @@ export function createTideweftReliefRenderer(
           }
         }
 
-        p.emissiveMaterial(primary);
+        p.ambientMaterial(primary);
         p.ellipsoid(bodyHalfLength, bodyHalfHeight, bodyHalfWidth, 8, 5);
         if (dog.coat.secondary !== null && dog.coat.pattern !== "solid") {
           p.push();
           p.translate(bodyHalfLength * 0.28, -bodyHalfHeight * 0.15, 0);
-          p.emissiveMaterial(secondary);
+          p.ambientMaterial(secondary);
           p.ellipsoid(
             bodyHalfLength * 0.34,
             bodyHalfHeight * 0.9,
@@ -3710,10 +3734,10 @@ export function createTideweftReliefRenderer(
 
         p.push();
         p.translate(bodyHalfLength * 0.92, -bodyHalfHeight * 0.34, 0);
-        p.emissiveMaterial(primary);
+        p.ambientMaterial(primary);
         p.sphere(headRadius, 7, 5);
         p.translate(headRadius * 0.72, headRadius * 0.08, 0);
-        p.emissiveMaterial(secondary);
+        p.ambientMaterial(secondary);
         p.ellipsoid(headRadius * 0.68, headRadius * 0.42, headRadius * 0.5, 6, 4);
         p.ambientMaterial(RELIEF_PALETTE.ink);
         for (const earZ of [-headRadius * 0.52, headRadius * 0.52]) {
@@ -5901,7 +5925,8 @@ export function createTideweftReliefRenderer(
             ? Math.sin(p.millis() * 0.006) * adrift.leanIntensity * 0.12
             : 0),
       );
-      p.emissiveMaterial(playerColor);
+      p.emissiveMaterial(0, 0, 0);
+      p.ambientMaterial(playerColor);
       const silhouetteScale = reliefSilhouetteScale(presentation);
       p.scale(...silhouetteScale);
       if (player.mode === "skiff") {
@@ -6232,12 +6257,31 @@ export function createTideweftReliefRenderer(
       now: number,
     ): void => {
       const camera = currentCameraState();
+      const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       setCamera(camera);
-      // A warm neutral key and restrained cool fill preserve material identity;
-      // the former cyan-heavy rig flattened water, land, and finds together.
-      p.ambientLight(90, 82, 68);
-      p.directionalLight(210, 184, 142, -0.55, 0.9, -0.35);
-      p.directionalLight(24, 34, 40, 0.65, 0.2, 0.7);
+      // The shared clock changes one warm/cool outdoor rig. Material identity
+      // remains readable at night, and emissive blue water is isolated below.
+      p.ambientLight(
+        outdoorLight.ambient.red,
+        outdoorLight.ambient.green,
+        outdoorLight.ambient.blue,
+      );
+      p.directionalLight(
+        outdoorLight.key.red,
+        outdoorLight.key.green,
+        outdoorLight.key.blue,
+        outdoorLight.keyDirection.x,
+        outdoorLight.keyDirection.y,
+        outdoorLight.keyDirection.z,
+      );
+      p.directionalLight(
+        outdoorLight.fill.red,
+        outdoorLight.fill.green,
+        outdoorLight.fill.blue,
+        -outdoorLight.keyDirection.x,
+        0.2,
+        -outdoorLight.keyDirection.z,
+      );
       drawTerrain(view, cache, camera, terrainMemory);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
@@ -6302,7 +6346,12 @@ export function createTideweftReliefRenderer(
       const now = performance.now();
       telemetry.recordFrame(now);
       advancePointerParallax(pointerParallax, now, reducedMotion);
-      p.background(latestView?.weather.kind === "mist" ? RELIEF_PALETTE.horizon : RELIEF_PALETTE.ink);
+      const outdoorLight = outdoorIlluminationPresentation(latestView?.worldTime);
+      p.background(
+        latestView?.weather.kind === "mist"
+          ? outdoorLight.reliefMistSky
+          : outdoorLight.reliefSky,
+      );
       if (!latestView) return;
       const terrainMemory = terrainPerceptionMemory.sample({
         terrain: latestView.terrain,

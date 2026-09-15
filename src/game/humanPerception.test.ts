@@ -132,13 +132,13 @@ describe("existing-human sensory bridge", () => {
     const first = collectExistingHumanObservations({
       world: forward.world,
       window: forward.window,
-      targetTick: 1,
+      targetTick: fixtureTick(forward, 1),
       playerSamples: samples,
     });
     const second = collectExistingHumanObservations({
       world: reverse.world,
       window: reverse.window,
-      targetTick: 1,
+      targetTick: fixtureTick(reverse, 1),
       playerSamples: [...samples].reverse(),
     });
 
@@ -182,13 +182,13 @@ describe("existing-human sensory bridge", () => {
     const first = batchFor(collectExistingHumanObservations({
       world: base.world,
       window: base.window,
-      targetTick: 1,
+      targetTick: fixtureTick(base, 1),
       playerSamples: [sample],
     }), base.resident.id)?.observations;
     const second = batchFor(collectExistingHumanObservations({
       world: shiftedWorld,
       window: shiftedWindow,
-      targetTick: 1,
+      targetTick: fixtureTick(base, 1),
       playerSamples: [sample],
     }), base.resident.id)?.observations;
 
@@ -225,10 +225,11 @@ describe("existing-human sensory bridge", () => {
   it("keeps attending to a stationary identified player when route-facing points away", () => {
     const current = fixture("saved attention sustains lawful contact", { facing: "west" });
     const target = worldPoint(OBSERVER_X + 4, OBSERVER_Y);
+    const startTick = current.resident.perception.tick;
     const priorObservation = createActorObservation({
       id: "prior-attended-player",
       observerId: current.resident.identity.stableId,
-      observedAtTick: 1,
+      observedAtTick: startTick + 1,
       channel: "vision",
       perceivedClass: "human",
       subjectId: LOCAL_PLAYER_SUBJECT_ID,
@@ -239,8 +240,8 @@ describe("existing-human sensory bridge", () => {
     });
     if (!priorObservation) throw new Error("prior attention must be valid");
     const priorState = stepActorPerception(
-      createActorPerceptionState(current.resident.identity.stableId),
-      { tick: 1, observations: [priorObservation] },
+      createActorPerceptionState(current.resident.identity.stableId, startTick),
+      { tick: startTick + 1, observations: [priorObservation] },
     );
     if (!priorState) throw new Error("prior attention state must be valid");
     current.resident.perception = priorState;
@@ -281,25 +282,25 @@ describe("existing-human sensory bridge", () => {
     expect(collectExistingHumanObservations({
       world: current.world,
       window: current.window,
-      targetTick: 1,
+      targetTick: fixtureTick(current, 1),
       playerSamples: [valid, malformed],
     })).toEqual([]);
     expect(collectExistingHumanObservations({
       world: current.world,
       window: current.window,
-      targetTick: 1,
+      targetTick: fixtureTick(current, 1),
       playerSamples: [valid, valid],
     })).toEqual([]);
     expect(collectExistingHumanObservations({
       world: current.world,
       window: current.window,
-      targetTick: 1,
+      targetTick: fixtureTick(current, 1),
       playerSamples: [valid, { ...valid, id: "same-ordinal" }],
     })).toEqual([]);
     expect(collectExistingHumanObservations({
       world: current.world,
       window: current.window,
-      targetTick: 1,
+      targetTick: fixtureTick(current, 1),
       playerSamples: Array.from(
         { length: HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES + 1 },
         (_, index) => visualSample(`sample-${index}`, OBSERVER_X + 2, OBSERVER_Y, {
@@ -311,7 +312,7 @@ describe("existing-human sensory bridge", () => {
     expect(collectExistingHumanObservations({
       world: current.world,
       window: unrelated.window,
-      targetTick: 1,
+      targetTick: fixtureTick(current, 1),
       playerSamples: [valid],
     })).toEqual([]);
   });
@@ -420,9 +421,13 @@ function observationsFor(
   return batchFor(collectExistingHumanObservations({
     world: current.world,
     window: current.window,
-    targetTick,
+    targetTick: fixtureTick(current, targetTick),
     playerSamples: samples,
   }), current.resident.id)?.observations ?? [];
+}
+
+function fixtureTick(current: Fixture, offset: number): number {
+  return current.state.meta.completedTick + offset;
 }
 
 function batchFor(
@@ -495,10 +500,11 @@ function worldPoint(tileX: number, tileY: number) {
 }
 
 function searchingState(resident: ResidentState, lastKnown: ReturnType<typeof worldPoint>) {
+  const startTick = resident.perception.tick;
   const observed = createActorObservation({
     id: "prior-player-sighting",
     observerId: resident.identity.stableId,
-    observedAtTick: 1,
+    observedAtTick: startTick + 1,
     channel: "vision",
     perceivedClass: "human",
     subjectId: LOCAL_PLAYER_SUBJECT_ID,
@@ -509,10 +515,13 @@ function searchingState(resident: ResidentState, lastKnown: ReturnType<typeof wo
   });
   if (!observed) throw new Error("prior sighting must be valid");
   const identified = stepActorPerception(
-    createActorPerceptionState(resident.identity.stableId),
-    { tick: 1, observations: [observed] },
+    createActorPerceptionState(resident.identity.stableId, startTick),
+    { tick: startTick + 1, observations: [observed] },
   );
-  const searching = stepActorPerception(identified, { tick: 2, observations: [] });
+  const searching = stepActorPerception(identified, {
+    tick: startTick + 2,
+    observations: [],
+  });
   if (!searching) throw new Error("search state must be valid");
   return searching as ActorPerceptionState;
 }

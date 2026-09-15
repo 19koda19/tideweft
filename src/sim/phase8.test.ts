@@ -411,7 +411,7 @@ describe("truthful traced-route coverage", () => {
   it("assigns full coverage to every authoritative NPC porter leg", () => {
     const world = createWorld("porters know their old roads", "calm");
     const contract = firstOffer(world);
-    contract.playerExclusiveUntilTick = 0;
+    contract.playerExclusiveUntilTick = world.meta.completedTick;
     stepWorld(world);
     expect(contract.carrierKind).toBe("resident");
     stepWorld(world);
@@ -446,6 +446,7 @@ describe("truthful traced-route coverage", () => {
 describe("authoritative tide choirs", () => {
   it("canonicalizes and rewards a simple cycle without creating resources or trace", () => {
     const world = createWorld("three bells answer");
+    const activationTick = world.meta.completedTick + 1;
     const settlementIds = world.settlements.slice(0, 3).map((settlement) => settlement.id);
     const first = settlementIds[0];
     const second = settlementIds[1];
@@ -474,7 +475,7 @@ describe("authoritative tide choirs", () => {
     const canonicalRouteIds = routes.map((route) => route.id).sort((left, right) => left - right);
     expect(choir?.routeIds).toEqual(canonicalRouteIds);
     expect(choir?.settlementIds).toEqual([...settlementIds].sort((left, right) => left - right));
-    expect(choir?.awakenedTick).toBe(1);
+    expect(choir?.awakenedTick).toBe(activationTick);
     expect(world.settlements.map((settlement) => settlement.inventory)).toEqual(inventoryBefore);
     routes.forEach((route, index) => {
       expect(route.traceStrength).toBe(routeBefore[index]?.traceStrength);

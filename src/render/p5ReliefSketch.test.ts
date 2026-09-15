@@ -11,6 +11,7 @@ import type {
   WildlifeView,
 } from "./types";
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
+import { outdoorIlluminationPresentation } from "./outdoorIllumination";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
@@ -574,6 +575,149 @@ beforeEach(() => {
   p5Harness.reducedMotion = false;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+});
+
+describe("Relief shared outdoor illumination", () => {
+  it("uses the projected clock for sky and lights while blue water stays unlit", () => {
+    // Reduced motion removes camera/actor decoration, never the physical time
+    // of day or its static accessible color state.
+    p5Harness.reducedMotion = true;
+    const nightTime = {
+      version: 1 as const,
+      dayNumber: 1,
+      dayTick: 0,
+      phase: "night" as const,
+      phaseProgress: 0.4,
+      cycleProgress: 0,
+      solarProgress: null,
+      illumination: 0.1,
+    };
+    const source = warmWaterView("daylight-relief");
+    const harness = renderHarness({ ...source, worldTime: nightTime });
+    harness.draw();
+    const night = outdoorIlluminationPresentation(nightTime);
+    const background = harness.instance.background as ReturnType<typeof vi.fn>;
+    const ambientLight = harness.instance.ambientLight as ReturnType<typeof vi.fn>;
+    const directionalLight = harness.instance.directionalLight as ReturnType<typeof vi.fn>;
+    expect(background).toHaveBeenLastCalledWith(night.reliefSky);
+    expect(ambientLight).toHaveBeenLastCalledWith(
+      night.ambient.red,
+      night.ambient.green,
+      night.ambient.blue,
+    );
+    expect(directionalLight.mock.calls.at(-2)).toEqual([
+      night.key.red,
+      night.key.green,
+      night.key.blue,
+      night.keyDirection.x,
+      night.keyDirection.y,
+      night.keyDirection.z,
+    ]);
+
+    const waterColors = p5Harness.materialTrace.flatMap((entry, index) => {
+      const ambient = p5Harness.materialTrace[index + 1];
+      const emissive = p5Harness.materialTrace[index + 2];
+      return entry.method === "fill"
+        && entry.args.join(",") === "0,0,0,255"
+        && ambient?.method === "ambientMaterial"
+        && ambient.args.join(",") === "0,0,0"
+        && emissive?.method === "emissiveMaterial"
+        && typeof emissive.args[0] === "string"
+        ? [emissive.args[0]]
+        : [];
+    });
+    expect(waterColors.length).toBeGreaterThan(0);
+    for (const waterColor of waterColors) {
+      const red = Number.parseInt(waterColor.slice(1, 3), 16);
+      const green = Number.parseInt(waterColor.slice(3, 5), 16);
+      const blue = Number.parseInt(waterColor.slice(5, 7), 16);
+      expect(blue).toBeGreaterThan(green);
+      expect(green).toBeGreaterThan(red);
+    }
+
+    const dayTime = {
+      ...nightTime,
+      dayTick: 720,
+      phase: "day" as const,
+      phaseProgress: 0.5,
+      cycleProgress: 0.5,
+      solarProgress: 0.5,
+      illumination: 1,
+    };
+    harness.setView({ ...source, worldTime: dayTime });
+    harness.draw();
+    const day = outdoorIlluminationPresentation(dayTime);
+    expect(background).toHaveBeenLastCalledWith(day.reliefSky);
+    expect(ambientLight).toHaveBeenLastCalledWith(
+      day.ambient.red,
+      day.ambient.green,
+      day.ambient.blue,
+    );
+    expect(day.ambient).not.toEqual(night.ambient);
+    harness.renderer.destroy();
+  });
+
+  it("renders only the observation-gated local-light pool and invalidates its material cache", () => {
+    const base = view("relief-local-light", { x: 48, y: 48 });
+    const perception = {
+      version: 1,
+      signature: "same-detail-mask",
+      valid: true,
+      visibleTileCount: 16,
+      directTileCount: 16,
+      peripheralTileCount: 0,
+      detailVisibleTileCount: 16,
+      detailDirectTileCount: 16,
+      detailPeripheralTileCount: 0,
+    } as const;
+    const lit: TideweftView = {
+      ...base,
+      perception,
+      terrain: {
+        ...base.terrain,
+        currentLocalIlluminationRevision: "lamp-on",
+        tiles: base.terrain.tiles.map((tile, index) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: index === 5 ? 0.78 : 0,
+        })),
+      },
+    };
+    const harness = renderHarness(lit);
+    harness.draw();
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "emissiveMaterial"
+      && typeof args[0] === "number"
+      && typeof args[1] === "number"
+      && typeof args[2] === "number"
+      && args[0] > args[1]
+      && args[1] > args[2]
+      && args[2] > 0
+    ))).toBe(true);
+
+    p5Harness.materialTrace.length = 0;
+    harness.setView({
+      ...lit,
+      terrain: {
+        ...lit.terrain,
+        currentLocalIlluminationRevision: "lamp-out-of-sight",
+        tiles: lit.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentLocalIllumination: 0,
+        })),
+      },
+    });
+    harness.draw();
+    expect(p5Harness.materialTrace.some(({ method, args }) => (
+      method === "emissiveMaterial"
+      && typeof args[0] === "number"
+      && typeof args[1] === "number"
+      && typeof args[2] === "number"
+      && (args[0] > 0 || args[1] > 0 || args[2] > 0)
+    ))).toBe(false);
+    harness.renderer.destroy();
+  });
 });
 
 describe("Relief spatial epoch release gate", () => {
@@ -1218,7 +1362,7 @@ describe("Relief ADRIFT presentation path", () => {
     const harness = renderHarness(legacySwept);
     const line = harness.instance.line as ReturnType<typeof vi.fn>;
     const stroke = harness.instance.stroke as ReturnType<typeof vi.fn>;
-    const emissiveMaterial = harness.instance.emissiveMaterial as ReturnType<typeof vi.fn>;
+    const ambientMaterial = harness.instance.ambientMaterial as ReturnType<typeof vi.fn>;
     harness.draw();
     const legacyLineCount = line.mock.calls.length;
     const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
@@ -1227,7 +1371,7 @@ describe("Relief ADRIFT presentation path", () => {
 
     line.mockClear();
     stroke.mockClear();
-    emissiveMaterial.mockClear();
+    ambientMaterial.mockClear();
     const floating: TideweftView = {
       ...legacySwept,
       player: {
@@ -1254,7 +1398,7 @@ describe("Relief ADRIFT presentation path", () => {
     expect(Number.parseFloat(floatingLabel.style.left ?? "NaN")).toBeLessThanOrEqual(186.4);
     expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeGreaterThanOrEqual(62);
     expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeLessThanOrEqual(206);
-    expect(emissiveMaterial).toHaveBeenCalledWith("#55c7dc");
+    expect(ambientMaterial).toHaveBeenCalledWith("#55c7dc");
     expect(stroke.mock.calls.some(([value]) =>
       value === "#e5fbff"
         || (value as { value?: unknown } | undefined)?.value === "#e5fbff"
@@ -1263,7 +1407,7 @@ describe("Relief ADRIFT presentation path", () => {
 
     line.mockClear();
     stroke.mockClear();
-    emissiveMaterial.mockClear();
+    ambientMaterial.mockClear();
     harness.setView({
       ...floating,
       player: {
@@ -1280,7 +1424,7 @@ describe("Relief ADRIFT presentation path", () => {
       .map((child) => child.textContent ?? "")
       .join(" ") ?? "";
     expect(renderedCopy).not.toMatch(/ashore|arrived|\bETA\b|\d+(?:\.\d+)?\s*%|percent/iu);
-    expect(emissiveMaterial).toHaveBeenCalledWith("#61e6d2");
+    expect(ambientMaterial).toHaveBeenCalledWith("#61e6d2");
     expect(stroke.mock.calls.some(([value]) =>
       value === "#edfff9"
         || (value as { value?: unknown } | undefined)?.value === "#edfff9"
@@ -1316,8 +1460,11 @@ describe("Relief dog presentation", () => {
     expect(layer?.children.map((child) => child.textContent).join(" "))
       .not.toContain("D-R-v1-relief-dog");
     expect(p5Harness.materialTrace.some(({ method, args }) =>
-      method === "emissiveMaterial" && args[0] === "#98583d"
+      method === "ambientMaterial" && args[0] === "#98583d"
     )).toBe(true);
+    expect(p5Harness.materialTrace.some(({ method, args }) =>
+      method === "emissiveMaterial" && args[0] === "#98583d"
+    )).toBe(false);
     expect(harness.instance.ellipsoid).toHaveBeenCalled();
     expect(harness.instance.sphere).toHaveBeenCalled();
     expect(harness.instance.cone).toHaveBeenCalled();
@@ -1393,7 +1540,7 @@ describe("Relief dog presentation", () => {
     expect(layer?.children.some((child) => child.dataset.tone === "dog" && !child.removed))
       .toBe(false);
     expect(p5Harness.materialTrace.some(({ method, args }) =>
-      method === "emissiveMaterial" && args[0] === "#98583d"
+      method === "ambientMaterial" && args[0] === "#98583d"
     )).toBe(false);
     harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 93 }));
     harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 93 }));
