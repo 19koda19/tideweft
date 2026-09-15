@@ -4,9 +4,10 @@ import {
 } from "../sim/actorPerception";
 import {
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
+  residentAtSettlementRestDestination,
   residentCircadianUrgentPreference,
   residentCircadianWatchReference,
-  residentHomeRestDestinationId,
+  residentSettlementRestNetworkId,
 } from "../sim/livingCircadian";
 import {
   FIXED_POINT,
@@ -59,7 +60,7 @@ export interface ResidentCircadianProjection {
   readonly routine: LivingCircadianProjection;
   /** Exact compact receipt for the resident simulation owner to commit. */
   readonly receipt: LivingCircadianPersistentState;
-  /** True only while the authenticated body is at home and resting/asleep. */
+  /** True only while the body is at a settlement refuge and resting/asleep. */
   readonly restorative: boolean;
   /** Internal causal result; presentation must not expose its hidden values. */
   readonly priorityOverride: LivingCircadianPriorityOverride | null;
@@ -69,7 +70,7 @@ export interface ResidentCircadianUnboundDeferral {
   readonly kind: "unbound-deferred";
   readonly residentActorId: string;
   readonly atTick: number;
-  readonly reason: "home-arrival-unproven";
+  readonly reason: "settlement-arrival-unproven";
 }
 
 export type ResidentCircadianPlan =
@@ -82,7 +83,8 @@ export type ResidentCircadianPlan =
 /**
  * Species-neutral human bridge into the shared living-circadian kernel. It
  * owns no movement, home, work, needs, perception, physiology, or save root.
- * A home settlement is the current honest rest destination: no house, bed,
+ * The resident's reciprocal settlement network is the honest rest anchor:
+ * physical location still owns which refuge they occupy, and no house, bed,
  * interior, commute, or fabricated duty is introduced here.
  */
 export function projectResidentCircadian(
@@ -93,7 +95,7 @@ export function projectResidentCircadian(
 }
 
 /**
- * Distinguishes a fully validated legacy resident awaiting physical home
+ * Distinguishes a fully validated legacy resident awaiting physical settlement
  * arrival from malformed input. Runtime transactions may preserve only the
  * former; a generic null result must never be interpreted as lawful deferral.
  */
@@ -112,27 +114,25 @@ export function planResidentCircadian(
   const weather = canonicalWeather(raw.weather, raw.atTick);
   if (resident === null || duty === undefined || weather === null) return null;
 
-  const restDestinationId = residentHomeRestDestinationId(
+  const restDestinationId = residentSettlementRestNetworkId(
     resident.identity.stableId,
     resident.homeSettlementId,
   );
   if (restDestinationId === null) return null;
-  const restDestinationArrived = resident.location.kind === "settlement"
-    && resident.location.settlementId === resident.homeSettlementId
-    && resident.activeContractId === null;
+  const restDestinationArrived = residentAtSettlementRestDestination(resident);
 
   const savedReceipt = resident.circadian === undefined
     ? null
     : canonicalizeLivingCircadianPersistentState(resident.circadian);
-  // A legacy human is adopted only where the body already authenticates its
-  // home destination. A present receipt may follow its owner away and wakes
-  // when work or location invalidates rest.
+  // A legacy human is adopted only where the body already authenticates a
+  // physical settlement refuge. A present receipt may follow its owner away
+  // and wakes when work or location invalidates rest.
   if (resident.circadian === undefined && !restDestinationArrived) {
     return deepFreeze({
       kind: "unbound-deferred" as const,
       residentActorId: resident.identity.stableId,
       atTick: raw.atTick,
-      reason: "home-arrival-unproven" as const,
+      reason: "settlement-arrival-unproven" as const,
     });
   }
   if (

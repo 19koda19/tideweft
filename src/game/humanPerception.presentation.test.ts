@@ -47,20 +47,22 @@ interface PresentationFixture {
 }
 
 describe("existing-human perception presentation", () => {
-  it("shows only a directly observed keeper's present rest posture", () => {
-    const state = createWorld("keeper sleep is observable, not omniscient", "standard");
+  it("shows only a directly observed visitor's present rest posture", () => {
+    const state = createWorld("visitor sleep is observable, not omniscient", "standard");
     const initial = createWorldView(state);
     const player = createPlayer(initial);
     const settlementId = initial.settlements.find(({ tileIndex }) => (
       tileIndex === playerTileIndex(player)
     ))?.id;
     const residentIndex = state.residents.findIndex((resident) => (
-      resident.location.kind === "settlement"
-      && resident.location.settlementId === settlementId
-      && resident.homeSettlementId === settlementId
+      resident.homeSettlementId !== settlementId
+      && resident.activeContractId === null
     ));
     const resident = state.residents[residentIndex];
-    if (resident === undefined) throw new Error("fixture needs a local human resident");
+    if (resident === undefined || settlementId === undefined) {
+      throw new Error("fixture needs a visiting human resident");
+    }
+    resident.location = { kind: "settlement", settlementId };
     const restDestinationId = residentHomeRestDestinationId(
       resident.identity.stableId,
       resident.homeSettlementId,

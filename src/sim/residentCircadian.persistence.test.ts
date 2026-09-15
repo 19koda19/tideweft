@@ -6,8 +6,10 @@ import {
   livingCircadianPhaseOffsetTicks,
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
+  residentAtSettlementRestDestination,
   residentCircadianUrgentPreference,
   residentHomeRestDestinationId,
+  residentSettlementRestNetworkId,
   type LivingCircadianPersistentState,
 } from "./livingCircadian";
 import {
@@ -35,7 +37,7 @@ function receipt(
   },
   restDestinationArrived = true,
 ): LivingCircadianPersistentState {
-  const restDestinationId = residentHomeRestDestinationId(
+  const restDestinationId = residentSettlementRestNetworkId(
     resident.identity.stableId,
     resident.homeSettlementId,
   );
@@ -85,6 +87,88 @@ describe("resident circadian persistence seam", () => {
     expect(viewCircadian?.posture).not.toBe(firstResident(restored).circadian?.posture);
   });
 
+  it("persists reciprocal rest at a foreign physical settlement without changing receipt bytes", () => {
+    const world = createWorld("resident reciprocal settlement rest");
+    const resident = firstResident(world);
+    const foreign = world.settlements.find(({ id }) => id !== resident.homeSettlementId);
+    if (foreign === undefined) throw new Error("fixture needs a foreign settlement");
+    resident.location = { kind: "settlement", settlementId: foreign.id };
+
+    expect(residentAtSettlementRestDestination(resident)).toBe(true);
+    world.residents[0] = replaceResidentCircadian(resident, {
+      atTick: resident.perception.tick,
+      circadian: receipt(resident),
+    });
+
+    assertWorldInvariants(world);
+    const encoded = serializeWorld(world);
+    const restored = deserializeWorld(encoded);
+    expect(serializeWorld(restored)).toBe(encoded);
+    expect(firstResident(restored).location).toEqual({
+      kind: "settlement",
+      settlementId: foreign.id,
+    });
+    expect(firstResident(restored).circadian).toEqual(receipt(resident));
+    expect(createWorldView(restored).residents[0]?.circadian).toEqual(receipt(resident));
+
+    expect(residentAtSettlementRestDestination({
+      ...resident,
+      activeContractId: 999,
+    })).toBe(false);
+    expect(residentAtSettlementRestDestination({
+      ...resident,
+      location: { kind: "route", routeId: world.routes[0]?.id ?? 1, progress: 0 },
+    })).toBe(false);
+    expect(residentAtSettlementRestDestination({
+      ...resident,
+      activeContractId: undefined,
+    })).toBe(false);
+  });
+
+  it("reconciles Alpha 51 non-resting visitors but never accepts false-arrival sleep", () => {
+    let lastResident: ResidentState | null = null;
+    for (const state of ["awake", "startled"] as const) {
+      const world = createWorld(`resident ${state} visitor transition`);
+      const resident = firstResident(world);
+      const foreign = world.settlements.find(({ id }) => id !== resident.homeSettlementId);
+      if (foreign === undefined) throw new Error("fixture needs a foreign settlement");
+      resident.location = { kind: "settlement", settlementId: foreign.id };
+      const pending = receipt(resident, {
+        state,
+        enteredAtTick: resident.perception.tick,
+      }, false);
+      expect(() => replaceResidentCircadian(resident, {
+        atTick: resident.perception.tick,
+        circadian: pending,
+      })).toThrow(/malformed, unbound, or future-dated/u);
+      resident.circadian = pending;
+
+      assertWorldInvariants(world);
+      const encoded = serializeWorld(world);
+      const restored = deserializeWorld(encoded);
+      expect(serializeWorld(restored)).toBe(encoded);
+      expect(createWorldView(restored).residents[0]?.circadian).toMatchObject({
+        restDestinationArrived: false,
+        posture: { state },
+      });
+      stepWorld(restored);
+      expect(firstResident(restored).circadian).toMatchObject({
+        restDestinationArrived: true,
+        posture: { state },
+      });
+      assertWorldInvariants(restored);
+      lastResident = resident;
+    }
+
+    if (lastResident === null) throw new Error("fixture did not create a visitor");
+    for (const state of ["resting", "asleep"] as const) {
+      expect(canonicalizeLivingCircadianPersistentState(receipt(lastResident, {
+        state,
+        enteredAtTick: lastResident.perception.tick,
+      }, false))).toBeNull();
+    }
+  });
+
   it("rejects malformed, explicit-undefined, unbound, and future-dated receipts", () => {
     const world = createWorld("resident circadian rejection");
     const resident = firstResident(world);
@@ -121,6 +205,15 @@ describe("resident circadian persistence seam", () => {
       enteredAtTick: future.meta.completedTick + 1,
     });
     expect(() => assertWorldInvariants(future)).toThrow(/circadian state/u);
+
+    const missingRefuge = createWorld("resident circadian missing refuge");
+    const missingRefugeResident = firstResident(missingRefuge);
+    missingRefugeResident.location = {
+      kind: "settlement",
+      settlementId: Math.max(...missingRefuge.settlements.map(({ id }) => id)) + 1,
+    };
+    missingRefugeResident.circadian = receipt(missingRefugeResident);
+    expect(() => assertWorldInvariants(missingRefuge)).toThrow(/location is invalid/u);
   });
 
   it("replaces only at the resident cognition tick and can repair stale arrival", () => {
@@ -161,28 +254,34 @@ describe("resident circadian persistence seam", () => {
     expect(reconciled.circadian?.restDestinationArrived).toBe(false);
   });
 
-  it("derives an opaque destination from both stable human and home settlement", () => {
+  it("derives a byte-compatible opaque rest network from stable human and home settlement", () => {
     const world = createWorld("resident circadian destination");
     const resident = firstResident(world);
-    const destination = residentHomeRestDestinationId(
+    const destination = residentSettlementRestNetworkId(
       resident.identity.stableId,
       resident.homeSettlementId,
     );
 
     expect(destination).toMatch(/^resident-home:[0-9a-f]{16}$/u);
-    expect(residentHomeRestDestinationId(
+    expect(residentSettlementRestNetworkId("H-byte-contract", 17))
+      .toBe("resident-home:fe91713ad8045b64");
+    expect(residentSettlementRestNetworkId(
       resident.identity.stableId,
       resident.homeSettlementId,
     )).toBe(destination);
     expect(residentHomeRestDestinationId(
+      resident.identity.stableId,
+      resident.homeSettlementId,
+    )).toBe(destination);
+    expect(residentSettlementRestNetworkId(
       `${resident.identity.stableId}-other`,
       resident.homeSettlementId,
     )).not.toBe(destination);
-    expect(residentHomeRestDestinationId(
+    expect(residentSettlementRestNetworkId(
       resident.identity.stableId,
       resident.homeSettlementId + 1,
     )).not.toBe(destination);
-    expect(residentHomeRestDestinationId(resident.identity.stableId, -0)).toBeNull();
+    expect(residentSettlementRestNetworkId(resident.identity.stableId, -0)).toBeNull();
   });
 
   it("shares the exact stable-phase clock boundary with the game projector", () => {

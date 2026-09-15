@@ -1015,6 +1015,33 @@ The independent dog has no authenticated den, and there is no bonded or named
 player companion yet. Alpha51 adds neither one. It changes no population,
 occupational production, human movement owner, save version, or dog schema.
 
+The local **Rest Between Harbors** Alpha52 source candidate closes Alpha51's
+foreign-courier recovery contradiction through the settlement network that
+already feeds and supports physically present visitors. A contract-free
+resident at any real settlement may now settle, become Asleep, recover, and
+wake there. Their stable home identity anchors reciprocal membership, while
+their actual location remains the sole authority for which refuge they occupy.
+The same predicate governs routine projection, sleeping vision, physiology,
+save invariants, view copies, ABOUT, and post-contract reconciliation.
+
+Promise transport remains physical. A courier accepts and carries real cargo,
+travels the real route, delivers into the destination inventory, and remains
+the same person at that foreign settlement. A later onward or reverse Promise
+may select them from that actual origin and route them again; Alpha52 creates no
+automatic return, teleport, deadhead commute, guest house, bed, or guaranteed
+backhaul. Route work, active contracts, storms, urgent needs, watch/search, and
+lawful strong disturbance still outrank rest.
+
+Outer save v32 and simulation v4 remain unchanged. The renamed reciprocal
+rest-network receipt deliberately preserves Alpha51's exact opaque
+`resident-home:` bytes. An Alpha51 foreign visitor saved Awake or STARTLED with
+the former false arrival bit is admitted only as a non-resting transition,
+receives no restorative benefit, and reconciles on the next ordinary tick;
+false-arrival Resting or Asleep remains invalid. Alpha52 is local and
+unpublished. Multi-day CPU/save-growth evidence, automatic WAIT interruption,
+frame-cadence proof, packaged parity/performance, cumulative validation, and
+the Turning Day release checkpoint remain.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1866,6 +1893,14 @@ dog keeps its exact identity, custody, assignment, and sleep continuity; the
 independent dog remains unbound and no player companion is invented. Alpha51 is
 local and unpublished and still lacks the final multi-day/package evidence and
 Turning Day closure gate.
+Local Alpha52 **Rest Between Harbors** now lets any contract-free resident
+physically present at a real settlement use reciprocal rest and recovery
+without inventing a room or commute. The same courier, identity, relationships,
+and Promise cargo travel to the foreign destination; a real onward or reverse
+Promise is the only current path back onto the network. The opaque receipt
+bytes, outer save v32, and simulation v4 remain exact. Alpha52 is local and
+unpublished and still lacks the final multi-day/package evidence and Turning
+Day closure gate.
 
 Live through Alpha 39:
 

@@ -4137,7 +4137,7 @@ describe("runtime settlement ecology integration", () => {
     reloaded.destroy();
   }, 180_000);
 
-  it("adopts every current home resident atomically while preserving the keeper's exact dawn wake", async () => {
+  it("adopts every current settled resident atomically while preserving the keeper's exact dawn wake", async () => {
     const world = createWorld("settlement keeper home night continuity", "wild");
     const startingSettlementId = world.contracts.find(({ status }) => status === "offered")
       ?.originSettlementId ?? world.settlements[0]?.id;
@@ -4154,6 +4154,19 @@ describe("runtime settlement ecology integration", () => {
             : left.id - right.id
       ))[0];
     if (expectedKeeper === undefined) throw new Error("keeper fixture has no bootstrap human");
+    const visitingResident = world.residents.find(({ identity }) => (
+      identity.stableId !== expectedKeeper.identity.stableId
+    ));
+    const visitorRefuge = visitingResident === undefined
+      ? undefined
+      : world.settlements.find(({ id }) => id !== visitingResident.homeSettlementId);
+    if (visitingResident === undefined || visitorRefuge === undefined) {
+      throw new Error("keeper fixture has no reciprocal settlement visitor");
+    }
+    visitingResident.location = {
+      kind: "settlement",
+      settlementId: visitorRefuge.id,
+    };
     const wakeTick = firstLivingCircadianActiveTick(
       expectedKeeper.identity.stableId,
       WORLD_NIGHT_START_TICK + 31,
@@ -4286,6 +4299,17 @@ describe("runtime settlement ecology integration", () => {
       resident.circadian !== undefined
       && resident.circadian.restDestinationArrived
     ))).toBe(true);
+    expect(savedWorld.residents.find(({ identity }) => (
+      identity.stableId === visitingResident.identity.stableId
+    ))).toMatchObject({
+      id: visitingResident.id,
+      homeSettlementId: visitingResident.homeSettlementId,
+      location: {
+        kind: "settlement",
+        settlementId: visitorRefuge.id,
+      },
+      circadian: { restDestinationArrived: true },
+    });
     expect(savedWorld.residents.map((resident) => ({
       id: resident.id,
       identity: resident.identity,

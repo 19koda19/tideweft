@@ -128,10 +128,10 @@ describe("existing-human sensory bridge", () => {
     expect(heard?.area.center).not.toEqual(sample.position);
   });
 
-  it("closes only authenticated sleeping vision while preserving audible contact", () => {
+  it("closes only authenticated sleeping vision at a settlement refuge while preserving audible contact", () => {
     const legacy = homeFixture("sleeping sight gate", "legacy");
     const awake = homeFixture("sleeping sight gate", "awake");
-    const sleeping = homeFixture("sleeping sight gate", "asleep");
+    const sleeping = homeFixture("sleeping sight gate", "asleep", "foreign");
     const legacyObservations = observationsFor(
       legacy,
       [residentStimulus(legacy, "obvious-and-audible")],
@@ -164,7 +164,8 @@ describe("existing-human sensory bridge", () => {
     expect(legacyObservations.some(({ channel }) => channel === "vision")).toBe(true);
     expect(legacyObservations.some(({ channel }) => channel === "hearing")).toBe(true);
     expect(awakeObservations).toEqual(legacyObservations);
-    expect(rawSleepingObservations).toEqual(legacyObservations);
+    expect(rawSleepingObservations.map(({ channel }) => channel).sort())
+      .toEqual(["hearing", "vision"]);
     expect(sleepingObservations.some(({ channel }) => channel === "vision")).toBe(false);
     expect(sleepingObservations).toContainEqual(expect.objectContaining({
       channel: "hearing",
@@ -477,12 +478,18 @@ function fixture(
 function homeFixture(
   seed: string,
   posture: "legacy" | "awake" | "asleep",
+  refuge: "home" | "foreign" = "home",
 ): Fixture {
   const state = createWorld(seed, "standard");
   const residentIndex = 0;
   let resident = state.residents[residentIndex];
   if (!resident) throw new Error("home fixture needs a resident");
-  resident.location = { kind: "settlement", settlementId: resident.homeSettlementId };
+  const homeSettlementId = resident.homeSettlementId;
+  const settlement = refuge === "home"
+    ? state.settlements.find(({ id }) => id === homeSettlementId)
+    : state.settlements.find(({ id }) => id !== homeSettlementId);
+  if (!settlement) throw new Error("home fixture needs its settlement refuge");
+  resident.location = { kind: "settlement", settlementId: settlement.id };
   resident.activeContractId = null;
   if (posture !== "legacy") {
     const restDestinationId = residentHomeRestDestinationId(
@@ -503,8 +510,6 @@ function homeFixture(
     });
     state.residents[residentIndex] = resident;
   }
-  const settlement = state.settlements.find(({ id }) => id === resident.homeSettlementId);
-  if (!settlement) throw new Error("home fixture needs its settlement");
   return buildFixture(state, resident, {
     x: settlement.tileIndex % state.terrain.width,
     y: Math.floor(settlement.tileIndex / state.terrain.width),

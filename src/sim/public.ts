@@ -28,6 +28,7 @@ export {
   RESIDENT_CIRCADIAN_URGENT_REST_NEED,
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
   RESIDENT_HOME_REST_DESTINATION_OWNER_ID,
+  RESIDENT_SETTLEMENT_REST_NETWORK_OWNER_ID,
   canonicalizeLivingCircadianPersistentState,
   canonicalizeLivingCircadianPolicy,
   canonicalizeResidentCircadianState,
@@ -36,9 +37,11 @@ export {
   livingCircadianProfile,
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
+  residentAtSettlementRestDestination,
   residentCircadianUrgentPreference,
   residentCircadianWatchReference,
   residentHomeRestDestinationId,
+  residentSettlementRestNetworkId,
 } from "./livingCircadian";
 export type {
   LivingCircadianDriver,

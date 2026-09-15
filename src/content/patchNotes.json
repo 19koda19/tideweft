@@ -2,6 +2,47 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.52",
+      "releaseDate": "2026-09-15",
+      "buildIdentity": "0.3.3-alpha.52",
+      "summary": "Rest Between Harbors is the local unpublished Alpha 52 source candidate: a courier who finishes a real Promise at another settlement can now rest there through the reciprocal settlement network, while any onward or homeward journey still requires real physical work.",
+      "gameplayContractVersion": 50,
+      "tutorialVersion": 62,
+      "categories": {
+        "gameplay": [
+          "A contract-free resident physically present at any existing settlement may now settle, become Asleep, recover, and wake through the same shared civil clock. Their stable home identity anchors reciprocal network membership while their current location remains the sole authority for which refuge they occupy.",
+          "A resident courier still accepts cargo at a real origin, travels the actual route, conserves and delivers the Promise cargo, and remains the same person at the destination. A later onward or reverse Promise may select that physically present visitor and route them again; no automatic return is invented.",
+          "Promise work, route travel, storms, urgent needs, current watch or search, and lawful strong disturbances continue to override neutral rest. Leaving a settlement or accepting work wakes a resting visitor immediately through the existing routine contract."
+        ],
+        "fixes": [
+          "Delivered couriers no longer become indefinitely unable to use their existing rest physiology merely because the destination settlement is not their home.",
+          "Routine projection, invariant checking, view copies, recovery physiology, sleeping vision, ABOUT presentation, and post-contract reconciliation now consume one shared physical settlement-rest predicate.",
+          "An Alpha 51 candidate save containing an Awake or STARTLED visitor with the former home-only arrival flag can load without receiving free recovery and reconciles on the next ordinary tick. Impossible false-arrival Resting or Asleep receipts remain invalid."
+        ],
+        "balancing": [
+          "Reciprocal rest requires actual settlement presence and no active contract. A route, remote wilderness location, or named home value alone grants no sleep or recovery.",
+          "There is no free fast travel, invisible deadhead commute, fabricated guest house, guaranteed backhaul, or morning teleport. Return remains emergent from real available Promises and the existing transport simulation.",
+          "This slice adds no settlement, resident, species, item, cargo, reward, house, bed, interior, route, or movement owner, and it keeps A CHALLENGING HARD as the only ruleset."
+        ],
+        "interface": [
+          "Chart, Relief, quick inspection, and ABOUT may truthfully show a directly observed visiting resident as Resting or Asleep at the settlement where their body actually is.",
+          "Presentation still hides reciprocal-network identifiers, home knowledge the player has not learned, schedule timing, phase offsets, wake thresholds, exact needs, private attention, and unseen residents.",
+          "Field Manual version 62 explains reciprocal settlement rest, physical courier continuity, real reverse-Promise travel, and the remaining Turning Day closure work."
+        ],
+        "saves": [
+          "Outer save version 32 and simulation format 4 remain unchanged. The renamed reciprocal settlement-network identifier deliberately preserves the exact Alpha 51 resident-home prefix and digest bytes.",
+          "Existing Alpha 51 home receipts remain valid without rewriting identity, relationships, needs, location, contracts, or posture. Loading and saving alone does not invent a trip or change the world clock.",
+          "The bounded compatibility allowance accepts only a physically present foreign visitor whose saved false-arrival posture is Awake or STARTLED; it grants no rest benefit and is corrected by the ordinary simulation owner on the next tick."
+        ],
+        "knownLimitations": [
+          "Alpha 52 Rest Between Harbors is a local unpublished SOURCE_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+          "Reciprocal settlement rest is not a house, room, guest bed, interior, occupational schedule, guaranteed return service, or infinite regional human population system.",
+          "The independent dog still has no authenticated den or companion bond. A bonded, named player companion does not yet exist; the current kennel-bound working dog remains the honest relationship-bearing continuity witness.",
+          "Final multi-day CPU and save-growth evidence, automatic WAIT-interruption and frame-cadence witnesses, upgraded packaged desktop and mobile parity checks, cumulative validation, and the Turning Day release checkpoint remain before Breathing Room begins."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.51",
       "releaseDate": "2026-09-15",
       "buildIdentity": "0.3.3-alpha.51",

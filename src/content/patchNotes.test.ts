@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.51",
+      version: "0.3.3-alpha.52",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.51",
-      gameplayContractVersion: 49,
-      tutorialVersion: 61,
+      buildIdentity: "0.3.3-alpha.52",
+      gameplayContractVersion: 50,
+      tutorialVersion: 62,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-51 A Day Shared and retains the earlier Turning Day slices", () => {
-    const alpha51Copy = PATCH_NOTE_CATEGORIES
+  it("scopes Alpha-52 Rest Between Harbors and retains the earlier Turning Day slices", () => {
+    const alpha52Copy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
-    const alpha51Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha52Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha51Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.51",
+    );
+    const alpha51Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha51Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha51Limitations = alpha51Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha50Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.50",
     );
@@ -339,8 +347,26 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("A Day Shared");
-    expect(LATEST_PATCH_NOTE.summary).toContain("all forty-two current original-estuary residents");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Rest Between Harbors");
+    expect(LATEST_PATCH_NOTE.summary).toContain("reciprocal settlement network");
+    expect(alpha52Copy).toContain("contract-free resident physically present at any existing settlement");
+    expect(alpha52Copy).toContain("current location remains the sole authority");
+    expect(alpha52Copy).toContain("conserves and delivers the Promise cargo");
+    expect(alpha52Copy).toContain("later onward or reverse Promise");
+    expect(alpha52Copy).toContain("no automatic return is invented");
+    expect(alpha52Copy).toContain("Leaving a settlement or accepting work wakes a resting visitor");
+    expect(alpha52Copy).toContain("shared physical settlement-rest predicate");
+    expect(alpha52Copy).toContain("Awake or STARTLED visitor");
+    expect(alpha52Copy).toContain("false-arrival Resting or Asleep receipts remain invalid");
+    expect(alpha52Copy).toContain("no free fast travel");
+    expect(alpha52Copy).toContain("Field Manual version 62");
+    expect(alpha52Copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
+    expect(alpha52Copy).toContain("exact Alpha 51 resident-home prefix and digest bytes");
+    expect(alpha52Limitations).toContain("local unpublished SOURCE_CANDIDATE");
+    expect(alpha52Limitations).toContain("not a house, room, guest bed, interior");
+    expect(alpha52Limitations).toContain("Turning Day release checkpoint remain before Breathing Room");
+    expect(alpha51Release?.summary).toContain("A Day Shared");
+    expect(alpha51Release?.summary).toContain("all forty-two current original-estuary residents");
     expect(alpha51Copy).toContain("All forty-two current original-estuary human residents");
     expect(alpha51Copy).toContain("contract-free resident at their real home settlement may settle, become Asleep, and wake");
     expect(alpha51Copy).toContain("Active Promise contracts and route travel");

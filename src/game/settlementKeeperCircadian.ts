@@ -68,7 +68,7 @@ export interface SettlementKeeperCircadianProjection {
   readonly routine: LivingCircadianProjection;
   /** Exact compact receipt for the resident simulation owner to commit. */
   readonly receipt: LivingCircadianPersistentState;
-  /** True only while the authenticated body is at home and resting/asleep. */
+  /** True only while the body is at a settlement refuge and resting/asleep. */
   readonly restorative: boolean;
   readonly presentationIntent: SettlementKeeperCircadianPresentationIntent;
 }
@@ -84,8 +84,8 @@ export type SettlementKeeperCircadianPlan =
  * Pure cross-owner bridge for the one existing settlement food-store keeper.
  * The resident simulation still owns identity, needs, perception, contracts,
  * location, physiology, and receipt mutation. This adapter proposes no human
- * movement and treats the existing home settlement as its complete honest
- * destination resolution.
+ * movement. The keeper normally rests at home, while the shared resident
+ * adapter also permits physically present reciprocal settlement hospitality.
  */
 export function projectSettlementKeeperCircadian(
   inputValue: ProjectSettlementKeeperCircadianInput,

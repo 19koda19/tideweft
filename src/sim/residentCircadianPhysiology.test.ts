@@ -10,7 +10,7 @@ import {
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
-  residentHomeRestDestinationId,
+  residentSettlementRestNetworkId,
 } from "./livingCircadian";
 import {
   FIXED_POINT,
@@ -58,11 +58,11 @@ function bindCircadian(
   posture: "awake" | "resting" | "asleep",
 ): ResidentState {
   const resident = residentById(world, residentId);
-  const restDestinationId = residentHomeRestDestinationId(
+  const restDestinationId = residentSettlementRestNetworkId(
     resident.identity.stableId,
     resident.homeSettlementId,
   );
-  if (restDestinationId === null) throw new Error("fixture could not derive resident home ID");
+  if (restDestinationId === null) throw new Error("fixture could not derive resident rest network ID");
   return replaceResident(world, replaceResidentCircadian(resident, {
     atTick: world.meta.completedTick,
     circadian: {
@@ -172,9 +172,9 @@ function completePerceptionFrame(
 }
 
 describe("resident circadian physiology", () => {
-  it("recovers a bound human only while resting at home and preserves legacy recovery", () => {
+  it("recovers a bound human only while resting at an inactive settlement and preserves legacy recovery", () => {
     const world = worldBeforeNeedsTick(
-      "resident rest belongs to a body at home",
+      "resident rest belongs to a body at a settlement",
       NIGHT_NEEDS_TICK,
     );
     const available = world.residents.filter(({ activeContractId }) => activeContractId === null);
@@ -215,7 +215,7 @@ describe("resident circadian physiology", () => {
     bindCircadian(world, awake.id, "awake");
     bindCircadian(world, resting.id, "resting");
     bindCircadian(world, asleep.id, "asleep");
-    const boundAway = bindCircadian(world, away.id, "resting");
+    const boundAway = bindCircadian(world, away.id, "asleep");
     const foreign = world.settlements.find(({ id }) => id !== boundAway.homeSettlementId);
     if (foreign === undefined) throw new Error("fixture needs a foreign settlement");
     replaceResident(world, {
@@ -244,6 +244,11 @@ describe("resident circadian physiology", () => {
           NIGHT_NEEDS_TICK,
           "sleeping-vision",
         )]],
+        [away.id, [currentVisualObservation(
+          away,
+          NIGHT_NEEDS_TICK,
+          "visitor-sleeping-vision",
+        )]],
         [noticing.id, [currentAudibleObservation(
           noticing,
           NIGHT_NEEDS_TICK,
@@ -266,7 +271,7 @@ describe("resident circadian physiology", () => {
       .toBe(BASE_EXHAUSTION - 2_500);
     expect(residentById(world, legacy.id).needs.rest)
       .toBe(BASE_REST_PRESSURE - 52_000);
-    for (const residentId of [resting.id, asleep.id, noticing.id]) {
+    for (const residentId of [resting.id, asleep.id, away.id, noticing.id]) {
       expect(residentById(world, residentId).condition.exhaustion)
         .toBe(BASE_EXHAUSTION - 2_500);
       expect(residentById(world, residentId).needs.rest)
@@ -277,7 +282,6 @@ describe("resident circadian physiology", () => {
     expect(residentById(world, urgentRest.id).needs.rest).toBe(800_000 - 52_000);
     for (const residentId of [
       awake.id,
-      away.id,
       interrupted.id,
       urgentActive.id,
     ]) {
@@ -305,6 +309,10 @@ describe("resident circadian physiology", () => {
       belief.channel === "vision"
       && belief.lastObservedTick === NIGHT_NEEDS_TICK
     ))).toBe(false);
+    expect(residentById(world, away.id).perception.beliefs.some((belief) => (
+      belief.channel === "vision"
+      && belief.lastObservedTick === NIGHT_NEEDS_TICK
+    ))).toBe(false);
 
     // Drying and cold relief remain environmental settlement effects, not
     // circadian rewards, so an awake bound resident still receives both.
@@ -313,8 +321,8 @@ describe("resident circadian physiology", () => {
       coldStress: 80_000,
     });
     expect(residentById(world, away.id).circadian).toMatchObject({
-      restDestinationArrived: false,
-      posture: { state: "awake", enteredAtTick: NIGHT_NEEDS_TICK },
+      restDestinationArrived: true,
+      posture: { state: "asleep" },
     });
     expect(residentById(world, routed.id).circadian).toMatchObject({
       restDestinationArrived: false,
@@ -426,7 +434,7 @@ describe("resident circadian physiology", () => {
     assertWorldInvariants(world);
   });
 
-  it("wakes and clears home arrival when a resting resident accepts route work", () => {
+  it("wakes for route work and authenticates the foreign settlement after delivery", () => {
     const world = createWorld("a promise wakes the sleeping porter", "standard");
     const contract = world.contracts.find(({ status }) => status === "offered");
     const resident = contract === undefined
@@ -440,6 +448,7 @@ describe("resident circadian physiology", () => {
     if (contract === undefined || resident === undefined) {
       throw new Error("fixture needs an offered contract and local porter");
     }
+    const residentStableId = resident.identity.stableId;
     world.weather = {
       kind: "clear",
       intensity: 0,
@@ -447,6 +456,11 @@ describe("resident circadian physiology", () => {
       windY: 0,
       nextChangeTick: world.meta.completedTick + 1_000,
     };
+    for (const settlement of world.settlements) {
+      for (const recipe of settlement.recipes) {
+        recipe.nextRunTick = world.meta.completedTick + 1_000;
+      }
+    }
     preparePhysiology(resident);
     bindCircadian(world, resident.id, "asleep");
     const acceptedAtTick = world.meta.completedTick + 1;
@@ -490,6 +504,8 @@ describe("resident circadian physiology", () => {
 
     const departed = residentById(world, resident.id);
     expect(contract.status).toBe("in-transit");
+    expect(contract.cargoQuantity).toBe(contract.quantity);
+    expect(departed.identity.stableId).toBe(residentStableId);
     expect(departed.location.kind).toBe("route");
     expect(departed.circadian).toMatchObject({
       restDestinationArrived: false,
@@ -498,7 +514,7 @@ describe("resident circadian physiology", () => {
 
     // Route shelter is a physical weather hold, not authenticated human rest.
     // Neither the unsafe-weather nor clearing-weather hold may passively heal a
-    // bound courier's exhaustion while the body remains away from home.
+    // bound courier's exhaustion while the body remains on a route.
     if (contract.arrivalTick === null) {
       throw new Error("fixture contract did not acquire an arrival tick");
     }
@@ -536,6 +552,107 @@ describe("resident circadian physiology", () => {
     expect(clearingHeld.circadian).toMatchObject({
       restDestinationArrived: false,
       posture: { state: "awake", enteredAtTick: acceptedAtTick },
+    });
+
+    const destination = world.settlements.find(({ id }) => (
+      id === contract.destinationSettlementId
+    ));
+    if (destination === undefined) throw new Error("fixture lost delivery destination");
+    const destinationStockBeforeDelivery = destination.inventory[contract.resource];
+    clearingHeld.condition.sheltering = false;
+    clearingHeld.condition.coldStress = 0;
+    contract.arrivalTick = world.meta.completedTick + 1;
+    stepWorld(world);
+
+    const delivered = residentById(world, resident.id);
+    expect(contract.status).toBe("fulfilled");
+    expect(contract.cargoQuantity).toBe(0);
+    expect(destination.inventory[contract.resource])
+      .toBe(destinationStockBeforeDelivery + contract.quantity);
+    expect(delivered.identity.stableId).toBe(residentStableId);
+    expect(delivered.activeContractId).toBeNull();
+    expect(delivered.location).toEqual({
+      kind: "settlement",
+      settlementId: contract.destinationSettlementId,
+    });
+    expect(contract.destinationSettlementId).not.toBe(delivered.homeSettlementId);
+    expect(delivered.circadian).toMatchObject({
+      restDestinationArrived: true,
+      posture: { state: "awake", enteredAtTick: acceptedAtTick },
+    });
+
+    // A visitor is not teleported home or given a fabricated deadhead job.
+    // They may accept a real reverse Promise whose physical origin is the
+    // settlement where the first Promise left them.
+    const reverse = world.contracts.find((candidate) => (
+      candidate.status === "offered" && candidate.id !== contract.id
+    ));
+    const reverseRequester = world.residents.find((candidate) => (
+      candidate.homeSettlementId === contract.originSettlementId
+    ));
+    if (reverse === undefined || reverseRequester === undefined) {
+      throw new Error("fixture needs an offered reverse Promise and requester");
+    }
+    reverse.requesterResidentId = reverseRequester.id;
+    reverse.originSettlementId = contract.destinationSettlementId;
+    reverse.destinationSettlementId = contract.originSettlementId;
+    // Reuse the physically delivered resource, which is now known to exist at
+    // this origin, rather than injecting test-only stock for the return leg.
+    reverse.resource = contract.resource;
+    reverse.quantity = 1;
+    reverse.routeId = contract.routeId;
+    reverse.playerExclusiveUntilTick = world.meta.completedTick + 20;
+    reverse.dueTick = world.meta.completedTick + 200;
+    stepWorld(world, [{
+      id: "circadian-visitor-accepts-reverse-promise",
+      type: "accept-contract",
+      carrier: "resident",
+      contractId: reverse.id,
+      residentId: delivered.id,
+    }]);
+
+    const reverseAccepted = residentById(world, resident.id);
+    expect(reverse.status).toBe("accepted");
+    expect(reverse.assignedResidentId).toBe(resident.id);
+    expect(reverseAccepted.identity.stableId).toBe(residentStableId);
+    expect(reverseAccepted.location).toEqual({
+      kind: "settlement",
+      settlementId: contract.destinationSettlementId,
+    });
+    expect(reverseAccepted.homeSettlementId).toBe(reverse.destinationSettlementId);
+    expect(reverseAccepted.circadian).toMatchObject({
+      restDestinationArrived: false,
+      posture: { state: "awake", enteredAtTick: acceptedAtTick },
+    });
+
+    stepWorld(world);
+    const returning = residentById(world, resident.id);
+    expect(reverse.status).toBe("in-transit");
+    expect(reverse.cargoQuantity).toBe(1);
+    expect(returning.location.kind).toBe("route");
+    expect(returning.identity.stableId).toBe(residentStableId);
+
+    const home = world.settlements.find(({ id }) => id === resident.homeSettlementId);
+    if (home === undefined || reverse.arrivalTick === null) {
+      throw new Error("fixture lost the return destination or arrival");
+    }
+    const homeStockBeforeReturn = home.inventory[reverse.resource];
+    reverse.arrivalTick = world.meta.completedTick + 1;
+    stepWorld(world);
+
+    const returned = residentById(world, resident.id);
+    expect(reverse.status).toBe("fulfilled");
+    expect(reverse.cargoQuantity).toBe(0);
+    expect(home.inventory[reverse.resource]).toBe(homeStockBeforeReturn + 1);
+    expect(returned.identity.stableId).toBe(residentStableId);
+    expect(returned.activeContractId).toBeNull();
+    expect(returned.location).toEqual({
+      kind: "settlement",
+      settlementId: resident.homeSettlementId,
+    });
+    expect(returned.circadian).toMatchObject({
+      restDestinationArrived: true,
+      posture: { state: "awake" },
     });
     assertWorldInvariants(world);
   });

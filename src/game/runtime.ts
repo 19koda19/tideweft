@@ -7369,8 +7369,8 @@ function stepRuntimePorterResponse(
  * Commits one shared routine across every current human only after perception,
  * location, contracts, weather, and the keeper's separate response owner have
  * reached the same authoritative tick. Legacy humans first encountered away
- * from home remain unbound until a later physical home arrival; no house,
- * commute, or remote schedule history is invented.
+ * from a settlement refuge remain unbound until a later physical arrival; no
+ * house, commute, or remote schedule history is invented.
  */
 export function advanceRuntimeResidentCircadian(
   currentWorld: WorldState,

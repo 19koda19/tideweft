@@ -14,6 +14,7 @@ import {
 } from "./actorPerception";
 import {
   canonicalizeResidentCircadianState,
+  residentAtSettlementRestDestination,
   type LivingCircadianPersistentState,
 } from "./livingCircadian";
 
@@ -27,15 +28,15 @@ function copyResidentCircadian(
   resident: ResidentState,
   atTick: number,
 ): LivingCircadianPersistentState {
-  const arrivedHome = resident.location.kind === "settlement"
-    && resident.location.settlementId === resident.homeSettlementId
-    && resident.activeContractId === null;
+  const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
   const copy = canonicalizeResidentCircadianState(resident.circadian, {
     residentStableId: resident.identity.stableId,
     homeSettlementId: resident.homeSettlementId,
     atTick,
-    arrivedHome,
-  });
+    arrivedAtSettlementRest,
+  }, arrivedAtSettlementRest
+    && resident.location.kind === "settlement"
+    && resident.location.settlementId !== resident.homeSettlementId);
   if (copy === null) throw new Error("Cannot project malformed resident circadian state");
   return copy;
 }

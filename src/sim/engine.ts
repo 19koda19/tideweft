@@ -40,6 +40,7 @@ import {
   gateResidentCircadianObservations,
   projectLivingCircadianClockPreference,
   replaceResidentCircadian,
+  residentAtSettlementRestDestination,
   residentCircadianUrgentPreference,
   residentCircadianWatchReference,
 } from "./livingCircadian";
@@ -963,27 +964,26 @@ function residentHasCircadianBinding(resident: ResidentState): boolean {
 /**
  * A clock preference is never itself restorative physiology. A bound human
  * recovers only from the canonical receipt proving that this body has arrived
- * home, is actually resting or asleep, and is free of route work.
+ * at a settlement refuge, is actually resting or asleep, and is free of route
+ * work.
  */
 function residentCircadianRestIsRestorative(
   world: WorldState,
   resident: ResidentState,
 ): boolean {
   if (!residentHasCircadianBinding(resident)) return false;
-  const arrivedHome = resident.location.kind === "settlement"
-    && resident.location.settlementId === resident.homeSettlementId
-    && resident.activeContractId === null;
+  const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
   const circadian = canonicalizeResidentCircadianState(resident.circadian, {
     residentStableId: resident.identity.stableId,
     homeSettlementId: resident.homeSettlementId,
     atTick: resident.perception.tick,
-    arrivedHome,
+    arrivedAtSettlementRest,
   });
   if (
     circadian === null
     || !circadian.restDestinationArrived
     || (circadian.posture.state !== "resting" && circadian.posture.state !== "asleep")
-    || !arrivedHome
+    || !arrivedAtSettlementRest
   ) return false;
 
   // Runtime response projection follows this pure sim step. Fail closed on
@@ -1029,23 +1029,21 @@ function reconcileResidentCircadianAfterContractAdvance(
     if (current === null) {
       throw new Error(`Resident ${resident.id} has malformed circadian state`);
     }
-    const arrivedHome = resident.location.kind === "settlement"
-      && resident.location.settlementId === resident.homeSettlementId
-      && resident.activeContractId === null;
-    const lostRestDestination = !arrivedHome
+    const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
+    const lostRestDestination = !arrivedAtSettlementRest
       && (current.posture.state === "resting" || current.posture.state === "asleep");
     const posture = lostRestDestination
       ? { state: "awake" as const, enteredAtTick: tick }
       : current.posture;
     if (
-      current.restDestinationArrived === arrivedHome
+      current.restDestinationArrived === arrivedAtSettlementRest
       && !lostRestDestination
     ) {
       const authenticated = canonicalizeResidentCircadianState(current, {
         residentStableId: resident.identity.stableId,
         homeSettlementId: resident.homeSettlementId,
         atTick: tick,
-        arrivedHome,
+        arrivedAtSettlementRest,
       });
       if (authenticated === null) {
         throw new Error(`Resident ${resident.id} has unbound circadian state`);
@@ -1056,7 +1054,7 @@ function reconcileResidentCircadianAfterContractAdvance(
       atTick: tick,
       circadian: {
         ...current,
-        restDestinationArrived: arrivedHome,
+        restDestinationArrived: arrivedAtSettlementRest,
         posture,
       },
     });

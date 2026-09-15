@@ -142,7 +142,7 @@ function sleepingFixture(): ResidentState {
 }
 
 describe("settlement keeper circadian adapter", () => {
-  it("adopts only the authenticated keeper at home and presents neutral day watch", () => {
+  it("adopts the authenticated keeper at a settlement refuge and presents neutral day watch", () => {
     const resident = residentAt(DAY_TICK);
     const projection = project(resident);
 
@@ -173,21 +173,29 @@ describe("settlement keeper circadian adapter", () => {
     expect(Object.isFrozen(projection)).toBe(true);
     expect(Object.isFrozen(projection.receipt)).toBe(true);
 
-    const awayLegacy: ResidentState = {
+    const foreignSettlement = WORLD.settlements.find(({ id }) => (
+      id !== resident.homeSettlementId
+    ));
+    if (foreignSettlement === undefined) throw new Error("fixture needs a foreign refuge");
+    const visitingLegacy: ResidentState = {
       ...resident,
-      location: { kind: "settlement", settlementId: resident.homeSettlementId + 1 },
+      location: { kind: "settlement", settlementId: foreignSettlement.id },
     };
     const routeLegacy: ResidentState = {
       ...resident,
       location: { kind: "route", routeId: 91, progress: 300_000 },
     };
     expect(projectSettlementKeeperCircadian({
-      resident: awayLegacy,
+      resident: visitingLegacy,
       settlementEcology: ecologyFor(resident),
       porterResponse: porterAt(resident, DAY_TICK),
       weather: weatherAt(DAY_TICK),
       atTick: DAY_TICK,
-    })).toBeNull();
+    })).toMatchObject({
+      restDestinationArrived: true,
+      restorative: false,
+      presentationIntent: "watch",
+    });
     expect(projectSettlementKeeperCircadian({
       resident: routeLegacy,
       settlementEcology: ecologyFor(resident),
@@ -197,7 +205,7 @@ describe("settlement keeper circadian adapter", () => {
     })).toBeNull();
   });
 
-  it("rests and sleeps only at home, then wakes without inventing movement when routed", () => {
+  it("rests and sleeps only at a settlement refuge, then wakes without inventing movement when routed", () => {
     let resident = residentAt(NIGHT_TICK);
     const resting = project(resident);
     expect(resting).toMatchObject({

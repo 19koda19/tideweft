@@ -472,6 +472,32 @@ place and remains unbound. No bonded player companion exists yet, so Alpha51
 does not fabricate or advertise one. Outer save version 32, simulation format
 4, Regional Ecology V6, and both dog roots remain unchanged.
 
+The local Alpha52 **Rest Between Harbors** source candidate reinterprets that
+resident-bound opaque destination as a reciprocal settlement-network rest
+anchor without changing a serialized byte. Home identity authenticates network
+membership; `ResidentState.location` plus `activeContractId === null`
+authenticates physical arrival at a particular real settlement. One shared
+predicate is consumed by the game adapter, simulation replacement, invariants,
+view copying, sleeping-vision gate, restorative physiology, presentation, and
+post-contract reconciliation. World invariants separately reject nonexistent
+settlement locations.
+
+The contract owner remains the only human travel owner. Fulfillment conserves
+and deposits cargo, clears the active contract, and leaves the same resident at
+the destination. The existing courier selector may later assign that visitor
+an actual onward or reverse Promise from the settlement they physically occupy;
+there is no scheduler for invisible return, commute, lodging, or teleport.
+Accepting work or entering a route makes the same receipt non-arrived and wakes
+resting posture.
+
+Outer save v32 and simulation v4 remain unchanged. The new
+`residentSettlementRestNetworkId` API returns the exact historical
+`resident-home:` digest and retains the former helper as a compatibility alias.
+Only invariant/view reading may temporarily admit an Alpha51 foreign receipt
+whose arrival bit is false and posture is Awake or STARTLED; it grants no rest
+or physiology and the simulation corrects it on the next tick. False-arrival
+Resting/Asleep and forged receipt identities remain invalid.
+
 ## Authoritative tick
 
 One world tick:
@@ -2134,6 +2160,16 @@ Resting/Asleep. Alpha45's relationship-bearing
 working dog remains the existing kennel continuity proof. The independent dog
 has no valid rest anchor, and no bonded player companion is claimed. Save v32,
 simulation v4, resident identity/relationships, and dog roots remain unchanged.
+
+The local Alpha52 **Rest Between Harbors** source candidate closes that explicit
+visitor gap without adding a save root or movement owner. A free resident at
+any physically valid settlement is at the reciprocal settlement-rest network;
+the home-derived opaque ID remains byte-identical while current location owns
+the actual refuge. One real outbound Promise can therefore end in foreign rest,
+save/reload, and a later real reverse Promise by the same identity with cargo
+conserved in both directions. No automatic return, house, guest bed, interior,
+or teleport exists. Alpha52 remains local and unpublished pending the final
+Turning Day performance, packaged-parity, cumulative, and release gates.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

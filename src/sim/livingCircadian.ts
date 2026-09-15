@@ -161,8 +161,16 @@ export interface LivingCircadianPersistentState {
   readonly posture: LivingCircadianPosture;
 }
 
-export const RESIDENT_HOME_REST_DESTINATION_OWNER_ID =
+/**
+ * Persisted receipt authority. The legacy literal is intentionally retained:
+ * changing it would rewrite every existing resident's opaque receipt ID.
+ */
+export const RESIDENT_SETTLEMENT_REST_NETWORK_OWNER_ID =
   "sim:resident-home-rest-destination:v1" as const;
+
+/** @deprecated Use RESIDENT_SETTLEMENT_REST_NETWORK_OWNER_ID. */
+export const RESIDENT_HOME_REST_DESTINATION_OWNER_ID =
+  RESIDENT_SETTLEMENT_REST_NETWORK_OWNER_ID;
 
 export const RESIDENT_CIRCADIAN_URGENT_FOOD_NEED = 760_000 as const;
 export const RESIDENT_CIRCADIAN_URGENT_REST_NEED = 750_000 as const;
@@ -209,7 +217,7 @@ export interface ResidentCircadianBinding {
   readonly residentStableId: string;
   readonly homeSettlementId: number;
   readonly atTick: number;
-  readonly arrivedHome: boolean;
+  readonly arrivedAtSettlementRest: boolean;
 }
 
 export interface ReplaceResidentCircadianInput {
@@ -439,17 +447,53 @@ export function residentCircadianUrgentPreference(
       });
 }
 
-/** Opaque destination identity shared by invariants, physiology, and game adapters. */
-export function residentHomeRestDestinationId(
+/**
+ * Opaque reciprocal-rest-network identity shared by invariants, physiology,
+ * and game adapters. Home identity anchors membership, while current physical
+ * location decides which settlement refuge the resident is using.
+ *
+ * The serialized prefix and hash shape deliberately retain their Alpha 51
+ * bytes; this is a semantic API correction, not a save-schema migration.
+ */
+export function residentSettlementRestNetworkId(
   residentStableId: unknown,
   homeSettlementId: unknown,
 ): string | null {
   if (!validId(residentStableId) || !positiveSafeInteger(homeSettlementId)) return null;
   return `resident-home:${hashCanonical({
     homeSettlementId,
-    ownerId: RESIDENT_HOME_REST_DESTINATION_OWNER_ID,
+    ownerId: RESIDENT_SETTLEMENT_REST_NETWORK_OWNER_ID,
     residentStableId,
   })}`;
+}
+
+/** @deprecated Use residentSettlementRestNetworkId. */
+export function residentHomeRestDestinationId(
+  residentStableId: unknown,
+  homeSettlementId: unknown,
+): string | null {
+  return residentSettlementRestNetworkId(residentStableId, homeSettlementId);
+}
+
+/**
+ * Shared physical eligibility predicate. Settlement existence and reciprocal
+ * network membership remain authenticated by the owning world's invariants;
+ * this function accepts no route, active contract, or malformed resident.
+ */
+export function residentAtSettlementRestDestination(
+  residentValue: unknown,
+): boolean {
+  if (
+    !plainRecord(residentValue)
+    || !positiveSafeInteger(residentValue.homeSettlementId)
+    || !validResidentLocation(residentValue.location)
+    || !(
+      residentValue.activeContractId === null
+      || positiveSafeInteger(residentValue.activeContractId)
+    )
+  ) return false;
+  return residentValue.location.kind === "settlement"
+    && residentValue.activeContractId === null;
 }
 
 /**
@@ -459,26 +503,45 @@ export function residentHomeRestDestinationId(
 export function canonicalizeResidentCircadianState(
   value: unknown,
   bindingValue: ResidentCircadianBinding,
+  allowPendingAwakeForeignArrival = false,
 ): LivingCircadianPersistentState | null {
   const binding: unknown = bindingValue;
   if (
     !plainRecord(binding)
-    || !exactKeys(binding, ["arrivedHome", "atTick", "homeSettlementId", "residentStableId"])
+    || !exactKeys(binding, [
+      "arrivedAtSettlementRest",
+      "atTick",
+      "homeSettlementId",
+      "residentStableId",
+    ])
     || !validId(binding.residentStableId)
     || !positiveSafeInteger(binding.homeSettlementId)
     || !nonnegativeSafeInteger(binding.atTick)
-    || typeof binding.arrivedHome !== "boolean"
+    || typeof binding.arrivedAtSettlementRest !== "boolean"
+    || typeof allowPendingAwakeForeignArrival !== "boolean"
   ) return null;
   const state = canonicalizeLivingCircadianPersistentState(value);
-  const destinationId = residentHomeRestDestinationId(
+  const destinationId = residentSettlementRestNetworkId(
     binding.residentStableId,
     binding.homeSettlementId,
   );
+  // Alpha 51 could persist an awake or startled visitor immediately after
+  // delivery with the old home-only arrival bit still false. The owning
+  // invariant/view boundary opts into this one foreign-arrival transition
+  // explicitly. It grants no sleep or physiology and the simulation
+  // reconciles it next tick.
+  const pendingAwakeArrival = allowPendingAwakeForeignArrival
+    && state?.restDestinationArrived === false
+    && binding.arrivedAtSettlementRest
+    && (state.posture.state === "awake" || state.posture.state === "startled");
   if (
     state === null
     || destinationId === null
     || state.restDestinationId !== destinationId
-    || state.restDestinationArrived !== binding.arrivedHome
+    || (
+      state.restDestinationArrived !== binding.arrivedAtSettlementRest
+      && !pendingAwakeArrival
+    )
     || state.posture.enteredAtTick > binding.atTick
     || !samePolicy(state.policy, RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY)
   ) return null;
@@ -487,10 +550,11 @@ export function canonicalizeResidentCircadianState(
 
 /**
  * Authenticates an entire resident observation batch before applying the one
- * posture-owned channel rule: an actor still asleep at home cannot see. The
- * saved arrival bit authenticates the prior-tick receipt; current location and
- * contract state independently decide whether sleep remains physically active
- * after same-tick commands. Every nonvisual channel remains available.
+ * posture-owned channel rule: an actor still asleep at a settlement refuge
+ * cannot see. The saved arrival bit authenticates the prior-tick receipt;
+ * current location and contract state independently decide whether sleep
+ * remains physically active after same-tick commands. Every nonvisual channel
+ * remains available.
  */
 export function gateResidentCircadianObservations(
   inputValue: GateResidentCircadianObservationsInput,
@@ -539,12 +603,10 @@ export function gateResidentCircadianObservations(
     atTick: priorState.tick,
     // Commands already ran. Authenticate the receipt against the arrival fact
     // its owner actually saved, then consult current physical state below.
-    arrivedHome: saved.restDestinationArrived,
+    arrivedAtSettlementRest: saved.restDestinationArrived,
   });
   if (circadian === null) return null;
-  const stillAtRestDestination = resident.location.kind === "settlement"
-    && resident.location.settlementId === resident.homeSettlementId
-    && resident.activeContractId === null;
+  const stillAtRestDestination = residentAtSettlementRestDestination(resident);
   return circadian.posture.state === "asleep" && stillAtRestDestination
     ? Object.freeze(observations.filter(({ channel }) => channel !== "vision"))
     : observations;
@@ -571,14 +633,12 @@ export function replaceResidentCircadian(
     || !nonnegativeSafeInteger(replacement.atTick)
     || replacement.atTick !== resident.perception.tick
   ) throw new RangeError("Resident circadian replacement must share the resident's current tick");
-  const arrivedHome = resident.location.kind === "settlement"
-    && resident.location.settlementId === resident.homeSettlementId
-    && resident.activeContractId === null;
+  const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
   const circadian = canonicalizeResidentCircadianState(replacement.circadian, {
     residentStableId: resident.identity.stableId,
     homeSettlementId: resident.homeSettlementId,
     atTick: replacement.atTick,
-    arrivedHome,
+    arrivedAtSettlementRest,
   });
   if (circadian === null) {
     throw new RangeError("Resident circadian posture is malformed, unbound, or future-dated");

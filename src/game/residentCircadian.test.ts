@@ -11,6 +11,7 @@ import {
   livingCircadianProfile,
   replaceResidentCircadian,
   residentHomeRestDestinationId,
+  residentSettlementRestNetworkId,
 } from "../sim/livingCircadian";
 import {
   WORLD_DAWN_START_TICK,
@@ -384,8 +385,8 @@ describe("shared resident circadian adapter", () => {
     expect(projection.restorative).toBe(false);
   });
 
-  it("adopts legacy state only at a contract-free home and never invents movement", () => {
-    const world = createWorld("resident lawful home adoption", "standard");
+  it("adopts legacy state at a contract-free settlement refuge and never invents movement", () => {
+    const world = createWorld("resident lawful settlement adoption", "standard");
     const source = world.residents[0];
     const foreign = source === undefined
       ? undefined
@@ -405,7 +406,22 @@ describe("shared resident circadian adapter", () => {
     };
     const contracted: ResidentState = { ...home, activeContractId: 904 };
 
-    for (const resident of [away, routed, contracted]) {
+    const awayProjection = requireProjection(away);
+    expect(awayProjection).toMatchObject({
+      restDestinationArrived: true,
+      restorative: true,
+      routine: { posture: { state: "resting" } },
+    });
+    expect(awayProjection.receipt.restDestinationId).toBe(
+      residentSettlementRestNetworkId(
+        away.identity.stableId,
+        away.homeSettlementId,
+      ),
+    );
+    expect(awayProjection).not.toHaveProperty("motion");
+    expect(away.location).toEqual({ kind: "settlement", settlementId: foreign.id });
+
+    for (const resident of [routed, contracted]) {
       const input = {
         resident,
         duty: null,
@@ -417,41 +433,44 @@ describe("shared resident circadian adapter", () => {
         kind: "unbound-deferred",
         residentActorId: resident.identity.stableId,
         atTick: SAFE_NIGHT_TICK,
-        reason: "home-arrival-unproven",
+        reason: "settlement-arrival-unproven",
       });
     }
 
-    const resting = requireProjection(home);
-    const committed = commitProjection(home, resting);
-    const awayTick = SAFE_NIGHT_TICK + 1;
-    const moved: ResidentState = {
-      ...atTick(committed, awayTick),
-      location: { kind: "settlement", settlementId: foreign.id },
+    const homeProjection = requireProjection(home);
+    expect(homeProjection.routine.posture.state).toBe("resting");
+    const committedAway = commitProjection(away, awayProjection);
+    const routeTick = SAFE_NIGHT_TICK + 1;
+    const departed: ResidentState = {
+      ...atTick(committedAway, routeTick),
+      location: { kind: "route", routeId: route.id, progress: 250_000 },
     };
-    const projectedAway = requireProjection(moved);
+    const projectedRoute = requireProjection(departed);
 
-    expect(resting.routine.posture.state).toBe("resting");
-    expect(projectedAway).toMatchObject({
+    expect(projectedRoute).toMatchObject({
       restDestinationArrived: false,
       restorative: false,
       routine: {
-        posture: { state: "awake", enteredAtTick: awayTick },
+        posture: { state: "awake", enteredAtTick: routeTick },
         transitionCause: "rest-destination-lost",
       },
     });
-    expect(projectedAway).not.toHaveProperty("motion");
-    expect(moved.location).toEqual({ kind: "settlement", settlementId: foreign.id });
+    expect(projectedRoute).not.toHaveProperty("motion");
+    expect(departed.location).toEqual({
+      kind: "route",
+      routeId: route.id,
+      progress: 250_000,
+    });
 
-    const laterTick = awayTick + WORLD_TICKS_PER_DAY * 2;
-    const stillAway = commitProjection(moved, projectedAway);
-    const projectedDaysLater = requireProjection(atTick(stillAway, laterTick));
+    const laterTick = SAFE_NIGHT_TICK + WORLD_TICKS_PER_DAY * 2;
+    const projectedDaysLater = requireProjection(atTick(committedAway, laterTick));
     expect(projectedDaysLater).toMatchObject({
-      restDestinationArrived: false,
-      restorative: false,
-      routine: { posture: { state: "awake" } },
+      restDestinationArrived: true,
+      restorative: true,
+      routine: { posture: { state: "asleep" } },
     });
     expect(projectedDaysLater).not.toHaveProperty("motion");
-    expect(stillAway.location).toEqual({ kind: "settlement", settlementId: foreign.id });
+    expect(committedAway.location).toEqual({ kind: "settlement", settlementId: foreign.id });
   });
 
   it("fails closed on stale cognition/weather and malformed duties, weather, or receipts", () => {

@@ -19,6 +19,7 @@ import {
   deriveBaselineBiomeClimate,
   deriveMagicalWaterInfluence,
   projectWorldTime,
+  residentAtSettlementRestDestination,
   seedFromText,
   type BiomeClimate,
   type BiomeId,
@@ -294,18 +295,15 @@ function porterPerceptionLabel(suspicion: ActorSuspicionState): string | null {
 export function observableResidentRestState(
   resident: ResidentState,
 ): "resting" | "asleep" | null {
-  if (
-    resident.activeContractId !== null
-    || resident.location.kind !== "settlement"
-    || resident.location.settlementId !== resident.homeSettlementId
-  ) return null;
+  const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
+  if (!arrivedAtSettlementRest) return null;
   const circadian = resident.circadian === undefined
     ? null
     : canonicalizeResidentCircadianState(resident.circadian, {
         residentStableId: resident.identity.stableId,
         homeSettlementId: resident.homeSettlementId,
         atTick: resident.perception.tick,
-        arrivedHome: true,
+        arrivedAtSettlementRest,
       });
   return circadian !== null
     && circadian.restDestinationArrived
