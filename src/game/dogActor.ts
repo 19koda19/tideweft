@@ -27,6 +27,10 @@ import {
   isLivingActorAddress,
   type LivingActorAddress,
 } from "./livingActor";
+import {
+  canonicalizeLivingCircadianPersistentState,
+  type LivingCircadianPersistentState,
+} from "./livingCircadian";
 import { isWorldPosition, type WorldPosition } from "./worldPosition";
 
 /**
@@ -164,6 +168,8 @@ export interface DogActorState {
   };
   readonly humanFamiliarity: Readonly<DogHumanFamiliarity>;
   readonly perception: ActorPerceptionState;
+  /** Present only after an authenticated routine owner first commits posture. */
+  readonly circadian?: LivingCircadianPersistentState;
   readonly memories: readonly DogActorMemory[];
   readonly intent: DogActorIntentState;
   readonly playerKnowledge: DogPlayerKnowledgeState;
@@ -194,6 +200,12 @@ export interface ReplaceDogActorPhysiologyInput {
   readonly condition: Readonly<DogCondition>;
   readonly humanFamiliarity: Readonly<DogHumanFamiliarity>;
   readonly atTick: number;
+}
+
+export interface ReplaceDogActorCircadianInput {
+  /** Posture projection and actor cognition commit at the same world tick. */
+  readonly atTick: number;
+  readonly circadian: LivingCircadianPersistentState;
 }
 
 export function createDogActorState(input: CreateDogActorInput): DogActorState {
@@ -236,7 +248,7 @@ export function createDogActorState(input: CreateDogActorInput): DogActorState {
 
 /** Rejects aliases, extra fields, impossible cross-record IDs, and unbounded state. */
 export function canonicalizeDogActorState(value: unknown): DogActorState | null {
-  if (!plainRecord(value) || !exactKeys(value, [
+  if (!plainRecord(value) || !requiredAndOptionalKeys(value, [
     "address",
     "condition",
     "humanFamiliarity",
@@ -249,7 +261,7 @@ export function canonicalizeDogActorState(value: unknown): DogActorState | null 
     "promotion",
     "updatedAtTick",
     "version",
-  ])) return null;
+  ], ["circadian"])) return null;
   if (value.version !== DOG_ACTOR_STATE_VERSION || !nonnegativeSafeInteger(value.updatedAtTick)) {
     return null;
   }
@@ -283,11 +295,25 @@ export function canonicalizeDogActorState(value: unknown): DogActorState | null 
 
   const memories = canonicalMemories(value.memories, value.updatedAtTick);
   const intent = canonicalIntent(value.intent, value.updatedAtTick);
+  const hasCircadian = Object.hasOwn(value, "circadian");
+  const circadian = hasCircadian
+    ? canonicalizeLivingCircadianPersistentState(value.circadian)
+    : undefined;
   const playerKnowledge = canonicalPlayerKnowledge(value.playerKnowledge, value.updatedAtTick);
   const promotion = value.promotion === null
     ? null
     : canonicalPromotion(value.promotion, value.updatedAtTick);
-  if (memories === null || intent === null || playerKnowledge === null) return null;
+  if (
+    memories === null
+    || intent === null
+    || playerKnowledge === null
+    || (hasCircadian && circadian === null)
+    || (
+      circadian !== undefined
+      && circadian !== null
+      && circadian.posture.enteredAtTick > value.updatedAtTick
+    )
+  ) return null;
   if (value.promotion !== null && promotion === null) return null;
   if (!playerKnowledge.facts.every((fact) => knowledgeEvidenceMatches(memories, fact))) {
     return null;
@@ -309,6 +335,7 @@ export function canonicalizeDogActorState(value: unknown): DogActorState | null 
     condition: generated.condition,
     humanFamiliarity: generated.humanFamiliarity,
     perception,
+    ...(circadian === undefined || circadian === null ? {} : { circadian }),
     memories,
     intent,
     playerKnowledge,
@@ -557,6 +584,26 @@ export function replaceDogActorPhysiology(
     condition: generated.condition,
     humanFamiliarity: generated.humanFamiliarity,
   });
+}
+
+/** Commits only a routine posture already projected for this exact actor tick. */
+export function replaceDogActorCircadian(
+  value: unknown,
+  replacement: ReplaceDogActorCircadianInput,
+): DogActorState {
+  const state = requireDogActorState(value);
+  if (
+    !plainRecord(replacement)
+    || !exactKeys(replacement, ["atTick", "circadian"])
+    || !nonnegativeSafeInteger(replacement.atTick)
+    || replacement.atTick !== state.updatedAtTick
+  ) throw new RangeError("Dog circadian replacement must share the actor's current tick");
+  const circadian = canonicalizeLivingCircadianPersistentState(replacement.circadian);
+  if (
+    circadian === null
+    || circadian.posture.enteredAtTick > replacement.atTick
+  ) throw new RangeError("Dog circadian posture is malformed or future-dated");
+  return rebuildState(state, { circadian });
 }
 
 function initialIntent(state: GeneratedDogState, tick: number): DogActorIntentState {
@@ -1137,6 +1184,16 @@ function exactKeys(value: Readonly<Record<string, unknown>>, expected: readonly 
   const sortedExpected = [...expected].sort(compareText);
   return actual.length === sortedExpected.length
     && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+function requiredAndOptionalKeys(
+  value: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => Object.hasOwn(value, key))
+    && Object.keys(value).every((key) => allowed.has(key));
 }
 
 function compareText(left: string, right: string): number {

@@ -585,8 +585,10 @@ import {
   applyDogBehaviorDecision,
   createDogActorState,
   repositionDogActor,
+  replaceDogActorCircadian,
   replaceDogActorPerception,
   replaceDogActorPhysiology,
+  setDogActorIntent,
   type DogActorState,
 } from "./dogActor";
 import {
@@ -609,6 +611,11 @@ import {
   type DogExposureSample,
 } from "./dogExposure";
 import { DOG_NEEDS_STEP_VERSION, stepDogNeeds } from "./dogNeeds";
+import {
+  SETTLEMENT_WORKING_DOG_CIRCADIAN_REST_INTENT_REFERENCE_ID,
+  projectSettlementWorkingDogCircadian,
+  type SettlementWorkingDogCircadianProjection,
+} from "./settlementWorkingDogCircadian";
 import {
   createLivingActorAddress,
   headingFromRadians,
@@ -3318,6 +3325,9 @@ function canonicalRuntimeSettlementWorkingAnimals(
 ): SettlementWorkingAnimalState | null {
   const state = canonicalizeSettlementWorkingAnimalState(value);
   const assignment = state?.assignments[0];
+  const dog = assignment === undefined
+    ? null
+    : dogActorRosterActor(dogRoster, assignment.workerActorId);
   if (
     state === null
     || assignment === undefined
@@ -3333,7 +3343,7 @@ function canonicalRuntimeSettlementWorkingAnimals(
     || (assignment.lastTaskOutcome?.closedAtTick ?? 0) > world.meta.completedTick
     || (assignment.lastTaskOutcome?.lastTransition.acceptedAtTick ?? 0) > world.meta.completedTick
     || (assignment.pendingTaskTransition?.acceptedAtTick ?? 0) > world.meta.completedTick
-    || dogActorRosterActor(dogRoster, assignment.workerActorId) === null
+    || dog === null
   ) return null;
   try {
     const expected = createRuntimeSettlementWorkingAnimals(
@@ -3343,11 +3353,68 @@ function canonicalRuntimeSettlementWorkingAnimals(
       assignment.createdAtTick,
     );
     const expectedAssignment = expected.assignments[0];
-    return expectedAssignment !== undefined
-      && stableStringify(workingAssignmentIdentityView(assignment))
-        === stableStringify(workingAssignmentIdentityView(expectedAssignment))
-      ? state
-      : null;
+    if (
+      expectedAssignment === undefined
+      || stableStringify(workingAssignmentIdentityView(assignment))
+        !== stableStringify(workingAssignmentIdentityView(expectedAssignment))
+    ) return null;
+    if (dog.circadian !== undefined) {
+      const custody = settlement.domesticCustodies.find(({ relationshipId }) => (
+        relationshipId === assignment.workerCustodyRelationshipId
+      ));
+      if (custody === undefined || custody.homeStructure.kind !== "kennel") return null;
+      const projection = projectSettlementWorkingDogCircadian({
+        dog,
+        custody,
+        assignment,
+        atTick: world.meta.completedTick,
+        kennelArrived: runtimeWorkingDogKennelArrived(dog, custody),
+      });
+      if (
+        projection === null
+        || stableStringify(projection.receipt) !== stableStringify(dog.circadian)
+      ) return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pending work transactions are recovered before play resumes. If that
+ * recovery changes the active commitment, reproject an already-owned routine
+ * receipt against the recovered assignment at the same saved tick. Legacy
+ * dogs with no routine receipt remain byte-for-byte absent on load.
+ */
+function reconcileRuntimeWorkingDogCircadianAfterWorkRecovery(
+  roster: DogActorRosterState,
+  workingAnimals: SettlementWorkingAnimalState,
+  settlement: SettlementEcologyState,
+  atTick: number,
+): DogActorRosterState | null {
+  const assignment = workingAnimals.assignments[0];
+  if (assignment === undefined || assignment.workerSpecies !== "domestic-dog") return null;
+  const dog = dogActorRosterActor(roster, assignment.workerActorId);
+  if (dog === null) return null;
+  if (dog.circadian === undefined) return roster;
+  const custody = settlement.domesticCustodies.find(({ relationshipId }) => (
+    relationshipId === assignment.workerCustodyRelationshipId
+  ));
+  if (custody === undefined || custody.homeStructure.kind !== "kennel") return null;
+  const projection = projectSettlementWorkingDogCircadian({
+    dog,
+    custody,
+    assignment,
+    atTick,
+    kennelArrived: runtimeWorkingDogKennelArrived(dog, custody),
+  });
+  if (projection === null) return null;
+  try {
+    return replaceDogActorInRoster(roster, replaceDogActorCircadian(dog, {
+      atTick,
+      circadian: projection.receipt,
+    }));
   } catch {
     return null;
   }
@@ -7838,6 +7905,82 @@ function stepRuntimeWorkingAnimalTaskLifecycle(
   return resolved?.state ?? null;
 }
 
+function runtimeWorkingDogKennelArrived(
+  dog: DogActorState,
+  custody: SettlementEcologyState["domesticCustodies"][number],
+): boolean {
+  return runtimePositionInsideArea(dog.address.position, {
+    center: custody.homeStructure.position,
+    radiusUnits: custody.homeStructure.radiusUnits,
+  });
+}
+
+/**
+ * The schedule may own only the neutral rest/observe intent. Threats, needs,
+ * perception and retained work remain dog/work authority and are never
+ * overwritten here.
+ */
+function runtimeApplyWorkingDogCircadianNeutralIntent(
+  dog: DogActorState,
+  projection: SettlementWorkingDogCircadianProjection,
+): DogActorState {
+  const scheduleOwnedRest = dog.intent.kind === "rest"
+    && dog.intent.cause.kind === "world-event"
+    && dog.intent.cause.referenceId
+      === SETTLEMENT_WORKING_DOG_CIRCADIAN_REST_INTENT_REFERENCE_ID;
+  if (projection.preferredNeutralIntent === "rest" && dog.intent.kind === "observe") {
+    return setDogActorIntent(dog, {
+      kind: "rest",
+      cause: {
+        kind: "world-event",
+        referenceId: SETTLEMENT_WORKING_DOG_CIRCADIAN_REST_INTENT_REFERENCE_ID,
+      },
+      enteredAtTick: projection.atTick,
+      nextThinkTick: projection.routine.nextEvaluationTick,
+    });
+  }
+  if (projection.preferredNeutralIntent === "observe" && scheduleOwnedRest) {
+    return setDogActorIntent(dog, {
+      kind: "observe",
+      cause: {
+        kind: "condition",
+        referenceId: "condition:neutral-watch",
+      },
+      enteredAtTick: projection.atTick,
+      nextThinkTick: projection.routine.nextEvaluationTick,
+    });
+  }
+  return dog;
+}
+
+function runtimeProjectWorkingDogCircadian(input: Readonly<{
+  readonly dog: DogActorState;
+  readonly custody: SettlementEcologyState["domesticCustodies"][number];
+  readonly assignment: SettlementWorkingAnimalAssignment;
+  readonly tick: number;
+}>): Readonly<{
+  readonly dog: DogActorState;
+  readonly projection: SettlementWorkingDogCircadianProjection;
+}> | null {
+  const project = (dog: DogActorState) => projectSettlementWorkingDogCircadian({
+    dog,
+    custody: input.custody,
+    assignment: input.assignment,
+    atTick: input.tick,
+    kennelArrived: runtimeWorkingDogKennelArrived(dog, input.custody),
+  });
+  let dog = input.dog;
+  let projection = project(dog);
+  if (projection === null) return null;
+  const scheduledDog = runtimeApplyWorkingDogCircadianNeutralIntent(dog, projection);
+  if (scheduledDog !== dog) {
+    dog = scheduledDog;
+    projection = project(dog);
+    if (projection === null) return null;
+  }
+  return Object.freeze({ dog, projection });
+}
+
 function stepRuntimeSettlementWorkingDog(input: Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
@@ -7879,14 +8022,23 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     || protectedCustody.homeStructure.structureId !== assignment.worksiteId
   ) return null;
 
-  const shelter = runtimePositionInsideArea(dog.address.position, {
-    center: workerCustody.homeStructure.position,
-    radiusUnits: workerCustody.homeStructure.radiusUnits,
-  }) ? 720_000 : 0;
+  let circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = circadianStep.dog;
+  let circadian = circadianStep.projection;
+
+  const shelter = runtimeWorkingDogKennelArrived(dog, workerCustody) ? 720_000 : 0;
   const currentActivity = assignment.currentActivity.activity;
-  const exertion = currentActivity === "investigate" || currentActivity === "return"
-    ? 260_000
-    : currentActivity === "watch" ? 40_000 : 0;
+  const exertion = circadian.motion.kind === "travel-to-kennel"
+    ? 160_000
+    : currentActivity === "investigate" || currentActivity === "return"
+      ? 260_000
+      : currentActivity === "watch" ? 40_000 : 0;
   const exposure = {
     ...bio0ExposureFromCompletedWeather(input.weather),
     shelter,
@@ -7896,6 +8048,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     { ...dog.condition, injuries: [...dog.condition.injuries] },
     dog.identity.weatherAdaptation,
     exposure,
+    { restorativeRest: circadian.restorative ? FIXED_POINT : 0 },
   );
   const steppedNeeds = stepDogNeeds(dog.needs, condition, {
     version: DOG_NEEDS_STEP_VERSION,
@@ -7903,7 +8056,9 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     ambientHeat: exposure.ambientHeat,
     threatPressure: perception.suspicionPressure,
     shelter,
-    resting: FIXED_POINT - exertion,
+    // Recovery follows the committed physical routine posture. Merely standing
+    // watch with low exertion is not sleep, and kennel travel is not rest.
+    resting: circadian.restorative ? FIXED_POINT : 0,
     socialContact: 0,
   });
   // Hunger/thirst are not actionable for this roster dog until a physical
@@ -7940,6 +8095,15 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   });
   if (autonomy === null) return null;
   dog = autonomy.dog;
+  circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = circadianStep.dog;
+  circadian = circadianStep.projection;
   const welfare = {
     injuryPressure: Math.min(
       FIXED_POINT,
@@ -7968,7 +8132,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
           investigate: actorOnOpenTerrain && hasTraversableStep,
           return: actorOnOpenTerrain && hasTraversableStep,
         },
-        actorDisposition: autonomy.disposition,
+        actorDisposition: circadian.actorDisposition,
         workerInsideDutyArea: runtimePositionInsideArea(
           dog.address.position,
           assignment.dutyArea,
@@ -8003,6 +8167,20 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     }
   }
 
+  let currentAssignment = workingAnimals.assignments.find(({ assignmentId }) => (
+    assignmentId === assignment.assignmentId
+  ));
+  if (currentAssignment === undefined) return null;
+  circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment: currentAssignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = circadianStep.dog;
+  circadian = circadianStep.projection;
+
   const initialTaskLifecycle = stepRuntimeWorkingAnimalTaskLifecycle(
     workingAnimals,
     {
@@ -8013,9 +8191,9 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       workerPerception: dog.perception,
       handlerPerception: input.handler.resident.perception,
       welfare,
-      actorDisposition: autonomy.disposition,
+      actorDisposition: circadian.actorDisposition,
       handlerDisposition: runtimeWorkingAnimalHandlerDisposition({
-        assignment,
+        assignment: currentAssignment,
         dog,
         handler: input.handler,
       }),
@@ -8027,6 +8205,15 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     assignmentId === assignment.assignmentId
   ));
   if (activeAssignment === undefined) return null;
+  circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment: activeAssignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = circadianStep.dog;
+  circadian = circadianStep.projection;
   const requiredWorkArea = activeAssignment.currentTask?.phase === "awaiting-handler"
     ? settlementWorkingAnimalReturnArea(activeAssignment)
     : activeAssignment.dutyArea;
@@ -8037,7 +8224,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     dog.address.position,
     requiredWorkArea,
   );
-  let workActorDisposition = autonomy.disposition;
+  let workActorDisposition = circadian.actorDisposition;
   const workEvaluation = {
     assignmentId: activeAssignment.assignmentId,
     tick,
@@ -8099,10 +8286,16 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     );
     if (!consumesFallback) {
       dog = applyDogBehaviorDecision(dog, autonomy.assignmentCompatibleFallback);
-      workActorDisposition = {
-        kind: "defer-to-actor",
-        referenceId: `actor-intent:${dog.intent.kind}`,
-      };
+      circadianStep = runtimeProjectWorkingDogCircadian({
+        dog,
+        custody: workerCustody,
+        assignment: activeAssignment,
+        tick,
+      });
+      if (circadianStep === null) return null;
+      dog = circadianStep.dog;
+      circadian = circadianStep.projection;
+      workActorDisposition = circadian.actorDisposition;
       // Re-propose against the original authoritative work state. The
       // speculative stage above was immutable and never became committed.
       staged = stageSettlementWorkingAnimalActivity(
@@ -8161,6 +8354,15 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     assignmentId === assignment.assignmentId
   ));
   if (acceptedAssignment === undefined) return null;
+  circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment: acceptedAssignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = circadianStep.dog;
+  circadian = circadianStep.projection;
   const acceptedActivity = acceptedAssignment.currentActivity;
   const targetAreas: Array<Readonly<{
     center: LivingActorAddress["position"];
@@ -8195,6 +8397,9 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     });
     if (escapeTargets === null) return null;
     targetAreas.push(...escapeTargets);
+  }
+  if (circadian.motion.kind === "travel-to-kennel") {
+    targetAreas.push(circadian.motion.targetArea);
   }
 
   for (let targetOrdinal = 0; targetOrdinal < targetAreas.length; targetOrdinal += 1) {
@@ -8252,6 +8457,17 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
       break;
     }
   }
+  circadianStep = runtimeProjectWorkingDogCircadian({
+    dog,
+    custody: workerCustody,
+    assignment: acceptedAssignment,
+    tick,
+  });
+  if (circadianStep === null) return null;
+  dog = replaceDogActorCircadian(circadianStep.dog, {
+    atTick: tick,
+    circadian: circadianStep.projection.receipt,
+  });
   const roster = replaceDogActorInRoster(input.roster, dog);
   return roster === null ? null : Object.freeze({ roster, workingAnimals });
 }
@@ -15348,7 +15564,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (coreEcology === null) {
       throw new Error("Current save contains invalid core ecology state");
     }
-    const dogActorRoster = decoded.version >= PADDOCK_WATCH_GAME_SAVE_VERSION
+    let dogActorRoster = decoded.version >= PADDOCK_WATCH_GAME_SAVE_VERSION
       ? canonicalRuntimeDogActorRoster(
           deserializeDogActorRoster(decoded.dogActorRoster),
           world,
@@ -15459,6 +15675,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           // A pending task transition was staged against the saved current
           // activity. Resolve it first; a later pending activity may otherwise
           // invalidate that authenticated lifecycle transaction before replay.
+          let recoveredPendingWork = false;
           for (const assignment of accepted.assignments) {
             if (assignment.pendingTaskTransition === null) continue;
             const recovered = recoverPendingSettlementWorkingAnimalTaskLifecycle(
@@ -15467,6 +15684,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             );
             if (recovered === null) return null;
             accepted = recovered.state;
+            recoveredPendingWork = true;
           }
           for (const assignment of accepted.assignments) {
             if (assignment.pendingActivity === null) continue;
@@ -15476,6 +15694,17 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             );
             if (recovered === null) return null;
             accepted = recovered.state;
+            recoveredPendingWork = true;
+          }
+          if (recoveredPendingWork) {
+            const reconciledRoster = reconcileRuntimeWorkingDogCircadianAfterWorkRecovery(
+              dogActorRoster,
+              accepted,
+              settlementEcology,
+              world.meta.completedTick,
+            );
+            if (reconciledRoster === null) return null;
+            dogActorRoster = reconciledRoster;
           }
           return canonicalRuntimeSettlementWorkingAnimals(
             accepted,

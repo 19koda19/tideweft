@@ -105,6 +105,21 @@ describe("dynamic dog weather exposure", () => {
     expect(sheltered.exhaustion).toBeLessThan(exposed.exhaustion);
   });
 
+  it("lets an authoritative posture gate shelter-based exhaustion recovery", () => {
+    const sheltered = sample({ shelter: FIXED_POINT });
+    const awake = stepDogExposure(CONDITION, ADAPTATION, sheltered, {
+      restorativeRest: 0,
+    });
+    const asleep = stepDogExposure(CONDITION, ADAPTATION, sheltered, {
+      restorativeRest: FIXED_POINT,
+    });
+
+    expect(awake.exhaustion).toBe(CONDITION.exhaustion);
+    expect(asleep.exhaustion).toBeLessThan(CONDITION.exhaustion);
+    expect(awake.wetness).toBe(asleep.wetness);
+    expect(awake.coldStress).toBe(asleep.coldStress);
+  });
+
   it("keeps immersion dangerous even under nominal shelter", () => {
     const immersed = advance(CONDITION, sample({
       immersion: FIXED_POINT,
@@ -128,5 +143,8 @@ describe("dynamic dog weather exposure", () => {
       ...sample(),
       hiddenWeatherFlag: true,
     } as DogExposureSample)).toThrow(/sample/u);
+    expect(() => stepDogExposure(CONDITION, ADAPTATION, sample(), {
+      restorativeRest: -0,
+    })).toThrow(/recovery context/u);
   });
 });

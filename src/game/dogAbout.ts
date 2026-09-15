@@ -296,6 +296,7 @@ function observableBehavior(intent: DogPresentationBehavior): string {
     case "seek-shelter": return "Seeking shelter";
     case "retreat": return "Retreating";
     case "rest": return "Resting";
+    case "asleep": return "Asleep";
     case "observe": return "Watching";
     case "work-investigate": return "Investigating something nearby";
     case "work-return": return "Returning nearby";

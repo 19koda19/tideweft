@@ -5,6 +5,7 @@ import {
   appendDogActorMemory,
   deserializeDogActorState,
   learnDogPlayerKnowledge,
+  replaceDogActorCircadian,
   replaceDogActorPhysiology,
   serializeDogActorState,
   setDogActorIntent,
@@ -16,6 +17,7 @@ import {
   projectDogAbout,
   projectDogQuickInspect,
 } from "./dogAbout";
+import { createLivingCircadianPolicy } from "./livingCircadian";
 import { evaluatePerception, type PerceptionCell } from "./perception";
 import { createWorldPosition } from "./worldPosition";
 
@@ -82,6 +84,25 @@ function identityEvidence(actor: DogActorState, eventId: string, atTick: number)
     atTick,
     salience: 700_000,
     location: actor.address.position,
+  });
+}
+
+function withCircadian(actor: DogActorState, state: "resting" | "asleep"): DogActorState {
+  const policy = createLivingCircadianPolicy({
+    profileId: "adaptive-active",
+    drivers: ["clock"],
+  });
+  if (policy === null) throw new Error("ABOUT circadian policy was malformed");
+  return replaceDogActorCircadian(actor, {
+    atTick: actor.updatedAtTick,
+    circadian: {
+      version: policy.version,
+      ownerId: policy.ownerId,
+      policy,
+      restDestinationId: "settlement:dog-rest:about",
+      restDestinationArrived: true,
+      posture: { state, enteredAtTick: actor.updatedAtTick },
+    },
   });
 }
 
@@ -209,6 +230,24 @@ describe("dog ABOUT projection", () => {
       value: "Following a food scent",
     });
     expect(JSON.stringify(about)).not.toContain("class:scent");
+  });
+
+  it("says Asleep only under direct current sight and never reveals routine custody", () => {
+    const asleep = withCircadian(dog(), "asleep");
+    const about = projectDogAbout(asleep, observed(asleep));
+
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Asleep" });
+    const encoded = JSON.stringify(about);
+    expect(encoded).not.toContain("settlement:dog-rest:about");
+    expect(encoded).not.toContain("adaptive-active");
+    expect(encoded).not.toContain("wakeSensitivity");
+    expect(projectDogAbout(asleep, observed(asleep, 22, Math.PI))).toBeNull();
+
+    const resting = withCircadian(dog(), "resting");
+    expect(projectDogAbout(resting, observed(resting))?.observed).toContainEqual({
+      label: "Behavior",
+      value: "Resting",
+    });
   });
 
   it("keeps quick inspection compact and immutable", () => {

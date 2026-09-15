@@ -6,7 +6,15 @@ import {
   createActorPerceptionState,
   stepActorPerception,
 } from "../sim/actorPerception";
-import { createWorldView, deserializeWorld } from "../sim/public";
+import {
+  WORLD_TICKS_PER_DAY,
+  createWorld,
+  createWorldView,
+  deserializeWorld,
+  runTicks,
+  serializeWorld,
+  type WorldState,
+} from "../sim/public";
 import {
   createRegionCoord,
   globalTileToRegion,
@@ -18,6 +26,12 @@ import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/t
 import { hashCanonical, stableStringify } from "../sim/util";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { deserializeBio0Ecology } from "./bio0Ecology";
+import {
+  repositionDogActor,
+  replaceDogActorPerception,
+  replaceDogActorPhysiology,
+  setDogActorIntent,
+} from "./dogActor";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
@@ -58,7 +72,12 @@ import type {
   CoreEcologySettlementShadowsStimulusFrame,
   CoreEcologySmallWorldSourceStepInput,
 } from "./coreEcologySmallWorld";
-import { deserializeDogActorRoster } from "./dogActorRoster";
+import {
+  deserializeDogActorRoster,
+  replaceDogActorInRoster,
+  serializeDogActorRoster,
+} from "./dogActorRoster";
+import { firstLivingCircadianActiveTick } from "./livingCircadian";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
   repositionCoreWildlifeActor,
@@ -75,7 +94,7 @@ import {
 } from "./coreEcologySpeciesRuntimePolicy";
 import { stepCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import { coreWildlifeTraversabilityCell } from "./coreWildlifeLocomotionProfile";
-import { TILE_UNITS, type PlayerState } from "./player";
+import { TILE_UNITS, createPlayer, type PlayerState } from "./player";
 import {
   capturePlayerRegionalTravel,
   recenterRegionalPlayer,
@@ -106,10 +125,12 @@ import {
 } from "./regionalEcologyStateV6";
 import {
   createRegionalWorldView,
+  regionalAddressAt,
   regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { createSessionState } from "./sessionTypes";
 import {
   canonicalizeSettlementEcologyState,
   deserializeSettlementEcologyState,
@@ -125,6 +146,7 @@ import {
   PRIOR_SETTLEMENT_WORKING_ANIMALS_OWNER_ID,
   PRIOR_SETTLEMENT_WORKING_ANIMALS_VERSION,
   PRIOR_SETTLEMENT_WORKING_ANIMAL_ASSIGNMENT_VERSION,
+  SETTLEMENT_WORKING_ANIMAL_RETURN_RADIUS_UNITS,
   deserializeSettlementWorkingAnimalState,
   resolveSettlementWorkingAnimalActivity,
   serializeSettlementWorkingAnimalState,
@@ -132,6 +154,7 @@ import {
   stageSettlementWorkingAnimalActivity,
   stageSettlementWorkingAnimalTaskLifecycle,
 } from "./settlementWorkingAnimals";
+import { settlementWorkingDogCircadianRestDestinationId } from "./settlementWorkingDogCircadian";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -578,6 +601,19 @@ function advancePlayerSteps(
   runtime.stop();
 }
 
+/** WAIT accepts a fixed step on its first frame; there is no clock-establishing frame. */
+function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
+  runtime.start();
+  for (let frame = 0; frame < count; frame += 1) {
+    const callback = scheduledFrame;
+    if (!callback) throw new Error("runtime did not schedule its next WAIT frame");
+    scheduledFrame = undefined;
+    callback(nextFrameTime);
+    nextFrameTime += 100;
+  }
+  runtime.stop();
+}
+
 function moveBeyondStoreDetailVisibility(runtime: TideweftRuntime): boolean {
   const initial = runtime.getRenderView();
   const { columns, rows, tileSize, tiles } = initial.terrain;
@@ -645,6 +681,87 @@ function withCurrentEnvelopeFields(
       integrity: gameSaveEnvelopeIntegrity(nextFields),
     }),
   };
+}
+
+function legacyRuntimeSaveRecord(world: WorldState): SaveRecord {
+  const session = createSessionState(world.meta.seedText, "gale", "wander");
+  session.paused = false;
+  session.titleVisible = false;
+  return {
+    slotId: "autosave",
+    label: "Working dog night routine",
+    seed: world.meta.seedText,
+    updatedAt: 1,
+    playTicks: world.meta.completedTick,
+    settlementCount: world.settlements.length,
+    connectedCount: 0,
+    worldJson: JSON.stringify({
+      format: "tideweft-session",
+      version: 1,
+      world: serializeWorld(world),
+      player: createPlayer(createWorldView(world)),
+      session,
+    }),
+  };
+}
+
+function connectedOpenDogPositionOutside(
+  view: WorldView,
+  center: WorldPosition,
+  radiusUnits: number,
+): WorldPosition {
+  const centerLocalX = Math.floor(center.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const centerLocalY = Math.floor(center.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const start = regionalTileIndexInView(
+    view,
+    center.region,
+    centerLocalY * WORLD_WIDTH + centerLocalX,
+  );
+  if (start === null) throw new Error("working-dog kennel is outside its fixture view");
+
+  const visited = new Set([start]);
+  const frontier = [start];
+  while (frontier.length > 0) {
+    const index = frontier.shift();
+    if (index === undefined) break;
+    const tile = view.terrain.tiles[index];
+    if (
+      tile === undefined
+      || tile.terrain === "deep-water"
+      || tile.waterDepth > ADRIFT_STAND_DEPTH
+    ) continue;
+    const address = regionalAddressAt(view, index);
+    if (address === null) throw new Error("working-dog route lost a regional address");
+    const position = createWorldPosition(
+      address.region,
+      address.localX * WORLD_POSITION_UNITS_PER_TILE
+        + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      address.localY * WORLD_POSITION_UNITS_PER_TILE
+        + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+    );
+    const delta = worldPositionDelta(position, center);
+    const distance = Math.hypot(delta.x, delta.y);
+    if (
+      distance > radiusUnits + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2)
+      && distance <= radiusUnits + WORLD_POSITION_UNITS_PER_TILE * 1.5
+    ) return position;
+
+    const x = index % view.terrain.width;
+    const y = Math.floor(index / view.terrain.width);
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+      const nextX = x + dx;
+      const nextY = y + dy;
+      if (
+        nextX < 0 || nextX >= view.terrain.width
+        || nextY < 0 || nextY >= view.terrain.height
+      ) continue;
+      const next = nextY * view.terrain.width + nextX;
+      if (visited.has(next)) continue;
+      visited.add(next);
+      frontier.push(next);
+    }
+  }
+  throw new Error("working-dog fixture found no connected open tile outside its kennel");
 }
 
 function safeEastSeamRow(view: WorldView): number {
@@ -3306,6 +3423,7 @@ describe("runtime settlement ecology integration", () => {
     expect(initialRoster.actors).toHaveLength(1);
     expect(initialWork.assignments).toHaveLength(1);
     expect(initialAssignment.currentActivity.activity).toBe("watch");
+    expect(initialGuardian.circadian).toBeUndefined();
     expect(initialSettlement.domesticCustodies.find(({ species }) => (
       species === "domestic-dog"
     ))?.memberActorIds).toEqual([initialGuardian.identity.stableId]);
@@ -3342,6 +3460,20 @@ describe("runtime settlement ecology integration", () => {
     }
     expect(guardianPerceptionHarness.targetKind).toBe("reachable");
     expect(advancedGuardian.identity).toEqual(initialGuardian.identity);
+    const guardianCustody = advancedSettlement.domesticCustodies.find(({ relationshipId }) => (
+      relationshipId === advancedAssignment.workerCustodyRelationshipId
+    ));
+    if (guardianCustody === undefined || guardianCustody.homeStructure.kind !== "kennel") {
+      throw new Error("guardian witness lost its actual kennel custody");
+    }
+    expect(advancedGuardian.circadian).toMatchObject({
+      policy: { profileId: "day-active", drivers: ["clock"] },
+      restDestinationId: settlementWorkingDogCircadianRestDestinationId(
+        advancedGuardian.identity.stableId,
+        guardianCustody.homeStructure.structureId,
+      ),
+      posture: { state: "awake" },
+    });
     expect(advancedGuardian.perception.beliefs.some(({ sourceObservationId }) => (
       sourceObservationId === reachedObservationId
     ))).toBe(true);
@@ -3556,6 +3688,364 @@ describe("runtime settlement ecology integration", () => {
     expect(replay.settlementWorkingAnimals).toBe(eastEnvelope.settlementWorkingAnimals);
     expect(replay.settlementEcology).toBe(eastEnvelope.settlementEcology);
     expect(deserializeDogActorRoster(replay.dogActorRoster)?.actors).toHaveLength(1);
+    reloaded.destroy();
+  }, 180_000);
+
+  it("returns the neutral night guardian to its kennel, sleeps through WAIT, reloads, and wakes at its dawn", async () => {
+    const nearDawnTick = WORLD_TICKS_PER_DAY + 350;
+    const world = createWorld("working dog kennel sleep continuity", "wild");
+    runTicks(world, nearDawnTick - world.meta.completedTick);
+    world.weather.kind = "clear";
+    world.weather.intensity = 0;
+    world.weather.windX = 0;
+    world.weather.windY = 0;
+    world.weather.nextChangeTick = nearDawnTick + WORLD_TICKS_PER_DAY;
+
+    // Advance the cheap headless world first, then let the legacy-load path
+    // construct every newer authoritative root at the same near-dawn tick.
+    const migrationRepository = new MemoryRepository(legacyRuntimeSaveRecord(world));
+    const migration = await createTideweftRuntime(migrationRepository);
+    expect(migration.getUIView().saveWarning).toBeUndefined();
+    await migration.save();
+    const migratedRecord = migrationRepository.snapshot();
+    const migratedEnvelope = savedEnvelope(migrationRepository);
+    const migratedWorld = deserializeWorld(String(migratedEnvelope.world));
+    const migratedRoster = deserializeDogActorRoster(migratedEnvelope.dogActorRoster);
+    const migratedWork = deserializeSettlementWorkingAnimalState(
+      migratedEnvelope.settlementWorkingAnimals,
+    );
+    const migratedSettlement = deserializeSettlementEcologyState(
+      migratedEnvelope.settlementEcology,
+    );
+    const guardian = migratedRoster?.actors[0];
+    const assignment = migratedWork?.assignments[0];
+    const custody = migratedSettlement.domesticCustodies.find(({ species }) => (
+      species === "domestic-dog"
+    ));
+    if (
+      guardian === undefined
+      || assignment === undefined
+      || custody === undefined
+      || custody.homeStructure.kind !== "kennel"
+    ) throw new Error("night guardian fixture omitted its kennel relationship");
+    expect(migratedWorld.meta.completedTick).toBe(nearDawnTick);
+    expect(guardian.updatedAtTick).toBe(nearDawnTick);
+    expect(guardian.circadian).toBeUndefined();
+    expect(assignment.workerCustodyRelationshipId).toBe(custody.relationshipId);
+
+    const displacedPosition = connectedOpenDogPositionOutside(
+      createWorldView(migratedWorld),
+      custody.homeStructure.position,
+      custody.homeStructure.radiusUnits,
+    );
+    const initialKennelDelta = worldPositionDelta(
+      displacedPosition,
+      custody.homeStructure.position,
+    );
+    const initialKennelDistance = Math.hypot(initialKennelDelta.x, initialKennelDelta.y);
+    const dutyDelta = worldPositionDelta(displacedPosition, assignment.dutyArea.center);
+    expect(initialKennelDistance).toBeGreaterThan(custody.homeStructure.radiusUnits);
+    expect(Math.hypot(dutyDelta.x, dutyDelta.y)).toBeLessThanOrEqual(
+      assignment.dutyArea.radiusUnits,
+    );
+
+    let preparedGuardian = replaceDogActorPhysiology(guardian, {
+      needs: { hunger: 0, thirst: 0, rest: 0, safety: 0, company: 0 },
+      condition: {
+        health: FIXED_POINT,
+        wetness: 0,
+        coldStress: 0,
+        heatStress: 0,
+        exhaustion: 100_000,
+        injuries: [],
+      },
+      humanFamiliarity: guardian.humanFamiliarity,
+      atTick: nearDawnTick,
+    });
+    preparedGuardian = setDogActorIntent(preparedGuardian, {
+      kind: "observe",
+      cause: { kind: "world-event", referenceId: "event:test-neutral-night-watch" },
+      enteredAtTick: nearDawnTick,
+      nextThinkTick: nearDawnTick + WORLD_TICKS_PER_DAY,
+    });
+    preparedGuardian = repositionDogActor(preparedGuardian, {
+      position: displacedPosition,
+      heading: guardian.address.heading,
+      atTick: nearDawnTick,
+    });
+    const preparedRoster = replaceDogActorInRoster(migratedRoster, preparedGuardian);
+    if (preparedRoster === null) throw new Error("night guardian fixture rejected its actor");
+    const preparedRecord = withCurrentEnvelopeFields(migratedRecord, {
+      dogActorRoster: serializeDogActorRoster(preparedRoster),
+    });
+    migration.destroy();
+
+    // Make the perception seam a complete empty snapshot for this observer so
+    // a co-located handler or ambient alarm cannot mask clock-owned behavior.
+    guardianPerceptionHarness.observerId = guardian.identity.stableId;
+    guardianPerceptionHarness.handlerId = "TEST-NO-NIGHT-GUARDIAN-SUBJECT";
+    const repository = new MemoryRepository(preparedRecord);
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+
+    let priorDistance = initialKennelDistance;
+    let priorAwakeExhaustion = preparedGuardian.condition.exhaustion;
+    let sawPhysicalProgress = false;
+    let sawAwakeWithoutRecovery = false;
+    let restingTick: number | null = null;
+    let restingPosition: WorldPosition | null = null;
+    for (let elapsed = 0; elapsed < 12 && restingTick === null; elapsed += 1) {
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const envelope = savedEnvelope(repository);
+      const steppedWorld = deserializeWorld(String(envelope.world));
+      const steppedDog = deserializeDogActorRoster(envelope.dogActorRoster)?.actors[0];
+      if (steppedDog === undefined || steppedDog.circadian === undefined) {
+        throw new Error("runtime did not persist the guardian routine");
+      }
+      const kennelDelta = worldPositionDelta(
+        steppedDog.address.position,
+        custody.homeStructure.position,
+      );
+      const kennelDistance = Math.hypot(kennelDelta.x, kennelDelta.y);
+      sawPhysicalProgress ||= kennelDistance < priorDistance;
+      if (steppedDog.circadian.posture.state === "resting") {
+        expect(kennelDistance).toBeLessThanOrEqual(custody.homeStructure.radiusUnits);
+        // The work-return area shares this center but is much narrower. Holding
+        // here proves the destination is the kennel, not the livestock worksite.
+        expect(kennelDistance).toBeGreaterThan(
+          SETTLEMENT_WORKING_ANIMAL_RETURN_RADIUS_UNITS,
+        );
+        restingTick = steppedWorld.meta.completedTick;
+        restingPosition = steppedDog.address.position;
+        expect(steppedDog.circadian).toMatchObject({
+          posture: { state: "resting", enteredAtTick: restingTick },
+          restDestinationArrived: true,
+          restDestinationId: settlementWorkingDogCircadianRestDestinationId(
+            steppedDog.identity.stableId,
+            custody.homeStructure.structureId,
+          ),
+        });
+      } else {
+        expect(steppedDog.circadian.posture.state).toBe("awake");
+        if (kennelDistance > custody.homeStructure.radiusUnits) {
+          expect(steppedDog.circadian.restDestinationArrived).toBe(false);
+          expect(steppedDog.condition.exhaustion).toBeGreaterThanOrEqual(
+            priorAwakeExhaustion,
+          );
+          sawAwakeWithoutRecovery = true;
+          priorAwakeExhaustion = steppedDog.condition.exhaustion;
+        }
+      }
+      priorDistance = kennelDistance;
+    }
+    expect(sawPhysicalProgress).toBe(true);
+    expect(sawAwakeWithoutRecovery).toBe(true);
+    if (restingTick === null || restingPosition === null) {
+      throw new Error("guardian did not physically reach and settle in its kennel");
+    }
+
+    for (let tick = 0; tick < 11; tick += 1) advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const beforeWaitEnvelope = savedEnvelope(repository);
+    const beforeWaitDog = deserializeDogActorRoster(
+      beforeWaitEnvelope.dogActorRoster,
+    )?.actors[0];
+    expect(deserializeWorld(String(beforeWaitEnvelope.world)).meta.completedTick)
+      .toBe(restingTick + 11);
+    expect(beforeWaitDog?.circadian?.posture).toEqual({
+      state: "resting",
+      enteredAtTick: restingTick,
+    });
+    expect(beforeWaitDog?.address.position).toEqual(restingPosition);
+
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 100);
+    expect(runtime.getUIView().controls?.waitActive).toBe(false);
+    await runtime.save();
+    const asleepRecord = repository.snapshot();
+    const asleepEnvelope = savedEnvelope(repository);
+    const asleepTick = deserializeWorld(String(asleepEnvelope.world)).meta.completedTick;
+    const asleepDog = deserializeDogActorRoster(asleepEnvelope.dogActorRoster)?.actors[0];
+    if (asleepDog?.circadian === undefined) {
+      throw new Error("WAIT lost the guardian routine receipt");
+    }
+    expect(asleepTick).toBe(restingTick + 21);
+    expect(asleepDog.address.position).toEqual(restingPosition);
+    expect(asleepDog.circadian).toMatchObject({
+      posture: { state: "asleep", enteredAtTick: asleepTick },
+      restDestinationArrived: true,
+    });
+    const asleepRosterBytes = asleepEnvelope.dogActorRoster;
+    runtime.destroy();
+
+    // Branch from the authenticated sleeping save at its exact current tick.
+    // The activity transaction is the sole pending owner; no stale/future
+    // task transaction is needed to exercise load-time circadian recovery.
+    const asleepRoster = deserializeDogActorRoster(asleepEnvelope.dogActorRoster);
+    const asleepWork = deserializeSettlementWorkingAnimalState(
+      asleepEnvelope.settlementWorkingAnimals,
+    );
+    const asleepAssignment = asleepWork?.assignments[0];
+    if (asleepRoster === null || asleepAssignment === undefined) {
+      throw new Error("sleeping guardian recovery fixture lost its work relationship");
+    }
+    expect(asleepAssignment).toMatchObject({
+      currentTask: null,
+      pendingActivity: null,
+      pendingTaskTransition: null,
+    });
+    const pendingAlarm = createActorObservation({
+      id: `OBS-night-pending-investigate-${asleepTick}`,
+      observerId: asleepDog.identity.stableId,
+      observedAtTick: asleepTick,
+      channel: "hearing",
+      perceivedClass: "animal-alarm",
+      subjectId: null,
+      area: asleepAssignment.dutyArea,
+      confidence: 400_000,
+      salience: 400_000,
+      identification: "anonymous",
+      interrupt: "none",
+    });
+    if (pendingAlarm === null) throw new Error("pending recovery alarm was malformed");
+    const pendingPerception = stepActorPerception(
+      createActorPerceptionState(asleepDog.identity.stableId, asleepTick - 1),
+      { tick: asleepTick, observations: [pendingAlarm] },
+    );
+    if (pendingPerception === null) {
+      throw new Error("pending recovery alarm did not enter dog cognition");
+    }
+    const pendingActivity = stageSettlementWorkingAnimalActivity(asleepWork, {
+      assignmentId: asleepAssignment.assignmentId,
+      tick: asleepTick,
+      perception: pendingPerception,
+      welfare: {
+        injuryPressure: 0,
+        coldPressure: 0,
+        heatPressure: 0,
+        exhaustionPressure: 0,
+        hungerPressure: 0,
+        thirstPressure: 0,
+      },
+      accessibility: { watch: true, investigate: true, return: true },
+      actorDisposition: { kind: "available" },
+      workerInsideDutyArea: true,
+    });
+    if (pendingActivity?.transaction === null || pendingActivity === null) {
+      throw new Error("pending recovery investigation was not staged");
+    }
+    expect(pendingActivity.transaction).toMatchObject({
+      activity: "investigate",
+      acceptedAtTick: asleepTick,
+      cause: { kind: "perception", referenceId: pendingAlarm.id },
+    });
+    expect(pendingActivity.state.assignments[0]).toMatchObject({
+      currentTask: null,
+      pendingActivity: { activity: "investigate" },
+      pendingTaskTransition: null,
+    });
+
+    const pendingDog = replaceDogActorPerception(asleepDog, pendingPerception);
+    expect(pendingDog.circadian?.posture.state).toBe("asleep");
+    const pendingRoster = replaceDogActorInRoster(asleepRoster, pendingDog);
+    if (pendingRoster === null) throw new Error("pending recovery dog roster was rejected");
+    const pendingRecord = withCurrentEnvelopeFields(asleepRecord, {
+      dogActorRoster: serializeDogActorRoster(pendingRoster),
+      settlementWorkingAnimals: serializeSettlementWorkingAnimalState(
+        pendingActivity.state,
+      ),
+    });
+    const pendingRepository = new MemoryRepository(pendingRecord);
+    const recoveredPending = await createTideweftRuntime(pendingRepository);
+    expect(recoveredPending.getUIView().saveWarning).toBeUndefined();
+    await recoveredPending.save();
+    const recoveredPendingEnvelope = savedEnvelope(pendingRepository);
+    const recoveredPendingWork = deserializeSettlementWorkingAnimalState(
+      recoveredPendingEnvelope.settlementWorkingAnimals,
+    );
+    const recoveredPendingDog = deserializeDogActorRoster(
+      recoveredPendingEnvelope.dogActorRoster,
+    )?.actors[0];
+    if (recoveredPendingDog?.circadian === undefined) {
+      throw new Error("pending work recovery lost the same dog's circadian receipt");
+    }
+    expect(recoveredPendingWork?.assignments[0]).toMatchObject({
+      currentActivity: {
+        ordinal: pendingActivity.transaction.ordinal,
+        activity: "investigate",
+        acceptedAtTick: asleepTick,
+      },
+      lastResolvedActivityOrdinal: pendingActivity.transaction.ordinal,
+      pendingActivity: null,
+      currentTask: null,
+      pendingTaskTransition: null,
+    });
+    expect(recoveredPendingDog.identity).toEqual(asleepDog.identity);
+    expect(recoveredPendingDog.address).toEqual(asleepDog.address);
+    expect(recoveredPendingDog.updatedAtTick).toBe(asleepTick);
+    expect(recoveredPendingDog.perception).toEqual(pendingPerception);
+    expect(recoveredPendingDog.circadian).toMatchObject({
+      policy: asleepDog.circadian.policy,
+      restDestinationId: asleepDog.circadian.restDestinationId,
+      restDestinationArrived: true,
+      posture: { state: "awake", enteredAtTick: asleepTick },
+    });
+    const recoveredPendingRosterBytes = recoveredPendingEnvelope.dogActorRoster;
+    const recoveredPendingWorkBytes = recoveredPendingEnvelope.settlementWorkingAnimals;
+    recoveredPending.destroy();
+
+    const replayedPending = await createTideweftRuntime(pendingRepository);
+    expect(replayedPending.getUIView().saveWarning).toBeUndefined();
+    await replayedPending.save();
+    const replayedPendingEnvelope = savedEnvelope(pendingRepository);
+    expect(replayedPendingEnvelope.dogActorRoster).toBe(recoveredPendingRosterBytes);
+    expect(replayedPendingEnvelope.settlementWorkingAnimals).toBe(recoveredPendingWorkBytes);
+    replayedPending.destroy();
+
+    const reloadRepository = new MemoryRepository(asleepRecord);
+    const reloaded = await createTideweftRuntime(reloadRepository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    await reloaded.save();
+    const reloadEnvelope = savedEnvelope(reloadRepository);
+    expect(reloadEnvelope.dogActorRoster).toBe(asleepRosterBytes);
+    const reloadedDog = deserializeDogActorRoster(reloadEnvelope.dogActorRoster)?.actors[0];
+    if (reloadedDog?.circadian === undefined) {
+      throw new Error("reload lost the sleeping guardian receipt");
+    }
+    const wakeTick = firstLivingCircadianActiveTick(
+      reloadedDog.identity.stableId,
+      asleepTick,
+      asleepTick + WORLD_TICKS_PER_DAY,
+      reloadedDog.circadian.policy,
+    );
+    if (wakeTick === null) throw new Error("guardian has no bounded dawn wake tick");
+    expect(wakeTick % WORLD_TICKS_PER_DAY).toBeGreaterThanOrEqual(330);
+    expect(wakeTick % WORLD_TICKS_PER_DAY).toBeLessThanOrEqual(390);
+
+    const ticksBeforeWake = wakeTick - asleepTick - 1;
+    if (ticksBeforeWake > 0) advancePlayerSteps(reloaded, ticksBeforeWake * 10);
+    await reloaded.save();
+    const beforeWakeEnvelope = savedEnvelope(reloadRepository);
+    const beforeWakeDog = deserializeDogActorRoster(
+      beforeWakeEnvelope.dogActorRoster,
+    )?.actors[0];
+    expect(deserializeWorld(String(beforeWakeEnvelope.world)).meta.completedTick)
+      .toBe(wakeTick - 1);
+    expect(beforeWakeDog?.circadian?.posture.state).toBe("asleep");
+    expect(beforeWakeDog?.address.position).toEqual(restingPosition);
+
+    advancePlayerSteps(reloaded, 10);
+    await reloaded.save();
+    const awakeEnvelope = savedEnvelope(reloadRepository);
+    const awakeDog = deserializeDogActorRoster(awakeEnvelope.dogActorRoster)?.actors[0];
+    expect(deserializeWorld(String(awakeEnvelope.world)).meta.completedTick).toBe(wakeTick);
+    expect(awakeDog?.circadian?.posture).toEqual({
+      state: "awake",
+      enteredAtTick: wakeTick,
+    });
+    expect(awakeDog?.address.position).toEqual(restingPosition);
     reloaded.destroy();
   }, 180_000);
 

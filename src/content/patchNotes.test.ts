@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.44",
+      version: "0.3.3-alpha.45",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.44",
-      gameplayContractVersion: 42,
-      tutorialVersion: 54,
+      buildIdentity: "0.3.3-alpha.45",
+      gameplayContractVersion: 43,
+      tutorialVersion: 55,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-44 bounded WAIT candidate and retains Two Rhythms and earlier releases", () => {
+  it("scopes the Alpha-45 Kennel Night candidate and retains Ten Minutes and earlier releases", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha44Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.44",
+    );
+    const alpha44Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha44Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha44Limitations = alpha44Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha43Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.43",
     );
@@ -291,24 +299,45 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Ten Minutes");
-    expect(currentCopy).toContain("exactly one hundred ordinary player fixed steps");
-    expect(currentCopy).toContain("ten displayed minutes");
-    expect(currentCopy).toContain("weather, tide, cargo, actor, ecology, Promise, deadline, perception, and traversal authority");
-    expect(currentCopy).toContain("one successful fixed step per presented frame");
-    expect(currentCopy).toContain("lawfully perceived strong disturbance");
-    expect(currentCopy).toContain("final fixed step keeps announcement priority");
-    expect(currentCopy).toContain("grants no special healing");
-    expect(currentCopy).toContain("same fixed-step phase");
-    expect(currentCopy).toContain("shared Journey action dock on desktop and touch");
-    expect(currentCopy).toContain("Outer save version 31 remains unchanged");
-    expect(currentCopy).toContain("intentionally session-local");
-    expect(currentLimitations).toContain("not player REST or SLEEP");
-    expect(currentLimitations).toContain("Human and companion routines");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Kennel Night");
+    expect(currentCopy).toContain("Exactly one existing starting-harbor settlement-custodied working dog");
+    expect(currentCopy).toContain("shared living-circadian kernel");
+    expect(currentCopy).toContain("clock-driven day-active policy");
+    expect(currentCopy).toContain("actual kennel already authenticated by its settlement custody");
+    expect(currentCopy).toContain("stays awake and receives no restorative physiology while travelling");
+    expect(currentCopy).toContain("only physical arrival permits Resting and then Asleep");
+    expect(currentCopy).toContain("wakes at its stable-ID active boundary");
+    expect(currentCopy).toContain("retained investigation or return work");
+    expect(currentCopy).toContain("kennel keeps its physical weather shelter while the dog is awake");
+    expect(currentCopy).toContain("Shelter alone, low-exertion watch, and travel toward the kennel now reduce neither exhaustion nor rest need");
+    expect(currentCopy).toContain("both recovery paths require the committed restorative posture after authenticated kennel arrival");
+    expect(currentCopy).toContain("working-animal deferral now records its actual current intent instead of substituting a retreat cause");
+    expect(currentCopy).toContain("directly visible ABOUT inspection can label the current posture Resting or Asleep");
+    expect(currentCopy).toContain("hidden schedule, phase offset, wake threshold");
+    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and working-animal state version 2 remain unchanged");
+    expect(currentCopy).toContain("Dog actor schema/version 1 gains an additive optional shared circadian receipt");
+    expect(currentCopy).toContain("Legacy dog actor records without the optional field remain valid and byte-stable");
+    expect(currentCopy).toContain("recovers accepted pending working-animal transactions exactly once before play resumes");
+    expect(currentCopy).toContain("already-present routine receipt is reprojected against the recovered assignment at the same saved tick");
+    expect(currentCopy).toContain("legacy absent receipt remains absent rather than being invented");
+    expect(currentLimitations).toContain("exactly one existing settlement-custodied working dog's kennel routine");
+    expect(currentLimitations).toContain("not a routine for the independent porter-scene dog, all dogs, humans");
+    expect(currentLimitations).toContain("bonded/player companion routines");
+    expect(currentLimitations).toContain("player REST and SLEEP");
     expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
     expect(currentLimitations).toContain("not been pushed, published, deployed");
     expect(currentLimitations).toContain("LIVE_VERIFIED");
-    expect(currentCopy).not.toMatch(/player sleep is live|human schedules are live|grants free healing/iu);
+    expect(currentCopy).not.toMatch(/player sleep is live|human schedules are live|all dogs|grants free healing/iu);
+    expect(alpha44Release?.summary).toContain("Ten Minutes");
+    expect(alpha44Copy).toContain("exactly one hundred ordinary player fixed steps");
+    expect(alpha44Copy).toContain("ten displayed minutes");
+    expect(alpha44Copy).toContain("one successful fixed step per presented frame");
+    expect(alpha44Copy).toContain("final fixed step keeps announcement priority");
+    expect(alpha44Copy).toContain("shared Journey action dock on desktop and touch");
+    expect(alpha44Copy).toContain("Outer save version 31 remains unchanged");
+    expect(alpha44Copy).toContain("intentionally session-local");
+    expect(alpha44Limitations).toContain("not player REST or SLEEP");
+    expect(alpha44Limitations).toContain("Human and companion routines");
     expect(alpha43Release?.summary).toContain("Two Rhythms");
     expect(alpha43Copy).toContain("declarative species-to-activity registry");
     expect(alpha43Copy).toContain("day-active fish crow");

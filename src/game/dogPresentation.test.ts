@@ -9,11 +9,13 @@ import {
   appendDogActorMemory,
   createDogActorState,
   learnDogPlayerKnowledge,
+  replaceDogActorCircadian,
   replaceDogActorPerception,
   replaceDogActorPhysiology,
 } from "./dogActor";
 import type { VisibilityGrade } from "./perception";
 import { projectDogPresentation } from "./dogPresentation";
+import { createLivingCircadianPolicy } from "./livingCircadian";
 import {
   createSettlementWorkingAnimalState,
   resolveSettlementWorkingAnimalActivity,
@@ -52,7 +54,32 @@ function input(actor: unknown = dog()) {
   };
 }
 
-function investigatingWork(actor: ReturnType<typeof dog>) {
+function withCircadian(
+  actor: ReturnType<typeof dog>,
+  state: "resting" | "asleep",
+) {
+  const policy = createLivingCircadianPolicy({
+    profileId: "adaptive-active",
+    drivers: ["clock"],
+  });
+  if (policy === null) throw new Error("Presentation circadian policy was malformed");
+  return replaceDogActorCircadian(actor, {
+    atTick: actor.updatedAtTick,
+    circadian: {
+      version: policy.version,
+      ownerId: policy.ownerId,
+      policy,
+      restDestinationId: "settlement:dog-rest:presentation",
+      restDestinationArrived: true,
+      posture: { state, enteredAtTick: actor.updatedAtTick },
+    },
+  });
+}
+
+function authenticatedWork(
+  actor: ReturnType<typeof dog>,
+  requested: "investigate" | "return",
+) {
   const initial = createSettlementWorkingAnimalState({
     settlementId: 1,
     assignments: [{
@@ -69,23 +96,27 @@ function investigatingWork(actor: ReturnType<typeof dog>) {
       createdAtTick: actor.updatedAtTick,
     }],
   });
-  const observation = createActorObservation({
-    id: "OBS-presentation-alarm",
-    observerId: actor.identity.stableId,
-    observedAtTick: 5,
-    channel: "hearing",
-    perceivedClass: "animal-alarm",
-    subjectId: null,
-    area: { center: actor.address.position, radiusUnits: 500 },
-    confidence: 900_000,
-    salience: 900_000,
-    identification: "anonymous",
-    interrupt: "strong",
-  });
-  if (observation === null) throw new Error("Presentation work observation was malformed");
+  const observation = requested === "investigate"
+    ? createActorObservation({
+        id: "OBS-presentation-alarm",
+        observerId: actor.identity.stableId,
+        observedAtTick: 5,
+        channel: "hearing",
+        perceivedClass: "animal-alarm",
+        subjectId: null,
+        area: { center: actor.address.position, radiusUnits: 500 },
+        confidence: 900_000,
+        salience: 900_000,
+        identification: "anonymous",
+        interrupt: "strong",
+      })
+    : null;
+  if (requested === "investigate" && observation === null) {
+    throw new Error("Presentation work observation was malformed");
+  }
   const perception = stepActorPerception(actor.perception, {
     tick: 5,
-    observations: [observation],
+    observations: observation === null ? [] : [observation],
   });
   if (perception === null) throw new Error("Presentation work perception was malformed");
   const staged = stageSettlementWorkingAnimalActivity(initial, {
@@ -100,12 +131,17 @@ function investigatingWork(actor: ReturnType<typeof dog>) {
       hungerPressure: 0,
       thirstPressure: 0,
     },
-    accessibility: { watch: true, investigate: true, return: true },
+    accessibility: requested === "investigate"
+      ? { watch: true, investigate: true, return: true }
+      : { watch: false, investigate: false, return: true },
     actorDisposition: { kind: "available" },
-    workerInsideDutyArea: true,
+    workerInsideDutyArea: requested === "investigate",
   });
   if (staged?.transaction === null || staged?.transaction === undefined) {
     throw new Error("Presentation work activity was not staged");
+  }
+  if (staged.decision.activity !== requested) {
+    throw new Error(`Presentation work fixture chose ${staged.decision.activity}`);
   }
   const resolved = resolveSettlementWorkingAnimalActivity(staged.state, staged.transaction);
   if (resolved === null) throw new Error("Presentation work activity was not resolved");
@@ -164,9 +200,24 @@ describe("dog presentation", () => {
     expect(view).not.toHaveProperty("owner");
   });
 
+  it("projects directly visible resting and asleep posture without leaking routine custody", () => {
+    const resting = withCircadian(dog(), "resting");
+    const asleep = withCircadian(dog(), "asleep");
+
+    expect(projectDogPresentation(input(resting))?.behavior).toBe("rest");
+    const sleepingView = projectDogPresentation(input(asleep));
+    expect(sleepingView?.behavior).toBe("asleep");
+    expect(JSON.stringify(sleepingView)).not.toContain("settlement:dog-rest:presentation");
+    expect(JSON.stringify(sleepingView)).not.toContain("adaptive-active");
+
+    const hidden = input(asleep);
+    hidden.detailVisibilityGrades[3 * 8 + 2] = 1;
+    expect(projectDogPresentation(hidden)).toBeNull();
+  });
+
   it("composes authenticated assigned movement without rewriting autonomous intent", () => {
     const original = dog();
-    const work = investigatingWork(original);
+    const work = authenticatedWork(original, "investigate");
     const view = projectDogPresentation({
       ...input(work.actor),
       activity: { state: work.state, atTick: 5 },
@@ -178,6 +229,18 @@ describe("dog presentation", () => {
       ...input(work.actor),
       activity: { state: work.state, atTick: 4 },
     })).toBeNull();
+  });
+
+  it("keeps authenticated investigate and return work ahead of asleep posture", () => {
+    for (const requested of ["investigate", "return"] as const) {
+      const work = authenticatedWork(dog(), requested);
+      const asleep = withCircadian(work.actor, "asleep");
+      const view = projectDogPresentation({
+        ...input(asleep),
+        activity: { state: work.state, atTick: asleep.updatedAtTick },
+      });
+      expect(view?.behavior).toBe(`work-${requested}`);
+    }
   });
 
   it("requires direct detail perception and never leaks a peripheral actor", () => {

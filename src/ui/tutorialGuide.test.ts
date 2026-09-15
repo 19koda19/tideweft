@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(54);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(55);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -64,25 +64,27 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 44 · Ten Minutes is a local unpublished source candidate");
-    expect(copy).toContain("carries forward Alpha 43's shared living-routine kernel");
-    expect(copy).toContain("a day-active fish crow returns to its authenticated perch at night");
-    expect(copy).toContain(
-      "a night-active North American river otter returns to its authenticated dry haulout by day",
-    );
-    expect(copy).toContain("Neither animal receives rest physiology while travelling");
-    expect(copy).toContain(
-      "compact optional routine state still survives save, reload, and bounded coarse absence",
-    );
-    expect(copy).toContain("WAIT 10 MIN control advances exactly ten displayed minutes");
+    expect(copy).toContain("Alpha 45 · Kennel Night is a local unpublished source candidate");
+    expect(copy).toContain("Exactly one existing settlement-custodied working dog");
+    expect(copy).toContain("shared clock-driven day-active circadian policy");
+    expect(copy).toContain("real kennel");
+    expect(copy).toContain("remains awake and receives no restorative physiology while travelling");
+    expect(copy).toContain("Physical arrival permits Resting and then Asleep");
+    expect(copy).toContain("wakes at its stable-ID active boundary");
+    expect(copy).toContain("retained investigation or return work");
+    expect(copy).toContain("directly visible ABOUT inspection can label the current posture Resting or Asleep");
+    expect(copy).toContain("without revealing the schedule, phase offset, wake threshold");
+    expect(copy).toContain("The independent porter-scene dog is unchanged");
+    expect(copy).toContain("not an all-dog, human, bonded/player companion, or player REST/SLEEP routine");
+    expect(copy).toContain("Alpha 44's WAIT 10 MIN still advances exactly ten displayed minutes");
     expect(copy).toContain("same authoritative fixed-step world simulation as ordinary play");
     expect(copy).toContain("grants no special healing or replenishment");
     expect(copy).toContain("committed fixed-step boundary");
     expect(copy).toContain("Every completed step, elapsed minute, and consequence remains authoritative");
     expect(copy).toContain("not a pause, REST, SLEEP, Quiet Hour");
     expect(copy).toContain("WAIT AND WATCH");
-    expect(copy).toContain("all released catalog snapshots remain exact");
-    expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
+    expect(copy).toContain("outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and working-animal state version 2 remain unchanged");
+    expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
     expect(copy).toContain("Player REST and SLEEP, validated longer or coarse-time acceleration");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
@@ -98,8 +100,9 @@ describe("TIDEWEFT field-manual content", () => {
       "completed beacon projects light nearby unobstructed ground and blue water after dusk",
     );
     expect(copy).toContain("WAIT 10 MIN deliberately advances exactly ten displayed minutes");
+    expect(copy).toContain("one settlement working dog now uses its stable-identity day-active boundary");
     expect(copy).toContain(
-      "complete actor schedules, player REST and SLEEP, and validated longer or coarse-time advancement remain later",
+      "complete human, independent-dog, bonded/player companion, and catalog-wide actor schedules, player REST and SLEEP, and validated longer or coarse-time advancement remain later",
     );
     expect(liveBoundary?.title).toBe("Present in this source candidate");
     expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
@@ -552,6 +555,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("ordinary actors using shared senses, attention, terrain movement, and broad ecological roles");
     expect(copy).toContain("One distinct domestic dog has a third custody relationship and kennel");
     expect(copy).toContain("generic working-animal assignment binds that dog and the existing keeper to the protected goat custody, herd, and pen worksite");
+    expect(copy).toContain("That one settlement-custodied working dog uses the shared day-active circadian policy");
+    expect(copy).toContain("travels physically through ordinary terrain movement to the actual kennel in its custody");
+    expect(copy).toContain("stays awake without restorative physiology until arrival");
+    expect(copy).toContain("At the kennel it can become Resting and then Asleep");
+    expect(copy).toContain("wakes at its stable-ID active boundary");
+    expect(copy).toContain("urgent needs and self-preservation, and retained investigation or return work still outrank the neutral routine");
+    expect(copy).toContain("directly visible ABOUT inspection may say Resting or Asleep");
+    expect(copy).toContain("never reveals schedule timing, phase offset, wake threshold, stable identity, destination ID, custody, or assignment internals");
+    expect(copy).toContain("does not change the independent porter-scene dog or create a bonded/player companion, human schedule, player REST, or player SLEEP");
     expect(copy).toContain("current caused escape can physically split the herd");
     expect(copy).toContain("regroup only from fresh identified sight of its herd mate");
     expect(copy).toContain("self-preservation still wins");

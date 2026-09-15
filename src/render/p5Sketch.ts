@@ -3038,7 +3038,7 @@ export function createTideweftRenderer(
             ? 1
             : 1.08;
         const scale = (highlighted ? 5.5 : 4.7) * dog.sizeScale / camera.zoom;
-        const resting = dog.behavior === "rest";
+        const resting = dog.behavior === "rest" || dog.behavior === "asleep";
         const bodyLength = scale * 2.7;
         const bodyHeight = scale * (resting ? 0.88 : 1.08) * coatVolume;
         const headRadius = scale * 0.72 * coatVolume;

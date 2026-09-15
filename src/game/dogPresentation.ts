@@ -14,6 +14,7 @@ import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 export const DOG_PRESENTATION_VERSION = 1 as const;
 
 export type DogPresentationBehavior = DogActorIntent
+  | "asleep"
   | "work-investigate"
   | "work-return";
 
@@ -127,7 +128,7 @@ export function projectDogObservedBehavior(
 ): DogPresentationBehavior | null {
   const actor = canonicalizeDogActorState(actorValue);
   if (actor === null) return null;
-  if (activityValue === undefined) return actor.intent.kind;
+  if (activityValue === undefined) return observedAutonomousBehavior(actor);
   const work = canonicalDogWorkActivity(activityValue, actor);
   if (work === null) return null;
   switch (work.activity) {
@@ -136,6 +137,17 @@ export function projectDogObservedBehavior(
     case "watch":
     case "survival-override":
     case "defer-to-actor":
+      return observedAutonomousBehavior(actor);
+  }
+}
+
+function observedAutonomousBehavior(actor: DogActorState): DogPresentationBehavior {
+  switch (actor.circadian?.posture.state) {
+    case "asleep": return "asleep";
+    case "resting": return "rest";
+    case "awake":
+    case "startled":
+    case undefined:
       return actor.intent.kind;
   }
 }

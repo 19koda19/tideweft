@@ -4,6 +4,49 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.45 — 2026-09-15
+
+Build: `0.3.3-alpha.45` · Gameplay contract: 43 · Tutorial: 55
+
+Kennel Night is the local unpublished Alpha 45 source candidate: the one settlement-custodied working dog now follows the shared day-active circadian policy through a physical, overrideable routine at its real kennel.
+
+### Gameplay
+
+- Exactly one existing starting-harbor settlement-custodied working dog now composes the version-1 shared living-circadian kernel with its clock-driven day-active policy; the independent porter-scene dog, humans, and every other unbound actor remain unchanged.
+- When that dog's clock preference is rest, ordinary locomotion carries it toward the actual kennel already authenticated by its settlement custody. It stays awake and receives no restorative physiology while travelling; only physical arrival permits Resting and then Asleep after the shared settling interval.
+- The dog wakes at its stable-ID active boundary. Lawful current danger or strong disturbance, urgent needs and self-preserving intent, and retained investigation or return work still override the neutral schedule preference without being erased or fabricated by it.
+
+### Fixes
+
+- The kennel keeps its physical weather shelter while the dog is awake, so cover still dries and moderates temperature exposure. Shelter alone, low-exertion watch, and travel toward the kennel now reduce neither exhaustion nor rest need; both recovery paths require the committed restorative posture after authenticated kennel arrival.
+- A retained guardian investigation or return remains active through the clock's rest window, while danger, avoidance, food, shelter, and dog-owned rest needs continue through the existing cognition and working-animal priority boundaries. If lawful disturbance startles the dog, working-animal deferral now records its actual current intent instead of substituting a retreat cause.
+- Losing physical kennel arrival wakes a resting or sleeping dog instead of allowing remote rest physiology, and a schedule-owned rest intent returns to neutral observation at the same dog's stable active boundary.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Kennel sleep grants no threat immunity, teleportation, automatic defense, special healing, free food or water, extra dog, population change, cargo protection, Promise advantage, or mortality change.
+- Stable identity staggers the working dog's active boundary through the shared policy rather than creating a global mass transition. Current danger, needs, and already-retained work keep their established priority.
+- This slice changes no guardian assignment, goat custody, herd, pen, kennel, actor capacity, species catalog, habitat, wildlife binding, resident schedule, player action, or ten-minute WAIT rule.
+
+### Interface
+
+- Chart and Relief now use the authoritative resting body pose for the visible working dog's Resting or Asleep posture, while directly visible ABOUT inspection can label the current posture Resting or Asleep.
+- Those views never reveal the dog's hidden schedule, phase offset, wake threshold, stable database identity, kennel destination ID, custody graph, or assignment internals. Losing direct-detail sight removes the dog and its current behavior instead of leaving a remote sleep indicator.
+- Field Manual version 55 explains the one working-dog kennel routine, awake physical travel, stable-identity waking, priority overrides, knowledge-honest inspection, unchanged save authority, and the boundary around humans, the independent dog, companions, and player REST or SLEEP.
+
+### Save changes
+
+- Outer save version 31, RegionalEcologyStateV6, settlement ecology version 4, and working-animal state version 2 remain unchanged. Kennel Night adds no new save wrapper or migration.
+- Dog actor schema/version 1 gains an additive optional shared circadian receipt only after an authenticated current routine commit. It preserves policy, the stable dog-plus-kennel rest-destination identity, physical-arrival fact, posture, and posture-entry tick.
+- Legacy dog actor records without the optional field remain valid and byte-stable through actor serialization. Any present working-dog receipt is reauthenticated against the actual custody, kennel, assignment, actor tick, and shared day-active policy, so reload cannot substitute another dog, structure, or routine.
+- Load deterministically recovers accepted pending working-animal transactions exactly once before play resumes. If recovery changes the active commitment, an already-present routine receipt is reprojected against the recovered assignment at the same saved tick; a legacy absent receipt remains absent rather than being invented.
+
+### Known limitations
+
+- Alpha 45 Kennel Night is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This is exactly one existing settlement-custodied working dog's kennel routine, not a routine for the independent porter-scene dog, all dogs, humans, a bonded or player companion, every settlement animal, or the wildlife catalog.
+- Human work, home, and watch schedules, bonded/player companion routines, broader animal bindings, player REST and SLEEP, validated longer or coarse-time player advancement, production crepuscular, tide-, weather-, and opportunity-driven routines, Living Voice, new species, and new mortality remain unfinished. The Turning Day directive remains open.
+
 ## 0.3.3-alpha.44 — 2026-09-15
 
 Build: `0.3.3-alpha.44` · Gameplay contract: 42 · Tutorial: 54

@@ -15,6 +15,7 @@ import {
   learnDogPlayerKnowledge,
   promoteDogActor,
   repositionDogActor,
+  replaceDogActorCircadian,
   replaceDogActorPerception,
   replaceDogActorPhysiology,
   serializeDogActorState,
@@ -25,6 +26,10 @@ import {
   type DogPlayerKnowledgeFactKind,
 } from "./dogActor";
 import { DOG_BEHAVIOR_INTENTS, decideDogBehavior } from "./dogBehavior";
+import {
+  createLivingCircadianPolicy,
+  type LivingCircadianPersistentState,
+} from "./livingCircadian";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -61,6 +66,22 @@ function memory(
     atTick: ordinal + 1,
     salience,
     location: state.address.position,
+  };
+}
+
+function circadianState(enteredAtTick: number): LivingCircadianPersistentState {
+  const policy = createLivingCircadianPolicy({
+    profileId: "adaptive-active",
+    drivers: ["clock"],
+  });
+  if (policy === null) throw new Error("Dog circadian fixture policy failed");
+  return {
+    version: policy.version,
+    ownerId: policy.ownerId,
+    policy,
+    restDestinationId: "settlement:dog-rest:test",
+    restDestinationArrived: true,
+    posture: { state: "awake", enteredAtTick },
   };
 }
 
@@ -119,6 +140,79 @@ describe("authoritative dog actor sidecar", () => {
       expect(state).not.toHaveProperty(forbidden);
       expect(state.identity).not.toHaveProperty(forbidden);
     }
+  });
+
+  it("accepts and byte-preserves legacy actor records without optional circadian state", () => {
+    const legacy = createDogActorState(fixtureInput());
+    const legacyText = serializeDogActorState(legacy);
+
+    expect(legacy).not.toHaveProperty("circadian");
+    expect(JSON.parse(legacyText)).not.toHaveProperty("circadian");
+    expect(serializeDogActorState(deserializeDogActorState(legacyText))).toBe(legacyText);
+  });
+
+  it("persists canonical shared circadian state through serialization and mutation", () => {
+    const legacy = createDogActorState(fixtureInput(12));
+    const circadian = circadianState(12);
+    const adopted = canonicalizeDogActorState({ ...legacy, circadian });
+    if (adopted === null) throw new Error("Valid dog circadian state was rejected");
+
+    const encoded = serializeDogActorState(adopted);
+    expect(deserializeDogActorState(encoded)).toEqual(adopted);
+    expect(adopted.circadian).toEqual(circadian);
+    expect(Object.isFrozen(adopted.circadian)).toBe(true);
+
+    const moved = repositionDogActor(adopted, {
+      position: adopted.address.position,
+      heading: adopted.address.heading,
+      atTick: 13,
+    });
+    expect(moved.circadian).toEqual(adopted.circadian);
+    expect(serializeDogActorState(deserializeDogActorState(
+      serializeDogActorState(moved),
+    ))).toBe(serializeDogActorState(moved));
+  });
+
+  it("rejects malformed, explicit-undefined, and future-dated optional circadian state", () => {
+    const state = createDogActorState(fixtureInput(12));
+    const circadian = circadianState(12);
+
+    expect(canonicalizeDogActorState({ ...state, circadian: undefined })).toBeNull();
+    expect(canonicalizeDogActorState({
+      ...state,
+      circadian: { ...circadian, unexpected: true },
+    })).toBeNull();
+    expect(canonicalizeDogActorState({
+      ...state,
+      circadian: {
+        ...circadian,
+        posture: { ...circadian.posture, enteredAtTick: 13 },
+      },
+    })).toBeNull();
+  });
+
+  it("replaces dog circadian state only at the actor's exact current tick", () => {
+    const state = createDogActorState(fixtureInput(12));
+    const circadian = circadianState(12);
+    const adopted = replaceDogActorCircadian(state, { atTick: 12, circadian });
+
+    expect(adopted.circadian).toEqual(circadian);
+    expect(adopted.updatedAtTick).toBe(12);
+    expect(() => replaceDogActorCircadian(adopted, {
+      atTick: 13,
+      circadian,
+    })).toThrow(/current tick/u);
+    expect(() => replaceDogActorCircadian(
+      createDogActorState(fixtureInput(0)),
+      { atTick: -0, circadian: circadianState(0) },
+    )).toThrow(/current tick/u);
+    expect(() => replaceDogActorCircadian(state, {
+      atTick: 12,
+      circadian: {
+        ...circadian,
+        posture: { ...circadian.posture, enteredAtTick: 13 },
+      },
+    })).toThrow(/future-dated/u);
   });
 
   it("roundtrips only canonical versioned serialization and rejects forged aliases", () => {

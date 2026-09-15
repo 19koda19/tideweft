@@ -3678,7 +3678,7 @@ export function createTideweftReliefRenderer(
             ? 1
             : 1.08;
         const base = tileSize * 0.105 * dog.sizeScale * (highlighted ? 1.08 : 1);
-        const resting = dog.behavior === "rest";
+        const resting = dog.behavior === "rest" || dog.behavior === "asleep";
         const bodyHalfLength = base * 1.45;
         const bodyHalfHeight = base * (resting ? 0.48 : 0.7) * coatVolume;
         const bodyHalfWidth = base * 0.62 * coatVolume;

@@ -811,6 +811,26 @@ living-actor choice **WAIT AND WATCH**. Leaving the page ends the transient
 action at its last completed step; save version 31 already preserves that exact
 world and partial-minute state, and reload never invisibly finishes the rest.
 
+The local **Kennel Night** Alpha45 candidate gives exactly one existing
+settlement-custodied working dog a physical night routine through the shared
+day-active circadian policy. When its stable identity places it inside the rest
+window, ordinary movement carries it toward the real kennel already named by
+its custody. Travel is still awake work and supplies no rest physiology. Only
+physical arrival permits Resting and then Asleep after the common settling
+interval; the same stable-identity clock boundary wakes it for active time.
+Lawful danger or strong current disturbance, urgent needs and self-preserving
+intent, and a retained investigation or return task can override that neutral
+preference.
+
+This is kennel life for that one working dog, not a rule for the independent
+porter-scene dog, all dogs, humans, or a bonded/player companion. It adds no
+player REST or SLEEP. Direct-detail Chart and Relief inspection and ABOUT can
+describe the current dog as Resting or Asleep, but do not reveal its schedule,
+phase offset, wake threshold, stable database identity, kennel destination ID,
+or assignment graph. The compact optional routine receipt persists in the
+existing dog actor record without changing outer save version 31, settlement
+ecology version 4, or working-animal state version 2.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1571,6 +1591,15 @@ catalog-wide sleep. Humans, both dogs, other wildlife bindings, player
 REST/SLEEP, and complete Turning Day closure remain unfinished. Local Alpha44
 **Ten Minutes** now supplies the bounded player WAIT described above through
 ordinary runtime steps; it does not imply those broader routines or sleep.
+Local Alpha45 **Kennel Night** now connects only the one settlement-custodied
+working dog to the same shared day-active policy and its actual kennel. The dog
+remains awake while physically travelling there, can Rest or become Asleep only
+after arrival, and wakes at its stable-identity active boundary; lawful danger,
+needs, and retained work still win. Visible direct inspection may show Resting
+or Asleep without disclosing schedule internals. Humans, the independent dog,
+bonded/player companion routines, broader animal bindings, and player
+REST/SLEEP remain unfinished. Alpha45 is an unpublished local candidate, not a
+pushed, CI-verified, Pages-verified, or live release.
 
 Live through Alpha 39:
 

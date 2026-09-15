@@ -192,6 +192,47 @@ completed root and the exact partial-minute carry. Reload cannot resume,
 replay, skip, or reroll the remainder. Player REST/SLEEP and validated longer
 or coarse elapsed-time actions remain later Turning Day work.
 
+The local Alpha45 **Kennel Night** candidate connects exactly one more
+production actor to the same `livingCircadian` authority. The adapter in
+`src/game/settlementWorkingDogCircadian.ts` accepts only the existing
+settlement-custodied guardian dog, its matching persisted assignment, and that
+custody's real kennel. It selects the shared clock-driven day-active policy and
+derives one rest-destination identity from both stable dog identity and kennel
+identity; an arbitrary structure, another dog, the independent porter-scene
+dog, or an incoherent saved receipt fails closed.
+
+Night preference owns only the neutral rest suggestion. The existing movement
+owner must carry the dog physically to the kennel, and the dog remains AWAKE
+and non-restorative throughout that journey. Authenticated arrival permits
+RESTING and, after the shared settling interval, ASLEEP; loss of physical
+arrival wakes it. Runtime passes that committed restorative posture into both
+needs recovery and shelter-based exhaustion recovery. The kennel's physical
+weather shelter still dries and moderates exposure while the dog is awake, but
+cover, low-exertion watch, and kennel travel cannot masquerade as restorative
+rest. The same identity-derived phase offset determines its active boundary,
+where a schedule-owned rest intent returns to neutral observation. Current
+lawful danger or sufficiently strong disturbance, dog-owned needs and self-
+preservation, and retained investigation or return work continue to override
+routine preference. A startled working-animal defer records the dog's actual
+current intent rather than inventing a retreat cause. Routine code cannot erase
+or fabricate those authorities.
+
+Dog actor schema/version 1 gains only an additive optional circadian receipt
+using the existing shared record: policy, stable kennel destination, physical
+arrival fact, posture, and posture-entry tick. Legacy records without the field
+remain valid, and the runtime reauthenticates any present receipt against the
+actual custody and assignment. Load deterministically recovers accepted pending
+work transactions first; if that exact-once recovery changes an active
+commitment, any already-present routine receipt is reprojected against the
+recovered assignment at the same saved tick before play resumes. A legacy
+absent receipt remains absent. Outer save version 31, settlement ecology
+version 4, and working-animal state version 2 do not change. Chart and Relief
+use the authoritative resting pose, while directly visible ABOUT inspection
+may label Resting or Asleep; neither exposes the schedule, phase offset, wake
+threshold, destination ID, kennel custody graph, or assignment internals. This
+is not a human routine, independent-dog routine, bonded/player companion
+routine, or player REST/SLEEP.
+
 ## Authoritative tick
 
 One world tick:
@@ -1107,6 +1148,12 @@ not denning, a catalog-wide routine conversion, a production crepuscular or
 tide-driven binding, or the complete circadian system; humans, dogs, and player
 REST/SLEEP remain outside it. Alpha44's bounded player WAIT reuses the ordinary
 runtime fixed-step path independently of those still-unfinished actor routines.
+Alpha45 then adds one separate adapter for the existing settlement-custodied
+working dog only: its shared day-active preference can lead it physically to
+its authenticated kennel, but travel remains awake, restorative posture begins
+only on arrival, and danger, needs, and retained work remain authoritative.
+The independent dog, humans, bonded/player companions, and player REST/SLEEP
+remain outside that adapter.
 
 `src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
@@ -1683,6 +1730,19 @@ roots retain their exact authenticated bytes and hashes. This is two physical
 wildlife compositions, not catalog-wide circadian life. Humans, dogs, player
 WAIT/REST/SLEEP, production crepuscular or tide-driven bindings, Living Voice,
 and Directive 04_1A closure remain absent.
+
+The local Alpha45 **Kennel Night** candidate adds a fail-closed adapter for the
+one settlement-custodied working dog, its persisted guardian assignment, and
+its actual kennel. Shared day-active projection, stable dog-plus-kennel
+destination identity, awake physical travel, arrival-gated restorative
+posture, weather shelter separated from posture-gated exhaustion recovery,
+stable-identity waking, lawful danger/needs/work priority, actual-intent
+startled deferral, optional dog-record persistence, post-recovery routine
+reprojection, and direct-detail Resting/Asleep presentation are covered without
+changing outer save v31, settlement ecology v4, or working-animal state v2.
+Humans, the independent dog, bonded/player companions, and player REST/SLEEP
+remain excluded, and this local candidate has no push, CI, Pages, or live-
+verification evidence.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

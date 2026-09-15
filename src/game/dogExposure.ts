@@ -14,6 +14,16 @@ export interface DogExposureSample {
   readonly exertion: number;
 }
 
+/**
+ * Optional actor-authority gate for exhaustion recovery. Callers without a
+ * committed posture retain the original coarse shelter/rest approximation;
+ * a routine owner can require actual restorative posture without rewriting
+ * the physical weather sample or its persisted schema.
+ */
+export interface DogExposureRecoveryContext {
+  readonly restorativeRest: number;
+}
+
 const RAIN_WET_GAIN = 34_000;
 const IMMERSION_WET_GAIN = 120_000;
 const BASE_DRYING = 5_000;
@@ -39,10 +49,12 @@ export function stepDogExposure(
   condition: DogCondition,
   adaptation: DogWeatherAdaptation,
   sample: DogExposureSample,
+  recovery?: DogExposureRecoveryContext,
 ): DogCondition {
   assertCondition(condition);
   assertAdaptation(adaptation);
   assertSample(sample);
+  assertRecoveryContext(recovery);
 
   const exposedRain = multiplyUnit(sample.rain, FIXED_POINT - sample.shelter);
   // Rain tolerance represents coat/body adaptation, not waterproof immunity.
@@ -96,10 +108,13 @@ export function stepDogExposure(
   );
 
   const exhaustionGain = multiplyUnit(sample.exertion, EXERTION_GAIN);
-  const restOpportunity = multiplyUnit(
+  const coarseRestOpportunity = multiplyUnit(
     FIXED_POINT - sample.exertion,
     sample.shelter,
   );
+  const restOpportunity = recovery === undefined
+    ? coarseRestOpportunity
+    : multiplyUnit(coarseRestOpportunity, recovery.restorativeRest);
   const exhaustion = clampUnit(
     condition.exhaustion + exhaustionGain - multiplyUnit(restOpportunity, REST_RECOVERY),
   );
@@ -112,6 +127,15 @@ export function stepDogExposure(
     exhaustion,
     injuries: [...condition.injuries],
   });
+}
+
+function assertRecoveryContext(value: DogExposureRecoveryContext | undefined): void {
+  if (value === undefined) return;
+  if (
+    !plainRecord(value)
+    || Object.keys(value).sort().join(",") !== "restorativeRest"
+    || !scaledUnit(value.restorativeRest)
+  ) throw new RangeError("Dog exposure recovery context is invalid");
 }
 
 function assertCondition(condition: DogCondition): void {
