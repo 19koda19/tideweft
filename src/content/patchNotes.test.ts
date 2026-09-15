@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.41",
+      version: "0.3.3-alpha.42",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.41",
-      gameplayContractVersion: 39,
-      tutorialVersion: 51,
+      buildIdentity: "0.3.3-alpha.42",
+      gameplayContractVersion: 40,
+      tutorialVersion: 52,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,10 +69,18 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-41 first-light candidate and retains the clock, released biodiversity boundary, and earlier candidates", () => {
+  it("scopes the Alpha-42 first-roost candidate and retains First Light, the clock, and earlier releases", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha41Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.41",
+    );
+    const alpha41Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha41Release?.categories[category] ?? [])
       .join(" ");
     const alpha40Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.40",
@@ -267,15 +275,28 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("First Light");
-    expect(currentCopy).toContain("Outdoor illumination is now one deterministic fixed-point world condition");
-    expect(currentCopy).toContain("Darkness now contracts exact actor, item, label, and interaction recognition");
-    expect(currentCopy).toContain("completed beacon civic project");
-    expect(currentCopy).toContain("Chart 2D and Relief 3D");
-    expect(currentCopy).toContain("Fresh worlds begin at Day 1 07:00");
-    expect(currentCopy).toContain("Relief water remains an unlit blue-anchored material");
-    expect(currentCopy).toContain("Outer save version 30 remains unchanged");
-    expect(currentCopy).not.toMatch(/actor schedules are live|player sleep is live|fire light is live/iu);
+    expect(LATEST_PATCH_NOTE.summary).toContain("First Roost");
+    expect(currentCopy).toContain("A versioned species-neutral living-routine kernel");
+    expect(currentCopy).toContain("existing fish-crow perch-watch behavior");
+    expect(currentCopy).toContain("physically travels to its authenticated habitat perch");
+    expect(currentCopy).toContain("Routine posture is AWAKE, RESTING, ASLEEP, or STARTLED");
+    expect(currentCopy).toContain("REST physiology is now inaccessible");
+    expect(currentCopy).toContain("asleep wake threshold");
+    expect(currentCopy).toContain("bounded coarse absence");
+    expect(currentCopy).toContain("A CHALLENGING HARD remains the only ruleset");
+    expect(currentCopy).toContain("The outer session envelope advances to version 31");
+    expect(currentCopy).toContain("Core wildlife actor version 1 gains an additive optional circadian sidecar");
+    expect(currentLimitations).toContain("one representative fish-crow/perch-watch vertical slice");
+    expect(currentLimitations).toContain("Player WAIT, REST, and SLEEP actions");
+    expect(currentCopy).not.toMatch(/all wildlife.*(?:sleep|circadian)|player sleep is live|human schedules are live/iu);
+    expect(alpha41Release?.summary).toContain("First Light");
+    expect(alpha41Copy).toContain("Outdoor illumination is now one deterministic fixed-point world condition");
+    expect(alpha41Copy).toContain("Darkness now contracts exact actor, item, label, and interaction recognition");
+    expect(alpha41Copy).toContain("completed beacon civic project");
+    expect(alpha41Copy).toContain("Chart 2D and Relief 3D");
+    expect(alpha41Copy).toContain("Fresh worlds begin at Day 1 07:00");
+    expect(alpha41Copy).toContain("Relief water remains an unlit blue-anchored material");
+    expect(alpha41Copy).toContain("Outer save version 30 remains unchanged");
     expect(alpha40Release?.summary).toContain("One Clock");
     expect(alpha40Copy).toContain("One versioned civil-day contract");
     expect(alpha40Copy).toContain("one displayed minute");

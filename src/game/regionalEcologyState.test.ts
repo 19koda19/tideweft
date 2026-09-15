@@ -59,11 +59,17 @@ import {
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  replaceCoreWildlifeActorCircadian,
   replaceCoreWildlifeActorPhysiology,
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
   stepCoreWildlifeActor,
 } from "./coreWildlifeActor";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import {
+  livingCircadianPersistentStateFromProjection,
+  projectLivingCircadian,
+} from "./livingCircadian";
 import {
   claimCoreWildlifeCarcass,
   createCoreWildlifeCarcass,
@@ -84,6 +90,7 @@ const SEED = seedFromText("alpha32-regional-habitat-properties");
 const TICK = 19;
 const HOME_REGION = createRegionCoord(-3, 0);
 const WILD_REGION = createRegionCoord(2, -5);
+const CIRCADIAN_REGION = createRegionCoord(-10, -11);
 const PREDATOR_REGION = createRegionCoord(-3, -2);
 const EMPTY_REGION = createRegionCoord(-2, 0);
 const PRESSURE_REGION = createRegionCoord(-10, -20);
@@ -1609,6 +1616,103 @@ describe("regional ecology v25 owner substrate", () => {
       .find(({ actor: candidate }) => candidate.identity.stableId === actor.identity.stableId)
       ?.actor.memories.some(({ environmentalEvidence }) => environmentalEvidence !== undefined))
       .toBe(true);
+  });
+
+  it("retains an authenticated regional roost posture across active-source exchange", () => {
+    const root = createPristineRegionalEcologyRoot({ rootSeed: SEED, completedTick: TICK });
+    const home = homeAt(HOME_REGION);
+    const wild = patchAt(CIRCADIAN_REGION);
+    const state = createRegionalEcologyState({
+      root,
+      settlementHome: { sourceKey: home.patchKey, patch: home },
+      activeRegions: [CIRCADIAN_REGION],
+      activeResidents: [{
+        kind: "regional-habitat",
+        sourceKey: wild.patchKey,
+        patch: wild,
+      }],
+    });
+    const projection = projectRegionalEcologyActiveState(
+      state,
+      windowAt(CIRCADIAN_REGION),
+    );
+    const projected = projection?.residents.find(({ sourceKey }) => sourceKey === wild.patchKey)
+      ?.patch;
+    if (projection === null || projected === undefined) {
+      throw new Error("Regional roost fixture failed to project");
+    }
+    const materialized = projected.populations.flatMap(({ members }) => members)
+      .filter(({ materialization }) => materialization === "materialized");
+    const crow = materialized.find(({ actor }) => actor.identity.species === "fish-crow")?.actor;
+    if (crow === undefined) throw new Error("Regional roost fixture needs a materialized fish crow");
+
+    const nextTick = TICK + 1;
+    const stepped = stepCoreEcologyAggregatePatch(projected, {
+      tick: nextTick,
+      actorSteps: materialized.map(({ actor }) => ({
+        actorId: actor.identity.stableId,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      })),
+    });
+    const homeStep = stepCoreEcologyAggregatePatch(home, {
+      tick: nextTick,
+      actorSteps: [],
+    });
+    const steppedCrow = stepped?.patch.populations.flatMap(({ members }) => members)
+      .find(({ actor }) => actor.identity.stableId === crow.identity.stableId)?.actor;
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (stepped === null || homeStep === null || steppedCrow === undefined || policy === null) {
+      throw new Error("Regional roost fixture failed to advance");
+    }
+    const routine = projectLivingCircadian({
+      subjectId: steppedCrow.identity.stableId,
+      atTick: nextTick,
+      mode: "full",
+      policy,
+      current: { state: "awake", enteredAtTick: TICK },
+      restDestination: {
+        destinationId: `roost:${steppedCrow.identity.stableId}`,
+        arrived: true,
+      },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: {
+        kind: "urgent-need",
+        referenceId: `need:rest:${steppedCrow.identity.stableId}`,
+        preference: "rest",
+      },
+    });
+    if (routine === null) throw new Error("Regional roost fixture could not project a routine");
+    const roostingCrow = replaceCoreWildlifeActorCircadian(steppedCrow, {
+      atTick: nextTick,
+      circadian: livingCircadianPersistentStateFromProjection(routine),
+    });
+    const roosting = replaceCoreEcologyAggregatePatchActor(stepped.patch, roostingCrow);
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(wild, roosting)).toBe(false);
+
+    const advancedRoot = advanceRegionalEcologyRoot(root, nextTick);
+    const committed = commitRegionalEcologyActiveProjection(state, projection, {
+      root: advancedRoot,
+      rootSeed: SEED,
+      settlementHome: { sourceKey: home.patchKey, patch: homeStep.patch },
+      residents: [{ sourceKey: roosting.patchKey, patch: roosting }],
+    });
+    if (committed === null) throw new Error("Regional roost commit failed");
+    const durableRoot = putRegionalEcologyResidentDeviation(advancedRoot, {
+      rootSeed: SEED,
+      patch: committed.activeResidents[0]!.patch,
+    });
+    const restored = regionalEcologyRegionalResidentsForActiveRegions(
+      durableRoot,
+      SEED,
+      [CIRCADIAN_REGION],
+    )?.find(({ sourceKey }) => sourceKey === wild.patchKey)?.patch
+      .populations.flatMap(({ members }) => members)
+      .find(({ actor }) => actor.identity.stableId === crow.identity.stableId)?.actor;
+    expect(durableRoot.regions).toHaveLength(1);
+    expect(restored?.circadian).toEqual(roostingCrow.circadian);
   });
 
   it("projects globally, commits all sources, and erases presentation-only materialization", () => {

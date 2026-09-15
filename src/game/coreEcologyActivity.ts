@@ -53,16 +53,30 @@ import {
   type CoreEcologyActivityPresentationSignal,
 } from "./coreEcologyActivityAffordance";
 import {
+  CORE_WILDLIFE_REST_NEED_THRESHOLD,
+  CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
+  coreWildlifePerceivedClassCanWake,
+  replaceCoreWildlifeActorCircadian,
   repositionCoreWildlifeActor,
   type CoreWildlifeActorState,
   type CoreWildlifeIntentKind,
 } from "./coreWildlifeActor";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
 import type { CoreWildlifeTravelMedium } from "./coreWildlifeLocomotionProfile";
 import { headingFromRadians } from "./livingActor";
 import {
   resolveLivingActorLocomotion,
   type LivingActorTraversabilitySurface,
 } from "./livingActorLocomotion";
+import {
+  livingCircadianPersistentStateFromProjection,
+  livingCircadianProfile,
+  projectLivingCircadian,
+  type LivingCircadianDisturbance,
+  type LivingCircadianPosture,
+  type LivingCircadianPriorityOverride,
+  type LivingCircadianProjection,
+} from "./livingCircadian";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -167,6 +181,8 @@ export interface CoreEcologyActivityProjection {
   /** Exact current anonymous observation authorizing surface response; null means no cue. */
   readonly sourceObservationId: string | null;
   readonly preferredNeutralIntent: Extract<CoreWildlifeIntentKind, "observe" | "rest"> | null;
+  /** Shared routine truth; null for archetypes not yet connected to the kernel. */
+  readonly routine: LivingCircadianProjection | null;
   readonly presentationSignal: CoreEcologyActivityPresentationSignal | null;
   readonly perch: Readonly<{
     readonly availability: "not-applicable" | "available-at-anchor" | "available-here";
@@ -555,6 +571,63 @@ function projectCanonicalCoreEcologyActivity(
   if (authority === null) return null;
 
   const responsive = IMMEDIATE_RESPONSE_INTENTS.has(owned.member.actor.intent.kind);
+  const actorNeedsRest = owned.member.actor.intent.kind === "rest";
+  const inRestWindow = day.phase === "rest-window";
+
+  if (activityProfile.archetypeId === "perch-watch") {
+    const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
+    const atPerch = perch.availability === "available-here";
+    const routine = projectPerchWatchRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atPerch,
+      responsive,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch,
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest" || actorNeedsRest) {
+      return activityProjection(owned, input.atTick, day, {
+        state: atPerch ? "perched" : "seeking-perch",
+        responsiveToImmediateIntent: false,
+        // Only physical arrival may request a rest intent. The intent's saved
+        // entry tick then carries the continuous bout across save/load.
+        preferredNeutralIntent: routine.effectivePreference === "rest" && atPerch
+          ? "rest"
+          : "observe",
+        routine,
+        presentationSignal: atPerch ? "perched" : null,
+        perch,
+        motion: atPerch
+          ? Object.freeze({ kind: "hold-position" })
+          : Object.freeze({
+              kind: "target-area",
+              verb: "seek-perch",
+              targetArea: frozenArea(authority.homeAnchor, PERCH_ARRIVAL_RADIUS_UNITS),
+            }),
+      });
+    }
+    return activityProjection(owned, input.atTick, day, {
+      state: "active-watch",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      routine,
+      presentationSignal: null,
+      perch,
+      motion: Object.freeze({ kind: "defer-to-intent" }),
+    });
+  }
+
   if (responsive) {
     const responsivePerchAnchor = activityPerchAnchor(activityProfile, authority);
     return activityProjection(owned, input.atTick, day, {
@@ -572,8 +645,6 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
-  const actorNeedsRest = owned.member.actor.intent.kind === "rest";
-  const inRestWindow = day.phase === "rest-window";
   if (activityProfile.archetypeId === "ridge-soar-perch") {
     const ridgeAuthority = authority.ridgeAuthority;
     if (ridgeAuthority === null) return null;
@@ -616,37 +687,6 @@ function projectCanonicalCoreEcologyActivity(
       }),
     });
   }
-  if (activityProfile.archetypeId === "perch-watch") {
-    const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
-    if (inRestWindow || actorNeedsRest) {
-      const atPerch = perch.availability === "available-here";
-      return activityProjection(owned, input.atTick, day, {
-        state: atPerch ? "perched" : "seeking-perch",
-        responsiveToImmediateIntent: false,
-        // A physiological rest may continue briefly into daylight, but only
-        // the actual rest window may request another schedule-owned rest.
-        preferredNeutralIntent: inRestWindow && atPerch ? "rest" : "observe",
-        presentationSignal: atPerch ? "perched" : null,
-        perch,
-        motion: atPerch
-          ? Object.freeze({ kind: "hold-position" })
-          : Object.freeze({
-              kind: "target-area",
-              verb: "seek-perch",
-              targetArea: frozenArea(authority.homeAnchor, PERCH_ARRIVAL_RADIUS_UNITS),
-            }),
-      });
-    }
-    return activityProjection(owned, input.atTick, day, {
-      state: "active-watch",
-      responsiveToImmediateIntent: false,
-      preferredNeutralIntent: "observe",
-      presentationSignal: null,
-      perch,
-      motion: Object.freeze({ kind: "defer-to-intent" }),
-    });
-  }
-
   if (activityProfile.archetypeId === "perch-forage") {
     const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
     if (inRestWindow || actorNeedsRest) {
@@ -1298,7 +1338,22 @@ function activityMotionStep(
   projection: CoreEcologyActivityProjection,
   resolution: CoreEcologyActivityMotionStep["resolution"],
 ): CoreEcologyActivityMotionStep {
-  return Object.freeze({ patch, projection, resolution });
+  if (projection.routine === null) {
+    return Object.freeze({ patch, projection, resolution });
+  }
+  const actor = findMaterializedActor(patch, projection.actorId)?.member.actor;
+  if (actor === undefined || actor.updatedAtTick !== projection.atTick) {
+    return Object.freeze({ patch, projection, resolution });
+  }
+  const withRoutine = replaceCoreWildlifeActorCircadian(actor, {
+    atTick: projection.atTick,
+    circadian: livingCircadianPersistentStateFromProjection(projection.routine),
+  });
+  return Object.freeze({
+    patch: replaceCoreEcologyAggregatePatchActor(patch, withRoutine),
+    projection,
+    resolution,
+  });
 }
 
 /**
@@ -1327,6 +1382,119 @@ export function assertCoreEcologyActivityPolicies(): void {
   }
 }
 
+function projectPerchWatchRoutine(
+  owned: OwnedActivityActor,
+  atTick: number,
+  perchAnchor: WorldPosition,
+  arrived: boolean,
+  responsive: boolean,
+): LivingCircadianProjection | null {
+  const actor = owned.member.actor;
+  const policy = coreEcologyCircadianPolicyForSpecies(actor.identity.species);
+  if (policy === null) return null;
+  const destinationId = `perch:${hashCanonical([
+    "perch-watch-rest-destination-v1",
+    actor.identity.stableId,
+    perchAnchor,
+  ])}`;
+  return projectLivingCircadian({
+    subjectId: actor.identity.stableId,
+    atTick,
+    mode: "full",
+    policy,
+    current: perchWatchPosture(actor, atTick, arrived, destinationId),
+    restDestination: {
+      destinationId,
+      arrived,
+    },
+    driverSignals: [],
+    disturbance: currentPerchWatchDisturbance(actor, atTick),
+    priorityOverride: perchWatchPriorityOverride(actor, responsive),
+  });
+}
+
+function perchWatchPosture(
+  actor: CoreWildlifeActorState,
+  atTick: number,
+  arrived: boolean,
+  destinationId: string,
+): LivingCircadianPosture {
+  if (actor.circadian !== undefined) {
+    return actor.circadian.restDestinationId === destinationId
+      ? actor.circadian.posture
+      : Object.freeze({ state: "awake", enteredAtTick: atTick });
+  }
+  const enteredAtTick = actor.intent.enteredAtTick;
+  const profile = livingCircadianProfile("day-active");
+  if (actor.intent.kind === "rest") {
+    // Lazy v30 adoption may encounter one historical schedule-owned rest
+    // intent before this sidecar exists. Only that exact bounded lease can
+    // seed posture; need-driven travel can never become instant sleep.
+    if (
+      actor.intent.cause.kind !== "condition"
+      || actor.intent.cause.referenceId !== CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID
+      || actor.intent.expiresAtTick === null
+      || atTick >= actor.intent.expiresAtTick
+    ) return Object.freeze({ state: "awake", enteredAtTick: atTick });
+    const settled = arrived && atTick - enteredAtTick >= profile.settleTicks;
+    return Object.freeze({
+      state: settled ? "asleep" : "resting",
+      enteredAtTick: settled ? enteredAtTick + profile.settleTicks : enteredAtTick,
+    });
+  }
+  return Object.freeze({ state: "awake", enteredAtTick });
+}
+
+function currentPerchWatchDisturbance(
+  actor: CoreWildlifeActorState,
+  atTick: number,
+): LivingCircadianDisturbance | null {
+  const candidates = actor.perception.beliefs.filter((candidate) => (
+    candidate.lastObservedTick === atTick
+    && candidate.strongInterrupt
+    && coreWildlifePerceivedClassCanWake(candidate.perceivedClass)
+  )).sort((left, right) => (
+    right.salience - left.salience
+    || (left.sourceObservationId < right.sourceObservationId ? -1 : 1)
+  ));
+  const belief = actor.intent.focusObservationId === null
+    ? candidates[0]
+    : candidates.find((candidate) => (
+        candidate.sourceObservationId === actor.intent.focusObservationId
+      )) ?? candidates[0];
+  return belief === undefined
+    ? null
+    : Object.freeze({
+        source: "lawful-perception",
+        referenceId: belief.sourceObservationId,
+        observedAtTick: atTick,
+        intensity: belief.salience,
+      });
+}
+
+function perchWatchPriorityOverride(
+  actor: CoreWildlifeActorState,
+  responsive: boolean,
+): LivingCircadianPriorityOverride | null {
+  if (responsive) {
+    const urgentNeed = actor.intent.kind === "forage"
+      || actor.intent.kind === "scavenge"
+      || actor.intent.cause.kind === "condition";
+    return Object.freeze({
+      kind: urgentNeed ? "urgent-need" : "active-commitment",
+      referenceId: actor.intent.cause.referenceId,
+      preference: "active",
+    });
+  }
+  return actor.needs.rest >= CORE_WILDLIFE_REST_NEED_THRESHOLD
+    ? Object.freeze({
+        kind: "urgent-need" as const,
+        referenceId: "need:rest",
+        preference: "rest" as const,
+      })
+    : null;
+}
+
 function activityProjection(
   owned: OwnedActivityActor,
   atTick: number,
@@ -1339,7 +1507,10 @@ function activityProjection(
     | "presentationSignal"
     | "responsiveToImmediateIntent"
     | "state"
-  > & Readonly<{ readonly sourceObservationId?: string | null }>,
+  > & Readonly<{
+    readonly routine?: LivingCircadianProjection | null;
+    readonly sourceObservationId?: string | null;
+  }>,
 ): CoreEcologyActivityProjection | null {
   const profile = coreEcologyActivityAffordanceProfile(owned.species);
   if (profile === null) return null;
@@ -1353,6 +1524,7 @@ function activityProjection(
     dayTick: day.dayTick,
     dayPhase: day.phase,
     ...activity,
+    routine: activity.routine ?? null,
     sourceObservationId: activity.sourceObservationId ?? null,
   });
   return validateCoreEcologyActivityProjectionAffordance(

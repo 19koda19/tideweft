@@ -22,12 +22,21 @@ import {
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import { stableStringify } from "../sim/util";
+import { WORLD_TICKS_PER_DAY } from "../sim/worldTime";
 import {
   createLivingActorAddress,
   isLivingActorAddress,
   type LivingActorAddress,
 } from "./livingActor";
 import { coreEcologySpeciesRuntimePolicy } from "./coreEcologySpeciesRuntimePolicy";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import {
+  canonicalizeLivingCircadianPersistentState,
+  livingCircadianProfile,
+  livingCircadianPersistentStateFromProjection,
+  projectLivingCircadian,
+  type LivingCircadianPersistentState,
+} from "./livingCircadian";
 import { isWorldPosition, type WorldPosition } from "./worldPosition";
 
 export const CORE_WILDLIFE_ACTOR_VERSION = 1 as const;
@@ -36,6 +45,8 @@ export const CORE_WILDLIFE_EVENT_VERSION = 1 as const;
 export const CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_VERSION = 1 as const;
 export const CORE_WILDLIFE_MEMORY_CAP = 16 as const;
 export const CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES = 24 as const;
+export const CORE_WILDLIFE_REST_NEED_THRESHOLD = 420_000 as const;
+export const CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID = "activity:rest-window" as const;
 /**
  * Individual wildlife signs remain physical for at most three in-world hours.
  * Their observable strength falls linearly over that interval, while this hard
@@ -179,6 +190,8 @@ export interface CoreWildlifeActorState {
   readonly condition: CoreWildlifeCondition;
   readonly perception: ActorPerceptionState;
   readonly intent: CoreWildlifeIntentState;
+  /** Present only after an authenticated routine owner first commits posture. */
+  readonly circadian?: LivingCircadianPersistentState;
   readonly memories: readonly CoreWildlifeMemory[];
 }
 
@@ -238,6 +251,13 @@ export interface CoreWildlifeActorStepInput {
   readonly observations: readonly ActorObservation[];
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
+  /**
+   * Optional current-sleep gate supplied by an authenticated routine owner.
+   * It suppresses perception-driven danger/regroup responses until a current
+   * strong observation reaches this salience; needs and physical opportunity
+   * can still override rest through their ordinary policies.
+   */
+  readonly minimumPerceptionWakeSalience?: number;
   readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
   readonly regroupOpportunity?: CoreWildlifeRegroupOpportunity;
 }
@@ -289,6 +309,12 @@ export interface ReplaceCoreWildlifePhysiologyInput {
   readonly condition: CoreWildlifeCondition;
 }
 
+export interface ReplaceCoreWildlifeCircadianInput {
+  /** Posture projection and actor cognition commit at the same world tick. */
+  readonly atTick: number;
+  readonly circadian: LivingCircadianPersistentState;
+}
+
 export interface RepositionCoreWildlifeActorInput {
   readonly atTick: number;
   readonly position: WorldPosition;
@@ -321,6 +347,12 @@ const HUMAN_CLASSES = new Set(["human", "porter", "unknown-human", "human-voice"
 const ALARM_CLASSES = new Set(["alarm-call", "animal-alarm", "herd-alarm"]);
 const COMPETITOR_CLASSES = new Set(["food-competitor", "competitor"]);
 const RAIN_CLASSES = new Set(["rain-exposure"]);
+const WAKE_CLASSES = new Set([
+  ...THREAT_CLASSES,
+  ...HUMAN_CLASSES,
+  ...ALARM_CLASSES,
+  ...RAIN_CLASSES,
+]);
 const FOOD_SOURCES = new Set<string>([
   "natural-forage",
   "physical-item",
@@ -413,7 +445,7 @@ export function createCoreWildlifeActorState(
 export function canonicalizeCoreWildlifeActorState(
   value: unknown,
 ): CoreWildlifeActorState | null {
-  if (!plainRecord(value) || !exactKeys(value, [
+  if (!plainRecord(value) || !requiredAndOptionalKeys(value, [
     "address",
     "condition",
     "identity",
@@ -423,7 +455,7 @@ export function canonicalizeCoreWildlifeActorState(
     "perception",
     "updatedAtTick",
     "version",
-  ])) return null;
+  ], ["circadian"])) return null;
   if (value.version !== CORE_WILDLIFE_ACTOR_VERSION || !nonnegativeSafeInteger(value.updatedAtTick)) {
     return null;
   }
@@ -439,11 +471,17 @@ export function canonicalizeCoreWildlifeActorState(
   const condition = canonicalCondition(value.condition);
   const perception = canonicalizeActorPerceptionState(value.perception);
   const intent = canonicalIntent(value.intent, value.updatedAtTick);
+  const circadian = value.circadian === undefined
+    ? undefined
+    : canonicalizeLivingCircadianPersistentState(value.circadian);
   const memories = canonicalMemories(
     value.memories,
     value.updatedAtTick,
     identity.species,
   );
+  const expectedCircadianPolicy = circadian === undefined || circadian === null
+    ? null
+    : coreEcologyCircadianPolicyForSpecies(identity.species);
   if (
     needs === null
     || condition === null
@@ -452,6 +490,20 @@ export function canonicalizeCoreWildlifeActorState(
     || perception.actorId !== identity.stableId
     || perception.tick > value.updatedAtTick
     || intent === null
+    || (value.circadian !== undefined && circadian === null)
+    || (
+      circadian !== undefined
+      && circadian !== null
+      && circadian.posture.enteredAtTick > value.updatedAtTick
+    )
+    || (
+      circadian !== undefined
+      && circadian !== null
+      && (
+        expectedCircadianPolicy === null
+        || stableStringify(circadian.policy) !== stableStringify(expectedCircadianPolicy)
+      )
+    )
     || memories === null
   ) return null;
   return deepFreeze({
@@ -463,6 +515,7 @@ export function canonicalizeCoreWildlifeActorState(
     condition,
     perception,
     intent,
+    ...(circadian === undefined || circadian === null ? {} : { circadian }),
     memories,
   });
 }
@@ -511,6 +564,25 @@ export function replaceCoreWildlifeActorPhysiology(
     needs,
     condition,
   });
+}
+
+/** Commits only a routine posture already projected for this exact actor tick. */
+export function replaceCoreWildlifeActorCircadian(
+  value: unknown,
+  replacement: ReplaceCoreWildlifeCircadianInput,
+): CoreWildlifeActorState {
+  const state = requireActor(value);
+  if (
+    !plainRecord(replacement)
+    || !exactKeys(replacement, ["atTick", "circadian"])
+    || replacement.atTick !== state.updatedAtTick
+  ) throw new RangeError("Core wildlife circadian replacement must share the actor's current tick");
+  const circadian = canonicalizeLivingCircadianPersistentState(replacement.circadian);
+  if (
+    circadian === null
+    || circadian.posture.enteredAtTick > replacement.atTick
+  ) throw new RangeError("Core wildlife circadian posture is malformed or future-dated");
+  return rebuildActor(state, { circadian });
 }
 
 /**
@@ -618,14 +690,17 @@ export function advanceCoreWildlifeActorCoarse(
     || input.atTick > Number.MAX_SAFE_INTEGER - 64
   ) throw new RangeError("Core wildlife coarse advance is malformed or stale");
 
+  const routineActor = advanceAuthenticatedCircadianRestBout(state, input.atTick);
+  if (routineActor !== null) return routineActor;
+
   const elapsed = input.atTick - state.updatedAtTick;
   const expiresAt = state.intent.expiresAtTick;
-  const intentElapsed = expiresAt === null
+  const ordinaryIntentElapsed = expiresAt === null
     ? elapsed
     : Math.max(0, Math.min(elapsed, expiresAt - state.updatedAtTick));
-  const neutralElapsed = elapsed - intentElapsed;
-  let needs = ageNeeds(state.needs, state.intent.kind, intentElapsed);
-  let condition = ageCondition(state.condition, state.intent.kind, intentElapsed);
+  const neutralElapsed = elapsed - ordinaryIntentElapsed;
+  let needs = ageNeeds(state.needs, state.intent.kind, ordinaryIntentElapsed);
+  let condition = ageCondition(state.condition, state.intent.kind, ordinaryIntentElapsed);
   if (neutralElapsed > 0) {
     needs = ageNeeds(needs, "observe", neutralElapsed);
     condition = ageCondition(condition, "observe", neutralElapsed);
@@ -647,13 +722,206 @@ export function advanceCoreWildlifeActorCoarse(
         expiresAtTick: null,
       }
     : state.intent;
+  const circadian = advanceKnownCircadianPostureCoarse(state, input.atTick);
   return rebuildActor(state, {
     updatedAtTick: input.atTick,
     perception,
     needs,
     condition,
     intent,
+    ...(circadian === undefined ? {} : { circadian }),
     memories: retainMemories(state.memories, input.atTick),
+  });
+}
+
+/**
+ * Coarse absence cannot create a disturbance, so an already-authenticated
+ * STARTLED hold has one exact known recovery tick. Commit that transition and
+ * nothing beyond it; ordinary awake routine selection still waits for a loaded
+ * physical activity owner.
+ */
+function advanceKnownCircadianPostureCoarse(
+  state: CoreWildlifeActorState,
+  atTick: number,
+): LivingCircadianPersistentState | undefined {
+  const saved = state.circadian;
+  if (saved === undefined || saved.posture.state !== "startled") return saved;
+  const profile = livingCircadianProfile(saved.policy.profileId);
+  const recoveryTick = saved.posture.enteredAtTick + profile.startledHoldTicks;
+  if (atTick < recoveryTick) return saved;
+  const recovered = projectLivingCircadian({
+    subjectId: state.identity.stableId,
+    atTick: recoveryTick,
+    mode: "coarse",
+    policy: saved.policy,
+    current: saved.posture,
+    restDestination: {
+      destinationId: saved.restDestinationId,
+      arrived: saved.restDestinationArrived,
+    },
+    driverSignals: [],
+    disturbance: null,
+    priorityOverride: null,
+  });
+  if (recovered === null || recovered.posture.state !== "awake") {
+    throw new Error("Authenticated coarse startle could not reach its exact recovery tick");
+  }
+  return livingCircadianPersistentStateFromProjection(recovered);
+}
+
+const COARSE_ROUTINE_REST_ACCESSIBILITY: CoreWildlifeActionAccessibility = Object.freeze({
+  disengage: false,
+  flee: false,
+  alarm: false,
+  retreat: false,
+  guard: false,
+  scavenge: false,
+  forage: false,
+  pursue: false,
+  regroup: false,
+  rest: true,
+  observe: true,
+});
+
+const COARSE_ROUTINE_OBSERVE_ACCESSIBILITY: CoreWildlifeActionAccessibility = Object.freeze({
+  ...COARSE_ROUTINE_REST_ACCESSIBILITY,
+  rest: false,
+});
+
+/**
+ * Continues only a rest bout that was already committed by the loaded physical
+ * activity owner. This includes the single residual cognition tick after an
+ * urgent-rest override clears: posture is already AWAKE, but the pre-step rest
+ * decision remains until the next exact decision. Replaying at most one civil
+ * day plus the bounded urgent-rest tail preserves exact need-to-routine,
+ * settling, and wake transition ticks. Once the actor first resumes neutral
+ * activity, the remainder ages in one pass; coarse simulation therefore never
+ * invents another unseen sleep bout.
+ */
+function advanceAuthenticatedCircadianRestBout(
+  state: CoreWildlifeActorState,
+  atTick: number,
+): CoreWildlifeActorState | null {
+  const saved = state.circadian;
+  const completedUrgentRestDecision = saved !== undefined
+    && saved.posture.state === "awake"
+    && state.intent.kind === "rest"
+    && state.intent.cause.kind === "need"
+    && state.intent.cause.referenceId === "need:rest"
+    && state.needs.rest < CORE_WILDLIFE_REST_NEED_THRESHOLD;
+  if (
+    saved === undefined
+    || !saved.restDestinationArrived
+    || state.intent.kind !== "rest"
+    || (
+      saved.posture.state !== "resting"
+      && saved.posture.state !== "asleep"
+      && !completedUrgentRestDecision
+    )
+  ) return null;
+  let actor = state;
+  const maximumReplayTick = Math.min(
+    atTick,
+    state.updatedAtTick + WORLD_TICKS_PER_DAY + 64,
+  );
+  while (actor.updatedAtTick < maximumReplayTick) {
+    const tick = actor.updatedAtTick + 1;
+    const current = actor.circadian!;
+    const preStepRoutine = projectLivingCircadian({
+      subjectId: actor.identity.stableId,
+      atTick: tick,
+      mode: "coarse",
+      policy: current.policy,
+      current: current.posture,
+      restDestination: {
+        destinationId: current.restDestinationId,
+        arrived: true,
+      },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: coarseRoutineRestOverride(actor.needs.rest),
+    });
+    if (preStepRoutine === null) {
+      throw new Error("Authenticated coarse routine could not project its next decision tick");
+    }
+    const canRest = preStepRoutine.action === "settle-at-rest-destination"
+      || preStepRoutine.action === "sleep-at-rest-destination";
+    const stepped = stepCoreWildlifeActor(actor, {
+      tick,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: canRest
+        ? COARSE_ROUTINE_REST_ACCESSIBILITY
+        : COARSE_ROUTINE_OBSERVE_ACCESSIBILITY,
+      neutralActivityPreference: canRest ? "rest" : "observe",
+    });
+    if (stepped === null) {
+      throw new Error("Authenticated coarse routine could not advance actor physiology");
+    }
+    const postStepRoutine = projectLivingCircadian({
+      subjectId: actor.identity.stableId,
+      atTick: tick,
+      mode: "coarse",
+      policy: current.policy,
+      current: current.posture,
+      restDestination: {
+        destinationId: current.restDestinationId,
+        arrived: true,
+      },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: coarseRoutineRestOverride(stepped.actor.needs.rest),
+    });
+    if (postStepRoutine === null) {
+      throw new Error("Authenticated coarse routine could not commit its next posture");
+    }
+    actor = replaceCoreWildlifeActorCircadian(stepped.actor, {
+      atTick: tick,
+      circadian: livingCircadianPersistentStateFromProjection(postStepRoutine),
+    });
+    if (actor.intent.kind !== "rest") {
+      return actor.updatedAtTick === atTick
+        ? actor
+        : advanceNeutralCoarseActor(actor, atTick);
+    }
+  }
+  if (actor.updatedAtTick !== atTick) {
+    throw new Error("Authenticated coarse routine exceeded its one-day replay bound");
+  }
+  return actor;
+}
+
+function coarseRoutineRestOverride(restNeed: number) {
+  return restNeed >= CORE_WILDLIFE_REST_NEED_THRESHOLD
+    ? Object.freeze({
+        kind: "urgent-need" as const,
+        referenceId: "need:rest",
+        preference: "rest" as const,
+      })
+    : null;
+}
+
+function advanceNeutralCoarseActor(
+  state: CoreWildlifeActorState,
+  atTick: number,
+): CoreWildlifeActorState {
+  if (state.intent.kind !== "observe" || state.intent.expiresAtTick !== null) {
+    throw new Error("Completed coarse routine did not reach stable neutral activity");
+  }
+  const elapsed = atTick - state.updatedAtTick;
+  const perception = stepActorPerception(state.perception, {
+    tick: atTick,
+    observations: [],
+  });
+  if (perception === null) {
+    throw new Error("Completed coarse routine could not age neutral cognition");
+  }
+  return rebuildActor(state, {
+    updatedAtTick: atTick,
+    perception,
+    needs: ageNeeds(state.needs, "observe", elapsed),
+    condition: ageCondition(state.condition, "observe", elapsed),
+    memories: retainMemories(state.memories, atTick),
   });
 }
 
@@ -715,11 +983,22 @@ function decide(
 ): CoreWildlifeDecision {
   const profile = getCoreWildlifeProfile(state.identity.species);
   const attention = queryActorAttention(perception);
-  const threat = strongestBelief(attention, THREAT_CLASSES);
-  const human = strongestBelief(attention, HUMAN_CLASSES);
-  const alarm = strongestBelief(attention, ALARM_CLASSES);
-  const competitor = strongestBelief(attention, COMPETITOR_CLASSES);
-  const rain = strongestBelief(attention, RAIN_CLASSES);
+  const perceptionResponseAllowed = currentObservationCanWake(step);
+  const threat = perceptionResponseAllowed
+    ? strongestBelief(attention, THREAT_CLASSES)
+    : null;
+  const human = perceptionResponseAllowed
+    ? strongestBelief(attention, HUMAN_CLASSES)
+    : null;
+  const alarm = perceptionResponseAllowed
+    ? strongestBelief(attention, ALARM_CLASSES)
+    : null;
+  const competitor = perceptionResponseAllowed
+    ? strongestBelief(attention, COMPETITOR_CLASSES)
+    : null;
+  const rain = perceptionResponseAllowed
+    ? strongestBelief(attention, RAIN_CLASSES)
+    : null;
   const effectiveThreat = pressureFor(state, threat);
   const effectiveHuman = pressureFor(state, human);
   const effectiveAlarm = pressureFor(state, alarm);
@@ -828,14 +1107,15 @@ function decide(
     }
   }
 
-  if (state.needs.rest >= 420_000 && step.accessibility.rest) {
+  if (state.needs.rest >= CORE_WILDLIFE_REST_NEED_THRESHOLD && step.accessibility.rest) {
     return decisionFor(state, step.tick, "rest", {
       kind: "need",
       referenceId: "need:rest",
     }, null, null);
   }
   if (
-    step.regroupOpportunity !== undefined
+    perceptionResponseAllowed
+    && step.regroupOpportunity !== undefined
     && state.identity.traits.sociability >= CORE_WILDLIFE_REGROUP_SOCIAL_THRESHOLD
     && step.accessibility.regroup
   ) {
@@ -847,7 +1127,7 @@ function decide(
   if (step.neutralActivityPreference === "rest" && step.accessibility.rest) {
     return decisionFor(state, step.tick, "rest", {
       kind: "condition",
-      referenceId: "activity:rest-window",
+      referenceId: CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
     }, null, null);
   }
   return decisionFor(state, step.tick, "observe", threatReference === null
@@ -868,10 +1148,25 @@ function decisionFor(
     && state.intent.kind === "pursue"
     && state.intent.resourceReference?.resourceId === resource?.resourceId
     && state.intent.expiresAtTick !== null;
+  // A renewed rest decision is one continuous physical rest bout.  Keeping
+  // its original entry tick lets the shared routine owner distinguish
+  // settling from sleep without adding a second persisted actor clock.  The
+  // short expiry is still refreshed below so ordinary decision arbitration
+  // can wake the actor on the very next cognition step.
+  const sameRest = intent === "rest"
+    && state.intent.kind === "rest"
+    && cause.kind === "condition"
+    && cause.referenceId === CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID
+    && state.intent.cause.kind === cause.kind
+    && state.intent.cause.referenceId === cause.referenceId
+    && state.intent.expiresAtTick !== null
+    && tick < state.intent.expiresAtTick;
   const duration = intent === "pursue"
     ? profile.behavior.maximumPursuitTicks
     : TEMPORARY_INTENT_DURATION[intent];
-  const enteredAtTick = samePursuit ? state.intent.enteredAtTick : tick;
+  const enteredAtTick = samePursuit || sameRest
+    ? state.intent.enteredAtTick
+    : tick;
   const expiresAtTick = samePursuit
     ? state.intent.expiresAtTick
     : duration === null ? null : safeFutureTick(tick, duration);
@@ -905,7 +1200,7 @@ function canonicalStepInput(
   if (!plainRecord(value) || !requiredAndOptionalKeys(
     value,
     ["accessibility", "foodOpportunities", "observations", "tick"],
-    ["neutralActivityPreference", "regroupOpportunity"],
+    ["minimumPerceptionWakeSalience", "neutralActivityPreference", "regroupOpportunity"],
   )) return null;
   if (
     !nonnegativeSafeInteger(value.tick)
@@ -923,6 +1218,11 @@ function canonicalStepInput(
   ) return null;
   const accessibility = canonicalAccessibility(value.accessibility);
   if (accessibility === null || !accessibility.observe) return null;
+  const minimumPerceptionWakeSalience = value.minimumPerceptionWakeSalience;
+  if (
+    minimumPerceptionWakeSalience !== undefined
+    && (!scaledUnit(minimumPerceptionWakeSalience) || minimumPerceptionWakeSalience === 0)
+  ) return null;
   const neutralActivityPreference = value.neutralActivityPreference;
   if (
     neutralActivityPreference !== undefined
@@ -938,11 +1238,29 @@ function canonicalStepInput(
     observations,
     foodOpportunities: value.foodOpportunities as readonly CoreWildlifeFoodOpportunity[],
     accessibility,
+    ...(minimumPerceptionWakeSalience === undefined
+      ? {}
+      : { minimumPerceptionWakeSalience }),
     ...(neutralActivityPreference === undefined ? {} : { neutralActivityPreference }),
     ...(regroupOpportunity === undefined || regroupOpportunity === null
       ? {}
       : { regroupOpportunity }),
   };
+}
+
+function currentObservationCanWake(step: CoreWildlifeActorStepInput): boolean {
+  const threshold = step.minimumPerceptionWakeSalience;
+  if (threshold === undefined) return true;
+  return step.observations.some((observation) => (
+    observation.interrupt === "strong"
+    && observation.salience >= threshold
+    && coreWildlifePerceivedClassCanWake(observation.perceivedClass)
+  ));
+}
+
+/** Shared routine/activity owners use the same bounded wake vocabulary as cognition. */
+export function coreWildlifePerceivedClassCanWake(perceivedClass: string): boolean {
+  return WAKE_CLASSES.has(perceivedClass);
 }
 
 function canonicalRegroupOpportunityShape(
@@ -1327,18 +1645,21 @@ function canonicalIntent(value: unknown, maximumTick: number): CoreWildlifeInten
     "kind",
     "resourceReference",
   ])) return null;
+  const cause = canonicalCause(value.cause);
   if (
     !INTENTS.has(value.kind as string)
     || !nonnegativeSafeInteger(value.enteredAtTick)
     || value.enteredAtTick > maximumTick
-    || !(value.expiresAtTick === null || (
-      nonnegativeSafeInteger(value.expiresAtTick)
-      && value.expiresAtTick > value.enteredAtTick
-      && value.expiresAtTick <= value.enteredAtTick + 64
-    ))
+    || cause === null
+    || !validIntentExpiry(
+      value.kind as CoreWildlifeIntentKind,
+      cause,
+      value.enteredAtTick,
+      value.expiresAtTick,
+      maximumTick,
+    )
     || !(value.focusObservationId === null || validId(value.focusObservationId))
   ) return null;
-  const cause = canonicalCause(value.cause);
   const resource = value.resourceReference === null
     ? null
     : canonicalResourceReference(value.resourceReference);
@@ -1352,6 +1673,31 @@ function canonicalIntent(value: unknown, maximumTick: number): CoreWildlifeInten
     enteredAtTick: value.enteredAtTick,
     expiresAtTick: value.expiresAtTick as number | null,
   });
+}
+
+function validIntentExpiry(
+  kind: CoreWildlifeIntentKind,
+  cause: CoreWildlifeIntentCause,
+  enteredAtTick: number,
+  expiresAtTick: unknown,
+  maximumTick: number,
+): boolean {
+  if (expiresAtTick === null) return true;
+  if (
+    !nonnegativeSafeInteger(expiresAtTick)
+    || expiresAtTick <= enteredAtTick
+  ) return false;
+  // A renewed schedule-owned physical rest bout preserves its original entry
+  // tick while refreshing a short wakeable lease.  Bound that lease against
+  // the actor's current tick so an overnight bout remains canonical without
+  // accepting an unbounded future expiry.  Every other temporary intent keeps
+  // the older 64-tick total-duration cap.
+  const continuousRoutineRest = kind === "rest"
+    && cause.kind === "condition"
+    && cause.referenceId === CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID;
+  return continuousRoutineRest
+    ? expiresAtTick <= maximumTick || expiresAtTick - maximumTick <= 64
+    : expiresAtTick - enteredAtTick <= 64;
 }
 
 function canonicalCause(value: unknown): CoreWildlifeIntentCause | null {
@@ -1556,6 +1902,7 @@ function rebuildActor(
     | "address"
     | "needs"
     | "condition"
+    | "circadian"
     | "perception"
     | "intent"
     | "memories"

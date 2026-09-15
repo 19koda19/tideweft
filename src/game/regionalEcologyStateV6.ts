@@ -122,7 +122,7 @@ export interface RegionalEcologyStateV6 {
   readonly breadthRoot: RegionalBreadthEcologyRootV1;
   /** Hot snapshots use the exact v1 active regions; there is no second window. */
   readonly breadthActiveResidents: readonly RegionalEcologyStateV6BreadthSnapshotV1[];
-  /** Migration provenance from v29; null for a fresh v30 world. */
+  /** Migration provenance from v29; null for a freshly created V6 ecology root. */
   readonly adoption: RegionalEcologyStateV6AdoptionReceiptV1 | null;
   readonly integrity: string;
 }
@@ -239,7 +239,7 @@ export function createRegionalEcologyStateV6(
   });
 }
 
-/** Fresh outer-v30 worlds have no migration receipt. */
+/** Fresh worlds using the V6 ecology root have no migration receipt. */
 export function createFreshRegionalEcologyStateV6(
   baseValue: unknown,
   rootSeed: RootSeed,

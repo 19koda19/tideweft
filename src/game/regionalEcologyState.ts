@@ -1579,6 +1579,7 @@ function regionalResidentDurableSignal(
         return {
           actor: {
             address: actor.address,
+            ...(actor.circadian === undefined ? {} : { circadian: actor.circadian }),
             conditionHealth: actor.condition.health,
             identity: actor.identity,
             intent,

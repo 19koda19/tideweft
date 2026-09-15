@@ -771,6 +771,24 @@ inspectable actor proxies, and the two Alpha-31 species add no track evidence.
 
 Shared species policy composes representation, capabilities, group eligibility, locomotion, travel medium, decision verbs, activity, evidence, sound, tide, item claims, materialization, and projection instead of adding a separate detector or decision tree for each animal. Aggregate visual pressure and aquatic observation likewise accept canonical species and resolve shared roles/capabilities/trophic classes instead of maintaining a pair allowlist. Every core-wildlife catalog module declares every broad interaction target class as either supported or an intentional no-response, so adding a species cannot silently inherit an unspecified behavior. These broad rows are a fail-closed contract, not a claim that every species pair has bespoke coverage. In released Alpha 22 the intentionally narrow activity owner consumes the six reusable profiles above: a bounded daytime/rest window covers fish-crow perching, harrier low quartering, egret wading, duck dabbling, otter shore-water activity, and gull air-only surface circling or habitat-anchor rest. Authenticated habitat or a current lawful observation supplies each destination unless a higher-priority immediate intent takes precedence. Future species should remain data and capability declarations over these shared owners. Correctness comes from shared invariants, deterministic properties, conservation, representative scenarios, bounded interaction-graph fuzzing, and performance witnesses—not species-by-species fixtures or a hand-authored N² animal-pair matrix. This is not a full sleep, denning, ecological migration, capture, consumption, feeding, or circadian-life simulation.
 
+The local unpublished **First Roost** slice begins real circadian behavior
+through that same composition rather than replacing it. One generic routine
+kernel defines reusable day-active, night-active, twilight-active, and adaptive
+profiles, stable individual phase, a bounded next-evaluation hint not yet used
+for runtime scheduling, clock/tide/weather/opportunity driver hooks, wake
+sensitivity, and AWAKE/RESTING/ASLEEP/STARTLED state. Only the
+existing fish-crow `perch-watch` archetype is connected in production now: a
+crow returns physically to its actual perch, must arrive before rest begins,
+settles into sleep, and can wake from a sufficiently strong current lawful
+disturbance. Danger, urgent need, and active commitments remain able to override
+the routine. Save/load and coarse streaming preserve the same bout instead of
+rerolling or teleporting the bird. Outer save v31 strictly adopts exact v30/V6
+worlds, retains the nested ecology bytes and actor schema/version 1, and invents
+no circadian state for an old actor. This is representative architecture, not a
+claim that other wildlife, humans, companions, or the player already have full
+daily lives; player WAIT/REST/SLEEP and production nocturnal breadth remain
+later Turning Day slices.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.
@@ -1514,6 +1532,16 @@ ships their exact append-only lineage and is itself released, deployed,
 Pages-verified, and exact-live verified. It closes bounded Directive 04_1 at 45
 core-wildlife / 47 total living records. It does not implement worldwide
 ecology, the full bestiary, full circadian life, or Living Voice.
+
+Local and unpublished in the active Turning Day directive, **The First Roost**
+connects one existing fish-crow activity path to actual daily routine. During
+its rest window a crow travels to its known perch rather than disappearing,
+becomes visibly asleep only after arrival and settling, and may be startled by
+lawfully perceived danger strong enough for that animal's wake threshold. Its
+same routine state survives save and coarse streaming. The four-profile shared
+kernel is intentionally broader than this one proof, but the other profiles and
+species are not player-facing claims yet. Humans, companion dogs, other animal
+archetypes, nocturnal ecology, and player WAIT/REST/SLEEP remain unfinished.
 
 Live through Alpha 39:
 

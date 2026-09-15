@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.42 — 2026-09-15
+
+Build: `0.3.3-alpha.42` · Gameplay contract: 40 · Tutorial: 52
+
+The First Roost is the local unpublished Alpha 42 source candidate: one reusable living-routine kernel now gives a representative fish crow a physical, wakeable, persistent night at its authenticated perch.
+
+### Gameplay
+
+- A versioned species-neutral living-routine kernel now composes diurnal, nocturnal, twilight-active, and adaptive rhythms with stable individual phase variation, bounded clock, tide, weather, and opportunity drivers, priority overrides, and authored wake sensitivity.
+- The existing fish-crow perch-watch behavior is the first production binding: during its rest preference the bird physically travels to its authenticated habitat perch, settles there, becomes asleep, and can become startled by sufficiently salient current lawful evidence.
+- Routine posture is AWAKE, RESTING, ASLEEP, or STARTLED. For the live fish-crow binding, lawful danger, urgent needs, and active commitments can override the clock; weather remains an unbound shared kernel input rather than current production behavior.
+
+### Fixes
+
+- REST physiology is now inaccessible while the fish crow is still travelling toward its perch, so a tired bird cannot recover in flight or count travel time as settling.
+- The asleep wake threshold now passes through the complete runtime and aggregate cognition boundary. Weak current cues can leave a bird asleep, while an accepted strong cue can startle it through the ordinary perception and response path.
+- One already-authenticated rest bout now continues through bounded coarse absence and ends at the first effective active boundary after any already-known urgent-rest override clears, instead of expiring after five minutes, healing through daylight, or inventing another unobserved night.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Sleep grants no invulnerability, threat immunity, extra population, teleportation, or free off-route recovery; physical arrival and ordinary actor needs remain authoritative.
+- Stable per-actor phase offsets prevent every future actor using a shared profile from changing posture on the same tick. No animal density, spawn placement, food budget, mortality, or Promise value changes in this slice.
+- Only the fish-crow perch-watch composition is bound in production. The other shared profiles and drivers are reusable architecture until later species or human/companion slices connect them through their own real destinations and world evidence.
+
+### Interface
+
+- A directly observed fish crow at its authenticated perch can now be described as Asleep through the existing pane-free wildlife presentation, without exposing its schedule, wake threshold, destination ID, or internal transition fields.
+- The routine adds no universal sleep meter, floating omniscient event text, new panel, or renderer-owned clock. Chart and Relief continue to share the existing authoritative day and visibility rules.
+- Field Manual version 52 explains the representative physical roost, durable wakeable posture, save migration, and the explicit boundary between this slice and full catalog or player sleep support.
+
+### Save changes
+
+- The outer session envelope advances to version 31. Exact authenticated version-30 RegionalEcologyStateV6 saves load through the same strict child reader, preserve their original ecology bytes, and write version 31 on the next save.
+- Core wildlife actor version 1 gains an additive optional circadian sidecar only after a current authenticated activity commit. Historical actors and species without a live binding retain true field omission rather than receiving invented null or default posture.
+- The sidecar preserves the bound policy, authenticated rest-destination identity, physical-arrival fact, posture, and posture-entry tick across save, reload, and coarse streaming. Reloading cannot reroll stable phase or wake sensitivity.
+
+### Known limitations
+
+- Alpha 42 The First Roost is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This is one representative fish-crow/perch-watch vertical slice, not full circadian coverage of the wildlife catalog. No other bird, mammal, human, companion dog, tide-driven, weather-driven, opportunistic, den, home, or shelter routine is connected yet.
+- Player WAIT, REST, and SLEEP actions, accelerated elapsed-time orchestration, human and companion continuity, multi-day offscreen routine selection, Living Voice, seasons, migration, new species, and new mortality remain unfinished. The Turning Day directive remains open.
+
 ## 0.3.3-alpha.41 — 2026-09-15
 
 Build: `0.3.3-alpha.41` · Gameplay contract: 39 · Tutorial: 51

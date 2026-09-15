@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(51);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(52);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,15 +63,18 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 41 First Light is a local unpublished source candidate");
-    expect(copy).toContain("No renderer, actor system, region, device clock, or timezone owns a second clock");
-    expect(copy).toContain("Player disclosure, wildlife sight, aggregate activity");
-    expect(copy).toContain("Fresh worlds begin at 07:00");
-    expect(copy).toContain("outer save version 30");
-    expect(copy).toContain("closing the game adds no offline time");
+    expect(copy).toContain("Alpha 42 The First Roost is a local unpublished source candidate");
+    expect(copy).toContain("A shared living-routine kernel");
+    expect(copy).toContain("AWAKE, RESTING, ASLEEP, or STARTLED posture");
+    expect(copy).toContain("fish crow using the existing perch-watch activity physically returns");
+    expect(copy).toContain("cannot recover while still travelling");
+    expect(copy).toContain("posture and destination survive save, reload, and bounded coarse absence");
+    expect(copy).toContain("first effective active boundary after any already-known urgent-rest override clears");
+    expect(copy).toContain("outer-version-30 worlds migrate to version 31");
+    expect(copy).toContain("species without a live binding retain true field omission");
     expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("complete actor schedules, player sleep/wait");
-    expect(copy).toContain("The Turning Day directive remains open");
+    expect(copy).toContain("Humans, dogs, other wildlife bindings, player WAIT, REST, or SLEEP");
+    expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
 
   it("describes shared outdoor light without claiming unfinished Turning Day systems", () => {
@@ -262,7 +265,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 30");
+    expect(copy).toContain("Outer save version 31");
     expect(copy).toContain("RegionalEcologyStateV6");
     expect(copy).toContain("sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once into version 30");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
@@ -585,7 +588,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("teaches the v6 breadth wrapper without rewriting the exact v5 ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 30 and RegionalEcologyStateV6 remain current");
+    expect(copy).toContain("Outer save version 31 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
     expect(copy).toContain("complete V5 base, Alpine, polar-shore, cold-shore, and polar-consumer lineage");
     expect(copy).toContain("every exact earlier Open Country Ledger and Coldwater Glint adoption");

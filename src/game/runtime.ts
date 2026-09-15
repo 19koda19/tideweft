@@ -537,8 +537,10 @@ import {
   CORE_WILDLIFE_EVENT_VERSION,
   CORE_WILDLIFE_INTENTS,
   CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES,
+  coreWildlifePerceivedClassCanWake,
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
+  replaceCoreWildlifeActorCircadian,
   replaceCoreWildlifeActorPhysiology,
   type CoreWildlifeActorState,
   type CoreWildlifeActionAccessibility,
@@ -549,6 +551,7 @@ import {
   type CoreWildlifeRegroupOpportunity,
   type CoreWildlifeResourceClaim,
 } from "./coreWildlifeActor";
+import { livingCircadianPersistentStateFromProjection } from "./livingCircadian";
 import {
   CORE_WILDLIFE_RESOURCE_CLAIM_ARBITRATION_VERSION,
   orderCoreWildlifeResourceClaimContenders,
@@ -690,7 +693,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 30;
+const GAME_SAVE_VERSION = 31;
+const REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION = 30;
 const REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION = 29;
 const REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION = 28;
 const REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION = 27;
@@ -5670,6 +5674,33 @@ interface RuntimeCoreBlockedMovement {
   readonly intent: CoreWildlifeIntentKind;
 }
 
+function refreshRuntimeCoreRoutineAfterIntentMovement(
+  patch: CoreEcologyAggregatePatchState,
+  actorId: string,
+  tick: number,
+  authority?: CoreEcologyActivityAuthorityReceipt,
+): CoreEcologyAggregatePatchState | null {
+  const projected = projectCoreEcologyActivity(patch, {
+    actorId,
+    atTick: tick,
+  }, authority);
+  if (projected === null) return null;
+  if (projected.routine === null) return patch;
+  const actor = coreEcologyAggregatePatchActor(patch, actorId);
+  if (actor === null || actor.updatedAtTick !== tick) return null;
+  try {
+    return replaceCoreEcologyAggregatePatchActor(
+      patch,
+      replaceCoreWildlifeActorCircadian(actor, {
+        atTick: tick,
+        circadian: livingCircadianPersistentStateFromProjection(projected.routine),
+      }),
+    );
+  } catch {
+    return null;
+  }
+}
+
 function resolveRuntimeCoreLocomotion(
   state: CoreEcologyAggregatePatchState,
   world: WorldView,
@@ -5683,23 +5714,35 @@ function resolveRuntimeCoreLocomotion(
   let patch = state;
   const blocked: RuntimeCoreBlockedMovement[] = [];
   for (const member of state.populations.flatMap(({ members }) => members)
-    .filter(({ materialization, actor }) => (
-      materialization === "materialized"
-      && localActorIds.has(actor.identity.stableId)
-    ))
+    .filter(({ materialization }) => materialization === "materialized")
     .sort((left, right) => left.actor.identity.stableId < right.actor.identity.stableId ? -1 : 1)) {
-    const actor = coreEcologyAggregatePatchActor(patch, member.actor.identity.stableId);
+    let actor = coreEcologyAggregatePatchActor(patch, member.actor.identity.stableId);
     if (actor === null) return null;
+    const local = localActorIds.has(actor.identity.stableId);
     const ownsActivity = coreEcologySpeciesHasBoundedActivityProjection(
       actor.identity.species,
     );
+    const activityAuthority = activityAuthorities.get(actor.identity.stableId);
     if (ownsActivity) {
-      const authority = activityAuthorities.get(actor.identity.stableId);
       const projectedActivity = projectCoreEcologyActivity(patch, {
         actorId: actor.identity.stableId,
         atTick: tick,
-      }, authority);
+      }, activityAuthority);
       if (projectedActivity === null) return null;
+      if (!local) {
+        if (projectedActivity.routine !== null) {
+          patch = replaceCoreEcologyAggregatePatchActor(
+            patch,
+            replaceCoreWildlifeActorCircadian(actor, {
+              atTick: tick,
+              circadian: livingCircadianPersistentStateFromProjection(
+                projectedActivity.routine,
+              ),
+            }),
+          );
+        }
+        continue;
+      }
       const travelMedium = coreEcologyActivityTravelMedium(projectedActivity.motion);
       const activitySurface = travelMedium !== null && travelMedium !== "air"
         ? createRuntimeCoreTraversability(actor, world, tick, travelMedium)
@@ -5715,14 +5758,20 @@ function resolveRuntimeCoreLocomotion(
         ...(activitySurface === undefined || activitySurface === null
           ? {}
           : { surface: activitySurface }),
-      }, authority);
+      }, activityAuthority);
       if (activityMotion === null) return null;
       patch = activityMotion.patch;
       // A bounded physical-surface route can be temporarily closed by the live
       // terrain/tide window. Holding is valid; only deferred threat motion
       // falls through to the ordinary intent resolver.
       if (activityMotion.resolution !== "deferred") continue;
+      // Activity commits routine posture/destination authority before ordinary
+      // threat locomotion. Compose any deferred flee/retreat movement onto that
+      // committed actor rather than restoring the stale pre-activity sidecar.
+      actor = coreEcologyAggregatePatchActor(patch, actor.identity.stableId);
+      if (actor === null) return null;
     }
+    if (!local) continue;
     const targetAreas = runtimeCoreMovementTargets(actor);
     if (targetAreas.length === 0) {
       if (RUNTIME_CORE_MOVING_INTENTS.has(actor.intent.kind)) {
@@ -5763,6 +5812,16 @@ function resolveRuntimeCoreLocomotion(
             position: translateWorldPosition(actor.address.position, moveX, moveY),
             heading: headingFromRadians(Math.atan2(moveY, moveX)),
           }));
+          if (ownsActivity) {
+            const refreshed = refreshRuntimeCoreRoutineAfterIntentMovement(
+              patch,
+              actor.identity.stableId,
+              tick,
+              activityAuthority,
+            );
+            if (refreshed === null) return null;
+            patch = refreshed;
+          }
           resolved = true;
           break;
         } catch {
@@ -5817,6 +5876,16 @@ function resolveRuntimeCoreLocomotion(
         });
         movedActor = recordRuntimeCoreMovementEvidence(actor, movedActor, world, tick);
         patch = replaceCoreEcologyAggregatePatchActor(patch, movedActor);
+        if (ownsActivity) {
+          const refreshed = refreshRuntimeCoreRoutineAfterIntentMovement(
+            patch,
+            actor.identity.stableId,
+            tick,
+            activityAuthority,
+          );
+          if (refreshed === null) return null;
+          patch = refreshed;
+        }
         resolved = true;
         break;
       } catch {
@@ -6119,6 +6188,7 @@ function stepRuntimeCoreEcology(
     observations: readonly ActorObservation[];
     foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
     accessibility: typeof CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE;
+    minimumPerceptionWakeSalience?: number;
     neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
     regroupOpportunity?: CoreWildlifeRegroupOpportunity;
   }> = [];
@@ -6126,14 +6196,30 @@ function stepRuntimeCoreEcology(
     .filter(({ materialization }) => materialization === "materialized")) {
     if (!localActorIds.has(actor.identity.stableId)) {
       // Atomic group admission may retain an exact body just beyond this
-      // regional frame. Age it without inventing perception, resources, or
-      // movement until its segmented address re-enters a loaded frame.
+      // regional frame. Reproject an already-owned routine against its
+      // authenticated destination, but invent no perception, resource, or
+      // movement until the segmented address re-enters a loaded frame.
+      const ownsActivity = coreEcologySpeciesHasBoundedActivityProjection(
+        actor.identity.species,
+      );
+      const authority = activityAuthorities.get(actor.identity.stableId);
+      const activity = ownsActivity
+        ? projectCoreEcologyActivity(state, {
+            actorId: actor.identity.stableId,
+            atTick: world.meta.completedTick,
+          }, authority)
+        : null;
+      if (ownsActivity && activity === null) return null;
+      const routineCanRest = activity?.routine?.action === "settle-at-rest-destination"
+        || activity?.routine?.action === "sleep-at-rest-destination";
       actorSteps.push({
         actorId: actor.identity.stableId,
         observations: Object.freeze([]),
         foodOpportunities: Object.freeze([]),
-        accessibility: RUNTIME_CORE_OFF_FRAME_ACTION_ACCESSIBILITY,
-        neutralActivityPreference: "observe",
+        accessibility: routineCanRest
+          ? Object.freeze({ ...RUNTIME_CORE_OFF_FRAME_ACTION_ACCESSIBILITY, rest: true })
+          : RUNTIME_CORE_OFF_FRAME_ACTION_ACCESSIBILITY,
+        neutralActivityPreference: routineCanRest ? "rest" : "observe",
       });
       continue;
     }
@@ -6193,6 +6279,36 @@ function stepRuntimeCoreEcology(
       || accessibility === null
       || (ownsActivity && activity === null)
     ) return null;
+    // Sleeping is not perception-blind.  It uses the binding's authored wake
+    // sensitivity so only sufficiently salient current evidence can interrupt
+    // the bout; needs and physical opportunities retain their ordinary paths.
+    const routineWakeSensitivity = activity?.routine !== null
+      && (
+        activity?.routine?.posture.state === "resting"
+        || activity?.routine?.posture.state === "asleep"
+      )
+      ? activity.routine.wakeSensitivity
+      : undefined;
+    const minimumPerceptionWakeSalience = activity?.routine?.posture.state === "asleep"
+      ? activity.routine.wakeSensitivity
+      : undefined;
+    const currentWakeDisturbance = routineWakeSensitivity !== undefined
+      && observations.some((observation) => (
+        observation.interrupt === "strong"
+        && observation.salience >= routineWakeSensitivity
+        && coreWildlifePerceivedClassCanWake(observation.perceivedClass)
+      ));
+    // A routine can nominate rest before the actor reaches its authenticated
+    // roost, den, or shelter. The activity owner may steer that journey, but
+    // physiology cannot recover until the projection proves arrival; both a
+    // current wake disturbance and the ensuing STARTLED hold remain active
+    // rather than restorative.
+    const activityAccessibility = activity?.routine?.action
+      === "travel-to-rest-destination"
+      || activity?.routine?.action === "respond-to-disturbance"
+      || currentWakeDisturbance
+      ? Object.freeze({ ...accessibility, rest: false })
+      : accessibility;
     const regroupOpportunity = runtimeCoreRegroupOpportunity(
       state,
       actor,
@@ -6203,7 +6319,10 @@ function stepRuntimeCoreEcology(
       actorId: actor.identity.stableId,
       observations,
       foodOpportunities: reachableFood,
-      accessibility,
+      accessibility: activityAccessibility,
+      ...(minimumPerceptionWakeSalience === undefined
+        ? {}
+        : { minimumPerceptionWakeSalience }),
       ...(regroupOpportunity === undefined ? {} : { regroupOpportunity }),
       ...(activity?.preferredNeutralIntent === null || activity === null
         ? {}
@@ -14233,6 +14352,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
+        && decoded.version !== REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -14254,6 +14374,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
@@ -14571,7 +14692,10 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (bio0Ecology === null) {
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
-    const persistedRegionalEcologyV6 = decoded.version === GAME_SAVE_VERSION
+    const persistedRegionalEcologyV6 = (
+      decoded.version === GAME_SAVE_VERSION
+      || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
+    )
       ? (() => {
           const text = decoded.regionalEcology;
           const structural = deserializeRegionalEcologyStateV6(text);
@@ -14587,7 +14711,13 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           );
         })()
       : null;
-    if (decoded.version === GAME_SAVE_VERSION && persistedRegionalEcologyV6 === null) {
+    if (
+      (
+        decoded.version === GAME_SAVE_VERSION
+        || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
+      )
+      && persistedRegionalEcologyV6 === null
+    ) {
       throw new Error("Current save contains invalid regional ecology state");
     }
     const persistedRegionalEcologyV5 = decoded.version === REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION

@@ -16,6 +16,7 @@ import {
   stepCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import { stepCoreEcologyActivityMotion } from "./coreEcologyActivity";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
@@ -1097,6 +1098,52 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       expect(projected).not.toHaveProperty("dayPhase");
     },
   );
+
+  it("presents authenticated fish-crow sleep without exposing circadian internals", () => {
+    const { actor, patch } = rainActivityFixture("fish-crow", 1_222);
+    const sleeping = canonicalizeCoreWildlifeActorState({
+      ...actor,
+      intent: {
+        kind: "rest",
+        cause: { kind: "condition", referenceId: "activity:rest-window" },
+        focusObservationId: null,
+        resourceReference: null,
+        // This is one continuous saved bout, settled for the day-active
+        // profile's full 21-tick threshold at its authenticated perch.
+        enteredAtTick: 1_201,
+        expiresAtTick: 1_227,
+      },
+    });
+    if (sleeping === null) throw new Error("Fish-crow sleep fixture must remain canonical");
+    const uncommittedPatch = replaceCoreEcologyAggregatePatchActor(patch, sleeping);
+    const committed = stepCoreEcologyActivityMotion(uncommittedPatch, {
+      actorId: sleeping.identity.stableId,
+      atTick: 1_222,
+      maximumStepUnits: 1,
+    });
+    if (committed === null) throw new Error("Fish-crow sleep posture did not commit");
+    const sleepingPatch = committed.patch;
+    const committedActor = sleepingPatch.populations
+      .flatMap(({ members }) => members)
+      .find(({ actor }) => actor.identity.stableId === sleeping.identity.stableId)?.actor;
+    if (committedActor === undefined) throw new Error("Committed fish crow disappeared");
+    const presentation = projectWildlifePresentation({
+      actor: committedActor,
+      observation: directObservation(committedActor),
+      tileSize: 16,
+      activity: { patch: sleepingPatch, atTick: 1_222 },
+    });
+
+    expect(presentation).toMatchObject({
+      actorId: committedActor.identity.stableId,
+      species: "fish-crow",
+      behavior: "perch",
+      behaviorLabel: "Asleep",
+    });
+    expect(JSON.stringify(presentation)).not.toMatch(
+      /routine|clockPreference|effectivePreference|profileId|transitionCause|causeReferenceId|restDestination|wakeSensitivity|dayPhase|dayTick|enteredAtTick/iu,
+    );
+  });
 
   it("presents one lawfully observed surface opportunity without naming hidden prey", () => {
     const { actor, patch } = rainActivityFixture("gull", 359);

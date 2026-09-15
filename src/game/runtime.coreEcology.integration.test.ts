@@ -30,6 +30,7 @@ import {
 import {
   projectCoreEcologyActivity,
   projectCoreEcologyDayPhase,
+  stepCoreEcologyActivityMotion,
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
 import { projectCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
@@ -77,6 +78,7 @@ import {
   createCoreEcologyGroup,
   createCoreEcologyGroupSet,
   reconcileCoreEcologyGroupAnchors,
+  reconcileCoreEcologyGroupMaterialized,
   type CoreEcologyGroupState,
 } from "./coreEcologyGroups";
 import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
@@ -91,6 +93,7 @@ import {
 import { stepCoreEcologyTidalTable } from "./coreEcologyTidalTable";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
   repositionCoreWildlifeActor,
@@ -161,7 +164,9 @@ import {
   type RegionalEcologyStateV5,
 } from "./regionalEcologyStateV5";
 import {
+  commitRegionalEcologyStateV6ActiveProjection,
   deserializeRegionalEcologyStateV6,
+  projectRegionalEcologyStateV6ActiveState,
   serializeRegionalEcologyStateV6,
   type RegionalEcologyStateV6,
 } from "./regionalEcologyStateV6";
@@ -212,13 +217,13 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 30;
+  readonly version: 31;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v30 envelopes never carry this field. */
+  /** Historical fixtures only; current v31 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -497,7 +502,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedRecord.payloadVersion).toBe(31);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -559,7 +564,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedRecord.payloadVersion).toBe(31);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -664,7 +669,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(30);
+    expect(repository.snapshot().payloadVersion).toBe(31);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -780,7 +785,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(30);
+    expect(v13Record.payloadVersion).toBe(31);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(v10Envelope.player);
@@ -861,7 +866,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(30);
+    expect(v13Record.payloadVersion).toBe(31);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(v11Envelope.player);
@@ -959,7 +964,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(30);
+    expect(v13Record.payloadVersion).toBe(31);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(v12Envelope.player);
@@ -1046,7 +1051,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedRecord.payloadVersion).toBe(31);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v13Envelope.player);
@@ -1116,7 +1121,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(30);
+    expect(adoptedRecord.payloadVersion).toBe(31);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(v14Envelope.player);
@@ -1503,7 +1508,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(30);
+    expect(before.version).toBe(31);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -1938,6 +1943,7 @@ describe("runtime core-ecology vertical slice", () => {
       atTick: patch.updatedAtTick,
     })).toMatchObject({
       state: "seeking-perch",
+      routine: { action: "travel-to-rest-destination" },
       motion: { kind: "target-area", verb: "seek-perch" },
     });
     const prepared = resealedEnvelope(envelope, {
@@ -1963,10 +1969,17 @@ describe("runtime core-ecology vertical slice", () => {
       Math.hypot(startingPerchDistance.x, startingPerchDistance.y),
     );
     expect(savedCrow.intent).toMatchObject({
-      kind: "rest",
-      cause: { kind: "need", referenceId: "need:rest" },
+      kind: "observe",
       focusObservationId: null,
     });
+    expect(savedCrow.circadian).toMatchObject({
+      restDestinationArrived: false,
+      posture: { state: "awake" },
+    });
+    expect(coreActors(savedCore)
+      .filter(({ identity }) => identity.species !== "fish-crow")
+      .every((actor) => !Object.hasOwn(actor, "circadian"))).toBe(true);
+    expect(savedCrow.needs.rest).toBeGreaterThanOrEqual(restPressuredCrow.needs.rest);
     expect(projectCoreEcologyActivity(savedCore, {
       actorId: crow.identity.stableId,
       atTick: savedCore.updatedAtTick,
@@ -1975,6 +1988,7 @@ describe("runtime core-ecology vertical slice", () => {
       species: "fish-crow",
       state: "seeking-perch",
       preferredNeutralIntent: "observe",
+      routine: { action: "travel-to-rest-destination" },
       motion: { kind: "target-area", verb: "seek-perch" },
     });
     expect(savedCrow.perception.beliefs.length).toBeGreaterThan(0);
@@ -1987,12 +2001,616 @@ describe("runtime core-ecology vertical slice", () => {
     expect(savedCrow.memories).toEqual([]);
 
     const durableCore = saved.regionalEcology;
+    const durableCircadian = stableStringify(savedCrow.circadian);
     runtime.destroy();
     scheduledFrame = undefined;
     const resumed = await createTideweftRuntime(repository);
     await resumed.save();
-    expect(requiredEnvelope(repository).regionalEcology).toBe(durableCore);
+    const resumedEnvelope = requiredEnvelope(repository);
+    expect(resumedEnvelope.regionalEcology).toBe(durableCore);
+    const resumedCrow = coreActors(requiredCore(resumedEnvelope)).find(
+      ({ identity }) => identity.stableId === crow.identity.stableId,
+    );
+    expect(stableStringify(resumedCrow?.circadian)).toBe(durableCircadian);
     resumed.destroy();
+  }, 45_000);
+
+  it("keeps an off-frame materialized crow posture-consistent after leaving its perch", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "rain-chorus-runtime-2",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    makeWorldDryAndClear(world);
+    const travel = restorePlayerRegionalTravel(
+      world.meta.rootSeed,
+      envelope.player,
+      envelope.regionalTravel,
+    );
+    if (travel === null) throw new Error("Off-frame crow fixture lost its regional frame");
+    const regional = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
+    if (regional === null) {
+      throw new Error("Off-frame crow fixture did not begin from current regional ecology v6");
+    }
+    const ecologyWindow = {
+      origin: travel.window.origin,
+      terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+    };
+    const active = projectRegionalEcologyStateV6ActiveState(regional, ecologyWindow);
+    if (active === null) {
+      throw new Error("Off-frame crow fixture could not project current regional ecology v6");
+    }
+    const activeBase = active.base.base.base.base.base;
+    const crowSource = activeBase.residents.find(({ kind, patch }) => (
+      (kind === "legacy-cohort" || kind === "regional-habitat")
+      && patch.groups.groups.some(({ identity, memberOrdinals }) => (
+        identity.species === "fish-crow" && memberOrdinals.length >= 2
+      ))
+    ));
+    if (crowSource === undefined) {
+      throw new Error("Off-frame crow fixture omitted its projected fish-crow flock source");
+    }
+    if (crowSource.kind !== "legacy-cohort" && crowSource.kind !== "regional-habitat") {
+      throw new Error("Off-frame crow fixture selected an unsupported source owner");
+    }
+    const crowSourceKind = crowSource.kind;
+    let patch = crowSource.patch;
+    const crowPopulation = patch.populations.find(({ species }) => species === "fish-crow");
+    const sourceCrowGroup = patch.groups.groups.find(({ identity }) => (
+      identity.species === "fish-crow"
+      && identity.populationKey === crowPopulation?.populationKey
+    ));
+    const selectedOrdinal = sourceCrowGroup?.memberOrdinals.at(-1);
+    const crowMember = crowPopulation?.members.find(({ populationOrdinal }) => (
+      populationOrdinal === selectedOrdinal
+    ));
+    if (
+      crowPopulation === undefined
+      || sourceCrowGroup === undefined
+      || selectedOrdinal === undefined
+      || crowMember === undefined
+    ) {
+      throw new Error("Off-frame crow fixture omitted its fish crow");
+    }
+    const crowMateOrdinal = sourceCrowGroup.memberOrdinals.find((ordinal) => (
+      ordinal !== selectedOrdinal
+    ));
+    const crowMate = crowPopulation.members.find(({ populationOrdinal }) => (
+      populationOrdinal === crowMateOrdinal
+    ));
+    if (crowMate === undefined) {
+      throw new Error("Off-frame crow fixture omitted its atomic flock mate");
+    }
+    if (
+      sourceCrowGroup.phase !== "cohesive"
+      || sourceCrowGroup.memberOrdinals.some((ordinal) => (
+        crowPopulation.members.find(({ populationOrdinal }) => populationOrdinal === ordinal)
+          ?.materialization !== "materialized"
+      ))
+    ) {
+      throw new Error("Off-frame crow fixture did not project one atomic materialized flock");
+    }
+    const activityAuthority = projectCoreEcologyActivityAuthority({
+      rootSeed: world.meta.rootSeed,
+      root: regional.base.base.base.base.base.root,
+      sourceKind: crowSourceKind,
+      patch,
+      actorId: crowMember.actor.identity.stableId,
+    });
+    if (activityAuthority === null) {
+      throw new Error("Off-frame crow fixture lost its transient perch authority");
+    }
+    const selectedActivity = projectCoreEcologyActivity(patch, {
+      actorId: crowMember.actor.identity.stableId,
+      atTick: patch.updatedAtTick,
+    }, activityAuthority);
+    const selectedPerch = selectedActivity?.perch.anchor;
+    if (selectedPerch === null || selectedPerch === undefined) {
+      throw new Error("Off-frame crow fixture omitted its selected crow perch");
+    }
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(
+      crowMember.actor,
+      {
+        atTick: patch.updatedAtTick,
+        position: selectedPerch,
+        heading: crowMember.actor.address.heading,
+      },
+    ));
+    const restingCrow = replaceCoreWildlifeActorPhysiology(
+      requiredCoreActor(patch, crowMember.actor.identity.stableId),
+      {
+      atTick: patch.updatedAtTick,
+      needs: { hunger: 0, safety: 0, rest: 900_000 },
+      condition: { health: 1_000_000, exhaustion: 400_000, stress: 0 },
+      },
+    );
+    patch = replaceCoreEcologyAggregatePatchActor(patch, restingCrow);
+    const asleepEnteredAtTick = Math.max(0, patch.updatedAtTick - 64);
+    const routineRestingCrow = canonicalizeCoreWildlifeActorState({
+      ...requiredCoreActor(patch, restingCrow.identity.stableId),
+      intent: {
+        kind: "rest",
+        cause: {
+          kind: "condition",
+          referenceId: CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
+        },
+        focusObservationId: null,
+        resourceReference: null,
+        enteredAtTick: asleepEnteredAtTick,
+        expiresAtTick: patch.updatedAtTick + 5,
+      },
+    });
+    if (routineRestingCrow === null) {
+      throw new Error("Off-frame crow fixture could not stage its routine rest");
+    }
+    patch = replaceCoreEcologyAggregatePatchActor(patch, routineRestingCrow);
+    const committedRoutine = stepCoreEcologyActivityMotion(patch, {
+      actorId: routineRestingCrow.identity.stableId,
+      atTick: patch.updatedAtTick,
+      maximumStepUnits: 1,
+    }, activityAuthority);
+    if (
+      committedRoutine === null
+      || committedRoutine.resolution !== "held"
+      || committedRoutine.patch.populations.flatMap(({ members }) => members)
+        .find(({ actor }) => actor.identity.stableId === routineRestingCrow.identity.stableId)
+        ?.actor.circadian?.posture.state !== "asleep"
+    ) {
+      throw new Error("Off-frame crow fixture did not commit asleep at its perch");
+    }
+    patch = committedRoutine.patch;
+    const committedCrow = requiredCoreActor(patch, restingCrow.identity.stableId);
+    const restDestinationId = committedCrow.circadian?.restDestinationId;
+    if (restDestinationId === undefined) {
+      throw new Error("Off-frame crow fixture did not commit its rest destination");
+    }
+    const frameWidth = REGIONAL_TRAVEL_COLUMNS * WORLD_POSITION_UNITS_PER_TILE;
+    const frameHeight = REGIONAL_TRAVEL_ROWS * WORLD_POSITION_UNITS_PER_TILE;
+    const committedPlacement = livingActorAddressInRegionalWindow(
+      committedCrow.address,
+      travel.window,
+    );
+    const committedTile = regionLocalToGlobalTile(
+      committedCrow.address.position.region,
+      Math.trunc(committedCrow.address.position.localX / WORLD_POSITION_UNITS_PER_TILE),
+      Math.trunc(committedCrow.address.position.localY / WORLD_POSITION_UNITS_PER_TILE),
+    );
+    const frameMaxX = travel.window.origin.x + REGIONAL_TRAVEL_COLUMNS - 1;
+    const frameMaxY = travel.window.origin.y + REGIONAL_TRAVEL_ROWS - 1;
+    const offFrameDisplacement = committedPlacement === null
+      ? committedTile.x < travel.window.origin.x
+        ? { x: -WORLD_POSITION_UNITS_PER_TILE, y: 0 }
+        : committedTile.x > frameMaxX
+          ? { x: WORLD_POSITION_UNITS_PER_TILE, y: 0 }
+          : committedTile.y < travel.window.origin.y
+            ? { x: 0, y: -WORLD_POSITION_UNITS_PER_TILE }
+            : committedTile.y > frameMaxY
+              ? { x: 0, y: WORLD_POSITION_UNITS_PER_TILE }
+              : undefined
+      : [
+          { x: -committedPlacement.point.x - 1, y: 0 },
+          { x: frameWidth - committedPlacement.point.x, y: 0 },
+          { x: 0, y: -committedPlacement.point.y - 1 },
+          { x: 0, y: frameHeight - committedPlacement.point.y },
+        ].sort((left, right) => (
+          Math.abs(left.x) + Math.abs(left.y) - Math.abs(right.x) - Math.abs(right.y)
+        ))[0];
+    if (offFrameDisplacement === undefined) {
+      throw new Error("Off-frame crow fixture could not choose a frame boundary");
+    }
+    const offFramePosition = translateWorldPosition(
+      committedCrow.address.position,
+      offFrameDisplacement.x,
+      offFrameDisplacement.y,
+    );
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(
+      committedCrow,
+      {
+        atTick: patch.updatedAtTick,
+        position: offFramePosition,
+        heading: committedCrow.address.heading,
+      },
+    ));
+    const split = reconcileCoreEcologyGroupMaterialized(sourceCrowGroup, {
+      atTick: patch.updatedAtTick,
+      memberPositions: sourceCrowGroup.memberOrdinals.map((populationOrdinal) => {
+        const sourceMember = crowPopulation.members.find((candidate) => (
+          candidate.populationOrdinal === populationOrdinal
+        ));
+        if (sourceMember === undefined) {
+          throw new Error("Off-frame crow fixture lost a flock member");
+        }
+        const member = requiredCoreMember(patch, sourceMember.actor.identity.stableId);
+        return { memberOrdinal: populationOrdinal, position: member.actor.address.position };
+      }),
+      splitDistanceUnits: WORLD_POSITION_UNITS_PER_TILE,
+      rejoinDistanceUnits: WORLD_POSITION_UNITS_PER_TILE,
+      currentEscapeCause: {
+        eventId: "fixture:off-frame-crow-split",
+        causeReferenceId: "fixture:off-frame-crow-departure",
+        memberOrdinal: selectedOrdinal,
+      },
+    });
+    if (split === null || split.events[0]?.kind !== "group-split") {
+      throw new Error("Off-frame crow fixture could not split its materialized flock");
+    }
+    const splitPatch = canonicalizeCoreEcologyAggregatePatch({
+      ...patch,
+      groups: createCoreEcologyGroupSet(patch.groups.groups.map((group) => (
+        group.identity.stableId === sourceCrowGroup.identity.stableId
+          ? split.group
+          : group
+      ))),
+    });
+    if (splitPatch === null) {
+      throw new Error("Off-frame crow fixture produced a non-canonical split flock");
+    }
+    patch = splitPatch;
+    const splitGroup = patch.groups.groups.find(({ identity }) => (
+      identity.stableId === sourceCrowGroup.identity.stableId
+    ));
+    const targetComponent = splitGroup?.components.find(({ memberOrdinals }) => (
+      memberOrdinals.includes(selectedOrdinal)
+    ));
+    const localComponent = splitGroup?.components.find(({ memberOrdinals }) => (
+      !memberOrdinals.includes(selectedOrdinal)
+    ));
+    if (splitGroup === undefined || targetComponent === undefined || localComponent === undefined) {
+      throw new Error("Off-frame crow fixture lost its split flock components");
+    }
+    expect(livingActorAddressInRegionalWindow(
+      requiredCoreActor(patch, committedCrow.identity.stableId).address,
+      travel.window,
+    )).toBeNull();
+    expect(livingActorAddressInRegionalWindow(
+      {
+        ...requiredCoreActor(patch, committedCrow.identity.stableId).address,
+        position: targetComponent.anchor,
+      },
+      travel.window,
+    )).toBeNull();
+    expect(livingActorAddressInRegionalWindow(
+      {
+        ...requiredCoreActor(patch, crowMate.actor.identity.stableId).address,
+        position: localComponent.anchor,
+      },
+      travel.window,
+    )).not.toBeNull();
+    expect(requiredCoreMember(patch, committedCrow.identity.stableId).materialization)
+      .toBe("materialized");
+    expect(splitGroup.memberOrdinals.every((populationOrdinal) => (
+      crowPopulation.members.some((member) => (
+        member.populationOrdinal === populationOrdinal
+        && requiredCoreMember(patch, member.actor.identity.stableId).materialization
+          === "materialized"
+      ))
+    ))).toBe(true);
+
+    const baseInput = {
+      base: {
+        base: {
+          base: {
+            base: {
+              root: regional.base.base.base.base.base.root,
+              rootSeed: world.meta.rootSeed,
+              settlementHome: activeBase.residents.some(({ sourceKey }) => (
+                sourceKey === regional.base.base.base.base.base.settlementHome.sourceKey
+              ))
+                ? null
+                : {
+                    sourceKey: regional.base.base.base.base.base.settlementHome.sourceKey,
+                    patch: regional.base.base.base.base.base.settlementHome.patch,
+                  },
+              residents: activeBase.residents.map(({ sourceKey, patch: sourcePatch }) => ({
+                sourceKey,
+                patch: sourceKey === crowSource.sourceKey ? patch : sourcePatch,
+              })),
+            },
+            alpineResidents: active.base.base.base.base.alpineResidents.map(
+              ({ sourceKey, patch: sourcePatch }) => ({ sourceKey, patch: sourcePatch }),
+            ),
+          },
+          polarShoreResidents: active.base.base.base.polarShoreResidents.map(
+            ({ sourceKey, patch: sourcePatch }) => ({ sourceKey, patch: sourcePatch }),
+          ),
+        },
+        coldShoreResidents: active.base.base.coldShoreResidents.map(
+          ({ sourceKey, patch: sourcePatch }) => ({ sourceKey, patch: sourcePatch }),
+        ),
+      },
+      polarConsumerResidents: active.base.polarConsumerResidents.map(
+        ({ sourceKey, patch: sourcePatch }) => ({ sourceKey, patch: sourcePatch }),
+      ),
+    };
+    const committedRegional = commitRegionalEcologyStateV6ActiveProjection(
+      regional,
+      active,
+      {
+        base: baseInput,
+        breadthResidents: active.breadthResidents.map(
+          ({ sourceKey, patch: sourcePatch }) => ({ sourceKey, patch: sourcePatch }),
+        ),
+      },
+    );
+    if (committedRegional === null) {
+      throw new Error("Current regional ecology v6 rejected the split flock transaction");
+    }
+    const committedSource = committedRegional.base.base.base.base.base.activeResidents.find(
+      ({ sourceKey }) => sourceKey === crowSource.sourceKey,
+    );
+    const savedCommittedCrow = committedSource === undefined
+      ? undefined
+      : requiredCoreActor(committedSource.patch, committedCrow.identity.stableId);
+    expect(savedCommittedCrow?.circadian).toMatchObject({
+      restDestinationId,
+      restDestinationArrived: true,
+      posture: { state: "asleep" },
+    });
+
+    const { integrity: _priorIntegrity, ...priorEnvelope } = envelope;
+    const preparedBase = {
+      ...priorEnvelope,
+      world: serializeWorld(world),
+      regionalEcology: serializeRegionalEcologyStateV6(committedRegional),
+    };
+    const prepared = Object.freeze({
+      ...preparedBase,
+      integrity: gameSaveEnvelopeIntegrity(preparedBase),
+    }) as CurrentEnvelope;
+    await repository.save(recordWithEnvelope(record, prepared));
+    scheduledFrame = undefined;
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    await runtime.save();
+    const loaded = requiredEnvelope(repository);
+    const loadedWorld = deserializeWorld(loaded.world);
+    const loadedTravel = restorePlayerRegionalTravel(
+      loadedWorld.meta.rootSeed,
+      loaded.player,
+      loaded.regionalTravel,
+    );
+    const loadedRegional = deserializeRegionalEcologyStateV6(loaded.regionalEcology);
+    const loadedProjection = loadedRegional === null || loadedTravel === null
+      ? null
+      : projectRegionalEcologyStateV6ActiveState(loadedRegional, {
+          origin: loadedTravel.window.origin,
+          terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+        });
+    const loadedSource = loadedProjection?.base.base.base.base.base.residents.find(
+      ({ sourceKey }) => sourceKey === crowSource.sourceKey,
+    );
+    const loadedCrowMember = loadedSource === undefined
+      ? undefined
+      : requiredCoreMember(loadedSource.patch, committedCrow.identity.stableId);
+    if (
+      loadedRegional === null
+      || loadedTravel === null
+      || loadedProjection === null
+      || loadedSource === undefined
+      || loadedCrowMember === undefined
+    ) throw new Error("Reloaded off-frame crow lost its current v6 projection");
+    const loadedActivityAuthority = projectCoreEcologyActivityAuthority({
+      rootSeed: loadedWorld.meta.rootSeed,
+      root: loadedRegional.base.base.base.base.base.root,
+      sourceKind: crowSourceKind,
+      patch: loadedSource.patch,
+      actorId: committedCrow.identity.stableId,
+    });
+    const loadedActivity = projectCoreEcologyActivity(loadedSource.patch, {
+      actorId: committedCrow.identity.stableId,
+      atTick: loadedSource.patch.updatedAtTick,
+    }, loadedActivityAuthority ?? undefined);
+    expect(loadedCrowMember.materialization).toBe("materialized");
+    expect(livingActorAddressInRegionalWindow(
+      loadedCrowMember.actor.address,
+      loadedTravel.window,
+    )).toBeNull();
+    expect(loadedCrowMember.actor.circadian).toMatchObject({
+      restDestinationId,
+      restDestinationArrived: true,
+      posture: { state: "asleep" },
+    });
+    expect(loadedActivity).toMatchObject({
+      state: "seeking-perch",
+      routine: {
+        restDestinationId,
+        restDestinationArrived: false,
+        posture: { state: "awake" },
+        action: "travel-to-rest-destination",
+      },
+    });
+
+    const beforeTick = loadedRegional.updatedAtTick;
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(saved.world);
+    const savedTravel = restorePlayerRegionalTravel(
+      savedWorld.meta.rootSeed,
+      saved.player,
+      saved.regionalTravel,
+    );
+    const savedRegional = deserializeRegionalEcologyStateV6(saved.regionalEcology);
+    const savedProjection = savedRegional === null || savedTravel === null
+      ? null
+      : projectRegionalEcologyStateV6ActiveState(savedRegional, {
+          origin: savedTravel.window.origin,
+          terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+        });
+    const savedSource = savedProjection?.base.base.base.base.base.residents.find(
+      ({ sourceKey }) => sourceKey === crowSource.sourceKey,
+    );
+    const savedCrowMember = savedSource === undefined
+      ? undefined
+      : requiredCoreMember(savedSource.patch, committedCrow.identity.stableId);
+    if (
+      savedRegional === null
+      || savedTravel === null
+      || savedProjection === null
+      || savedSource === undefined
+      || savedCrowMember === undefined
+    ) throw new Error("Stepped off-frame crow lost its current v6 projection");
+    const savedCrow = savedCrowMember.actor;
+    expect(savedRegional.updatedAtTick).toBe(beforeTick + 1);
+    expect(savedCrowMember.materialization).toBe("materialized");
+    expect(livingActorAddressInRegionalWindow(savedCrow.address, savedTravel.window)).toBeNull();
+    expect(savedCrow.intent).toMatchObject({
+      kind: "observe",
+      focusObservationId: null,
+      resourceReference: null,
+    });
+    expect(savedCrow.circadian).toMatchObject({
+      restDestinationId,
+      restDestinationArrived: false,
+      posture: { state: "awake", enteredAtTick: savedRegional.updatedAtTick },
+    });
+    expect(savedCrow.perception.beliefs).toEqual([]);
+    const savedActivityAuthority = projectCoreEcologyActivityAuthority({
+      rootSeed: savedWorld.meta.rootSeed,
+      root: savedRegional.base.base.base.base.base.root,
+      sourceKind: crowSourceKind,
+      patch: savedSource.patch,
+      actorId: committedCrow.identity.stableId,
+    });
+    const savedActivity = projectCoreEcologyActivity(savedSource.patch, {
+      actorId: committedCrow.identity.stableId,
+      atTick: savedSource.patch.updatedAtTick,
+    }, savedActivityAuthority ?? undefined);
+    expect(savedActivity).toMatchObject({
+      state: "seeking-perch",
+      routine: {
+        restDestinationId,
+        restDestinationArrived: false,
+        posture: { state: "awake" },
+        action: "travel-to-rest-destination",
+      },
+    });
+
+    const durableRegional = saved.regionalEcology;
+    const durableCircadian = stableStringify(savedCrow.circadian);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    await resumed.save();
+    const resumedEnvelope = requiredEnvelope(repository);
+    expect(resumedEnvelope.regionalEcology).toBe(durableRegional);
+    const resumedRegional = deserializeRegionalEcologyStateV6(resumedEnvelope.regionalEcology);
+    const resumedWorld = deserializeWorld(resumedEnvelope.world);
+    const resumedTravel = restorePlayerRegionalTravel(
+      resumedWorld.meta.rootSeed,
+      resumedEnvelope.player,
+      resumedEnvelope.regionalTravel,
+    );
+    const resumedProjection = resumedRegional === null || resumedTravel === null
+      ? null
+      : projectRegionalEcologyStateV6ActiveState(resumedRegional, {
+          origin: resumedTravel.window.origin,
+          terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+        });
+    const resumedSource = resumedProjection?.base.base.base.base.base.residents.find(
+      ({ sourceKey }) => sourceKey === crowSource.sourceKey,
+    );
+    const resumedCrowMember = resumedSource === undefined
+      ? undefined
+      : requiredCoreMember(resumedSource.patch, committedCrow.identity.stableId);
+    expect(resumedCrowMember?.materialization).toBe("materialized");
+    expect(resumedTravel === null || resumedCrowMember === undefined
+      ? null
+      : livingActorAddressInRegionalWindow(resumedCrowMember.actor.address, resumedTravel.window))
+      .toBeNull();
+    expect(stableStringify(resumedCrowMember?.actor.circadian)).toBe(durableCircadian);
+    expect(resumedCrowMember?.actor.intent).toMatchObject({
+      kind: "observe",
+      focusObservationId: null,
+      resourceReference: null,
+    });
+    expect(resumedCrowMember?.actor.perception.beliefs).toEqual([]);
+    resumed.destroy();
+  }, 45_000);
+
+  it("preserves a crow startle sidecar through deferred retreat locomotion", async () => {
+    const fixture = await createCommittedCrowAlarmRuntime("asleep", 900_000);
+    const before = fixture.beforeCrow;
+    advancePlayerSteps(fixture.runtime, 10);
+    await fixture.runtime.save();
+    const saved = requiredEnvelope(fixture.repository);
+    const savedCore = requiredCore(saved);
+    const savedCrow = requiredCoreActor(savedCore, fixture.crowActorId);
+    const movement = worldPositionDelta(before.address.position, savedCrow.address.position);
+    expect(savedCore.updatedAtTick).toBe(fixture.beforeTick + 1);
+    expect(savedCrow.intent.kind).toBe("retreat");
+    expect(Math.abs(movement.x) + Math.abs(movement.y)).toBeGreaterThan(0);
+    expect(savedCrow.circadian).toMatchObject({
+      restDestinationId: fixture.restDestinationId,
+      restDestinationArrived: false,
+      posture: { state: "startled", enteredAtTick: savedCore.updatedAtTick },
+    });
+    expect(requiredRegionalActivityProjection(saved, fixture.crowActorId)).toMatchObject({
+      state: "responding",
+      motion: { kind: "defer-to-intent" },
+      routine: {
+        restDestinationId: fixture.restDestinationId,
+        restDestinationArrived: false,
+        posture: { state: "startled", enteredAtTick: savedCore.updatedAtTick },
+        action: "respond-to-disturbance",
+        transitionCause: "disturbance",
+      },
+    });
+
+    const durableRegional = saved.regionalEcology;
+    const durableCircadian = stableStringify(savedCrow.circadian);
+    fixture.runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(fixture.repository);
+    await resumed.save();
+    const resumedEnvelope = requiredEnvelope(fixture.repository);
+    const resumedCrow = requiredCoreActor(requiredCore(resumedEnvelope), fixture.crowActorId);
+    expect(resumedEnvelope.regionalEcology).toBe(durableRegional);
+    expect(resumedCrow.address.position).toEqual(savedCrow.address.position);
+    expect(stableStringify(resumedCrow.circadian)).toBe(durableCircadian);
+    resumed.destroy();
+  }, 45_000);
+
+  it("does not restore crow physiology on the strong-alarm tick that ends routine rest", async () => {
+    const fixture = await createCommittedCrowAlarmRuntime("resting", 0);
+    const before = fixture.beforeCrow;
+    advancePlayerSteps(fixture.runtime, 10);
+    await fixture.runtime.save();
+    const saved = requiredEnvelope(fixture.repository);
+    const savedCore = requiredCore(saved);
+    const savedCrow = requiredCoreActor(savedCore, fixture.crowActorId);
+    expect(savedCore.updatedAtTick).toBe(fixture.beforeTick + 1);
+    expect(savedCrow.address.position).toEqual(before.address.position);
+    expect(savedCrow.intent).toMatchObject({
+      kind: "observe",
+      focusObservationId: null,
+    });
+    expect(savedCrow.needs.rest).toBeGreaterThan(before.needs.rest);
+    expect(savedCrow.condition.exhaustion).toBeGreaterThan(before.condition.exhaustion);
+    expect(savedCrow.circadian).toMatchObject({
+      restDestinationId: fixture.restDestinationId,
+      restDestinationArrived: true,
+      posture: { state: "startled", enteredAtTick: savedCore.updatedAtTick },
+    });
+    expect(requiredRegionalActivityProjection(saved, fixture.crowActorId)).toMatchObject({
+      state: "responding",
+      motion: { kind: "defer-to-intent" },
+      routine: {
+        restDestinationId: fixture.restDestinationId,
+        restDestinationArrived: true,
+        posture: { state: "startled", enteredAtTick: savedCore.updatedAtTick },
+        action: "respond-to-disturbance",
+      },
+    });
+    fixture.runtime.destroy();
   }, 45_000);
 
   it("keeps a selected crow's v25 runtime ABOUT posture in render parity", async () => {
@@ -2458,7 +3076,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(30);
+    expect(repository.snapshot().payloadVersion).toBe(31);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -2585,7 +3203,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(30);
+    expect(repository.snapshot().payloadVersion).toBe(31);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4171,17 +4789,20 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 30
+    || value.version !== 31
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v30 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v31 envelope");
   }
   return value;
 }
 
 function resealedEnvelope(
   envelope: CurrentEnvelope,
-  changes: Partial<Pick<CurrentEnvelope, "coreEcology" | "physicalCargo" | "player" | "world">>,
+  changes: Partial<Pick<
+    CurrentEnvelope,
+    "coreEcology" | "physicalCargo" | "player" | "world"
+  >>,
 ): CurrentEnvelope {
   const { integrity: _integrity, ...prior } = envelope;
   if (changes.coreEcology !== undefined) {
@@ -4440,6 +5061,197 @@ function withFixtureRestIntent(actor: CoreWildlifeActorState): CoreWildlifeActor
   });
   if (resting === null) throw new Error("Fixture rest intent was not canonical");
   return resting;
+}
+
+function requiredCoreMember(
+  patch: CoreEcologyAggregatePatchState,
+  actorId: string,
+): CoreEcologyAggregatePatchState["populations"][number]["members"][number] {
+  const member = patch.populations.flatMap(({ members }) => members)
+    .find(({ actor }) => actor.identity.stableId === actorId);
+  if (member === undefined) throw new Error(`Fixture lost core actor ${actorId}`);
+  return member;
+}
+
+function requiredCoreActor(
+  patch: CoreEcologyAggregatePatchState,
+  actorId: string,
+): CoreWildlifeActorState {
+  return requiredCoreMember(patch, actorId).actor;
+}
+
+function commitFixtureCrowRoutinePosture(
+  source: CoreEcologyAggregatePatchState,
+  actorId: string,
+  posture: "resting" | "asleep",
+): CoreEcologyAggregatePatchState {
+  const actor = requiredCoreActor(source, actorId);
+  const enteredAtTick = posture === "asleep"
+    ? Math.max(0, source.updatedAtTick - 64)
+    : source.updatedAtTick;
+  const resting = canonicalizeCoreWildlifeActorState({
+    ...actor,
+    intent: {
+      kind: "rest",
+      cause: {
+        kind: "condition",
+        referenceId: CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
+      },
+      focusObservationId: null,
+      resourceReference: null,
+      enteredAtTick,
+      expiresAtTick: source.updatedAtTick + 5,
+    },
+  });
+  if (resting === null) throw new Error("Crow routine-rest fixture was not canonical");
+  const patch = replaceCoreEcologyAggregatePatchActor(source, resting);
+  const committed = stepCoreEcologyActivityMotion(patch, {
+    actorId,
+    atTick: patch.updatedAtTick,
+    maximumStepUnits: 1,
+  });
+  if (committed === null || committed.resolution !== "held") {
+    throw new Error("Crow routine-rest fixture did not hold at its authenticated perch");
+  }
+  const committedActor = requiredCoreActor(committed.patch, actorId);
+  if (
+    committedActor.circadian?.restDestinationArrived !== true
+    || committedActor.circadian.posture.state !== posture
+  ) throw new Error(`Crow routine-rest fixture did not commit ${posture}`);
+  return committed.patch;
+}
+
+async function createCommittedCrowAlarmRuntime(
+  posture: "resting" | "asleep",
+  safety: number,
+): Promise<Readonly<{
+  runtime: TideweftRuntime;
+  repository: MemoryRepository;
+  crowActorId: string;
+  restDestinationId: string;
+  beforeTick: number;
+  beforeCrow: CoreWildlifeActorState;
+}>> {
+  const repository = new MemoryRepository();
+  const initial = await createTideweftRuntime(repository);
+  initial.dispatchUI({
+    type: "new-world",
+    seed: "rain-chorus-runtime-2",
+    posture: "gale",
+    sessionShape: "wander",
+  });
+  await initial.save();
+  const record = repository.snapshot();
+  const envelope = requiredEnvelope(repository);
+  const world = deserializeWorld(envelope.world);
+  makeWorldDryAndClear(world);
+  let patch = requiredCore(envelope);
+  const sourceCrow = patch.populations.find(({ species }) => species === "fish-crow")
+    ?.members[0]?.actor;
+  const sourceGull = patch.populations.find(({ species }) => species === "gull")
+    ?.members[0]?.actor;
+  if (sourceCrow === undefined || sourceGull === undefined) {
+    throw new Error("Crow wake fixture omitted its crow or alarm gull");
+  }
+  const restPressuredCrow = replaceCoreWildlifeActorPhysiology(sourceCrow, {
+    atTick: patch.updatedAtTick,
+    needs: { hunger: 0, safety, rest: 900_000 },
+    condition: { health: 1_000_000, exhaustion: 400_000, stress: 0 },
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(patch, restPressuredCrow);
+  patch = commitFixtureCrowRoutinePosture(
+    patch,
+    sourceCrow.identity.stableId,
+    posture,
+  );
+  const committedCrow = requiredCoreActor(patch, sourceCrow.identity.stableId);
+  const restDestinationId = committedCrow.circadian?.restDestinationId;
+  if (restDestinationId === undefined) {
+    throw new Error("Crow wake fixture did not commit its rest destination");
+  }
+  const alarmGull = canonicalizeCoreWildlifeActorState({
+    ...repositionCoreWildlifeActor(sourceGull, {
+      atTick: patch.updatedAtTick,
+      position: translateWorldPosition(
+        committedCrow.address.position,
+        WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      heading: 500_000,
+    }),
+    intent: {
+      kind: "alarm",
+      cause: { kind: "condition", referenceId: "condition:fixture-alarm" },
+      focusObservationId: null,
+      resourceReference: null,
+      enteredAtTick: patch.updatedAtTick,
+      expiresAtTick: patch.updatedAtTick + 1,
+    },
+  });
+  if (alarmGull === null) throw new Error("Crow wake fixture alarm was not canonical");
+  patch = replaceCoreEcologyAggregatePatchActor(patch, alarmGull);
+  let displacedOrdinal = 0;
+  for (const actor of coreActors(patch)) {
+    if (
+      actor.identity.stableId === committedCrow.identity.stableId
+      || actor.identity.stableId === alarmGull.identity.stableId
+    ) continue;
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+      atTick: patch.updatedAtTick,
+      position: translateWorldPosition(
+        committedCrow.address.position,
+        (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+        20 * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      heading: actor.address.heading,
+    }));
+    displacedOrdinal += 1;
+  }
+  patch = reconcileFixtureGroupAnchors(patch);
+  patch = promoteFixtureActors(patch, [
+    committedCrow.identity.stableId,
+    alarmGull.identity.stableId,
+  ]);
+  const prepared = resealedEnvelope(envelope, {
+    world: serializeWorld(world),
+    coreEcology: serializeCoreEcologyAggregatePatch(patch),
+  });
+  await repository.save(recordWithEnvelope(record, prepared));
+  initial.destroy();
+  scheduledFrame = undefined;
+
+  const runtime = await createTideweftRuntime(repository);
+  if (runtime.getUIView().saveWarning !== undefined) {
+    throw new Error(`Crow wake fixture was rejected: ${stableStringify(
+      runtime.getUIView().saveWarning,
+    )}`);
+  }
+  await runtime.save();
+  const adopted = requiredEnvelope(repository);
+  const adoptedWorld = deserializeWorld(adopted.world);
+  const adoptedTravel = restorePlayerRegionalTravel(
+    adoptedWorld.meta.rootSeed,
+    adopted.player,
+    adopted.regionalTravel,
+  );
+  const beforeCrow = requiredCoreActor(requiredCore(adopted), committedCrow.identity.stableId);
+  if (
+    adoptedTravel === null
+    || livingActorAddressInRegionalWindow(beforeCrow.address, adoptedTravel.window) === null
+    || beforeCrow.circadian?.posture.state !== posture
+    || beforeCrow.circadian.restDestinationId !== restDestinationId
+  ) {
+    runtime.destroy();
+    throw new Error("Crow wake fixture lost its local committed routine posture");
+  }
+  return Object.freeze({
+    runtime,
+    repository,
+    crowActorId: committedCrow.identity.stableId,
+    restDestinationId,
+    beforeTick: requiredCore(adopted).updatedAtTick,
+    beforeCrow,
+  });
 }
 
 function makeWorldTraceableAndClear(world: ReturnType<typeof deserializeWorld>): void {
@@ -4767,7 +5579,9 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
-  if (version === 30) return requiredRegionalEcologyV6(envelope).base.base.base.base.base;
+  if (version === 31 || version === 30) {
+    return requiredRegionalEcologyV6(envelope).base.base.base.base.base;
+  }
   if (version === 29) return requiredRegionalEcologyV5(envelope).base.base.base.base;
   if (version === 28) return requiredRegionalEcologyV4(envelope).base.base.base;
   if (version === 27) return requiredRegionalEcologyV3(envelope).base.base;

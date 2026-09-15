@@ -244,7 +244,7 @@ describe("independent NPC ABOUT disclosure audit", () => {
       id: "introduced",
       type: "greet-resident",
       residentId: resident.id,
-      observedTick: 1,
+      observedTick: state.meta.completedTick,
     }]);
     player.mode = "foot";
     const acquaintedWorld = createWorldView(state);

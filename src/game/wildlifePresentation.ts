@@ -1989,6 +1989,10 @@ function observableBehavior(
   intent: CoreWildlifeIntentKind,
   activity: CoreEcologyActivityProjection | null,
 ): string {
+  // Sleep is disclosed only through a routine projection reauthenticated from
+  // the same patch and direct-detail observation as the visible animal.  The
+  // private clock/threshold data never enters the player-facing record.
+  if (activity?.routine?.posture.state === "asleep") return "Asleep";
   if (activity?.presentationSignal === "dabbling-forage") return "Dabbling";
   if (activity?.presentationSignal === "surface-swimming") return "Swimming";
   if (activity?.presentationSignal === "surface-opportunity-flight") {

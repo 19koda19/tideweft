@@ -17,6 +17,7 @@ import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_WILDLIFE_EVENT_VERSION,
+  CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID,
   advanceCoreWildlifeActorCoarse,
   canonicalizeCoreWildlifeActorState,
   createCoreWildlifeActorState,
@@ -680,6 +681,7 @@ export interface CoreEcologyActorStepInput {
   readonly observations: readonly ActorObservation[];
   readonly foodOpportunities: readonly CoreWildlifeFoodOpportunity[];
   readonly accessibility: CoreWildlifeActionAccessibility;
+  readonly minimumPerceptionWakeSalience?: number;
   readonly neutralActivityPreference?: CoreWildlifeNeutralActivityPreference;
   readonly regroupOpportunity?: CoreWildlifeRegroupOpportunity;
 }
@@ -2411,6 +2413,9 @@ export function stepCoreEcologyPatch(
         observations: stepInput.observations,
         foodOpportunities: stepInput.foodOpportunities,
         accessibility: stepInput.accessibility,
+        ...(stepInput.minimumPerceptionWakeSalience === undefined
+          ? {}
+          : { minimumPerceptionWakeSalience: stepInput.minimumPerceptionWakeSalience }),
         ...(stepInput.neutralActivityPreference === undefined
           ? {}
           : { neutralActivityPreference: stepInput.neutralActivityPreference }),
@@ -2533,6 +2538,9 @@ export function stepCoreEcologyAggregatePatch(
         observations: stepInput.observations,
         foodOpportunities: stepInput.foodOpportunities,
         accessibility: stepInput.accessibility,
+        ...(stepInput.minimumPerceptionWakeSalience === undefined
+          ? {}
+          : { minimumPerceptionWakeSalience: stepInput.minimumPerceptionWakeSalience }),
         ...(stepInput.neutralActivityPreference === undefined
           ? {}
           : { neutralActivityPreference: stepInput.neutralActivityPreference }),
@@ -3438,12 +3446,19 @@ function canonicalPatchStepInput(
     if (!plainRecord(raw) || !requiredAndOptionalKeys(
       raw,
       ["accessibility", "actorId", "foodOpportunities", "observations"],
-      ["neutralActivityPreference", "regroupOpportunity"],
+      ["minimumPerceptionWakeSalience", "neutralActivityPreference", "regroupOpportunity"],
     )) return null;
     if (
       typeof raw.actorId !== "string"
       || !Array.isArray(raw.observations)
       || !Array.isArray(raw.foodOpportunities)
+    ) return null;
+    if (
+      raw.minimumPerceptionWakeSalience !== undefined
+      && (
+        !fixedInteger(raw.minimumPerceptionWakeSalience)
+        || raw.minimumPerceptionWakeSalience === 0
+      )
     ) return null;
     if (
       raw.neutralActivityPreference !== undefined
@@ -3455,6 +3470,9 @@ function canonicalPatchStepInput(
       observations: raw.observations as readonly ActorObservation[],
       foodOpportunities: raw.foodOpportunities as readonly CoreWildlifeFoodOpportunity[],
       accessibility: raw.accessibility as CoreWildlifeActionAccessibility,
+      ...(raw.minimumPerceptionWakeSalience === undefined
+        ? {}
+        : { minimumPerceptionWakeSalience: raw.minimumPerceptionWakeSalience }),
       ...(raw.neutralActivityPreference === undefined
         ? {}
         : { neutralActivityPreference: raw.neutralActivityPreference }),
@@ -4952,13 +4970,25 @@ function dormantActorSupportsExactSinglePass(
 ): boolean {
   const perception = actor.perception;
   return (
-    (actor.intent.expiresAtTick === null || actor.intent.expiresAtTick > atTick)
+    (
+      actor.intent.expiresAtTick === null
+      || actor.intent.expiresAtTick > atTick
+      || dormantActorHasBridgeableRoutineBout(actor)
+    )
     && perception.suspicion === "unaware"
     && perception.suspicionPressure === 0
     && perception.attentionKeys.length === 0
     && perception.beliefs.length === 0
     && perception.search === null
   );
+}
+
+function dormantActorHasBridgeableRoutineBout(actor: CoreWildlifeActorState): boolean {
+  const routine = actor.circadian;
+  return routine !== undefined
+    && routine.restDestinationArrived
+    && (routine.posture.state === "resting" || routine.posture.state === "asleep")
+    && actor.intent.kind === "rest";
 }
 
 function advanceDormantGroupsInOnePass(

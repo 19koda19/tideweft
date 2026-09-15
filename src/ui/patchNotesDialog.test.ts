@@ -129,6 +129,7 @@ describe("Patch Notes dialog", () => {
     expect(scroll?.tabIndex).toBe(0);
     expect(scroll?.getAttribute("aria-label")).toContain("newest release first");
     expect(releases.map((release) => release.dataset.version)).toEqual([
+      "0.3.3-alpha.42",
       "0.3.3-alpha.41",
       "0.3.3-alpha.40",
       "0.3.3-alpha.39",

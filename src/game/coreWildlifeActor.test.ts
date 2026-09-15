@@ -16,6 +16,7 @@ import { seedFromText } from "../sim/rng";
 import {
   CORE_WILDLIFE_ACTOR_VERSION,
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  CORE_WILDLIFE_REST_NEED_THRESHOLD,
   CORE_WILDLIFE_MEMORY_CAP,
   CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
   advanceCoreWildlifeActorCoarse,
@@ -26,11 +27,18 @@ import {
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
   replaceCoreWildlifeActorPhysiology,
+  replaceCoreWildlifeActorCircadian,
   serializeCoreWildlifeActorState,
   stepCoreWildlifeActor,
   type CoreWildlifeActorState,
   type CoreWildlifeFoodOpportunity,
 } from "./coreWildlifeActor";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import {
+  firstLivingCircadianActiveTick,
+  livingCircadianPersistentStateFromProjection,
+  projectLivingCircadian,
+} from "./livingCircadian";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -65,6 +73,7 @@ function observation(
     channel?: ActorObservationChannel;
     confidence?: number;
     salience?: number;
+    interrupt?: "none" | "strong";
   }>,
 ): ActorObservation {
   const channel = spec.channel ?? "vision";
@@ -82,6 +91,7 @@ function observation(
     confidence: spec.confidence ?? ACTOR_PERCEPTION_SCALE,
     salience: spec.salience ?? ACTOR_PERCEPTION_SCALE,
     identification: channel === "vision" ? "identified" : "anonymous",
+    interrupt: spec.interrupt ?? "none",
   });
   if (value === null) throw new Error(`Invalid observation fixture ${spec.id}`);
   return value;
@@ -151,6 +161,81 @@ describe("core Wave-A wildlife actor", () => {
       expect(Object.isFrozen(state.identity)).toBe(true);
       expect(Object.isFrozen(state.needs)).toBe(true);
     }
+  });
+
+  it("roundtrips the historical v1 actor shape while accepting only bound optional routine state", () => {
+    const legacy = actor("fish-crow");
+    const legacyText = serializeCoreWildlifeActorState(legacy);
+    expect(JSON.parse(legacyText)).not.toHaveProperty("circadian");
+    expect(serializeCoreWildlifeActorState(
+      deserializeCoreWildlifeActorState(legacyText),
+    )).toBe(legacyText);
+
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (policy === null) throw new Error("Fish-crow routine binding is missing");
+    const projected = projectLivingCircadian({
+      subjectId: legacy.identity.stableId,
+      atTick: 0,
+      mode: "full",
+      policy,
+      current: { state: "awake", enteredAtTick: 0 },
+      restDestination: { destinationId: "perch:test", arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: { kind: "urgent-need", referenceId: "need:rest", preference: "rest" },
+    });
+    if (projected === null) throw new Error("Fish-crow routine fixture failed");
+    const circadian = livingCircadianPersistentStateFromProjection(projected);
+    const adopted = replaceCoreWildlifeActorCircadian(legacy, { atTick: 0, circadian });
+    expect(deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(adopted),
+    )).toEqual(adopted);
+    expect(canonicalizeCoreWildlifeActorState({
+      ...actor("deer"),
+      circadian,
+    })).toBeNull();
+    expect(canonicalizeCoreWildlifeActorState({
+      ...adopted,
+      circadian: {
+        ...circadian,
+        posture: { ...circadian.posture, enteredAtTick: 1 },
+      },
+    })).toBeNull();
+  });
+
+  it("requires a current strong observation to meet a sleeping binding's wake threshold", () => {
+    const crow = actor("fish-crow");
+    const weakThreat = observation(crow, 1, {
+      id: "obs:sleep-weak-threat",
+      perceivedClass: "predator",
+      salience: 449_999,
+      interrupt: "strong",
+    });
+    const weak = stepCoreWildlifeActor(crow, {
+      tick: 1,
+      observations: [weakThreat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      minimumPerceptionWakeSalience: 450_000,
+      neutralActivityPreference: "rest",
+    });
+    expect(weak?.decision.intent).toBe("rest");
+
+    const exactCrow = actor("fish-crow");
+    const exactThreat = observation(exactCrow, 1, {
+      id: "obs:sleep-exact-threat",
+      perceivedClass: "predator",
+      salience: 450_000,
+      interrupt: "strong",
+    });
+    expect(stepCoreWildlifeActor(exactCrow, {
+      tick: 1,
+      observations: [exactThreat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      minimumPerceptionWakeSalience: 450_000,
+      neutralActivityPreference: "rest",
+    })?.decision.intent).toBe("alarm");
   });
 
   it("lets an owned activity window choose only the otherwise-neutral posture", () => {
@@ -455,6 +540,105 @@ describe("core Wave-A wildlife actor", () => {
     expect(resting.actor.needs.rest).toBeLessThan(tired.needs.rest);
   });
 
+  it("keeps renewed routine rest as one continuous physical bout", () => {
+    const first = stepCoreWildlifeActor(actor("fish-crow"), {
+      tick: 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (first === null) throw new Error("First routine-rest decision was rejected");
+    const second = stepCoreWildlifeActor(first.actor, {
+      tick: 2,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (second === null) throw new Error("Renewed routine-rest decision was rejected");
+
+    expect(first.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
+      enteredAtTick: 1,
+      expiresAtTick: 6,
+    });
+    expect(second.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
+      enteredAtTick: 1,
+      expiresAtTick: 7,
+    });
+
+    let overnight = second.actor;
+    for (let tick = 3; tick <= 600; tick += 1) {
+      const renewed = stepCoreWildlifeActor(overnight, {
+        tick,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "rest",
+      });
+      if (renewed === null) throw new Error(`Routine rest failed at tick ${tick}`);
+      overnight = renewed.actor;
+    }
+    expect(overnight.intent).toMatchObject({
+      kind: "rest",
+      enteredAtTick: 1,
+      expiresAtTick: 605,
+    });
+    expect(deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(overnight),
+    )).toEqual(overnight);
+    expect(canonicalizeCoreWildlifeActorState({
+      ...overnight,
+      intent: { ...overnight.intent, expiresAtTick: 665 },
+    })).toBeNull();
+
+    const afterGap = stepCoreWildlifeActor(first.actor, {
+      tick: 20,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    expect(afterGap?.actor.intent).toMatchObject({
+      kind: "rest",
+      enteredAtTick: 20,
+      expiresAtTick: 25,
+    });
+  });
+
+  it("does not broaden continuous routine leases to ordinary need-driven rest", () => {
+    const tired = replaceCoreWildlifeActorPhysiology(actor("deer"), {
+      atTick: 0,
+      needs: { hunger: 0, safety: 0, rest: 800_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const first = step(tired, 1).actor;
+    const second = step(first, 2).actor;
+
+    expect(first.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+      enteredAtTick: 1,
+    });
+    expect(second.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+      enteredAtTick: 2,
+    });
+    expect(canonicalizeCoreWildlifeActorState({
+      ...second,
+      intent: {
+        ...second.intent,
+        enteredAtTick: 1,
+        expiresAtTick: 70,
+      },
+    })).toBeNull();
+  });
+
   it("ages an absent actor without charging a newly selected intent across hidden time", () => {
     const tired = replaceCoreWildlifeActorPhysiology(actor("deer"), {
       atTick: 0,
@@ -481,6 +665,313 @@ describe("core Wave-A wildlife actor", () => {
     expect(advanced.memories).toEqual(resting.memories);
     expect(() => advanceCoreWildlifeActorCoarse(advanced, { atTick: 20 }))
       .toThrow(/stale/u);
+  });
+
+  it("continues one authenticated coarse roost bout only until the next active boundary", () => {
+    let crow = replaceCoreWildlifeActorPhysiology(actor("fish-crow"), {
+      atTick: 1_350,
+      needs: { hunger: 0, safety: 0, rest: 870_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (policy === null) throw new Error("Fish-crow routine binding is missing");
+    const entering = projectLivingCircadian({
+      subjectId: crow.identity.stableId,
+      atTick: 1_350,
+      mode: "full",
+      policy,
+      current: { state: "awake", enteredAtTick: 1_350 },
+      restDestination: { destinationId: "perch:coarse-test", arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: null,
+    });
+    if (entering === null) throw new Error("Coarse roost entry failed");
+    crow = replaceCoreWildlifeActorCircadian(crow, {
+      atTick: 1_350,
+      circadian: livingCircadianPersistentStateFromProjection(entering),
+    });
+    const resting = stepCoreWildlifeActor(crow, {
+      tick: 1_351,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (resting === null) throw new Error("Coarse roost intent failed");
+    expect(resting.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+    });
+    const continued = advanceCoreWildlifeActorCoarse(resting.actor, { atTick: 1_400 });
+    expect(continued.address).toEqual(resting.actor.address);
+    expect(continued.circadian).toMatchObject({
+      restDestinationId: "perch:coarse-test",
+      restDestinationArrived: true,
+      posture: { state: "asleep" },
+    });
+    expect(continued.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
+      enteredAtTick: 1_367,
+    });
+    expect(continued.needs.rest).toBeLessThan(resting.actor.needs.rest);
+    expect(deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(continued),
+    )).toEqual(continued);
+
+    let fixedStep = resting.actor;
+    for (let tick = 1_352; tick <= 1_400; tick += 1) {
+      const actorStep = stepCoreWildlifeActor(fixedStep, {
+        tick,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        neutralActivityPreference: "rest",
+      });
+      if (actorStep === null) throw new Error("Full roost replay failed");
+      const routineStep = projectLivingCircadian({
+        subjectId: fixedStep.identity.stableId,
+        atTick: tick,
+        mode: "full",
+        policy,
+        current: fixedStep.circadian!.posture,
+        restDestination: { destinationId: "perch:coarse-test", arrived: true },
+        driverSignals: [],
+        disturbance: null,
+        priorityOverride: null,
+      });
+      if (routineStep === null) throw new Error("Full roost posture replay failed");
+      fixedStep = replaceCoreWildlifeActorCircadian(actorStep.actor, {
+        atTick: tick,
+        circadian: livingCircadianPersistentStateFromProjection(routineStep),
+      });
+    }
+    expect(continued.needs).toEqual(fixedStep.needs);
+    expect(continued.condition).toEqual(fixedStep.condition);
+    expect(continued.circadian).toEqual(fixedStep.circadian);
+    expect(continued).toEqual(fixedStep);
+    expect(continued.circadian?.posture).toEqual({
+      state: "asleep",
+      enteredAtTick: 1_371,
+    });
+
+    const wakeTick = firstLivingCircadianActiveTick(
+      continued.identity.stableId,
+      continued.updatedAtTick,
+      2_000,
+      policy,
+    );
+    if (wakeTick === null) throw new Error("Coarse roost fixture omitted dawn");
+    const beforeWake = advanceCoreWildlifeActorCoarse(continued, {
+      atTick: wakeTick - 1,
+    });
+    const coarseWake = advanceCoreWildlifeActorCoarse(beforeWake, { atTick: wakeTick });
+    const fullWakeRoutine = projectLivingCircadian({
+      subjectId: beforeWake.identity.stableId,
+      atTick: wakeTick,
+      mode: "full",
+      policy,
+      current: beforeWake.circadian!.posture,
+      restDestination: {
+        destinationId: beforeWake.circadian!.restDestinationId,
+        arrived: true,
+      },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: null,
+    });
+    if (fullWakeRoutine === null) throw new Error("Full dawn projection failed");
+    const fullWakeStep = stepCoreWildlifeActor(beforeWake, {
+      tick: wakeTick,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (fullWakeStep === null) throw new Error("Full dawn cognition failed");
+    const fullWake = replaceCoreWildlifeActorCircadian(fullWakeStep.actor, {
+      atTick: wakeTick,
+      circadian: livingCircadianPersistentStateFromProjection(fullWakeRoutine),
+    });
+    expect(coarseWake).toEqual(fullWake);
+
+    const afterDawn = advanceCoreWildlifeActorCoarse(continued, { atTick: 2_000 });
+    expect(afterDawn.address).toEqual(continued.address);
+    expect(afterDawn.circadian?.posture).toMatchObject({ state: "awake" });
+    expect(afterDawn.circadian!.posture.enteredAtTick).toBeLessThan(2_000);
+    expect(afterDawn.intent).toMatchObject({
+      kind: "observe",
+      cause: { kind: "condition", referenceId: "condition:neutral-watch" },
+    });
+    // Recovery ends at dawn; the remaining hidden daylight ages normally.
+    expect(afterDawn.needs.rest).toBeGreaterThan(0);
+  });
+
+  it("preserves a known urgent-rest override during active-clock coarse absence", () => {
+    const startTick = 720;
+    let crow = replaceCoreWildlifeActorPhysiology(actor("fish-crow"), {
+      atTick: startTick,
+      needs: { hunger: 0, safety: 0, rest: 870_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 420_000, stress: 0 },
+    });
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (policy === null) throw new Error("Fish-crow routine binding is missing");
+    const destinationId = "perch:urgent-coarse-test";
+    const urgentOverride = (rest: number) => rest >= CORE_WILDLIFE_REST_NEED_THRESHOLD
+      ? {
+          kind: "urgent-need" as const,
+          referenceId: "need:rest",
+          preference: "rest" as const,
+        }
+      : null;
+    const entering = projectLivingCircadian({
+      subjectId: crow.identity.stableId,
+      atTick: startTick,
+      mode: "full",
+      policy,
+      current: { state: "awake", enteredAtTick: startTick },
+      restDestination: { destinationId, arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: urgentOverride(crow.needs.rest),
+    });
+    if (entering === null) throw new Error("Urgent active-clock rest entry failed");
+    crow = replaceCoreWildlifeActorCircadian(crow, {
+      atTick: startTick,
+      circadian: livingCircadianPersistentStateFromProjection(entering),
+    });
+    const first = stepCoreWildlifeActor(crow, {
+      tick: startTick + 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (first === null) throw new Error("Urgent active-clock rest step failed");
+    const firstRoutine = projectLivingCircadian({
+      subjectId: crow.identity.stableId,
+      atTick: startTick + 1,
+      mode: "full",
+      policy,
+      current: crow.circadian!.posture,
+      restDestination: { destinationId, arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: urgentOverride(first.actor.needs.rest),
+    });
+    if (firstRoutine === null) throw new Error("Urgent rest posture commit failed");
+    const start = replaceCoreWildlifeActorCircadian(first.actor, {
+      atTick: startTick + 1,
+      circadian: livingCircadianPersistentStateFromProjection(firstRoutine),
+    });
+
+    let fixedStep = start;
+    for (let tick = start.updatedAtTick + 1; tick <= 737; tick += 1) {
+      const preRoutine = projectLivingCircadian({
+        subjectId: fixedStep.identity.stableId,
+        atTick: tick,
+        mode: "full",
+        policy,
+        current: fixedStep.circadian!.posture,
+        restDestination: { destinationId, arrived: true },
+        driverSignals: [],
+        disturbance: null,
+        priorityOverride: urgentOverride(fixedStep.needs.rest),
+      });
+      if (preRoutine === null) throw new Error("Urgent rest replay projection failed");
+      const canRest = preRoutine.action === "settle-at-rest-destination"
+        || preRoutine.action === "sleep-at-rest-destination";
+      const actorStep = stepCoreWildlifeActor(fixedStep, {
+        tick,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: {
+          ...CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+          rest: canRest,
+        },
+        neutralActivityPreference: canRest ? "rest" : "observe",
+      });
+      if (actorStep === null) throw new Error("Urgent rest fixed step failed");
+      const postRoutine = projectLivingCircadian({
+        subjectId: fixedStep.identity.stableId,
+        atTick: tick,
+        mode: "full",
+        policy,
+        current: fixedStep.circadian!.posture,
+        restDestination: { destinationId, arrived: true },
+        driverSignals: [],
+        disturbance: null,
+        priorityOverride: urgentOverride(actorStep.actor.needs.rest),
+      });
+      if (postRoutine === null) throw new Error("Urgent rest replay commit failed");
+      fixedStep = replaceCoreWildlifeActorCircadian(actorStep.actor, {
+        atTick: tick,
+        circadian: livingCircadianPersistentStateFromProjection(postRoutine),
+      });
+    }
+
+    const coarse = advanceCoreWildlifeActorCoarse(start, { atTick: 737 });
+    expect(coarse).toEqual(fixedStep);
+    expect(coarse.circadian?.posture.state).toBe("awake");
+    expect(coarse.intent.kind).toBe("observe");
+    expect(coarse.condition.exhaustion).toBeLessThan(start.condition.exhaustion);
+
+    const far = advanceCoreWildlifeActorCoarse(start, { atTick: 800 });
+    const boundary = advanceCoreWildlifeActorCoarse(start, { atTick: 736 });
+    expect(boundary.circadian?.posture).toEqual({ state: "awake", enteredAtTick: 736 });
+    expect(boundary.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+    });
+    expect(boundary.needs.rest).toBeLessThan(CORE_WILDLIFE_REST_NEED_THRESHOLD);
+    expect(advanceCoreWildlifeActorCoarse(boundary, { atTick: 800 })).toEqual(far);
+    expect(far.circadian?.posture).toEqual({ state: "awake", enteredAtTick: 736 });
+    expect(far.intent).toMatchObject({ kind: "observe", enteredAtTick: 737 });
+    expect(far.needs.rest).toBeGreaterThanOrEqual(CORE_WILDLIFE_REST_NEED_THRESHOLD);
+  });
+
+  it("expires an authenticated STARTLED hold exactly while coarse", () => {
+    const atTick = 100;
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (policy === null) throw new Error("Fish-crow routine binding is missing");
+    const base = replaceCoreWildlifeActorPhysiology(actor("fish-crow"), {
+      atTick,
+      needs: { hunger: 0, safety: 0, rest: 0 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const startledProjection = projectLivingCircadian({
+      subjectId: base.identity.stableId,
+      atTick,
+      mode: "full",
+      policy,
+      current: { state: "asleep", enteredAtTick: 70 },
+      restDestination: { destinationId: "perch:startle-coarse-test", arrived: true },
+      driverSignals: [],
+      disturbance: {
+        source: "lawful-perception",
+        referenceId: "obs:startle-coarse-test",
+        observedAtTick: atTick,
+        intensity: policy.wakeSensitivity,
+      },
+      priorityOverride: null,
+    });
+    if (startledProjection === null) throw new Error("Coarse startle fixture failed");
+    const startled = replaceCoreWildlifeActorCircadian(base, {
+      atTick,
+      circadian: livingCircadianPersistentStateFromProjection(startledProjection),
+    });
+    expect(startled.circadian?.posture).toEqual({ state: "startled", enteredAtTick: 100 });
+
+    const duringHold = advanceCoreWildlifeActorCoarse(startled, { atTick: 102 });
+    expect(duringHold.circadian?.posture).toEqual({ state: "startled", enteredAtTick: 100 });
+    const oneShot = advanceCoreWildlifeActorCoarse(startled, { atTick: 120 });
+    const split = advanceCoreWildlifeActorCoarse(duringHold, { atTick: 120 });
+    expect(oneShot.circadian?.posture).toEqual({ state: "awake", enteredAtTick: 104 });
+    expect(split).toEqual(oneShot);
+    expect(deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(oneShot),
+    )).toEqual(oneShot);
   });
 
   it("emits a causal alarm before fleeing from the same still-perceived threat", () => {

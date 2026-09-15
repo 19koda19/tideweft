@@ -11,10 +11,13 @@ import { seedFromText } from "../sim/rng";
 import { stableStringify } from "../sim/util";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  replaceCoreWildlifeActorCircadian,
   replaceCoreWildlifeActorPhysiology,
+  stepCoreWildlifeActor,
   type CoreWildlifeActorState,
   type CoreWildlifeFoodOpportunity,
 } from "./coreWildlifeActor";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_MAX_STEP_TICKS,
@@ -44,6 +47,10 @@ import {
   stepCoreEcologyGroupCoarse,
 } from "./coreEcologyGroups";
 import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
+import {
+  livingCircadianPersistentStateFromProjection,
+  projectLivingCircadian,
+} from "./livingCircadian";
 import { createCoreEcologyRegionalResidentPatch } from "./regionalEcologyResidents";
 import {
   REGION_HEIGHT_UNITS,
@@ -370,6 +377,87 @@ describe("bounded core ecology patch", () => {
     expect(after.perception.beliefs).toEqual([]);
     expect(result.events).toEqual([]);
     expect(result.resourceClaims).toEqual([]);
+  });
+
+  it("bridges one authenticated coarse roost after its wakeable intent lease expires", () => {
+    const startTick = 1_350;
+    let state = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "east-marsh:coarse-roost-lease",
+      originRegion: ORIGIN,
+      tick: startTick,
+      derivation: { kind: "bounded-input-v1" },
+      populations: [population("fish-crow", [0], false)],
+    });
+    let crow = replaceCoreWildlifeActorPhysiology(bySpecies(state, "fish-crow"), {
+      atTick: startTick,
+      needs: { hunger: 0, safety: 0, rest: 870_000 },
+      condition: { health: ACTOR_PERCEPTION_SCALE, exhaustion: 0, stress: 0 },
+    });
+    const policy = coreEcologyCircadianPolicyForSpecies("fish-crow");
+    if (policy === null) throw new Error("Fish-crow routine binding is missing");
+    const entering = projectLivingCircadian({
+      subjectId: crow.identity.stableId,
+      atTick: startTick,
+      mode: "full",
+      policy,
+      current: { state: "awake", enteredAtTick: startTick },
+      restDestination: { destinationId: "perch:coarse-patch-test", arrived: true },
+      driverSignals: [],
+      disturbance: null,
+      priorityOverride: null,
+    });
+    if (entering === null) throw new Error("Coarse roost entry failed");
+    crow = replaceCoreWildlifeActorCircadian(crow, {
+      atTick: startTick,
+      circadian: livingCircadianPersistentStateFromProjection(entering),
+    });
+    const resting = stepCoreWildlifeActor(crow, {
+      tick: startTick + 1,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (resting === null) throw new Error("Coarse roost intent failed");
+    state = replaceCoreEcologyAggregatePatchActor(state, resting.actor);
+    expect(resting.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+    });
+    expect(resting.actor.intent.expiresAtTick).toBeLessThan(startTick + 50);
+
+    const advanced = advanceCoreEcologyDormantAggregatePatch(state, {
+      atTick: startTick + 50,
+    });
+    expect(advanced).not.toBeNull();
+    const continued = bySpecies(advanced!, "fish-crow");
+    expect(continued.address).toEqual(resting.actor.address);
+    expect(continued.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "condition", referenceId: "activity:rest-window" },
+      enteredAtTick: startTick + 17,
+    });
+    expect(continued.circadian).toMatchObject({
+      restDestinationId: "perch:coarse-patch-test",
+      restDestinationArrived: true,
+      posture: { state: "asleep" },
+    });
+    expect(continued.needs.rest).toBeLessThan(resting.actor.needs.rest);
+
+    const targetTick = 2_000;
+    const oneShot = advanceCoreEcologyDormantAggregatePatch(state, {
+      atTick: targetTick,
+    });
+    let chunked = state;
+    while (chunked.updatedAtTick < targetTick) {
+      const next = advanceCoreEcologyDormantAggregatePatch(chunked, {
+        atTick: Math.min(targetTick, chunked.updatedAtTick + CORE_ECOLOGY_MAX_STEP_TICKS),
+      });
+      if (next === null) throw new Error("Chunked coarse roost replay failed");
+      chunked = next;
+    }
+    expect(stableStringify(oneShot)).toBe(stableStringify(chunked));
   });
 
   it("fast-forwards a settled dormant group byte-identically to bounded cadence replay", () => {

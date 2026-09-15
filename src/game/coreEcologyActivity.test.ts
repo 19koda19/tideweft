@@ -8,6 +8,7 @@ import { tideAtTick } from "../sim/terrain";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
+  deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
   setCoreEcologyAggregatePatchMaterializedActors,
@@ -671,7 +672,7 @@ describe("core ecology bounded activity", () => {
       createRegionCoord(REGION_COORD_LIMIT, -REGION_COORD_LIMIT),
       createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT),
     ]) {
-      const patch = activityPatch(360, "materialized", region);
+      const patch = activityPatch(720, "materialized", region);
       const actors = patch.populations.flatMap(({ species, members }) => (
         species === "fish-crow" || species === "northern-harrier"
           ? members.map(({ actor }) => actor)
@@ -682,18 +683,18 @@ describe("core ecology bounded activity", () => {
         const species = actor.identity.species;
         const first = projectCoreEcologyActivity(patch, {
           actorId: actor.identity.stableId,
-          atTick: 360,
+          atTick: 720,
         });
         expect(first).toEqual(projectCoreEcologyActivity(patch, {
           actorId: actor.identity.stableId,
-          atTick: 360,
+          atTick: 720,
         }));
         expect(first?.motion.kind).toBe(
           species === "northern-harrier" ? "target-area" : "defer-to-intent",
         );
         const stepped = stepCoreEcologyActivityMotion(patch, {
           actorId: actor.identity.stableId,
-          atTick: 360,
+          atTick: 720,
           maximumStepUnits: 1_000,
         });
         expect(stepped).not.toBeNull();
@@ -738,6 +739,11 @@ describe("core ecology bounded activity", () => {
     expect(perched).toMatchObject({
       state: "perched",
       preferredNeutralIntent: "rest",
+      routine: {
+        profileId: "day-active",
+        posture: { state: "resting" },
+        action: "settle-at-rest-destination",
+      },
       presentationSignal: "perched",
       perch: { availability: "available-here" },
       motion: { kind: "hold-position" },
@@ -760,6 +766,11 @@ describe("core ecology bounded activity", () => {
     expect(seeking).toMatchObject({
       state: "seeking-perch",
       preferredNeutralIntent: "observe",
+      routine: {
+        profileId: "day-active",
+        posture: { state: "awake" },
+        action: "travel-to-rest-destination",
+      },
       presentationSignal: null,
       perch: { availability: "available-at-anchor" },
       motion: { kind: "target-area", verb: "seek-perch" },
@@ -772,6 +783,389 @@ describe("core ecology bounded activity", () => {
       throw new Error("Crow activity projection lost its authenticated perch anchor");
     }
     expect(seeking.motion.targetArea.center).toEqual(perched.perch.anchor);
+
+    const daylight = activityPatch(720);
+    const watching = memberFor(daylight, "fish-crow").actor;
+    expect(projectCoreEcologyActivity(daylight, {
+      actorId: watching.identity.stableId,
+      atTick: 720,
+    })).toMatchObject({
+      state: "active-watch",
+      routine: {
+        clockPreference: "active",
+        posture: { state: "awake" },
+        action: "remain-active",
+      },
+    });
+  });
+
+  it("derives sleep and lawful startle from the persisted perch-watch intent bout", () => {
+    let patch = activityPatch(1_200);
+    const initialRest = stepCoreEcologyAggregatePatch(patch, {
+      tick: 1_201,
+      actorSteps: neutralActivitySteps(patch, 1_201),
+    });
+    if (initialRest === null) throw new Error("Perch-watch rest decision failed");
+    patch = commitFishCrowActivity(initialRest.patch, 1_201);
+    expect(memberFor(patch, "fish-crow").actor.intent).toMatchObject({
+      kind: "rest",
+      enteredAtTick: 1_201,
+    });
+
+    for (let tick = 1_202; tick <= 1_222; tick += 1) {
+      const next = stepCoreEcologyAggregatePatch(patch, {
+        tick,
+        actorSteps: neutralActivitySteps(patch, tick),
+      });
+      if (next === null) throw new Error(`Perch-watch rest bout failed at ${tick}`);
+      patch = commitFishCrowActivity(next.patch, tick);
+    }
+    const sleepingActor = memberFor(patch, "fish-crow").actor;
+    const asleep = projectCoreEcologyActivity(patch, {
+      actorId: sleepingActor.identity.stableId,
+      atTick: 1_222,
+    });
+    expect(asleep).toMatchObject({
+      state: "perched",
+      preferredNeutralIntent: "rest",
+      routine: {
+        posture: { state: "asleep", enteredAtTick: 1_222 },
+        action: "sleep-at-rest-destination",
+      },
+      motion: { kind: "hold-position" },
+    });
+
+    const restored = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(patch),
+    );
+    if (restored === null) throw new Error("Perch-watch save round trip failed");
+    expect(projectCoreEcologyActivity(restored, {
+      actorId: sleepingActor.identity.stableId,
+      atTick: 1_222,
+    })).toEqual(asleep);
+
+    const wakeSensitivity = asleep?.routine?.wakeSensitivity;
+    if (wakeSensitivity === undefined) throw new Error("Sleep wake threshold is absent");
+    const weakThreat = createActorObservation({
+      id: "perch-watch-weak-threat:1223",
+      observerId: sleepingActor.identity.stableId,
+      observedAtTick: 1_223,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "FOX-perch-watch-weak-threat",
+      area: { center: sleepingActor.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: wakeSensitivity - 1,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (weakThreat === null) throw new Error("Weak perch-watch threat fixture failed");
+    const stepWithThreat = (observation: NonNullable<typeof weakThreat>) => (
+      neutralActivitySteps(patch, 1_223).map((actorStep) => (
+        actorStep.actorId === sleepingActor.identity.stableId
+          ? {
+              ...actorStep,
+              observations: [observation],
+              minimumPerceptionWakeSalience: wakeSensitivity,
+            }
+          : actorStep
+      ))
+    );
+    const sleptThrough = stepCoreEcologyAggregatePatch(patch, {
+      tick: 1_223,
+      actorSteps: stepWithThreat(weakThreat),
+    });
+    if (sleptThrough === null) throw new Error("Aggregate wake gate rejected weak evidence");
+    expect(memberFor(sleptThrough.patch, "fish-crow").actor.intent.kind).toBe("rest");
+
+    const threat = createActorObservation({
+      id: "perch-watch-threat:1223",
+      observerId: sleepingActor.identity.stableId,
+      observedAtTick: 1_223,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "FOX-perch-watch-threat",
+      area: { center: sleepingActor.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Perch-watch threat fixture failed");
+    const physicallyBlocked = stepCoreEcologyAggregatePatch(patch, {
+      tick: 1_223,
+      actorSteps: stepWithThreat(threat).map((actorStep) => (
+        actorStep.actorId === sleepingActor.identity.stableId
+          ? {
+              ...actorStep,
+              accessibility: {
+                ...CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+                alarm: false,
+                disengage: false,
+                flee: false,
+                forage: false,
+                guard: false,
+                pursue: false,
+                regroup: false,
+                retreat: false,
+                scavenge: false,
+              },
+            }
+          : actorStep
+      )),
+    });
+    if (physicallyBlocked === null) throw new Error("Blocked wake fixture failed");
+    const blockedCrow = memberFor(physicallyBlocked.patch, "fish-crow").actor;
+    expect(blockedCrow.intent.kind).toBe("rest");
+    expect(projectCoreEcologyActivity(physicallyBlocked.patch, {
+      actorId: blockedCrow.identity.stableId,
+      atTick: 1_223,
+    })).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      routine: {
+        posture: { state: "startled", enteredAtTick: 1_223 },
+        action: "respond-to-disturbance",
+        transitionCause: "disturbance",
+        causeReferenceId: threat.id,
+      },
+    });
+
+    const alarmedStep = stepCoreEcologyAggregatePatch(patch, {
+      tick: 1_223,
+      actorSteps: stepWithThreat(threat),
+    });
+    if (alarmedStep === null) throw new Error("Perch-watch threat response failed");
+    const alarmed = memberFor(alarmedStep.patch, "fish-crow").actor;
+    expect(["alarm", "flee", "retreat"]).toContain(alarmed.intent.kind);
+    const alarmPatch = alarmedStep.patch;
+    const startled = projectCoreEcologyActivity(alarmPatch, {
+      actorId: alarmed.identity.stableId,
+      atTick: 1_223,
+    });
+    expect(startled).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: true,
+      preferredNeutralIntent: null,
+      routine: {
+        effectivePreference: "active",
+        posture: { state: "startled", enteredAtTick: 1_223 },
+        action: "respond-to-disturbance",
+        transitionCause: "disturbance",
+        causeReferenceId: threat.id,
+      },
+      motion: { kind: "defer-to-intent" },
+    });
+    const committedStartle = stepCoreEcologyActivityMotion(alarmPatch, {
+      actorId: alarmed.identity.stableId,
+      atTick: 1_223,
+      maximumStepUnits: 1,
+    });
+    if (committedStartle === null) throw new Error("Startled posture did not commit");
+    const reloadedStartle = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(committedStartle.patch),
+    );
+    if (reloadedStartle === null) throw new Error("Startled posture did not reload");
+    expect(projectCoreEcologyActivity(reloadedStartle, {
+      actorId: alarmed.identity.stableId,
+      atTick: 1_224,
+    })).toMatchObject({
+      routine: {
+        posture: { state: "startled", enteredAtTick: 1_223 },
+        action: "respond-to-disturbance",
+      },
+    });
+    const reloadedActor = memberFor(reloadedStartle, "fish-crow").actor;
+    const quietHold = stepCoreWildlifeActor(reloadedActor, {
+      tick: 1_224,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      minimumPerceptionWakeSalience: wakeSensitivity,
+      neutralActivityPreference: "observe",
+    });
+    if (quietHold === null) throw new Error("Startled hold cognition was rejected");
+    const quietHoldPatch = replaceCoreEcologyAggregatePatchActor(
+      reloadedStartle,
+      quietHold.actor,
+    );
+    expect(projectCoreEcologyActivity(quietHoldPatch, {
+      actorId: alarmed.identity.stableId,
+      atTick: 1_224,
+    })).toMatchObject({
+      state: "responding",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+      routine: {
+        posture: { state: "startled", enteredAtTick: 1_223 },
+        action: "respond-to-disturbance",
+      },
+      motion: { kind: "defer-to-intent" },
+    });
+  });
+
+  it("lets an urgent rest need override a perch-watch active clock", () => {
+    let patch = activityPatch(720);
+    const watching = memberFor(patch, "fish-crow").actor;
+    const tired = replaceCoreWildlifeActorPhysiology(watching, {
+      atTick: 720,
+      needs: { ...watching.needs, rest: 500_000 },
+      condition: watching.condition,
+    });
+    const resting = stepCoreWildlifeActor(tired, {
+      tick: 721,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "observe",
+    });
+    if (resting === null) throw new Error("Urgent perch-watch rest was rejected");
+    expect(resting.actor.intent).toMatchObject({
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, resting.actor);
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: resting.actor.identity.stableId,
+      atTick: 721,
+    })).toMatchObject({
+      preferredNeutralIntent: "rest",
+      routine: {
+        clockPreference: "active",
+        effectivePreference: "rest",
+        posture: { state: "resting" },
+        action: "settle-at-rest-destination",
+      },
+    });
+
+    const threat = createActorObservation({
+      id: "urgent-rest-threat:722",
+      observerId: resting.actor.identity.stableId,
+      observedAtTick: 722,
+      channel: "vision",
+      perceivedClass: "predator",
+      subjectId: "PREDATOR-urgent-rest",
+      area: { center: resting.actor.address.position, radiusUnits: 0 },
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+      identification: "identified",
+      interrupt: "strong",
+    });
+    if (threat === null) throw new Error("Urgent-rest threat fixture failed");
+    const responding = stepCoreWildlifeActor(resting.actor, {
+      tick: 722,
+      observations: [threat],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: "rest",
+    });
+    if (responding === null) throw new Error("Urgent-rest response failed");
+    expect(projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(patch, responding.actor),
+      { actorId: responding.actor.identity.stableId, atTick: 722 },
+    )).toMatchObject({
+      state: "responding",
+      routine: {
+        effectivePreference: "active",
+        posture: { state: "startled" },
+        transitionCause: "disturbance",
+      },
+    });
+  });
+
+  it("does not count need-driven travel time as settling at the crow perch", () => {
+    let patch = activityPatch(720);
+    const generated = memberFor(patch, "fish-crow").actor;
+    const perch = generated.address.position;
+    const away = repositionCoreWildlifeActor(generated, {
+      atTick: 720,
+      position: translateWorldPosition(
+        perch,
+        WORLD_POSITION_UNITS_PER_TILE * 2,
+        0,
+      ),
+      heading: generated.address.heading,
+    });
+    const tired = replaceCoreWildlifeActorPhysiology(away, {
+      atTick: 720,
+      needs: { ...away.needs, rest: 500_000 },
+      condition: away.condition,
+    });
+    const seeking = projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(patch, tired),
+      { actorId: tired.identity.stableId, atTick: 720 },
+    );
+    expect(seeking).toMatchObject({
+      preferredNeutralIntent: "observe",
+      routine: {
+        effectivePreference: "rest",
+        action: "travel-to-rest-destination",
+        posture: { state: "awake" },
+      },
+      motion: { kind: "target-area", verb: "seek-perch" },
+    });
+    const travelling = stepCoreWildlifeActor(tired, {
+      tick: 721,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: Object.freeze({
+        ...CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+        rest: false,
+      }),
+      neutralActivityPreference: "observe",
+    });
+    if (travelling === null) throw new Error("Need-driven travel fixture failed");
+    expect(travelling.actor.intent).toMatchObject({
+      kind: "observe",
+    });
+    expect(travelling.actor.needs.rest).toBeGreaterThan(tired.needs.rest);
+
+    patch = replaceCoreEcologyAggregatePatchActor(patch, travelling.actor);
+    const moved = stepCoreEcologyActivityMotion(patch, {
+      actorId: travelling.actor.identity.stableId,
+      atTick: 721,
+      maximumStepUnits: WORLD_POSITION_UNITS_PER_TILE * 3,
+    });
+    if (moved === null) throw new Error("Need-driven perch travel failed");
+    expect(moved.resolution).toBe("moved");
+    patch = moved.patch;
+    const arrived = memberFor(patch, "fish-crow").actor;
+    const atPerch = projectCoreEcologyActivity(patch, {
+      actorId: arrived.identity.stableId,
+      atTick: 722,
+    });
+    expect(atPerch).toMatchObject({
+      state: "perched",
+      preferredNeutralIntent: "rest",
+      routine: {
+        effectivePreference: "rest",
+        posture: { state: "resting", enteredAtTick: 722 },
+        action: "settle-at-rest-destination",
+      },
+    });
+    const resting = stepCoreWildlifeActor(arrived, {
+      tick: 722,
+      observations: [],
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      neutralActivityPreference: atPerch?.preferredNeutralIntent ?? "observe",
+    });
+    if (resting === null) throw new Error("Arrived rest fixture failed");
+    expect(resting.actor.intent).toMatchObject({
+      kind: "rest",
+      enteredAtTick: 722,
+    });
+    expect(resting.actor.needs.rest).toBeLessThan(arrived.needs.rest);
+    expect(projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(patch, resting.actor),
+      {
+        actorId: resting.actor.identity.stableId,
+        atTick: 722,
+      },
+    )).toMatchObject({
+      routine: { posture: { state: "resting", enteredAtTick: 722 } },
+    });
   });
 
   it("holds without prey evidence and returns from wading ground to its dry refuge", () => {
@@ -1410,6 +1804,20 @@ function neutralActivitySteps(
           : { neutralActivityPreference: activity.preferredNeutralIntent }),
       };
     });
+}
+
+function commitFishCrowActivity(
+  patch: CoreEcologyAggregatePatchState,
+  atTick: number,
+): CoreEcologyAggregatePatchState {
+  const actor = memberFor(patch, "fish-crow").actor;
+  const motion = stepCoreEcologyActivityMotion(patch, {
+    actorId: actor.identity.stableId,
+    atTick,
+    maximumStepUnits: 1,
+  });
+  if (motion === null) throw new Error(`Fish-crow routine commit failed at ${atTick}`);
+  return motion.patch;
 }
 
 function deriveHabitat(
