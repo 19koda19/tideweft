@@ -416,10 +416,10 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Opening Patch Notes dispatches no simulation or save command. From the active field, the world continues underneath; from the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
       {
-        id: "whats-new-first-roost",
+        id: "whats-new-two-rhythms",
         audience: "all",
-        title: "The first roost joins the clock",
-        body: "Alpha 42 The First Roost is a local unpublished source candidate. A shared living-routine kernel now expresses diurnal, nocturnal, twilight-active, and adaptive rhythms with stable individual timing, bounded clock, tide, weather, and opportunity drivers, physical rest destinations, and AWAKE, RESTING, ASLEEP, or STARTLED posture. This candidate connects one representative production behavior only: a fish crow using the existing perch-watch activity physically returns to its authenticated habitat perch, settles before sleep, and wakes only when current lawful evidence reaches its authored sensitivity. A tired crow cannot recover while still travelling; danger and urgent activity can override its routine. Its posture and destination survive save, reload, and bounded coarse absence, and the current bout ends at its first effective active boundary after any already-known urgent-rest override clears instead of healing through daylight or inventing another unseen night. Direct observation can describe the crow as Asleep without exposing its internal clock or threshold. Existing exact outer-version-30 worlds migrate to version 31 while preserving their authenticated RegionalEcologyStateV6 child and inventing no circadian state; species without a live binding retain true field omission. The four-profile kernel is reusable architecture, not a claim that every animal now sleeps. Humans, dogs, other wildlife bindings, player WAIT, REST, or SLEEP, long accelerated time, Living Voice, new species, and new mortality remain unfinished. This candidate has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
+        title: "Two rhythms share the same day",
+        body: "Alpha 43 Two Rhythms is a local unpublished source candidate. The shared living-routine kernel still expresses diurnal, nocturnal, twilight-active, and adaptive rhythms with stable individual timing, physical rest destinations, and AWAKE, RESTING, ASLEEP, or STARTLED posture. Its declarative activity registry now connects two contrasting production examples without adding species schedulers: a day-active fish crow returns to its authenticated perch at night, while a night-active North American river otter returns to its authenticated dry haulout by day and travels toward authenticated foraging water when active. Neither animal can receive rest physiology while still travelling. Current lawful danger, urgent needs, and active commitments continue to override routine preference, and direct observation may describe a sleeping animal as Asleep without exposing hidden schedule or destination data. The same compact optional routine state survives save, reload, and bounded coarse absence; old otters acquire it only after a lawful current activity commit. Outer save version 31, RegionalEcologyStateV6, wildlife actor version 1, and all released catalog snapshots remain exact, while the current catalog now truthfully identifies the otter's broad rhythm as nocturnal. This is two representative physical routine compositions, not catalog-wide sleep. Humans, dogs, other wildlife bindings, player WAIT, REST, or SLEEP, long accelerated time, Living Voice, new species, and new mortality remain unfinished. This candidate has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED; Alpha 39 remains the latest verified public release.",
       },
     ],
     callouts: [
@@ -1570,7 +1570,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 52 as const;
+export const TUTORIAL_CONTENT_VERSION = 53 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

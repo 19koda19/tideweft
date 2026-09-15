@@ -33,6 +33,10 @@ import {
 import { projectCoreEcologyBreadthActivityAuthority } from "./coreEcologyActivityAuthority";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
+  CORE_ECOLOGY_CIRCADIAN_BINDINGS,
+  coreEcologyCircadianPolicyForSpecies,
+} from "./coreEcologyCircadianPolicy";
+import {
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
@@ -115,6 +119,33 @@ describe("core ecology bounded activity", () => {
     );
     expect(validateCoreEcologyActivityPolicies(withoutHarrier))
       .toContain("northern-harrier:missing-policy");
+  });
+
+  it("binds contrasting routines through existing activity archetypes", () => {
+    expect(CORE_ECOLOGY_CIRCADIAN_BINDINGS.map((binding) => ({
+      speciesId: binding.speciesId,
+      activityArchetypeId: binding.activityArchetypeId,
+      profileId: binding.policy.profileId,
+    }))).toEqual([
+      {
+        speciesId: "fish-crow",
+        activityArchetypeId: "perch-watch",
+        profileId: "day-active",
+      },
+      {
+        speciesId: "north-american-river-otter",
+        activityArchetypeId: "shore-water-forager",
+        profileId: "night-active",
+      },
+    ]);
+    for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
+      expect(coreEcologyActivityAffordanceProfile(binding.speciesId)?.archetypeId)
+        .toBe(binding.activityArchetypeId);
+      expect(coreEcologyCircadianPolicyForSpecies(binding.speciesId)).toBe(binding.policy);
+      expect(Object.isFrozen(binding)).toBe(true);
+    }
+    expect(coreEcologyCircadianPolicyForSpecies("gull")).toBeNull();
+    expect(coreEcologyCircadianPolicyForSpecies("harbor-seal")).toBeNull();
   });
 
   it("projects deterministic low quartering by day and real rest by night", () => {
@@ -1612,19 +1643,103 @@ describe("core ecology bounded activity", () => {
       presentationSignal: "aquatic-foraging",
     });
 
-    let restPatch = tidalWebActivityPatch(0);
+    const nightPatch = tidalWebActivityPatch(0);
+    const nightOtter = memberFor(nightPatch, "north-american-river-otter").actor;
+    const nightAnchors = nightPatch.derivation.kind === "habitat-v7"
+      || nightPatch.derivation.kind === "legacy-fixed-v1-with-habitat-v7"
+      ? nightPatch.derivation.habitat.tidalAnchors.filter(({ species }) => (
+          species === "north-american-river-otter"
+        ))
+      : [];
+    const nightHaulout = nightAnchors.find(({ purpose }) => purpose === "haulout");
+    if (nightHaulout === undefined) throw new Error("Night otter lacks its haulout");
+    const activeAtNight = projectCoreEcologyActivity(
+      replaceCoreEcologyAggregatePatchActor(
+        nightPatch,
+        repositionCoreWildlifeActor(nightOtter, {
+          atTick: 0,
+          position: nightHaulout.position,
+          heading: nightOtter.address.heading,
+        }),
+      ),
+      { actorId: nightOtter.identity.stableId, atTick: 0 },
+    );
+    expect(activeAtNight).toMatchObject({
+      state: "seeking-foraging-water",
+      routine: {
+        profileId: "night-active",
+        effectivePreference: "active",
+        posture: { state: "awake" },
+      },
+    });
+
+    let restPatch = tidalWebActivityPatch(720);
     const restingOtter = memberFor(restPatch, "north-american-river-otter").actor;
     restPatch = replaceCoreEcologyAggregatePatchActor(restPatch, repositionCoreWildlifeActor(
       restingOtter,
-      { atTick: 0, position: foraging.position, heading: restingOtter.address.heading },
+      { atTick: 720, position: foraging.position, heading: restingOtter.address.heading },
     ));
     expect(projectCoreEcologyActivity(restPatch, {
       actorId: restingOtter.identity.stableId,
-      atTick: 0,
+      atTick: 720,
     })).toMatchObject({
       state: "hauling-out",
       presentationSignal: "shore-water-relocation",
       motion: { verb: "seek-otter-haulout", travelMedium: "amphibious" },
+      routine: {
+        profileId: "night-active",
+        effectivePreference: "rest",
+        action: "travel-to-rest-destination",
+        restDestinationArrived: false,
+      },
+    });
+
+    const atHauloutPatch = replaceCoreEcologyAggregatePatchActor(
+      restPatch,
+      repositionCoreWildlifeActor(
+        memberFor(restPatch, "north-american-river-otter").actor,
+        {
+          atTick: 720,
+          position: haulout.position,
+          heading: restingOtter.address.heading,
+        },
+      ),
+    );
+    const arrived = projectCoreEcologyActivity(atHauloutPatch, {
+      actorId: restingOtter.identity.stableId,
+      atTick: 720,
+    });
+    expect(arrived).toMatchObject({
+      state: "shore-resting",
+      preferredNeutralIntent: "rest",
+      motion: { kind: "hold-position" },
+      routine: {
+        profileId: "night-active",
+        posture: { state: "resting", enteredAtTick: 720 },
+        action: "settle-at-rest-destination",
+        restDestinationArrived: true,
+      },
+    });
+    const committed = stepCoreEcologyActivityMotion(atHauloutPatch, {
+      actorId: restingOtter.identity.stableId,
+      atTick: 720,
+      maximumStepUnits: 1,
+    });
+    if (committed === null) throw new Error("Otter haulout routine did not commit");
+    const reloaded = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(committed.patch),
+    );
+    if (reloaded === null) throw new Error("Otter haulout routine did not reload");
+    expect(projectCoreEcologyActivity(reloaded, {
+      actorId: restingOtter.identity.stableId,
+      atTick: 741,
+    })).toMatchObject({
+      state: "shore-resting",
+      routine: {
+        profileId: "night-active",
+        posture: { state: "asleep", enteredAtTick: 741 },
+        action: "sleep-at-rest-destination",
+      },
     });
   });
 

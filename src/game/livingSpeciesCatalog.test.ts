@@ -15,7 +15,9 @@ import {
 } from "./coreEcologySpeciesRuntimePolicy";
 import { CORE_ECOLOGY_ACTIVITY_OWNER_ID } from "./coreEcologyActivity";
 import { CORE_ECOLOGY_ACTIVITY_AFFORDANCE_PROFILES } from "./coreEcologyActivityAffordance";
+import { CORE_ECOLOGY_CIRCADIAN_BINDINGS } from "./coreEcologyCircadianPolicy";
 import { coreWildlifeLocomotionProfile } from "./coreWildlifeLocomotionProfile";
+import { livingCircadianProfile } from "./livingCircadian";
 import {
   LIVING_SPECIES_CAPABILITY_SCALE,
   LIVING_SPECIES_ALPHA32_CATALOG,
@@ -273,6 +275,50 @@ describe("Living Weft species module catalog", () => {
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG)).toBe(true);
     expect(Object.isFrozen(LIVING_SPECIES_CATALOG.modules[0]?.physiology.conditions)).toBe(true);
     expect(livingSpeciesModule("wolf")).toBeNull();
+  });
+
+  it("publishes current routine rhythms without rewriting released catalog children", () => {
+    const currentOtter = livingSpeciesModule("north-american-river-otter");
+    expect(currentOtter?.activity.circadian).toEqual({
+      status: "active",
+      ownerId: "game:core-ecology-species-runtime-policy:v1",
+      rhythm: "nocturnal",
+      cadenceTicks: 4,
+      phaseBias: 800_000,
+    });
+    for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
+      expect(livingSpeciesModule(binding.speciesId)?.activity.circadian.rhythm).toBe(
+        livingCircadianProfile(binding.policy.profileId).rhythm,
+      );
+    }
+
+    const releasedCatalogs = [
+      LIVING_SPECIES_ALPHA32_CATALOG,
+      LIVING_SPECIES_ALPHA33_CATALOG,
+      LIVING_SPECIES_ALPHA34_CATALOG,
+      LIVING_SPECIES_ALPHA35_CATALOG,
+      LIVING_SPECIES_ALPHA36_CATALOG,
+      LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG,
+      LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG,
+      LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
+    ];
+    const releasedOtters = releasedCatalogs.map((catalog) => (
+      catalog.modules.find(({ speciesId }) => speciesId === "north-american-river-otter")
+    ));
+    for (const otter of releasedOtters) {
+      expect(otter?.activity.circadian).toEqual({
+        status: "active",
+        ownerId: "game:core-ecology-species-runtime-policy:v1",
+        rhythm: "diurnal",
+        cadenceTicks: 4,
+        phaseBias: 800_000,
+      });
+      expect(otter === undefined ? null : canonicalizeLivingSpeciesModule(otter))
+        .toEqual(otter);
+      expect(Object.isFrozen(otter)).toBe(true);
+    }
+    expect(releasedOtters.every((otter) => otter === releasedOtters[0])).toBe(true);
+    expect(currentOtter).not.toBe(releasedOtters[0]);
   });
 
   it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
@@ -1793,7 +1839,7 @@ describe("Living Weft species module catalog", () => {
         implementation: "active",
         ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
         decisionModel: "individual",
-        circadian: { status: "active", rhythm: "diurnal" },
+        circadian: { status: "active", rhythm: "nocturnal" },
       },
       social: {
         implementation: "foundation",

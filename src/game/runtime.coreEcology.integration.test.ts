@@ -34,6 +34,7 @@ import {
   type CoreEcologyActivityProjection,
 } from "./coreEcologyActivity";
 import { projectCoreEcologyActivityAuthority } from "./coreEcologyActivityAuthority";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
 import {
   CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_MAX_ALLOCATIONS,
   CORE_ECOLOGY_DOMESTIC_PEN_HABITAT_SPECIES,
@@ -1977,7 +1978,9 @@ describe("runtime core-ecology vertical slice", () => {
       posture: { state: "awake" },
     });
     expect(coreActors(savedCore)
-      .filter(({ identity }) => identity.species !== "fish-crow")
+      .filter(({ identity }) => (
+        coreEcologyCircadianPolicyForSpecies(identity.species) === null
+      ))
       .every((actor) => !Object.hasOwn(actor, "circadian"))).toBe(true);
     expect(savedCrow.needs.rest).toBeGreaterThanOrEqual(restPressuredCrow.needs.rest);
     expect(projectCoreEcologyActivity(savedCore, {
@@ -3931,10 +3934,26 @@ describe("runtime core-ecology vertical slice", () => {
     if (movedOtter === undefined) throw new Error("shore-water actor was not persisted");
     const movement = worldPositionDelta(otterPosition, movedOtter.address.position);
     expect(["flee", "retreat"]).toContain(movedOtter.intent.kind);
+    expect(movedOtter.circadian).toMatchObject({
+      policy: { profileId: "night-active", drivers: ["clock"] },
+      restDestinationArrived: false,
+      posture: {
+        state: "awake",
+        enteredAtTick: savedWorld.meta.completedTick,
+      },
+    });
     expect(Math.abs(movement.x) + Math.abs(movement.y)).toBeGreaterThan(0);
     expect(compatibilityTileAtPosition(savedWorld, movedOtter.address.position).waterDepth)
       .toBeGreaterThan(ADRIFT_STAND_DEPTH);
+    const durableRoutine = stableStringify(movedOtter.circadian);
     runtime.destroy();
+    scheduledFrame = undefined;
+    const reloaded = await createTideweftRuntime(repository);
+    const reloadedOtter = coreActors(requiredCore(requiredEnvelope(repository))).find(
+      ({ identity }) => identity.stableId === otter.identity.stableId,
+    );
+    expect(stableStringify(reloadedOtter?.circadian)).toBe(durableRoutine);
+    reloaded.destroy();
   }, 45_000);
 
   it("denies a floored negative-seam food claim outside exact loose-unit reach", async () => {

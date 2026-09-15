@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(52);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(53);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -63,15 +63,20 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("A CHALLENGING HARD");
     expect(copy).toContain("dispatches no simulation or save command");
     expect(copy).toContain("world continues underneath");
-    expect(copy).toContain("Alpha 42 The First Roost is a local unpublished source candidate");
-    expect(copy).toContain("A shared living-routine kernel");
+    expect(copy).toContain("Alpha 43 Two Rhythms is a local unpublished source candidate");
+    expect(copy).toContain("The shared living-routine kernel");
     expect(copy).toContain("AWAKE, RESTING, ASLEEP, or STARTLED posture");
-    expect(copy).toContain("fish crow using the existing perch-watch activity physically returns");
-    expect(copy).toContain("cannot recover while still travelling");
-    expect(copy).toContain("posture and destination survive save, reload, and bounded coarse absence");
-    expect(copy).toContain("first effective active boundary after any already-known urgent-rest override clears");
-    expect(copy).toContain("outer-version-30 worlds migrate to version 31");
-    expect(copy).toContain("species without a live binding retain true field omission");
+    expect(copy).toContain("a day-active fish crow returns to its authenticated perch at night");
+    expect(copy).toContain(
+      "a night-active North American river otter returns to its authenticated dry haulout by day",
+    );
+    expect(copy).toContain("Neither animal can receive rest physiology while still travelling");
+    expect(copy).toContain(
+      "The same compact optional routine state survives save, reload, and bounded coarse absence",
+    );
+    expect(copy).toContain("old otters acquire it only after a lawful current activity commit");
+    expect(copy).toContain("all released catalog snapshots remain exact");
+    expect(copy).toContain("current catalog now truthfully identifies the otter's broad rhythm as nocturnal");
     expect(copy).toContain("has not been pushed, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
     expect(copy).toContain("Humans, dogs, other wildlife bindings, player WAIT, REST, or SLEEP");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");

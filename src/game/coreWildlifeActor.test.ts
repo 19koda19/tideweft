@@ -195,6 +195,10 @@ describe("core Wave-A wildlife actor", () => {
       circadian,
     })).toBeNull();
     expect(canonicalizeCoreWildlifeActorState({
+      ...actor("north-american-river-otter"),
+      circadian,
+    })).toBeNull();
+    expect(canonicalizeCoreWildlifeActorState({
       ...adopted,
       circadian: {
         ...circadian,

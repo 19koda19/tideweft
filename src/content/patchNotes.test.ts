@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.42",
+      version: "0.3.3-alpha.43",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.42",
-      gameplayContractVersion: 40,
-      tutorialVersion: 52,
+      buildIdentity: "0.3.3-alpha.43",
+      gameplayContractVersion: 41,
+      tutorialVersion: 53,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes the Alpha-42 first-roost candidate and retains First Light, the clock, and earlier releases", () => {
+  it("scopes the Alpha-43 two-rhythms candidate and retains First Roost and earlier releases", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha42Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.42",
+    );
+    const alpha42Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha42Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha42Limitations = alpha42Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha41Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.41",
     );
@@ -275,20 +283,41 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("First Roost");
-    expect(currentCopy).toContain("A versioned species-neutral living-routine kernel");
-    expect(currentCopy).toContain("existing fish-crow perch-watch behavior");
-    expect(currentCopy).toContain("physically travels to its authenticated habitat perch");
-    expect(currentCopy).toContain("Routine posture is AWAKE, RESTING, ASLEEP, or STARTLED");
-    expect(currentCopy).toContain("REST physiology is now inaccessible");
-    expect(currentCopy).toContain("asleep wake threshold");
-    expect(currentCopy).toContain("bounded coarse absence");
-    expect(currentCopy).toContain("A CHALLENGING HARD remains the only ruleset");
-    expect(currentCopy).toContain("The outer session envelope advances to version 31");
-    expect(currentCopy).toContain("Core wildlife actor version 1 gains an additive optional circadian sidecar");
-    expect(currentLimitations).toContain("one representative fish-crow/perch-watch vertical slice");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Two Rhythms");
+    expect(currentCopy).toContain("declarative species-to-activity registry");
+    expect(currentCopy).toContain("day-active fish crow");
+    expect(currentCopy).toContain("night-active North American river otter");
+    expect(currentCopy).toContain("authenticated foraging water");
+    expect(currentCopy).toContain("authenticated dry haulout");
+    expect(currentCopy).toContain("shared amphibious route");
+    expect(currentCopy).toContain("rest physiology in transit");
+    expect(currentCopy).toContain("Historical actors still receive no invented routine state");
+    expect(currentCopy).toContain("Harbor seal behavior is unchanged");
+    expect(currentCopy).toContain("forty-seven records total");
+    expect(currentCopy).toContain("Outer save version 31, RegionalEcologyStateV6, and core wildlife actor schema/version 1 remain unchanged");
+    expect(currentCopy).toContain("frozen 24-, 27-, 28-, 29-, 31-, 36-, 43-, and 47-record Alpha 32 through Alpha 39 catalog snapshots retain their exact bytes and hashes");
+    expect(currentCopy).toContain("Only the current forty-seven-record catalog declares the otter nocturnal");
+    expect(currentLimitations).toContain("not catalog-wide circadian or sleep coverage");
     expect(currentLimitations).toContain("Player WAIT, REST, and SLEEP actions");
+    expect(currentLimitations).toContain("human schedules");
+    expect(currentLimitations).toContain("companion-dog settling and waking");
+    expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
+    expect(currentLimitations).toContain("not been pushed, published, deployed");
+    expect(currentLimitations).toContain("LIVE_VERIFIED");
     expect(currentCopy).not.toMatch(/all wildlife.*(?:sleep|circadian)|player sleep is live|human schedules are live/iu);
+    expect(alpha42Release?.summary).toContain("First Roost");
+    expect(alpha42Copy).toContain("A versioned species-neutral living-routine kernel");
+    expect(alpha42Copy).toContain("existing fish-crow perch-watch behavior");
+    expect(alpha42Copy).toContain("physically travels to its authenticated habitat perch");
+    expect(alpha42Copy).toContain("Routine posture is AWAKE, RESTING, ASLEEP, or STARTLED");
+    expect(alpha42Copy).toContain("REST physiology is now inaccessible");
+    expect(alpha42Copy).toContain("asleep wake threshold");
+    expect(alpha42Copy).toContain("bounded coarse absence");
+    expect(alpha42Copy).toContain("A CHALLENGING HARD remains the only ruleset");
+    expect(alpha42Copy).toContain("The outer session envelope advances to version 31");
+    expect(alpha42Copy).toContain("Core wildlife actor version 1 gains an additive optional circadian sidecar");
+    expect(alpha42Limitations).toContain("one representative fish-crow/perch-watch vertical slice");
+    expect(alpha42Limitations).toContain("Player WAIT, REST, and SLEEP actions");
     expect(alpha41Release?.summary).toContain("First Light");
     expect(alpha41Copy).toContain("Outdoor illumination is now one deterministic fixed-point world condition");
     expect(alpha41Copy).toContain("Darkness now contracts exact actor, item, label, and interaction recognition");

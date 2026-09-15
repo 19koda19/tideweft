@@ -32,6 +32,8 @@ import {
   coreEcologySpeciesPredatorContact,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
+import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import { livingCircadianProfile } from "./livingCircadian";
 
 /**
  * Versioned capability boundary for Living Weft species modules. This is not a
@@ -4670,6 +4672,7 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
     && coreEcologySpeciesHasRuntimeCapability(species, "school-coordination");
   const physicalBodyResourceUnits = coreEcologySpeciesPhysicalBodyResourceUnits(species);
   const physicalBodySizeUnits = coreEcologySpeciesPhysicalBodySizeUnits(species);
+  const circadianPolicy = coreEcologyCircadianPolicyForSpecies(species);
   const ownsPhysicalBody = physicalBodySizeUnits > 0
     && physicalBodyResourceUnits > 0
     && coreEcologySpeciesHasRuntimeCapability(species, "physical-body-resource");
@@ -4906,7 +4909,12 @@ function coreWildlifeModule(species: CoreWildlifeSpecies): LivingSpeciesModule {
         ? {
             status: "active",
             ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
-            rhythm: "diurnal",
+            // This v1 catalog block still describes the established bounded
+            // activity owner/cadence. A physically bound routine may refine
+            // only its truthful broad rhythm without rewriting that lineage.
+            rhythm: circadianPolicy === null
+              ? "diurnal"
+              : livingCircadianProfile(circadianPolicy.profileId).rhythm,
             cadenceTicks: 4,
             phaseBias: 800_000,
           }
@@ -5602,12 +5610,59 @@ if (!sameStringArray(currentSpecies, expectedSpecies)) {
   throw new Error("Living Weft catalog does not exactly cover the implemented actor roster");
 }
 
+const legacyBoundedCircadian = (species: CoreWildlifeSpecies): LivingSpeciesCircadianContract => (
+  coreEcologySpeciesHasRuntimeCapability(species, "diurnal-activity")
+    ? {
+        status: "active",
+        ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
+        rhythm: "diurnal",
+        cadenceTicks: 4,
+        phaseBias: 800_000,
+      }
+    : noCircadianSchedule()
+);
+const HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES = new Map<
+  string,
+  LivingSpeciesModule
+>();
+
+/**
+ * Released catalog children authenticate their original bounded-activity
+ * declarations. Current physical routines may refine a species rhythm, but a
+ * new binding must never rewrite those historical bytes.
+ */
+function historicalCircadianCompatibilityModule(
+  module: LivingSpeciesModule,
+): LivingSpeciesModule {
+  const cached = HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES.get(module.speciesId);
+  if (cached !== undefined) return cached;
+  if (!CORE_WILDLIFE_SPECIES.includes(module.speciesId as CoreWildlifeSpecies)) {
+    return module;
+  }
+  const historicalCircadian = legacyBoundedCircadian(
+    module.speciesId as CoreWildlifeSpecies,
+  );
+  if (sameData(module.activity.circadian, historicalCircadian)) return module;
+  const historical = canonicalizeLivingSpeciesModule({
+    ...module,
+    activity: {
+      ...module.activity,
+      circadian: historicalCircadian,
+    },
+  });
+  if (historical === null) {
+    throw new Error(`Living Weft could not preserve ${module.speciesId} circadian lineage`);
+  }
+  HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES.set(module.speciesId, historical);
+  return historical;
+}
+
 const alpha32CompatibilityModules = LIVING_SPECIES_ALPHA32_SPECIES_IDS.map((speciesId) => {
   const module = currentCatalog.modules.find((candidate) => candidate.speciesId === speciesId);
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-32 compatibility species ${speciesId}`);
   }
-  return module;
+  return historicalCircadianCompatibilityModule(module);
 });
 const alpha32CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5633,7 +5688,7 @@ const alpha33CompatibilityModules = LIVING_SPECIES_ALPHA33_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-33 compatibility species ${speciesId}`);
   }
-  return module;
+  return historicalCircadianCompatibilityModule(module);
 });
 const alpha33CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5659,7 +5714,7 @@ const alpha34CompatibilityModules = LIVING_SPECIES_ALPHA34_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-34 compatibility species ${speciesId}`);
   }
-  return module;
+  return historicalCircadianCompatibilityModule(module);
 });
 const alpha34CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5685,7 +5740,7 @@ const alpha35CompatibilityModules = LIVING_SPECIES_ALPHA35_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-35 compatibility species ${speciesId}`);
   }
-  return module;
+  return historicalCircadianCompatibilityModule(module);
 });
 const alpha35CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5711,7 +5766,7 @@ const alpha36CompatibilityModules = LIVING_SPECIES_ALPHA36_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-36 compatibility species ${speciesId}`);
   }
-  return module;
+  return historicalCircadianCompatibilityModule(module);
 });
 const alpha36CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5738,7 +5793,7 @@ const waveGEstuaryCompatibilityModules = LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_I
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G estuary species ${speciesId}`);
     }
-    return module;
+    return historicalCircadianCompatibilityModule(module);
   },
 );
 const waveGEstuaryCompatibilityCatalog = deepFreeze({
@@ -5768,7 +5823,7 @@ const waveGMarshChannelModules = LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G marsh-channel species ${speciesId}`);
     }
-    return module;
+    return historicalCircadianCompatibilityModule(module);
   },
 );
 const waveGMarshChannelCatalog = deepFreeze({
@@ -5798,7 +5853,7 @@ const waveGSaltmarshSmallWorldsModules =
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G saltmarsh species ${speciesId}`);
     }
-    return module;
+    return historicalCircadianCompatibilityModule(module);
   });
 const waveGSaltmarshSmallWorldsCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,

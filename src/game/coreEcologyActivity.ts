@@ -168,7 +168,7 @@ export type CoreEcologyActivityMotion =
 export interface CoreEcologyActivityProjection {
   readonly version: typeof CORE_ECOLOGY_ACTIVITY_VERSION;
   readonly ownerId: typeof CORE_ECOLOGY_ACTIVITY_OWNER_ID;
-  /** This is deliberately narrower than the later universal circadian system. */
+  /** The activity affordance remains bounded; `routine` carries full circadian truth. */
   readonly scheduleScope: "bounded-diurnal-window";
   readonly actorId: string;
   readonly species: CoreEcologyActivitySpecies;
@@ -573,16 +573,19 @@ function projectCanonicalCoreEcologyActivity(
   const responsive = IMMEDIATE_RESPONSE_INTENTS.has(owned.member.actor.intent.kind);
   const actorNeedsRest = owned.member.actor.intent.kind === "rest";
   const inRestWindow = day.phase === "rest-window";
+  const circadianPolicy = coreEcologyCircadianPolicyForSpecies(owned.species);
 
   if (activityProfile.archetypeId === "perch-watch") {
     const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
     const atPerch = perch.availability === "available-here";
-    const routine = projectPerchWatchRoutine(
+    const routine = projectPhysicalRestRoutine(
       owned,
       input.atTick,
       authority.homeAnchor,
       atPerch,
       responsive,
+      "perch-watch-rest-destination-v1",
+      "perch",
     );
     if (routine === null) return null;
     if (responsive || routine.posture.state === "startled") {
@@ -628,7 +631,16 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
-  if (responsive) {
+  // Shore-water actors must resolve their physical haulout before a bound
+  // routine can commit its disturbance posture. Every other established
+  // archetype retains the generic immediate-response path below.
+  if (
+    responsive
+    && !(
+      activityProfile.archetypeId === "shore-water-forager"
+      && circadianPolicy !== null
+    )
+  ) {
     const responsivePerchAnchor = activityPerchAnchor(activityProfile, authority);
     return activityProjection(owned, input.atTick, day, {
       state: "responding",
@@ -906,11 +918,39 @@ function projectCanonicalCoreEcologyActivity(
       tidalWeb.hauloutTarget,
       OTTER_ARRIVAL_RADIUS_UNITS,
     );
-    if (inRestWindow || actorNeedsRest) {
+    const routine = circadianPolicy === null
+      ? null
+      : projectPhysicalRestRoutine(
+          owned,
+          input.atTick,
+          tidalWeb.hauloutTarget,
+          atHaulout,
+          responsive,
+          "shore-water-haulout-rest-destination-v1",
+          "haulout",
+        );
+    if (circadianPolicy !== null && routine === null) return null;
+    if (responsive || routine?.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    const routinePrefersRest = routine?.effectivePreference === "rest";
+    if (routinePrefersRest || (routine === null && inRestWindow) || actorNeedsRest) {
       return activityProjection(owned, input.atTick, day, {
         state: atHaulout ? "shore-resting" : "hauling-out",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atHaulout ? "rest" : "observe",
+        preferredNeutralIntent: (routinePrefersRest || routine === null && inRestWindow)
+          && atHaulout
+          ? "rest"
+          : "observe",
+        routine,
         presentationSignal: atHaulout ? "resting" : "shore-water-relocation",
         perch: noPerchProjection(),
         motion: atHaulout
@@ -939,6 +979,7 @@ function projectCanonicalCoreEcologyActivity(
         responsiveToImmediateIntent: false,
         sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: "shore-water-relocation",
         perch: noPerchProjection(),
         motion: Object.freeze({
@@ -957,6 +998,7 @@ function projectCanonicalCoreEcologyActivity(
       responsiveToImmediateIntent: false,
       sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: aquaticObservation !== null
         ? "aquatic-foraging"
         : searching ? "surface-diving" : "surface-swimming",
@@ -1382,42 +1424,45 @@ export function assertCoreEcologyActivityPolicies(): void {
   }
 }
 
-function projectPerchWatchRoutine(
+function projectPhysicalRestRoutine(
   owned: OwnedActivityActor,
   atTick: number,
-  perchAnchor: WorldPosition,
+  restDestination: WorldPosition,
   arrived: boolean,
   responsive: boolean,
+  destinationNamespace: string,
+  destinationPrefix: string,
 ): LivingCircadianProjection | null {
   const actor = owned.member.actor;
   const policy = coreEcologyCircadianPolicyForSpecies(actor.identity.species);
   if (policy === null) return null;
-  const destinationId = `perch:${hashCanonical([
-    "perch-watch-rest-destination-v1",
+  const destinationId = `${destinationPrefix}:${hashCanonical([
+    destinationNamespace,
     actor.identity.stableId,
-    perchAnchor,
+    restDestination,
   ])}`;
   return projectLivingCircadian({
     subjectId: actor.identity.stableId,
     atTick,
     mode: "full",
     policy,
-    current: perchWatchPosture(actor, atTick, arrived, destinationId),
+    current: physicalRestPosture(actor, atTick, arrived, destinationId, policy),
     restDestination: {
       destinationId,
       arrived,
     },
     driverSignals: [],
-    disturbance: currentPerchWatchDisturbance(actor, atTick),
-    priorityOverride: perchWatchPriorityOverride(actor, responsive),
+    disturbance: currentRoutineDisturbance(actor, atTick),
+    priorityOverride: routinePriorityOverride(actor, responsive),
   });
 }
 
-function perchWatchPosture(
+function physicalRestPosture(
   actor: CoreWildlifeActorState,
   atTick: number,
   arrived: boolean,
   destinationId: string,
+  policy: NonNullable<ReturnType<typeof coreEcologyCircadianPolicyForSpecies>>,
 ): LivingCircadianPosture {
   if (actor.circadian !== undefined) {
     return actor.circadian.restDestinationId === destinationId
@@ -1425,7 +1470,7 @@ function perchWatchPosture(
       : Object.freeze({ state: "awake", enteredAtTick: atTick });
   }
   const enteredAtTick = actor.intent.enteredAtTick;
-  const profile = livingCircadianProfile("day-active");
+  const profile = livingCircadianProfile(policy.profileId);
   if (actor.intent.kind === "rest") {
     // Lazy v30 adoption may encounter one historical schedule-owned rest
     // intent before this sidecar exists. Only that exact bounded lease can
@@ -1445,7 +1490,7 @@ function perchWatchPosture(
   return Object.freeze({ state: "awake", enteredAtTick });
 }
 
-function currentPerchWatchDisturbance(
+function currentRoutineDisturbance(
   actor: CoreWildlifeActorState,
   atTick: number,
 ): LivingCircadianDisturbance | null {
@@ -1472,7 +1517,7 @@ function currentPerchWatchDisturbance(
       });
 }
 
-function perchWatchPriorityOverride(
+function routinePriorityOverride(
   actor: CoreWildlifeActorState,
   responsive: boolean,
 ): LivingCircadianPriorityOverride | null {

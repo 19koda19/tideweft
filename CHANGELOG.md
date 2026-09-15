@@ -4,6 +4,48 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.43 — 2026-09-15
+
+Build: `0.3.3-alpha.43` · Gameplay contract: 41 · Tutorial: 53
+
+Two Rhythms is the local unpublished Alpha 43 source candidate: the shared living-routine composition now contrasts a day-active fish crow with a night-active North American river otter moving physically between authenticated water and dry haulout.
+
+### Gameplay
+
+- One declarative species-to-activity registry now binds two contrasting production routines through the same versioned, species-neutral kernel: day-active fish crow and night-active North American river otter.
+- The fish crow remains active by day and physically returns to its authenticated perch for night rest. The otter now travels toward its authenticated foraging water while active at night, then crosses the shared amphibious route back to its authenticated dry haulout for daytime rest.
+- Both bindings retain stable individual phase, AWAKE, RESTING, ASLEEP, and STARTLED posture, authored wake sensitivity, and priority overrides. Danger, urgent needs, and active commitments can interrupt preference; a clock edge never teleports an actor or grants rest physiology in transit.
+
+### Fixes
+
+- The North American river otter's current catalog declaration now truthfully reports a nocturnal rhythm instead of inheriting the older bounded daylight-activity label, while frozen released catalog children preserve their historical declarations exactly.
+- The generic shore-water routine now authenticates the otter's distinct foraging-water and dry-haulout destinations before projection, so active and rest travel reuse actual habitat custody rather than a species-only schedule or synthetic target.
+- A current otter routine commit persists the same policy, destination identity, arrival fact, and posture through save, reload, and bounded coarse absence. Historical actors still receive no invented routine state before a lawful current activity commit.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. The second binding adds no population, spawn, food, cargo, Promise, mortality, immunity, teleportation, or free-recovery change; physical travel and ordinary needs remain authoritative.
+- The production living catalog remains exactly forty-five core-wildlife profiles plus the separate human and domestic-dog foundations, forty-seven records total. Alpha 43 adds no species, aggregate unit, actor slot, habitat source, anchor, or materialization capacity.
+- Harbor seal behavior is unchanged. It retains its existing authenticated shore-water activity and physical water/haulout movement but gains no circadian binding, asleep posture, schedule rewrite, or catalog-lineage change in this slice.
+
+### Interface
+
+- A directly observed bound fish crow or North American river otter can be described as Asleep through the existing knowledge-honest wildlife presentation, without revealing hidden schedules, wake thresholds, destination IDs, phase offsets, or internal transitions.
+- Two Rhythms adds no universal sleep meter, omniscient routine event, new panel, or renderer-owned schedule. Chart and Relief continue to present only the same authoritative world state and lawful current observation.
+- Field Manual version 53 explains the two contrasting physical routines, current-versus-historical catalog truth, unchanged save authority, and the boundary between these examples and catalog-wide sleep or player time advancement.
+
+### Save changes
+
+- Outer save version 31, RegionalEcologyStateV6, and core wildlife actor schema/version 1 remain unchanged. The existing strict version-30 adoption path remains exact, and Alpha 43 adds no migration, wrapper, mutable clock, or second routine record.
+- Habitat version 11, core-ecology patch version 3, aggregate ecology record version 5, settlement ecology version 4, and working-animal state version 2 remain unchanged; existing habitat anchors, populations, actors, groups, aggregate units, items, and world facts are not rewritten.
+- The frozen 24-, 27-, 28-, 29-, 31-, 36-, 43-, and 47-record Alpha 32 through Alpha 39 catalog snapshots retain their exact bytes and hashes, including the otter's historical diurnal declaration. Only the current forty-seven-record catalog declares the otter nocturnal.
+
+### Known limitations
+
+- Alpha 43 Two Rhythms is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- This is exactly two representative physical routine compositions, not catalog-wide circadian or sleep coverage. Harbor seal and every other wildlife profile remain unchanged unless already covered by the fish-crow or otter binding; production crepuscular, tide-, weather-, and opportunity-driven routines remain reusable kernel architecture rather than new production behavior.
+- Player WAIT, REST, and SLEEP actions, accelerated elapsed-time orchestration, human schedules, companion-dog settling and waking, catalog-wide routines, multi-day offscreen routine selection, Living Voice, seasons, migration, new species, and new mortality remain unfinished. The Turning Day directive remains open.
+
 ## 0.3.3-alpha.42 — 2026-09-15
 
 Build: `0.3.3-alpha.42` · Gameplay contract: 40 · Tutorial: 52

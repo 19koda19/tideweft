@@ -117,15 +117,27 @@ opportunity. A policy owns a fixed-point wake-sensitivity threshold rather than
 making every nearby observation an automatic wake event. Rendering, wall time,
 array order, and region loading are not routine inputs.
 
-The current local Turning Day routine slice binds only the existing reusable
-`perch-watch` activity archetype—and therefore only its present fish-crow
-consumer—to the day-active clock policy. An individual crow must travel through
-shared locomotion to its habitat-authenticated perch before rest physiology can
-apply. Continuous physical arrival permits RESTING and then ASLEEP after the
-settling interval; daylight, an urgent need, an active commitment, dangerous
-weather where supported, or a sufficiently salient current lawful disturbance
-can keep or return it to active behavior. Strong disturbance produces STARTLED
-and a bounded recovery hold. No clock edge teleports an actor.
+`src/game/coreEcologyCircadianPolicy.ts` owns a frozen declarative binding
+registry whose key is the combination of species and existing activity
+archetype. The local Alpha43 **Two Rhythms** candidate contains exactly two
+clock-driven rows: fish crow + `perch-watch` + day-active, and North American
+river otter + `shore-water-forager` + night-active. The activity profile must
+still match the authored archetype or the lookup fails closed; selecting an
+archetype alone never grants a routine. This matters because harbor seal also
+uses `shore-water-forager` but has no circadian binding and retains its legacy
+bounded daylight/rest-window activity.
+
+A fish crow must travel through shared locomotion to its habitat-authenticated
+perch before nighttime rest physiology can apply. A river otter follows the
+inverse preference through the same generic `livingCircadian` kernel: by day it
+physically returns to its authenticated distinct dry haulout before settling or
+sleeping, and at night it wakes and travels amphibiously toward authenticated
+foraging water. Continuous physical arrival permits RESTING and then ASLEEP
+after the settling interval; an urgent need, active commitment, dangerous
+weather where supported, or sufficiently salient current lawful disturbance
+can keep or return either animal to active behavior. Strong disturbance
+produces STARTLED and a bounded recovery hold. No clock edge teleports an
+actor, and neither animal receives rest physiology while still travelling.
 
 The compact circadian receipt is embedded in the existing wildlife actor state:
 policy, stable rest-destination identity, authenticated-arrival receipt, posture,
@@ -135,18 +147,27 @@ Save/load and full-to-coarse-to-full transitions preserve a committed rest bout;
 coarse advancement may carry it only to the first effective active boundary
 after any already-known priority override clears and cannot invent another
 unobserved bout, movement, perception, or destination.
-Alpha42 advances the outer `GAME_SAVE_VERSION` from 30 to 31 while retaining
-the exact nested `RegionalEcologyStateV6` and wildlife actor schema/version 1.
+Alpha42 advanced the outer `GAME_SAVE_VERSION` from 30 to 31 while retaining
+the exact nested `RegionalEcologyStateV6` and wildlife actor schema/version 1;
+Alpha43 changes none of those envelopes.
 The actor's circadian field is optional: the strict version-30 reader preserves
 an authenticated V6 ecology child byte-for-byte, invents no posture for an old
 actor, and resaves the adopted world as version 31. This is not a second clock
 or a nested ecology-schema rewrite.
 
-This representative binding does not claim circadian adoption by the other 44
-core-wildlife profiles, a nocturnal/crepuscular/tide-driven production animal,
-human work/home/watch schedules, companion settling and waking, player WAIT,
-REST, or SLEEP actions, or complete Turning Day closure. Those consumers must
-reuse the same kernel and physical authority rather than add species schedulers.
+The current living-species catalog now reports the river otter's broad rhythm
+truthfully as nocturnal. Every authenticated historical catalog snapshot keeps
+its exact prior bytes and hash, including the former bounded-activity `diurnal`
+declaration: the Alpha32–36 roots and the Wave-G Estuary Surface Break, Marsh
+Channel Web, and Alpha39 Saltmarsh Small Worlds roots are compatibility records,
+not mutable views of the current catalog.
+
+These two representative bindings are not catalog-wide circadian adoption.
+The other 43 core-wildlife profiles—including the unbound harbor seal—do not
+acquire a physical routine from this registry. Human work/home/watch schedules,
+both dogs' settling and waking, player WAIT/REST/SLEEP elapsed-time actions,
+and complete Turning Day closure remain absent. Later consumers must reuse the
+same kernel and physical authority rather than add species schedulers.
 
 ## Authoritative tick
 
@@ -1041,15 +1062,27 @@ narration.
 
 `src/game/coreEcologySpeciesRuntimePolicy.ts` composes representation, addressability, locomotion, group organization, aggregate response, food investigation, shared alarm, mobbing, pursuit, activity, evidence, and presentation capabilities without a species-pair behavior table. `src/game/coreEcologyAggregatePolicy.ts` separately owns aggregate namespaces, anchor bounds, activity/evidence vocabulary, rain response, and the shared role/trophic response bridge, so aggregate consumers do not branch on ad hoc species checks. `src/game/coreEcologyTidalTable.ts` owns only the pure target-tick tide/depth projection and its conservation-safe fish redistribution/activity step; it neither regenerates habitat nor owns cargo, consumption, or mortality. Its completed tidal-edge opportunity is recorded in the durable aggregate operation clock even when no unit moves. Released Alpha 22 introduced `src/game/coreEcologyActivityAffordance.ts` with six reusable archetypes. The released Alpha39 registry has eleven archetypes across sixteen participating species: the original `perch-watch`, `low-quartering`, `tidal-wader`, `dabbling-waterfowl`, `shore-water-forager`, and `aerial-surface-opportunist`, plus `ridge-soar-perch`, `anchored-wader`, `diving-waterbird`, `perch-forage`, and `amphibious-margin-forager`. Each profile declares required runtime capabilities, locomotion class, allowed travel media, destination authority, observation affordance, presentation signals, and only a bounded daylight/rest window. Unknown species and incoherent capability/profile combinations fail closed. `src/game/coreEcologyActivity.ts` consumes those profiles through one shared finalizer that rejects any emitted signal, movement medium, destination semantic, perch claim, or observation reference outside the selected profile before it can reach movement or presentation. Immediate lawful alarm, flee/retreat/guard, pursuit/disengagement, and physical-food forage/scavenge intents outrank neutral activity. Existing routines retain their authenticated anchors and movement contracts. Alpha38 lets greater yellowlegs reuse `anchored-wader`, belted kingfishers reuse the air-only surface-opportunity/rest profile, and cormorants use `diving-waterbird` for lawful surface swimming, diving, resting, and flight relocation. Alpha39 adds shared `perch-forage` activity for seaside sparrows and `amphibious-margin-forager` activity for the diamondback terrapin. Transit presentation remains generic until the current state lawfully supports a more specific visible behavior; private cues never become player knowledge. This is not sleep, denning, a nocturnal schedule, capture/feeding resolution, continuously simulated 3D flight, or the complete circadian system.
 
-That boundary remains true of the released Alpha39 activity layer. The local
-Turning Day routine slice now layers the generic circadian kernel onto
-`perch-watch`: a fish crow physically seeks its authenticated perch, settles,
-sleeps, can be lawfully startled, and preserves that bout through existing actor
-serialization and bounded coarse advancement. An observed sleeping crow may
-disclose `Asleep`; private thresholds, policy, and destinations do not become
-player knowledge. Every other activity archetype retains its preceding bounded
-activity behavior. This is not denning, a production nocturnal, crepuscular, or
-tide-driven binding, or the complete catalog-wide circadian system.
+That boundary remains true of the released Alpha39 activity layer. Alpha42
+layered the generic circadian kernel onto fish-crow `perch-watch`; the local
+Alpha43 **Two Rhythms** candidate replaces that implicit perch-only lookup with
+a declarative species + activity-archetype registry and adds North American
+river otter + `shore-water-forager` + night-active beside fish crow +
+`perch-watch` + day-active. The crow physically seeks its authenticated perch
+at night. The otter physically seeks its authenticated dry haulout by day,
+settles and sleeps only after arrival, then wakes and returns toward its
+authenticated foraging water at night. Both use the same routine, movement,
+priority, disturbance, persistence, and coarse-continuation laws. An observed
+sleeping actor may disclose `Asleep`; private thresholds, policy, and
+destinations do not become player knowledge.
+
+The registry qualifies an exact species/archetype pair rather than binding a
+whole archetype. Harbor seal therefore keeps its prior unbound
+`shore-water-forager` daylight/rest-window behavior, and every other activity
+profile keeps its preceding bounded behavior. The current catalog declares the
+otter nocturnal while all historical frozen catalog roots remain exact. This is
+not denning, a catalog-wide routine conversion, a production crepuscular or
+tide-driven binding, or the complete circadian system; humans, dogs, and player
+WAIT/REST/SLEEP remain outside it.
 
 `src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
@@ -1605,22 +1638,27 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 28. Internal Alpha37 checkpoint, first shipped cumulatively in Alpha39: exact 31-record Alpha36 prefix plus bay-anchovy, Atlantic-ghost-crab, great-blue-heron, common-tern, and osprey records 32–36; one habitat-gated append-only Estuary Surface Break breadth root with honest regional absence; two conserved non-addressable aggregates, two solitary actors, and one group-atomic tern flock; shared Tide Table, activity, perception, locomotion, ABOUT, and dual-view presentation; an authenticated heron wading anchor plus tern/osprey air-only surface-opportunity/rest behavior subordinate to danger; one clear-versus-ridge-occluded common-tern/anchovy nonlethal pressure witness with exact conservation; exact V5 child plus breadth root under V6/outer-v30 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It opens Wave G toward 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuous 3D flight, dedicated Wave-G performance or seamless actor-crossing proof at that checkpoint, Directive completion, and standalone release/deployment evidence.
 29. Internal Alpha38 checkpoint, first shipped cumulatively in Alpha39: exact 36-record Alpha37 prefix plus Atlantic-menhaden, mummichog, grass-shrimp, blue-crab, greater-yellowlegs, belted-kingfisher, and double-crested-cormorant records 37–43; append-only breadth epoch 2 with dependency-gated honest absence; four conserved non-addressable aggregates, one solitary kingfisher, and group-atomic yellowlegs/cormorant flocks; shared Tide Table, aggregate, activity, perception, locomotion, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded cormorant/menhaden nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic old-epoch activation; and the same global group-atomic 24-actor cap and atomic cross-layer commit. It reaches 41 of 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuously simulated 3D flight, Directive completion at that checkpoint, and standalone release/deployment evidence.
 30. Released Alpha39 cumulative closure: exact 43-record Alpha38 prefix plus eastern-saltmarsh-mosquito, marsh-periwinkle, seaside-sparrow, and diamondback-terrapin records 44–47; append-only breadth epoch 3 with exact substrate dependencies and honest absence; two max-two-anchor conserved non-addressable aggregates, one two-to-four-member group-atomic sparrow flock, and one solitary terrapin; shared aggregate, activity, perception, locomotion, group, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded terrapin/periwinkle nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic epoch-2 adoption; and the same global group-atomic 24-actor cap and atomic cross-layer commit. Shared performance and seamless-crossing closure owners cover the architecture without per-species tests. It reaches the released 45 core-wildlife / 47 living-record boundary while explicitly excluding bites/disease, exact insect/snail actors, capture/consumption, new mortality/bodies, sound, reproduction/recovery, full circadian behavior, and continuous 3D flight. Gameplay commit `40bfeebde94729ffb1034764ffba3e18100ac1fc` plus timeout-only descendants `7455fd0` and `c67f30b10066f60372d2cf84e1e6eacae1cbd31f` passed CI `34905718204`, Pages `34905718214`, and a 5/5 exact-live comparison.
-The local unpublished Alpha42 routine candidate, **The First Roost**, adds one
-generic version-1 living-circadian kernel with four reusable profiles,
-orthogonal clock/tide/weather/opportunity driver vocabulary, stable
-identity-derived phase plus a bounded not-yet-scheduled evaluation hint,
-fixed-point wake sensitivity, priority
-overrides, and AWAKE/RESTING/ASLEEP/STARTLED state. Its sole production binding
-is the existing `perch-watch` archetype and its present fish-crow consumer. The
-crow must physically reach its authenticated perch before rest can recover it;
-strong lawful disturbance can wake it, and the compact routine receipt survives
-save/load and bounded coarse streaming. Outer save v31 strictly adopts exact
-outer-v30/V6 worlds without rewriting their ecology bytes or inventing
-circadian state; nested V6, actor schema/version 1, catalog, habitat,
-population, group, item, and mortality authority remain unchanged. Other activity
-archetypes, humans, companions, player WAIT/REST/SLEEP, production nocturnal,
-crepuscular, or tide-driven examples, Living Voice, and Directive 04_1A closure
-remain absent. It has no push, deployment, or live-verification evidence.
+The local Alpha43 routine candidate, **Two Rhythms**, retains Alpha42's generic
+version-1 living-circadian kernel with four reusable profiles, orthogonal
+clock/tide/weather/opportunity driver vocabulary, stable identity-derived phase
+plus a bounded not-yet-scheduled evaluation hint, fixed-point wake sensitivity,
+priority overrides, and AWAKE/RESTING/ASLEEP/STARTLED state. A frozen
+species + activity-archetype registry binds exactly fish crow + `perch-watch` +
+day-active and North American river otter + `shore-water-forager` +
+night-active. Crow perch and otter dry-haulout arrival are physical prerequisites
+for rest; the active otter returns toward authenticated foraging water at night,
+strong lawful disturbance may wake either animal, and each compact routine
+receipt survives save/load and bounded coarse streaming. Harbor seal shares the
+shore-water archetype but remains explicitly unbound on its legacy bounded
+daylight/rest path.
+
+Outer save v31, exact outer-v30/V6 adoption, nested V6, and actor
+schema/version 1 remain unchanged. The current species catalog now declares the
+otter nocturnal, while the frozen Alpha32–36 and three Wave-G historical catalog
+roots retain their exact authenticated bytes and hashes. This is two physical
+wildlife compositions, not catalog-wide circadian life. Humans, dogs, player
+WAIT/REST/SLEEP, production crepuscular or tide-driven bindings, Living Voice,
+and Directive 04_1A closure remain absent.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
