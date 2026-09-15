@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.49",
+      version: "0.3.3-alpha.50",
       releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.49",
-      gameplayContractVersion: 47,
-      tutorialVersion: 59,
+      buildIdentity: "0.3.3-alpha.50",
+      gameplayContractVersion: 48,
+      tutorialVersion: 60,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-49 Twilight at the Marsh Edge and retains the earlier Turning Day slices", () => {
+  it("scopes Alpha-50 Many Rhythms and retains the earlier Turning Day slices", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
     const currentLimitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha49Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.49",
+    );
+    const alpha49Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha49Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha49Limitations = alpha49Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha47Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.47",
     );
@@ -323,36 +331,84 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Twilight at the Marsh Edge");
-    expect(currentCopy).toContain("existing marsh rabbit");
-    expect(currentCopy).toContain("twilight-active policy");
-    expect(currentCopy).toContain("one saved civil clock");
-    expect(currentCopy).toContain("stable identity-derived variation");
-    expect(currentCopy).toContain("shared terrain pathing surface");
-    expect(currentCopy).toContain("authenticated habitat rest site");
-    expect(currentCopy).toContain("Travel remains Awake");
-    expect(currentCopy).toContain("Resting requires physical arrival");
-    expect(currentCopy).toContain("Asleep requires the common settling interval");
-    expect(currentCopy).toContain("Immediate danger, lawful disturbance, urgent needs, and retained commitments");
-    expect(currentCopy).toContain("does not create food, consume a resource, guarantee safety, or resolve feeding");
-    expect(currentCopy).toContain("circadian-activity capability");
-    expect(currentCopy).toContain("circadian-routine activity scope");
-    expect(currentCopy).toContain("explicit land travel");
-    expect(currentCopy).toContain("adds no rabbit, species, population unit");
-    expect(currentCopy).toContain("adds no attack, injury, death, carcass, consumption, reproduction");
-    expect(currentCopy).toContain("currently observable ground activity, relocation, Resting, or Asleep posture");
-    expect(currentCopy).toContain("Outer save version 32 and RegionalEcologyStateV6 remain unchanged");
+    expect(LATEST_PATCH_NOTE.summary).toContain("Many Rhythms");
+    expect(LATEST_PATCH_NOTE.summary).toContain("all seventeen existing wildlife species with declared activity profiles");
+    expect(currentCopy).toContain("exactly covers all seventeen current wildlife activity profiles");
+    expect(currentCopy).toContain("Fourteen are day-active");
+    expect(currentCopy).toContain("North American river otter remains night-active");
+    expect(currentCopy).toContain("snowy egret remains adaptive to clock, tide, and current lawful opportunity");
+    expect(currentCopy).toContain("marsh rabbit remains twilight-active");
+    expect(currentCopy).toContain("American black duck now composes its day-active clock with current weather");
+    expect(currentCopy).toContain("qualifying ordinary rain may activate it outside its base clock window");
+    expect(currentCopy).toContain("dangerous storm drives physical travel to and rest at its authenticated refuge");
+    expect(currentCopy).toContain("American black duck, North American river otter, greater yellowlegs, and diamondback terrapin keep clock-based wake policy");
+    expect(currentCopy).toContain("action and destination projections remain tide- and depth-responsive only where dabbling water, foraging water, wading ground, or wet margin is physically usable");
+    expect(currentCopy).toContain("Tide does not independently wake them");
+    expect(currentCopy).toContain("existing authenticated perch, refuge, habitat anchor, wading ground, haulout, or cover");
+    expect(currentCopy).toContain("already-declared travel medium");
+    expect(currentCopy).toContain("Transit remains Awake");
+    expect(currentCopy).toContain("physical arrival alone permits Resting");
+    expect(currentCopy).toContain("shared settling interval alone permits Asleep");
+    expect(currentCopy).toContain("STARTLED response, current danger, lawful disturbance, urgent needs, and retained commitments");
+    expect(currentCopy).toContain("No activity profile receives a private scheduler, detector, pathfinder, or teleport");
+    expect(currentCopy).toContain("thirteen formerly bounded day-window profiles");
+    expect(currentCopy).toContain("circadian-activity capability and circadian-routine scope");
+    expect(currentCopy).toContain("All twelve reusable activity archetypes");
+    expect(currentCopy).toContain("fail closed when species, profile, travel medium, destination, body, policy, or tick do not agree");
+    expect(currentCopy).toContain("Tide- and depth-responsive actions now require the current species' real physical affordance");
+    expect(currentCopy).toContain("without synthesizing a generic wake signal that would erase sleep on always-usable habitat");
+    expect(currentCopy).toContain("dry diamondback-terrapin margin remains an awake tide wait instead of falsely presenting rest");
+    expect(currentCopy).toContain("air, amphibious, surface-water-capable, or land locomotion");
+    expect(currentCopy).toContain("does not mint unsupported track evidence, food, feeding results, targets, knowledge, or new choices");
+    expect(currentCopy).toContain("adds no species, actor, population unit");
+    expect(currentCopy).toContain("Southern leopard frog remains a real non-addressable rain-responsive aggregate");
+    expect(currentCopy).toContain("rain can raise its lawful activity and chorus while masking hearing");
+    expect(currentCopy).toContain("no fabricated individual actor, destination, posture, or circadian binding");
+    expect(currentCopy).toContain("lawfully observed current activity, relocation, Resting, Asleep, or STARTLED posture");
+    expect(currentCopy).toContain("Field Manual version 60");
+    expect(currentCopy).toContain("Outer save version 32, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged");
+    expect(currentCopy).toContain("current catalog derives rhythm and cadence from the shared binding registry");
+    expect(currentCopy).toContain("frozen Alpha 32 through Alpha 39 catalogs preserve their exact released bytes and hashes");
     expect(currentCopy).toContain("optional version-1 wildlife circadian receipt");
-    expect(currentCopy).toContain("Stable actor identity remains separately owned");
-    expect(currentCopy).toContain("phase is rederived from identity plus policy");
-    expect(currentCopy).toContain("Full detail reauthenticates those facts");
-    expect(currentCopy).toContain("coarse absence may conserve only an already committed bounded rest bout");
-    expect(currentCopy).toContain("invents no commute, forage route, observation, or new decision");
-    expect(currentCopy).toContain("Legacy rabbit actors without a receipt remain valid");
-    expect(currentCopy).toContain("Released historical species-catalog snapshots preserve their exact earlier unbound activity declarations");
-    expect(currentLimitations).toContain("not a new species, population expansion, weather-driven routine");
+    expect(currentCopy).toContain("Legacy absence remains valid");
+    expect(currentCopy).toContain("Full detail reauthenticates current body and destination before behavioral use");
+    expect(currentCopy).toContain("Coarse absence may conserve only an already committed bounded rest bout");
+    expect(currentCopy).toContain("invents no commute, perception, target, or decision");
+    expect(currentLimitations).toContain("exact seventeen-profile registry is not all forty-five core-wildlife profiles");
+    expect(currentLimitations).toContain("Southern leopard frog retains real aggregate rain response without a fabricated individual posture");
+    expect(currentLimitations).toContain("broader driver coverage");
     expect(currentLimitations).toContain("broader coarse-time validation");
     expect(currentLimitations).toContain("Turning Day closure remain unfinished");
+    expect(alpha49Release?.summary).toContain("Twilight at the Marsh Edge");
+    expect(alpha49Copy).toContain("existing marsh rabbit");
+    expect(alpha49Copy).toContain("twilight-active policy");
+    expect(alpha49Copy).toContain("one saved civil clock");
+    expect(alpha49Copy).toContain("stable identity-derived variation");
+    expect(alpha49Copy).toContain("shared terrain pathing surface");
+    expect(alpha49Copy).toContain("authenticated habitat rest site");
+    expect(alpha49Copy).toContain("Travel remains Awake");
+    expect(alpha49Copy).toContain("Resting requires physical arrival");
+    expect(alpha49Copy).toContain("Asleep requires the common settling interval");
+    expect(alpha49Copy).toContain("Immediate danger, lawful disturbance, urgent needs, and retained commitments");
+    expect(alpha49Copy).toContain("does not create food, consume a resource, guarantee safety, or resolve feeding");
+    expect(alpha49Copy).toContain("circadian-activity capability");
+    expect(alpha49Copy).toContain("circadian-routine activity scope");
+    expect(alpha49Copy).toContain("explicit land travel");
+    expect(alpha49Copy).toContain("adds no rabbit, species, population unit");
+    expect(alpha49Copy).toContain("adds no attack, injury, death, carcass, consumption, reproduction");
+    expect(alpha49Copy).toContain("currently observable ground activity, relocation, Resting, or Asleep posture");
+    expect(alpha49Copy).toContain("Outer save version 32 and RegionalEcologyStateV6 remain unchanged");
+    expect(alpha49Copy).toContain("optional version-1 wildlife circadian receipt");
+    expect(alpha49Copy).toContain("Stable actor identity remains separately owned");
+    expect(alpha49Copy).toContain("phase is rederived from identity plus policy");
+    expect(alpha49Copy).toContain("Full detail reauthenticates those facts");
+    expect(alpha49Copy).toContain("coarse absence may conserve only an already committed bounded rest bout");
+    expect(alpha49Copy).toContain("invents no commute, forage route, observation, or new decision");
+    expect(alpha49Copy).toContain("Legacy rabbit actors without a receipt remain valid");
+    expect(alpha49Copy).toContain("Released historical species-catalog snapshots preserve their exact earlier unbound activity declarations");
+    expect(alpha49Limitations).toContain("not a new species, population expansion, weather-driven routine");
+    expect(alpha49Limitations).toContain("broader coarse-time validation");
+    expect(alpha49Limitations).toContain("Turning Day closure remain unfinished");
     expect(alpha47Release?.summary).toContain("Rest and Rise");
     expect(alpha47Copy).toContain("REST 30 MIN");
     expect(alpha47Copy).toContain("exactly three hundred ordinary player steps");

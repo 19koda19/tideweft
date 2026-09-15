@@ -3,6 +3,7 @@ import {
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import { globalTileToRegion } from "../sim/regions";
+import type { WeatherState } from "../sim/types";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   canonicalizeCoreEcologyAggregatePatch,
@@ -12,6 +13,7 @@ import {
   type CoreEcologyPopulationState,
 } from "./coreEcology";
 import {
+  canonicalCoreEcologyCurrentWeather,
   coreEcologySpeciesHasBoundedActivityProjection,
   type CoreEcologyActivityAuthorityReceipt,
 } from "./coreEcologyActivity";
@@ -20,6 +22,7 @@ import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuth
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
 import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
+import { coreEcologyCircadianBindingForSpecies } from "./coreEcologyCircadianPolicy";
 import {
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
@@ -59,6 +62,8 @@ export interface ProjectCoreEcologyWildlifeInput {
   readonly window: CoreEcologyRuntimeWindow;
   readonly perception: PerceptionResult;
   readonly tileSize: number;
+  /** Current authoritative environment used by shared circadian activity. */
+  readonly weather?: Readonly<WeatherState>;
   readonly selectedTarget?: CoreWildlifeSelectionTarget | null;
   /** Transient source-authenticated activity destinations, never save data. */
   readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityReceipt[];
@@ -276,6 +281,18 @@ export function projectCoreEcologyWildlife(
     || !Number.isFinite(input.tileSize)
     || input.tileSize <= 0
     || input.tileSize > 4_096
+    || (
+      Object.hasOwn(input, "weather")
+      && canonicalCoreEcologyCurrentWeather(input.weather, patch.updatedAtTick) === null
+    )
+  ) return null;
+  if (
+    !Object.hasOwn(input, "weather")
+    && patch.populations.some((population) => (
+      population.members.some(({ materialization }) => materialization === "materialized")
+      && (coreEcologyCircadianBindingForSpecies(population.species)?.weatherResponses.length ?? 0)
+        > 0
+    ))
   ) return null;
 
   const activityAuthorities = canonicalActivityAuthorities(
@@ -305,6 +322,7 @@ export function projectCoreEcologyWildlife(
               activity: {
                 patch,
                 atTick: patch.updatedAtTick,
+                ...(input.weather === undefined ? {} : { weather: input.weather }),
                 ...(activityAuthorities.get(member.actor.identity.stableId) === undefined
                   ? {}
                   : {
@@ -350,6 +368,7 @@ export function projectCoreEcologyWildlife(
             activity: {
               patch,
               atTick: patch.updatedAtTick,
+              ...(input.weather === undefined ? {} : { weather: input.weather }),
               ...(activityAuthorities.get(member.actor.identity.stableId) === undefined
                 ? {}
                 : {
@@ -453,6 +472,7 @@ function allowedProjectionInputKeys(value: Record<string, unknown>): boolean {
   const expected = ["patch", "perception", "tileSize", "window"];
   if (Object.hasOwn(value, "activityAuthorities")) expected.push("activityAuthorities");
   if (Object.hasOwn(value, "selectedTarget")) expected.push("selectedTarget");
+  if (Object.hasOwn(value, "weather")) expected.push("weather");
   return exactKeys(value, expected);
 }
 

@@ -1102,6 +1102,40 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     },
   );
 
+  it("presents the activity owner's current neutral posture over a stale saved rest intent", () => {
+    const { actor, patch } = rainActivityFixture("fish-crow", 420);
+    const staleRest = canonicalizeCoreWildlifeActorState({
+      ...actor,
+      intent: {
+        kind: "rest",
+        cause: { kind: "condition", referenceId: "condition:stale-rest" },
+        focusObservationId: null,
+        resourceReference: null,
+        enteredAtTick: 420,
+        expiresAtTick: 425,
+      },
+    });
+    if (staleRest === null) throw new Error("Stale-rest presentation fixture was invalid");
+    const currentPatch = replaceCoreEcologyAggregatePatchActor(patch, staleRest);
+    expect(projectCoreEcologyActivity(currentPatch, {
+      actorId: staleRest.identity.stableId,
+      atTick: 420,
+    })).toMatchObject({
+      state: "active-watch",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: "observe",
+    });
+    expect(projectWildlifePresentation({
+      actor: staleRest,
+      observation: directObservation(staleRest),
+      tileSize: 16,
+      activity: { patch: currentPatch, atTick: 420 },
+    })).toMatchObject({
+      behavior: "watch",
+      behaviorLabel: "Watching",
+    });
+  });
+
   it("presents rabbit ground activity without claiming motion or cover it cannot observe", () => {
     const { actor, patch } = rainActivityFixture("marsh-rabbit", 390);
     const moving = projectWildlifePresentation({
@@ -1213,11 +1247,11 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
   });
 
   it("presents one lawfully observed surface opportunity without naming hidden prey", () => {
-    const { actor, patch } = rainActivityFixture("gull", 359);
+    const { actor, patch } = rainActivityFixture("gull", 419);
     const observation = createActorObservation({
-      id: "presentation-surface-opportunity:360",
+      id: "presentation-surface-opportunity:420",
       observerId: actor.identity.stableId,
-      observedAtTick: 360,
+      observedAtTick: 420,
       channel: "vision",
       perceivedClass: "aquatic-activity",
       subjectId: null,
@@ -1236,7 +1270,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     });
     if (observation === null) throw new Error("Surface opportunity fixture failed");
     const observed = stepCoreWildlifeActor(actor, {
-      tick: 360,
+      tick: 420,
       observations: [observation],
       foodOpportunities: [],
       accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
@@ -1257,7 +1291,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       actor: observed.actor,
       observation: transitObservation,
       tileSize: 16,
-      activity: { patch: observedPatch, atTick: 360 },
+      activity: { patch: observedPatch, atTick: 420 },
     });
 
     expect(transitPresentation).toMatchObject({
@@ -1269,7 +1303,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     });
 
     const arrived = repositionCoreWildlifeActor(observed.actor, {
-      atTick: 360,
+      atTick: 420,
       position: observation.area.center,
       heading: observed.actor.address.heading,
     });
@@ -1278,7 +1312,7 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
       actor: arrived,
       observation: directObservation(arrived),
       tileSize: 16,
-      activity: { patch: arrivedPatch, atTick: 360 },
+      activity: { patch: arrivedPatch, atTick: 420 },
     });
     expect(arrivedPresentation).toMatchObject({
       species: "gull",
@@ -1398,11 +1432,34 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
 
   it("projects authenticated surface swimming without exporting the duck's tidal target", () => {
     const { duck, patch } = waterfowlActivityFixture();
-    const presentation = projectWildlifePresentation({
+    const clear = Object.freeze({
+      kind: "clear" as const,
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: patch.updatedAtTick + 50,
+    });
+    expect(projectWildlifePresentation({
       actor: duck,
       observation: directObservation(duck),
       tileSize: 16,
       activity: { patch, atTick: patch.updatedAtTick },
+    })).toBeNull();
+    expect(projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck),
+      tileSize: 16,
+      activity: {
+        patch,
+        atTick: patch.updatedAtTick,
+        weather: { ...clear, nextChangeTick: patch.updatedAtTick },
+      },
+    })).toBeNull();
+    const presentation = projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck),
+      tileSize: 16,
+      activity: { patch, atTick: patch.updatedAtTick, weather: clear },
     });
 
     expect(presentation).toMatchObject({
@@ -1412,6 +1469,24 @@ describe(`${ALPHA33_ALPINE_PRESENTATION_INVARIANTS_OWNER_INTENT} ${ALPHA34_POLAR
     });
     expect(JSON.stringify(presentation))
       .not.toMatch(/activity|anchor|dabblingTarget|refuge|tide|waterDepth/iu);
+
+    const stormPresentation = projectWildlifePresentation({
+      actor: duck,
+      observation: directObservation(duck),
+      tileSize: 16,
+      activity: {
+        patch,
+        atTick: patch.updatedAtTick,
+        weather: { ...clear, kind: "storm", intensity: 700_000 },
+      },
+    });
+    expect(stormPresentation).toMatchObject({
+      species: "american-black-duck",
+      behavior: "flight",
+      behaviorLabel: "Flying",
+    });
+    expect(JSON.stringify(stormPresentation))
+      .not.toMatch(/weather|storm|routine|priority|refuge/iu);
   });
 
   it("rejects activity custody when the presented actor is not the patch-owned revision", () => {

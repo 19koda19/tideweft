@@ -52,7 +52,7 @@ const HOME = createWorldPosition(REGION, 10_500, 10_500);
 
 describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated eagle ridge-soar activity`, () => {
   it("projects and executes one deterministic daylight soar loop using air only", () => {
-    const patch = eaglePatch(360);
+    const patch = eaglePatch(420);
     const eagle = patch.populations[0]?.members[0]?.actor;
     if (eagle === undefined) throw new Error("Golden-eagle fixture is empty");
     const authority = ridgeAuthority(patch, eagle.identity.stableId);
@@ -61,11 +61,11 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
 
     const first = projectCoreEcologyActivity(patch, {
       actorId: eagle.identity.stableId,
-      atTick: 360,
+      atTick: 420,
     }, authority);
     const repeated = projectCoreEcologyActivity(patch, {
       actorId: eagle.identity.stableId,
-      atTick: 360 + CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS - 1,
+      atTick: 420 + CORE_ECOLOGY_ACTIVITY_CADENCE_TICKS - 1,
     }, authority);
     expect(first).toMatchObject({
       species: "golden-eagle",
@@ -108,7 +108,7 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
     );
     const stepped = stepCoreEcologyActivityMotion(patch, {
       actorId: eagle.identity.stableId,
-      atTick: 360,
+      atTick: 420,
       maximumStepUnits: 700,
     }, authority);
     if (stepped === null) throw new Error("Authenticated ridge activity failed to step");
@@ -126,13 +126,13 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
   });
 
   it("rests at its authenticated ridge perch and lets immediate intent outrank soaring", () => {
-    let patch = eaglePatch(1_200);
+    let patch = eaglePatch(1_260);
     const eagle = patch.populations[0]?.members[0]?.actor;
     if (eagle === undefined) throw new Error("Golden-eagle fixture is empty");
     const authority = ridgeAuthority(patch, eagle.identity.stableId);
     const seeking = projectCoreEcologyActivity(patch, {
       actorId: eagle.identity.stableId,
-      atTick: 1_200,
+      atTick: 1_260,
     }, authority);
     expect(seeking).toMatchObject({
       state: "seeking-ridge-perch",
@@ -147,14 +147,14 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
       .toBe("authenticated-ridge-perch");
 
     const perchedActor = repositionCoreWildlifeActor(eagle, {
-      atTick: 1_200,
+      atTick: 1_260,
       position: authority.perchAnchor.position,
       heading: eagle.address.heading,
     });
     patch = replaceCoreEcologyAggregatePatchActor(patch, perchedActor);
     expect(projectCoreEcologyActivity(patch, {
       actorId: eagle.identity.stableId,
-      atTick: 1_200,
+      atTick: 1_260,
     }, authority)).toMatchObject({
       state: "perched",
       preferredNeutralIntent: "rest",
@@ -163,14 +163,14 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
       motion: { kind: "hold-position" },
     });
 
-    const daylightPatch = eaglePatch(360);
+    const daylightPatch = eaglePatch(420);
     const daylightEagle = daylightPatch.populations[0]?.members[0]?.actor;
     if (daylightEagle === undefined) throw new Error("Daylight eagle fixture is empty");
     const daylightAuthority = ridgeAuthority(daylightPatch, daylightEagle.identity.stableId);
     const threat = createActorObservation({
-      id: "ridge-threat:361",
+      id: "ridge-threat:421",
       observerId: daylightEagle.identity.stableId,
-      observedAtTick: 361,
+      observedAtTick: 421,
       channel: "vision",
       perceivedClass: "predator",
       subjectId: "THREAT-ridge-activity",
@@ -182,7 +182,7 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
     });
     if (threat === null) throw new Error("Ridge threat fixture failed");
     const alarmed = stepCoreWildlifeActor(daylightEagle, {
-      tick: 361,
+      tick: 421,
       observations: [threat],
       foodOpportunities: [],
       accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
@@ -193,7 +193,7 @@ describe(`${ALPHA33_ALPINE_SHARED_ACTIVITY_OWNER_INTENT} shared authenticated ea
     expect(["alarm", "flee", "retreat"]).toContain(alarmed.actor.intent.kind);
     expect(projectCoreEcologyActivity(alarmPatch, {
       actorId: daylightEagle.identity.stableId,
-      atTick: 361,
+      atTick: 421,
     }, daylightAuthority)).toMatchObject({
       state: "responding",
       responsiveToImmediateIntent: true,

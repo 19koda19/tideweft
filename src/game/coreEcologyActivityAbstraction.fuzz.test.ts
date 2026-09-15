@@ -83,7 +83,9 @@ describe("Alpha22 tidal-convergence activity abstraction fuzz", () => {
     const seenDirections = new Set<string>();
 
     for (const variant of variants) {
-      const atTick = 361 + variant.ordinal;
+      // Stay beyond the shared ±30-tick dawn variation so the property probes
+      // activity composition rather than a particular individual's transition.
+      const atTick = 421 + variant.ordinal;
       let patch = activityPatch(atTick - 1, variant.ordinal);
       const gull = gullActor(patch);
       const target = translateWorldPosition(
@@ -187,7 +189,7 @@ describe("Alpha22 tidal-convergence activity abstraction fuzz", () => {
   });
 
   it("rejects adversarial projection mutations through the shared contract firewall", () => {
-    const atTick = 361;
+    const atTick = 421;
     let patch = activityPatch(atTick - 1, 99);
     const gull = gullActor(patch);
     const target = translateWorldPosition(

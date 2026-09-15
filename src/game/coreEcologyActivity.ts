@@ -1,6 +1,10 @@
 import type { ObservedArea } from "../sim/actorPerception";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { tideAtTick } from "../sim/terrain";
+import {
+  FIXED_POINT,
+  type WeatherState,
+} from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
   WORLD_DAWN_START_TICK,
@@ -61,7 +65,10 @@ import {
   type CoreWildlifeActorState,
   type CoreWildlifeIntentKind,
 } from "./coreWildlifeActor";
-import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import {
+  coreEcologyCircadianBindingForSpecies,
+  coreEcologyCircadianPolicyForSpecies,
+} from "./coreEcologyCircadianPolicy";
 import type { CoreWildlifeTravelMedium } from "./coreWildlifeLocomotionProfile";
 import { headingFromRadians } from "./livingActor";
 import {
@@ -199,6 +206,8 @@ export interface CoreEcologyActivityProjection {
 export interface ProjectCoreEcologyActivityInput {
   readonly actorId: string;
   readonly atTick: number;
+  /** Canonical current environment; required by any binding with weather responses. */
+  readonly weather?: Readonly<WeatherState>;
 }
 
 /** Transient destination custody accepted by the shared activity owner. */
@@ -257,10 +266,7 @@ const QUARTERING_OFFSETS = Object.freeze([
   Object.freeze({ x: -2_300, y: 500 }),
 ] as const);
 
-/**
- * Projects the bounded daylight/rest window without claiming sleep, denning,
- * nocturnal routines, or a full circadian schedule.
- */
+/** Compatibility daylight label; the shared routine projection owns schedule truth. */
 export function projectCoreEcologyDayPhase(
   atTick: unknown,
 ): CoreEcologyDayPhaseProjection | null {
@@ -347,6 +353,19 @@ export function validateCoreEcologyActivityProjectionAffordance(
   ) errors.push("projection-actor-profile-mismatch");
   if (projection.scheduleScope !== profile.scheduleScope) {
     errors.push("projection-schedule-scope-mismatch");
+  }
+
+  const circadianPolicy = coreEcologyCircadianPolicyForSpecies(profile.speciesId);
+  if (circadianPolicy === null) {
+    if (projection.routine !== null) errors.push("undeclared-circadian-routine");
+  } else if (projection.routine === null) {
+    errors.push("missing-circadian-routine");
+  } else if (
+    projection.routine.subjectId !== actor.identity.stableId
+    || projection.routine.atTick !== projection.atTick
+    || hashCanonical(projection.routine.policy) !== hashCanonical(circadianPolicy)
+  ) {
+    errors.push("circadian-routine-binding-mismatch");
   }
 
   if (
@@ -456,27 +475,35 @@ export function stepCoreEcologyActivityMotion(
 ): CoreEcologyActivityMotionStep | null {
   const patch = canonicalizeCoreEcologyAggregatePatch(patchValue);
   const ordinaryKeys = ["actorId", "atTick", "maximumStepUnits"] as const;
-  const withSurfaceKeys = [...ordinaryKeys, "surface"] as const;
+  const inputRecord = plainRecord(input) ? input : null;
+  const expectedKeys = [
+    ...ordinaryKeys,
+    ...(inputRecord !== null && Object.hasOwn(inputRecord, "surface") ? ["surface"] : []),
+    ...(inputRecord !== null && Object.hasOwn(inputRecord, "weather") ? ["weather"] : []),
+  ];
   if (
     patch === null
-    || !plainRecord(input)
-    || (!exactKeys(input, ordinaryKeys) && !exactKeys(input, withSurfaceKeys))
+    || inputRecord === null
+    || !exactKeys(inputRecord, expectedKeys)
     || typeof input.actorId !== "string"
     || input.actorId.length === 0
     || input.actorId.length > 256
     || !nonnegativeSafeInteger(input.atTick)
     || !positiveSafeInteger(input.maximumStepUnits)
+    || (Object.hasOwn(inputRecord, "weather")
+      && canonicalCoreEcologyCurrentWeather(input.weather, input.atTick) === null)
   ) return null;
   const projection = projectCanonicalCoreEcologyActivity(patch, {
     actorId: input.actorId,
     atTick: input.atTick,
+    ...(input.weather === undefined ? {} : { weather: input.weather }),
   }, authority);
   if (projection === null) return null;
   if (projection.motion.kind === "defer-to-intent") {
-    return activityMotionStep(patch, projection, "deferred", authority);
+    return activityMotionStep(patch, projection, "deferred", authority, input.weather);
   }
   if (projection.motion.kind === "hold-position") {
-    return activityMotionStep(patch, projection, "held", authority);
+    return activityMotionStep(patch, projection, "held", authority, input.weather);
   }
 
   const owned = findMaterializedActor(patch, input.actorId);
@@ -499,8 +526,8 @@ export function stepCoreEcologyActivityMotion(
     });
     if (resolution.kind === "no-move") {
       return resolution.reason === "already-within-observed-area"
-        ? activityMotionStep(patch, projection, "arrived", authority)
-        : activityMotionStep(patch, projection, "blocked", authority);
+        ? activityMotionStep(patch, projection, "arrived", authority, input.weather)
+        : activityMotionStep(patch, projection, "blocked", authority, input.weather);
     }
     try {
       const moved = repositionCoreWildlifeActor(owned.member.actor, {
@@ -513,6 +540,7 @@ export function stepCoreEcologyActivityMotion(
         projection,
         "moved",
         authority,
+        input.weather,
       );
     } catch {
       return null;
@@ -530,7 +558,7 @@ export function stepCoreEcologyActivityMotion(
   const magnitude = Math.hypot(delta.x, delta.y);
   if (!Number.isFinite(magnitude)) return null;
   if (magnitude <= projection.motion.targetArea.radiusUnits) {
-    return activityMotionStep(patch, projection, "arrived", authority);
+    return activityMotionStep(patch, projection, "arrived", authority, input.weather);
   }
   const distance = Math.min(input.maximumStepUnits, magnitude);
   const moveX = Math.round(delta.x / magnitude * distance);
@@ -551,6 +579,7 @@ export function stepCoreEcologyActivityMotion(
       projection,
       "moved",
       authority,
+      input.weather,
     );
   } catch {
     return null;
@@ -564,13 +593,20 @@ function projectCanonicalCoreEcologyActivity(
 ): CoreEcologyActivityProjection | null {
   if (
     !plainRecord(input)
-    || !exactKeys(input, ["actorId", "atTick"])
+    || !exactKeys(
+      input,
+      Object.hasOwn(input, "weather")
+        ? ["actorId", "atTick", "weather"]
+        : ["actorId", "atTick"],
+    )
     || typeof input.actorId !== "string"
     || input.actorId.length === 0
     || input.actorId.length > 256
     || !nonnegativeSafeInteger(input.atTick)
     || input.atTick < patch.updatedAtTick
     || input.atTick - patch.updatedAtTick > CORE_ECOLOGY_MAX_STEP_TICKS
+    || (Object.hasOwn(input, "weather")
+      && canonicalCoreEcologyCurrentWeather(input.weather, input.atTick) === null)
   ) return null;
   const day = projectCoreEcologyDayPhase(input.atTick);
   const owned = findMaterializedActor(patch, input.actorId);
@@ -580,6 +616,11 @@ function projectCanonicalCoreEcologyActivity(
   if (activityProfile === null || !runtimePolicyOwnsActivity(policy, activityProfile)) {
     return null;
   }
+  const circadianBinding = coreEcologyCircadianBindingForSpecies(owned.species);
+  if (
+    (circadianBinding?.weatherResponses.length ?? 0) > 0
+    && !Object.hasOwn(input, "weather")
+  ) return null;
   const authority = authenticatedActivityDestinations(
     patch,
     owned.population,
@@ -590,9 +631,8 @@ function projectCanonicalCoreEcologyActivity(
   if (authority === null) return null;
 
   const responsive = IMMEDIATE_RESPONSE_INTENTS.has(owned.member.actor.intent.kind);
-  const actorNeedsRest = owned.member.actor.intent.kind === "rest";
-  const inRestWindow = day.phase === "rest-window";
-  const circadianPolicy = coreEcologyCircadianPolicyForSpecies(owned.species);
+  const circadianPolicy = circadianBinding?.policy
+    ?? coreEcologyCircadianPolicyForSpecies(owned.species);
 
   if (activityProfile.archetypeId === "perch-watch") {
     const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
@@ -606,6 +646,7 @@ function projectCanonicalCoreEcologyActivity(
       "perch-watch-rest-destination-v1",
       "perch",
       [],
+      input.weather,
     );
     if (routine === null) return null;
     if (responsive || routine.posture.state === "startled") {
@@ -619,7 +660,7 @@ function projectCanonicalCoreEcologyActivity(
         motion: Object.freeze({ kind: "defer-to-intent" }),
       });
     }
-    if (routine.effectivePreference === "rest" || actorNeedsRest) {
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atPerch ? "perched" : "seeking-perch",
         responsiveToImmediateIntent: false,
@@ -666,6 +707,7 @@ function projectCanonicalCoreEcologyActivity(
       "ground-cover-rest-destination-v1",
       "cover",
       [],
+      input.weather,
     );
     if (routine === null) return null;
     if (responsive || routine.posture.state === "startled") {
@@ -731,19 +773,10 @@ function projectCanonicalCoreEcologyActivity(
     });
   }
 
-  // Bound shore-water and tidal-wader actors must resolve their physical rest
-  // destination before their routine can commit its disturbance posture.
-  // Every other established archetype retains the generic response path.
-  if (
-    responsive
-    && !(
-      (
-        activityProfile.archetypeId === "shore-water-forager"
-        || activityProfile.archetypeId === "tidal-wader"
-      )
-      && circadianPolicy !== null
-    )
-  ) {
+  // An unbound compatibility profile may still defer immediately. Every bound
+  // profile first authenticates its physical rest destination so disturbance
+  // can commit the shared STARTLED posture against the same body and place.
+  if (responsive && circadianPolicy === null) {
     const responsivePerchAnchor = activityPerchAnchor(activityProfile, authority);
     return activityProjection(owned, input.atTick, day, {
       state: "responding",
@@ -765,12 +798,36 @@ function projectCanonicalCoreEcologyActivity(
     if (ridgeAuthority === null) return null;
     const perchAnchor = ridgeAuthority.perchAnchor.position;
     const perch = perchProjection(perchAnchor, owned.member.actor.address.position);
-    if (inRestWindow || actorNeedsRest) {
-      const atPerch = perch.availability === "available-here";
+    const atPerch = perch.availability === "available-here";
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      perchAnchor,
+      atPerch,
+      responsive,
+      "ridge-perch-rest-destination-v1",
+      "ridge-perch",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch,
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atPerch ? "perched" : "seeking-ridge-perch",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atPerch ? "rest" : "observe",
+        preferredNeutralIntent: atPerch ? "rest" : "observe",
+        routine,
         presentationSignal: atPerch ? "perched" : "ridge-soaring-flight",
         perch,
         motion: atPerch
@@ -792,6 +849,7 @@ function projectCanonicalCoreEcologyActivity(
       state: "ridge-soaring",
       responsiveToImmediateIntent: false,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: "ridge-soaring-flight",
       perch,
       motion: Object.freeze({
@@ -804,12 +862,36 @@ function projectCanonicalCoreEcologyActivity(
   }
   if (activityProfile.archetypeId === "perch-forage") {
     const perch = perchProjection(authority.homeAnchor, owned.member.actor.address.position);
-    if (inRestWindow || actorNeedsRest) {
-      const atPerch = perch.availability === "available-here";
+    const atPerch = perch.availability === "available-here";
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atPerch,
+      responsive,
+      "perch-forage-rest-destination-v1",
+      "perch",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch,
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atPerch ? "perched" : "seeking-perch",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atPerch ? "rest" : "observe",
+        preferredNeutralIntent: atPerch ? "rest" : "observe",
+        routine,
         presentationSignal: atPerch ? "perched" : null,
         perch,
         motion: atPerch
@@ -835,6 +917,7 @@ function projectCanonicalCoreEcologyActivity(
       state: "low-foraging",
       responsiveToImmediateIntent: false,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: atForagingArea ? null : "low-foraging-flight",
       perch,
       motion: atForagingArea
@@ -854,11 +937,39 @@ function projectCanonicalCoreEcologyActivity(
       authority.homeAnchor,
       HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
     );
+    const waterDepth = Math.max(
+      0,
+      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
+    );
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atHabitatAnchor,
+      responsive,
+      "amphibious-margin-rest-destination-v1",
+      "margin",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
     if (!atHabitatAnchor) {
       return activityProjection(owned, input.atTick, day, {
         state: "seeking-habitat-anchor",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: "shore-water-relocation",
         perch: noPerchProjection(),
         motion: Object.freeze({
@@ -872,16 +983,17 @@ function projectCanonicalCoreEcologyActivity(
         }),
       });
     }
-    const waterDepth = Math.max(
-      0,
-      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
-    );
-    const restsOnMargin = inRestWindow || actorNeedsRest || waterDepth === 0;
+    const restsOnMargin = routine.effectivePreference === "rest";
     return activityProjection(owned, input.atTick, day, {
-      state: restsOnMargin ? "shore-resting" : "aquatic-foraging",
+      state: restsOnMargin
+        ? "shore-resting"
+        : waterDepth === 0 ? "waiting-on-tide" : "aquatic-foraging",
       responsiveToImmediateIntent: false,
-      preferredNeutralIntent: inRestWindow ? "rest" : "observe",
-      presentationSignal: restsOnMargin ? "resting" : "aquatic-foraging",
+      preferredNeutralIntent: restsOnMargin ? "rest" : "observe",
+      routine,
+      presentationSignal: restsOnMargin
+        ? "resting"
+        : waterDepth === 0 ? null : "aquatic-foraging",
       perch: noPerchProjection(),
       motion: Object.freeze({ kind: "hold-position" }),
     });
@@ -900,11 +1012,35 @@ function projectCanonicalCoreEcologyActivity(
       waterfowl.refugeTarget.targetPosition,
       DABBLING_ARRIVAL_RADIUS_UNITS,
     );
-    if (inRestWindow || actorNeedsRest) {
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      waterfowl.refugeTarget.targetPosition,
+      atRefuge,
+      responsive,
+      "dabbling-refuge-rest-destination-v1",
+      "waterfowl-refuge",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atRefuge ? "resting" : "seeking-tidal-refuge",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atRefuge ? "rest" : "observe",
+        preferredNeutralIntent: atRefuge ? "rest" : "observe",
+        routine,
         presentationSignal: atRefuge ? "resting" : "tidal-relocation-flight",
         perch: noPerchProjection(),
         motion: atRefuge
@@ -925,6 +1061,7 @@ function projectCanonicalCoreEcologyActivity(
         state: atRefuge ? "waiting-on-tide" : "seeking-tidal-refuge",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: atRefuge ? null : "tidal-relocation-flight",
         perch: noPerchProjection(),
         motion: atRefuge
@@ -977,6 +1114,7 @@ function projectCanonicalCoreEcologyActivity(
           ? aquaticObservation.sourceObservationId
           : null,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: dabbling
           ? "dabbling-forage"
           : "surface-swimming",
@@ -992,6 +1130,7 @@ function projectCanonicalCoreEcologyActivity(
       responsiveToImmediateIntent: false,
       sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: travelMedium === "air"
         ? "tidal-relocation-flight"
         : "surface-swimming",
@@ -1021,20 +1160,19 @@ function projectCanonicalCoreEcologyActivity(
       tidalWeb.hauloutTarget,
       OTTER_ARRIVAL_RADIUS_UNITS,
     );
-    const routine = circadianPolicy === null
-      ? null
-      : projectPhysicalRestRoutine(
-          owned,
-          input.atTick,
-          tidalWeb.hauloutTarget,
-          atHaulout,
-          responsive,
-          "shore-water-haulout-rest-destination-v1",
-          "haulout",
-          [],
-        );
-    if (circadianPolicy !== null && routine === null) return null;
-    if (responsive || routine?.posture.state === "startled") {
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      tidalWeb.hauloutTarget,
+      atHaulout,
+      responsive,
+      "shore-water-haulout-rest-destination-v1",
+      "haulout",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
       return activityProjection(owned, input.atTick, day, {
         state: "responding",
         responsiveToImmediateIntent: responsive,
@@ -1045,15 +1183,12 @@ function projectCanonicalCoreEcologyActivity(
         motion: Object.freeze({ kind: "defer-to-intent" }),
       });
     }
-    const routinePrefersRest = routine?.effectivePreference === "rest";
-    if (routinePrefersRest || (routine === null && inRestWindow) || actorNeedsRest) {
+    const routinePrefersRest = routine.effectivePreference === "rest";
+    if (routinePrefersRest) {
       return activityProjection(owned, input.atTick, day, {
         state: atHaulout ? "shore-resting" : "hauling-out",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: (routinePrefersRest || routine === null && inRestWindow)
-          && atHaulout
-          ? "rest"
-          : "observe",
+        preferredNeutralIntent: atHaulout ? "rest" : "observe",
         routine,
         presentationSignal: atHaulout ? "resting" : "shore-water-relocation",
         perch: noPerchProjection(),
@@ -1127,17 +1262,12 @@ function projectCanonicalCoreEcologyActivity(
     const aquaticObservation = currentAquaticActivityObservation(actor, input.atTick);
     const driverSignals: LivingCircadianDriverSignal[] = [];
     if (egret.wadingTarget !== null) {
-      driverSignals.push(Object.freeze({
-        driver: "tide",
-        source: "authoritative-environment",
-        referenceId: `tide:wading:${hashCanonical([
-          input.atTick,
-          egret.wadingTarget.targetAnchorOrdinal,
-          egret.wadingTarget.targetPosition,
-          egret.wadingTarget.waterDepth,
-        ])}`,
-        sampledAtTick: input.atTick,
-      }));
+      const tideSignal = authoritativeTideDriverSignal(owned, input.atTick, {
+        targetAnchorOrdinal: egret.wadingTarget.targetAnchorOrdinal,
+        targetPosition: egret.wadingTarget.targetPosition,
+        waterDepth: egret.wadingTarget.waterDepth,
+      });
+      if (tideSignal !== null) driverSignals.push(tideSignal);
     }
     if (aquaticObservation !== null) {
       driverSignals.push(Object.freeze({
@@ -1156,6 +1286,7 @@ function projectCanonicalCoreEcologyActivity(
       "tidal-wader-refuge-rest-destination-v1",
       "tidal-refuge",
       driverSignals,
+      input.weather,
     );
     if (routine === null) return null;
     if (responsive || routine.posture.state === "startled") {
@@ -1283,6 +1414,36 @@ function projectCanonicalCoreEcologyActivity(
       authority.homeAnchor,
       WADING_ARRIVAL_RADIUS_UNITS,
     );
+    const waterDepth = Math.max(
+      0,
+      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
+    );
+    // Authenticated habitat admission guarantees the upper bound. Fail closed
+    // rather than presenting a bird standing or resting in unsupported depth.
+    if (waterDepth > CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH) return null;
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atWadingGround,
+      responsive,
+      "anchored-wader-rest-destination-v1",
+      "wading-anchor",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
     const seekAuthenticatedWadingGround = () => activityProjection(
       owned,
       input.atTick,
@@ -1291,6 +1452,7 @@ function projectCanonicalCoreEcologyActivity(
         state: "seeking-wading-ground",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: "tidal-relocation-flight",
         perch: noPerchProjection(),
         motion: Object.freeze({
@@ -1303,19 +1465,13 @@ function projectCanonicalCoreEcologyActivity(
         }),
       },
     );
-    const waterDepth = Math.max(
-      0,
-      tideAtTick(input.atTick).level - authority.homeAnchorElevation,
-    );
-    // Authenticated habitat admission guarantees this invariant. Fail closed
-    // rather than presenting a bird standing or resting in unsupported depth.
-    if (waterDepth > CORE_ECOLOGY_ANCHORED_WADER_MAXIMUM_DEPTH) return null;
-    if (inRestWindow || actorNeedsRest) {
+    if (routine.effectivePreference === "rest") {
       if (!atWadingGround) return seekAuthenticatedWadingGround();
       return activityProjection(owned, input.atTick, day, {
         state: "resting",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow ? "rest" : "observe",
+        preferredNeutralIntent: "rest",
+        routine,
         presentationSignal: "resting",
         perch: noPerchProjection(),
         motion: Object.freeze({ kind: "hold-position" }),
@@ -1327,6 +1483,7 @@ function projectCanonicalCoreEcologyActivity(
         state: "waiting-on-tide",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: null,
         perch: noPerchProjection(),
         motion: Object.freeze({ kind: "defer-to-intent" }),
@@ -1346,6 +1503,7 @@ function projectCanonicalCoreEcologyActivity(
       responsiveToImmediateIntent: false,
       sourceObservationId: aquaticObservation?.sourceObservationId ?? null,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: searching ? "wading-search" : "wading-scan",
       perch: noPerchProjection(),
       motion: Object.freeze({ kind: "hold-position" }),
@@ -1358,11 +1516,35 @@ function projectCanonicalCoreEcologyActivity(
       authority.homeAnchor,
       HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
     );
-    if (inRestWindow || actorNeedsRest) {
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atHabitatAnchor,
+      responsive,
+      "diving-waterbird-rest-destination-v1",
+      "habitat-anchor",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atHabitatAnchor ? "resting" : "seeking-habitat-anchor",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atHabitatAnchor ? "rest" : "observe",
+        preferredNeutralIntent: atHabitatAnchor ? "rest" : "observe",
+        routine,
         presentationSignal: atHabitatAnchor ? "resting" : "tidal-relocation-flight",
         perch: noPerchProjection(),
         motion: atHabitatAnchor
@@ -1386,6 +1568,7 @@ function projectCanonicalCoreEcologyActivity(
         state: "active-watch",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: null,
         perch: noPerchProjection(),
         motion: Object.freeze({ kind: "defer-to-intent" }),
@@ -1403,6 +1586,7 @@ function projectCanonicalCoreEcologyActivity(
       responsiveToImmediateIntent: false,
       sourceObservationId: surfaceOpportunity.sourceObservationId,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: atSurfaceOpportunity
         ? "surface-diving"
         : "surface-opportunity-flight",
@@ -1426,11 +1610,35 @@ function projectCanonicalCoreEcologyActivity(
       authority.homeAnchor,
       HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
     );
-    if (inRestWindow || actorNeedsRest) {
+    const routine = projectPhysicalRestRoutine(
+      owned,
+      input.atTick,
+      authority.homeAnchor,
+      atHabitatAnchor,
+      responsive,
+      "aerial-surface-rest-destination-v1",
+      "habitat-anchor",
+      [],
+      input.weather,
+    );
+    if (routine === null) return null;
+    if (responsive || routine.posture.state === "startled") {
+      return activityProjection(owned, input.atTick, day, {
+        state: "responding",
+        responsiveToImmediateIntent: responsive,
+        preferredNeutralIntent: responsive ? null : "observe",
+        routine,
+        presentationSignal: null,
+        perch: noPerchProjection(),
+        motion: Object.freeze({ kind: "defer-to-intent" }),
+      });
+    }
+    if (routine.effectivePreference === "rest") {
       return activityProjection(owned, input.atTick, day, {
         state: atHabitatAnchor ? "resting" : "seeking-habitat-anchor",
         responsiveToImmediateIntent: false,
-        preferredNeutralIntent: inRestWindow && atHabitatAnchor ? "rest" : "observe",
+        preferredNeutralIntent: atHabitatAnchor ? "rest" : "observe",
+        routine,
         presentationSignal: atHabitatAnchor ? "resting" : "tidal-relocation-flight",
         perch: noPerchProjection(),
         motion: atHabitatAnchor
@@ -1454,6 +1662,7 @@ function projectCanonicalCoreEcologyActivity(
         state: "active-watch",
         responsiveToImmediateIntent: false,
         preferredNeutralIntent: "observe",
+        routine,
         presentationSignal: null,
         perch: noPerchProjection(),
         motion: Object.freeze({ kind: "defer-to-intent" }),
@@ -1471,6 +1680,7 @@ function projectCanonicalCoreEcologyActivity(
       responsiveToImmediateIntent: false,
       sourceObservationId: surfaceOpportunity.sourceObservationId,
       preferredNeutralIntent: "observe",
+      routine,
       presentationSignal: "surface-opportunity-flight",
       perch: noPerchProjection(),
       motion: atSurfaceOpportunity
@@ -1487,20 +1697,59 @@ function projectCanonicalCoreEcologyActivity(
   }
 
   if (activityProfile.archetypeId !== "low-quartering") return null;
-  if (inRestWindow || actorNeedsRest) {
+  const atHabitatAnchor = withinWorldRadius(
+    owned.member.actor.address.position,
+    authority.homeAnchor,
+    HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+  );
+  const routine = projectPhysicalRestRoutine(
+    owned,
+    input.atTick,
+    authority.homeAnchor,
+    atHabitatAnchor,
+    responsive,
+    "low-quartering-rest-destination-v1",
+    "habitat-anchor",
+    [],
+    input.weather,
+  );
+  if (routine === null) return null;
+  if (responsive || routine.posture.state === "startled") {
     return activityProjection(owned, input.atTick, day, {
-      state: "resting",
-      responsiveToImmediateIntent: false,
-      preferredNeutralIntent: inRestWindow ? "rest" : "observe",
-      presentationSignal: "resting",
+      state: "responding",
+      responsiveToImmediateIntent: responsive,
+      preferredNeutralIntent: responsive ? null : "observe",
+      routine,
+      presentationSignal: null,
       perch: noPerchProjection(),
-      motion: Object.freeze({ kind: "hold-position" }),
+      motion: Object.freeze({ kind: "defer-to-intent" }),
+    });
+  }
+  if (routine.effectivePreference === "rest") {
+    return activityProjection(owned, input.atTick, day, {
+      state: atHabitatAnchor ? "resting" : "seeking-habitat-anchor",
+      responsiveToImmediateIntent: false,
+      preferredNeutralIntent: atHabitatAnchor ? "rest" : "observe",
+      routine,
+      presentationSignal: atHabitatAnchor ? "resting" : "low-quartering-flight",
+      perch: noPerchProjection(),
+      motion: atHabitatAnchor
+        ? Object.freeze({ kind: "hold-position" })
+        : Object.freeze({
+            kind: "target-area",
+            verb: "seek-habitat-anchor",
+            targetArea: frozenArea(
+              authority.homeAnchor,
+              HABITAT_ANCHOR_ARRIVAL_RADIUS_UNITS,
+            ),
+          }),
     });
   }
   return activityProjection(owned, input.atTick, day, {
     state: "low-quartering",
     responsiveToImmediateIntent: false,
     preferredNeutralIntent: "observe",
+    routine,
     presentationSignal: "low-quartering-flight",
     perch: noPerchProjection(),
     motion: Object.freeze({
@@ -1523,6 +1772,7 @@ function activityMotionStep(
   projection: CoreEcologyActivityProjection,
   resolution: CoreEcologyActivityMotionStep["resolution"],
   authority?: CoreEcologyActivityAuthorityReceipt,
+  weather?: Readonly<WeatherState>,
 ): CoreEcologyActivityMotionStep | null {
   if (projection.routine === null) {
     return Object.freeze({ patch, projection, resolution });
@@ -1533,9 +1783,10 @@ function activityMotionStep(
   }
   const committedRoutine = resolution === "moved"
     ? projectCanonicalCoreEcologyActivity(patch, {
-        actorId: projection.actorId,
-        atTick: projection.atTick,
-      }, authority)?.routine ?? null
+      actorId: projection.actorId,
+      atTick: projection.atTick,
+      ...(weather === undefined ? {} : { weather }),
+    }, authority)?.routine ?? null
     : projection.routine;
   if (committedRoutine === null) return null;
   const withRoutine = replaceCoreWildlifeActorCircadian(actor, {
@@ -1584,10 +1835,12 @@ function projectPhysicalRestRoutine(
   destinationNamespace: string,
   destinationPrefix: string,
   driverSignals: readonly LivingCircadianDriverSignal[],
+  weather: Readonly<WeatherState> | undefined,
 ): LivingCircadianProjection | null {
   const actor = owned.member.actor;
-  const policy = coreEcologyCircadianPolicyForSpecies(actor.identity.species);
-  if (policy === null) return null;
+  const binding = coreEcologyCircadianBindingForSpecies(actor.identity.species);
+  if (binding === null) return null;
+  const weatherResponse = projectCircadianWeatherResponse(binding, atTick, weather);
   const destinationId = `${destinationPrefix}:${hashCanonical([
     destinationNamespace,
     actor.identity.stableId,
@@ -1597,15 +1850,86 @@ function projectPhysicalRestRoutine(
     subjectId: actor.identity.stableId,
     atTick,
     mode: "full",
-    policy,
-    current: physicalRestPosture(actor, atTick, arrived, destinationId, policy),
+    policy: binding.policy,
+    current: physicalRestPosture(actor, atTick, arrived, destinationId, binding.policy),
     restDestination: {
       destinationId,
       arrived,
     },
-    driverSignals,
+    driverSignals: Object.freeze([
+      ...driverSignals,
+      ...weatherResponse.driverSignals,
+    ]),
     disturbance: currentRoutineDisturbance(actor, atTick),
-    priorityOverride: routinePriorityOverride(actor, responsive),
+    priorityOverride: routinePriorityOverride(actor, responsive)
+      ?? weatherResponse.priorityOverride,
+  });
+}
+
+function projectCircadianWeatherResponse(
+  binding: NonNullable<ReturnType<typeof coreEcologyCircadianBindingForSpecies>>,
+  atTick: number,
+  weather: Readonly<WeatherState> | undefined,
+): Readonly<{
+  driverSignals: readonly LivingCircadianDriverSignal[];
+  priorityOverride: LivingCircadianPriorityOverride | null;
+}> {
+  if (weather === undefined || binding.weatherResponses.length === 0) {
+    return Object.freeze({
+      driverSignals: Object.freeze([]),
+      priorityOverride: null,
+    });
+  }
+  const matching = binding.weatherResponses.filter((response) => (
+    response.weatherKinds.includes(weather.kind)
+    && weather.intensity >= response.minimumIntensity
+  ));
+  const activity = matching.find(({ effect }) => effect === "activity-driver");
+  const dangerous = matching.find(({ effect }) => effect === "dangerous-weather-rest");
+  const referenceIdFor = (responseId: string) => `weather:${responseId}:${hashCanonical({
+    atTick,
+    weather,
+  })}`;
+  return Object.freeze({
+    driverSignals: activity === undefined
+      ? Object.freeze([])
+      : Object.freeze([Object.freeze({
+          driver: "weather" as const,
+          source: "authoritative-environment" as const,
+          referenceId: referenceIdFor(activity.responseId),
+          sampledAtTick: atTick,
+        })]),
+    priorityOverride: dangerous === undefined
+      ? null
+      : Object.freeze({
+          kind: "dangerous-weather" as const,
+          referenceId: referenceIdFor(dangerous.responseId),
+          preference: "rest" as const,
+        }),
+  });
+}
+
+/**
+ * Turns branch-owned ecological usability evidence into the one shared tide
+ * driver shape. A branch must first prove useful depth/terrain; the tide's mere
+ * existence never wakes an actor.
+ */
+function authoritativeTideDriverSignal(
+  owned: OwnedActivityActor,
+  atTick: number,
+  usabilityEvidence: unknown,
+): LivingCircadianDriverSignal | null {
+  const binding = coreEcologyCircadianBindingForSpecies(owned.species);
+  if (binding === null || !binding.policy.drivers.includes("tide")) return null;
+  return Object.freeze({
+    driver: "tide",
+    source: "authoritative-environment",
+    referenceId: `tide:usable:${hashCanonical({
+      actorId: owned.member.actor.identity.stableId,
+      atTick,
+      usabilityEvidence,
+    })}`,
+    sampledAtTick: atTick,
   });
 }
 
@@ -2225,6 +2549,50 @@ export function coreEcologySpeciesHasBoundedActivityProjection(
 }
 
 const isActivitySpecies = coreEcologySpeciesHasBoundedActivityProjection;
+
+/**
+ * Canonical current weather accepted by ecology routine and presentation
+ * boundaries. Optional callers must either omit weather or provide this exact
+ * authoritative shape and remain valid beyond the projection tick; an
+ * explicit undefined, expired snapshot, or caller-authored extension fails
+ * closed.
+ */
+export function canonicalCoreEcologyCurrentWeather(
+  value: unknown,
+  atTick: number,
+): Readonly<WeatherState> | null {
+  if (
+    !nonnegativeSafeInteger(atTick)
+    || !plainRecord(value)
+    || !exactKeys(value, ["intensity", "kind", "nextChangeTick", "windX", "windY"])
+    || (
+      value.kind !== "clear"
+      && value.kind !== "mist"
+      && value.kind !== "rain"
+      && value.kind !== "storm"
+    )
+    || !nonnegativeSafeInteger(value.intensity)
+    || value.intensity > FIXED_POINT
+    || !signedFixedPoint(value.windX)
+    || !signedFixedPoint(value.windY)
+    || !nonnegativeSafeInteger(value.nextChangeTick)
+    || value.nextChangeTick <= atTick
+  ) return null;
+  return Object.freeze({
+    kind: value.kind,
+    intensity: value.intensity,
+    windX: value.windX,
+    windY: value.windY,
+    nextChangeTick: value.nextChangeTick,
+  });
+}
+
+function signedFixedPoint(value: unknown): value is number {
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && Math.abs(value) <= FIXED_POINT
+    && !Object.is(value, -0);
+}
 
 function nonnegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number"

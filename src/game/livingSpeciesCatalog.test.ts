@@ -284,8 +284,8 @@ describe("Living Weft species module catalog", () => {
       status: "active",
       ownerId: "game:core-ecology-species-runtime-policy:v1",
       rhythm: "nocturnal",
-      cadenceTicks: 4,
-      phaseBias: 800_000,
+      cadenceTicks: 7,
+      phaseBias: 0,
     });
     expect(currentRabbit?.activity).toMatchObject({
       ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
@@ -298,9 +298,25 @@ describe("Living Weft species module catalog", () => {
       },
     });
     for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
-      expect(livingSpeciesModule(binding.speciesId)?.activity.circadian.rhythm).toBe(
-        livingCircadianProfile(binding.policy.profileId).rhythm,
-      );
+      const profile = livingCircadianProfile(binding.policy.profileId);
+      const module = livingSpeciesModule(binding.speciesId);
+      expect(module?.activity.circadian).toEqual({
+        status: "active",
+        ownerId: "game:core-ecology-species-runtime-policy:v1",
+        rhythm: profile.rhythm,
+        cadenceTicks: profile.evaluationCadenceTicks,
+        phaseBias: 0,
+      });
+      if (binding.weatherResponses.length > 0) {
+        expect(module?.environment.weather).toMatchObject({
+          status: "active",
+          ownerId: module?.activity.ownerId,
+          outputs: ["activity-pressure"],
+        });
+        expect(module?.interactions.targets.find(({ targetClass }) => (
+          targetClass === "weather"
+        ))?.policy).toBe("available");
+      }
     }
 
     const releasedCatalogs = [
@@ -318,6 +334,9 @@ describe("Living Weft species module catalog", () => {
     ));
     const releasedRabbits = releasedCatalogs.map((catalog) => (
       catalog.modules.find(({ speciesId }) => speciesId === "marsh-rabbit")
+    ));
+    const releasedDucks = releasedCatalogs.map((catalog) => (
+      catalog.modules.find(({ speciesId }) => speciesId === "american-black-duck")
     ));
     for (const otter of releasedOtters) {
       expect(otter?.activity.circadian).toEqual({
@@ -340,10 +359,34 @@ describe("Living Weft species module catalog", () => {
         .toEqual(rabbit);
       expect(Object.isFrozen(rabbit)).toBe(true);
     }
+    for (const duck of releasedDucks) {
+      expect(duck?.environment.weather).toEqual({
+        status: "unimplemented",
+        ownerId: null,
+        inputs: [],
+        outputs: [],
+      });
+      expect(duck?.interactions.targets.find(({ targetClass }) => (
+        targetClass === "weather"
+      ))).toEqual({
+        targetClass: "weather",
+        policy: "intentional-no-response",
+        perceptionChannels: [],
+        appraisals: [],
+        motivationAxes: [],
+        verbs: [],
+        escalationConstraints: [],
+        disengagementVerbs: [],
+      });
+      expect(duck === undefined ? null : canonicalizeLivingSpeciesModule(duck)).toEqual(duck);
+      expect(Object.isFrozen(duck)).toBe(true);
+    }
     expect(releasedOtters.every((otter) => otter === releasedOtters[0])).toBe(true);
     expect(releasedRabbits.every((rabbit) => rabbit === releasedRabbits[0])).toBe(true);
+    expect(releasedDucks.every((duck) => duck === releasedDucks[0])).toBe(true);
     expect(currentOtter).not.toBe(releasedOtters[0]);
     expect(currentRabbit).not.toBe(releasedRabbits[0]);
+    expect(livingSpeciesModule("american-black-duck")).not.toBe(releasedDucks[0]);
   });
 
   it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
@@ -1830,12 +1873,25 @@ describe("Living Weft species module catalog", () => {
       health: { implementation: "unimplemented", causalDeath: false },
       aftermath: { implementation: "unimplemented", carcassModel: "none" },
       environment: {
-        weather: { status: "unimplemented" },
+        weather: {
+          status: "active",
+          ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+          inputs: ["weather-intensity", "weather-kind"],
+          outputs: ["activity-pressure"],
+        },
         water: { status: "unimplemented", inputs: [], outputs: [] },
         tide: { status: "unimplemented", inputs: [], outputs: [] },
       },
       lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
     });
+    expect(duck?.physiology.conditions.map(({ id }) => id)).not.toContain("activity-pressure");
+    expect(duck?.interactions.targets.find(({ targetClass }) => targetClass === "weather"))
+      .toMatchObject({
+        policy: "available",
+        appraisals: ["activity-pressure", "exposure"],
+        motivationAxes: ["activity", "safety"],
+        verbs: ["activate", "retreat"],
+      });
     expect(otter).toMatchObject({
       profile: {
         implementation: "active",
@@ -1945,7 +2001,7 @@ describe("Living Weft species module catalog", () => {
       "aquatic-animal", "dog", "food", "human", "predator", "water",
     ]);
     expect(availableTargets(duck)).toEqual([
-      "aquatic-animal", "dog", "food", "human", "predator", "water",
+      "aquatic-animal", "dog", "food", "human", "predator", "water", "weather",
     ]);
     expect(availableTargets(otter)).toEqual([
       "aquatic-animal", "dog", "food", "human", "predator", "smaller-prey", "water",
@@ -2634,7 +2690,7 @@ describe("Living Weft species module catalog", () => {
     })).toBeNull();
   });
 
-  it("allows environment effects to mutate only declared condition axes", () => {
+  it("allows only declared condition outputs or the activity owner's weather pressure", () => {
     const human = cloneModule("human");
     expect(canonicalizeLivingSpeciesModule({
       ...human,
@@ -2643,6 +2699,53 @@ describe("Living Weft species module catalog", () => {
         weather: {
           ...human.environment.weather,
           outputs: ["cold-stress", "secret-morale", "wetness"],
+        },
+      },
+    })).toBeNull();
+    const duck = cloneModule("american-black-duck");
+    expect(duck.physiology.conditions.map(({ id }) => id)).not.toContain("activity-pressure");
+    expect(canonicalizeLivingSpeciesModule(duck)).toEqual(duck);
+    expect(canonicalizeLivingSpeciesModule({
+      ...duck,
+      environment: {
+        ...duck.environment,
+        weather: {
+          ...duck.environment.weather,
+          ownerId: "game:core-wildlife-actor:v1",
+        },
+      },
+    })).toBeNull();
+    expect(canonicalizeLivingSpeciesModule({
+      ...duck,
+      environment: {
+        ...duck.environment,
+        water: {
+          status: "active",
+          ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
+          inputs: ["water-depth"],
+          outputs: ["activity-pressure"],
+        },
+      },
+    })).toBeNull();
+    expect(canonicalizeLivingSpeciesModule({
+      ...duck,
+      environment: {
+        ...duck.environment,
+        weather: {
+          ...duck.environment.weather,
+          outputs: ["activity-pressure", "secret-morale"],
+        },
+      },
+    })).toBeNull();
+    expect(canonicalizeLivingSpeciesModule({
+      ...duck,
+      environment: {
+        ...duck.environment,
+        weather: {
+          status: "unimplemented",
+          ownerId: null,
+          inputs: [],
+          outputs: [],
         },
       },
     })).toBeNull();
@@ -2803,6 +2906,8 @@ describe("Living Weft species module catalog", () => {
     }
     expect(livingSpeciesModule("brown-rat")?.environment.weather.status).toBe("active");
     expect(livingSpeciesModule("domestic-cat")?.environment.weather.status)
+      .toBe("active");
+    expect(livingSpeciesModule("american-black-duck")?.environment.weather.status)
       .toBe("active");
     expect(livingSpeciesModule("human")?.population).toMatchObject({
       implementation: "active",

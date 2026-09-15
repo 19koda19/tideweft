@@ -4,6 +4,52 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.50 — 2026-09-15
+
+Build: `0.3.3-alpha.50` · Gameplay contract: 48 · Tutorial: 60
+
+Many Rhythms is the local unpublished Alpha 50 source candidate: all seventeen existing wildlife species with declared activity profiles now share one arrival-gated living-circadian routine contract through their existing activity, destination, and locomotion owners.
+
+### Gameplay
+
+- The circadian registry now exactly covers all seventeen current wildlife activity profiles. Fourteen are day-active, North American river otter remains night-active, snowy egret remains adaptive to clock, tide, and current lawful opportunity, and marsh rabbit remains twilight-active.
+- American black duck now composes its day-active clock with current weather: qualifying ordinary rain may activate it outside its base clock window, while a dangerous storm drives physical travel to and rest at its authenticated refuge.
+- American black duck, North American river otter, greater yellowlegs, and diamondback terrapin keep clock-based wake policy; their existing action and destination projections remain tide- and depth-responsive only where dabbling water, foraging water, wading ground, or wet margin is physically usable. Tide does not independently wake them.
+- Every bound actor uses its existing authenticated perch, refuge, habitat anchor, wading ground, haulout, or cover and its already-declared travel medium. Transit remains Awake; physical arrival alone permits Resting, and the shared settling interval alone permits Asleep.
+- STARTLED response, current danger, lawful disturbance, urgent needs, and retained commitments outrank neutral routine preference. No activity profile receives a private scheduler, detector, pathfinder, or teleport.
+
+### Fixes
+
+- The thirteen formerly bounded day-window profiles now declare the truthful circadian-activity capability and circadian-routine scope instead of using the compatibility-only bounded-diurnal window.
+- All twelve reusable activity archetypes now route rest preference through the same authenticated physical-rest adapter and fail closed when species, profile, travel medium, destination, body, policy, or tick do not agree.
+- Tide- and depth-responsive actions now require the current species' real physical affordance without synthesizing a generic wake signal that would erase sleep on always-usable habitat. A dry diamondback-terrapin margin remains an awake tide wait instead of falsely presenting rest while its clock profile prefers activity.
+- Routine-owned travel reuses existing air, amphibious, surface-water-capable, or land locomotion and does not mint unsupported track evidence, food, feeding results, targets, knowledge, or new choices.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Routine preference changes neither awareness nor immunity; threats, terrain, weather, needs, and current commitments retain their ordinary authority.
+- This slice adds no species, actor, population unit, habitat allocation, encounter density, item, cargo, feeding result, attack, mortality path, or reward. It converts only the seventeen already-declared activity profiles.
+- Southern leopard frog remains a real non-addressable rain-responsive aggregate: rain can raise its lawful activity and chorus while masking hearing. It gains no fabricated individual actor, destination, posture, or circadian binding.
+
+### Interface
+
+- Chart, Relief, quick inspection, and ABOUT may present only a lawfully observed current activity, relocation, Resting, Asleep, or STARTLED posture for addressable actors.
+- Presentation never exposes hidden policy, stable phase, wake threshold, destination identity, current private target, or unseen schedule state.
+- Field Manual version 60 explains the exact seventeen-profile routine boundary, duck weather response, four tide/depth-responsive physical action paths, physical arrival rule, frog aggregate distinction, persistence law, and unfinished Turning Day work.
+
+### Save changes
+
+- Outer save version 32, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged. Many Rhythms adds no migration, parallel ecology root, actor rewrite, or habitat reallocation.
+- The current catalog derives rhythm and cadence from the shared binding registry, while frozen Alpha 32 through Alpha 39 catalogs preserve their exact released bytes and hashes through an explicit historical bounded-diurnal set.
+- The existing optional version-1 wildlife circadian receipt still stores only policy, authenticated rest-destination receipt, and posture with its entered tick after lawful commitment. Legacy absence remains valid.
+- Full detail reauthenticates current body and destination before behavioral use. Coarse absence may conserve only an already committed bounded rest bout; it invents no commute, perception, target, or decision.
+
+### Known limitations
+
+- Alpha 50 Many Rhythms is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- The exact seventeen-profile registry is not all forty-five core-wildlife profiles and not a complete autonomous animal-life simulation. Wildlife outside this profile set remains unchanged.
+- Southern leopard frog retains real aggregate rain response without a fabricated individual posture. Wildlife outside the seventeen-profile registry, remaining humans, the independent dog, bonded/player companions, broader driver coverage, broader coarse-time validation, final parity and performance evidence, and Turning Day closure remain unfinished before Living Voice.
+
 ## 0.3.3-alpha.49 — 2026-09-15
 
 Build: `0.3.3-alpha.49` · Gameplay contract: 47 · Tutorial: 59

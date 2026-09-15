@@ -998,6 +998,13 @@ function initializeV24ActivityActor(
   const activity = projectCoreEcologyActivity(patch, {
     actorId: member.actor.identity.stableId,
     atTick: tick,
+    weather: {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: tick + 1,
+    },
   });
   if (activity === null) throw new Error(`v24 fixture ${species} activity was rejected`);
   if (activity.motion.kind !== "target-area") return patch;

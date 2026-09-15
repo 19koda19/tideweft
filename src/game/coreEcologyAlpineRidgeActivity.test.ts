@@ -69,10 +69,19 @@ describe("canonical Alpine ridge activity projection", () => {
       expectCanonicalTerrainAnchor(anchor, terrain, SEED, REGION);
     }
 
-    expect(projectCoreEcologyActivity(daylight.patch, {
-      actorId: daylight.actorId,
-      atTick: 360,
-    }, authority)).toMatchObject({
+    const establishedDaylight = materializedEaglePatch(SEED, REGION, 420);
+    const establishedAuthority = projectCoreEcologyAlpineRidgeActivityAuthority({
+      rootSeed: SEED,
+      patch: establishedDaylight.patch,
+      actorId: establishedDaylight.actorId,
+    });
+    if (establishedAuthority === null) {
+      throw new Error("Established-daylight ridge authority fixture failed");
+    }
+    expect(projectCoreEcologyActivity(establishedDaylight.patch, {
+      actorId: establishedDaylight.actorId,
+      atTick: 420,
+    }, establishedAuthority)).toMatchObject({
       species: "golden-eagle",
       state: "ridge-soaring",
       presentationSignal: "ridge-soaring-flight",
@@ -83,7 +92,7 @@ describe("canonical Alpine ridge activity projection", () => {
       },
     });
 
-    const rest = materializedEaglePatch(SEED, REGION, 1_200);
+    const rest = materializedEaglePatch(SEED, REGION, 1_260);
     const restAuthority = projectCoreEcologyAlpineRidgeActivityAuthority({
       rootSeed: SEED,
       patch: rest.patch,
@@ -92,7 +101,7 @@ describe("canonical Alpine ridge activity projection", () => {
     if (restAuthority === null) throw new Error("Rest-window ridge authority fixture failed");
     const restProjection = projectCoreEcologyActivity(rest.patch, {
       actorId: rest.actorId,
-      atTick: 1_200,
+      atTick: 1_260,
     }, restAuthority);
     expect(["perched", "seeking-ridge-perch"]).toContain(restProjection?.state);
     expect(restProjection?.perch.anchor).toEqual(restAuthority.perchAnchor.position);

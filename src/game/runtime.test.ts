@@ -590,6 +590,13 @@ function initializeExactV24ActivityActor(
   const activity = projectCoreEcologyActivity(patch, {
     actorId: member.actor.identity.stableId,
     atTick: tick,
+    weather: {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: tick + 1,
+    },
   });
   if (activity === null)
     throw new Error(`historical ${species} initialization failed`);

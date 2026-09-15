@@ -1,5 +1,6 @@
 import { ACTOR_PERCEPTION_SCALE } from "../sim/actorPerception";
 import { globalTileToRegion } from "../sim/regions";
+import type { WeatherState } from "../sim/types";
 import {
   getCoreWildlifeProfile,
   type CoreWildlifeLifeStage,
@@ -19,6 +20,7 @@ import {
   type CoreEcologyAggregateEvidenceKind,
 } from "./coreEcology";
 import {
+  canonicalCoreEcologyCurrentWeather,
   coreEcologySpeciesHasBoundedActivityProjection,
   projectCoreEcologyActivity,
   type CoreEcologyActivityAuthorityReceipt,
@@ -28,6 +30,7 @@ import { isTrustedCoreEcologyActivityAuthority } from "./coreEcologyActivityAuth
 import { isTrustedCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
 import { isTrustedCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
+import { coreEcologyCircadianBindingForSpecies } from "./coreEcologyCircadianPolicy";
 import {
   isCoreEcologyAggregateSpecies,
   type CoreEcologyAggregateSpecies,
@@ -138,6 +141,7 @@ export interface WildlifePresentationInput {
   readonly activity?: Readonly<{
     readonly patch: unknown;
     readonly atTick: number;
+    readonly weather?: Readonly<WeatherState>;
     readonly authority?: CoreEcologyActivityAuthorityReceipt;
   }>;
 }
@@ -1389,10 +1393,11 @@ export function projectWildlifePresentation(
   if (!activity.valid) return null;
 
   const speciesIdentified = detail.visualClarity >= descriptor.identificationClarity;
-  const behavior = presentationBehavior(actor.intent.kind, activity.projection);
+  const visibleIntent = reauthenticatedPresentationIntent(actor.intent.kind, activity.projection);
+  const behavior = presentationBehavior(visibleIntent, activity.projection);
   const behaviorLabel = detail.visualClarity >= BEHAVIOR_CLARITY
-    ? observableBehavior(actor.intent.kind, activity.projection)
-    : coarseMotion(actor.intent.kind, activity.projection);
+    ? observableBehavior(visibleIntent, activity.projection)
+    : coarseMotion(visibleIntent, activity.projection);
   const conditionLabels = detail.visualClarity >= CONDITION_CLARITY
     ? observableConditionLabels(actor)
     : Object.freeze([]);
@@ -1879,15 +1884,26 @@ function resolvePresentationActivity(
     return Object.freeze({ valid: true, projection: null });
   }
   if (value === undefined) return Object.freeze({ valid: true, projection: null });
+  const weatherRequired = (
+    coreEcologyCircadianBindingForSpecies(actor.identity.species)?.weatherResponses.length ?? 0
+  ) > 0;
   if (
     !plainRecord(value)
     || !exactKeys(
       value,
-      value.authority === undefined
-        ? ["atTick", "patch"]
-        : ["atTick", "authority", "patch"],
+      [
+        "atTick",
+        "patch",
+        ...(Object.hasOwn(value, "authority") ? ["authority"] : []),
+        ...(Object.hasOwn(value, "weather") ? ["weather"] : []),
+      ],
     )
     || !nonnegativeSafeInteger(value.atTick)
+    || (weatherRequired && !Object.hasOwn(value, "weather"))
+    || (
+      Object.hasOwn(value, "weather")
+      && canonicalCoreEcologyCurrentWeather(value.weather, value.atTick) === null
+    )
     || (
       value.authority !== undefined
       && !isTrustedCoreEcologyActivityAuthority(value.authority)
@@ -1928,8 +1944,12 @@ function resolvePresentationActivity(
   const projection = projectCoreEcologyActivity(patch, {
     actorId: actor.identity.stableId,
     atTick: value.atTick,
+    ...(value.weather === undefined ? {} : { weather: value.weather }),
   }, value.authority);
-  if (value.authority !== undefined && projection === null) {
+  if (
+    (value.authority !== undefined || Object.hasOwn(value, "weather"))
+    && projection === null
+  ) {
     return Object.freeze({ valid: false, projection: null });
   }
   return Object.freeze({
@@ -1965,6 +1985,22 @@ function activityBehavior(
     case undefined:
       return null;
   }
+}
+
+/**
+ * A saved neutral intent can lag the current authenticated routine by one
+ * runtime step. The activity owner is authoritative for that neutral posture;
+ * immediate response intents continue to describe the visible behavior.
+ */
+function reauthenticatedPresentationIntent(
+  intent: CoreWildlifeIntentKind,
+  activity: CoreEcologyActivityProjection | null,
+): CoreWildlifeIntentKind {
+  return activity !== null
+    && !activity.responsiveToImmediateIntent
+    && activity.preferredNeutralIntent !== null
+    ? activity.preferredNeutralIntent
+    : intent;
 }
 
 function presentationBehavior(

@@ -5,7 +5,10 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { seedFromText, type RootSeed } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord, type RegionCoord } from "../sim/regions";
 import { tideAtTick } from "../sim/terrain";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import {
+  resolveCoreEcologyAggregateActivityIntensity,
+} from "./coreEcologyAggregatePolicy";
 import {
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
@@ -34,10 +37,13 @@ import { projectCoreEcologyBreadthActivityAuthority } from "./coreEcologyActivit
 import { coreEcologyActivityAffordanceProfile } from "./coreEcologyActivityAffordance";
 import {
   CORE_ECOLOGY_CIRCADIAN_BINDINGS,
+  CORE_ECOLOGY_ORDINARY_RAIN_ACTIVITY_MINIMUM_INTENSITY,
+  coreEcologyCircadianBindingForSpecies,
   coreEcologyCircadianPolicyForSpecies,
 } from "./coreEcologyCircadianPolicy";
 import {
   CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID,
+  CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
   deriveCoreEcologyBreadthHabitat,
 } from "./coreEcologyBreadthHabitat";
 import {
@@ -52,7 +58,10 @@ import {
   type CoreEcologyWaterfowlHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { projectCoreEcologyTidalTable } from "./coreEcologyTidalTable";
-import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
+import {
+  CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES,
+  coreEcologySpeciesHasRuntimeCapability,
+} from "./coreEcologySpeciesRuntimePolicy";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   replaceCoreWildlifeActorPhysiology,
@@ -71,6 +80,7 @@ import {
 const SEED = seedFromText("rain chorus bounded diurnal activity owner");
 const BREADTH_ACTIVITY_SEED = seedFromText("alpha37 estuary breadth shared properties");
 const DIVING_WATERBIRD_REGION = createRegionCoord(173_753, 11_507);
+const AMPHIBIOUS_MARGIN_REGION = createRegionCoord(-126_625, -214_398);
 const ORIGIN = createRegionCoord(0, 0);
 
 describe("core ecology bounded activity", () => {
@@ -87,7 +97,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyDayPhase(1.5)).toBeNull();
   });
 
-  it("fails the policy gate if a declared diurnal species lacks this runtime owner", () => {
+  it("fails the policy gate if a declared circadian species lacks this runtime owner", () => {
     expect(validateCoreEcologyActivityPolicies()).toEqual([]);
     const alpha32ActivitySpecies = [
       "fish-crow",
@@ -123,45 +133,67 @@ describe("core ecology bounded activity", () => {
   });
 
   it("binds contrasting routines through existing activity archetypes", () => {
-    expect(CORE_ECOLOGY_CIRCADIAN_BINDINGS.map((binding) => ({
-      speciesId: binding.speciesId,
-      activityArchetypeId: binding.activityArchetypeId,
-      profileId: binding.policy.profileId,
-      drivers: binding.policy.drivers,
-    }))).toEqual([
-      {
-        speciesId: "fish-crow",
-        activityArchetypeId: "perch-watch",
-        profileId: "day-active",
-        drivers: ["clock"],
-      },
-      {
-        speciesId: "north-american-river-otter",
-        activityArchetypeId: "shore-water-forager",
-        profileId: "night-active",
-        drivers: ["clock"],
-      },
-      {
-        speciesId: "snowy-egret",
-        activityArchetypeId: "tidal-wader",
-        profileId: "adaptive-active",
-        drivers: ["clock", "tide", "opportunity"],
-      },
-      {
-        speciesId: "marsh-rabbit",
-        activityArchetypeId: "ground-cover-forager",
-        profileId: "twilight-active",
-        drivers: ["clock"],
-      },
-    ]);
+    expect(CORE_ECOLOGY_CIRCADIAN_BINDINGS.map(({ speciesId }) => speciesId))
+      .toEqual(CORE_ECOLOGY_ACTIVITY_SPECIES);
     for (const binding of CORE_ECOLOGY_CIRCADIAN_BINDINGS) {
       expect(coreEcologyActivityAffordanceProfile(binding.speciesId)?.archetypeId)
         .toBe(binding.activityArchetypeId);
       expect(coreEcologyCircadianPolicyForSpecies(binding.speciesId)).toBe(binding.policy);
       expect(Object.isFrozen(binding)).toBe(true);
+      expect(binding.policy.profileId).toBe(
+        binding.speciesId === "north-american-river-otter"
+          ? "night-active"
+          : binding.speciesId === "snowy-egret"
+            ? "adaptive-active"
+            : binding.speciesId === "marsh-rabbit"
+              ? "twilight-active"
+              : "day-active",
+      );
+      expect(binding.policy.drivers).toEqual(
+        binding.speciesId === "snowy-egret"
+          ? ["clock", "tide", "opportunity"]
+          : binding.speciesId === "american-black-duck"
+            ? ["clock", "weather"]
+          : ["clock"],
+      );
+      expect(Object.isFrozen(binding.weatherResponses)).toBe(true);
+      expect(binding.weatherResponses.length > 0).toBe(
+        binding.speciesId === "american-black-duck",
+      );
     }
-    expect(coreEcologyCircadianPolicyForSpecies("gull")).toBeNull();
-    expect(coreEcologyCircadianPolicyForSpecies("harbor-seal")).toBeNull();
+    expect(coreEcologyCircadianBindingForSpecies("american-black-duck"))
+      .toMatchObject({
+        weatherResponses: [
+          {
+            responseId: "ordinary-rain-activity",
+            weatherKinds: ["rain"],
+            minimumIntensity: CORE_ECOLOGY_ORDINARY_RAIN_ACTIVITY_MINIMUM_INTENSITY,
+            effect: "activity-driver",
+          },
+          {
+            responseId: "storm-refuge",
+            weatherKinds: ["storm"],
+            effect: "dangerous-weather-rest",
+          },
+        ],
+      });
+    // Rain already drives this aggregate population's real activity and chorus.
+    // It has no addressable body, so it must not fabricate an individual rest posture.
+    expect(coreEcologyActivityAffordanceProfile("southern-leopard-frog")).toBeNull();
+    expect(coreEcologyCircadianPolicyForSpecies("southern-leopard-frog")).toBeNull();
+    expect(coreEcologySpeciesHasRuntimeCapability(
+      "southern-leopard-frog",
+      "rain-activity",
+    )).toBe(true);
+    expect(resolveCoreEcologyAggregateActivityIntensity(
+      "southern-leopard-frog",
+      400_000,
+      FIXED_POINT,
+    )).toBeGreaterThan(resolveCoreEcologyAggregateActivityIntensity(
+      "southern-leopard-frog",
+      400_000,
+      0,
+    ));
   });
 
   it("projects deterministic low quartering by day and real rest by night", () => {
@@ -188,7 +220,7 @@ describe("core ecology bounded activity", () => {
     expect(first).toEqual(repeated);
     expect(first).toMatchObject({
       ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID,
-      scheduleScope: "bounded-diurnal-window",
+      scheduleScope: "circadian-routine",
       state: "low-quartering",
       preferredNeutralIntent: "observe",
       presentationSignal: "low-quartering-flight",
@@ -217,11 +249,13 @@ describe("core ecology bounded activity", () => {
   });
 
   it("lets an aerial surface opportunist follow only a current anonymous sighting", () => {
-    let patch = activityPatch(360);
+    // Use established daylight rather than the exact dawn edge: shared
+    // circadian bindings intentionally stagger individuals around transitions.
+    let patch = activityPatch(420);
     const gull = memberFor(patch, "gull").actor;
     expect(projectCoreEcologyActivity(patch, {
       actorId: gull.identity.stableId,
-      atTick: 360,
+      atTick: 420,
     })).toMatchObject({
       state: "active-watch",
       sourceObservationId: null,
@@ -236,9 +270,9 @@ describe("core ecology bounded activity", () => {
       0,
     );
     const observation = createActorObservation({
-      id: "gull-surface-opportunity:361",
+      id: "gull-surface-opportunity:421",
       observerId: gull.identity.stableId,
-      observedAtTick: 361,
+      observedAtTick: 421,
       channel: "vision",
       perceivedClass: "aquatic-activity",
       subjectId: null,
@@ -250,7 +284,7 @@ describe("core ecology bounded activity", () => {
     });
     if (observation === null) throw new Error("Gull surface observation fixture failed");
     const observed = stepCoreWildlifeActor(gull, {
-      tick: 361,
+      tick: 421,
       observations: [observation],
       foodOpportunities: [],
       accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
@@ -261,7 +295,7 @@ describe("core ecology bounded activity", () => {
 
     const surfaceProjection = projectCoreEcologyActivity(patch, {
       actorId: gull.identity.stableId,
-      atTick: 361,
+      atTick: 421,
     });
     expect(surfaceProjection).toMatchObject({
       state: "seeking-surface-opportunity",
@@ -327,13 +361,13 @@ describe("core ecology bounded activity", () => {
     )).toContain("undeclared-destination-semantic");
     expect(stepCoreEcologyActivityMotion(patch, {
       actorId: gull.identity.stableId,
-      atTick: 361,
+      atTick: 421,
       maximumStepUnits: 700,
     })).toMatchObject({ resolution: "moved" });
 
     expect(projectCoreEcologyActivity(patch, {
       actorId: gull.identity.stableId,
-      atTick: 362,
+      atTick: 422,
     })).toMatchObject({
       state: "active-watch",
       sourceObservationId: null,
@@ -341,11 +375,11 @@ describe("core ecology bounded activity", () => {
       motion: { kind: "defer-to-intent" },
     });
 
-    const restPatch = activityPatch(1_200);
+    const restPatch = activityPatch(1_260);
     const restingGull = memberFor(restPatch, "gull").actor;
     expect(projectCoreEcologyActivity(restPatch, {
       actorId: restingGull.identity.stableId,
-      atTick: 1_200,
+      atTick: 1_260,
     })).toMatchObject({
       state: "resting",
       preferredNeutralIntent: "rest",
@@ -354,7 +388,7 @@ describe("core ecology bounded activity", () => {
     });
 
     const displacedRestingGull = repositionCoreWildlifeActor(restingGull, {
-      atTick: 1_200,
+      atTick: 1_260,
       position: translateWorldPosition(
         restingGull.address.position,
         4 * WORLD_POSITION_UNITS_PER_TILE,
@@ -368,7 +402,7 @@ describe("core ecology bounded activity", () => {
     );
     expect(projectCoreEcologyActivity(displacedRestPatch, {
       actorId: restingGull.identity.stableId,
-      atTick: 1_200,
+      atTick: 1_260,
     })).toMatchObject({
       state: "seeking-habitat-anchor",
       preferredNeutralIntent: "observe",
@@ -380,7 +414,7 @@ describe("core ecology bounded activity", () => {
     });
     expect(stepCoreEcologyActivityMotion(displacedRestPatch, {
       actorId: restingGull.identity.stableId,
-      atTick: 1_200,
+      atTick: 1_260,
       maximumStepUnits: 700,
     })).toMatchObject({ resolution: "moved" });
   });
@@ -1537,6 +1571,13 @@ describe("core ecology bounded activity", () => {
   it("floats, scans, and dabbles only at live authenticated duck water", () => {
     let patch = waterfowlActivityPatch(360);
     const duck = memberFor(patch, "american-black-duck").actor;
+    const clear = {
+      kind: "clear" as const,
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: 1_000,
+    };
     if (
       patch.derivation.kind !== "habitat-v6"
       && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
@@ -1557,6 +1598,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyActivity(patch, {
       actorId: duck.identity.stableId,
       atTick: 360,
+      weather: clear,
     })).toMatchObject({
       state: "floating",
       sourceObservationId: null,
@@ -1566,6 +1608,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyActivity(patch, {
       actorId: duck.identity.stableId,
       atTick: 364,
+      weather: clear,
     })).toMatchObject({
       state: "water-scan",
       sourceObservationId: null,
@@ -1602,6 +1645,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyActivity(observedPatch, {
       actorId: duck.identity.stableId,
       atTick: 361,
+      weather: clear,
     })).toMatchObject({
       state: "dabbling",
       sourceObservationId: observation.id,
@@ -1610,9 +1654,210 @@ describe("core ecology bounded activity", () => {
     });
   });
 
+  it("composes canonical rain activation and storm refuge through one weather binding", () => {
+    let patch = waterfowlActivityPatch(0);
+    const generatedDuck = memberFor(patch, "american-black-duck").actor;
+    if (
+      patch.derivation.kind !== "habitat-v6"
+      && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
+    ) throw new Error("Weather routine fixture lost habitat-v6 custody");
+    const refuge = patch.derivation.habitat.tidalAnchors.find((anchor) => (
+      anchor.species === "american-black-duck" && anchor.purpose === "refuge"
+    ));
+    if (refuge === undefined) throw new Error("Weather routine fixture lacks refuge");
+    const duck = repositionCoreWildlifeActor(generatedDuck, {
+      atTick: 0,
+      position: refuge.position,
+      heading: generatedDuck.address.heading,
+    });
+    patch = replaceCoreEcologyAggregatePatchActor(patch, duck);
+    const clear = Object.freeze({
+      kind: "clear" as const,
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: 50,
+    });
+    const lightRain = Object.freeze({
+      ...clear,
+      kind: "rain" as const,
+      intensity: CORE_ECOLOGY_ORDINARY_RAIN_ACTIVITY_MINIMUM_INTENSITY - 1,
+    });
+    const qualifyingRain = Object.freeze({
+      ...lightRain,
+      intensity: CORE_ECOLOGY_ORDINARY_RAIN_ACTIVITY_MINIMUM_INTENSITY,
+    });
+    const storm = Object.freeze({
+      ...clear,
+      kind: "storm" as const,
+      intensity: 700_000,
+    });
+    const clearNight = projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: clear,
+    });
+    const belowThreshold = projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: lightRain,
+    });
+    const rainNight = projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: qualifyingRain,
+    });
+    const stormRefuge = projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: storm,
+    });
+
+    expect(clearNight).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      routine: {
+        clockPreference: "rest",
+        effectivePreference: "rest",
+        activatingDriver: null,
+        transitionCause: "clock",
+      },
+      motion: { kind: "hold-position" },
+    });
+    expect(belowThreshold).toMatchObject({
+      state: "resting",
+      routine: { effectivePreference: "rest", activatingDriver: null },
+    });
+    expect(rainNight).not.toBeNull();
+    expect(rainNight?.state).not.toBe("resting");
+    expect(rainNight).toMatchObject({
+      preferredNeutralIntent: "observe",
+      routine: {
+        clockPreference: "rest",
+        effectivePreference: "active",
+        activatingDriver: "weather",
+        transitionCause: "driver",
+      },
+    });
+    expect(rainNight?.routine?.causeReferenceId).toMatch(/^weather:ordinary-rain-activity:/u);
+    expect(stormRefuge).toMatchObject({
+      state: "resting",
+      preferredNeutralIntent: "rest",
+      presentationSignal: "resting",
+      routine: {
+        effectivePreference: "rest",
+        activatingDriver: null,
+        transitionCause: "priority-override",
+      },
+      motion: { kind: "hold-position" },
+    });
+    expect(stormRefuge?.routine?.causeReferenceId).toMatch(/^weather:storm-refuge:/u);
+
+    const committed = stepCoreEcologyActivityMotion(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      maximumStepUnits: 1,
+      weather: qualifyingRain,
+    });
+    if (committed === null) throw new Error("Weather-driven duck routine did not commit");
+    const reloaded = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(committed.patch),
+    );
+    if (reloaded === null) throw new Error("Weather-driven duck routine did not reload");
+    expect(projectCoreEcologyActivity(reloaded, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: qualifyingRain,
+    })).toMatchObject({
+      routine: {
+        effectivePreference: "active",
+        activatingDriver: "weather",
+        policy: { drivers: ["clock", "weather"] },
+      },
+    });
+    expect(reloaded.populations.some(({ species }) => (
+      species === "southern-leopard-frog"
+    ))).toBe(false);
+  });
+
+  it("rejects malformed weather rather than manufacturing activity authority", () => {
+    const patch = waterfowlActivityPatch(0);
+    const duck = memberFor(patch, "american-black-duck").actor;
+    const base = {
+      kind: "rain",
+      intensity: CORE_ECOLOGY_ORDINARY_RAIN_ACTIVITY_MINIMUM_INTENSITY,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: 50,
+    } as const;
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+    })).toBeNull();
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: { ...base, nextChangeTick: 0 },
+    })).toBeNull();
+    expect(stepCoreEcologyActivityMotion(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      maximumStepUnits: 1,
+      weather: { ...base, nextChangeTick: 0 },
+    })).toBeNull();
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: { ...base, intensity: 250_000.5 },
+    })).toBeNull();
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: { ...base, source: "caller-claim" },
+    } as unknown as Parameters<typeof projectCoreEcologyActivity>[1])).toBeNull();
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: duck.identity.stableId,
+      atTick: 0,
+      weather: undefined,
+    } as unknown as Parameters<typeof projectCoreEcologyActivity>[1])).toBeNull();
+  });
+
+  it("presents an active dry amphibious margin as waiting, never resting", () => {
+    const fixture = amphibiousMarginActivityFixture(720);
+    if (fixture.authority.homeAnchorElevation === null) {
+      throw new Error("Amphibious-margin authority omitted its elevation");
+    }
+    expect(tideAtTick(720).level - fixture.authority.homeAnchorElevation)
+      .toBeLessThanOrEqual(0);
+    const projection = projectCoreEcologyActivity(fixture.patch, {
+      actorId: fixture.actor.identity.stableId,
+      atTick: 720,
+    }, fixture.authority);
+    expect(projection).toMatchObject({
+      state: "waiting-on-tide",
+      preferredNeutralIntent: "observe",
+      presentationSignal: null,
+      routine: {
+        clockPreference: "active",
+        effectivePreference: "active",
+      },
+      motion: { kind: "hold-position" },
+    });
+    expect(projection?.presentationSignal === "resting").toBe(
+      projection?.routine?.effectivePreference === "rest",
+    );
+  });
+
   it("uses bounded surface routing, aerial refuge travel, and intent-owned flushes", () => {
     let patch = waterfowlActivityPatch(360);
     let duck = memberFor(patch, "american-black-duck").actor;
+    const clear = {
+      kind: "clear" as const,
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: 1_000,
+    };
     if (
       patch.derivation.kind !== "habitat-v6"
       && patch.derivation.kind !== "legacy-fixed-v1-with-habitat-v6"
@@ -1637,6 +1882,7 @@ describe("core ecology bounded activity", () => {
     const activity = projectCoreEcologyActivity(patch, {
       actorId: duck.identity.stableId,
       atTick: 360,
+      weather: clear,
     });
     expect(activity).toMatchObject({
       state: "seeking-dabbling-water",
@@ -1652,6 +1898,7 @@ describe("core ecology bounded activity", () => {
       actorId: duck.identity.stableId,
       atTick: 360,
       maximumStepUnits: 720,
+      weather: clear,
     })).toBeNull();
 
     const surface = createLivingActorTraversabilitySurface({
@@ -1670,6 +1917,7 @@ describe("core ecology bounded activity", () => {
       atTick: 360,
       maximumStepUnits: 720,
       surface,
+      weather: clear,
     });
     expect(moved?.resolution).toBe("moved");
     if (activity?.motion.kind !== "target-area" || moved === null) {
@@ -1702,6 +1950,7 @@ describe("core ecology bounded activity", () => {
       atTick: 360,
       maximumStepUnits: 720,
       surface: blockedSurface,
+      weather: clear,
     })?.resolution).toBe("blocked");
 
     let restPatch = waterfowlActivityPatch(0);
@@ -1709,6 +1958,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyActivity(restPatch, {
       actorId: restingDuck.identity.stableId,
       atTick: 0,
+      weather: clear,
     })).toMatchObject({
       state: "seeking-tidal-refuge",
       motion: {
@@ -1735,6 +1985,7 @@ describe("core ecology bounded activity", () => {
     expect(projectCoreEcologyActivity(restPatch, {
       actorId: restingDuck.identity.stableId,
       atTick: 0,
+      weather: clear,
     })).toMatchObject({
       state: "resting",
       preferredNeutralIntent: "rest",
@@ -1767,6 +2018,7 @@ describe("core ecology bounded activity", () => {
     const responsive = projectCoreEcologyActivity(alarmPatch, {
       actorId: duck.identity.stableId,
       atTick: 361,
+      weather: clear,
     });
     expect(["alarm", "flee", "retreat"]).toContain(alarmed.actor.intent.kind);
     expect(responsive).toMatchObject({
@@ -2413,6 +2665,50 @@ function divingWaterbirdActivityFixture(tick: number) {
     actor,
     authority,
   });
+}
+
+function amphibiousMarginActivityFixture(tick: number) {
+  const habitat = deriveCoreEcologyBreadthHabitat({
+    seed: BREADTH_ACTIVITY_SEED,
+    region: AMPHIBIOUS_MARGIN_REGION,
+    cohortId: CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID,
+  });
+  const coarse = createCoreEcologyBreadthResidentPatch({
+    seed: BREADTH_ACTIVITY_SEED,
+    habitat,
+    tick,
+  });
+  const source = coarse.populations.flatMap(({ members }) => members).find(({ actor }) => (
+    coreEcologyActivityAffordanceProfile(actor.identity.species)?.archetypeId
+      === "amphibious-margin-forager"
+  ));
+  if (source === undefined) throw new Error("Amphibious-margin fixture is absent");
+  const actorId = source.actor.identity.stableId;
+  let patch = setCoreEcologyAggregatePatchMaterializedActors(coarse, {
+    atTick: tick,
+    actorIds: [actorId],
+  });
+  const authority = projectCoreEcologyBreadthActivityAuthority({
+    rootSeed: BREADTH_ACTIVITY_SEED,
+    patch,
+    actorId,
+  });
+  if (authority === null) throw new Error("Amphibious-margin authority is absent");
+  const generated = patch.populations.flatMap(({ members }) => members)
+    .find(({ actor }) => actor.identity.stableId === actorId)?.actor;
+  if (generated === undefined) throw new Error("Amphibious-margin actor is absent");
+  const rested = replaceCoreWildlifeActorPhysiology(generated, {
+    atTick: tick,
+    needs: { ...generated.needs, rest: 0 },
+    condition: generated.condition,
+  });
+  const actor = repositionCoreWildlifeActor(rested, {
+    atTick: tick,
+    position: authority.homeAnchor,
+    heading: rested.address.heading,
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(patch, actor);
+  return Object.freeze({ patch, actor, authority });
 }
 
 function neutralActivitySteps(

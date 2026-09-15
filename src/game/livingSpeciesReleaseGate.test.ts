@@ -2128,7 +2128,7 @@ describe("Living Weft species release gate", () => {
     expect(goat?.diet.resources).toEqual([{ resourceClass: "browse", role: "nutrition" }]);
   });
 
-  it("keeps Alpha-16's still-unreleased living-cover and circadian seams explicit", () => {
+  it("keeps Alpha-16's living-cover and remaining fox circadian seams explicit", () => {
     for (const species of ALPHA16_MARSH_EDGE_SPECIES) {
       const module = livingSpeciesModule(species);
       expect(module).not.toBeNull();
@@ -2138,13 +2138,21 @@ describe("Living Weft species release gate", () => {
         inputs: [],
         outputs: [],
       });
-      expect(module?.activity.circadian).toEqual({
-        status: "unimplemented",
-        ownerId: null,
-        rhythm: "unspecified",
-        cadenceTicks: 0,
-        phaseBias: 0,
-      });
+      expect(module?.activity.circadian).toEqual(species === "marsh-rabbit"
+        ? {
+            status: "active",
+            ownerId: "game:core-ecology-species-runtime-policy:v1",
+            rhythm: "crepuscular",
+            cadenceTicks: 5,
+            phaseBias: 0,
+          }
+        : {
+            status: "unimplemented",
+            ownerId: null,
+            rhythm: "unspecified",
+            cadenceTicks: 0,
+            phaseBias: 0,
+          });
     }
   });
 

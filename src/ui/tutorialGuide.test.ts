@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(59);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(60);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -56,8 +56,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.shortTitle).toBe("What's New");
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "whats-new-twilight-at-the-marsh-edge",
-        title: "Twilight at the marsh edge",
+        id: "whats-new-many-rhythms",
+        title: "Many rhythms",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,37 +70,48 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 49 · Twilight at the Marsh Edge is a local unpublished source candidate");
-    expect(copy).toContain("existing marsh rabbit now composes the shared twilight-active circadian policy");
-    expect(copy).toContain("same saved civil clock");
-    expect(copy).toContain("bounded deterministic local ground activity");
-    expect(copy).toContain("ordinary terrain locomotion");
-    expect(copy).toContain("authenticated habitat cover");
-    expect(copy).toContain("Travel remains Awake");
-    expect(copy).toContain("Resting begins only after physical arrival");
-    expect(copy).toContain("Asleep begins only after the shared settling interval");
-    expect(copy).toContain("Immediate danger, urgent needs, and retained commitments still win");
-    expect(copy).toContain("stale neutral REST suggestion cannot suppress a newly active twilight preference");
-    expect(copy).toContain("twelve reusable archetypes serving seventeen species");
+    expect(copy).toContain("Alpha 50 · Many Rhythms is a local unpublished source candidate");
+    expect(copy).toContain("exactly covers all seventeen current wildlife activity profiles");
+    expect(copy).toContain("Fish crow, northern harrier, American black duck, gull, golden eagle, harbor seal, great blue heron, common tern, osprey, greater yellowlegs, belted kingfisher, double-crested cormorant, seaside sparrow, and diamondback terrapin retain day-active base clocks");
+    expect(copy).toContain("North American river otter remains night-active");
+    expect(copy).toContain("snowy egret remains adaptive to clock, tide, and current lawful opportunity");
+    expect(copy).toContain("marsh rabbit remains twilight-active");
+    expect(copy).toContain("American black duck also composes current weather");
+    expect(copy).toContain("qualifying ordinary rain may activate it outside its base clock window");
+    expect(copy).toContain("dangerous storm drives physical travel to and rest at its authenticated refuge");
+    expect(copy).toContain("duck, river otter, greater yellowlegs, and diamondback terrapin keep clock-based wake policy");
+    expect(copy).toContain("action and destination projections remain tide- and depth-responsive only where dabbling water, foraging water, wading ground, or wet margin is physically usable");
+    expect(copy).toContain("Tide does not independently wake them");
+    expect(copy).toContain("dry terrapin margin remains an awake tide wait rather than falsely presenting rest");
+    expect(copy).toContain("thirteen formerly bounded day-window profiles");
     expect(copy).toContain("circadian-activity capability");
     expect(copy).toContain("circadian-routine scope");
-    expect(copy).toContain("explicit land travel");
-    expect(copy).toContain("creates and consumes no food and never guarantees feeding");
-    expect(copy).toContain("not an invented burrow or den");
-    expect(copy).toContain("Direct inspection may show only current observable posture and activity");
-    expect(copy).toContain("optional wildlife circadian receipt stores only policy, the authenticated rest-destination receipt, and posture with its entered tick");
-    expect(copy).toContain("Raw save parsing preserves those canonical receipt fields but does not prove the live habitat cover or current body location");
-    expect(copy).toContain("full-detail activity projection reauthenticates those world facts before behavioral use");
-    expect(copy).toContain("While coarse, the rabbit conserves only an already committed bounded rest bout");
-    expect(copy).toContain("does not invent a commute, perception, target, or new decision");
-    expect(copy).toContain("authenticated historical catalogs retain their exact released rabbit record");
-    expect(copy).toContain("current catalog truthfully names its active crepuscular rhythm");
-    expect(copy).toContain("Existing exact-contact rabbit injury, death, and carcass rules are unchanged");
-    expect(copy).toContain("adds no rabbit, population unit, density, cargo, item, feeding, capture, attack, mortality");
-    expect(copy).toContain("Alpha 48's snowy-egret adaptive routine remains present");
-    expect(copy).toContain("one representative production crepuscular binding");
-    expect(copy).toContain("not validated broad coarse-time advancement");
-    expect(copy).toContain("a full catalog schedule");
+    expect(copy).toContain("All twelve reusable activity archetypes");
+    expect(copy).toContain("existing authenticated perch, refuge, habitat anchor, wading ground, haulout, or cover");
+    expect(copy).toContain("already-declared air, amphibious, surface-water-capable, or land locomotion");
+    expect(copy).toContain("Transit remains Awake");
+    expect(copy).toContain("physical arrival alone permits Resting");
+    expect(copy).toContain("shared settling interval alone permits Asleep");
+    expect(copy).toContain("STARTLED response, current danger, lawful disturbance, urgent needs, and retained commitments still win");
+    expect(copy).toContain("No profile receives a private scheduler, detector, pathfinder, or teleport");
+    expect(copy).toContain("routine travel mints no unsupported track evidence, food, feeding result, target, knowledge, or choice");
+    expect(copy).toContain("Direct inspection may show only a lawfully observed current activity or posture");
+    expect(copy).toContain("Southern leopard frog separately remains a real non-addressable rain-responsive aggregate");
+    expect(copy).toContain("rain can raise its lawful activity and chorus while masking hearing");
+    expect(copy).toContain("no individual frog actor, destination, posture, or circadian binding is fabricated");
+    expect(copy).toContain("No species, actor, population unit, habitat allocation, encounter density, item, cargo, attack, mortality path, or reward is added");
+    expect(copy).toContain("Outer save version 32, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged");
+    expect(copy).toContain("current catalog derives rhythm and cadence from the shared binding registry");
+    expect(copy).toContain("frozen Alpha 32 through Alpha 39 catalogs retain their exact historical bytes and hashes");
+    expect(copy).toContain("existing optional wildlife circadian receipt remains unchanged");
+    expect(copy).toContain("legacy absence remains valid");
+    expect(copy).toContain("full detail reauthenticates current body and destination before use");
+    expect(copy).toContain("coarse absence may conserve only an already committed bounded rest bout without inventing travel or decisions");
+    expect(copy).toContain("exact seventeen-profile boundary is not all forty-five wildlife profiles");
+    expect(copy).toContain("complete driver coverage");
+    expect(copy).toContain("validated broad coarse-time advancement");
+    expect(copy).toContain("complete autonomous animal life");
+    expect(copy).toContain("Turning Day closure");
     expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
     expect(copy).toContain("Alpha 39 remains the latest verified public release");
   });
@@ -116,20 +127,36 @@ describe("TIDEWEFT field-manual content", () => {
       "completed beacon projects light nearby unobstructed ground and blue water after dusk",
     );
     expect(copy).toContain("WAIT 10 MIN, REST 30 MIN, and settlement SLEEP TO DAWN all advance this same clock");
-    expect(copy).toContain("one settlement working dog uses its stable-identity day-active boundary");
-    expect(copy).toContain("one food-store keeper uses the same clock for a home-settlement rest");
-    expect(copy).toContain("existing snowy egret combines it with current tide and lawful aquatic opportunity");
-    expect(copy).toContain("existing marsh rabbit uses its own stable twilight windows");
+    expect(copy).toContain("settlement working dog and food-store keeper retain their shared-clock routines");
+    expect(copy).toContain("All seventeen current wildlife activity profiles now use the same arrival-gated routine contract");
+    expect(copy).toContain("fourteen retain day-active base clocks");
+    expect(copy).toContain("North American river otter is night-active");
+    expect(copy).toContain("snowy egret is adaptive to clock, tide, and lawful opportunity");
+    expect(copy).toContain("marsh rabbit is twilight-active");
+    expect(copy).toContain("Qualifying ordinary rain can activate American black duck outside its base clock window");
+    expect(copy).toContain("dangerous storm drives it toward authenticated refuge and rest");
+    expect(copy).toContain("duck, otter, greater yellowlegs, and diamondback terrapin keep clock-based wake policy");
+    expect(copy).toContain("tide does not independently wake them");
+    expect(copy).toContain("Southern leopard frog separately remains a weather-responsive aggregate");
     expect(copy).toContain(
-      "Remaining humans, the independent dog, bonded/player companions, weather-driven bindings, catalog-wide actor schedules, and validated broad coarse-time advancement remain later",
+      "Wildlife outside those seventeen profiles, remaining humans, the independent dog, bonded/player companions, broader driver coverage, and validated broad coarse-time advancement remain later",
     );
     expect(liveBoundary?.title).toBe("Present in this source candidate");
     expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
-    expect(liveBoundary?.body).toContain("existing snowy egret with an adaptive clock-, tide-, and opportunity-driven physical dry-refuge routine");
-    expect(liveBoundary?.body).toContain("existing marsh rabbit with a twilight-active physical habitat-cover routine");
+    expect(liveBoundary?.body).toContain("All seventeen current declared wildlife activity profiles share the arrival-gated living-circadian routine contract");
+    expect(liveBoundary?.body).toContain("fourteen retain day-active base clocks");
+    expect(liveBoundary?.body).toContain("North American river otter is night-active");
+    expect(liveBoundary?.body).toContain("snowy egret is adaptive to clock, tide, and lawful opportunity");
+    expect(liveBoundary?.body).toContain("marsh rabbit is twilight-active");
+    expect(liveBoundary?.body).toContain("Qualifying rain can activate the American black duck beyond its base clock window");
+    expect(liveBoundary?.body).toContain("dangerous storm drives authenticated refuge and rest");
+    expect(liveBoundary?.body).toContain("Duck, otter, greater yellowlegs, and terrapin keep clock-based wake policy");
+    expect(liveBoundary?.body).toContain("actions and destinations remain tide- and depth-responsive where physically usable");
+    expect(liveBoundary?.body).toContain("Each of the seventeen bound wildlife profiles may use the existing optional wildlife circadian receipt");
     expect(liveBoundary?.body).toContain("Raw parsing preserves canonical receipt data without proving current location or refuge");
     expect(liveBoundary?.body).toContain("Coarse absence conserves an already committed bounded rest bout without inventing travel or decisions");
-    expect(liveBoundary?.body).toContain("Alpha 49 Twilight at the Marsh Edge remains a local unpublished source candidate");
+    expect(liveBoundary?.body).toContain("current catalog derives rhythm and cadence from the binding registry while exact Alpha 32 through Alpha 39 historical catalogs remain unchanged");
+    expect(liveBoundary?.body).toContain("Alpha 50 Many Rhythms remains a local unpublished source candidate");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

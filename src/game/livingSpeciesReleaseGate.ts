@@ -4610,10 +4610,10 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
   const activityProfileSpecies = historicalActivityProfiles
     .map(({ speciesId }) => speciesId);
   const activityProfileSpeciesSet = new Set<string>(activityProfileSpecies);
-  const diurnalPolicySpecies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
+  const circadianPolicySpecies = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES
     .filter(({ speciesId, capabilities }) => (
       historicalActivitySpeciesSet.has(speciesId)
-      && capabilities.includes("diurnal-activity")
+      && capabilities.includes("circadian-activity")
     ))
     .map(({ speciesId }) => speciesId);
   const reusableActivityArchetypesReady = activityAffordanceErrors.length === 0
@@ -4627,10 +4627,10 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
     && activityProfileSpecies.every((speciesId, index) => (
       speciesId === historicalActivitySpecies[index]
     ))
-    && diurnalPolicySpecies.length === activityProfileSpecies.length
-    && diurnalPolicySpecies.every((speciesId) => activityProfileSpeciesSet.has(speciesId))
+    && circadianPolicySpecies.length === activityProfileSpecies.length
+    && circadianPolicySpecies.every((speciesId) => activityProfileSpeciesSet.has(speciesId))
     && historicalActivityProfiles.every(({ scheduleScope }) => (
-      scheduleScope === "bounded-diurnal-window"
+      scheduleScope === "circadian-routine"
     ));
 
   const surfaceProfiles = historicalActivityProfiles.filter(
@@ -4779,7 +4779,7 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
     ))
   ))
     && historicalActivityProfiles.every(({ scheduleScope }) => (
-      scheduleScope === "bounded-diurnal-window"
+      scheduleScope === "circadian-routine"
     ))
     && surfaceProfiles.every(({ observationAffordance }) => (
       observationAffordance.kind === "current-anonymous-area"

@@ -515,7 +515,9 @@ function createCandidatePatch(
     seed: SEED,
     patchKey,
     originRegion: region,
-    tick: 360,
+    // Keep the activity/perception witness beyond the shared +/-30-tick dawn
+    // transition while still covering a complete deterministic tide soak.
+    tick: 420,
     populations: individualInputs(habitat, selectMaterialization),
     derivation: { kind: "habitat-v6", habitat },
   });
@@ -668,6 +670,13 @@ function surfaceMotionFixture(habitat: CoreEcologyWaterfowlHabitatAssemblage) {
   const input = Object.freeze({
     actorId: actor.identity.stableId,
     atTick: activityPatch.updatedAtTick,
+    weather: {
+      kind: "clear" as const,
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: activityPatch.updatedAtTick + 1,
+    },
   });
   const airPatch = replaceCoreEcologyAggregatePatchActor(
     activityPatch,

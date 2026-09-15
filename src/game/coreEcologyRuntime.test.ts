@@ -737,5 +737,59 @@ describe("core ecology pure runtime seam", () => {
         actorId: "BEAR-cross-species-alias",
       },
     })).toBeNull();
+    expect(projectCoreEcologyWildlife({
+      patch: state,
+      window,
+      perception,
+      tileSize: 16,
+      weather: undefined,
+    } as unknown as Parameters<typeof projectCoreEcologyWildlife>[0])).toBeNull();
+    expect(projectCoreEcologyWildlife({
+      patch: state,
+      window,
+      perception,
+      tileSize: 16,
+      weather: {
+        kind: "rain",
+        intensity: 250_000,
+        windX: 0,
+        windY: 0,
+        nextChangeTick: 20,
+        source: "caller-claim",
+      },
+    } as unknown as Parameters<typeof projectCoreEcologyWildlife>[0])).toBeNull();
+
+    const weatherDriven = createCoreEcologyAggregatePatch({
+      seed: SEED,
+      patchKey: "runtime:weather-required",
+      originRegion: ORIGIN,
+      tick: 0,
+      derivation: { kind: "legacy-fixed-v1" },
+      populations: [population(
+        "american-black-duck",
+        "duck:weather-required",
+        [positionAt(window, 61, 60)],
+        new Set([0]),
+      )],
+    });
+    expect(projectCoreEcologyWildlife({
+      patch: weatherDriven,
+      window,
+      perception,
+      tileSize: 16,
+    })).toBeNull();
+    expect(projectCoreEcologyWildlife({
+      patch: weatherDriven,
+      window,
+      perception,
+      tileSize: 16,
+      weather: {
+        kind: "clear",
+        intensity: 0,
+        windX: 0,
+        windY: 0,
+        nextChangeTick: weatherDriven.updatedAtTick,
+      },
+    })).toBeNull();
   });
 });

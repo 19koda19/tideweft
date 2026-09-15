@@ -116,7 +116,7 @@ export interface CoreEcologyActivityArchetype {
   readonly destinations: readonly CoreEcologyActivityDestinationAffordance[];
   readonly observationAffordance: CoreEcologyActivityObservationAffordance;
   readonly presentationSignals: readonly CoreEcologyActivityPresentationSignal[];
-  /** This remains narrower than a future sleep or circadian-life owner. */
+  /** Shared routine scope; identity, cognition, and physical motion retain custody. */
   readonly scheduleScope: CoreEcologyActivityScheduleScope;
 }
 
@@ -192,7 +192,7 @@ function archetype(
   return deepFreeze({
     version: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_VERSION,
     ownerId: CORE_ECOLOGY_ACTIVITY_AFFORDANCE_OWNER_ID,
-    scheduleScope: value.scheduleScope ?? "bounded-diurnal-window",
+    scheduleScope: value.scheduleScope ?? "circadian-routine",
     ...value,
   });
 }
@@ -209,7 +209,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
       requiredCapabilities: [
         "actor-address",
         "aerial-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "perch",
       ],
       locomotionClass: "aerial",
@@ -226,12 +226,13 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "actor-address",
         "aerial-locomotion",
         "aerial-predator",
-        "diurnal-activity",
+        "circadian-activity",
         "live-prey-pursuit",
       ],
       locomotionClass: "aerial",
       allowedTravelMedia: ["air"],
       destinations: [
+        destination("authenticated-habitat-anchor", "habitat-allocation", ["air"]),
         destination(
           "deterministic-local-quartering-area",
           "deterministic-local-area",
@@ -248,7 +249,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "aerial-locomotion",
         "amphibious-locomotion",
         "aquatic-foraging",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "surface-opportunity",
         "tidal-activity",
@@ -281,7 +282,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "amphibious-locomotion",
         "aquatic-foraging",
         "aquatic-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "surface-opportunity",
         "tidal-activity",
@@ -312,7 +313,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "amphibious-locomotion",
         "aquatic-foraging",
         "aquatic-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "shore-water-activity",
         "surface-opportunity",
@@ -339,7 +340,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
       requiredCapabilities: [
         "actor-address",
         "aerial-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "surface-opportunity",
         "tidal-activity",
       ],
@@ -366,7 +367,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "actor-address",
         "aerial-locomotion",
         "aerial-predator",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "perch",
       ],
@@ -386,7 +387,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "aerial-locomotion",
         "amphibious-locomotion",
         "aquatic-foraging",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "surface-opportunity",
         "tidal-activity",
@@ -418,7 +419,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "amphibious-locomotion",
         "aquatic-foraging",
         "aquatic-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "surface-opportunity",
         "tidal-activity",
@@ -454,7 +455,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
       requiredCapabilities: [
         "actor-address",
         "aerial-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "food-investigation",
         "movement-memory",
         "perch",
@@ -480,7 +481,7 @@ export const CORE_ECOLOGY_ACTIVITY_ARCHETYPES: readonly CoreEcologyActivityArche
         "amphibious-route",
         "aquatic-foraging",
         "aquatic-locomotion",
-        "diurnal-activity",
+        "circadian-activity",
         "movement-memory",
         "shore-water-activity",
         "tidal-activity",

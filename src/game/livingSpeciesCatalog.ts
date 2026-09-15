@@ -32,7 +32,10 @@ import {
   coreEcologySpeciesPredatorContact,
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
-import { coreEcologyCircadianPolicyForSpecies } from "./coreEcologyCircadianPolicy";
+import {
+  coreEcologyCircadianBindingForSpecies,
+  coreEcologyCircadianPolicyForSpecies,
+} from "./coreEcologyCircadianPolicy";
 import { livingCircadianProfile } from "./livingCircadian";
 
 /**
@@ -47,6 +50,7 @@ export const MAX_LIVING_SPECIES_MODULES = 256 as const;
 export const MAX_MATERIALIZED_ACTORS_PER_REGION = 4_096 as const;
 export const MAX_SPECIES_STATE_AXES = 64 as const;
 export const MAX_SPECIES_CAPABILITY_ENTRIES = 64 as const;
+const CORE_ECOLOGY_ACTIVITY_DECISION_OWNER_ID = "game:core-ecology-activity:v1" as const;
 
 /**
  * Exact Alpha-32 catalog lineage. The live catalog may grow, but these modules
@@ -827,7 +831,11 @@ export interface LivingSpeciesEnvironmentResponseContract {
   readonly status: LivingSpeciesCapabilityStatus;
   readonly ownerId: string | null;
   readonly inputs: readonly string[];
-  /** Must reference condition-axis IDs declared by this same module. */
+  /**
+   * Usually condition-axis IDs declared by this module. A weather response may
+   * instead feed the shared activity owner's explicit `activity-pressure`
+   * decision input; it never becomes invented physiology.
+   */
   readonly outputs: readonly string[];
 }
 
@@ -1760,7 +1768,12 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
       decayOwnerId: null,
       interprets: [],
     },
-    weather: absentResponse(),
+    weather: {
+      status: "active",
+      ownerId: CORE_ECOLOGY_ACTIVITY_DECISION_OWNER_ID,
+      inputs: ["weather-intensity", "weather-kind"],
+      outputs: ["activity-pressure"],
+    },
     // Water and tide already select habitat, activity, and travel medium.
     // Direct water/tide mutation of condition axes remains a later owner.
     water: absentResponse(),
@@ -3624,7 +3637,7 @@ const CORE_WILDLIFE_INTERACTION_POLICY_BY_SPECIES = deepFreeze({
     shelter: "intentional-no-response",
     "smaller-prey": "intentional-no-response",
     water: "available",
-    weather: "intentional-no-response",
+    weather: "available",
   },
   "north-american-river-otter": {
     "aquatic-animal": "available",
@@ -4531,17 +4544,22 @@ function coreWildlifeInteractionTargets(
   }
 
   if (CORE_WILDLIFE_CATALOG_VALUES[species].weather.status === "active") {
+    const activityWeather = (
+      coreEcologyCircadianBindingForSpecies(species)?.weatherResponses.length ?? 0
+    ) > 0;
     targets.push({
       targetClass: "weather",
       policy: "available",
       perceptionChannels: ["hearing", "vision"],
-      appraisals: ["exposure"],
-      motivationAxes: ["safety"],
-      verbs: species === "southern-leopard-frog"
-        ? ["chorus", "redistribute"]
-        : species === "brown-rat"
-          ? ["redistribute"]
-          : ["retreat"],
+      appraisals: activityWeather ? ["activity-pressure", "exposure"] : ["exposure"],
+      motivationAxes: activityWeather ? ["activity", "safety"] : ["safety"],
+      verbs: activityWeather
+        ? ["activate", "retreat"]
+        : species === "southern-leopard-frog"
+          ? ["chorus", "redistribute"]
+          : species === "brown-rat"
+            ? ["redistribute"]
+            : ["retreat"],
       escalationConstraints: ["bounded-response", "current-weather-required"],
       disengagementVerbs: ["disengage"],
     });
@@ -5560,7 +5578,7 @@ export function canonicalizeLivingSpeciesModule(value: unknown): LivingSpeciesMo
   if (!validHealth(value.health, conditionIds)) return null;
   if (!validAftermath(value.aftermath, value.identity.form)) return null;
   if (!validInteractions(value.interactions, value.senses.channels)) return null;
-  if (!validEnvironment(value.environment, conditionIds)) return null;
+  if (!validEnvironment(value.environment, conditionIds, value.activity)) return null;
   if (!validInventory(value.inventory)) return null;
   if (!validAbout(value.about)) return null;
   if (!validPersistence(value.persistence)) return null;
@@ -5633,9 +5651,34 @@ const expectedSpecies = [...LIVING_ACTOR_SPECIES].sort(compareText);
 if (!sameStringArray(currentSpecies, expectedSpecies)) {
   throw new Error("Living Weft catalog does not exactly cover the implemented actor roster");
 }
+for (const module of currentCatalog.modules) {
+  if (!currentCircadianWeatherContractCoherent(module)) {
+    throw new Error(`Living Weft catalog disagrees with ${module.speciesId} weather binding`);
+  }
+}
+
+const HISTORICAL_BOUNDED_DIURNAL_ACTIVITY_SPECIES: ReadonlySet<CoreWildlifeSpecies> =
+  new Set([
+    "fish-crow",
+    "northern-harrier",
+    "snowy-egret",
+    "american-black-duck",
+    "north-american-river-otter",
+    "gull",
+    "golden-eagle",
+    "harbor-seal",
+    "great-blue-heron",
+    "common-tern",
+    "osprey",
+    "greater-yellowlegs",
+    "belted-kingfisher",
+    "double-crested-cormorant",
+    "seaside-sparrow",
+    "diamondback-terrapin",
+  ]);
 
 const legacyBoundedCircadian = (species: CoreWildlifeSpecies): LivingSpeciesCircadianContract => (
-  coreEcologySpeciesHasRuntimeCapability(species, "diurnal-activity")
+  HISTORICAL_BOUNDED_DIURNAL_ACTIVITY_SPECIES.has(species)
     ? {
         status: "active",
         ownerId: CORE_ECOLOGY_SPECIES_RUNTIME_POLICY_OWNER_ID,
@@ -5669,9 +5712,31 @@ function historicalCircadianCompatibilityModule(
   const historicalActivityOwnerId = module.speciesId === "marsh-rabbit"
     ? "game:core-wildlife-actor:v1"
     : module.activity.ownerId;
+  const historicalDuck = module.speciesId === "american-black-duck";
+  const historicalWeather = historicalDuck ? absentResponse() : module.environment.weather;
+  const historicalWeatherTargets = historicalDuck
+    ? module.interactions.targets.map((target) => target.targetClass === "weather"
+      ? {
+          targetClass: "weather" as const,
+          policy: "intentional-no-response" as const,
+          perceptionChannels: [],
+          appraisals: [],
+          motivationAxes: [],
+          verbs: [],
+          escalationConstraints: [],
+          disengagementVerbs: [],
+        }
+      : target)
+    : module.interactions.targets;
+  const historicalMemoryKinds = historicalDuck
+    ? module.cognition.memoryKinds.filter((kind) => kind !== "weather")
+    : module.cognition.memoryKinds;
   if (
     module.activity.ownerId === historicalActivityOwnerId
     && sameData(module.activity.circadian, historicalCircadian)
+    && sameData(module.environment.weather, historicalWeather)
+    && sameData(module.interactions.targets, historicalWeatherTargets)
+    && sameData(module.cognition.memoryKinds, historicalMemoryKinds)
   ) return module;
   const historical = canonicalizeLivingSpeciesModule({
     ...module,
@@ -5679,6 +5744,18 @@ function historicalCircadianCompatibilityModule(
       ...module.activity,
       ownerId: historicalActivityOwnerId,
       circadian: historicalCircadian,
+    },
+    cognition: {
+      ...module.cognition,
+      memoryKinds: historicalMemoryKinds,
+    },
+    interactions: {
+      ...module.interactions,
+      targets: historicalWeatherTargets,
+    },
+    environment: {
+      ...module.environment,
+      weather: historicalWeather,
     },
   });
   if (historical === null) {
@@ -6669,25 +6746,38 @@ function validEvidence(value: unknown): value is LivingSpeciesEvidenceContract {
     && (value.produces.length > 0 || value.interprets.length > 0);
 }
 
-function validEnvironment(value: unknown, conditionIds: ReadonlySet<string>): value is LivingSpeciesEnvironmentContract {
+function validEnvironment(
+  value: unknown,
+  conditionIds: ReadonlySet<string>,
+  activity: LivingSpeciesActivityContract,
+): value is LivingSpeciesEnvironmentContract {
   return plainRecord(value)
     && exactKeys(value, ["fire", "livingCover", "possibility", "terrain", "tide", "water", "weather"])
     && validResponse(value.fire, conditionIds)
     && validResponse(value.livingCover, conditionIds)
-    && validResponse(value.weather, conditionIds)
+    && validResponse(value.weather, conditionIds, activity)
     && validResponse(value.water, conditionIds)
     && validResponse(value.possibility, conditionIds)
     && validResponse(value.terrain, conditionIds)
     && validResponse(value.tide, conditionIds);
 }
 
-function validResponse(value: unknown, conditionIds: ReadonlySet<string>): value is LivingSpeciesEnvironmentResponseContract {
+function validResponse(
+  value: unknown,
+  conditionIds: ReadonlySet<string>,
+  activity?: LivingSpeciesActivityContract,
+): value is LivingSpeciesEnvironmentResponseContract {
   if (!plainRecord(value) || !exactKeys(value, ["inputs", "outputs", "ownerId", "status"])) return false;
   if (
     !CAPABILITY_STATUSES.has(value.status as string)
     || !canonicalStringSet(value.inputs, MAX_SPECIES_CAPABILITY_ENTRIES, (entry) => canonicalId(entry, 64))
     || !canonicalStringSet(value.outputs, MAX_SPECIES_CAPABILITY_ENTRIES, (entry) => canonicalId(entry, 64))
-    || value.outputs.some((axis) => !conditionIds.has(axis))
+    || value.outputs.some((axis) => !conditionIds.has(axis) && !(
+      axis === "activity-pressure"
+      && activity?.implementation === "active"
+      && activity.ownerId === CORE_ECOLOGY_ACTIVITY_DECISION_OWNER_ID
+      && value.ownerId === activity.ownerId
+    ))
   ) return false;
   if (value.status === "unimplemented") {
     return value.ownerId === null && value.inputs.length === 0 && value.outputs.length === 0;
@@ -6776,7 +6866,32 @@ function crossContractCoherence(module: LivingSpeciesModule): boolean {
   if (module.lifeHistory.dynamicAging && module.lifeHistory.implementation !== "active") return false;
   if (module.health.recovery && !module.health.incapacitation) return false;
   if (module.aftermath.implementation !== "unimplemented" && !module.health.causalDeath) return false;
+  const weatherTarget = module.interactions.targets.find(({ targetClass }) => (
+    targetClass === "weather"
+  ));
+  if (
+    weatherTarget !== undefined
+    && (weatherTarget.policy === "available") !== (module.environment.weather.status === "active")
+  ) return false;
   return true;
+}
+
+/** Current activity bindings and their public capability declarations move together. */
+function currentCircadianWeatherContractCoherent(module: LivingSpeciesModule): boolean {
+  if (!(CORE_WILDLIFE_SPECIES as readonly string[]).includes(module.speciesId)) return true;
+  const binding = coreEcologyCircadianBindingForSpecies(module.speciesId as CoreWildlifeSpecies);
+  if (binding === null) return true;
+  const bindingHasWeather = binding.weatherResponses.length > 0;
+  const catalogHasActivityWeather = module.environment.weather.status === "active"
+    && module.environment.weather.ownerId === module.activity.ownerId
+    && module.environment.weather.inputs.includes("weather-intensity")
+    && module.environment.weather.inputs.includes("weather-kind")
+    && module.environment.weather.outputs.includes("activity-pressure");
+  const weatherTarget = module.interactions.targets.find(({ targetClass }) => (
+    targetClass === "weather"
+  ));
+  return bindingHasWeather === catalogHasActivityWeather
+    && bindingHasWeather === (weatherTarget?.policy === "available");
 }
 
 function canonicalCapabilityList(value: unknown, allowEmpty: boolean): value is readonly string[] {

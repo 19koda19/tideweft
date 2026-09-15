@@ -126,7 +126,11 @@ describe("core ecology transient activity authority", () => {
       });
       const projection = projectCoreEcologyActivity(
         materialized,
-        { actorId: witness.actorId, atTick: 0 },
+        {
+          actorId: witness.actorId,
+          atTick: 0,
+          weather: { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: 1 },
+        },
         authority ?? undefined,
       );
       expect(projection).not.toBeNull();
@@ -452,7 +456,11 @@ describe("core ecology transient activity authority", () => {
     expect(isTrustedCoreEcologyActivityAuthority(forged)).toBe(false);
     expect(projectCoreEcologyActivity(
       materialized,
-      { actorId: witness.actorId, atTick: 0 },
+      {
+        actorId: witness.actorId,
+        atTick: 0,
+        weather: { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: 1 },
+      },
       forged,
     )).toBeNull();
   });

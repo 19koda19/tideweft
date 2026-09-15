@@ -275,6 +275,7 @@ function requiredRegionalActivityProjection(
   const projection = projectCoreEcologyActivity(source.patch, {
     actorId,
     atTick: source.patch.updatedAtTick,
+    weather: createWorldView(world).weather,
   }, authority);
   if (projection === null) {
     throw new Error(`activity fixture could not project ${actorId}`);
@@ -2204,6 +2205,121 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it("feeds authoritative storm weather into one regional duck refuge routine", async () => {
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "duck-runtime-0",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    world.weather.kind = "storm";
+    world.weather.intensity = 800_000;
+    world.weather.windX = 300_000;
+    world.weather.windY = -200_000;
+    world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+
+    let patch = requiredCore(envelope);
+    const sourceDuck = patch.populations.find(({ species }) => (
+      species === "american-black-duck"
+    ))?.members[0]?.actor;
+    if (sourceDuck === undefined || patch.derivation.kind !== "habitat-v11") {
+      throw new Error("Storm routine fixture omitted its authenticated duck habitat");
+    }
+    const refuge = patch.derivation.habitat.tidalAnchors.find((anchor) => (
+      anchor.species === "american-black-duck" && anchor.purpose === "refuge"
+    ));
+    if (refuge === undefined) throw new Error("Storm routine fixture omitted duck refuge");
+    const duckStart = translateWorldPosition(
+      refuge.position,
+      12 * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    );
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(
+      sourceDuck,
+      {
+        atTick: patch.updatedAtTick,
+        position: duckStart,
+        heading: sourceDuck.address.heading,
+      },
+    ));
+    let displacedOrdinal = 0;
+    for (const actor of coreActors(patch)) {
+      if (actor.identity.stableId === sourceDuck.identity.stableId) continue;
+      patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+        atTick: patch.updatedAtTick,
+        position: translateWorldPosition(
+          refuge.position,
+          (80 + displacedOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+          20 * WORLD_POSITION_UNITS_PER_TILE,
+        ),
+        heading: actor.address.heading,
+      }));
+      displacedOrdinal += 1;
+    }
+    patch = reconcileFixtureGroupAnchors(patch);
+    patch = promoteFixtureActors(patch, [sourceDuck.identity.stableId]);
+    expect(projectCoreEcologyActivity(patch, {
+      actorId: sourceDuck.identity.stableId,
+      atTick: patch.updatedAtTick,
+      weather: createWorldView(world).weather,
+    })).toMatchObject({
+      state: "seeking-tidal-refuge",
+      routine: {
+        effectivePreference: "rest",
+        transitionCause: "priority-override",
+        causeReferenceId: expect.stringMatching(/^weather:storm-refuge:/u),
+      },
+      motion: {
+        kind: "target-area",
+        verb: "seek-waterfowl-refuge",
+        travelMedium: "air",
+      },
+    });
+
+    await repository.save(recordWithEnvelope(record, resealedEnvelope(envelope, {
+      world: serializeWorld(world),
+      coreEcology: serializeCoreEcologyAggregatePatch(patch),
+    })));
+    initial.destroy();
+    scheduledFrame = undefined;
+    const runtime = await createTideweftRuntime(repository);
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+
+    const saved = requiredEnvelope(repository);
+    const savedDuck = regionalCoreActors(requiredRegionalEcology(saved)).find(({ identity }) => (
+      identity.stableId === sourceDuck.identity.stableId
+    ));
+    if (savedDuck === undefined) throw new Error("Storm routine lost its regional duck");
+    const startDelta = worldPositionDelta(duckStart, refuge.position);
+    const savedDelta = worldPositionDelta(savedDuck.address.position, refuge.position);
+    expect(Math.hypot(savedDelta.x, savedDelta.y)).toBeLessThan(
+      Math.hypot(startDelta.x, startDelta.y),
+    );
+    expect(savedDuck.circadian).toMatchObject({
+      policy: { profileId: "day-active", drivers: ["clock", "weather"] },
+      restDestinationArrived: false,
+      posture: { state: "awake" },
+    });
+    expect(requiredRegionalActivityProjection(saved, sourceDuck.identity.stableId)).toMatchObject({
+      species: "american-black-duck",
+      state: "seeking-tidal-refuge",
+      routine: {
+        effectivePreference: "rest",
+        transitionCause: "priority-override",
+        causeReferenceId: expect.stringMatching(/^weather:storm-refuge:/u),
+      },
+      motion: { kind: "target-area", verb: "seek-waterfowl-refuge", travelMedium: "air" },
+    });
+    runtime.destroy();
+  }, 45_000);
+
   it("keeps an off-frame materialized crow posture-consistent after leaving its perch", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
@@ -2802,7 +2918,7 @@ describe("runtime core-ecology vertical slice", () => {
     fixture.runtime.destroy();
   }, 45_000);
 
-  it("keeps a selected crow's v25 runtime ABOUT posture in render parity", async () => {
+  it("keeps a selected crow's reauthenticated active posture in render parity", async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);
     initial.dispatchUI({
@@ -2827,7 +2943,8 @@ describe("runtime core-ecology vertical slice", () => {
     expect(projectCoreEcologyActivity(patch, {
       actorId: crow.identity.stableId,
       atTick: patch.updatedAtTick,
-    })).toMatchObject({ state: "perched", preferredNeutralIntent: "observe" });
+      weather: createWorldView(world).weather,
+    })).toMatchObject({ state: "active-watch", preferredNeutralIntent: "observe" });
     const placement = livingActorAddressInRegionalWindow(crow.address, regional.window);
     if (placement === null) throw new Error("Crow ABOUT fixture placed its crow outside the frame");
     const crowTileX = Math.trunc(placement.point.x / WORLD_POSITION_UNITS_PER_TILE);
@@ -2864,7 +2981,7 @@ describe("runtime core-ecology vertical slice", () => {
     ));
     expect(renderCrow).toMatchObject({
       species: "fish-crow",
-      behavior: "perch",
+      behavior: "watch",
     });
     if (renderCrow === undefined) throw new Error("Crow ABOUT fixture could not see its crow");
     if (renderCrow.groupSize === undefined) {
@@ -2879,14 +2996,14 @@ describe("runtime core-ecology vertical slice", () => {
     });
     const selection = runtime.getUIView().selectedLivingActor;
     expect(selection?.quick.summary).toContain(`About ${renderCrow.groupSize} visible`);
-    expect(selection?.quick.summary).toContain("Perched");
+    expect(selection?.quick.summary).toContain("Watching");
     expect(selection?.about.observed).toContainEqual({
       label: "Visible group",
       value: `About ${renderCrow.groupSize}`,
     });
     expect(selection?.about.observed).toContainEqual({
       label: "Behavior",
-      value: "Perched",
+      value: "Watching",
     });
     runtime.destroy();
   }, 30_000);
@@ -6260,6 +6377,13 @@ function initializeExactV24ActivityActor(
   const activity = projectCoreEcologyActivity(patch, {
     actorId: member.actor.identity.stableId,
     atTick: tick,
+    weather: {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: tick + 1,
+    },
   });
   if (activity === null) throw new Error(`exact v24 ${species} initialization failed`);
   if (activity.motion.kind !== "target-area") return patch;

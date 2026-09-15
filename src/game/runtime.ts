@@ -1137,6 +1137,7 @@ function createRuntimeCoreEcology(
   const waterfowlInitialized = initializeRuntimeWaterfowlActivityActor(
     initialized,
     world.meta.completedTick,
+    economy.weather,
   );
   if (waterfowlInitialized === null) {
     throw new Error("Initial waterfowl placement failed validation");
@@ -1672,6 +1673,7 @@ function createRuntimeRegionalUplandCoreEcology(
   const waterfowlInitialized = initializeRuntimeWaterfowlActivityActor(
     initialized,
     world.meta.completedTick,
+    compatibilityClearActivityWeather(world.meta.completedTick),
   );
   if (waterfowlInitialized === null) {
     throw new Error("Initial waterfowl placement failed validation");
@@ -1758,7 +1760,11 @@ function createRuntimeDomesticPenCoreEcology(
     world.meta.completedTick,
   );
   if (initialized === null) throw new Error("Domestic-pen tidal actor placement failed validation");
-  const waterfowl = initializeRuntimeWaterfowlActivityActor(initialized, world.meta.completedTick);
+  const waterfowl = initializeRuntimeWaterfowlActivityActor(
+    initialized,
+    world.meta.completedTick,
+    compatibilityClearActivityWeather(world.meta.completedTick),
+  );
   if (waterfowl === null) throw new Error("Domestic-pen waterfowl placement failed validation");
   const tidalWeb = initializeRuntimeTidalWebActivityActor(waterfowl, world.meta.completedTick);
   if (tidalWeb === null) throw new Error("Domestic-pen tidal-web placement failed validation");
@@ -1768,6 +1774,7 @@ function createRuntimeDomesticPenCoreEcology(
 function initializeRuntimeWaterfowlActivityActor(
   patch: CoreEcologyAggregatePatchState,
   atTick: number,
+  weather: Readonly<WeatherState>,
 ): CoreEcologyAggregatePatchState | null {
   const member = patch.populations
     .find(({ species }) => species === "american-black-duck")
@@ -1777,6 +1784,7 @@ function initializeRuntimeWaterfowlActivityActor(
   const activity = projectCoreEcologyActivity(patch, {
     actorId: member.actor.identity.stableId,
     atTick,
+    weather,
   });
   if (activity === null) return null;
   if (activity.motion.kind !== "target-area") return patch;
@@ -1792,6 +1800,17 @@ function initializeRuntimeWaterfowlActivityActor(
   } catch {
     return null;
   }
+}
+
+/** Frozen constructors preserve their historical clock-only placement. */
+function compatibilityClearActivityWeather(atTick: number): Readonly<WeatherState> {
+  return Object.freeze({
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+    nextChangeTick: atTick + 1,
+  });
 }
 
 function initializeRuntimeTidalWebActivityActor(
@@ -1879,6 +1898,7 @@ function createRuntimeWaterfowlCoreEcology(
   const waterfowlInitialized = initializeRuntimeWaterfowlActivityActor(
     initialized,
     world.meta.completedTick,
+    compatibilityClearActivityWeather(world.meta.completedTick),
   );
   if (waterfowlInitialized === null) {
     throw new Error("Legacy waterfowl placement failed validation");
@@ -5769,11 +5789,13 @@ function refreshRuntimeCoreRoutineAfterIntentMovement(
   patch: CoreEcologyAggregatePatchState,
   actorId: string,
   tick: number,
+  weather: Readonly<WeatherState>,
   authority?: CoreEcologyActivityAuthorityReceipt,
 ): CoreEcologyAggregatePatchState | null {
   const projected = projectCoreEcologyActivity(patch, {
     actorId,
     atTick: tick,
+    weather,
   }, authority);
   if (projected === null) return null;
   if (projected.routine === null) return patch;
@@ -5818,6 +5840,7 @@ function resolveRuntimeCoreLocomotion(
       const projectedActivity = projectCoreEcologyActivity(patch, {
         actorId: actor.identity.stableId,
         atTick: tick,
+        weather: world.weather,
       }, activityAuthority);
       if (projectedActivity === null) return null;
       if (!local) {
@@ -5842,6 +5865,7 @@ function resolveRuntimeCoreLocomotion(
       const activityMotion = stepCoreEcologyActivityMotion(patch, {
         actorId: actor.identity.stableId,
         atTick: tick,
+        weather: world.weather,
         maximumStepUnits: coreWildlifeMaximumStepUnits(
           actor.identity.species,
           actor.intent.kind,
@@ -5908,6 +5932,7 @@ function resolveRuntimeCoreLocomotion(
               patch,
               actor.identity.stableId,
               tick,
+              world.weather,
               activityAuthority,
             );
             if (refreshed === null) return null;
@@ -5972,6 +5997,7 @@ function resolveRuntimeCoreLocomotion(
             patch,
             actor.identity.stableId,
             tick,
+            world.weather,
             activityAuthority,
           );
           if (refreshed === null) return null;
@@ -6298,6 +6324,7 @@ function stepRuntimeCoreEcology(
         ? projectCoreEcologyActivity(state, {
             actorId: actor.identity.stableId,
             atTick: world.meta.completedTick,
+            weather: movementView.weather,
           }, authority)
         : null;
       if (ownsActivity && activity === null) return null;
@@ -6363,6 +6390,7 @@ function stepRuntimeCoreEcology(
       ? projectCoreEcologyActivity(state, {
           actorId: actor.identity.stableId,
           atTick: world.meta.completedTick,
+          weather: movementView.weather,
         }, authority)
       : null;
     if (
@@ -9234,6 +9262,7 @@ export async function createTideweftRuntime(
         window: actorWindow,
         perception,
         tileSize: RENDER_TILE_SIZE,
+        weather: worldView.weather,
         selectedTarget: selectedWildlifeTarget,
         ...(activityAuthorities.size === 0
           ? {}
@@ -9403,6 +9432,7 @@ export async function createTideweftRuntime(
       ? {
           patch: selectedWildlifeOwner.source.patch,
           atTick: selectedWildlifeOwner.source.patch.updatedAtTick,
+          weather: worldView.weather,
           ...(activityAuthoritiesBySource
             .get(selectedWildlifeOwner.source.sourceKey)
             ?.get(selectedWildlife.identity.stableId) === undefined
@@ -11374,6 +11404,7 @@ export async function createTideweftRuntime(
           window: coreEventObservation.window,
           perception: eventPerception,
           tileSize: RENDER_TILE_SIZE,
+          weather: worldView.weather,
         });
         if (projected === null) {
           throw new Error("Core ecology event perception could not be projected");
@@ -11386,6 +11417,7 @@ export async function createTideweftRuntime(
           window: coreEventObservation.window,
           perception: eventPerception,
           tileSize: RENDER_TILE_SIZE,
+          weather: worldView.weather,
         });
         if (projected === null) {
           throw new Error("Core ecology pre-mortality perception could not be projected");

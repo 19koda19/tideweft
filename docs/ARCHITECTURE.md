@@ -122,13 +122,20 @@ are not routine inputs.
 
 `src/game/coreEcologyCircadianPolicy.ts` owns a frozen declarative binding
 registry whose key is the combination of species and existing activity
-archetype. The local Alpha43 **Two Rhythms** candidate contains exactly two
-clock-driven rows: fish crow + `perch-watch` + day-active, and North American
-river otter + `shore-water-forager` + night-active. The activity profile must
-still match the authored archetype or the lookup fails closed; selecting an
-archetype alone never grants a routine. This matters because harbor seal also
-uses `shore-water-forager` but has no circadian binding and retains its legacy
-bounded daylight/rest-window activity.
+archetype. Alpha43 **Two Rhythms** began that registry with two clock-driven
+rows: fish crow + `perch-watch` + day-active, and North American river otter +
+`shore-water-forager` + night-active. Alpha48 added snowy egret +
+`tidal-wader` + adaptive clock/tide/opportunity; Alpha49 added marsh rabbit +
+`ground-cover-forager` + twilight-active. The local Alpha50 **Many Rhythms**
+source candidate now makes the registry an exact ordered cover of all seventeen
+species that currently own an addressable activity-affordance profile. The
+thirteen formerly bounded-day rows reuse day-active policy and their existing
+archetypes rather than receiving private schedulers. Duck, otter, yellowlegs,
+and terrapin retain tide/depth-responsive actions and destinations without
+treating every usable-water sample as a wake signal; only the egret's bounded
+tide/opportunity evidence independently composes with clock preference. The
+activity profile must still match the authored archetype or lookup fails closed;
+selecting an archetype alone never grants a routine.
 
 A fish crow must travel through shared locomotion to its habitat-authenticated
 perch before nighttime rest physiology can apply. A river otter follows the
@@ -158,21 +165,25 @@ an authenticated V6 ecology child byte-for-byte, invents no posture for an old
 actor, and resaves the adopted world as version 31. This is not a second clock
 or a nested ecology-schema rewrite.
 
-The current living-species catalog now reports the river otter's broad rhythm
-truthfully as nocturnal. Every authenticated historical catalog snapshot keeps
-its exact prior bytes and hash, including the former bounded-activity `diurnal`
-declaration: the Alpha32–36 roots and the Wave-G Estuary Surface Break, Marsh
-Channel Web, and Alpha39 Saltmarsh Small Worlds roots are compatibility records,
-not mutable views of the current catalog.
+The current living-species catalog reports each of those seventeen profiles'
+broad rhythm and shared cadence from the common routine policy. Every
+authenticated historical catalog snapshot keeps its exact prior bytes and hash,
+including former bounded-activity `diurnal` declarations: the Alpha32–36 roots
+and the Wave-G Estuary Surface Break, Marsh Channel Web, and Alpha39 Saltmarsh
+Small Worlds roots are compatibility records, not mutable views of the current
+catalog.
 
-These two representative bindings are not catalog-wide circadian adoption.
-The other 43 core-wildlife profiles—including the unbound harbor seal—do not
-acquire a physical routine from this registry. The bounded working-dog and
-food-store-keeper adapters described below reuse the kernel without widening
-that wildlife registry. The independent dog, bonded/player companions, the
-other 41 humans, player REST/SLEEP, and complete Turning Day closure remain
-absent. Later consumers must reuse the same kernel and physical authority rather
-than add species or human schedulers.
+This exact-cover claim is deliberately narrower than catalog-wide circadian
+adoption. The other 28 core-wildlife profiles have no addressable activity
+affordance to which a physical routine can honestly bind; aggregate actors are
+not fabricated. In particular, the southern leopard frog retains real
+rain-driven aggregate activity and chorus without receiving an invented body,
+destination, or sleep posture. The bounded working-dog and food-store-keeper
+adapters described below reuse the kernel without widening the wildlife
+registry. The independent dog, bonded/player companions, the other 41 humans,
+and complete Turning Day closure remain outside Alpha50. Later consumers must
+reuse the same kernel and physical authority rather than add species or human
+schedulers.
 
 The local Alpha44 **Ten Minutes** candidate adds one bounded player `WAIT 10
 MIN` action owned by `src/game/runtime.ts`. A wait receipt records the starting
@@ -388,6 +399,41 @@ and finite-resource owners are unchanged. This slice adds no actor, population,
 density, food, feeding, capture, attack, mortality, weather driver, tide driver,
 opportunity driver, catalog-wide schedule, broad coarse-time advancement, or
 Turning Day closure.
+
+The local Alpha50 **Many Rhythms** source candidate converts the thirteen
+remaining addressable activity-profile species in one registry-driven pass.
+Together with the four earlier compositions, the circadian registry now exactly
+covers the seventeen entries in the activity-affordance registry. Each profile
+declares `circadian-activity` and `circadian-routine`, reuses its existing
+authenticated perch, refuge, haulout, wading ground, margin, or habitat anchor,
+and reaches that destination through its existing land, water, amphibious, or
+air movement owner. Transit remains Awake; only arrival can produce Resting or
+Asleep. Current danger, needs, retained commitments, and lawful disturbance
+still outrank a neutral routine. Shared registry and projection invariants cover
+the breadth; this does not add a species-by-species scheduler or test matrix.
+
+One data-declared American-black-duck composition also exercises the shared
+weather driver through authoritative current weather: qualifying rain may keep
+the existing duck active outside its ordinary clock window, while storm weather
+prefers its authenticated refuge. The same current weather sample is threaded
+through production cognition, locomotion, direct presentation, quick inspection,
+and ABOUT so visible posture cannot disagree with behavior. Duck, otter,
+yellowlegs, and terrapin keep clock-based wake policy while their existing
+physical branches continue to respond to usable tide/depth; tide does not wake
+them merely because habitat remains usable. Egret remains the actual
+clock/tide/opportunity activation composition. Coarse absence preserves a
+committed bout but cannot invent a new weather observation or destination. The
+non-addressable southern-leopard-frog population remains a separate truthful
+aggregate example: rain changes its real activity and chorus, but never
+fabricates an individual frog routine.
+
+Alpha50 changes no actor, population, food, harm, mortality, save, regional-
+ecology, or wildlife-actor schema. Current catalog rhythm/cadence comes from the
+shared profiles while every frozen historical catalog remains byte- and hash-
+exact. Its exact-cover boundary is the seventeen current addressable activity
+profiles, not all 45 core-wildlife records. People/companion breadth,
+multi-day/package performance evidence, cumulative validation, and final
+Turning Day release verification remain later work.
 
 ## Authoritative tick
 
@@ -1336,11 +1382,29 @@ travel to authenticated habitat cover, never an inferred burrow or den. Danger,
 lawful disturbance, urgent needs, and retained commitments still outrank that
 routine. Coarse absence conserves only an already committed rest bout and does
 not invent travel or a new choice. Current catalog truth changes without
-rewriting any historical catalog snapshot. Weather-driven bindings, validated
-broad coarse-time advancement, other animal routines, and catalog-wide daily
-life remain absent.
+rewriting any historical catalog snapshot.
 
-`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Alpha49 makes the already shared ordinary-terrain route explicit as `land` for rabbit cover and neutral ground activity, avoiding an implicit aerial fallback without introducing a rabbit-only pathfinder. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful ordinary intent-owned rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors and Alpha49's routine-owned travel cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
+Alpha50 then moves the thirteen remaining entries from the released bounded-day
+contract onto the same saved physical routine. The circadian registry and
+activity-affordance registry must now have identical ordered species keys, and
+the projection firewall rejects a bound actor without the matching routine,
+destination, movement medium, and policy. This is the complete current
+addressable activity-profile roster—seventeen species—not all 45 wildlife
+profiles. Existing activity destinations and locomotion owners stay
+authoritative; only arrival permits rest presentation or restorative posture.
+One reusable binding-level weather-response declaration lets authoritative
+qualifying rain activate the American black duck outside its ordinary clock
+window, while storm weather prioritizes the existing refuge. Current weather
+travels through runtime decision, movement, and direct inspection rather than
+being inferred from pixels. The duck, otter, yellowlegs, and terrapin continue
+to choose only physically usable tide/depth-dependent actions and destinations,
+but their wake policy remains clock-based; the egret alone has the proven
+bounded tide/opportunity wake composition. Aggregate frog rain behavior remains
+real but does not masquerade as an individual routine. Validated broad
+coarse-time advancement, other animal schedules, and catalog-wide daily life
+remain absent.
+
+`src/game/coreWildlifeLocomotionProfile.ts` layers species-shaped cost and gait data over one shared path resolver. The egret travels between an authenticated wading target and refuge through the aerial surface. The duck uses either bounded air or currently traversable `surface-water`. The otter selects the reusable `amphibious` medium: deep nonstandable water uses surface-water cost, while land and standable shallows use the ordinary terrain surface, allowing one actor to travel from dry haulout to water and back without an otter-specific pathfinder. Alpha37's great blue heron uses shared air travel to reach its authenticated wading anchor; common tern and osprey use the same bounded aerial route surface for neutral activity. Alpha38 composes the same media for yellowlegs wading, kingfisher air/perch travel, and cormorant water/air activity. Alpha39 composes ordinary aerial/perch travel for seaside sparrows and the shared amphibious margin route for the diamondback terrapin. Alpha49 makes the already shared ordinary-terrain route explicit as `land` for rabbit cover and neutral ground activity, avoiding an implicit aerial fallback without introducing a rabbit-only pathfinder. Alpha50 keeps every newly bound routine on that species' already-declared movement media and authenticated destination; it creates no new pathfinder. Those projected routes do not establish ecological cross-region actor migration or a continuously simulated 3D flight body. A successful ordinary intent-owned rabbit, fox, or gray-wolf relocation can atomically retain one rate-limited paired-track or canid-pawprint record at the destination; stationary actors and shared circadian-routine-owned travel cannot mint movement signs. The later birds deliberately produce no new persistent track evidence. Every retained individual-wildlife sign keeps immutable source strength while its visible clarity falls deterministically to exact expiry after 180 ticks, identically across full simulation, coarse time, save, and reload. This shared locomotion/evidence path does not itself create attack, injury, mortality, body, or feeding outcomes; current marsh-fox/gray-wolf/cougar contact and finite-body transactions remain separate authoritative owners. Wake evidence, capture, fishing, hunting, foliage consumption, ecological migration/reproduction, nesting, and reward loops remain absent.
 
 When the habitat assemblage contains a bear, the runtime seeds one exact loose dried-fish parcel near it. Visual evidence can make that parcel a food opportunity for an eligible bear, gull, fish crow, or river otter, but only an identified, directly confirmed, accessible whole unit may produce a claim. The cargo owner rechecks exact segmented contact, payload kind, quantity, and current existence before atomically committing one custody path and any lawful ordinary-food consumption. Sorted claims, replay protection, and exact custody ensure a second actor or reload cannot consume another copy. The otter is deliberately only another consumer of this generic seam, not an owner of private loot or cargo rules. A malformed claim, partial stack, consumed item, or out-of-reach seam case leaves both cargo and ecology unchanged. Aggregate attraction never consumes, moves, aliases, or duplicates one. Player-facing narration is emitted only when the event-time actor was directly visible; otherwise authoritative history remains silent to the player.
 
@@ -1991,6 +2055,34 @@ Outer save v32 and `RegionalEcologyStateV6` remain unchanged, as do the existing
 exact-contact rabbit mortality and carcass owners. This is local unpublished
 source-candidate behavior, not release evidence, a weather-driven binding,
 catalog-wide schedules, validated broad coarse time, or directive closure.
+
+The local Alpha50 **Many Rhythms** source candidate makes the declarative
+circadian registry an exact cover of all seventeen current addressable activity
+profiles. Fourteen use day-active policy, while the established river otter,
+snowy egret, and marsh rabbit retain night-active, adaptive-active, and
+twilight-active policies respectively. Every branch now carries the shared
+routine receipt through its existing authenticated rest place and movement
+owner, including response and ordinary activity states; actual arrival alone
+can authorize Resting/Asleep or a visible rest label. Qualifying authoritative
+rain activates the American black duck through the generic weather-driver
+declaration, while storm prefers its existing refuge, and production
+cognition/movement/presentation/ABOUT consume the same current weather sample.
+Duck, otter, yellowlegs, and terrapin retain clock-based wake policy while their
+physical action/destination branches remain tide/depth-responsive; this avoids
+an always-usable-water signal erasing sleep. Egret remains the actual
+clock/tide/opportunity wake composition. The dry-margin path no longer labels
+an awake active terrapin as resting.
+
+The current catalog derives rhythm and cadence from those shared policies;
+explicit compatibility adapters preserve every Alpha32–39 catalog byte and
+hash. Southern leopard frogs remain non-addressable conserved aggregates whose
+real rain activity and chorus do not create a fictitious individual posture.
+Outer save v32, Regional Ecology V6, wildlife actor v1, every population and
+stable identity, physical resources, cargo, and existing mortality remain
+unchanged. Alpha50 is local and unpublished. It does not bind the other 28
+wildlife profiles, other 41 humans, the independent dog, or a not-yet-existing
+player-bonded companion, and it does not supply final multi-day/package proof
+or close Turning Day.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.
