@@ -45,7 +45,9 @@ import {
 export const ALPHA36_POLAR_CONSUMER_EMERGENCE_OWNER_INTENT =
   "test:alpha36-polar-consumer-emergence:v1" as const;
 
-const TICK = 360;
+// Full daylight, one 720-tick tide period after the historical tick-360
+// fixture, preserves its tidal phase while exercising physical illumination.
+const TICK = 1_080;
 
 describe(`${ALPHA36_POLAR_CONSUMER_EMERGENCE_OWNER_INTENT} shared nonlethal food-web seam`, () => {
   it("lets direct sight drive seal pressure and bear pursuit while occlusion removes both", () => {

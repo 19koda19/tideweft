@@ -883,9 +883,12 @@ describe("effort, stability, and discovery", () => {
     };
     const player = makeUnstablePlayer();
     const comparison = makeUnstablePlayer();
+    const againstCurrent = world.tide.direction > 0
+      ? MOVE_RIGHT
+      : { moveX: -1, moveY: 0, brace: false } as const;
 
-    const swept = stepPlayer(player, world, MOVE_RIGHT);
-    const comparisonSweep = stepPlayer(comparison, world, MOVE_RIGHT);
+    const swept = stepPlayer(player, world, againstCurrent);
+    const comparisonSweep = stepPlayer(comparison, world, againstCurrent);
 
     expect(swept.exhausted).toBe(false);
     expect(player.stamina).toBeGreaterThan(0);

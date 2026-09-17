@@ -4,6 +4,7 @@ import {
   FIXED_POINT,
   createWorld,
   createWorldView,
+  runTicks,
   type WorldView,
 } from "../sim/public";
 import {
@@ -22,11 +23,11 @@ import {
 import { tideHarpPulseAnnouncement } from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import { tideHarpContainsTileCenter, type TideHarp } from "./tideHarps";
-import { placeContextualWayknot } from "./wayknots";
+import { WAYKNOT_SETTING_TICKS, placeContextualWayknot } from "./wayknots";
 import { projectUIView } from "./uiProjection";
 
 const FIXTURE_SEED = "phase ten glass ebb";
-const HARP_TILE_INDICES = [2_942, 3_230, 2_751] as const;
+const HARP_TILE_INDICES = [2_558, 2_846, 2_365] as const;
 const NO_INPUT = { moveX: 0, moveY: 0, brace: false } as const;
 
 interface GeneratedHarpFixture {
@@ -38,18 +39,19 @@ interface GeneratedHarpFixture {
 
 function generatedHarpFixture(): GeneratedHarpFixture {
   // The durable v2 knots spend three active world ticks setting before a Harp
-  // can answer. This fixture observes the already-set formation; setting and
-  // broken-member gating have focused coverage in wayknots.test.ts.
-  const world = {
-    ...createWorldView(createWorld(FIXTURE_SEED, "calm")),
-    completedTick: 3,
-  };
+  // can answer. Advance the authoritative world clock before observing the
+  // already-set formation; setting and broken-member gating have focused
+  // coverage in wayknots.test.ts.
+  const worldState = createWorld(FIXTURE_SEED, "calm");
+  runTicks(worldState, WAYKNOT_SETTING_TICKS);
+  const world = createWorldView(worldState);
+  const placementTick = world.completedTick - WAYKNOT_SETTING_TICKS;
   const player = createPlayer(world);
   const inventoryBeforeFormation = settlementInventory(world);
   for (const tileIndex of HARP_TILE_INDICES) {
     const context = wayknotContextAt(world, tileIndex);
     if (!context) throw new Error(`Generated Tide Harp fixture lost tile ${tileIndex}`);
-    const placement = placeContextualWayknot(player.wayknots, context);
+    const placement = placeContextualWayknot(player.wayknots, context, placementTick);
     if (!placement.ok) {
       throw new Error(`Generated Tide Harp fixture could not place tile ${tileIndex}: ${placement.reason}`);
     }
@@ -117,6 +119,7 @@ describe("Tide Harp gameplay wiring", () => {
     expect(Object.hasOwn(player, "tideHarps")).toBe(false);
 
     placePlayerAt(player, world, HARP_TILE_INDICES[0]);
+    player.depthSoundings[HARP_TILE_INDICES[0]] = FIXED_POINT;
     const active = projectUIView(world, player, activeSession());
     expect(active.field.tideHarps).toEqual({
       tunedCount: 1,

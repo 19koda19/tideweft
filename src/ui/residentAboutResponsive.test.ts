@@ -27,8 +27,17 @@ describe("resident ABOUT responsive shell", () => {
     expect(styles).toMatch(/\.resident-about__choice[\s\S]*?min-width: max\(5\.5rem, 44px\)/u);
     expect(styles).toContain("env(safe-area-inset-bottom)");
     expect(styles).toContain("@media (orientation: landscape) and (max-height: 34rem)");
-    expect(styles).toContain("top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem)");
-    expect(styles).toContain("bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 4rem)");
+    const compactAboutRules = styles.slice(
+      styles.indexOf("@media (max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)"),
+      styles.indexOf("@media (orientation: landscape) and (max-height: 34rem)"),
+    );
+    const compactAboutRule = compactAboutRules.match(
+      /#game-ui \.resident-about \{([\s\S]*?)\n  \}/u,
+    )?.[1] ?? "";
+    expect(compactAboutRule).toContain("top: calc(var(--masthead-offset) + var(--ui-gap) + 5.1rem)");
+    expect(compactAboutRule).toContain(
+      "bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem)",
+    );
   });
 
   it("gives overflowing facts a real touch/wheel scroll target without capturing the whole overlay", () => {

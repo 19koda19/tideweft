@@ -709,7 +709,7 @@ describe("runtime BIO0 ecology persistence", () => {
       intensity: 720_000,
       windX: 200_000,
       windY: -100_000,
-      nextChangeTick: 1,
+      nextChangeTick: WORLD_NEW_GAME_START_TICK + 1,
     });
     const repository = new MemoryRepository(record);
     const runtime = await createTideweftRuntime(repository);
@@ -719,10 +719,10 @@ describe("runtime BIO0 ecology persistence", () => {
     const envelope = currentEnvelope(repository);
     const world = deserializeWorld(envelope.world);
     const ecology = requiredBio0(envelope);
-    expect(world.meta.completedTick).toBe(1);
+    expect(world.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK + 1);
     expect(ecology).toMatchObject({
-      createdAtTick: 0,
-      tick: 1,
+      createdAtTick: WORLD_NEW_GAME_START_TICK,
+      tick: WORLD_NEW_GAME_START_TICK + 1,
       revision: 1,
       lastExposure: {
         rain: 900_000,
@@ -1713,6 +1713,7 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
       groupOrdinal: 0,
       memberOrdinals: population.allocations.map(({ allocationOrdinal }) => allocationOrdinal),
       anchor,
+      tick: world.meta.completedTick,
     })];
   });
   const waveA = createCoreEcologyPatch({

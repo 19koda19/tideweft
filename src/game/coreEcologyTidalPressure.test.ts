@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord, type RegionCoord } from "../sim/regions";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
+import { WORLD_DAY_START_TICK } from "../sim/worldTime";
 import {
   createCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -34,6 +35,7 @@ import {
 
 const SEED_TEXT = "tidal-triad-1";
 const ORIGIN = createRegionCoord(0, 0);
+const TEST_DAYLIGHT_TICK = WORLD_DAY_START_TICK + 300;
 
 interface Fixture {
   readonly patch: CoreEcologyAggregatePatchState;
@@ -86,7 +88,11 @@ describe("tidal-table nonlethal aggregate pressure", () => {
       expect.objectContaining({ response: "pressure", channels: ["vision"] }),
     ]));
 
-    const result = stepCoreEcologySmallWorld(current.patch, 0, frame);
+    const result = stepCoreEcologySmallWorld(
+      current.patch,
+      current.patch.updatedAtTick,
+      frame,
+    );
     if (result === null) throw new Error("Lawful snowy-egret pressure was rejected");
     const egretEvents = result.events.filter(({ sourceKind }) => sourceKind === "snowy-egret");
     expect(egretEvents.map(({ targetSpecies }) => targetSpecies).sort()).toEqual([
@@ -148,7 +154,11 @@ describe("tidal-table nonlethal aggregate pressure", () => {
       .toBe(false);
 
     for (const frame of [absent, unobserved]) {
-      const result = stepCoreEcologySmallWorld(current.patch, 0, frame);
+      const result = stepCoreEcologySmallWorld(
+        current.patch,
+        current.patch.updatedAtTick,
+        frame,
+      );
       if (result === null) throw new Error("Valid no-egret frame was rejected");
       expect(result.events.some(({ sourceKind }) => sourceKind === "snowy-egret"))
         .toBe(false);
@@ -171,6 +181,7 @@ describe("tidal-table nonlethal aggregate pressure", () => {
 
 function fixture(): Fixture {
   const state = createWorld(SEED_TEXT, "standard");
+  state.meta.completedTick = TEST_DAYLIGHT_TICK;
   state.weather = {
     ...state.weather,
     kind: "clear",
@@ -187,6 +198,7 @@ function fixture(): Fixture {
     seed: state.meta.rootSeed,
     patchKey: "tidal-table:nonlethal-pressure",
     originRegion: ORIGIN,
+    tick: state.meta.completedTick,
     populations: individualInputs(habitat),
     derivation: { kind: "habitat-v5", habitat },
   });

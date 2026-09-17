@@ -174,6 +174,7 @@ describe("Wayknots game wiring", () => {
     const player = createPlayer(world);
     const session = activeSession();
     placePlayerAt(player, world, marsh.tileIndex);
+    player.depthSoundings[marsh.tileIndex] = FIXED_POINT;
 
     const before = projectUIView(world, player, session);
     if (!before.controls) throw new Error("UI projection omitted Wayknot controls");

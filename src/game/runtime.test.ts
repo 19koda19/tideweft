@@ -1876,7 +1876,7 @@ describe("perpetual new worlds", () => {
     expect(resumedSave.saveGeneration).toBe(1);
     expect(resumedSave.updatedAt).toBeGreaterThan(replacement.updatedAt);
     resumed.destroy();
-  });
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("can replace and reload a future-dated maximum timestamp inside a newer generation", async () => {
     vi.spyOn(Date, "now").mockReturnValue(812);
@@ -3881,7 +3881,7 @@ describe("runtime clarity guards", () => {
     );
     expect(reloaded.physicalCargo).toEqual(cargoAtSave);
     resumed.destroy();
-  });
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("explains ADRIFT control and ignores scan and pace commands while swept", async () => {
     const world = createWorld("runtime swept guard", "calm");

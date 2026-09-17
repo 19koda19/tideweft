@@ -34,7 +34,7 @@ import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
-import { deserializeBio0Ecology } from "./bio0Ecology";
+import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
 import {
   repositionDogActor,
   replaceDogActorPerception,
@@ -87,6 +87,7 @@ import {
   serializeDogActorRoster,
 } from "./dogActorRoster";
 import { firstLivingCircadianActiveTick } from "./livingCircadian";
+import { headingFromRadians } from "./livingActor";
 import { createPorterResponseState } from "./porterResponse";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
@@ -960,28 +961,88 @@ function withPlayerAtEastSeam(record: SaveRecord): SaveRecord {
   });
 }
 
-function withPlayerFacing(record: SaveRecord, facingMilliRadians: number): SaveRecord {
+function withPlayerWitnessingWorldPosition(
+  record: SaveRecord,
+  position: WorldPosition,
+  lookAt: WorldPosition,
+): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  const { integrity: _integrity, ...currentFields } = current;
   if (
-    typeof current.player !== "object"
+    typeof current.world !== "string"
+    || typeof current.regionalTravel !== "string"
+    || typeof current.player !== "object"
     || current.player === null
     || Array.isArray(current.player)
-  ) throw new Error("runtime fixture omitted its player state");
-  const facedBase = {
-    ...currentFields,
-    player: {
-      ...current.player,
-      facingMilliRadians,
-    },
-  };
-  return {
-    ...record,
-    worldJson: JSON.stringify({
-      ...facedBase,
-      integrity: gameSaveEnvelopeIntegrity(facedBase),
-    }),
-  };
+  ) throw new Error("witness fixture omitted regional player authority");
+  const world = deserializeWorld(current.world);
+  const player = structuredClone(current.player) as PlayerState;
+  const travel = restorePlayerRegionalTravel(
+    world.meta.rootSeed,
+    player,
+    current.regionalTravel,
+  );
+  if (travel === null) throw new Error("witness fixture regional sidecar did not restore");
+  const view = createRegionalWorldView(createWorldView(world), travel.window, {
+    discovered: player.discovered,
+    depthSoundings: player.depthSoundings,
+  });
+  const positionTile = regionLocalToWindowTile(
+    travel.window,
+    position.region,
+    Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE),
+    Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE),
+  );
+  const lookAtTile = regionLocalToWindowTile(
+    travel.window,
+    lookAt.region,
+    Math.floor(lookAt.localX / WORLD_POSITION_UNITS_PER_TILE),
+    Math.floor(lookAt.localY / WORLD_POSITION_UNITS_PER_TILE),
+  );
+  if (positionTile === null || lookAtTile === null) {
+    throw new Error("witness fixture target fell outside the regional window");
+  }
+  const positionIndex = positionTile.y * REGIONAL_TRAVEL_COLUMNS + positionTile.x;
+  const footing = view.terrain.tiles[positionIndex];
+  if (
+    footing === undefined
+    || footing.terrain === "ridge"
+    || footing.waterDepth > ADRIFT_STAND_DEPTH
+    || footing.roughness >= 650_000
+  ) throw new Error("witness fixture target is not safe player footing");
+  const localRemainderX = position.localX % WORLD_POSITION_UNITS_PER_TILE;
+  const localRemainderY = position.localY % WORLD_POSITION_UNITS_PER_TILE;
+  player.x = positionTile.x * TILE_UNITS + localRemainderX;
+  player.y = positionTile.y * TILE_UNITS + localRemainderY;
+  player.previousX = player.x;
+  player.previousY = player.y;
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.stamina = FIXED_POINT;
+  player.stability = FIXED_POINT;
+  player.stabilityTrend = "steady";
+  player.stabilityHint = "Stable on sound footing";
+  player.pace = "steady";
+  player.mode = "foot";
+  player.sweepTicksRemaining = 0;
+  player.sweepTotalTicks = 0;
+  player.sweepPath = [];
+  player.sweepSupport = null;
+  player.currentTrace = [positionIndex];
+  player.surveyTrace = [positionIndex];
+  const lookAtX = lookAtTile.x * TILE_UNITS
+    + lookAt.localX % WORLD_POSITION_UNITS_PER_TILE;
+  const lookAtY = lookAtTile.y * TILE_UNITS
+    + lookAt.localY % WORLD_POSITION_UNITS_PER_TILE;
+  player.facingMilliRadians = Math.round(
+    Math.atan2(lookAtY - player.y, lookAtX - player.x) * 1_000,
+  );
+  const regionalTravel = serializePlayerRegionalTravel(
+    capturePlayerRegionalTravel(travel, player),
+  );
+  if (restorePlayerRegionalTravel(world.meta.rootSeed, player, regionalTravel) === null) {
+    throw new Error("witness fixture produced an invalid regional sidecar");
+  }
+  return withCurrentEnvelopeFields(record, { player, regionalTravel });
 }
 
 function requireRegionalEcology(encoded: unknown): RegionalEcologyStateV1 {
@@ -1877,6 +1938,7 @@ describe("runtime settlement ecology integration", () => {
       || Array.isArray(envelope.player)
     ) throw new Error("boundary fixture omitted regional authority");
     const world = deserializeWorld(envelope.world);
+    const startingTick = world.meta.completedTick;
     const player = structuredClone(envelope.player) as PlayerState;
     const travel = restorePlayerRegionalTravel(
       world.meta.rootSeed,
@@ -1994,7 +2056,7 @@ describe("runtime settlement ecology integration", () => {
     const advancedMembers = advancedPopulation?.members.filter(({ populationOrdinal }) => (
       group.memberOrdinals.includes(populationOrdinal)
     ));
-    expect(advancedWorld.meta.completedTick).toBe(1);
+    expect(advancedWorld.meta.completedTick).toBe(startingTick + 1);
     expect(advancedMembers).toHaveLength(members.length);
     expect(advancedMembers?.map(({ materialization, actor }) => ({
       materialization,
@@ -3299,6 +3361,9 @@ describe("runtime settlement ecology integration", () => {
     });
     await source.save();
     const baselineEnvelope = savedEnvelope(sourceRepository);
+    const baselineTick = deserializeWorld(String(baselineEnvelope.world)).meta.completedTick;
+    const transitionTick = baselineTick + 1;
+    const activityTick = baselineTick + 2;
     const initial = deserializeSettlementWorkingAnimalState(
       baselineEnvelope.settlementWorkingAnimals,
     );
@@ -3313,7 +3378,7 @@ describe("runtime settlement ecology integration", () => {
     const alarm = createActorObservation({
       id: "OBS-dual-pending-alarm",
       observerId: assignment.workerActorId,
-      observedAtTick: 1,
+      observedAtTick: transitionTick,
       channel: "hearing",
       perceivedClass: "animal-alarm",
       subjectId: null,
@@ -3325,19 +3390,19 @@ describe("runtime settlement ecology integration", () => {
     });
     if (alarm === null) throw new Error("dual-pending alarm was malformed");
     const workerAtOne = stepActorPerception(
-      createActorPerceptionState(assignment.workerActorId, 0),
-      { tick: 1, observations: [alarm] },
+      createActorPerceptionState(assignment.workerActorId, baselineTick),
+      { tick: transitionTick, observations: [alarm] },
     );
     const handlerAtOne = stepActorPerception(
-      createActorPerceptionState(assignment.handlerActorId, 0),
-      { tick: 1, observations: [] },
+      createActorPerceptionState(assignment.handlerActorId, baselineTick),
+      { tick: transitionTick, observations: [] },
     );
     if (workerAtOne === null || handlerAtOne === null) {
       throw new Error("dual-pending cognition could not advance");
     }
     const investigation = stageSettlementWorkingAnimalActivity(initial, {
       assignmentId: assignment.assignmentId,
-      tick: 1,
+      tick: transitionTick,
       perception: workerAtOne,
       welfare: {
         injuryPressure: 0,
@@ -3365,7 +3430,7 @@ describe("runtime settlement ecology integration", () => {
       committedInvestigation.state,
       {
         assignmentId: assignment.assignmentId,
-        tick: 1,
+        tick: transitionTick,
         workerPosition: assignment.dutyArea.center,
         handlerPosition: assignment.dutyArea.center,
         workerPerception: workerAtOne,
@@ -3385,11 +3450,14 @@ describe("runtime settlement ecology integration", () => {
     if (pendingTask?.transaction === null || pendingTask === null) {
       throw new Error("dual-pending task was not staged");
     }
-    const workerAtTwo = stepActorPerception(workerAtOne, { tick: 2, observations: [] });
+    const workerAtTwo = stepActorPerception(workerAtOne, {
+      tick: activityTick,
+      observations: [],
+    });
     if (workerAtTwo === null) throw new Error("dual-pending worker cognition did not age");
     const pendingActivity = stageSettlementWorkingAnimalActivity(pendingTask.state, {
       assignmentId: assignment.assignmentId,
-      tick: 2,
+      tick: activityTick,
       perception: workerAtTwo,
       welfare: {
         injuryPressure: 0,
@@ -4387,10 +4455,199 @@ describe("runtime settlement ecology integration", () => {
       sessionShape: "wander",
     });
     await source.save();
-    // The flock approaches from the west in this deterministic fixture. Face
-    // the ordinary player perception cone toward the yard without moving the
-    // player, forcing the narration to earn direct event-time sight.
-    const initialRecord = withPlayerFacing(sourceRepository.snapshot(), -3_142);
+    // Stage the flock on one short connected approach outside structural
+    // access. The player stands beside the access lane, forcing the narration
+    // to earn direct event-time sight rather than omniscient system knowledge.
+    const sourceRecord = sourceRepository.snapshot();
+    const sourceEnvelope = JSON.parse(sourceRecord.worldJson) as Record<string, unknown>;
+    const sourceWorld = deserializeWorld(String(sourceEnvelope.world));
+    const sourceView = createWorldView(sourceWorld);
+    const sourceStore = deserializeSettlementEcologyState(sourceEnvelope.settlementEcology);
+    const sourceRoster = deserializeDogActorRoster(sourceEnvelope.dogActorRoster);
+    const sourceBio0 = deserializeBio0Ecology(sourceEnvelope.bio0Ecology);
+    const sourceCustody = sourceStore.domesticCustodies.find(({ species }) => (
+      species === "domestic-chicken"
+    ));
+    const sourceGuardian = sourceRoster?.actors[0];
+    if (
+      sourceCustody === undefined || sourceRoster === null || sourceGuardian === undefined
+      || sourceBio0 === null
+    ) {
+      throw new Error("runtime omitted domestic custody or its independent guardian");
+    }
+    const displacedGuardianPosition = connectedOpenDogPositionOutside(
+      sourceView,
+      sourceStore.identity.position,
+      20 * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const hiddenObserverPosition = connectedOpenDogPositionOutside(
+      sourceView,
+      sourceStore.identity.position,
+      15 * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const positionedGuardian = repositionDogActor(sourceGuardian, {
+      position: displacedGuardianPosition,
+      heading: sourceGuardian.address.heading,
+      atTick: sourceWorld.meta.completedTick,
+    });
+    const positionedRoster = replaceDogActorInRoster(sourceRoster, positionedGuardian);
+    if (positionedRoster === null) {
+      throw new Error("domestic store fixture rejected its displaced guardian");
+    }
+    const positionedBio0 = {
+      ...sourceBio0,
+      dog: repositionDogActor(sourceBio0.dog, {
+        position: displacedGuardianPosition,
+        heading: sourceBio0.dog.address.heading,
+        atTick: sourceBio0.tick,
+      }),
+    };
+    let positionedCore = requireCurrentCoreEcology(sourceEnvelope);
+    positionedCore = setCoreEcologyAggregatePatchMaterializedActors(positionedCore, {
+      atTick: positionedCore.updatedAtTick,
+      actorIds: sourceCustody.memberActorIds,
+    });
+    const positionedChickens = positionedCore.populations
+      .filter(({ species }) => species === "domestic-chicken")
+      .flatMap(({ members }) => members)
+      .map(({ actor }) => actor)
+      .filter(({ identity }) => sourceCustody.memberActorIds.includes(identity.stableId))
+      .sort((left, right) => (
+        sourceCustody.memberActorIds.indexOf(left.identity.stableId)
+        - sourceCustody.memberActorIds.indexOf(right.identity.stableId)
+      ));
+    if (positionedChickens.length !== sourceCustody.memberActorIds.length) {
+      throw new Error("runtime omitted a domestic approach actor");
+    }
+    const storeTileX = Math.floor(
+      sourceStore.identity.position.localX / WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const storeTileY = Math.floor(
+      sourceStore.identity.position.localY / WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const approachDistanceTiles = 4;
+    const approachPositions = ([
+      [0, -1], [0, 1], [-1, 0], [1, 0],
+    ] as const).flatMap(([stepX, stepY]) => {
+      const openApproach = [approachDistanceTiles, approachDistanceTiles - 1]
+        .every((distance) => {
+        const localX = storeTileX + stepX * distance;
+        const localY = storeTileY + stepY * distance;
+        if (
+          localX < 0 || localX >= WORLD_WIDTH
+          || localY < 0 || localY >= WORLD_HEIGHT
+        ) return false;
+        const tile = sourceView.terrain.tiles[localY * WORLD_WIDTH + localX];
+        return tile !== undefined
+          && coreWildlifeTraversabilityCell("domestic-chicken", tile).access === "open";
+      });
+      if (!openApproach) return [];
+      const localX = storeTileX + stepX * approachDistanceTiles;
+      const localY = storeTileY + stepY * approachDistanceTiles;
+      return [{
+        stepX,
+        stepY,
+        position: createWorldPosition(
+          sourceStore.identity.position.region,
+          localX * WORLD_POSITION_UNITS_PER_TILE
+            + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+          localY * WORLD_POSITION_UNITS_PER_TILE
+            + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        ),
+        accessPosition: createWorldPosition(
+          sourceStore.identity.position.region,
+          (storeTileX + stepX * (approachDistanceTiles - 1))
+            * WORLD_POSITION_UNITS_PER_TILE
+            + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+          (storeTileY + stepY * (approachDistanceTiles - 1))
+            * WORLD_POSITION_UNITS_PER_TILE
+            + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        ),
+      }];
+    });
+    const approach = approachPositions[0];
+    if (approach === undefined) {
+      throw new Error("domestic store fixture omitted a short traversable approach");
+    }
+    const approachPosition = approach.position;
+    const accessTileX = storeTileX
+      + approach.stepX * (approachDistanceTiles - 1);
+    const accessTileY = storeTileY
+      + approach.stepY * (approachDistanceTiles - 1);
+    const witnessDistanceTiles = 5;
+    const witnessPosition = ([
+      [-approach.stepY, approach.stepX],
+      [approach.stepY, -approach.stepX],
+    ] as const).flatMap(([stepX, stepY]) => {
+      const clearWitnessLine = Array.from(
+        { length: witnessDistanceTiles },
+        (_, index) => index + 1,
+      ).every((distance) => {
+        const localX = accessTileX + stepX * distance;
+        const localY = accessTileY + stepY * distance;
+        if (
+          localX < 0 || localX >= WORLD_WIDTH
+          || localY < 0 || localY >= WORLD_HEIGHT
+        ) return false;
+        const tile = sourceView.terrain.tiles[localY * WORLD_WIDTH + localX];
+        return tile !== undefined
+          && tile.terrain !== "ridge"
+          && tile.waterDepth <= ADRIFT_STAND_DEPTH
+          && tile.roughness < 650_000;
+      });
+      if (!clearWitnessLine) return [];
+      return [createWorldPosition(
+        sourceStore.identity.position.region,
+        (accessTileX + stepX * witnessDistanceTiles)
+          * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        (accessTileY + stepY * witnessDistanceTiles)
+          * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      )];
+    })[0];
+    if (witnessPosition === undefined) {
+      throw new Error("domestic store fixture omitted a clear witness line");
+    }
+    const storeAccessReachUnits = Math.min(
+      sourceCustody.homeStructure.radiusUnits,
+      3 * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const approachByActorId = new Map<string, WorldPosition>();
+    for (const chicken of positionedChickens) {
+      const approachToStore = worldPositionDelta(
+        approachPosition,
+        sourceStore.identity.position,
+      );
+      expect(Math.hypot(approachToStore.x, approachToStore.y))
+        .toBeGreaterThan(storeAccessReachUnits);
+      approachByActorId.set(chicken.identity.stableId, approachPosition);
+      positionedCore = replaceCoreEcologyAggregatePatchActor(
+        positionedCore,
+        repositionCoreWildlifeActor(chicken, {
+          atTick: positionedCore.updatedAtTick,
+          position: approachPosition,
+          // Face the familiar feeding station. The player stands well beyond
+          // peripheral range on a perpendicular sight line, so witnessing the
+          // animal does not manufacture a reciprocal human observation.
+          heading: headingFromRadians(
+            Math.atan2(-approach.stepY, -approach.stepX),
+          ),
+        }),
+      );
+    }
+    const stagedRecord = withCurrentEnvelopeFields(
+      withCurrentSettlementHomeCore(sourceRecord, positionedCore),
+      {
+        bio0Ecology: serializeBio0Ecology(positionedBio0),
+        dogActorRoster: serializeDogActorRoster(positionedRoster),
+      },
+    );
+    const initialRecord = withPlayerWitnessingWorldPosition(
+      stagedRecord,
+      witnessPosition,
+      approach.accessPosition,
+    );
     const initialEnvelope = JSON.parse(initialRecord.worldJson) as Record<string, unknown>;
     const initialStore = deserializeSettlementEcologyState(initialEnvelope.settlementEcology);
     const initialCore = requireCurrentCoreEcology(initialEnvelope);
@@ -4407,6 +4664,12 @@ describe("runtime settlement ecology integration", () => {
       .map(({ actor }) => actor.identity.stableId);
     expect(initialChickenIds).toHaveLength(initialCustody.memberActorIds.length);
     expect(initialChickenIds.length).toBeGreaterThanOrEqual(2);
+    for (const [actorId, approachPosition] of approachByActorId) {
+      expect(initialCore.populations
+        .flatMap(({ members }) => members)
+        .find(({ actor }) => actor.identity.stableId === actorId)
+        ?.actor.address.position).toEqual(approachPosition);
+    }
     source.destroy();
 
     const witnessedRepository = new MemoryRepository(initialRecord);
@@ -4429,6 +4692,10 @@ describe("runtime settlement ecology integration", () => {
     const consumingActorId = witnessedUse.state.lastResolvedDomesticFoodUseMemberActorId;
     expect(initialCustody.memberActorIds).toContain(consumingActorId);
     if (consumingActorId === null) throw new Error("domestic food use omitted its actor");
+    const consumingActorApproach = approachByActorId.get(consumingActorId);
+    if (consumingActorApproach === undefined) {
+      throw new Error("domestic food use actor omitted its staged approach");
+    }
     const witnessedCore = requireCurrentCoreEcology(witnessedUse.envelope);
     const consumingActor = witnessedCore.populations
       .flatMap(({ members }) => members)
@@ -4436,6 +4703,18 @@ describe("runtime settlement ecology integration", () => {
     if (consumingActor === undefined) {
       throw new Error("domestic food use actor left its authoritative population");
     }
+    const approachTravel = worldPositionDelta(
+      consumingActorApproach,
+      consumingActor.address.position,
+    );
+    expect(Math.hypot(approachTravel.x, approachTravel.y)).toBeGreaterThan(0);
+    const storeContact = worldPositionDelta(
+      consumingActor.address.position,
+      witnessedUse.state.identity.position,
+    );
+    expect(Math.hypot(storeContact.x, storeContact.y)).toBeLessThanOrEqual(
+      storeAccessReachUnits,
+    );
     expect(consumingActor.intent).toMatchObject({
       kind: "forage",
       resourceReference: {
@@ -4459,7 +4738,7 @@ describe("runtime settlement ecology integration", () => {
     );
     witnessed.destroy();
 
-    const securedRepository = new MemoryRepository(withPlayerFacing(initialRecord, 0));
+    const securedRepository = new MemoryRepository(stagedRecord);
     const secured = await createTideweftRuntime(securedRepository);
     expect(secured.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
     secured.dispatchUI({ type: "interact" });
@@ -4490,10 +4769,16 @@ describe("runtime settlement ecology integration", () => {
     );
     secured.destroy();
 
-    const hiddenRepository = new MemoryRepository(initialRecord);
+    const hiddenRepository = new MemoryRepository(withPlayerWitnessingWorldPosition(
+      stagedRecord,
+      hiddenObserverPosition,
+      sourceStore.identity.position,
+    ));
     const hidden = await createTideweftRuntime(hiddenRepository);
     runtimeEcologyHarness.disableDomesticFoodInvestigation = true;
-    expect(moveBeyondStoreDetailVisibility(hidden)).toBe(true);
+    expect(hidden.getRenderView().settlements.some(({ foodStore }) => (
+      foodStore !== undefined
+    ))).toBe(false);
     runtimeEcologyHarness.disableDomesticFoodInvestigation = false;
     await hidden.save();
     const hiddenBefore = deserializeSettlementEcologyState(

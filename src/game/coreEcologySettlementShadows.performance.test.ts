@@ -260,6 +260,7 @@ function candidateFixture(): CandidateFixture {
     seed,
     patchKey: "performance:settlement-shadows",
     originRegion: ORIGIN,
+    tick: state.meta.completedTick,
     populations: individualInputs(habitat),
     derivation: { kind: "habitat-v2", habitat },
   });
@@ -281,7 +282,11 @@ function candidateFixture(): CandidateFixture {
     window,
     projectRegionalCartographyWindow(createRegionalCartography(seed), window),
   );
-  const patch = setCoreEcologyMaterializationForWindow(coarsePatch, window, 0);
+  const patch = setCoreEcologyMaterializationForWindow(
+    coarsePatch,
+    window,
+    state.meta.completedTick,
+  );
   if (patch === null) throw new Error("Performance fixture materialization failed");
   return Object.freeze({
     seed,
