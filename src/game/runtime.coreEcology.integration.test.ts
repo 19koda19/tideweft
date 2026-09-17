@@ -3112,6 +3112,34 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it("interrupts WAIT at the committed boundary of a lawfully heard strong alarm", async () => {
+    const { runtime, repository } = await createAlarmRuntime(-8);
+    const before = requiredEnvelope(repository);
+    const beforeTick = deserializeWorld(before.world).meta.completedTick;
+    soundscapePlay.mockClear();
+
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 10);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+      .toHaveLength(1);
+    expect(runtime.getUIView().announcement?.message).toBe("ANIMAL ALARM — source unclear.");
+    expect(runtime.getUIView().controls).toMatchObject({
+      waitActive: false,
+      waitLabel: "Wait 10 min",
+    });
+    await runtime.save();
+    const after = requiredEnvelope(repository);
+    expect(deserializeWorld(after.world).meta.completedTick).toBe(beforeTick + 1);
+    expect((after.perceptionCarry as { playerStepsSinceWorldTick?: unknown })
+      .playerStepsSinceWorldTick).toBe(0);
+    expect((after.session as { sessionChanges?: readonly string[] }).sessionChanges)
+      .not.toContainEqual(expect.stringContaining("Waited ten minutes"));
+    expect(Object.hasOwn(after, "pendingPlayerWait")).toBe(false);
+    runtime.destroy();
+  }, 45_000);
+
   it("does not turn direct visual alarm knowledge into out-of-range audio", async () => {
     const { runtime, alarmActorId } = await createAlarmRuntime(9);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
@@ -4394,6 +4422,7 @@ describe("runtime core-ecology vertical slice", () => {
 
 async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
   runtime: TideweftRuntime;
+  repository: MemoryRepository;
   alarmActorId: string;
 }> {
   const repository = new MemoryRepository();
@@ -4504,7 +4533,7 @@ async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
   scheduledFrame = undefined;
   const runtime = await createTideweftRuntime(repository);
   await runtime.save();
-  return { runtime, alarmActorId: alarmActor.identity.stableId };
+  return { runtime, repository, alarmActorId: alarmActor.identity.stableId };
 }
 
 function regionalUplandHabitatFromCurrentEcology(
@@ -6631,6 +6660,19 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
     if (!callback) throw new Error("runtime did not schedule its next frame");
+    scheduledFrame = undefined;
+    callback(nextFrameTime);
+    nextFrameTime += 100;
+  }
+  runtime.stop();
+}
+
+/** WAIT advances on its first presentation frame and accepts one fixed step per frame. */
+function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
+  runtime.start();
+  for (let frame = 0; frame < count; frame += 1) {
+    const callback = scheduledFrame;
+    if (!callback) throw new Error("runtime did not schedule its next WAIT frame");
     scheduledFrame = undefined;
     callback(nextFrameTime);
     nextFrameTime += 100;

@@ -26,8 +26,8 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.52';
-const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 50;
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.53';
+const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 51;
 const SMOKE_EXPECTED_SAVE_VERSION = 32;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
@@ -65,6 +65,17 @@ const SMOKE_COMPACT_PHONE_VIEWPORT = Object.freeze({ width: 360, height: 640 });
 const SMOKE_NARROW_PHONE_VIEWPORT = Object.freeze({ width: 320, height: 640 });
 const SMOKE_LANDSCAPE_PHONE_VIEWPORT = Object.freeze({ width: 844, height: 390 });
 const SMOKE_SCREENSHOT_VIEWPORT = Object.freeze({ width: 1440, height: 900 });
+const SMOKE_RENDERER_SAMPLE_FRAMES = 8;
+const SMOKE_RENDERER_SAMPLE_TIMEOUT_MS = 10_000;
+const SMOKE_RENDERER_MAX_FRAME_GAP_MS = 2_500;
+const SMOKE_RENDERER_MAX_SAMPLE_DURATION_MS = 10_000;
+const SMOKE_RENDERER_MAX_NAVIGATION_DURATION_MS = 60_000;
+const SMOKE_RENDERER_MAX_RESOURCE_COUNT = 512;
+const SMOKE_RENDERER_MIN_FPS = 4;
+const SMOKE_RENDERER_MAX_FRAME_TIME_MS = 250;
+// One authoritative world minute advances every 100 ms in the packaged loop.
+// Hold paused surfaces well beyond that cadence so a false pause cannot pass.
+const SMOKE_PAUSED_TICK_HOLD_MS = 1_250;
 const SMOKE_REQUESTED =
   process.env.TIDEWEFT_SMOKE === '1' ||
   process.argv.includes('--tideweft-smoke');
@@ -421,6 +432,9 @@ function rendererProbeScript() {
     const quietFinishButton = quietDialog?.querySelector('.text-button--primary') || null;
     const titlePatchNotesButton = title?.querySelector('.patch-notes-trigger') || null;
     const quietPatchNotesButton = quietDialog?.querySelector('.patch-notes-trigger') || null;
+    const clockDay = document.querySelector('.clock-readout__day');
+    const clockTime = document.querySelector('.clock-readout__time');
+    const mobileClock = document.querySelector('.mobile-field-strip__clock');
     const patchNotesDialog = document.querySelector('.patch-notes-dialog');
     const patchNotesContent = patchNotesDialog?.querySelector('.patch-notes-dialog__content') || null;
     const patchNotesScroll = patchNotesDialog?.querySelector('.patch-notes-dialog__scroll') || null;
@@ -587,6 +601,7 @@ function rendererProbeScript() {
       : null;
     const interactButton = document.querySelector('.action-button--interact');
     const waitButton = document.querySelector('.action-button--wait');
+    const recoveryButton = document.querySelector('.action-button--recovery');
     const wayknotButton = document.querySelector('.action-button--wayknot');
     const braceButton = document.querySelector('.brace-button');
     const stabilityDetail = document.querySelector('.vital__detail[data-bracing]');
@@ -598,6 +613,11 @@ function rendererProbeScript() {
     const tideHarpActive = document.querySelector('.field-readout__tide-harp-active');
     const tideHarpActiveStyle = tideHarpActive ? getComputedStyle(tideHarpActive) : null;
     const reliefLabelLayer = document.querySelector('.relief-label-layer[data-renderer="relief-3d"]');
+    const viewportGrain = document.querySelector('.viewport-grain');
+    const motionSurface = document.querySelector('.contract-card') || recoveryButton;
+    const rendererTelemetry = renderer && typeof renderer.telemetry === 'function'
+      ? renderer.telemetry()
+      : null;
     const reliefAdriftLabel = reliefLabelLayer?.querySelector(
       '.relief-world-label[data-tone="adrift"]',
     ) || null;
@@ -719,6 +739,45 @@ function rendererProbeScript() {
         scrollHeight: title instanceof HTMLElement ? title.scrollHeight : null,
         overflowY: title instanceof Element ? getComputedStyle(title).overflowY : null,
       },
+      clock: uiView?.clock
+        ? {
+            tick: renderView && Number.isFinite(renderView.tick) ? renderView.tick : null,
+            day: uiView.clock.day,
+            dayLabel: uiView.clock.dayLabel ?? null,
+            timeLabel: uiView.clock.timeLabel,
+            phase: uiView.clock.phase ?? null,
+            paused: uiView.clock.paused,
+            desktop: {
+              dayText: clockDay?.textContent?.trim() || null,
+              timeText: clockTime?.textContent?.trim() || null,
+              dayVisible: visiblyIntersectsViewport(clockDay),
+              timeVisible: visiblyIntersectsViewport(clockTime),
+            },
+            mobile: {
+              text: mobileClock?.textContent?.trim() || null,
+              visible: visiblyIntersectsViewport(mobileClock),
+              insideViewport: whollyInsideViewport(mobileClock),
+            },
+          }
+        : null,
+      worldTime: renderView?.worldTime
+        ? {
+            version: renderView.worldTime.version,
+            dayNumber: renderView.worldTime.dayNumber,
+            dayTick: renderView.worldTime.dayTick,
+            phase: renderView.worldTime.phase,
+          }
+        : null,
+      reducedMotion: {
+        preferred: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        grainAnimationName: viewportGrain instanceof Element
+          ? getComputedStyle(viewportGrain).animationName
+          : null,
+        motionTransitionDuration: motionSurface instanceof Element
+          ? getComputedStyle(motionSurface).transitionDuration
+          : null,
+      },
+      rendererTelemetry,
       paused: renderView ? Boolean(renderView.paused) : null,
       quietHour: {
         open: quietDialog instanceof HTMLDialogElement ? quietDialog.open : null,
@@ -852,6 +911,25 @@ function rendererProbeScript() {
             rect: rectOf(waitButton),
             controlAvailable: uiView?.controls?.canWait ?? null,
             controlActive: uiView?.controls?.waitActive ?? null,
+          }
+        : null,
+      recovery: recoveryButton
+        ? {
+            label: recoveryButton.querySelector('.action-button__label')?.textContent?.trim() || null,
+            title: recoveryButton.getAttribute('title'),
+            ariaLabel: recoveryButton.getAttribute('aria-label'),
+            ariaDisabled: recoveryButton.getAttribute('aria-disabled'),
+            ariaPressed: recoveryButton.getAttribute('aria-pressed'),
+            active: recoveryButton.getAttribute('data-active'),
+            kind: recoveryButton.getAttribute('data-kind'),
+            visible: visiblyIntersectsViewport(recoveryButton),
+            insideViewport: whollyInsideViewport(recoveryButton),
+            rect: rectOf(recoveryButton),
+            controlAvailable: uiView?.controls?.canRecover ?? null,
+            controlActive: uiView?.controls?.recoveryActive ?? null,
+            controlKind: uiView?.controls?.recoveryKind ?? null,
+            controlLabel: uiView?.controls?.recoveryLabel ?? null,
+            controlHint: uiView?.controls?.recoveryHint ?? null,
           }
         : null,
       wayknots: {
@@ -1170,7 +1248,13 @@ function rendererProbeScript() {
           controlsInsideViewport: actionControls
             .filter((control) => visiblyIntersectsViewport(control))
             .every((control) => whollyInsideViewport(control)),
-          coreControlsVisibleAndInside: [scanButton, interactButton, waitButton, wayknotButton]
+          coreControlsVisibleAndInside: [
+            scanButton,
+            interactButton,
+            waitButton,
+            recoveryButton,
+            wayknotButton,
+          ]
             .every((control) => visiblyIntersectsViewport(control) && whollyInsideViewport(control)),
           brace: braceButton
             ? {
@@ -1702,7 +1786,7 @@ async function exerciseSmokeResidentAbout(
   };
 }
 
-async function verifySmokeTitlePatchNotes(contents) {
+async function verifySmokeTitlePatchNotes(contents, heldTick) {
   const opened = await contents.executeJavaScript(`(() => {
     const title = document.querySelector('.title-dialog');
     const button = title?.querySelector('.patch-notes-trigger');
@@ -1714,7 +1798,12 @@ async function verifySmokeTitlePatchNotes(contents) {
   if (!opened) throw new Error('the title Patch Notes trigger was unavailable');
   const open = await waitForRenderer(
     contents,
-    (probe) => probe.titleOpen === false && probeHasOpenPatchNotes(probe, 'title'),
+    (probe) =>
+      probe.tick === heldTick &&
+      probe.paused === true &&
+      probe.titleOpen === false &&
+      probeHasAuthoritativeClock(probe) &&
+      probeHasOpenPatchNotes(probe, 'title'),
     SMOKE_TEST.timeoutMs,
   );
   const scrolled = await contents.executeJavaScript(`(() => {
@@ -1735,7 +1824,10 @@ async function verifySmokeTitlePatchNotes(contents) {
   const returned = await waitForRenderer(
     contents,
     (probe) =>
+      probe.tick === heldTick &&
+      probe.paused === true &&
       probe.titleOpen === true &&
+      probeHasAuthoritativeClock(probe) &&
       probe.patchNotes?.open === false &&
       probe.titleLayout?.patchNotesTrigger?.focused === true,
     SMOKE_TEST.timeoutMs,
@@ -1878,21 +1970,23 @@ async function bindSmokeWayknot(contents) {
         Math.floor(parcel.position.x / terrain.tileSize),
       );
     }
-    // These render categories correspond to dry authoritative contexts for a
-    // Reed mat or Wind knot. Staying out of live water keeps this smoke path
-    // focused on binding and avoids making it depend on a particular tide.
+    // These render categories correspond to authoritative Wayknot land. The
+    // maximum-tide elevation and production dry-depth threshold keep this
+    // physical recovery witness independent of a fortunate tide sample.
     const compatibleLand = new Set(['salt-marsh', 'mudflat', 'sandbar', 'scrub', 'ridge']);
     const candidates = terrain.tiles.flatMap((tile, index) => {
       if (
         !compatibleLand.has(tile.kind) ||
         occupied.has(index) ||
         !Number.isFinite(tile.waterDepth) ||
-        tile.waterDepth > 0.04
+        tile.waterDepth > 0.035 ||
+        !Number.isFinite(tile.elevation) ||
+        tile.elevation < 0.56
       ) return [];
       const x = index % terrain.columns;
       const y = Math.floor(index / terrain.columns);
       const distance = Math.abs(x - playerX) + Math.abs(y - playerY);
-      if (distance === 0) return [];
+      if (distance === 0 || distance > 8) return [];
       return [{
         index,
         kind: tile.kind,
@@ -1902,9 +1996,9 @@ async function bindSmokeWayknot(contents) {
           y: y * terrain.tileSize + terrain.tileSize / 2,
         },
       }];
-    }).sort((left, right) => left.distance - right.distance || left.index - right.index);
+    }).sort((left, right) => right.distance - left.distance || left.index - right.index);
     const candidate = candidates[0];
-    if (!candidate || candidate.distance > 8) return null;
+    if (!candidate) return null;
 
     runtime.dispatchRenderer({ type: 'move-target', point: candidate.point, additive: false });
     return candidate;
@@ -1949,7 +2043,12 @@ async function bindSmokeWayknot(contents) {
         projected[0]?.active === true &&
         probe.wayknots?.activeLabels?.length === 1 &&
         probe.wayknots?.button?.disabled === false &&
-        probe.wayknots?.button?.label?.startsWith('Reclaim ');
+        probe.wayknots?.button?.label?.startsWith('Reclaim ') &&
+        probeHasReducedMotionPresentation(probe) &&
+        probe.recovery?.controlAvailable === true &&
+        probe.recovery.controlKind === 'rest' &&
+        Number.isFinite(probe.playerStamina) &&
+        probe.playerStamina < 1;
     },
     SMOKE_TEST.timeoutMs,
   );
@@ -2776,18 +2875,48 @@ async function verifySmokeTideHarp(contents) {
   })()`, true);
   if (!clicked) throw new Error('the active Tide Harp could not pulse the real Scan control');
   const expectedEcho = `${SMOKE_TIDE_HARP.label} answered the Loom. One pulse sounded from your position and from its three knot origins: Reed mat #1, Tide anchor #3, and Wind knot #5. Each origin recorded nearby terrain and water depth.`;
-  const echoed = await waitForRenderer(
+  const firstPulse = await waitForRenderer(
     contents,
     (probe) =>
       probeHasPlayableTideHarp(probe) &&
-      (probe.announcement?.id ?? 0) > announcementId &&
-      probe.announcement?.message === expectedEcho &&
       probe.tideHarps?.remoteEcho?.tileIndex === SMOKE_TIDE_HARP.remoteEchoTileIndex &&
       probe.tideHarps.remoteEcho.discovered > 0 &&
       probe.tideHarps.remoteEcho.depthKnown > 0,
     SMOKE_TEST.timeoutMs,
   );
-  return { tuned, echoed, expectedEcho };
+  let echoed = firstPulse;
+  if (
+    (firstPulse.announcement?.id ?? 0) <= announcementId ||
+    firstPulse.announcement?.message !== expectedEcho
+  ) {
+    const retryAnnouncementId = firstPulse.announcement?.id ?? 0;
+    const retried = await contents.executeJavaScript(`(() => {
+      const button = document.querySelector('.action-button--scan');
+      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
+      button.click();
+      return true;
+    })()`, true);
+    if (!retried) throw new Error('the active Tide Harp could not repeat Scan after queued copy');
+    echoed = await waitForRenderer(
+      contents,
+      (probe) =>
+        probeHasPlayableTideHarp(probe) &&
+        (probe.announcement?.id ?? 0) > retryAnnouncementId &&
+        probe.announcement?.message === expectedEcho &&
+        probe.tideHarps?.remoteEcho?.tileIndex === SMOKE_TIDE_HARP.remoteEchoTileIndex &&
+        probe.tideHarps.remoteEcho.discovered > 0 &&
+        probe.tideHarps.remoteEcho.depthKnown > 0,
+      SMOKE_TEST.timeoutMs,
+    );
+  }
+  return {
+    tuned,
+    initialAnnouncementId: announcementId,
+    firstPulse,
+    retriedAfterQueuedAnnouncement: echoed !== firstPulse,
+    echoed,
+    expectedEcho,
+  };
 }
 
 async function focusSmokePlayer(contents) {
@@ -2798,6 +2927,167 @@ async function focusSmokePlayer(contents) {
     bridge.renderer.focusWorld(view.player.position, 1);
     return true;
   })()`, true);
+}
+
+function smokeExpectedClockAtTick(tick) {
+  if (!Number.isSafeInteger(tick) || tick < 0) return null;
+  const dayTick = tick % 1_440;
+  const hour = Math.floor(dayTick / 60);
+  const minute = dayTick % 60;
+  const phase = dayTick < 360
+    ? 'night'
+    : dayTick < 420
+      ? 'dawn'
+      : dayTick < 1_140
+        ? 'day'
+        : dayTick < 1_200
+          ? 'dusk'
+          : 'night';
+  const phaseLabel = `${phase[0].toUpperCase()}${phase.slice(1)}`;
+  const day = Math.floor(tick / 1_440) + 1;
+  return {
+    day,
+    dayLabel: `Day ${day}`,
+    timeLabel: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} · ${phaseLabel}`,
+    phase,
+  };
+}
+
+function probeHasAuthoritativeClock(probe, audience) {
+  const clock = probe?.clock;
+  const worldTime = probe?.worldTime;
+  const expected = smokeExpectedClockAtTick(probe?.tick);
+  if (
+    !clock ||
+    !worldTime ||
+    !expected ||
+    worldTime.version !== 1 ||
+    worldTime.dayNumber !== expected.day ||
+    worldTime.dayTick !== probe.tick % 1_440 ||
+    worldTime.phase !== expected.phase ||
+    clock.tick !== probe.tick ||
+    clock.day !== expected.day ||
+    clock.dayLabel !== expected.dayLabel ||
+    clock.timeLabel !== expected.timeLabel ||
+    clock.phase !== expected.phase ||
+    clock.paused !== probe.paused
+  ) return false;
+  // Runtime projection is authoritative. During active play, the DOM can
+  // still contain the immediately preceding minute until the next visual
+  // frame on a slow/software renderer. Bound that latency to one tick; the
+  // paused title and Quiet Hour checks separately prove a settled exact hold.
+  const previous = smokeExpectedClockAtTick(probe.tick - 1);
+  const displayedClocks = [expected, previous].filter(Boolean);
+  if (audience === 'desktop') {
+    return probe?.mobileHud?.breakpointActive === false &&
+      clock.desktop?.dayVisible === true &&
+      clock.desktop.timeVisible === true &&
+      displayedClocks.some((displayed) =>
+        clock.desktop.dayText === displayed.dayLabel &&
+        clock.desktop.timeText === displayed.timeLabel) &&
+      clock.mobile?.visible === false;
+  }
+  if (audience === 'mobile') {
+    return probe?.mobileHud?.breakpointActive === true &&
+      clock.desktop?.dayVisible === false &&
+      clock.desktop.timeVisible === false &&
+      clock.mobile?.visible === true &&
+      clock.mobile.insideViewport === true &&
+      displayedClocks.some((displayed) =>
+        clock.mobile.text === `${displayed.dayLabel} · ${displayed.timeLabel}`);
+  }
+  return true;
+}
+
+function probeHasExactPresentedClock(probe, audience) {
+  const expected = smokeExpectedClockAtTick(probe?.tick);
+  if (!expected || !probeHasAuthoritativeClock(probe, audience)) return false;
+  if (audience === 'desktop') {
+    return probe.clock.desktop?.dayText === expected.dayLabel &&
+      probe.clock.desktop.timeText === expected.timeLabel;
+  }
+  if (audience === 'mobile') {
+    return probe.clock.mobile?.text === `${expected.dayLabel} · ${expected.timeLabel}`;
+  }
+  return true;
+}
+
+async function verifySmokePresentedClockFrames(contents, audience) {
+  const samples = [];
+  for (let frame = 0; frame < 2; frame += 1) {
+    await contents.executeJavaScript(`new Promise((resolve) => {
+      requestAnimationFrame(() => resolve(true));
+    })`, true);
+    const probe = await waitForRenderer(
+      contents,
+      (candidate) =>
+        candidate.paused === false &&
+        probeHasExactPresentedClock(candidate, audience),
+      SMOKE_TEST.timeoutMs,
+    );
+    samples.push({
+      tick: probe.tick,
+      worldTime: probe.worldTime,
+      clock: probe.clock,
+    });
+  }
+  if (samples[1].tick < samples[0].tick) {
+    throw new Error(`the presented clock moved backward across frames: ${JSON.stringify(samples)}`);
+  }
+  return samples;
+}
+
+function probeHasRecoveryControl(probe, minimumTargetSize = 1) {
+  const recovery = probe?.recovery;
+  return Boolean(
+    recovery &&
+    recovery.visible === true &&
+    recovery.insideViewport === true &&
+    recovery.rect?.width >= minimumTargetSize &&
+    recovery.rect?.height >= minimumTargetSize &&
+    typeof recovery.controlAvailable === 'boolean' &&
+    typeof recovery.controlActive === 'boolean' &&
+    (recovery.controlKind === 'rest' || recovery.controlKind === 'sleep') &&
+    typeof recovery.controlLabel === 'string' &&
+    recovery.controlLabel.length > 0 &&
+    typeof recovery.controlHint === 'string' &&
+    recovery.controlHint.length > 0 &&
+    recovery.label === recovery.controlLabel &&
+    recovery.title === recovery.controlHint &&
+    recovery.ariaLabel?.startsWith(recovery.controlLabel) &&
+    recovery.ariaDisabled === String(recovery.controlAvailable === false) &&
+    recovery.ariaPressed === String(recovery.controlActive) &&
+    recovery.active === String(recovery.controlActive) &&
+    recovery.kind === recovery.controlKind
+  );
+}
+
+function cssDurationMilliseconds(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) return null;
+  const durations = value.split(',').map((entry) => {
+    const token = entry.trim();
+    if (token.endsWith('ms')) return Number.parseFloat(token);
+    if (token.endsWith('s')) return Number.parseFloat(token) * 1_000;
+    return Number.NaN;
+  });
+  return durations.length > 0 && durations.every(Number.isFinite)
+    ? Math.max(...durations)
+    : null;
+}
+
+function probeHasReducedMotionPresentation(probe) {
+  const transitionDuration = cssDurationMilliseconds(
+    probe?.reducedMotion?.motionTransitionDuration,
+  );
+  return Boolean(
+    probe?.reducedMotion?.preferred === true &&
+    probe.reducedMotion.grainAnimationName === 'none' &&
+    transitionDuration !== null &&
+    transitionDuration <= 1 &&
+    probeHasActiveRenderer(probe, 'relief-3d') &&
+    probeHasAuthoritativeClock(probe, 'desktop') &&
+    probeHasRecoveryControl(probe)
+  );
 }
 
 function probeHasActiveRenderer(probe, expectedRenderer) {
@@ -2875,6 +3165,8 @@ function probeHasDesktopFieldTruth(probe) {
   const field = probe?.desktopField;
   return Boolean(
     probe?.mobileHud?.breakpointActive === false &&
+    probeHasAuthoritativeClock(probe, 'desktop') &&
+    probeHasRecoveryControl(probe) &&
     field?.visible === true &&
     field.insideViewport === true &&
     field.pointerEvents === 'none' &&
@@ -2894,6 +3186,8 @@ function probeHasMobileHudFrame(probe) {
   const kit = probe?.kit?.trigger;
   return Boolean(
     mobile?.breakpointActive === true &&
+    probeHasAuthoritativeClock(probe, 'mobile') &&
+    probeHasRecoveryControl(probe, 44) &&
     probe?.desktopField?.visible === false &&
     mobile.strip?.visible === true &&
     mobile.strip?.insideViewport === true &&
@@ -3749,6 +4043,7 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
     (probe) =>
       probe.titleOpen === false &&
       probe.paused === true &&
+      probeHasAuthoritativeClock(probe, 'mobile') &&
       probe.quietHour?.open === true &&
       probe.quietHour.dialogVisible === true &&
       probe.quietHour.dialogInsideViewport === true &&
@@ -3766,6 +4061,24 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
       probe.quietHour.patchNotesTrigger.ariaHasPopup === 'dialog',
     SMOKE_TEST.timeoutMs,
   );
+  const heldTick = quiet.tick;
+  await new Promise((resolve) => setTimeout(resolve, SMOKE_PAUSED_TICK_HOLD_MS));
+  const quietHeld = await readRendererProbe(contents);
+  if (
+    quietHeld.tick !== heldTick ||
+    quietHeld.paused !== true ||
+    quietHeld.quietHour?.open !== true ||
+    !probeHasExactPresentedClock(quietHeld, 'mobile')
+  ) {
+    throw new Error(
+      `Quiet Hour advanced the completed world tick while open: ${JSON.stringify({
+        heldTick,
+        currentTick: quietHeld.tick,
+        paused: quietHeld.paused,
+        clock: quietHeld.clock,
+      })}`,
+    );
+  }
   const openedPatchNotes = await contents.executeJavaScript(`(() => {
     const dialog = document.querySelector('.quiet-dialog');
     const button = dialog?.querySelector('.patch-notes-trigger');
@@ -3777,8 +4090,10 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
   const patchNotes = await waitForRenderer(
     contents,
     (probe) =>
+      probe.tick === heldTick &&
       probe.paused === true &&
       probe.quietHour?.open === false &&
+      probeHasAuthoritativeClock(probe) &&
       probeHasOpenPatchNotes(probe, 'quiet-hour'),
     SMOKE_TEST.timeoutMs,
   );
@@ -3792,8 +4107,10 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
   const patchNotesReturned = await waitForRenderer(
     contents,
     (probe) =>
+      probe.tick === heldTick &&
       probe.paused === true &&
       probe.quietHour?.open === true &&
+      probeHasAuthoritativeClock(probe, 'mobile') &&
       probe.patchNotes?.open === false,
     SMOKE_TEST.timeoutMs,
   );
@@ -3808,9 +4125,11 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
   const title = await waitForRenderer(
     contents,
     (probe) =>
+      probe.tick === heldTick &&
       probe.titleOpen === true &&
       probe.paused === true &&
       probe.quietHour?.open === false &&
+      probeHasAuthoritativeClock(probe) &&
       probe.titleLayout?.contentVisible === true &&
       probe.titleLayout?.restartFormVisible === true &&
       probe.titleLayout?.restartInputVisible === true &&
@@ -3818,6 +4137,23 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
       probe.titleLayout?.continueButtonVisible === true,
     SMOKE_TEST.timeoutMs,
   );
+  await new Promise((resolve) => setTimeout(resolve, SMOKE_PAUSED_TICK_HOLD_MS));
+  const titleHeld = await readRendererProbe(contents);
+  if (
+    titleHeld.tick !== heldTick ||
+    titleHeld.titleOpen !== true ||
+    titleHeld.paused !== true ||
+    !probeHasAuthoritativeClock(titleHeld)
+  ) {
+    throw new Error(
+      `the saved title advanced the completed world tick while open: ${JSON.stringify({
+        heldTick,
+        currentTick: titleHeld.tick,
+        paused: titleHeld.paused,
+        clock: titleHeld.clock,
+      })}`,
+    );
+  }
   const resumed = await contents.executeJavaScript(`(() => {
     const button = document.querySelector('.continue-card');
     if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
@@ -3831,10 +4167,295 @@ async function verifySmokeMobileQuietHourTitlePath(contents) {
       probe.titleOpen === false &&
       probe.paused === false &&
       probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasAuthoritativeClock(probe, 'mobile') &&
       probeHasCollapsedMobileHud(probe),
     SMOKE_TEST.timeoutMs,
   );
-  return { quiet, patchNotes, patchNotesReturned, title, returned };
+  return { heldTick, quiet, quietHeld, patchNotes, patchNotesReturned, title, titleHeld, returned };
+}
+
+async function verifySmokeReducedMotionRecovery(contents, prepareRecovery) {
+  if (contents.debugger.isAttached()) {
+    throw new Error('the packaged reduced-motion probe requires an unattached renderer debugger');
+  }
+  contents.debugger.attach('1.3');
+  let restoredPreference = false;
+  try {
+    await contents.debugger.sendCommand('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    });
+    await contents.executeJavaScript(`new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`, true);
+    const recoveryReady = (probe) =>
+      probeHasReducedMotionPresentation(probe) &&
+      probe.recovery?.controlAvailable === true &&
+      probe.recovery.controlActive === false &&
+      probe.recovery.controlKind === 'rest' &&
+      probe.recovery.controlLabel === 'REST 30 MIN' &&
+      Number.isFinite(probe.playerStamina) &&
+      probe.playerStamina < 1;
+    const prepared = typeof prepareRecovery === 'function'
+      ? await prepareRecovery()
+      : null;
+    const ready = prepared?.bound ?? await waitForRenderer(
+      contents,
+      recoveryReady,
+      SMOKE_TEST.timeoutMs,
+    );
+    if (!recoveryReady(ready)) {
+      throw new Error(`the traversed recovery site was not ready for REST: ${JSON.stringify(ready)}`);
+    }
+    const action = await contents.executeJavaScript(`new Promise((resolve) => {
+      const runtime = window.__TIDEWEFT__?.runtime;
+      const button = document.querySelector('.action-button--recovery');
+      const beforeView = runtime?.getRenderView?.();
+      const beforeUI = runtime?.getUIView?.();
+      if (!(button instanceof HTMLButtonElement) || !runtime || !beforeView || !beforeUI) {
+        resolve({ error: 'recovery-control-unavailable' });
+        return;
+      }
+      const start = {
+        tick: beforeView.tick,
+        stamina: beforeView.player?.stamina ?? null,
+        clock: beforeUI.clock ?? null,
+        canRecover: beforeUI.controls?.canRecover ?? null,
+      };
+      button.click();
+      const activeUI = runtime.getUIView();
+      if (activeUI.controls?.recoveryActive !== true || activeUI.controls?.recoveryKind !== 'rest') {
+        resolve({ error: 'recovery-did-not-start', start, controls: activeUI.controls ?? null });
+        return;
+      }
+      let settled = false;
+      let presentedFrames = 0;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      const timeout = setTimeout(() => finish({
+        error: 'recovery-timed-out',
+        start,
+        presentedFrames,
+      }), ${SMOKE_RENDERER_SAMPLE_TIMEOUT_MS});
+      const sample = () => {
+        if (settled) return;
+        presentedFrames += 1;
+        const view = runtime.getRenderView();
+        const ui = runtime.getUIView();
+        if (ui.controls?.recoveryActive !== true) {
+          finish({
+            start,
+            end: {
+              tick: view.tick,
+              stamina: view.player?.stamina ?? null,
+              clock: ui.clock ?? null,
+              canRecover: ui.controls?.canRecover ?? null,
+              recoveryActive: ui.controls?.recoveryActive ?? null,
+              recoveryKind: ui.controls?.recoveryKind ?? null,
+              recoveryLabel: ui.controls?.recoveryLabel ?? null,
+            },
+            presentedFrames,
+          });
+          return;
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    })`, true);
+    const expectedEndClock = smokeExpectedClockAtTick(action?.end?.tick);
+    if (
+      action?.error ||
+      !Number.isSafeInteger(action?.start?.tick) ||
+      action.start.canRecover !== true ||
+      action.start.clock?.paused !== false ||
+      !Number.isFinite(action.start.stamina) ||
+      !Number.isSafeInteger(action?.end?.tick) ||
+      action.end.tick - action.start.tick !== 30 ||
+      !Number.isFinite(action.end.stamina) ||
+      action.end.stamina <= action.start.stamina ||
+      action.end.recoveryActive !== false ||
+      action.end.recoveryKind !== 'rest' ||
+      action.end.clock?.paused !== false ||
+      action.end.clock?.day !== expectedEndClock?.day ||
+      action.end.clock?.dayLabel !== expectedEndClock?.dayLabel ||
+      action.end.clock?.timeLabel !== expectedEndClock?.timeLabel ||
+      action.end.clock?.phase !== expectedEndClock?.phase ||
+      !Number.isSafeInteger(action.presentedFrames) ||
+      action.presentedFrames < 1
+    ) {
+      throw new Error(`the packaged reduced-motion REST was not authoritative: ${JSON.stringify(action)}`);
+    }
+    const completed = await waitForRenderer(
+      contents,
+      (probe) =>
+        probe.tick >= action.end.tick &&
+        probe.tick <= action.end.tick + 1 &&
+        probeHasReducedMotionPresentation(probe) &&
+        probe.recovery?.controlActive === false &&
+        probe.playerStamina >= action.end.stamina,
+      SMOKE_TEST.timeoutMs,
+    );
+
+    await contents.debugger.sendCommand('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+    });
+    await contents.executeJavaScript(`new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`, true);
+    const restored = await waitForRenderer(
+      contents,
+      (probe) =>
+        probe.reducedMotion?.preferred === false &&
+        probe.reducedMotion.grainAnimationName === 'grain-drift' &&
+        probeHasActiveRenderer(probe, 'relief-3d') &&
+        probeHasAuthoritativeClock(probe, 'desktop') &&
+        probeHasRecoveryControl(probe),
+      SMOKE_TEST.timeoutMs,
+    );
+    restoredPreference = true;
+    return { prepared, ready, action, completed, restored };
+  } finally {
+    if (!restoredPreference && contents.debugger.isAttached()) {
+      try {
+        await contents.debugger.sendCommand('Emulation.setEmulatedMedia', {
+          features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+        });
+      } catch {
+        // The original failure remains authoritative; renderer shutdown may
+        // make cleanup unavailable while the smoke result is being reported.
+      }
+    }
+    if (contents.debugger.isAttached()) contents.debugger.detach();
+  }
+}
+
+async function verifySmokeRendererTiming(contents) {
+  const before = await waitForRenderer(
+    contents,
+    (probe) => {
+      const telemetry = probe?.rendererTelemetry;
+      return probeHasActiveRenderer(probe, 'relief-3d') &&
+        probeHasAuthoritativeClock(probe, 'desktop') &&
+        telemetry?.active === true &&
+        Number.isSafeInteger(telemetry.frameCount) &&
+        telemetry.frameCount > 0 &&
+        Number.isFinite(telemetry.fps) &&
+        telemetry.fps >= SMOKE_RENDERER_MIN_FPS &&
+        Number.isFinite(telemetry.frameTimeMs) &&
+        telemetry.frameTimeMs >= 1 &&
+        telemetry.frameTimeMs <= SMOKE_RENDERER_MAX_FRAME_TIME_MS;
+    },
+    SMOKE_TEST.timeoutMs,
+  );
+  const sample = await contents.executeJavaScript(`new Promise((resolve) => {
+    const renderer = window.__TIDEWEFT__?.renderer;
+    const navigationEntry = performance.getEntriesByType('navigation')[0];
+    const startedAt = performance.now();
+    const beforeTelemetry = renderer?.telemetry?.() ?? null;
+    const gaps = [];
+    let priorAt = null;
+    let frames = 0;
+    let settled = false;
+    const finish = (timedOut) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      const finishedAt = performance.now();
+      resolve({
+        timedOut,
+        frames,
+        gapCount: gaps.length,
+        durationMs: finishedAt - startedAt,
+        maximumGapMs: gaps.length > 0 ? Math.max(...gaps) : null,
+        averageGapMs: gaps.length > 0
+          ? gaps.reduce((total, gap) => total + gap, 0) / gaps.length
+          : null,
+        beforeTelemetry,
+        afterTelemetry: renderer?.telemetry?.() ?? null,
+        navigation: navigationEntry
+          ? {
+              durationMs: navigationEntry.duration,
+              domContentLoadedMs: navigationEntry.domContentLoadedEventEnd,
+              loadEventEndMs: navigationEntry.loadEventEnd,
+            }
+          : null,
+        resourceCount: performance.getEntriesByType('resource').length,
+      });
+    };
+    const timeout = setTimeout(() => finish(true), ${SMOKE_RENDERER_SAMPLE_TIMEOUT_MS});
+    const sampleFrame = () => {
+      const observedAt = performance.now();
+      if (priorAt !== null) gaps.push(observedAt - priorAt);
+      priorAt = observedAt;
+      frames += 1;
+      if (frames >= ${SMOKE_RENDERER_SAMPLE_FRAMES}) {
+        finish(false);
+        return;
+      }
+      requestAnimationFrame(sampleFrame);
+    };
+    requestAnimationFrame(sampleFrame);
+  })`, true);
+  const afterTelemetry = sample?.afterTelemetry;
+  if (
+    sample?.timedOut !== false ||
+    sample.frames !== SMOKE_RENDERER_SAMPLE_FRAMES ||
+    sample.gapCount !== SMOKE_RENDERER_SAMPLE_FRAMES - 1 ||
+    !Number.isFinite(sample.durationMs) ||
+    sample.durationMs < 0 ||
+    sample.durationMs > SMOKE_RENDERER_MAX_SAMPLE_DURATION_MS ||
+    !Number.isFinite(sample.maximumGapMs) ||
+    sample.maximumGapMs < 0 ||
+    sample.maximumGapMs > SMOKE_RENDERER_MAX_FRAME_GAP_MS ||
+    !Number.isFinite(sample.averageGapMs) ||
+    sample.averageGapMs < 0 ||
+    sample.averageGapMs > SMOKE_RENDERER_MAX_FRAME_GAP_MS ||
+    sample?.beforeTelemetry?.active !== true ||
+    afterTelemetry?.active !== true ||
+    !Number.isSafeInteger(sample.beforeTelemetry.frameCount) ||
+    !Number.isSafeInteger(afterTelemetry.frameCount) ||
+    afterTelemetry.frameCount - sample.beforeTelemetry.frameCount < 4 ||
+    !Number.isFinite(afterTelemetry.fps) ||
+    afterTelemetry.fps < SMOKE_RENDERER_MIN_FPS ||
+    !Number.isFinite(afterTelemetry.frameTimeMs) ||
+    afterTelemetry.frameTimeMs < 1 ||
+    afterTelemetry.frameTimeMs > SMOKE_RENDERER_MAX_FRAME_TIME_MS ||
+    !Number.isFinite(sample?.navigation?.durationMs) ||
+    sample.navigation.durationMs < 0 ||
+    sample.navigation.durationMs > SMOKE_RENDERER_MAX_NAVIGATION_DURATION_MS ||
+    !Number.isSafeInteger(sample.resourceCount) ||
+    sample.resourceCount < 0 ||
+    sample.resourceCount > SMOKE_RENDERER_MAX_RESOURCE_COUNT
+  ) {
+    throw new Error(`packaged renderer timing left its bounded envelope: ${JSON.stringify(sample)}`);
+  }
+  const after = await readRendererProbe(contents);
+  if (
+    !probeHasActiveRenderer(after, 'relief-3d') ||
+    !probeHasAuthoritativeClock(after, 'desktop') ||
+    after.rendererTelemetry?.active !== true ||
+    after.rendererTelemetry.frameCount < afterTelemetry.frameCount
+  ) {
+    throw new Error(`packaged renderer telemetry did not remain live: ${JSON.stringify(after.rendererTelemetry)}`);
+  }
+  return {
+    thresholds: {
+      sampleFrames: SMOKE_RENDERER_SAMPLE_FRAMES,
+      sampleTimeoutMs: SMOKE_RENDERER_SAMPLE_TIMEOUT_MS,
+      maximumFrameGapMs: SMOKE_RENDERER_MAX_FRAME_GAP_MS,
+      maximumSampleDurationMs: SMOKE_RENDERER_MAX_SAMPLE_DURATION_MS,
+      maximumNavigationDurationMs: SMOKE_RENDERER_MAX_NAVIGATION_DURATION_MS,
+      maximumResourceCount: SMOKE_RENDERER_MAX_RESOURCE_COUNT,
+      reportedTelemetryMinimumFps: SMOKE_RENDERER_MIN_FPS,
+      reportedTelemetryMaximumFrameTimeMs: SMOKE_RENDERER_MAX_FRAME_TIME_MS,
+    },
+    before: before.rendererTelemetry,
+    sample,
+    after: after.rendererTelemetry,
+  };
 }
 
 async function resizeSmokeViewport(window, size, predicate) {
@@ -3955,6 +4576,8 @@ async function runProductionSmoke(window) {
       probe.hasRuntime === true &&
       probe.uiReady === 'true' &&
       probe.titleOpen === true &&
+      probe.paused === true &&
+      probeHasAuthoritativeClock(probe) &&
       probe.titleLayout?.contentVisible === true &&
       probe.titleLayout?.headingVisible === true &&
       probe.titleLayout?.formVisible === true &&
@@ -3985,7 +4608,10 @@ async function runProductionSmoke(window) {
     paintedTitleProbe.release?.gameplayContract?.id !== 'challenging-hard' ||
     paintedTitleProbe.release?.gameplayContract?.name !== 'A CHALLENGING HARD' ||
     paintedTitleProbe.release?.gameplayContract?.version !== SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION ||
+    paintedTitleProbe.tick !== bootProbe.tick ||
     paintedTitleProbe.titleOpen !== true ||
+    paintedTitleProbe.paused !== true ||
+    !probeHasAuthoritativeClock(paintedTitleProbe) ||
     paintedTitleProbe.titleLayout?.contentVisible !== true ||
     paintedTitleProbe.titleLayout?.headingVisible !== true ||
     paintedTitleProbe.titleLayout?.headingText !== 'TIDEWEFT' ||
@@ -4008,11 +4634,27 @@ async function runProductionSmoke(window) {
   ) {
     throw new Error(`title screen was not visibly painted: ${JSON.stringify(paintedTitleProbe.titleLayout)}`);
   }
-  const titlePatchNotesProbe = await verifySmokeTitlePatchNotes(contents);
+  const titlePatchNotesProbe = await verifySmokeTitlePatchNotes(contents, bootProbe.tick);
   // Closing Patch Notes reopens the semantic title dialog and intentionally
   // replays its CSS arrival without rearming the audio opening. Let that
   // return flourish settle before recording the title evidence too.
   await new Promise((resolve) => setTimeout(resolve, 1_500));
+  const titleHeldProbe = await readRendererProbe(contents);
+  if (
+    titleHeldProbe.tick !== bootProbe.tick ||
+    titleHeldProbe.titleOpen !== true ||
+    titleHeldProbe.paused !== true ||
+    !probeHasAuthoritativeClock(titleHeldProbe)
+  ) {
+    throw new Error(
+      `the opening title advanced the completed world tick: ${JSON.stringify({
+        initialTick: bootProbe.tick,
+        currentTick: titleHeldProbe.tick,
+        paused: titleHeldProbe.paused,
+        clock: titleHeldProbe.clock,
+      })}`,
+    );
+  }
   const titleScreenshot = await captureSmokeEvidence(window, SMOKE_TEST.titleScreenshotPath);
 
   await startSmokeWorld(contents);
@@ -4028,9 +4670,11 @@ async function runProductionSmoke(window) {
       probe.contractCount > 0 &&
       probe.reliefSupported === true &&
       probeHasActiveRenderer(probe, 'relief-3d') &&
+      probeHasAuthoritativeClock(probe, 'desktop') &&
       probeHasViewButtonMode(probe, 'relief-3d'),
     SMOKE_TEST.timeoutMs,
   );
+  const desktopClockFrames = await verifySmokePresentedClockFrames(contents, 'desktop');
   const desktopBraceProbe = await verifySmokeDesktopGlobalBrace(contents);
   const desktopResidentProbe = await exerciseSmokeResidentAbout(contents);
 
@@ -4039,6 +4683,15 @@ async function runProductionSmoke(window) {
   // promise, so one action must reserve the contract, load physical cargo,
   // and replace PICK UP guidance with an explicit DELIVER marker.
   const promisePickupProbe = await acceptSmokePromise(contents);
+  const promiseCommitProbe = await waitForRenderer(
+    contents,
+    (probe) =>
+      probe.tick >= promisePickupProbe.tick + 2 &&
+      probe.activeContractCount === 1 &&
+      probe.playerCargoLoad > 0 &&
+      probe.playerDestinationLabel?.startsWith('DELIVER'),
+    SMOKE_TEST.timeoutMs,
+  );
 
   // Perception now correctly refuses a remote inspector. Exercise the mobile
   // inspector while the deterministic smoke courier is still standing beside
@@ -4069,7 +4722,10 @@ async function runProductionSmoke(window) {
       const portraitOpen = await resizeSmokeViewport(
         window,
         SMOKE_NARROW_PHONE_VIEWPORT,
-        (probe) => probeHasActiveRenderer(probe, 'relief-3d') && probeHasResidentAbout(probe, true),
+        (probe) =>
+          probeHasActiveRenderer(probe, 'relief-3d') &&
+          probeHasMobileHudFrame(probe) &&
+          probeHasResidentAbout(probe, true),
       );
       const landscapeRestored = await resizeSmokeViewport(
         window,
@@ -4093,23 +4749,15 @@ async function runProductionSmoke(window) {
       probe.terrainTileCount === SMOKE_WORLD_TILE_COUNT,
   );
 
-  // Walk out of the harbor through the public pointer-routing command, then
-  // use the real field-kit button. The resulting object must exist in the
-  // renderer projection and agree with the HUD's deployed/active accounting.
-  const wayknotProbe = await bindSmokeWayknot(contents);
-
-  // UI pickup is intentionally optimistic until accept + pickup cross an
-  // authoritative world-tick boundary. Do not snapshot the Harp fixture in
-  // that short window: production load repair correctly rolls it back.
-  const promiseCommitProbe = await waitForRenderer(
+  // Enable reduced motion before the public pointer route begins. Walking a
+  // loaded courier to the far edge of the bounded dry search creates an
+  // ordinary stamina need; the same production control then starts REST
+  // immediately, before passive stillness can erase that truthful setup.
+  const reducedMotionRecoveryProbe = await verifySmokeReducedMotionRecovery(
     contents,
-    (probe) =>
-      probe.tick > wayknotProbe.bound.tick &&
-      probe.activeContractCount === 1 &&
-      probe.playerCargoLoad > 0 &&
-      probe.playerDestinationLabel?.startsWith('DELIVER'),
-    SMOKE_TEST.timeoutMs,
+    () => bindSmokeWayknot(contents),
   );
+  const wayknotProbe = reducedMotionRecoveryProbe.prepared;
 
   // Complete the proven generated three-piece formation through a smoke-only
   // persisted fixture, reload it through production validation, and use the
@@ -4275,6 +4923,7 @@ async function runProductionSmoke(window) {
   const adriftFixture = await installSmokeAdriftFixture(contents);
   const adriftProbe = await verifySmokeAdrift(contents, adriftFixture);
   const adriftRestored = await restoreSmokeAdriftFixture(contents, adriftFixture);
+  const rendererTiming = await verifySmokeRendererTiming(contents);
 
   if (resourceFailures.length > 0) {
     throw new Error(`production resources failed to load: ${JSON.stringify(resourceFailures)}`);
@@ -4293,7 +4942,12 @@ async function runProductionSmoke(window) {
 
   smokeResult(true, {
     entryUrl: PRODUCTION_ENTRY_URL,
-    boot: paintedTitleProbe,
+    boot: {
+      initial: bootProbe,
+      painted: paintedTitleProbe,
+      held: titleHeldProbe,
+      heldTick: bootProbe.tick,
+    },
     titlePatchNotes: titlePatchNotesProbe,
     world: worldProbe,
     desktopBrace: desktopBraceProbe,
@@ -4311,6 +4965,32 @@ async function runProductionSmoke(window) {
       tuned: tideHarpProbe.tuned,
       echoed: tideHarpProbe.echoed,
       expectedEcho: tideHarpProbe.expectedEcho,
+    },
+    turningDayPackagedEvidence: {
+      authoritativeClock: {
+        title: titleHeldProbe.clock,
+        world: worldProbe.clock,
+        desktopPresentedFrames: desktopClockFrames,
+        desktopRecoveryStart: reducedMotionRecoveryProbe.action.start.clock,
+        desktopRecoveryEnd: reducedMotionRecoveryProbe.action.end.clock,
+        portrait: landscapeResidentProbe.screenshot?.portraitOpen?.clock ?? null,
+        shortLandscape: landscapeResidentProbe.screenshot?.landscapeRestored?.clock ?? null,
+      },
+      recovery: {
+        desktop: reducedMotionRecoveryProbe,
+        portraitLayout: landscapeResidentProbe.screenshot?.portraitOpen?.recovery ?? null,
+        shortLandscapeLayout:
+          landscapeResidentProbe.screenshot?.landscapeRestored?.recovery ?? null,
+      },
+      pauseHolds: {
+        initialTitleTick: bootProbe.tick,
+        quietHourAndSavedTitle: narrowPhoneQuietHourProbe,
+      },
+      rendererTiming,
+      rendererIntegrity: {
+        actionableRendererErrorCount: actionableRendererErrors.length,
+        resourceFailureCount: resourceFailures.length,
+      },
     },
     adrift: {
       fixture: {

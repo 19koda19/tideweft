@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.52",
-      releaseDate: "2026-09-15",
-      buildIdentity: "0.3.3-alpha.52",
-      gameplayContractVersion: 50,
-      tutorialVersion: 62,
+      version: "0.3.3-alpha.53",
+      releaseDate: "2026-09-17",
+      buildIdentity: "0.3.3-alpha.53",
+      gameplayContractVersion: 51,
+      tutorialVersion: 63,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,20 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-52 Rest Between Harbors and retains the earlier Turning Day slices", () => {
-    const alpha52Copy = PATCH_NOTE_CATEGORIES
+  it("scopes Alpha-53 The Turning Day and retains its earlier slices", () => {
+    const alpha53Copy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
       .join(" ");
-    const alpha52Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha53Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha52Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.52",
+    );
+    const alpha52Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha52Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha52Limitations = alpha52Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha51Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.51",
     );
@@ -347,8 +355,26 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("Rest Between Harbors");
-    expect(LATEST_PATCH_NOTE.summary).toContain("reciprocal settlement network");
+    expect(LATEST_PATCH_NOTE.summary).toContain("The Turning Day");
+    expect(LATEST_PATCH_NOTE.summary).toContain("complete production-backed closure evidence");
+    expect(alpha53Copy).toContain("One deterministic civil clock carries day, dusk, night, and dawn");
+    expect(alpha53Copy).toContain("WAIT stops at the committed boundary of a lawfully heard strong alarm");
+    expect(alpha53Copy).toContain("exact authoritative WAIT cadence");
+    expect(alpha53Copy).toContain("production multi-day soak");
+    expect(alpha53Copy).toContain("all forty-two current residents");
+    expect(alpha53Copy).toContain("one exact dematerialize and rematerialize identity cycle");
+    expect(alpha53Copy).toContain("desktop, mobile portrait, and mobile landscape recovery controls");
+    expect(alpha53Copy).toContain("Field Manual version 63");
+    expect(alpha53Copy).toContain("Outer save version 32, simulation format 4, RegionalEcologyStateV6");
+    expect(alpha53Limitations).toContain("does not by itself prove publication");
+    expect(alpha53Limitations).toContain("separate push, remote CI, GitHub Pages, and exact deployed-build verification gate");
+    expect(alpha53Limitations).toContain("representative integration witnesses");
+    expect(alpha53Limitations).toContain("Packaged mobile coverage uses Relief");
+    expect(alpha53Limitations).toContain("not a claim of comfortable performance on every low-end device");
+    expect(alpha53Limitations).toContain("working settlement dog is not a bonded player companion");
+    expect(alpha53Limitations).toContain("Breathing Room is the next authorized directive");
+    expect(alpha52Release?.summary).toContain("Rest Between Harbors");
+    expect(alpha52Release?.summary).toContain("reciprocal settlement network");
     expect(alpha52Copy).toContain("contract-free resident physically present at any existing settlement");
     expect(alpha52Copy).toContain("current location remains the sole authority");
     expect(alpha52Copy).toContain("conserves and delivers the Promise cargo");
@@ -362,7 +388,8 @@ describe("canonical offline patch notes", () => {
     expect(alpha52Copy).toContain("Field Manual version 62");
     expect(alpha52Copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
     expect(alpha52Copy).toContain("exact Alpha 51 resident-home prefix and digest bytes");
-    expect(alpha52Limitations).toContain("local unpublished SOURCE_CANDIDATE");
+    expect(alpha52Limitations).toContain("At this internal checkpoint");
+    expect(alpha52Limitations).toContain("Alpha 39 was the latest verified public release");
     expect(alpha52Limitations).toContain("not a house, room, guest bed, interior");
     expect(alpha52Limitations).toContain("Turning Day release checkpoint remain before Breathing Room");
     expect(alpha51Release?.summary).toContain("A Day Shared");
@@ -498,8 +525,9 @@ describe("canonical offline patch notes", () => {
     expect(alpha46Limitations).toContain("exactly one existing food-store keeper");
     expect(alpha46Limitations).toContain("not a physical house, bed, interior routine");
     expect(alpha46Limitations).toContain("player REST and SLEEP");
-    expect(currentLimitations).toContain("Alpha 39 remains the latest verified public release");
-    expect(currentLimitations).toContain("not been pushed, published, deployed");
+    expect(currentLimitations).toContain("At this internal checkpoint");
+    expect(currentLimitations).toContain("Alpha 39 was the latest verified public release");
+    expect(currentLimitations).toContain("no independent push, CI, Pages, exact-live");
     expect(currentLimitations).toContain("LIVE_VERIFIED");
     expect(currentCopy).not.toMatch(/player sleep is live|all human schedules are live|all dogs|grants free healing/iu);
     expect(alpha45Release?.summary).toContain("Kennel Night");

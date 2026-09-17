@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(62);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(63);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -56,8 +56,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.shortTitle).toBe("What's New");
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        id: "whats-new-rest-between-harbors",
-        title: "Rest between harbors",
+        id: "whats-new-turning-day",
+        title: "The Turning Day",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,26 +70,23 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 52 · Rest Between Harbors is a local unpublished source candidate");
-    expect(copy).toContain("All forty-two current original-estuary residents");
-    expect(copy).toContain("contract-free person physically present at any existing settlement");
-    expect(copy).toContain("home identity anchors reciprocal settlement-network membership");
-    expect(copy).toContain("actual current location alone says which refuge they occupy");
-    expect(copy).toContain("resident courier still accepts real Promise cargo at its origin");
-    expect(copy).toContain("later onward or reverse Promise can select that physically present visitor");
-    expect(copy).toContain("no automatic return, invisible commute, or teleport");
-    expect(copy).toContain("Leaving settlement refuge or accepting work wakes a resting visitor");
-    expect(copy).toContain("complete bounded resident roster before committing any receipt");
-    expect(copy).toContain("Alpha 51 Awake or STARTLED foreign visitor");
-    expect(copy).toContain("impossible false-arrival Resting or Asleep state remains invalid");
-    expect(copy).toContain("No house, room, guest bed, interior, guaranteed backhaul");
-    expect(copy).toContain("existing settlement working dog remains the current relationship-bearing domestic-dog continuity witness");
-    expect(copy).toContain("No bonded, named player companion exists yet");
+    expect(copy).toContain("Alpha 53 · The Turning Day is the current gameplay entry");
+    expect(copy).toContain("One deterministic civil clock now carries day, dusk, night, and dawn");
+    expect(copy).toContain("all forty-two current residents");
+    expect(copy).toContain("seventeen existing wildlife activity profiles");
+    expect(copy).toContain("Physical arrival remains required before rest or sleep");
+    expect(copy).toContain("WAIT stops at the committed boundary of a lawfully heard strong alarm");
+    expect(copy).toContain("Mid-recovery reload resumes the same saved interval");
+    expect(copy).toContain("three-day resident and wildlife soak with daily persistence");
+    expect(copy).toContain("representative and distributed across shared owners");
+    expect(copy).toContain("Packaged mobile exercises Relief while packaged desktop exercises Chart and Relief");
+    expect(copy).toContain("regression and liveness floor");
+    expect(copy).toContain("existing settlement working dog remains the honest relationship-bearing continuity witness");
+    expect(copy).toContain("no bonded, named player companion exists yet");
     expect(copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
-    expect(copy).toContain("Final multi-day CPU and save-growth evidence");
-    expect(copy).toContain("Turning Day release checkpoint remain before Breathing Room begins");
-    expect(copy).toContain("has not been pushed, published, deployed, run through remote CI or Pages, or LIVE_VERIFIED");
-    expect(copy).toContain("Alpha 39 remains the latest verified public release");
+    expect(copy).toContain("Breathing Room is next, followed by Living Voice");
+    expect(copy).toContain("does not itself prove deployment");
+    expect(copy).toContain("LIVE_VERIFIED status requires the separate push, remote CI, GitHub Pages, and exact deployed-build verification gate");
   });
 
   it("describes shared outdoor light without claiming unfinished Turning Day systems", () => {
@@ -120,10 +117,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("tide does not independently wake them");
     expect(copy).toContain("Southern leopard frog separately remains a weather-responsive aggregate");
     expect(copy).toContain(
-      "Wildlife outside those seventeen profiles, the independent dog, bonded/player companions, broader driver coverage, houses and interiors, guaranteed return travel, and validated broad coarse-time advancement remain later",
+      "Representative multi-day persistence, lawful interruption, frame-cadence, streaming, and packaged parity witnesses close this bounded Turning Day architecture",
     );
-    expect(liveBoundary?.title).toBe("Present in this source candidate");
-    expect(liveBoundary?.body).toContain("Alpha 39 Saltmarsh Small Worlds is the released LIVE_VERIFIED biodiversity checkpoint");
+    expect(liveBoundary?.title).toBe("Present in this build");
     expect(liveBoundary?.body).toContain("All seventeen current declared wildlife activity profiles share the arrival-gated living-circadian routine contract");
     expect(liveBoundary?.body).toContain("fourteen retain day-active base clocks");
     expect(liveBoundary?.body).toContain("North American river otter is night-active");
@@ -142,7 +138,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("Real Promise work, route travel, storms, urgent needs, and current watch/search cognition outrank human rest");
     expect(liveBoundary?.body).toContain("eligible current human physically present at a settlement on an ordinary authoritative tick");
     expect(liveBoundary?.body).toContain("exact Alpha 51 resident-home digest bytes");
-    expect(liveBoundary?.body).toContain("Alpha 52 Rest Between Harbors remains a local unpublished source candidate");
+    expect(liveBoundary?.body).toContain("Alpha 53 adds production-backed three-day persistence, bounded save-growth, frame-cadence, lawful WAIT-interruption, and packaged parity witnesses");
+    expect(liveBoundary?.body).toContain("Its gameplay entry does not itself prove deployment");
+    expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -409,8 +407,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedBoundary?.body).not.toContain("player sleep/wait");
     expect(plannedBoundary?.body).not.toContain("player WAIT");
     expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
-    expect(plannedBoundary?.body).toContain("validated broad coarse-time advancement");
-    expect(plannedBoundary?.body).toContain("packaged parity/performance witness");
+    expect(plannedBoundary?.body).toContain("Breathing Room is the next authorized directive");
+    expect(plannedBoundary?.body).toContain("Living Voice follows it");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {

@@ -498,6 +498,32 @@ whose arrival bit is false and posture is Awake or STARTLED; it grants no rest
 or physiology and the simulation corrects it on the next tick. False-arrival
 Resting/Asleep and forged receipt identities remain invalid.
 
+The local Alpha53 **The Turning Day** source candidate closes this bounded
+daily-continuity architecture without adding a scheduler, simulation clock, or
+save format. The same civil clock now has production-backed closure evidence
+across day, dusk, night, and dawn; player WAIT/REST/SLEEP; all 42 current
+residents; the relationship-bearing settlement working dog; and all seventeen
+existing wildlife activity profiles. Physical destinations and ordinary
+locomotion remain authoritative, while work, travel, danger, storms, urgent
+needs, watch/search cognition, and lawful strong disturbance outrank neutral
+rest.
+
+Closure is proven through shared owners and representative integration rather
+than an N-squared species matrix: exact WAIT cadence from the same saved state
+under distinct animation-frame rates, real alarm-driven interruption at one
+committed tick, a three-day production routine soak with daily serialization
+and bounded growth, and stable actor identity through one source
+dematerialization/rematerialization cycle. The packaged harness holds the Title
+and Quiet Hour clocks still, performs real REST on validated footing, and
+exercises desktop Chart/Relief plus mobile portrait/landscape Relief controls.
+This is a regression and liveness floor, not universal low-end performance
+certification. The settlement working dog remains the honest continuity
+witness; a bonded player companion is not claimed. Outer save v32, simulation
+v4, Regional Ecology V6, and wildlife actor v1 remain unchanged. Alpha53 is
+still a local SOURCE_CANDIDATE pending cumulative and release verification.
+The next authorized directive is **Breathing Room**, followed by **Living
+Voice**.
+
 ## Authoritative tick
 
 One world tick:
@@ -1164,8 +1190,10 @@ verification descendants `7455fd0` and
 or artifacts. CI `34905718204` and Pages `34905718214` each passed 275 test
 files / 2,633 checks for `c67f30b`, Pages published five files totalling
 4,072,920 bytes, and the first cache-bypassed comparison matched all 5/5 live
-production files byte-for-byte. Directive 04_1 is closed; the next authorized
-directive is 04_1A **The Turning Day**, followed by 04_2 **The Living Voice**.
+production files byte-for-byte. Directive 04_1 is closed. At that released
+checkpoint, the next authorized directive was 04_1A **The Turning Day**. Local
+Alpha53 now closes its bounded implementation architecture; **Breathing Room**
+is next, followed by 04_2 **The Living Voice**.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -2168,8 +2196,22 @@ the home-derived opaque ID remains byte-identical while current location owns
 the actual refuge. One real outbound Promise can therefore end in foreign rest,
 save/reload, and a later real reverse Promise by the same identity with cargo
 conserved in both directions. No automatic return, house, guest bed, interior,
-or teleport exists. Alpha52 remains local and unpublished pending the final
-Turning Day performance, packaged-parity, cumulative, and release gates.
+or teleport exists. Alpha52 was an internal checkpoint rather than an
+independent release.
+
+Local Alpha53 **The Turning Day** adds no new simulation owner; it supplies the
+closure witnesses for the shared architecture accumulated through Alpha40–52.
+Production-backed checks cover exact frame-cadence authority, lawfully heard
+automatic WAIT interruption, three simulated days of real resident and
+wildlife routine projection with daily persistence and bounded save growth,
+and one stable actor across dematerialization/rematerialization. The packaged
+evidence spans stopped Title/Quiet Hour clocks, a real REST action, desktop
+Chart and Relief, and mobile portrait/landscape Relief using shared production
+authority. It is deliberately representative, not a full-catalog scripted
+journey; the working settlement dog is not a bonded player companion, and the
+timing witness is not low-end-device certification. Alpha53 remains a local
+SOURCE_CANDIDATE until its cumulative, CI, Pages, and exact-live gates pass.
+**Breathing Room** is next; **Living Voice** follows it.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

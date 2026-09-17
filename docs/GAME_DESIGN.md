@@ -565,9 +565,10 @@ later species. Exact gameplay commit
 Pages `34905718214`: 275 test files / 2,633 tests passed, and a cache-bypassed
 comparison matched all 5/5 live production files exactly. Gameplay contract 37,
 Field Manual 49, outer save v30, and `RegionalEcologyStateV6` are therefore the
-current released authorities. This closes bounded Directive 04_1; the next
-authorized directive is 04_1A **The Turning Day**, followed by 04_2 **The
-Living Voice**.
+current released authorities. This closes bounded Directive 04_1. At that
+released checkpoint, the next authorized directive was 04_1A **The Turning
+Day**. Local Alpha53 now closes its bounded implementation architecture;
+**Breathing Room** is next, followed by 04_2 **The Living Voice**.
 
 For historical continuity, exact Alpha 30 gameplay commit
 `56dc4812c7c41b6227bae1b0273701b51076f34a` passed feature CI
@@ -1037,10 +1038,32 @@ rest-network receipt deliberately preserves Alpha51's exact opaque
 `resident-home:` bytes. An Alpha51 foreign visitor saved Awake or STARTLED with
 the former false arrival bit is admitted only as a non-resting transition,
 receives no restorative benefit, and reconciles on the next ordinary tick;
-false-arrival Resting or Asleep remains invalid. Alpha52 is local and
-unpublished. Multi-day CPU/save-growth evidence, automatic WAIT interruption,
-frame-cadence proof, packaged parity/performance, cumulative validation, and
-the Turning Day release checkpoint remain.
+false-arrival Resting or Asleep remains invalid. Alpha52 was an internal
+checkpoint rather than an independent release.
+
+The local **The Turning Day** Alpha53 source candidate closes the bounded
+daily-life architecture accumulated through Alpha40–52. One deterministic
+civil clock carries outdoor light, WAIT, REST, SLEEP, all forty-two current
+residents, the relationship-bearing settlement working dog, and all seventeen
+existing wildlife activity profiles through day, dusk, night, and dawn.
+Physical arrival and ordinary locomotion remain required; work, travel, danger,
+storms, urgent needs, current watch/search, and lawful strong disturbance still
+override neutral rest.
+
+The closure evidence deliberately trusts shared abstractions rather than
+authoring a species-by-species script. It proves exact authoritative WAIT
+cadence at distinct animation-frame rates, automatic interruption by one
+lawfully heard alarm at its committed boundary, three production-backed days of
+resident and wildlife routine projection with daily persistence and bounded
+save growth, and one stable actor through dematerialization/rematerialization.
+The packaged field holds Title and Quiet Hour time still and exercises real
+REST through desktop Chart/Relief plus mobile portrait/landscape Relief. This
+is a representative regression/liveness floor, not low-end certification or a
+full-catalog journey. The settlement working dog is not a bonded player
+companion. Save v32, simulation v4, Regional Ecology V6, and wildlife actor v1
+remain unchanged. Alpha53 remains a local SOURCE_CANDIDATE until cumulative,
+CI, Pages, and exact-live gates pass. **Breathing Room** is next; **Living
+Voice** follows it.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -1898,9 +1921,15 @@ physically present at a real settlement use reciprocal rest and recovery
 without inventing a room or commute. The same courier, identity, relationships,
 and Promise cargo travel to the foreign destination; a real onward or reverse
 Promise is the only current path back onto the network. The opaque receipt
-bytes, outer save v32, and simulation v4 remain exact. Alpha52 is local and
-unpublished and still lacks the final multi-day/package evidence and Turning
-Day closure gate.
+bytes, outer save v32, and simulation v4 remain exact. Alpha52 was an internal
+checkpoint rather than an independent release.
+Local Alpha53 **The Turning Day** adds representative production-backed
+multi-day, persistence, cadence, interruption, streaming, and packaged-parity
+evidence without adding a scheduler or rewriting actor identity. It closes the
+bounded architecture locally; the working settlement dog remains the current
+relationship-bearing continuity witness rather than a bonded companion, and
+packaged timing is not universal low-end certification. **Breathing Room** is
+next, followed by **Living Voice**.
 
 Live through Alpha 39:
 

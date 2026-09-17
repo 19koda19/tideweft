@@ -4,11 +4,55 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.53 — 2026-09-17
+
+Build: `0.3.3-alpha.53` · Gameplay contract: 51 · Tutorial: 63
+
+The Turning Day is the Alpha 53 build: the shared civil clock now has complete production-backed closure evidence across player recovery, human and animal routines, lawful interruption, persistence, streaming, and packaged desktop and mobile presentation.
+
+### Gameplay
+
+- One deterministic civil clock carries day, dusk, night, and dawn through weather, tides, outdoor light, player WAIT, REST, and SLEEP, all forty-two current residents, the settlement working dog, and the seventeen existing wildlife activity profiles.
+- Routine preference never teleports a body or overrides the world. Work, route travel, danger, storms, urgent needs, identified or alert attention, and lawful strong disturbance retain priority; physical arrival is required before rest or sleep.
+- WAIT stops at the committed boundary of a lawfully heard strong alarm, while safe REST and settlement SLEEP continue ordinary simulation and preserve every consequence already committed.
+
+### Fixes
+
+- The closure harness now proves exact authoritative WAIT cadence from the same saved baseline at different animation-frame rates, preventing render cadence from becoming simulation authority.
+- A production multi-day soak now exercises real resident and wildlife routine owners across four touched world days, including physical movement, return to rest, daily serialization, and one exact dematerialize and rematerialize identity cycle.
+- Packaged desktop checks now hold the Title and Quiet Hour clocks still, exercise real REST on validated dry stable footing, and cover shared desktop, mobile portrait, and mobile landscape recovery controls.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. Time acceleration grants no immunity, free cargo safety, weather reset, Promise reset, fabricated travel, or automatic recovery beyond existing physical rules.
+- The current relationship-bearing companion-continuity witness is the existing settlement working dog. Alpha 53 does not invent a bonded or named player companion.
+- This checkpoint adds no species, population, house, interior, bed, occupational shift, hunger, thirst, health, death, Living Voice, or new reward.
+
+### Interface
+
+- The packaged field presents the authoritative civil clock consistently across Relief, desktop Chart, mobile portrait, and mobile landscape surfaces, including stopped Title and Quiet Hour states.
+- Reduced-motion presentation suppresses decorative grain and near-eliminates transition motion without changing REST eligibility, elapsed time, or simulation consequences.
+- Field Manual version 63 explains the complete Turning Day boundary, honest representative evidence, current companion limitation, and the next authorized Breathing Room directive.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged; no migration or identity rewrite is added.
+- Mid-recovery reload resumes the same saved action and partial fixed-step phase. Hidden or closed time does not advance the world, and version 31 adoption begins with no fabricated recovery action.
+- The multi-day closure witness round-trips the full production world root and regional ecology state daily, preserves a selected actor through source dematerialization and rematerialization, and keeps growth bounded in the measured run.
+
+### Known limitations
+
+- This gameplay entry does not by itself prove publication. LIVE\_VERIFIED status requires a separate push, remote CI, GitHub Pages, and exact deployed-build verification gate.
+- Closure evidence is distributed across production owners and representative integration witnesses rather than one scripted all-species journey or a species-by-species matrix.
+- Packaged mobile coverage uses Relief while packaged desktop covers Chart and Relief; shared production authority and integration tests cover both views, but this is not a separate packaged mobile Chart matrix.
+- Packaged timing is a regression and liveness floor, not a claim of comfortable performance on every low-end device. The working settlement dog is not a bonded player companion.
+- Breathing Room is the next authorized directive. Living Voice follows it; neither system is implemented by this build.
+
 ## 0.3.3-alpha.52 — 2026-09-15
 
 Build: `0.3.3-alpha.52` · Gameplay contract: 50 · Tutorial: 62
 
-Rest Between Harbors is the local unpublished Alpha 52 source candidate: a courier who finishes a real Promise at another settlement can now rest there through the reciprocal settlement network, while any onward or homeward journey still requires real physical work.
+Rest Between Harbors was the Alpha 52 internal checkpoint: a courier who finishes a real Promise at another settlement can rest there through the reciprocal settlement network, while any onward or homeward journey still requires real physical work.
 
 ### Gameplay
 
@@ -42,7 +86,7 @@ Rest Between Harbors is the local unpublished Alpha 52 source candidate: a couri
 
 ### Known limitations
 
-- Alpha 52 Rest Between Harbors is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 52 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - Reciprocal settlement rest is not a house, room, guest bed, interior, occupational schedule, guaranteed return service, or infinite regional human population system.
 - The independent dog still has no authenticated den or companion bond. A bonded, named player companion does not yet exist; the current kennel-bound working dog remains the honest relationship-bearing continuity witness.
 - Final multi-day CPU and save-growth evidence, automatic WAIT-interruption and frame-cadence witnesses, upgraded packaged desktop and mobile parity checks, cumulative validation, and the Turning Day release checkpoint remain before Breathing Room begins.
@@ -51,7 +95,7 @@ Rest Between Harbors is the local unpublished Alpha 52 source candidate: a couri
 
 Build: `0.3.3-alpha.51` · Gameplay contract: 49 · Tutorial: 61
 
-A Day Shared is the local unpublished Alpha 51 source candidate: all forty-two current original-estuary residents now use the same saved, home-anchored day/night routine while real work, travel, weather, needs, and lawful attention retain priority.
+A Day Shared was the Alpha 51 internal checkpoint: all forty-two current original-estuary residents use the same saved, home-anchored day/night routine while real work, travel, weather, needs, and lawful attention retain priority.
 
 ### Gameplay
 
@@ -86,7 +130,7 @@ A Day Shared is the local unpublished Alpha 51 source candidate: all forty-two c
 
 ### Known limitations
 
-- Alpha 51 A Day Shared is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 51 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - Current human breadth is the existing forty-two residents in the original compatibility region, not infinite regional population generation, autonomous occupational shifts, houses, interiors, or physical commutes.
 - A courier who finishes at a foreign settlement has no invented guest bed or return commute in this slice and receives no authenticated circadian rest there. That physical visitor/recovery gap stays explicit.
 - The independent dog still has no authenticated den or companion bond. A bonded, named player companion does not yet exist; the existing kennel-bound working dog is not reclassified as one.
@@ -96,7 +140,7 @@ A Day Shared is the local unpublished Alpha 51 source candidate: all forty-two c
 
 Build: `0.3.3-alpha.50` · Gameplay contract: 48 · Tutorial: 60
 
-Many Rhythms is the local unpublished Alpha 50 source candidate: all seventeen existing wildlife species with declared activity profiles now share one arrival-gated living-circadian routine contract through their existing activity, destination, and locomotion owners.
+Many Rhythms was the Alpha 50 internal checkpoint: all seventeen existing wildlife species with declared activity profiles share one arrival-gated living-circadian routine contract through their existing activity, destination, and locomotion owners.
 
 ### Gameplay
 
@@ -134,7 +178,7 @@ Many Rhythms is the local unpublished Alpha 50 source candidate: all seventeen e
 
 ### Known limitations
 
-- Alpha 50 Many Rhythms is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 50 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - The exact seventeen-profile registry is not all forty-five core-wildlife profiles and not a complete autonomous animal-life simulation. Wildlife outside this profile set remains unchanged.
 - Southern leopard frog retains real aggregate rain response without a fabricated individual posture. Wildlife outside the seventeen-profile registry, remaining humans, the independent dog, bonded/player companions, broader driver coverage, broader coarse-time validation, final parity and performance evidence, and Turning Day closure remain unfinished before Living Voice.
 
@@ -142,7 +186,7 @@ Many Rhythms is the local unpublished Alpha 50 source candidate: all seventeen e
 
 Build: `0.3.3-alpha.49` · Gameplay contract: 47 · Tutorial: 59
 
-Twilight at the Marsh Edge is the local unpublished Alpha 49 source candidate: the existing marsh rabbit now composes the shared twilight-active circadian policy with the one saved civil clock, authenticated habitat cover, and ordinary terrestrial movement.
+Twilight at the Marsh Edge was the Alpha 49 internal checkpoint: the existing marsh rabbit composes the shared twilight-active circadian policy with the one saved civil clock, authenticated habitat cover, and ordinary terrestrial movement.
 
 ### Gameplay
 
@@ -177,7 +221,7 @@ Twilight at the Marsh Edge is the local unpublished Alpha 49 source candidate: t
 
 ### Known limitations
 
-- Alpha 49 Twilight at the Marsh Edge is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 49 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is one production crepuscular binding for the already-admitted marsh rabbit, not a new species, population expansion, weather-driven routine, catalog-wide schedule conversion, or complete autonomous animal-life simulation.
 - The independent dog, bonded/player companions, remaining humans and wildlife, weather-driven routines, broader coarse-time validation, final parity and performance evidence, and Turning Day closure remain unfinished before Living Voice.
 
@@ -185,7 +229,7 @@ Twilight at the Marsh Edge is the local unpublished Alpha 49 source candidate: t
 
 Build: `0.3.3-alpha.48` · Gameplay contract: 46 · Tutorial: 58
 
-Tide at the Roost is the local unpublished Alpha 48 source candidate: the existing snowy egret now composes the shared adaptive-active circadian policy with the authoritative clock, current tide, and lawful aquatic opportunity while ordinary movement still owns every trip between wading water and its saved dry refuge.
+Tide at the Roost was the Alpha 48 internal checkpoint: the existing snowy egret composes the shared adaptive-active circadian policy with the authoritative clock, current tide, and lawful aquatic opportunity while ordinary movement still owns every trip between wading water and its saved dry refuge.
 
 ### Gameplay
 
@@ -220,7 +264,7 @@ Tide at the Roost is the local unpublished Alpha 48 source candidate: the existi
 
 ### Known limitations
 
-- Alpha 48 Tide at the Roost is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 48 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is one adaptive tide-and-opportunity binding for the existing snowy egret, not a new species, broader population pass, production crepuscular profile, weather-driven routine, catalog-wide schedule conversion, or full autonomous animal life simulation.
 - Remaining human routines, the independent dog, bonded/player companions, broader animal schedules, production crepuscular and weather-driven coverage, validated broad coarse-time advancement, final parity and performance evidence, and Turning Day directive closure remain unfinished before Living Voice.
 
@@ -228,7 +272,7 @@ Tide at the Roost is the local unpublished Alpha 48 source candidate: the existi
 
 Build: `0.3.3-alpha.47` · Gameplay contract: 45 · Tutorial: 57
 
-Rest and Rise is the local unpublished Alpha 47 source candidate: the player can now choose a thirty-minute rest on stable dry footing or sleep at a settlement from dusk until the next 06:00 dawn while the same authoritative world keeps moving.
+Rest and Rise was the Alpha 47 internal checkpoint: the player can choose a thirty-minute rest on stable dry footing or sleep at a settlement from dusk until the next 06:00 dawn while the same authoritative world keeps moving.
 
 ### Gameplay
 
@@ -263,7 +307,7 @@ Rest and Rise is the local unpublished Alpha 47 source candidate: the player can
 
 ### Known limitations
 
-- Alpha 47 Rest and Rise is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 47 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This slice adds player-controlled REST and settlement-anchored SLEEP over existing stamina and world consequences. It adds no new fatigue, hunger, thirst, player health, injury, shelter, camp, bed, house, interior, dream, or offline simulation system.
 - Broader human routines, the independent dog, bonded/player companions, other animal bindings, production crepuscular, tide-, weather-, and opportunity-driven routines, remaining performance/parity evidence, and Turning Day directive closure remain unfinished before Living Voice.
 
@@ -271,7 +315,7 @@ Rest and Rise is the local unpublished Alpha 47 source candidate: the player can
 
 Build: `0.3.3-alpha.46` · Gameplay contract: 44 · Tutorial: 56
 
-The Keeper Sleeps is the local unpublished Alpha 46 source candidate: the existing starting-harbor food-store keeper now follows the shared day-active circadian policy through an overrideable, physically authenticated home-settlement routine.
+The Keeper Sleeps was the Alpha 46 internal checkpoint: the existing starting-harbor food-store keeper follows the shared day-active circadian policy through an overrideable, physically authenticated home-settlement routine.
 
 ### Gameplay
 
@@ -306,7 +350,7 @@ The Keeper Sleeps is the local unpublished Alpha 46 source candidate: the existi
 
 ### Known limitations
 
-- Alpha 46 The Keeper Sleeps is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 46 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is exactly one existing food-store keeper using their authoritative settlement as a bounded home-rest anchor. It is not a physical house, bed, interior routine, shop-hours system, autonomous commute, every-human schedule, or settlement-wide daily life simulation.
 - Other human routines, the independent dog, bonded/player companions, broader animal bindings, player REST and SLEEP, validated longer or coarse-time player advancement, production crepuscular, tide-, weather-, and opportunity-driven routines, Living Voice, new species, and new mortality remain unfinished. The Turning Day directive remains open.
 
@@ -314,7 +358,7 @@ The Keeper Sleeps is the local unpublished Alpha 46 source candidate: the existi
 
 Build: `0.3.3-alpha.45` · Gameplay contract: 43 · Tutorial: 55
 
-Kennel Night is the local unpublished Alpha 45 source candidate: the one settlement-custodied working dog now follows the shared day-active circadian policy through a physical, overrideable routine at its real kennel.
+Kennel Night was the Alpha 45 internal checkpoint: the one settlement-custodied working dog follows the shared day-active circadian policy through a physical, overrideable routine at its real kennel.
 
 ### Gameplay
 
@@ -349,7 +393,7 @@ Kennel Night is the local unpublished Alpha 45 source candidate: the one settlem
 
 ### Known limitations
 
-- Alpha 45 Kennel Night is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 45 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is exactly one existing settlement-custodied working dog's kennel routine, not a routine for the independent porter-scene dog, all dogs, humans, a bonded or player companion, every settlement animal, or the wildlife catalog.
 - Human work, home, and watch schedules, bonded/player companion routines, broader animal bindings, player REST and SLEEP, validated longer or coarse-time player advancement, production crepuscular, tide-, weather-, and opportunity-driven routines, Living Voice, new species, and new mortality remain unfinished. The Turning Day directive remains open.
 
@@ -357,7 +401,7 @@ Kennel Night is the local unpublished Alpha 45 source candidate: the one settlem
 
 Build: `0.3.3-alpha.44` · Gameplay contract: 42 · Tutorial: 54
 
-Ten Minutes is the local unpublished Alpha 44 source candidate: one bounded WAIT action now advances the same authoritative living world by exactly ten displayed minutes without assigning time, pausing hazards, or granting special recovery.
+Ten Minutes was the Alpha 44 internal checkpoint: one bounded WAIT action advances the same authoritative living world by exactly ten displayed minutes without assigning time, pausing hazards, or granting special recovery.
 
 ### Gameplay
 
@@ -391,7 +435,7 @@ Ten Minutes is the local unpublished Alpha 44 source candidate: one bounded WAIT
 
 ### Known limitations
 
-- Alpha 44 Ten Minutes is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 44 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is one fixed ten-minute WAIT action, not player REST or SLEEP, destination-time waiting, long or coarse elapsed-time acceleration, offline simulation, a universal schedule, or complete Turning Day closure.
 - Human and companion routines, broader wildlife bindings, production crepuscular, tide-, weather-, and opportunity-driven routines, player REST and SLEEP, multi-day validation, Living Voice, new species, and new mortality remain unfinished.
 
@@ -399,7 +443,7 @@ Ten Minutes is the local unpublished Alpha 44 source candidate: one bounded WAIT
 
 Build: `0.3.3-alpha.43` · Gameplay contract: 41 · Tutorial: 53
 
-Two Rhythms is the local unpublished Alpha 43 source candidate: the shared living-routine composition now contrasts a day-active fish crow with a night-active North American river otter moving physically between authenticated water and dry haulout.
+Two Rhythms was the Alpha 43 internal checkpoint: the shared living-routine composition contrasts a day-active fish crow with a night-active North American river otter moving physically between authenticated water and dry haulout.
 
 ### Gameplay
 
@@ -433,7 +477,7 @@ Two Rhythms is the local unpublished Alpha 43 source candidate: the shared livin
 
 ### Known limitations
 
-- Alpha 43 Two Rhythms is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 43 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is exactly two representative physical routine compositions, not catalog-wide circadian or sleep coverage. Harbor seal and every other wildlife profile remain unchanged unless already covered by the fish-crow or otter binding; production crepuscular, tide-, weather-, and opportunity-driven routines remain reusable kernel architecture rather than new production behavior.
 - Player WAIT, REST, and SLEEP actions, accelerated elapsed-time orchestration, human schedules, companion-dog settling and waking, catalog-wide routines, multi-day offscreen routine selection, Living Voice, seasons, migration, new species, and new mortality remain unfinished. The Turning Day directive remains open.
 
@@ -441,7 +485,7 @@ Two Rhythms is the local unpublished Alpha 43 source candidate: the shared livin
 
 Build: `0.3.3-alpha.42` · Gameplay contract: 40 · Tutorial: 52
 
-The First Roost is the local unpublished Alpha 42 source candidate: one reusable living-routine kernel now gives a representative fish crow a physical, wakeable, persistent night at its authenticated perch.
+The First Roost was the Alpha 42 internal checkpoint: one reusable living-routine kernel gives a representative fish crow a physical, wakeable, persistent night at its authenticated perch.
 
 ### Gameplay
 
@@ -475,7 +519,7 @@ The First Roost is the local unpublished Alpha 42 source candidate: one reusable
 
 ### Known limitations
 
-- Alpha 42 The First Roost is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 42 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This is one representative fish-crow/perch-watch vertical slice, not full circadian coverage of the wildlife catalog. No other bird, mammal, human, companion dog, tide-driven, weather-driven, opportunistic, den, home, or shelter routine is connected yet.
 - Player WAIT, REST, and SLEEP actions, accelerated elapsed-time orchestration, human and companion continuity, multi-day offscreen routine selection, Living Voice, seasons, migration, new species, and new mortality remain unfinished. The Turning Day directive remains open.
 
@@ -483,7 +527,7 @@ The First Roost is the local unpublished Alpha 42 source candidate: one reusable
 
 Build: `0.3.3-alpha.41` · Gameplay contract: 39 · Tutorial: 51
 
-First Light is the local unpublished Alpha 41 source candidate: the shared clock now produces smooth outdoor light, physical night perception, and an earned settlement-beacon light without obscuring readable terrain.
+First Light was the Alpha 41 internal checkpoint: the shared clock produces smooth outdoor light, physical night perception, and an earned settlement-beacon light without obscuring readable terrain.
 
 ### Gameplay
 
@@ -519,7 +563,7 @@ First Light is the local unpublished Alpha 41 source candidate: the shared clock
 
 ### Known limitations
 
-- Alpha 41 First Light is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED; Alpha 39 remains the latest verified public release.
+- At this internal checkpoint, Alpha 41 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - Completed beacon projects are the only live local-light source in this slice. Fire, carried lanterns, independent canopy or interior cover, rendered shadow maps, moon or star astronomy, and settlement-interior lighting remain later work.
 - This candidate does not complete actor schedules, physical sleep destinations, asleep or startled state, companion sleep, player WAIT, REST, or SLEEP, interrupted time acceleration, Living Voice, seasons, migration, new species, or new mortality. The Turning Day directive remains open.
 
@@ -527,7 +571,7 @@ First Light is the local unpublished Alpha 41 source candidate: the shared clock
 
 Build: `0.3.3-alpha.40` · Gameplay contract: 38 · Tutorial: 50
 
-One Clock is the local unpublished Alpha 40 source candidate: the first Turning Day slice gives existing world-time consumers one deterministic civil-day projection and adds an exact phase cue to the HUD.
+One Clock was the Alpha 40 internal checkpoint: the first Turning Day slice gives existing world-time consumers one deterministic civil-day projection and adds an exact phase cue to the HUD.
 
 ### Gameplay
 
@@ -561,7 +605,7 @@ One Clock is the local unpublished Alpha 40 source candidate: the first Turning 
 
 ### Known limitations
 
-- Alpha 40 One Clock is a local unpublished SOURCE\_CANDIDATE. It has not been pushed, published, deployed, run through remote CI or Pages, or LIVE\_VERIFIED.
+- At this internal checkpoint, Alpha 40 had no independent push, CI, Pages, exact-live, or LIVE\_VERIFIED result; Alpha 39 was the latest verified public release.
 - This slice does not yet change outdoor brightness, vision range, Chart or Relief terrain lighting, real light sources, weather transmission, or night readability. Its projected open-sky signal is groundwork for the next complete illumination slice, not a claim that darkness is live.
 - This candidate adds no complete circadian routines, physical sleeping destinations, asleep or startled actor state, human home or work schedule, dog sleep, player WAIT, REST, or SLEEP action, Living Voice, astronomy, seasons, new species, or mortality path. The Turning Day directive remains open.
 

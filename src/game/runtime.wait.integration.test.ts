@@ -102,12 +102,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function invokeScheduledFrame(): void {
+function invokeScheduledFrame(frameDeltaMs = 100): void {
   const callback = scheduledFrame;
   if (!callback) throw new Error("runtime did not schedule its next animation frame");
   scheduledFrame = undefined;
   callback(nextFrameTime);
-  nextFrameTime += 100;
+  nextFrameTime += frameDeltaMs;
 }
 
 /** Ordinary play needs one presentation frame to establish its frame clock. */
@@ -122,6 +122,23 @@ function advanceOrdinaryFixedSteps(runtime: TideweftRuntime, count: number): voi
 function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
   runtime.start();
   for (let frame = 0; frame < count; frame += 1) invokeScheduledFrame();
+  runtime.stop();
+}
+
+/** Advances the same elapsed presentation time at one exact render cadence. */
+function advanceOrdinaryElapsedTime(
+  runtime: TideweftRuntime,
+  elapsedMs: number,
+  frameDeltaMs: number,
+): void {
+  if (elapsedMs % frameDeltaMs !== 0) {
+    throw new Error("frame cadence fixture requires an exact elapsed-time division");
+  }
+  runtime.start();
+  invokeScheduledFrame(frameDeltaMs);
+  for (let elapsed = 0; elapsed < elapsedMs; elapsed += frameDeltaMs) {
+    invokeScheduledFrame(frameDeltaMs);
+  }
   runtime.stop();
 }
 
@@ -193,6 +210,42 @@ async function beginFreshWorld(
 }
 
 describe("bounded runtime WAIT", () => {
+  it("produces identical authoritative state across two ordinary render cadences", async () => {
+    const setupRepository = new MemoryRepository();
+    const setup = await beginFreshWorld(
+      setupRepository,
+      "turning day frame cadence equality",
+    );
+    await setup.save();
+    const baselineRecord = setupRepository.snapshot();
+    const baselineTick = completedTick(decodeCurrent(baselineRecord));
+    setup.destroy();
+
+    const slowRepository = new MemoryRepository(baselineRecord);
+    const slow = await createTideweftRuntime(slowRepository);
+    advanceOrdinaryElapsedTime(slow, 1_000, 100);
+    await slow.save();
+    const slowState = decodeCurrent(slowRepository.snapshot());
+    slow.destroy();
+
+    // Reset only the presentation clock; both runtimes start from the same
+    // exact durable world and receive the same 1,000 ms of neutral play.
+    scheduledFrame = undefined;
+    nextFrameTime = 100;
+    const fastRepository = new MemoryRepository(baselineRecord);
+    const fast = await createTideweftRuntime(fastRepository);
+    advanceOrdinaryElapsedTime(fast, 1_000, 20);
+    await fast.save();
+    const fastState = decodeCurrent(fastRepository.snapshot());
+    fast.destroy();
+
+    expect(completedTick(slowState)).toBe(baselineTick + 1);
+    expect(completedTick(fastState)).toBe(baselineTick + 1);
+    expect(playerStepPhase(slowState)).toBe(0);
+    expect(playerStepPhase(fastState)).toBe(0);
+    expect(authoritativeSaveRoots(fastState)).toEqual(authoritativeSaveRoots(slowState));
+  });
+
   it("commits exactly 100 RAF-driven fixed steps, ignores a duplicate begin, and matches ordinary neutral play", async () => {
     const baselineRepository = new MemoryRepository();
     const setup = await beginFreshWorld(
