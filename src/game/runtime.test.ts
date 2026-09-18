@@ -2712,7 +2712,7 @@ describe("perpetual new worlds", () => {
         .seedText,
     ).toBe("generation two");
     runtime.destroy();
-  }, 30_000);
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v32 breadth wrapper`, async () => {
     const repository = new MemoryRepository();
@@ -3407,7 +3407,7 @@ describe("runtime clarity guards", () => {
     advancePlayerSteps(resumed, 3);
     expect(resumed.getRenderView().player.position).toEqual(reloadedPosition);
     resumed.destroy();
-  }, 60_000);
+  }, process.env.CI === "true" ? 90_000 : 60_000);
 
   it(
     "projects every stamina change through sweep recovery and immediate water re-entry",

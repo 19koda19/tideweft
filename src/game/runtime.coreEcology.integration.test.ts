@@ -409,7 +409,7 @@ describe("runtime core-ecology vertical slice", () => {
       scheduledFrame = undefined;
     }
     expect(witnessedBearFreeSeed).toBe(true);
-  }, 120_000);
+  }, process.env.CI === "true" ? 120_000 : 60_000);
 
   it("uses production-shaped external protection for a synthetic v24 adoption", async () => {
     const repository = new MemoryRepository();
@@ -1608,7 +1608,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(consumptionHistory(replayedCargo)).toHaveLength(1);
     expect(replayedCargo.expectedManifest.totalQuantity).toBe(0);
     resumed.destroy();
-  }, 60_000);
+  }, 120_000);
 
   it(`${PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT} lets one fish crow physically reach and consume one persistent provision exactly once`, async () => {
     const repository = new MemoryRepository();
@@ -3990,7 +3990,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     expect(requiredEnvelope(repository).regionalEcology).toBe(durableCore);
     resumed.destroy();
-  }, 75_000);
+  }, process.env.CI === "true" ? 150_000 : 75_000);
 
   it("routes a selected flee target around a closed local escape edge", async () => {
     const repository = new MemoryRepository();

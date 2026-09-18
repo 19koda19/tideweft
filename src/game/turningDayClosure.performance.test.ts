@@ -1,3 +1,5 @@
+import { cpuUsage } from "node:process";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -93,6 +95,8 @@ const PRODUCTION_FIXTURE_TICK = WORLD_NEW_GAME_START_TICK;
 const ROUTINE_ACTOR_STEP_UNITS = 1_000;
 // Deliberately generous shared-runner ceilings catch unbounded work and save
 // histories; packaged desktop/mobile smoke remains the frame-rate authority.
+// Measure consumed process CPU rather than wall time so host scheduling/steal
+// does not turn an otherwise identical bounded simulation into a CI failure.
 const SOAK_CPU_BUDGET_MS = 30_000;
 const WORLD_SAVE_BUDGET_BYTES = 4 * 1_024 * 1_024;
 const WORLD_SAVE_GROWTH_BUDGET_BYTES = 512 * 1_024;
@@ -199,6 +203,7 @@ describe("Turning Day bounded multi-day closure budget", () => {
     let settledTicks = 0;
 
     const startedAt = performance.now();
+    const cpuStartedAt = cpuUsage();
     for (let ordinal = 1; ordinal <= SOAK_TICKS; ordinal += 1) {
       stepWorld(world);
       advanceEveryResidentRoutine(world);
@@ -297,6 +302,8 @@ describe("Turning Day bounded multi-day closure budget", () => {
         .toBe(productionRoutine.actorId);
     }
     const elapsedMs = performance.now() - startedAt;
+    const elapsedCpu = cpuUsage(cpuStartedAt);
+    const elapsedCpuMs = (elapsedCpu.user + elapsedCpu.system) / 1_000;
 
     assertWorldInvariants(world);
     expect(currentRecord.payloadVersion).toBe(32);
@@ -346,7 +353,6 @@ describe("Turning Day bounded multi-day closure budget", () => {
       .toBeLessThan(REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES);
     expect(byteRange(regionalEcologySaveBytes))
       .toBeLessThan(REGIONAL_ECOLOGY_SAVE_GROWTH_BUDGET_BYTES);
-    expect(elapsedMs).toBeLessThan(SOAK_CPU_BUDGET_MS);
 
     console.info("[turning-day-multi-day-budget]", JSON.stringify({
       ownerId: TURNING_DAY_MULTI_DAY_BUDGET_OWNER_INTENT,
@@ -377,7 +383,9 @@ describe("Turning Day bounded multi-day closure budget", () => {
       regionalEcologySaveGrowthBytes: byteRange(regionalEcologySaveBytes),
       fixtureSetupMs: rounded(fixtureSetupMs),
       elapsedMs: rounded(elapsedMs),
+      elapsedCpuMs: rounded(elapsedCpuMs),
     }));
+    expect(elapsedCpuMs).toBeLessThan(SOAK_CPU_BUDGET_MS);
   }, 90_000);
 });
 
