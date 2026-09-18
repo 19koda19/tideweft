@@ -326,7 +326,7 @@ describe("runtime existing-human perception path", () => {
     const rejected = await createTideweftRuntime(repository);
     expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
     rejected.destroy();
-  }, 30_000);
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("clears a partial perception interval when an existing world is replaced", async () => {
     const fixture = perceptionFixture("runtime perception replacement reset");
