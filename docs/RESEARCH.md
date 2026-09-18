@@ -95,7 +95,7 @@ Alpha 15 sharpens that pattern by choosing representation per ecological scale. 
 
 Alpha 16 adds a second scaling lesson: ecological roles need a physically plausible size boundary before they can drive behavior. A generic `predator`/`prey` comparison was broad enough to misclassify the domestic-cat/deer pair. Declaring small prey and small predators lets the same trophic resolver support cat-or-fox pressure on rabbits while keeping deer outside that relationship; the correction is a shared rule rather than another species-name branch. The resulting rabbit/fox crossing stops at a finite nonlethal pursuit: direct visual evidence can produce rabbit alarm and flight or fox pursuit, dog and large-predator pressure can redirect attention, shared terrain costs shape movement, and expiry or lost opportunity produces disengagement. Paired tracks and canid pawprints persist at the movement site but remain direct-sight, non-targetable evidence; their immutable source clarity derives deterministic fading and exact expiry after 180 ticks rather than save-cadence-dependent mutation. Thumps and yips are presented only when their causative event was visible. None of this implies an attack, kill, carcass, complete scent field, foliage consumption, circadian schedule, worldwide population, or complete bestiary.
 
-The Alpha 17 Rain Chorus / Shadow Overhead release adds a third scaling lesson: a species can be plugged into shared policy and capability owners without pretending every ecological unit needs a full actor or a bespoke pairwise decision tree. Fish crows use no more than three persistent visible representatives and one saved flock when at least two are present; a northern harrier remains one solitary representative; a southern leopard-frog area conserves 64–72 units over no more than three anchors and never manufactures frog actors. The shared activity owner authenticates only a bounded daytime/rest distinction, habitat-valid crow perching, and deterministic harrier low quartering; it is deliberately not a complete circadian system. The physical-item owner still controls crow food custody, so a crow must reach and atomically consume the exact loose provision rather than receiving an abstract reward. The perception and trophic owners require a direct crow sighting of the harrier before alarm can become mobbing pressure and interrupt a finite nonlethal pursuit; co-presence alone does nothing.
+The Alpha 17 Rain Chorus / Shadow Overhead release adds a third scaling lesson: a species can be plugged into shared policy and capability owners without pretending every ecological unit needs a full actor or a bespoke pairwise decision tree. Fish crows use no more than three persistent visible representatives and one saved flock when at least two are present; a northern harrier remains one solitary representative; a southern leopard-frog area conserves 64–72 units over no more than three anchors and never manufactures frog actors. At that release boundary the shared activity owner authenticated only a bounded daytime/rest distinction, habitat-valid crow perching, and deterministic harrier low quartering; it was not yet a complete circadian system. The physical-item owner still controls crow food custody, so a crow must reach and atomically consume the exact loose provision rather than receiving an abstract reward. The perception and trophic owners require a direct crow sighting of the harrier before alarm can become mobbing pressure and interrupt a finite nonlethal pursuit; co-presence alone does nothing.
 
 The frog chorus demonstrates why stimulus and perception must remain separate. Rain raises aggregate activity, but the same rain masks the chorus through ordinary directional hearing. Quieting and one-unit redistribution modify the same conserved aggregate, while ABOUT, Chart, and Relief expose only lawful evidence rather than a hidden count or fake frogs. The current caption remains species-anonymous; its qualified direction and uncertainty-attenuated pan derive from the same heard-bearing band, and unresolved or co-located contact is stated honestly. Fish crows and the harrier likewise receive distinct visible forms and authenticated perch/quartering posture without fabricated bird ground tracks; the harrier receives no invented call. A selected visible flock's ABOUT estimate comes from its existing knowledge-filtered projection rather than a second hidden census. Habitat version 4 preserves the exact version-3 population prefix before appending these three analyses, and outer save version 12 performs the corresponding one-time adoption from an authenticated version-11 envelope. The release therefore exercises extension and conservation rather than treating a new roster as permission to reroll the old ecology.
 
@@ -141,7 +141,7 @@ live assets match the tested committed build byte-for-byte. It does not
 complete worldwide Wave C or broader biodiversity work. Mortality, carcasses, harmful
 attacks, live-prey capture or consumption, fishing, nesting, reproduction,
 ecological cross-region migration, full circadian life, and a general
-scent/sound/evidence system remain absent.
+scent/sound/evidence system were absent from that release.
 
 The **LIVE_VERIFIED** `0.3.3-alpha.23 — The Storehouse Door` release tests a ninth
 scaling lesson without adding a species: settlement ecology should compose
@@ -680,8 +680,8 @@ Alpha38 reaches 41 core-wildlife profiles / 43 total living records. One final
 coherent four-profile cohort reaches the 45 / 47 catalog boundary. Alpha38 was
 never a standalone public or LIVE_VERIFIED release; it is preserved in the
 Alpha39 lineage. Sound, capture/consumption, new mortality/bodies,
-reproduction, full circadian life, and continuously simulated 3D flight remain
-later-owner work.
+reproduction, full circadian life, and continuously simulated 3D flight were
+later-owner work at that Alpha38 checkpoint.
 
 The **LIVE_VERIFIED** `0.3.3-alpha.39 — Saltmarsh Small Worlds` release preserves the exact
 forty-three-record Alpha38 catalog and both earlier breadth epochs, then appends
@@ -715,11 +715,54 @@ Alpha39 reaches the chosen Directive 04_1 boundary of 45 core-wildlife profiles
 `c67f30b10066f60372d2cf84e1e6eacae1cbd31f` passed main CI `34905718204` and
 Pages `34905718214`: 275 test files / 2,633 tests passed, and a cache-bypassed
 comparison matched all 5/5 live production files exactly. Gameplay contract 37,
-Field Manual 49, outer save v30, and `RegionalEcologyStateV6` are current
-released authority. This closes bounded Directive 04_1. It adds no bite or
-disease, capture or consumption, new mortality or bodies, reproduction,
-sound/Living Voice, full circadian behavior, or continuous 3D flight. The next
-authorized directive is 04_1A The Turning Day; 04_2 The Living Voice follows.
+Field Manual 49, outer save v30, and `RegionalEcologyStateV6` were the released
+authority at that historical checkpoint. This closed bounded Directive 04_1.
+At that boundary Alpha39 added no bite or disease, capture or consumption, new
+mortality or bodies, reproduction, sound/Living Voice, bounded Turning Day
+daily life, or continuous 3D flight, and it authorized 04_1A The Turning Day.
+
+### A complete day is a distributed invariant, not a scripted showcase
+
+The **LIVE_VERIFIED** `0.3.3-alpha.53 — The Turning Day` release establishes the
+next scaling conclusion: one deterministic fixed-step civil day must remain the
+authority for outdoor light, WAIT, REST, SLEEP, human routines, dog continuity,
+and wildlife rhythms. Separate UI, player, human, and species clocks would make
+reload, frame-rate independence, interruption, and streaming disagree. The
+released composition instead carries all 42 current humans, the
+relationship-bearing settlement working dog, and the 17 current addressable
+wildlife activity profiles through the same day/dusk/night/dawn authority while
+physical arrival, work, travel, danger, weather, needs, watch/search, and lawful
+strong disturbance retain priority.
+
+The proof is deliberately distributed across production owners. Direct
+witnesses establish exact WAIT results under distinct presented-frame cadences
+and interruption by a lawfully heard alarm at its committed boundary. A bounded
+three-day / 4,320-tick production soak projects every current resident, carries
+one real activity-bound Alpine golden eagle through daily persistence and source
+dematerialization/rematerialization alongside the production dormant/coarse
+paths, and bounds save growth. Packaged witnesses
+exercise the same clock and real REST path across desktop Chart/Relief and
+mobile Relief while holding Title and Quiet Hour still. Together these shared
+representative invariants prove one causal day more honestly than a monolithic
+all-species tableau or an N² routine matrix.
+
+That conclusion remains scoped. Alpha40–52 are internal cumulative milestones,
+not independent releases. The existing settlement working dog is the
+relationship-bearing continuity witness, not a bonded player companion; the
+independent dog's shelter/routine, physical interiors, seasons, and broader
+routines remain later work. Packaged timing is a regression/liveness floor, not
+universal low-end certification.
+
+Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3` is preserved
+beneath validation-only descendants `f6a8816`, `e3fe15d`, and
+`da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
+test files / 2,791 tests and the production build; Pages `35375612200` deployed
+that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
+production files in the exact 4,251,968-byte web artifact. Outer save v32,
+gameplay contract 51, and Field Manual 63 are current; simulation v4,
+`RegionalEcologyStateV6`, and wildlife actor v1 remain unchanged. Directive
+04_1A is complete, Directive 04_1B **Breathing Room** is active, and 04_2 **The
+Living Voice** follows it.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -747,16 +790,23 @@ checkpoints extending that lineage to 31 records. Alpha37 is the preserved
 internal first Wave-G breadth checkpoint at 34 core-wildlife profiles / 36
 living records, and Alpha38 is the preserved internal epoch-2 checkpoint at
 41 / 43. None was a standalone LIVE_VERIFIED release. Alpha39 cumulatively
-ships that exact lineage and is the current LIVE_VERIFIED closure at 45 / 47
-through epoch 3 without quota padding.
-None completes broader aquatic or settlement ecology, broad
-attacks or mortality, population recovery, decomposition, body transport or
-harvesting, full circadian life, complete scent, worldwide species breadth, or the
-full bestiary. Broader species, reproduction, ecological migration, those
-absent physical systems, wider settlement ecology, and wider sound/evidence
-tracking still require their own authoritative owners. Alpha39's shared
-performance and seamless-crossing evidence closes the bounded Directive 04_1
-gate; Turning Day is the next authorized owner.
+shipped that exact lineage as the historical LIVE_VERIFIED Directive 04_1
+biodiversity closure at 45 / 47 through epoch 3 without quota padding.
+Alpha40–52 are the internal cumulative daily-life milestones; none was an
+independent release. Alpha53 now cumulatively ships their lineage and is the
+current LIVE_VERIFIED release.
+
+Those biodiversity checkpoints did not complete broader aquatic or settlement
+ecology, broad attacks or mortality, population recovery, decomposition, body
+transport or harvesting, complete scent, worldwide species breadth, or the full
+bestiary. Turning Day closes only its stated 42-human, relationship-bearing
+working-dog, and 17-addressable-wildlife routine boundary. Broader species,
+reproduction, ecological migration, independent-dog shelter/routine, bonded
+companionship, physical interiors, seasons, broader routines, wider settlement
+ecology, and wider sound/evidence tracking still require their own authoritative
+owners. Alpha39's shared performance and seamless-crossing evidence closed
+Directive 04_1; Alpha53's distributed production evidence closes Directive
+04_1A. Directive 04_1B Breathing Room is active, and Living Voice follows.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

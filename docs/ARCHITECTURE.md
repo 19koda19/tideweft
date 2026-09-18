@@ -126,9 +126,10 @@ archetype. Alpha43 **Two Rhythms** began that registry with two clock-driven
 rows: fish crow + `perch-watch` + day-active, and North American river otter +
 `shore-water-forager` + night-active. Alpha48 added snowy egret +
 `tidal-wader` + adaptive clock/tide/opportunity; Alpha49 added marsh rabbit +
-`ground-cover-forager` + twilight-active. The local Alpha50 **Many Rhythms**
-source candidate now makes the registry an exact ordered cover of all seventeen
-species that currently own an addressable activity-affordance profile. The
+`ground-cover-forager` + twilight-active. The internal Alpha50 **Many Rhythms**
+milestone, first shipped cumulatively in Alpha53, makes the registry an exact
+ordered cover of all seventeen species that currently own an addressable
+activity-affordance profile. The
 thirteen formerly bounded-day rows reuse day-active policy and their existing
 archetypes rather than receiving private schedulers. Duck, otter, yellowlegs,
 and terrapin retain tide/depth-responsive actions and destinations without
@@ -185,8 +186,9 @@ and complete Turning Day closure remain outside Alpha50. Later consumers must
 reuse the same kernel and physical authority rather than add species or human
 schedulers.
 
-The local Alpha44 **Ten Minutes** candidate adds one bounded player `WAIT 10
-MIN` action owned by `src/game/runtime.ts`. A wait receipt records the starting
+The internal Alpha44 **Ten Minutes** milestone, first shipped cumulatively in
+Alpha53, adds one bounded player `WAIT 10 MIN` action owned by
+`src/game/runtime.ts`. A wait receipt records the starting
 world tick, the existing partial-minute player-step phase, successful steps,
 and the fixed total of one hundred. The animation driver admits at most one
 ordinary 100-ms player step per presented frame through `runTickFailClosed()`
@@ -208,8 +210,9 @@ completed root and the exact partial-minute carry. Reload cannot resume,
 replay, skip, or reroll the remainder. Player REST/SLEEP and validated longer
 or coarse elapsed-time actions remain later Turning Day work.
 
-The local Alpha45 **Kennel Night** candidate connects exactly one more
-production actor to the same `livingCircadian` authority. The adapter in
+The internal Alpha45 **Kennel Night** milestone, first shipped cumulatively in
+Alpha53, connects exactly one more production actor to the same
+`livingCircadian` authority. The adapter in
 `src/game/settlementWorkingDogCircadian.ts` accepts only the existing
 settlement-custodied guardian dog, its matching persisted assignment, and that
 custody's real kennel. It selects the shared clock-driven day-active policy and
@@ -249,9 +252,10 @@ threshold, destination ID, kennel custody graph, or assignment internals. This
 is not a human routine, independent-dog routine, bonded/player companion
 routine, or player REST/SLEEP.
 
-The local Alpha46 **The Keeper Sleeps** candidate lowers the persistent
-circadian contract far enough for the existing resident simulation to own one
-human receipt without creating another human root. A fail-closed adapter in
+The internal Alpha46 **The Keeper Sleeps** milestone, first shipped
+cumulatively in Alpha53, lowers the persistent circadian contract far enough
+for the existing resident simulation to own one human receipt without creating
+another human root. A fail-closed adapter in
 `src/game/settlementKeeperCircadian.ts` authenticates exactly the resident whose
 stable identity already equals the starting-harbor food-store keeper named by
 settlement ecology. The resident's existing home-settlement ID is the complete
@@ -292,8 +296,9 @@ destination identity, wake threshold, raw need, or unseen observation. This is
 one representative keeper, not every-human home life, a physical interior,
 player REST/SLEEP, or Turning Day closure.
 
-The local Alpha47 **Rest and Rise** candidate adds player recovery without a
-second clock or a direct time assignment. On stable dry footing and below full
+The internal Alpha47 **Rest and Rise** milestone, first shipped cumulatively in
+Alpha53, adds player recovery without a second clock or a direct time
+assignment. On stable dry footing and below full
 stamina, `REST 30 MIN` creates a version-1 player time-action receipt for
 exactly three hundred ordinary 100-ms player steps. At an exact current
 settlement during Dusk or Night, the same control becomes `SLEEP TO DAWN`; it
@@ -334,8 +339,9 @@ add no offline elapsed time. WAIT remains transient and separate. This slice
 adds no new fatigue, hunger, thirst, health, shelter, camp, bed, interior, or
 dream system, and it does not close Turning Day by itself.
 
-The local Alpha48 **Tide at the Roost** candidate extends the exact
-species/activity circadian registry with snowy egret + `tidal-wader` +
+The internal Alpha48 **Tide at the Roost** milestone, first shipped
+cumulatively in Alpha53, extends the exact species/activity circadian registry
+with snowy egret + `tidal-wader` +
 `adaptive-active`. The policy retains the one authoritative clock and accepts
 only two additional current driver receipts: an authoritative-environment tide
 signal backed by the current saved-anchor depth projection, and a
@@ -366,8 +372,9 @@ This is one tide/opportunity binding for one existing actor, not a new
 population, teleport path, crepuscular or weather-driven policy, catalog-wide
 conversion, harm/mortality extension, or Turning Day closure.
 
-The local Alpha49 **Twilight at the Marsh Edge** candidate adds the first
-production crepuscular composition by binding the existing marsh rabbit to the
+The internal Alpha49 **Twilight at the Marsh Edge** milestone, first shipped
+cumulatively in Alpha53, adds the first production crepuscular composition by
+binding the existing marsh rabbit to the
 shared `ground-cover-forager` activity and `twilight-active` clock policy. The
 generic runtime policy declares `circadian-activity`; the activity profile
 declares `circadian-routine`; and both cover travel and bounded local activity
@@ -400,8 +407,9 @@ density, food, feeding, capture, attack, mortality, weather driver, tide driver,
 opportunity driver, catalog-wide schedule, broad coarse-time advancement, or
 Turning Day closure.
 
-The local Alpha50 **Many Rhythms** source candidate converts the thirteen
-remaining addressable activity-profile species in one registry-driven pass.
+The internal Alpha50 **Many Rhythms** milestone, first shipped cumulatively in
+Alpha53, converts the thirteen remaining addressable activity-profile species
+in one registry-driven pass.
 Together with the four earlier compositions, the circadian registry now exactly
 covers the seventeen entries in the activity-affordance registry. Each profile
 declares `circadian-activity` and `circadian-routine`, reuses its existing
@@ -431,12 +439,13 @@ Alpha50 changes no actor, population, food, harm, mortality, save, regional-
 ecology, or wildlife-actor schema. Current catalog rhythm/cadence comes from the
 shared profiles while every frozen historical catalog remains byte- and hash-
 exact. Its exact-cover boundary is the seventeen current addressable activity
-profiles, not all 45 core-wildlife records. People/companion breadth,
-multi-day/package performance evidence, cumulative validation, and final
-Turning Day release verification remain later work.
+profiles, not all 45 core-wildlife records. At that internal boundary,
+people/companion breadth, multi-day/package performance evidence, cumulative
+validation, and final Turning Day release verification remained for Alpha53.
 
-The local Alpha51 **A Day Shared** source candidate generalizes the Alpha46
-keeper bridge across all 42 current original-estuary residents without adding a
+The internal Alpha51 **A Day Shared** milestone, first shipped cumulatively in
+Alpha53, generalizes the Alpha46 keeper bridge across all 42 current
+original-estuary residents without adding a
 second human scheduler. `src/game/residentCircadian.ts` validates each human's
 stable identity, same-tick perception, needs, condition, location, optional
 receipt, and fresh authoritative weather before projecting the existing shared
@@ -472,8 +481,9 @@ place and remains unbound. No bonded player companion exists yet, so Alpha51
 does not fabricate or advertise one. Outer save version 32, simulation format
 4, Regional Ecology V6, and both dog roots remain unchanged.
 
-The local Alpha52 **Rest Between Harbors** source candidate reinterprets that
-resident-bound opaque destination as a reciprocal settlement-network rest
+The internal Alpha52 **Rest Between Harbors** milestone, first shipped
+cumulatively in Alpha53, reinterprets that resident-bound opaque destination as
+a reciprocal settlement-network rest
 anchor without changing a serialized byte. Home identity authenticates network
 membership; `ResidentState.location` plus `activeContractId === null`
 authenticates physical arrival at a particular real settlement. One shared
@@ -498,13 +508,16 @@ whose arrival bit is false and posture is Awake or STARTLED; it grants no rest
 or physiology and the simulation corrects it on the next tick. False-arrival
 Resting/Asleep and forged receipt identities remain invalid.
 
-The local Alpha53 **The Turning Day** source candidate closes this bounded
-daily-continuity architecture without adding a scheduler, simulation clock, or
-save format. The same civil clock now has production-backed closure evidence
-across day, dusk, night, and dawn; player WAIT/REST/SLEEP; all 42 current
-residents; the relationship-bearing settlement working dog; and all seventeen
-existing wildlife activity profiles. Physical destinations and ordinary
-locomotion remain authoritative, while work, travel, danger, storms, urgent
+Released `0.3.3-alpha.53 — The Turning Day` is **LIVE_VERIFIED** and closes this
+bounded daily-continuity architecture. The final Alpha53 closure slice adds no
+second scheduler, simulation clock, or save format beyond the internal
+Alpha40–52 milestones first shipped cumulatively in this release. The same
+civil clock now has
+production-backed closure evidence across day, dusk, night, and dawn; player
+WAIT/REST/SLEEP; all 42 current residents; the relationship-bearing settlement
+working dog; and all seventeen existing addressable wildlife activity profiles.
+Physical destinations and ordinary locomotion remain authoritative, while
+work, travel, danger, storms, urgent
 needs, watch/search cognition, and lawful strong disturbance outrank neutral
 rest.
 
@@ -512,17 +525,29 @@ Closure is proven through shared owners and representative integration rather
 than an N-squared species matrix: exact WAIT cadence from the same saved state
 under distinct animation-frame rates, real alarm-driven interruption at one
 committed tick, a three-day production routine soak with daily serialization
-and bounded growth, and stable actor identity through one source
-dematerialization/rematerialization cycle. The packaged harness holds the Title
-and Quiet Hour clocks still, performs real REST on validated footing, and
-exercises desktop Chart/Relief plus mobile portrait/landscape Relief controls.
-This is a regression and liveness floor, not universal low-end performance
-certification. The settlement working dog remains the honest continuity
-witness; a bonded player companion is not claimed. Outer save v32, simulation
-v4, Regional Ecology V6, and wildlife actor v1 remain unchanged. Alpha53 is
-still a local SOURCE_CANDIDATE pending cumulative and release verification.
-The next authorized directive is **Breathing Room**, followed by **Living
-Voice**.
+and bounded growth, and one representative golden eagle retaining stable actor
+identity through source dematerialization/rematerialization. The packaged
+harness holds the Title and Quiet Hour clocks still, performs real REST on
+validated footing, and exercises desktop Chart/Relief plus mobile
+portrait/landscape Relief controls. Packaged mobile coverage is Relief only;
+shared production authority and integration coverage, not a second packaged
+mobile Chart matrix, establish view parity. This is a regression and liveness
+floor, not universal low-end-device performance certification. The settlement
+working dog remains the honest continuity witness and is not a bonded player
+companion. The independent dog, physical houses/interiors, and seasons remain
+broader work outside this release.
+
+The current released boundaries are outer save v32, simulation v4, Regional
+Ecology V6, wildlife actor v1, gameplay contract 51, and tutorial/Field Manual
+version 63. Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3`
+is preserved beneath validation-only descendants `f6a8816`, `e3fe15d`, and
+final executable descendant `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI run `35375612294`
+passed 290 test files / 2,791 tests, and Pages run `35375612200` succeeded. The
+first cache-bypassed exact-live comparison matched all 5/5 production files,
+totalling 4,251,968 bytes; the packaged runtime-only ASAR contains 10 entries
+totalling 4,472,022 bytes. Directive 04_1A **The Turning Day** is closed and
+**LIVE_VERIFIED**. Directive 04_1B **Breathing Room** is active; 04_2 **The
+Living Voice** follows it.
 
 ## Authoritative tick
 
@@ -585,8 +610,12 @@ The playable slice uses:
   habitat-optional. This is signed-region distribution of a bounded current
   catalog at the released 45 core-wildlife-profile boundary, not worldwide
   species breadth, ecological migration behavior, or a complete bestiary.
-  Alpha39 is the current LIVE_VERIFIED release. Alpha34–38 were never standalone
-  releases; their exact append-only lineage is incorporated into Alpha39. The
+  Alpha39 remains the historical **LIVE_VERIFIED** Directive 04_1 biodiversity
+  closure; Alpha53 is the current **LIVE_VERIFIED** release and does not change
+  this catalog. Alpha34–38 were never standalone releases; their exact
+  append-only lineage is incorporated into Alpha39. Alpha40–52 likewise remain
+  internal cumulative milestones first shipped in Alpha53 rather than
+  standalone releases. The
   catalog contains two shared foundation records—human and domestic dog—outside
   the Directive 04_1 core-wildlife target, for exactly 45 core-wildlife profiles
   / 47 total living records.
@@ -1143,7 +1172,7 @@ actor-crossing closure evidence arrived with Alpha39; sound,
 capture/consumption, new mortality/bodies, reproduction, full circadian life,
 and continuous 3D flight remain absent. Alpha38 was not an independent release.
 
-### Released Alpha39: Saltmarsh Small Worlds
+### Historical LIVE_VERIFIED Alpha39: Saltmarsh Small Worlds
 
 `0.3.3-alpha.39 — Saltmarsh Small Worlds` preserves the exact Alpha38
 forty-three-record catalog and breadth epochs 1–2, then appends eastern
@@ -1180,8 +1209,9 @@ commit. Shared performance and seamless-crossing closure coverage plus
 representative emergence witnesses validate the reusable architecture rather
 than a bespoke species-by-species or N² pair matrix.
 
-Alpha39 is the **LIVE_VERIFIED** cumulative Directive 04_1 release at the chosen
-45 core-wildlife / 47 living-record boundary. It adds no sound/Living Voice,
+Alpha39 remains the historical **LIVE_VERIFIED** cumulative Directive 04_1
+biodiversity closure at the chosen 45 core-wildlife / 47 living-record
+boundary. It adds no sound/Living Voice,
 full circadian behavior, reproduction, migration, new mortality, or broader
 capture system. Exact gameplay commit
 `40bfeebde94729ffb1034764ffba3e18100ac1fc` is preserved beneath timeout-only
@@ -1191,9 +1221,10 @@ or artifacts. CI `34905718204` and Pages `34905718214` each passed 275 test
 files / 2,633 checks for `c67f30b`, Pages published five files totalling
 4,072,920 bytes, and the first cache-bypassed comparison matched all 5/5 live
 production files byte-for-byte. Directive 04_1 is closed. At that released
-checkpoint, the next authorized directive was 04_1A **The Turning Day**. Local
-Alpha53 now closes its bounded implementation architecture; **Breathing Room**
-is next, followed by 04_2 **The Living Voice**.
+checkpoint, the next authorized directive was 04_1A **The Turning Day**.
+Alpha53 has now shipped that bounded architecture as **LIVE_VERIFIED** and
+closes 04_1A. Directive 04_1B **Breathing Room** is active, followed by 04_2
+**The Living Voice**.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -1419,10 +1450,11 @@ narration.
 
 `src/game/coreEcologySpeciesRuntimePolicy.ts` composes representation, addressability, locomotion, group organization, aggregate response, food investigation, shared alarm, mobbing, pursuit, activity, evidence, and presentation capabilities without a species-pair behavior table. `src/game/coreEcologyAggregatePolicy.ts` separately owns aggregate namespaces, anchor bounds, activity/evidence vocabulary, rain response, and the shared role/trophic response bridge, so aggregate consumers do not branch on ad hoc species checks. `src/game/coreEcologyTidalTable.ts` owns only the pure target-tick tide/depth projection and its conservation-safe fish redistribution/activity step; it neither regenerates habitat nor owns cargo, consumption, or mortality. Its completed tidal-edge opportunity is recorded in the durable aggregate operation clock even when no unit moves. Released Alpha 22 introduced `src/game/coreEcologyActivityAffordance.ts` with six reusable archetypes. The released Alpha39 registry has eleven archetypes across sixteen participating species: the original `perch-watch`, `low-quartering`, `tidal-wader`, `dabbling-waterfowl`, `shore-water-forager`, and `aerial-surface-opportunist`, plus `ridge-soar-perch`, `anchored-wader`, `diving-waterbird`, `perch-forage`, and `amphibious-margin-forager`. Each profile declares required runtime capabilities, locomotion class, allowed travel media, destination authority, observation affordance, presentation signals, and only a bounded daylight/rest window. Unknown species and incoherent capability/profile combinations fail closed. `src/game/coreEcologyActivity.ts` consumes those profiles through one shared finalizer that rejects any emitted signal, movement medium, destination semantic, perch claim, or observation reference outside the selected profile before it can reach movement or presentation. Immediate lawful alarm, flee/retreat/guard, pursuit/disengagement, and physical-food forage/scavenge intents outrank neutral activity. Existing routines retain their authenticated anchors and movement contracts. Alpha38 lets greater yellowlegs reuse `anchored-wader`, belted kingfishers reuse the air-only surface-opportunity/rest profile, and cormorants use `diving-waterbird` for lawful surface swimming, diving, resting, and flight relocation. Alpha39 adds shared `perch-forage` activity for seaside sparrows and `amphibious-margin-forager` activity for the diamondback terrapin. Transit presentation remains generic until the current state lawfully supports a more specific visible behavior; private cues never become player knowledge. This is not sleep, denning, a nocturnal schedule, capture/feeding resolution, continuously simulated 3D flight, or the complete circadian system.
 
-That boundary remains true of the released Alpha39 activity layer. Alpha42
-layered the generic circadian kernel onto fish-crow `perch-watch`; the local
-Alpha43 **Two Rhythms** candidate replaces that implicit perch-only lookup with
-a declarative species + activity-archetype registry and adds North American
+That boundary remains true of the released Alpha39 activity layer. Internal
+Alpha42 layered the generic circadian kernel onto fish-crow `perch-watch`;
+internal Alpha43 **Two Rhythms**, first shipped cumulatively in Alpha53,
+replaces that implicit perch-only lookup with a declarative species +
+activity-archetype registry and adds North American
 river otter + `shore-water-forager` + night-active beside fish crow +
 `perch-watch` + day-active. The crow physically seeks its authenticated perch
 at night. The otter physically seeks its authenticated dry haulout by day,
@@ -1788,14 +1820,29 @@ integrity, or mismatched world binding fails closed. Alpha38 was not
 independently released; this exact epoch remains part of Alpha39's cumulative
 migration lineage.
 
-Released Alpha39 likewise keeps outer version 30 and
+Historical released Alpha39 likewise keeps outer version 30 and
 `RegionalEcologyStateV6`. Its authenticated breadth root advances from
 epoch 2 to epoch 3 exactly once at the saved tick, appending Saltmarsh Small
 Worlds after the exact two-cohort prefix. Already-current state is a no-op;
 rewind, future epoch, stale integrity, or mismatched world binding still fails
-closed. Outer version 30 / `RegionalEcologyStateV6` is the LIVE_VERIFIED Alpha39
-save boundary; versions 27–29 and breadth epochs 1–2 remain its authenticated
-internal compatibility lineage.
+closed. Outer version 30 / `RegionalEcologyStateV6` remains the historical
+**LIVE_VERIFIED** Alpha39 biodiversity boundary; versions 27–29 and breadth
+epochs 1–2 remain its authenticated internal compatibility lineage.
+
+Alpha40 and Alpha41 kept outer version 30 while deriving civil time and outdoor
+illumination from existing authority. Internal Alpha42 advanced the outer
+session to version 31, authenticating and preserving the exact outer-v30/V6
+child while allowing the additive optional wildlife circadian receipt; Alpha43
+through Alpha46 retained that envelope. Internal Alpha47 advanced the outer
+session to version 32 by inserting a required nullable player time-action into
+an authenticated version-31 session, with `null` proving that migration cannot
+invent recovery or elapsed time. Alpha48 through Alpha53 keep outer version 32,
+simulation format 4, `RegionalEcologyStateV6`, and wildlife actor schema/version
+1 unchanged. Alpha51's optional resident receipts and Alpha52's byte-identical
+reciprocal settlement-rest digest add no new root or migration. Alpha40–52 are
+internal cumulative milestones first shipped in Alpha53, not standalone
+releases. Outer version 32 is the current **LIVE_VERIFIED** Alpha53 save
+boundary.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic
@@ -1995,6 +2042,26 @@ owners. These released versions reach the exact 45 / 47 breadth boundary while
 preserving explicit nonlethal, no-sound, and no-full-circadian limits. They
 passed the cumulative Directive 04_1 release checkpoint in Alpha39.
 
+Internal Alpha40 through Alpha52 advance the Field Manual/tutorial from version
+50 through 62 and the gameplay contract from 38 through 50 in the same
+one-version-per-milestone order. Those records cover the shared civil clock,
+outdoor illumination, generic routine kernel, Two Rhythms, WAIT, the settlement
+working dog's kennel continuity, the representative keeper, player REST/SLEEP
+and outer-v32 adoption, egret and rabbit composition, the exact seventeen-
+profile routine registry, all 42 current humans, and reciprocal settlement
+rest. They retain their exact historical scope at each boundary, but none is a
+standalone release; all first ship cumulatively in Alpha53.
+
+Released Alpha53 advances the Field Manual/tutorial to version 63 and gameplay
+contract to 51. It records the representative golden-eagle multi-day
+persistence/streaming soak, exact frame-cadence and lawful WAIT-interruption
+witnesses, and packaged desktop Chart/Relief plus mobile Relief recovery
+coverage. It retains outer save v32 and closes Directive 04_1A without claiming
+the independent dog as a routine or bonded companion, physical interiors,
+seasons, a packaged mobile Chart matrix, or universal low-end-device
+certification. These are the current **LIVE_VERIFIED** manual, gameplay, and
+save boundaries.
+
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
 ## Electron security
@@ -2048,8 +2115,9 @@ The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and th
 27. Internal Alpha36 checkpoint, first shipped cumulatively in Alpha39, plus its first Wave-G boundary hardening: exact twenty-nine-record Alpha35 prefix plus harbor-seal and polar-bear records 30–31; one capelin-backed polar-consumer source with connected cold saline foraging water, a distinct dry haulout, one solitary seal, and a rarer bear only after the exact seal candidate exists; shared amphibious traversability with `amphibious-route` kept orthogonal to authenticated otter/seal `shore-water-activity`; individual cognition, materialization, sparse persistence, knowledge-honest ABOUT, and dual-view presentation; one current-LOS/occlusion-gated representative chain proving conserved seal pressure on capelin plus nonlethal bear pursuit and seal flight; exact V4 child plus polar-consumer sibling under V5/outer-v29 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It closes bounded Wave-F role coverage while explicitly excluding contact/capture/consumption, new mortality/bodies, player or dog harm, sea ice/snow, reproduction/recovery, audible Living Voice, Wave-G species breadth, Directive completion, and standalone release/deployment evidence.
 28. Internal Alpha37 checkpoint, first shipped cumulatively in Alpha39: exact 31-record Alpha36 prefix plus bay-anchovy, Atlantic-ghost-crab, great-blue-heron, common-tern, and osprey records 32–36; one habitat-gated append-only Estuary Surface Break breadth root with honest regional absence; two conserved non-addressable aggregates, two solitary actors, and one group-atomic tern flock; shared Tide Table, activity, perception, locomotion, ABOUT, and dual-view presentation; an authenticated heron wading anchor plus tern/osprey air-only surface-opportunity/rest behavior subordinate to danger; one clear-versus-ridge-occluded common-tern/anchovy nonlethal pressure witness with exact conservation; exact V5 child plus breadth root under V6/outer-v30 adoption; and the same one global group-atomic 24-actor cap and atomic cross-layer commit. It opens Wave G toward 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuous 3D flight, dedicated Wave-G performance or seamless actor-crossing proof at that checkpoint, Directive completion, and standalone release/deployment evidence.
 29. Internal Alpha38 checkpoint, first shipped cumulatively in Alpha39: exact 36-record Alpha37 prefix plus Atlantic-menhaden, mummichog, grass-shrimp, blue-crab, greater-yellowlegs, belted-kingfisher, and double-crested-cormorant records 37–43; append-only breadth epoch 2 with dependency-gated honest absence; four conserved non-addressable aggregates, one solitary kingfisher, and group-atomic yellowlegs/cormorant flocks; shared Tide Table, aggregate, activity, perception, locomotion, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded cormorant/menhaden nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic old-epoch activation; and the same global group-atomic 24-actor cap and atomic cross-layer commit. It reaches 41 of 45 core-wildlife profiles while explicitly excluding sound, capture/consumption, new mortality/bodies, player or dog harm, reproduction/recovery, continuously simulated 3D flight, Directive completion at that checkpoint, and standalone release/deployment evidence.
-30. Released Alpha39 cumulative closure: exact 43-record Alpha38 prefix plus eastern-saltmarsh-mosquito, marsh-periwinkle, seaside-sparrow, and diamondback-terrapin records 44–47; append-only breadth epoch 3 with exact substrate dependencies and honest absence; two max-two-anchor conserved non-addressable aggregates, one two-to-four-member group-atomic sparrow flock, and one solitary terrapin; shared aggregate, activity, perception, locomotion, group, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded terrapin/periwinkle nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic epoch-2 adoption; and the same global group-atomic 24-actor cap and atomic cross-layer commit. Shared performance and seamless-crossing closure owners cover the architecture without per-species tests. It reaches the released 45 core-wildlife / 47 living-record boundary while explicitly excluding bites/disease, exact insect/snail actors, capture/consumption, new mortality/bodies, sound, reproduction/recovery, full circadian behavior, and continuous 3D flight. Gameplay commit `40bfeebde94729ffb1034764ffba3e18100ac1fc` plus timeout-only descendants `7455fd0` and `c67f30b10066f60372d2cf84e1e6eacae1cbd31f` passed CI `34905718204`, Pages `34905718214`, and a 5/5 exact-live comparison.
-The local Alpha43 routine candidate, **Two Rhythms**, retains Alpha42's generic
+30. Historical released Alpha39 cumulative biodiversity closure: exact 43-record Alpha38 prefix plus eastern-saltmarsh-mosquito, marsh-periwinkle, seaside-sparrow, and diamondback-terrapin records 44–47; append-only breadth epoch 3 with exact substrate dependencies and honest absence; two max-two-anchor conserved non-addressable aggregates, one two-to-four-member group-atomic sparrow flock, and one solitary terrapin; shared aggregate, activity, perception, locomotion, group, ABOUT, and dual-view presentation; one clear-versus-ridge-occluded terrapin/periwinkle nonlethal pressure witness with exact conservation; unchanged V6/outer-v30 with deterministic epoch-2 adoption; and the same global group-atomic 24-actor cap and atomic cross-layer commit. Shared performance and seamless-crossing closure owners cover the architecture without per-species tests. It reaches the released 45 core-wildlife / 47 living-record boundary while explicitly excluding bites/disease, exact insect/snail actors, capture/consumption, new mortality/bodies, sound, reproduction/recovery, full circadian behavior, and continuous 3D flight. Gameplay commit `40bfeebde94729ffb1034764ffba3e18100ac1fc` plus timeout-only descendants `7455fd0` and `c67f30b10066f60372d2cf84e1e6eacae1cbd31f` passed CI `34905718204`, Pages `34905718214`, and a 5/5 exact-live comparison.
+The internal Alpha43 routine milestone, **Two Rhythms**, first shipped
+cumulatively in Alpha53, retains Alpha42's generic
 version-1 living-circadian kernel with four reusable profiles, orthogonal
 clock/tide/weather/opportunity driver vocabulary, stable identity-derived phase
 plus a bounded not-yet-scheduled evaluation hint, fixed-point wake sensitivity,
@@ -2069,11 +2137,12 @@ otter nocturnal, while the frozen Alpha32–36 and three Wave-G historical catal
 roots retain their exact authenticated bytes and hashes. This is two physical
 wildlife compositions, not catalog-wide circadian life. Humans, dogs, player
 WAIT/REST/SLEEP, production crepuscular or tide-driven bindings, Living Voice,
-and Directive 04_1A closure remain absent.
+and Directive 04_1A closure remained absent at that internal milestone.
 
-The local Alpha45 **Kennel Night** candidate adds a fail-closed adapter for the
-one settlement-custodied working dog, its persisted guardian assignment, and
-its actual kennel. Shared day-active projection, stable dog-plus-kennel
+The internal Alpha45 **Kennel Night** milestone, first shipped cumulatively in
+Alpha53, adds a fail-closed adapter for the one settlement-custodied working
+dog, its persisted guardian assignment, and its actual kennel. Shared
+day-active projection, stable dog-plus-kennel
 destination identity, awake physical travel, arrival-gated restorative
 posture, weather shelter separated from posture-gated exhaustion recovery,
 stable-identity waking, lawful danger/needs/work priority, actual-intent
@@ -2081,11 +2150,12 @@ startled deferral, optional dog-record persistence, post-recovery routine
 reprojection, and direct-detail Resting/Asleep presentation are covered without
 changing outer save v31, settlement ecology v4, or working-animal state v2.
 Humans, the independent dog, bonded/player companions, and player REST/SLEEP
-remain excluded from Alpha45, and that local candidate has no push, CI, Pages,
-or live-verification evidence.
+remain excluded from Alpha45. That milestone has no standalone push, CI, Pages,
+or live-verification claim.
 
-The local Alpha46 **The Keeper Sleeps** candidate connects exactly the existing
-starting-harbor food-store keeper to the same shared day-active authority. Its
+The internal Alpha46 **The Keeper Sleeps** milestone, first shipped
+cumulatively in Alpha53, connects exactly the existing starting-harbor
+food-store keeper to the same shared day-active authority. Its
 home settlement is an authenticated rest anchor, not an invented house or bed;
 route work, contracts, current response, storm, urgent needs, and lawful strong
 disturbance retain priority. The lower simulation owns the optional resident
@@ -2095,11 +2165,13 @@ hearing and scent remain lawful wake channels and same-tick work restores
 ordinary visual admission. Direct inspection exposes only Resting/Asleep.
 Legacy absence remains byte-stable until a lawful home tick, outer save v31 is
 unchanged, and the slice claims no other human schedule, interior, autonomous
-commute, player REST/SLEEP, push, CI, Pages, or live verification.
+commute, or player REST/SLEEP. It has no standalone push, CI, Pages, or live-
+verification claim.
 
-The local Alpha47 **Rest and Rise** candidate closes that player-action gap
-without claiming broader daily life. `REST 30 MIN` is available on stable dry
-footing when stamina is below full; `SLEEP TO DAWN` replaces it only at a
+The internal Alpha47 **Rest and Rise** milestone, first shipped cumulatively in
+Alpha53, closes that player-action gap without claiming broader daily life.
+`REST 30 MIN` is available on stable dry footing when stamina is below full;
+`SLEEP TO DAWN` replaces it only at a
 settlement during Dusk or Night and outside storm weather. Both execute
 ordinary authoritative fixed steps, preserve all world consequences, and can
 be interrupted at a committed boundary by deliberate action, physical loss of
@@ -2108,11 +2180,12 @@ but not terrain awareness, lawful hearing, or physical consequences. Its
 version-1 receipt is durable in outer save v32 and resumes at the exact saved
 world tick and partial player-step phase with no offline advance. Quiet Hour's
 `Save & return` remains a separate zero-time stopping action. Alpha47 has no
-push, CI, Pages, live-verification, new fatigue/needs/health, physical camp,
-interior, or Turning Day closure claim.
+standalone push, CI, Pages, or live-verification claim and adds no new
+fatigue/needs/health, physical camp, interior, or Turning Day closure by itself.
 
-The local Alpha48 **Tide at the Roost** candidate adds the exact snowy-egret +
-`tidal-wader` + `adaptive-active` registry composition. Current tide and a
+The internal Alpha48 **Tide at the Roost** milestone, first shipped
+cumulatively in Alpha53, adds the exact snowy-egret + `tidal-wader` +
+`adaptive-active` registry composition. Current tide and a
 current lawful anonymous aquatic-opportunity receipt can activate the routine;
 ordinary aerial locomotion still owns movement to its saved dry refuge, and
 Resting/Asleep remain arrival- and settling-gated. Priority overrides remain
@@ -2129,8 +2202,9 @@ teleport, harm, mortality, crepuscular or weather binding, validated broad
 coarse-time advancement, catalog conversion, release evidence, or
 directive-closure claim.
 
-The local Alpha49 **Twilight at the Marsh Edge** candidate binds the existing
-marsh rabbit to `ground-cover-forager` + `twilight-active` through the generic
+The internal Alpha49 **Twilight at the Marsh Edge** milestone, first shipped
+cumulatively in Alpha53, binds the existing marsh rabbit to
+`ground-cover-forager` + `twilight-active` through the generic
 registry. `circadian-activity`, `circadian-routine`, and explicit `land` travel
 form one validated capability/profile/locomotion contract.
 The shared activity owner physically moves the rabbit within a bounded local
@@ -2143,13 +2217,15 @@ REST suggestion. Full-detail projection reauthenticates the cover and body;
 coarse absence preserves only an already committed rest bout. Current catalog
 truth becomes crepuscular without changing any frozen historical catalog hash.
 Outer save v32 and `RegionalEcologyStateV6` remain unchanged, as do the existing
-exact-contact rabbit mortality and carcass owners. This is local unpublished
-source-candidate behavior, not release evidence, a weather-driven binding,
-catalog-wide schedules, validated broad coarse time, or directive closure.
+exact-contact rabbit mortality and carcass owners. At that internal milestone
+this had no standalone release evidence and did not claim a weather-driven
+binding, catalog-wide schedules, validated broad coarse time, or directive
+closure.
 
-The local Alpha50 **Many Rhythms** source candidate makes the declarative
-circadian registry an exact cover of all seventeen current addressable activity
-profiles. Fourteen use day-active policy, while the established river otter,
+The internal Alpha50 **Many Rhythms** milestone, first shipped cumulatively in
+Alpha53, makes the declarative circadian registry an exact cover of all
+seventeen current addressable activity profiles. Fourteen use day-active
+policy, while the established river otter,
 snowy egret, and marsh rabbit retain night-active, adaptive-active, and
 twilight-active policies respectively. Every branch now carries the shared
 routine receipt through its existing authenticated rest place and movement
@@ -2170,14 +2246,15 @@ hash. Southern leopard frogs remain non-addressable conserved aggregates whose
 real rain activity and chorus do not create a fictitious individual posture.
 Outer save v32, Regional Ecology V6, wildlife actor v1, every population and
 stable identity, physical resources, cargo, and existing mortality remain
-unchanged. Alpha50 is local and unpublished. It does not bind the other 28
-wildlife profiles, other 41 humans, the independent dog, or a not-yet-existing
-player-bonded companion, and it does not supply final multi-day/package proof
-or close Turning Day.
+unchanged. Alpha50 has no standalone release claim. It does not bind the other
+28 wildlife profiles, other 41 humans, the independent dog, or a not-yet-
+existing player-bonded companion, and at that milestone it did not supply final
+multi-day/package proof or close Turning Day.
 
-The local Alpha51 **A Day Shared** source candidate adds one bounded generic
-resident adapter over the already-optional human receipt and commits the entire
-42-person roster atomically. Home location authorizes rest; existing route and
+The internal Alpha51 **A Day Shared** milestone, first shipped cumulatively in
+Alpha53, adds one bounded generic resident adapter over the already-optional
+human receipt and commits the entire 42-person roster atomically. Home location
+authorizes rest; existing route and
 Promise state authorizes travel/work; only the keeper wrapper contributes a
 validated external duty. Current identified/alert/searching cognition owns
 watchfulness, and the simulation's recovery gate consumes the same rule. The
@@ -2189,9 +2266,10 @@ working dog remains the existing kennel continuity proof. The independent dog
 has no valid rest anchor, and no bonded player companion is claimed. Save v32,
 simulation v4, resident identity/relationships, and dog roots remain unchanged.
 
-The local Alpha52 **Rest Between Harbors** source candidate closes that explicit
-visitor gap without adding a save root or movement owner. A free resident at
-any physically valid settlement is at the reciprocal settlement-rest network;
+The internal Alpha52 **Rest Between Harbors** milestone, first shipped
+cumulatively in Alpha53, closes that explicit visitor gap without adding a save
+root or movement owner. A free resident at any physically valid settlement is
+at the reciprocal settlement-rest network;
 the home-derived opaque ID remains byte-identical while current location owns
 the actual refuge. One real outbound Promise can therefore end in foreign rest,
 save/reload, and a later real reverse Promise by the same identity with cargo
@@ -2199,19 +2277,32 @@ conserved in both directions. No automatic return, house, guest bed, interior,
 or teleport exists. Alpha52 was an internal checkpoint rather than an
 independent release.
 
-Local Alpha53 **The Turning Day** adds no new simulation owner; it supplies the
-closure witnesses for the shared architecture accumulated through Alpha40–52.
+Released Alpha53 **The Turning Day** is **LIVE_VERIFIED** and adds no new
+simulation owner; it supplies the closure witnesses for the shared architecture
+accumulated through the non-standalone internal Alpha40–52 milestones.
 Production-backed checks cover exact frame-cadence authority, lawfully heard
-automatic WAIT interruption, three simulated days of real resident and
-wildlife routine projection with daily persistence and bounded save growth,
-and one stable actor across dematerialization/rematerialization. The packaged
-evidence spans stopped Title/Quiet Hour clocks, a real REST action, desktop
-Chart and Relief, and mobile portrait/landscape Relief using shared production
-authority. It is deliberately representative, not a full-catalog scripted
-journey; the working settlement dog is not a bonded player companion, and the
-timing witness is not low-end-device certification. Alpha53 remains a local
-SOURCE_CANDIDATE until its cumulative, CI, Pages, and exact-live gates pass.
-**Breathing Room** is next; **Living Voice** follows it.
+automatic WAIT interruption, all 42 current humans, all seventeen addressable
+wildlife rhythms, three simulated days of real resident and wildlife routine
+projection with daily persistence and bounded save growth, and one
+representative golden eagle across dematerialization/rematerialization. The
+packaged evidence spans stopped Title/Quiet Hour clocks, a real REST action,
+desktop Chart and Relief, and mobile portrait/landscape Relief using shared
+production authority; packaged mobile does not claim a separate Chart matrix.
+It is deliberately representative, not a full-catalog scripted journey. The
+working settlement dog is not a bonded player companion, packaged timing is not
+low-end-device certification, and the independent dog, physical interiors, and
+seasons remain broader work.
+
+Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3` is preserved
+beneath validation-only descendants `f6a8816`, `e3fe15d`, and final executable
+descendant
+`da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
+test files / 2,791 tests; Pages `35375612200` succeeded; all 5/5 exact live
+production files matched the 4,251,968-byte build; and the packaged runtime-only
+ASAR contains 10 entries / 4,472,022 bytes. Outer save v32, gameplay contract
+51, and tutorial/Field Manual version 63 are current. Directive 04_1A is closed
+and **LIVE_VERIFIED**; Directive 04_1B **Breathing Room** is active, and 04_2
+**The Living Voice** follows it.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

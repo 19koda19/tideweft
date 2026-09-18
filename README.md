@@ -5,24 +5,17 @@
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
 The current release is the **LIVE_VERIFIED**
-`0.3.3-alpha.39 — Saltmarsh Small Worlds`. Exact gameplay commit
-`40bfeebde94729ffb1034764ffba3e18100ac1fc` is preserved beneath the
-timeout-only verification descendants `7455fd0` and
-`c67f30b10066f60372d2cf84e1e6eacae1cbd31f`; neither descendant changes
-production code or artifacts. CI `34905718204` and Pages `34905718214` each
-passed 275 test files / 2,633 checks for `c67f30b`, and the first
-cache-bypassed comparison matched all 5/5 mechanics-bearing production files
-byte-for-byte. The later release-surface reconciliation changes only public
-documentation and bundled explanatory copy; its exact five-file artifact is
-attested in the GitHub Pages section below.
+`0.3.3-alpha.53 — The Turning Day`. Exact source feature commit
+`a419f774260292331e8c93ebc65ee3fd5125f7c3` is preserved beneath the
+validation-only descendants `f6a8816`, `e3fe15d`, and
+`da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` and Pages
+`35375612200` succeeded after the 290-test-file / 2,791-check release gate, and
+the cache-bypassed live comparison matched all five production files exactly.
+The exact deployed artifact is recorded in the GitHub Pages section below.
 
-The working tree is now preparing `0.3.3-alpha.53 — The Turning Day` as a
-local **SOURCE_CANDIDATE**. It closes the bounded day/night architecture with
-production-backed multi-day persistence, lawful WAIT interruption,
-frame-cadence authority, streaming continuity, and packaged desktop/mobile
-evidence. It is not yet pushed, published, or `LIVE_VERIFIED`; the release gate
-still requires cumulative validation, CI, Pages, and an exact deployed-build
-comparison.
+Alpha 39 remains preserved below as the historical biodiversity closure for
+Directive 04_1. Alpha 53 closes The Turning Day; Directive 04_1B **Breathing
+Room** is active, and **Living Voice** follows it.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
@@ -55,8 +48,8 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **Open Country Ledger:** released Alpha 32 adds no species. Eligible existing wildlife derives from deterministic signed-region habitat, carrying capacity, food or prey support, territory, and density budgets, including lawful empty country. The starting harbor keeps bounded brown rats and anchored chicken and goat homes while its free-ranging cat is habitat-optional. Every active ecology owner shares one global group-atomic stable-distance top-K capped at 24 actors, and density is measured before that presentation cap. Current visual, tidal-activity, alarm, and the narrow marsh-fox/gray-wolf/cougar-to-eligible-solitary-rabbit mortality/body path may cross owner boundaries through one root-wide snapshot. Outer save 25 adds regional ecology root 1 and adopts normalized v24 exactly once through a conserved retain, redistribute, or non-death-retire disposition. Pristine regional baselines are rederived; only real deviations persist.
 - **Talus and Sky:** released Alpha 33 keeps the complete 24-record Alpha32 catalog as a frozen prefix and appends mountain goat, American pika, and golden eagle. Sparse Alpine authority is a sibling layer around the exact regional-ecology-v1 child: goats are addressable `HERD` members with shared directed-grade movement, pikas remain a conserved non-addressable talus aggregate, and a solitary eagle uses authenticated ridge soar/perch activity. A lawfully visible eagle can nonlethally quiet or redistribute pika activity through the existing visual/evidence/occlusion policy; a ridge between them blocks that pressure. All owners still share one group-atomic 24-actor materialization cap and one atomic commit. Outer save 26 wraps an authenticated v25 child exactly once without rewriting it. Chart, Relief, quick inspection, and ABOUT disclose only current lawful evidence. Relief presents eagle flight by elevating, flapping, and banking the state-based actor projection; this is not authoritative continuous 3D flight physics. This bounded first Alpine slice adds no new mortality, capture, exact pika target, reproduction, audible Living Voice, tactical combat, polar breadth, or Wave-F completion.
 - **Alpha 34–38 internal biodiversity checkpoints:** Coldwater Glint, the Arctic-fox cold shore, Breath Between Tides, Estuary Surface Break, and Marsh Channel Web preserve the exact 27-record Alpha33 catalog as their compatibility prefix, then append records 28–43 through sparse polar-shore, cold-shore, polar-consumer, and estuary-breadth owners. These were non-independent implementation checkpoints, not standalone public releases; their complete append-only lineage ships cumulatively in Alpha 39.
-- **Saltmarsh Small Worlds:** released Alpha 39 preserves that complete forty-three-record checkpoint lineage and the exact first two append-only breadth epochs, then adds eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44–47. Mosquitoes and periwinkles are conserved non-addressable aggregates over at most two authenticated anchors; seaside sparrows form one group-atomic flock of two to four; the terrapin is solitary. Sparrows require their local mosquito substrate and terrapins require periwinkle, while shared territory, density, and quiet gates preserve lawful absence. The final cohort reuses the existing identity, habitat, activity, perception, locomotion, group, aggregate, persistence, knowledge, and dual-view presentation owners. Breadth epoch 3 keeps outer save 30 and `RegionalEcologyStateV6`, preserves earlier epochs as an exact prefix, and cannot reroll on reload. This closes Directive 04_1 at exactly 45 core-wildlife profiles / 47 total living records. It adds no bites, disease, exact insect or snail actors, capture or consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight. Shared performance, seamless-crossing, conservation, and representative emergence coverage validate the architecture without a species-by-species or N² matrix. At that checkpoint, the next work was **The Turning Day**.
-- **The Turning Day:** local Alpha 53 completes the bounded daily-continuity architecture accumulated through Alpha 40–52. One deterministic civil clock drives outdoor light, WAIT, REST, SLEEP, all forty-two current residents, the relationship-bearing settlement working dog, and the seventeen existing wildlife activity profiles. Physical arrival, ordinary locomotion, danger, work, weather, needs, and lawful perception still decide what happens; dusk never teleports or commands an actor. Closure evidence uses shared production owners and representative witnesses rather than a scripted all-species matrix: a three-day resident/wildlife soak with daily persistence and bounded growth, exact frame-cadence equivalence, lawful automatic WAIT interruption, actor dematerialization/rematerialization, and packaged desktop plus mobile recovery controls. Packaged mobile covers Relief while desktop covers Chart and Relief through the same authority. The working dog is not a bonded player companion, and packaged timing is a regression/liveness floor rather than a universal low-end performance claim. **Breathing Room** is next; **Living Voice** follows it.
+- **Saltmarsh Small Worlds:** released Alpha 39 preserves that complete forty-three-record checkpoint lineage and the exact first two append-only breadth epochs, then adds eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44–47. Mosquitoes and periwinkles are conserved non-addressable aggregates over at most two authenticated anchors; seaside sparrows form one group-atomic flock of two to four; the terrapin is solitary. Sparrows require their local mosquito substrate and terrapins require periwinkle, while shared territory, density, and quiet gates preserve lawful absence. The final cohort reuses the existing identity, habitat, activity, perception, locomotion, group, aggregate, persistence, knowledge, and dual-view presentation owners. Breadth epoch 3 keeps outer save 30 and `RegionalEcologyStateV6`, preserves earlier epochs as an exact prefix, and cannot reroll on reload. This historical Directive 04_1 closure reached exactly 45 core-wildlife profiles / 47 total living records. It added no bites, disease, exact insect or snail actors, capture or consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight. At that checkpoint, **The Turning Day** was next; it is now released as Alpha 53.
+- **The Turning Day:** released Alpha 53 completes the bounded daily-continuity architecture accumulated through Alpha 40–52. One deterministic civil clock drives outdoor light, WAIT, REST, SLEEP, all forty-two current residents, the relationship-bearing settlement working dog, and the seventeen existing wildlife activity profiles. Physical arrival, ordinary locomotion, danger, work, weather, needs, and lawful perception still decide what happens; dusk never teleports or commands an actor. Closure evidence uses shared production owners and representative witnesses rather than a scripted all-species matrix: a three-day resident/wildlife soak with daily persistence and bounded growth, exact frame-cadence equivalence, lawful automatic WAIT interruption, actor dematerialization/rematerialization, and packaged desktop plus mobile recovery controls. Packaged mobile covers Relief while desktop covers Chart and Relief through the same authority. The working dog is not a bonded player companion, and packaged timing is a regression/liveness floor rather than a universal low-end performance claim. Directive 04_1B **Breathing Room** is active; **Living Voice** follows it.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
 - **Responsive river recovery:** desktop Shift now braces even when the document body or HUD has focus, with immediate BRACING copy and a color-independent planted marker in Chart and Relief. If stamina or stability still collapses in deep current, the courier becomes ADRIFT instead of being ejected to a bank: hold WASD/arrows or tap toward shallows to paddle, release movement to float and recover breath, then rise only after finding standable water with enough stamina. The current remains authoritative, full packs weaken a stroke, and separated physical parcels continue their own journey.
@@ -72,7 +65,16 @@ The published **Phase 10: Tide Harps** preview lets one Reed mat, one Tide ancho
 
 ## What is playable
 
-Each seed now creates one continuous deterministic terrain world. The preserved original 96 × 72 tidal country contains its well-separated harbor network, 42 persistent generated human residents, five resource economies, changing weather, shortage-driven promises, civic projects, and two distinct generated dogs. Walking beyond that old extent requires no edge action or transition: terrain is prepared ahead, exact negative coordinates work, and the same chart, cargo, route, camera, field kit, and persistent objects continue. Alpha 0.1's existing 64 × 48 saves retain their authored world rather than being regenerated. Released Alpha 31 completed the twenty-four-record catalog prefix. Released Alpha 32 distributes eligible existing wild populations through signed-region habitat, capacity, food/prey, territory, and density rules instead of keeping the compatibility assemblage around world start; empty regions remain empty. Released Alpha 33 appends mountain goat, American pika, and golden eagle through a sparse Alpine sibling while preserving that exact prefix. Released Alpha 39 cumulatively ships the internal Alpha34–38 append lineage and its final four-profile cohort, reaching exactly 45 core-wildlife profiles / 47 total living records without rewriting the 27-record Alpha33 compatibility prefix. Generated distant settlements, worldwide species breadth, player/dog/human/broader-animal or group-member mortality, reproduction and population recovery, live decomposition, body drift/drag/harvest, complete scent tracking, and full actor-to-actor ecology remain later work. The main loop is:
+Each seed now creates one continuous deterministic terrain world. The preserved original 96 × 72 tidal country contains its well-separated harbor network, 42 persistent generated human residents, five resource economies, changing weather, shortage-driven promises, civic projects, and two distinct generated dogs. Walking beyond that old extent requires no edge action or transition: terrain is prepared ahead, exact negative coordinates work, and the same chart, cargo, route, camera, field kit, and persistent objects continue. Alpha 0.1's existing 64 × 48 saves retain their authored world rather than being regenerated. Released Alpha 31 completed the twenty-four-record catalog prefix. Released Alpha 32 distributes eligible existing wild populations through signed-region habitat, capacity, food/prey, territory, and density rules instead of keeping the compatibility assemblage around world start; empty regions remain empty. Released Alpha 33 appends mountain goat, American pika, and golden eagle through a sparse Alpine sibling while preserving that exact prefix. Released Alpha 39 cumulatively ships the internal Alpha34–38 append lineage and its final four-profile cohort, reaching exactly 45 core-wildlife profiles / 47 total living records without rewriting the 27-record Alpha33 compatibility prefix. Generated distant settlements, worldwide species breadth, player/dog/human/broader-animal or group-member mortality, reproduction and population recovery, live decomposition, body drift/drag/harvest, complete scent tracking, and full actor-to-actor ecology remain later work.
+
+Alpha 53 adds one saved civil clock and three explicit time actions through the
+ordinary simulation: **WAIT 10 MIN**, **REST 30 MIN** on stable dry footing
+below full stamina, and settlement-anchored **SLEEP TO DAWN** during Dusk or
+Night outside storms. Their Cancel or Wake controls act at a committed step
+boundary, preserving elapsed time and consequences. Quiet Hour is the separate
+zero-time save-and-stop surface.
+
+The main loop is:
 
 1. Choose a physical cargo promise in the scrollable **Promises** panel.
 2. Reach its explicit **PICK UP** harbor and choose **Pick up cargo here** (or press E when it is the only local pickup).
@@ -103,6 +105,7 @@ The campaign resolves when every settlement belongs to a sufficiently redundant 
 - Alpha 31 advances outer save 24, habitat 11, gameplay contract 29, Field Manual 41, and the catalog to twenty-four records. Sealed version-23 saves preserve the exact habitat-10 source/population prefix and all mortality, body, claim, and consumption state before evaluating solitary cougar and brown-bear population records at that same source; only habitat-supported populations receive actors. Shared properties, conservation, signed-world determinism, bounded performance, and a representative predator/scavenger chain validate the abstraction rather than adding per-species or N² tests.
 - Released Alpha 32 advances outer save 25, gameplay contract 30, and Field Manual 42 while habitat 11, core-ecology patch 3, aggregate record 5, and the twenty-four-record catalog remain sealed. Regional ecology root 1 derives lawful signed-region baselines and stores only deviations. Normalized v24 adoption records one deterministic group-atomic retain, redistribute, or non-death-retire disposition without deleting or duplicating actor, population, body, item, cargo, Promise, or history truth.
 - Released Alpha 39 advances the cumulative lineage to outer save 30, `RegionalEcologyStateV6`, gameplay contract 37, Field Manual 49, and forty-seven living records while habitat 11, core-ecology patch 3, and aggregate record 5 remain sealed. The exact Alpha33 `RegionalEcologyStateV2`/outer-v26 boundary survives as a compatibility prefix beneath polar-shore, cold-shore, polar-consumer, and append-only breadth owners. Breadth epochs 1–3 preserve their prior activations exactly, and every layer shares one group-atomic 24-actor cap and atomic cross-layer commit.
+- Released Alpha 53 ships outer save 32, gameplay contract 51, and Field Manual 63. An in-progress REST or SLEEP action persists at its exact committed step and resumes after reload; WAIT remains transient. Simulation format 4, `RegionalEcologyStateV6`, wildlife actor version 1, and established actor identities remain unchanged.
 - Continuous terrain in every direction with exact global sampling, negative-coordinate support, a bounded 120 × 120 moving frame, deterministic prefetch, sparse durable world changes, persistent cartography, and exact Chart/Relief camera rebasing. The quiet HUD reports E/N world coordinates; remote Promise and report guidance retains its harbor name, global distance, and bearing.
 - Continuous foot/wading/skiff travel with stamina, active bracing, terrain-driven footing and stability, deterministic stumbles/falls, automatically derived Rest/Steady/Swift state, fragile shock, perishable freshness, depth sounding, discovery, visible magnitude-scaled surface-current direction, emergency camp, controllable ADRIFT recovery, and infrastructure-enabled rescue.
 - A civic field kit: the Sounding line is available immediately; completed Crossings, Ferries, and Beacons can entrust visiting couriers with Marsh stilts, a Tide sail, and a Storm kite.
@@ -146,11 +149,21 @@ The world canvas must have focus for directional travel keys. Shift-to-brace rem
 | Two-finger twist (mobile) | Spin Relief 3D without also charting a destination |
 | Mouse wheel | Zoom either world view |
 | Escape / right click | Cancel the current pointer destination |
+| WAIT 10 MIN | Cancel a route, then advance ten displayed minutes through ordinary simulation; the same control shows Cancel and the truthful time remaining |
+| REST 30 MIN / SLEEP TO DAWN | Recover on eligible stable dry footing, or sleep at a settlement during Dusk or Night; the same control becomes Cancel or Wake |
 | T on desktop / ? button on mobile | Open the complete field manual |
 | PROMISES + / PROMISES − (portrait or short landscape phones) | Open or fold the full-size Promises sheet; the four vitals and touch controls remain available |
 | KIT (mobile) | Open the safe-area PACK / MAKE / MEND inventory and crafting surface |
 
 Holding Shift—or holding **BRACE** on mobile—trades speed for a higher currently supported stability percentage and fragile-cargo protection. Pace is read-only: **REST** means still, exhausted, floating ADRIFT, or recovering; **STEADY** is ordinary travel or an active paddle stroke; **SWIFT** appears automatically downhill or when controlled travel is carried with the current. Completed caches shelter perishable food from freshness loss while you are there. The HUD always names the current stability percentage and its strongest terrain, water, weather, motion, load, and support causes.
+
+WAIT, REST, and SLEEP never pause weather, tides, cargo, actors, ecology,
+Promises, exposure, or hazards. Movement, another deliberate field action, a
+physical incident, invalid footing or settlement authority, storms, and
+qualifying lawful disturbance can cancel or wake the courier only after the
+triggering step commits. WAIT grants no recovery and does not resume after a
+reload; REST and SLEEP resume from their saved step. The read-only **REST**
+pace label remains distinct from the **REST 30 MIN** action.
 
 Selecting the visible dog opens its non-pausing ABOUT surface and the five first-living-web choices. **ASK FOR HELP** and **SUGGEST SECURING BELONGINGS** are requests to the nearby porter, not direct inventory commands. **WAIT AND WATCH** stops the current automatic route for a short observation. **ROUTE AROUND THIS SPOT** requires an existing automatic route and computes a genuine path to the same destination that avoids the dog's observed location. **LEAVE** closes the interaction.
 
@@ -158,7 +171,10 @@ Selecting directly visible wildlife opens the same non-pausing ABOUT surface wit
 
 Desktop world clicks route to resources but never harvest remotely: step onto the marked tile and press E. On touch, tapping a visible resource is the explicit gather command, so it routes to the exact tile and takes one unit on arrival. Either path rejects the whole action without changing the patch if the pack lacks room or only its final living unit remains. KIT can be opened between harbors; the tide, weather, residents, and route continue while PACK, MAKE, or MEND is visible.
 
-There is no manual in-play pause. Open **Quiet Hour** for a saved causal recap, or open the title to save and step away; either safely halts world and player ticks until you continue.
+There is no manual in-play pause. Open **Quiet Hour** for a saved causal recap
+or open the title to save and step away; either safely halts world and player
+ticks until you continue. Quiet Hour's **Save & return** is zero-time: it never
+finishes a WAIT, REST, or SLEEP interval behind the player's back.
 
 Relief 3D travel is camera-relative: after orbiting with J/L, drag, or a two-finger twist, WASD/arrows continue to mean screen-left, screen-right, forward, and back. A pointer-transparent N compass stays north-up in Chart and turns with the Relief camera so world north remains legible without changing any simulation direction. In clear air, broad terrain reaches toward 52 tiles, remains fully legible through 34, and feathers across the final 18; exact people, parcels, resources, water detail, labels, actions, and pointer targets still use the shorter 10-tile field. Terrain that has just left broad sight keeps a sub-second visual impression before easing into dim durable Chart memory or uncharted darkness, and the same bounded scalar buffer follows a quick Chart/Relief switch. Exact detail disappears immediately; no perception memory is serialized.
 
@@ -171,6 +187,13 @@ Physical cargo promises and signed reports are different jobs. A promise moves a
 The game exposes one local autosave and enters it automatically on launch—there is no routine Continue gate. It saves periodically, when the page is hidden or closed, when the title is opened, when Quiet Hour begins, and immediately after a new world is confirmed. The simulation never advances while the game is closed. Replacing a healthy autosave is deliberately explicit: open the title through Quiet Hour, type `restartrestartrestart` exactly in **Begin again**, choose **Unlock restart**, enter a non-empty new Seed phrase, then choose **START**. Phone-keyboard blur and ordinary title refreshes preserve the in-progress unlock, while closing and reopening the title clears it. Mistyping, a blank seed, or a rapid second START changes nothing, and unlocking alone performs no storage write. If the stored session is unreadable or two storage copies claim the same version with different contents, neither is guessed into play: a persistent visible title warning requires a deliberate non-empty seed, and it remains until that higher-version replacement is durable. If either configured storage backend cannot be read, the title instead shows **LOCAL SAVE UNAVAILABLE**, disables Continue and both world-creation forms, performs no write, and asks for a reload when both stores are available.
 
 Saves are local-first and remain on the player's device. IndexedDB is the primary store and localStorage carries a mirrored fallback. Healthy primary writes mirror the complete record, while compact version/fingerprint fences detect known rollback and same-version divergence. A launch adopts a record only after both configured stores can be read and compared; a partial or total read outage fails closed even when one survivor looks plausible. Reads compare save era, generation, timestamp, and world tick in that order; overlapping lifecycle/autosave requests coalesce behind an in-flight write, and a durable deletion marker prevents a stale primary copy from resurrecting after reconciliation. A stale tab or fork is not allowed to keep retrying over a different or newer durable record: saving stops, the warning persists across the field and all major dialogs, and the player is told to reload. Ordinary write failures after a safely loaded world still retry with bounded backoff and a fresh world snapshot, but the warning clears only when the latest requested snapshot in the current era and generation is durable.
+
+Released Alpha 53 uses outer save version 32, gameplay contract 51, and Field
+Manual 63. Version 32 persists an active REST or SLEEP receipt at the exact
+world tick and partial fixed-step phase; hidden or closed time adds nothing,
+and version 31 adopts with no fabricated recovery action. WAIT remains a
+transient field action. Simulation format 4, `RegionalEcologyStateV6`, and
+wildlife actor version 1 remain unchanged.
 
 Each deliberate replacement advances the backward-compatible two-part era/generation version before timestamp/tick comparison, including a safe carry into the next era if the generation counter is saturated. If both counters are already at JavaScript's largest safe integer, the game refuses to wrap them and visibly asks the player to clear Tideweft's stored site data before beginning again. Released Alpha 24 used outer session version 17, habitat version 8, settlement ecology version 2, and aggregate ecology version 4. A sealed version-16 Storehouse Door save migrates exactly once: every habitat-7 population and anchor, actor, group, aggregate unit, item, Promise, custody record, store and food-lot identity, closure, loss history, evidence record, player fact, and world fact remains exact before the deterministic two-to-three-chicken flock, yard anchor, and settlement relationship are appended. The staged domestic food-use transaction retains the exact actor, lot, cause event, tick, and ordinal, so save interruption and reload cannot duplicate a bird, replay a meal, or consume secured stock. Deterministic nearest-24 spatial materialization still ranks lawful candidates by local distance with stable-ID ties, preserving overflow actors in coarse state. Earlier supported versions retain their established migration chain without inventing observations or duplicating actors or cargo. Current payload fences reject half-completed actor or ecology transactions, mismatched ownership, stale chart, downgrade, rollback, duplication, or silent deletion before adoption. Older valid sessions keep their contents and original estuary intact; unreadable or structurally incompatible records are quarantined rather than silently loaded or overwritten. New worlds use perpetual `wander`; valid older `drift` and `weave` fields remain readable without regaining timed semantics. That release used outer session version 17.
 
@@ -605,9 +628,48 @@ runtime-only Electron ASAR, desktop/mobile/title smoke, and clean invariant,
 save, release-surface, and visual audits. The first cache-bypassed five-file
 live comparison matched the tested production build exactly.
 
-### Released — Alpha 39 Saltmarsh Small Worlds
+### Released — Alpha 53 The Turning Day
 
-`0.3.3-alpha.39 — Saltmarsh Small Worlds` is **LIVE_VERIFIED**. It preserves
+`0.3.3-alpha.53 — The Turning Day` is the current **LIVE_VERIFIED** release.
+One deterministic civil clock now carries day, dusk, night, and dawn through
+outdoor light, the player's WAIT, REST, and SLEEP actions, all forty-two
+current residents, the settlement working dog, and the seventeen existing
+wildlife activity profiles. Work, travel, danger, storms, urgent needs, current
+watch or search, and lawful strong disturbance retain priority; the clock does
+not teleport an actor or manufacture a routine.
+
+**WAIT 10 MIN** advances ordinary simulation and can be cancelled at a
+committed boundary. On eligible stable dry footing, **REST 30 MIN** uses the
+same ordinary rules; at a settlement during Dusk or Night, the recovery control
+becomes **SLEEP TO DAWN**. Cancel or Wake preserves every completed consequence.
+REST and SLEEP persist at their exact committed step in outer save 32, while
+WAIT remains transient and Quiet Hour remains zero-time. Gameplay contract 51
+and Field Manual 63 describe this same boundary.
+
+Closure evidence covers exact frame-cadence authority, lawful automatic WAIT
+interruption, a production multi-day resident/wildlife soak with daily
+persistence and bounded growth, one stable actor across dematerialization and
+rematerialization, and packaged recovery controls. Packaged desktop covers
+Chart and Relief; packaged mobile covers portrait and landscape Relief, not a
+separate mobile Chart matrix. Its timing result is a regression/liveness floor,
+not low-end performance certification. The settlement working dog is not a
+bonded player companion. This release adds no species, population, house,
+interior, bed, occupational shift, hunger, thirst, health, death, Living Voice,
+or new reward.
+
+Exact source feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3`
+is preserved beneath validation-only descendants `f6a8816`, `e3fe15d`, and
+`da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` and Pages
+`35375612200` succeeded after 290 test files / 2,791 checks. The inspected web
+build contains 5 files totaling 4,251,968 bytes, and the runtime-only Electron
+ASAR contains 10 entries totaling 4,472,022 bytes. The cache-bypassed exact-live
+asset record appears below. Alpha 53 closes Directive 04_1A; Directive 04_1B
+**Breathing Room** is active, and **Living Voice** follows it.
+
+### Historical release — Alpha 39 Saltmarsh Small Worlds
+
+`0.3.3-alpha.39 — Saltmarsh Small Worlds` remains the **LIVE_VERIFIED**
+historical biodiversity closure. It preserves
 the complete 27-record Alpha33 catalog as a frozen compatibility prefix and
 cumulatively ships the append-only Alpha34–38 checkpoint lineage: Atlantic
 capelin, Arctic fox, harbor seal, polar bear, the five-record Estuary Surface
@@ -643,10 +705,12 @@ is preserved beneath timeout-only verification descendants `7455fd0` and
 or artifacts. CI `34905718204` and Pages `34905718214` each passed 275 test
 files / 2,633 checks for `c67f30b`, and the first cache-bypassed comparison
 matched all 5/5 mechanics-bearing production files byte-for-byte. The
-release-surface reconciliation changes only public documentation and bundled
-explanatory copy; the final exact artifact record appears below. This closes
-Directive 04_1's bounded release scope; **The Turning Day** is next, followed
-by **The Living Voice**.
+release-surface reconciliation changed only public documentation and bundled
+explanatory copy, and the cache-bypassed comparison matched that checkpoint's
+deployed production files exactly. This closed Directive 04_1's bounded
+biodiversity scope. At that historical checkpoint, **The Turning Day** was
+next; it later released as Alpha 53. Directive 04_1B **Breathing Room** is now
+active, and **Living Voice** follows it.
 
 ### Internal Alpha 34 checkpoint — Coldwater Glint
 
@@ -896,23 +960,21 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 [The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 39 release is **LIVE_VERIFIED** at exact gameplay commit
-`40bfeebde94729ffb1034764ffba3e18100ac1fc`, preserved beneath timeout-only
-verification descendants `7455fd0` and
-`c67f30b10066f60372d2cf84e1e6eacae1cbd31f`. CI `34905718204` and Pages
-`34905718214` each passed 275 test files / 2,633 checks for `c67f30b`, and a
-cache-bypassed comparison matched all five mechanics-bearing assets exactly.
-The release-surface reconciliation changes only public documentation and
-bundled explanatory copy. Its 4,072,751-byte production build was rebuilt,
-deployed, and cache-bypassed against the live site byte-for-byte:
+The current Alpha 53 release is **LIVE_VERIFIED** at exact source feature
+commit `a419f774260292331e8c93ebc65ee3fd5125f7c3`, preserved beneath
+validation-only descendants `f6a8816`, `e3fe15d`, and
+`da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` and Pages
+`35375612200` succeeded after the 290-test-file / 2,791-check release gate.
+The exact 5-file, 4,251,968-byte production build was rebuilt, deployed, and
+cache-bypassed against the live site byte-for-byte:
 
 | Asset | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `index.html` | 4,168 | `2ae250f47a7dcd01299a2062e8f577e713839bee7513e195908e7a05fe19cd4b` |
+| `index.html` | 4,168 | `a6f58db1148d9cc5abdeb0aae2e032c0c05ce35f49609e12e889ad0e246d7d49` |
 | `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
 | `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
-| `assets/index-CdPO4Wv0.js` | 3,960,441 | `fb0a6e09a8dea00baeab2cc754966dc6825fcabed921e0ec78937bdd26751ef6` |
-| `assets/index-BnNSHuv9.css` | 106,761 | `05ac88340ddce1bdde27d73638642979cdbaca4bf460d621ddcf52c94c114706` |
+| `assets/index-DCloWIYG.js` | 4,139,141 | `24f736bd3ad89a6c23a8aa780c67a9b26d98cb03ce1bfdb71a20a385ccefe5b7` |
+| `assets/index-BVRzIrq-.css` | 107,278 | `fc0b5a3b4af81b42664dbb73c57bbf8e1e4d1ad5f9e18a87aba3edfb7c3a7e77` |
 
 For future releases:
 
