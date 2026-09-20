@@ -7,6 +7,7 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
+  setCoreEcologyAggregateActivityIntensity,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
@@ -17,6 +18,7 @@ import { CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE } from "./coreWildlifeActor";
 import { advanceRegionalEcologyRoot, createPristineRegionalEcologyRoot } from "./regionalEcology";
 import {
   createRegionalEcologyState,
+  regionalEcologyResidentTransitionIsVisitationOnly,
   regionalEcologyRegionalResidentsForActiveRegions,
 } from "./regionalEcologyState";
 import {
@@ -94,15 +96,14 @@ type Fixture = Readonly<{
 
 let cachedFixture: Fixture | null = null;
 
-function fixture(): Fixture {
-  if (cachedFixture !== null) return cachedFixture;
+function fixtureAtTick(tick: number): Fixture {
   const homeHabitat = homeHabitatAt(POLAR_REGION);
   const home = createCoreEcologySettlementHomePatch({
     seed: SEED,
     habitat: homeHabitat,
-    tick: TICK,
+    tick,
   });
-  const root = createPristineRegionalEcologyRoot({ rootSeed: SEED, completedTick: TICK });
+  const root = createPristineRegionalEcologyRoot({ rootSeed: SEED, completedTick: tick });
   const regional = regionalEcologyRegionalResidentsForActiveRegions(
     root,
     SEED,
@@ -116,7 +117,12 @@ function fixture(): Fixture {
     activeResidents: regional,
   });
   const v2 = createFreshRegionalEcologyStateV2(v1, SEED);
-  cachedFixture = Object.freeze({ homeHabitat, v2 });
+  return Object.freeze({ homeHabitat, v2 });
+}
+
+function fixture(): Fixture {
+  if (cachedFixture !== null) return cachedFixture;
+  cachedFixture = fixtureAtTick(TICK);
   return cachedFixture;
 }
 
@@ -322,6 +328,13 @@ describe(`${ALPHA34_POLAR_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} regional eco
     expect(stableStringify(structuralReplay)).toBe(stableStringify(committed));
     expect(committed?.updatedAtTick).toBe(nextTick);
     expect(committed?.adoption?.transactionId).toBe(state.adoption?.transactionId);
+    expect(committed?.polarShoreRoot.regions).toEqual([]);
+    expect(committed?.polarShoreRoot.revision).toBe(
+      state.polarShoreRoot.revision,
+    );
+    expect(committed?.polarShoreRoot.lastEventOrdinal).toBe(
+      state.polarShoreRoot.lastEventOrdinal,
+    );
     const after = committed?.polarShoreActiveResidents[0]?.patch.aggregatePopulations[0];
     expect(after?.aggregateId).toBe(before.aggregateId);
     expect(after?.populationSize).toBe(before.populationSize);
@@ -338,6 +351,136 @@ describe(`${ALPHA34_POLAR_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} regional eco
       completedTick: nextTick,
       settlementHomeHabitat: homeHabitat,
     })).toBe(committed);
+
+    const polarOutput = polarOutputs[0];
+    const school = polarOutput?.patch.aggregatePopulations[0];
+    if (polarOutput === undefined || school === undefined) {
+      throw new Error("Wave-F polar composite could not stage a lawful deviation");
+    }
+    const changedIntensity = school.activitySignal.intensity === 1_000_000
+      ? 999_999
+      : school.activitySignal.intensity + 1;
+    const changedActivity = setCoreEcologyAggregateActivityIntensity(
+      polarOutput.patch,
+      {
+        aggregateId: school.aggregateId,
+        atTick: nextTick,
+        intensity: changedIntensity,
+      },
+    );
+    expect(changedActivity).not.toBeNull();
+    const deviated = commitRegionalEcologyStateV3ActiveProjection(
+      state,
+      projection,
+      {
+        base: baseInput,
+        polarShoreResidents: polarOutputs.map((entry) => (
+          entry.sourceKey === polarOutput.sourceKey
+            ? Object.freeze({ sourceKey: entry.sourceKey, patch: changedActivity! })
+            : entry
+        )),
+      },
+    );
+    expect(deviated).not.toBeNull();
+    expect(deviated?.polarShoreRoot.regions).toHaveLength(1);
+    expect(deviated?.polarShoreRoot.revision).toBe(
+      state.polarShoreRoot.revision + 1,
+    );
+    expect(
+      deviated?.polarShoreActiveResidents[0]
+        ?.patch.aggregatePopulations[0]
+        ?.activitySignal.intensity,
+    ).toBe(changedIntensity);
+  });
+
+  it("rederives a later-tick visitation-only polar school without sparse-root churn", () => {
+    const sourceTick = 138;
+    const targetTick = sourceTick + 1;
+    const { v2 } = fixtureAtTick(sourceTick);
+    const state = createFreshRegionalEcologyStateV3(v2, SEED);
+    const projection = projectionOf(state);
+    const polarOutputs = projection.polarShoreResidents.map(({ patch }) => {
+      const next = reconcileCoreEcologyPolarShoreResidentPatchAtTick(
+        patch,
+        targetTick,
+      );
+      if (next === null) {
+        throw new Error("Shared tidal policy rejected visitation-only polar output");
+      }
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(patch, next)).toBe(true);
+      return Object.freeze({ sourceKey: next.patchKey, patch: next });
+    });
+    expect(polarOutputs).not.toHaveLength(0);
+
+    const committed = commitRegionalEcologyStateV3ActiveProjection(
+      state,
+      projection,
+      {
+        base: {
+          base: {
+            root: advanceRegionalEcologyRoot(state.base.base.root, targetTick),
+            rootSeed: SEED,
+            settlementHome: null,
+            residents: projection.base.base.residents.map(({ patch }) => (
+              advanceProjectedPatchWithoutAction(patch, targetTick)
+            )),
+          },
+          alpineResidents: projection.base.alpineResidents.map(({ patch }) => (
+            advanceProjectedPatchWithoutAction(patch, targetTick)
+          )),
+        },
+        polarShoreResidents: polarOutputs,
+      },
+    );
+    expect(committed).not.toBeNull();
+    expect(committed?.updatedAtTick).toBe(targetTick);
+    expect(committed?.polarShoreRoot.updatedAtTick).toBe(targetTick);
+    expect(committed?.polarShoreRoot.regions).toEqual([]);
+    expect(committed?.polarShoreRoot.revision).toBe(
+      state.polarShoreRoot.revision,
+    );
+    expect(committed?.polarShoreRoot.lastEventOrdinal).toBe(
+      state.polarShoreRoot.lastEventOrdinal,
+    );
+    expect(stableStringify(
+      committed?.polarShoreActiveResidents.map(({ patch }) => patch),
+    )).toBe(stableStringify(polarOutputs.map(({ patch }) => patch)));
+  });
+
+  it("accepts an unchanged same-tick polar presentation without rewriting sparse authority", () => {
+    const state = createFreshRegionalEcologyStateV3(fixture().v2, SEED);
+    const projection = projectionOf(state);
+    const committed = commitRegionalEcologyStateV3ActiveProjection(
+      state,
+      projection,
+      {
+        base: {
+          base: {
+            root: state.base.base.root,
+            rootSeed: SEED,
+            settlementHome: null,
+            residents: projection.base.base.residents.map(({ sourceKey, patch }) => ({
+              sourceKey,
+              patch,
+            })),
+          },
+          alpineResidents: projection.base.alpineResidents.map(({ sourceKey, patch }) => ({
+            sourceKey,
+            patch,
+          })),
+        },
+        polarShoreResidents: projection.polarShoreResidents.map(({ sourceKey, patch }) => ({
+          sourceKey,
+          patch,
+        })),
+      },
+    );
+    expect(committed).not.toBeNull();
+    expect(committed?.updatedAtTick).toBe(state.updatedAtTick);
+    expect(committed?.polarShoreRoot).toBe(state.polarShoreRoot);
+    expect(committed?.polarShoreRoot.regions).toEqual([]);
+    expect(committed?.polarShoreRoot.revision).toBe(0);
+    expect(committed?.polarShoreRoot.lastEventOrdinal).toBe(0);
   });
 
   it("rederives the polar sibling from seamless signed and extreme-coordinate windows", () => {

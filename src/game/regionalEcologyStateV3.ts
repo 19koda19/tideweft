@@ -10,6 +10,10 @@ import {
 import { CORE_ECOLOGY_POLAR_SHORE_DERIVATION_KIND } from "./coreEcologyPolarShoreHabitat";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import {
+  normalizeRegionalEcologyResidentPatchForStorage,
+  regionalEcologyResidentTransitionIsVisitationOnly,
+} from "./regionalEcologyState";
+import {
   REGIONAL_ECOLOGY_STATE_V2_MAX_SERIALIZED_BYTES,
   bindRegionalEcologyStateV2ActiveProjection,
   canonicalRegionalEcologyStateV2ForWorld,
@@ -583,13 +587,31 @@ export function commitRegionalEcologyStateV3ActiveProjection(
       || sourceLineageHash(bound) !== original.lineageHash
       || !patchMaterializationIsGroupAtomic(bound)
     ) return null;
-    try {
-      polarShoreRoot = putRegionalPolarShoreEcologyResidentDeviation(
-        polarShoreRoot,
-        { rootSeed, patch: bound },
+    const normalized = normalizeRegionalEcologyResidentPatchForStorage(
+      bound,
+      base.updatedAtTick,
+    );
+    const normalizedProjection = normalizeRegionalEcologyResidentPatchForStorage(
+      projected.patch,
+      projection.atTick,
+    );
+    if (normalized === null || normalizedProjection === null) return null;
+    const presentationOnly = base.updatedAtTick === projection.atTick
+      && stableStringify(normalized) === stableStringify(normalizedProjection);
+    const visitationOnly = base.updatedAtTick > projection.atTick
+      && regionalEcologyResidentTransitionIsVisitationOnly(
+        normalizedProjection,
+        normalized,
       );
-    } catch {
-      return null;
+    if (!presentationOnly && !visitationOnly) {
+      try {
+        polarShoreRoot = putRegionalPolarShoreEcologyResidentDeviation(
+          polarShoreRoot,
+          { rootSeed, patch: normalized },
+        );
+      } catch {
+        return null;
+      }
     }
   }
   try {
