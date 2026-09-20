@@ -15,6 +15,10 @@ export interface RendererWorkCounts {
   readonly perceptionMaterialSubmissions?: number;
   /** Visible chunk-local segments consumed by those perception submissions. */
   readonly perceptionMaterialSegments?: number;
+  /** Passive charted field-resource halos submitted in the current Relief frame. */
+  readonly passiveFieldResourceHaloCount?: number;
+  /** Actual vertices emitted by those passive screen-space-LOD halos. */
+  readonly passiveFieldResourceHaloVertices?: number;
   /** Projected entity records considered by render passes, before pass-local culling. */
   readonly projectedEntityCandidates?: number;
   readonly labels?: number;
@@ -75,6 +79,8 @@ function boundedCounts(counts: RendererWorkCounts | undefined): RendererWorkCoun
   const terrainTiles = boundedCount(counts.terrainTiles);
   const perceptionMaterialSubmissions = boundedCount(counts.perceptionMaterialSubmissions);
   const perceptionMaterialSegments = boundedCount(counts.perceptionMaterialSegments);
+  const passiveFieldResourceHaloCount = boundedCount(counts.passiveFieldResourceHaloCount);
+  const passiveFieldResourceHaloVertices = boundedCount(counts.passiveFieldResourceHaloVertices);
   const projectedEntityCandidates = boundedCount(counts.projectedEntityCandidates);
   const labels = boundedCount(counts.labels);
   const particles = boundedCount(counts.particles);
@@ -84,6 +90,10 @@ function boundedCounts(counts: RendererWorkCounts | undefined): RendererWorkCoun
       ? {}
       : { perceptionMaterialSubmissions }),
     ...(perceptionMaterialSegments === undefined ? {} : { perceptionMaterialSegments }),
+    ...(passiveFieldResourceHaloCount === undefined ? {} : { passiveFieldResourceHaloCount }),
+    ...(passiveFieldResourceHaloVertices === undefined
+      ? {}
+      : { passiveFieldResourceHaloVertices }),
     ...(projectedEntityCandidates === undefined ? {} : { projectedEntityCandidates }),
     ...(labels === undefined ? {} : { labels }),
     ...(particles === undefined ? {} : { particles }),

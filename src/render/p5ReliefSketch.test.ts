@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AggregateWildlifeEvidenceView,
   DogView,
+  FieldResourceNodeView,
   TideweftView,
   WeatherView,
   WildlifeCarcassView,
@@ -617,6 +618,61 @@ describe("Relief renderer telemetry", () => {
     });
     expect(telemetry.rawFrameIntervalMeanMs ?? 0).toBeGreaterThan(0);
     expect(telemetry.drawCpuMeanMs ?? 0).toBeGreaterThan(0);
+    harness.renderer.destroy();
+  });
+
+  it("reduces only passive field-resource halos while hover and sounding stay full-detail", () => {
+    const source = view("passive-resource-halo-lod", { x: 48, y: 48 });
+    const charted: FieldResourceNodeView = {
+      id: "resource:charted-cordreed",
+      material: "cordreed",
+      label: "Cordreed",
+      position: { x: 12, y: 12 },
+      knowledge: "charted",
+      currentVisibility: 1,
+    };
+    const harness = renderHarness(source);
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const vertex = harness.instance.vertex as ReturnType<typeof vi.fn>;
+
+    // Warm retained terrain so per-frame vertex deltas contain only immediate
+    // presentation work.
+    harness.draw();
+    vertex.mockClear();
+    harness.draw();
+    const baselineVertices = vertex.mock.calls.length;
+
+    harness.setView({ ...source, fieldResources: [charted] });
+    vertex.mockClear();
+    harness.draw();
+    const passiveTelemetry = harness.renderer.telemetry();
+    const passiveVertices = vertex.mock.calls.length - baselineVertices;
+    expect(passiveTelemetry.passiveFieldResourceHaloCount).toBe(1);
+    expect(passiveTelemetry.passiveFieldResourceHaloVertices).toBe(passiveVertices);
+    expect([13, 25]).toContain(passiveVertices);
+    expect(passiveVertices).toBeLessThan(49);
+
+    harness.setView({
+      ...source,
+      fieldResources: [{ ...charted, knowledge: "sounded", rarity: "common", stockUnits: 1 }],
+    });
+    vertex.mockClear();
+    harness.draw();
+    expect(vertex.mock.calls.length - baselineVertices).toBe(49);
+    expect(harness.renderer.telemetry()).toMatchObject({
+      passiveFieldResourceHaloCount: 0,
+      passiveFieldResourceHaloVertices: 0,
+    });
+
+    harness.setView({ ...source, fieldResources: [charted] });
+    harness.canvas.fire("pointermove", pointer(harness.canvas));
+    vertex.mockClear();
+    harness.draw();
+    expect(vertex.mock.calls.length - baselineVertices).toBe(49);
+    expect(harness.renderer.telemetry()).toMatchObject({
+      passiveFieldResourceHaloCount: 0,
+      passiveFieldResourceHaloVertices: 0,
+    });
     harness.renderer.destroy();
   });
 

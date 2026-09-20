@@ -215,6 +215,8 @@ describe("renderer telemetry", () => {
       terrainTiles: 12.9,
       perceptionMaterialSubmissions: 4.9,
       perceptionMaterialSegments: 11.8,
+      passiveFieldResourceHaloCount: 7.9,
+      passiveFieldResourceHaloVertices: 91.8,
       projectedEntityCandidates: -3,
       labels: Number.MAX_SAFE_INTEGER,
       particles: 8,
@@ -224,6 +226,8 @@ describe("renderer telemetry", () => {
       terrainTiles: 12,
       perceptionMaterialSubmissions: 4,
       perceptionMaterialSegments: 11,
+      passiveFieldResourceHaloCount: 7,
+      passiveFieldResourceHaloVertices: 91,
       projectedEntityCandidates: 0,
       labels: RENDERER_TELEMETRY_MAX_DRAW_COUNT,
       particles: 8,
@@ -234,6 +238,8 @@ describe("renderer telemetry", () => {
       terrainTiles: 9,
       perceptionMaterialSubmissions: Number.NaN,
       perceptionMaterialSegments: Number.POSITIVE_INFINITY,
+      passiveFieldResourceHaloCount: Number.NaN,
+      passiveFieldResourceHaloVertices: Number.POSITIVE_INFINITY,
       projectedEntityCandidates: Number.NaN,
       labels: Number.POSITIVE_INFINITY,
       particles: "many",
@@ -242,6 +248,8 @@ describe("renderer telemetry", () => {
     expect(tracker.getSnapshot()).not.toHaveProperty("projectedEntityCandidates");
     expect(tracker.getSnapshot()).not.toHaveProperty("perceptionMaterialSubmissions");
     expect(tracker.getSnapshot()).not.toHaveProperty("perceptionMaterialSegments");
+    expect(tracker.getSnapshot()).not.toHaveProperty("passiveFieldResourceHaloCount");
+    expect(tracker.getSnapshot()).not.toHaveProperty("passiveFieldResourceHaloVertices");
     expect(tracker.getSnapshot()).not.toHaveProperty("labels");
     expect(tracker.getSnapshot()).not.toHaveProperty("particles");
   });

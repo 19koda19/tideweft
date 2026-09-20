@@ -114,6 +114,11 @@ import {
 import { hitTestFieldResource } from "./resourceHitTest";
 import { FIELD_RESOURCE_PRESENTATION } from "./resourcePresentation";
 import {
+  RELIEF_GROUND_RING_FULL_SEGMENTS,
+  passiveReliefRingSegments,
+  projectedReliefRingRadiusPixels,
+} from "./reliefRingLod";
+import {
   beginLooseCargoPointerPress,
   cancelLooseCargoPointerPress,
   hitTestLooseCargoScreen,
@@ -434,6 +439,13 @@ interface ReliefTerrainDrawResult {
   readonly perceptionMaterialSubmissions: number;
   readonly perceptionMaterialSegments: number;
 }
+
+interface ReliefFieldResourceDrawResult {
+  readonly passiveFieldResourceHaloCount: number;
+  readonly passiveFieldResourceHaloVertices: number;
+}
+
+interface ReliefSceneDrawResult extends ReliefTerrainDrawResult, ReliefFieldResourceDrawResult {}
 
 interface ScanRipple {
   readonly point: WorldPoint;
@@ -2777,8 +2789,8 @@ export function createTideweftReliefRenderer(
       color: string,
       alpha: number,
       completion = 1,
-    ): void => {
-      const segments = 48;
+      segments = RELIEF_GROUND_RING_FULL_SEGMENTS,
+    ): number => {
       const count = Math.max(2, Math.floor(segments * clamp(completion, 0, 1)));
       p.noFill();
       p.stroke(withAlpha(color, alpha));
@@ -2799,6 +2811,7 @@ export function createTideweftReliefRenderer(
         p.vertex(sample.x, -height, sample.y);
       }
       p.endShape();
+      return count + 1;
     };
 
     const drawFieldResourceNode = (
@@ -2951,7 +2964,9 @@ export function createTideweftReliefRenderer(
     const drawFieldResources = (
       view: TideweftView,
       cache: CachedReliefMesh,
-    ): void => {
+      camera: ReliefCameraState,
+      trackCounts: boolean,
+    ): ReliefFieldResourceDrawResult => {
       const reachSquared = (orbit.distance * 1.18) ** 2;
       const visible = view.fieldResources
         .filter((node) => !view.perception || node.currentVisibility === 1)
@@ -2971,6 +2986,9 @@ export function createTideweftReliefRenderer(
           )?.node.id
         : undefined;
       const size = view.terrain.tileSize * 0.42;
+      const viewportHeight = Math.max(1, p.height);
+      let passiveFieldResourceHaloCount = 0;
+      let passiveFieldResourceHaloVertices = 0;
 
       for (const { node } of visible) {
         const surface = discoveredReliefSurfaceHeightAt(
@@ -3006,18 +3024,40 @@ export function createTideweftReliefRenderer(
           }
         } else {
           // Keep an understated material-colored halo around every discovered
-          // find so low-poly silhouettes stay distinct from lit terrain.
-          drawGroundRing(
+          // find so low-poly silhouettes stay distinct from lit terrain. Its
+          // screen-space tessellation changes only visual detail; sounded and
+          // hovered resource rings retain the complete authored geometry.
+          const radius = view.terrain.tileSize * 0.29;
+          const projection = projectReliefPoint(
+            node.position,
+            surface + 3,
+            camera,
+            { width: p.width, height: p.height },
+          );
+          const segments = passiveReliefRingSegments(projectedReliefRingRadiusPixels({
+            worldRadius: radius,
+            depth: projection.depth,
+            viewportHeight,
+            verticalFov: camera.verticalFov,
+          }));
+          const vertices = drawGroundRing(
             view,
             cache,
             node.position,
-            view.terrain.tileSize * 0.29,
+            radius,
             FIELD_RESOURCE_PRESENTATION[node.material].reliefColor,
             96,
+            1,
+            segments,
           );
+          if (trackCounts) {
+            passiveFieldResourceHaloCount += 1;
+            passiveFieldResourceHaloVertices += vertices;
+          }
         }
         drawFieldResourceNode(node, surface, size);
       }
+      return { passiveFieldResourceHaloCount, passiveFieldResourceHaloVertices };
     };
 
     const drawLooseCargo = (
@@ -6377,7 +6417,7 @@ export function createTideweftReliefRenderer(
       terrainMemory: TerrainPerceptionMemoryState,
       now: number,
       trackCounts: boolean,
-    ): ReliefTerrainDrawResult => {
+    ): ReliefSceneDrawResult => {
       const camera = currentCameraState();
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       setCamera(camera);
@@ -6407,7 +6447,7 @@ export function createTideweftReliefRenderer(
       const terrain = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
-      drawFieldResources(view, cache);
+      const resourceRings = drawFieldResources(view, cache, camera, trackCounts);
       drawSurfaceCurrents(view, cache, now);
       drawLooseCargo(view, cache, now);
       drawRoutes(view, cache, camera);
@@ -6426,7 +6466,7 @@ export function createTideweftReliefRenderer(
       setCamera(camera);
       drawWind(view.weather, now);
       drawRain(view.weather, now);
-      return terrain;
+      return { ...terrain, ...resourceRings };
     };
 
     p.setup = (): void => {
@@ -6484,6 +6524,8 @@ export function createTideweftReliefRenderer(
                 terrainTiles: 0,
                 perceptionMaterialSubmissions: 0,
                 perceptionMaterialSegments: 0,
+                passiveFieldResourceHaloCount: 0,
+                passiveFieldResourceHaloVertices: 0,
                 projectedEntityCandidates: 0,
                 labels: labelNodes.size,
                 particles: 0,
@@ -6522,6 +6564,8 @@ export function createTideweftReliefRenderer(
               terrainTiles: terrain.terrainTiles,
               perceptionMaterialSubmissions: terrain.perceptionMaterialSubmissions,
               perceptionMaterialSegments: terrain.perceptionMaterialSegments,
+              passiveFieldResourceHaloCount: terrain.passiveFieldResourceHaloCount,
+              passiveFieldResourceHaloVertices: terrain.passiveFieldResourceHaloVertices,
               projectedEntityCandidates: projectedRendererEntityCandidateCount(latestView),
               labels: labelNodes.size,
               // Relief currently has no generic ParticleView submission pass.
