@@ -67,6 +67,7 @@ vi.mock("p5", () => {
       ) => vi.fn((...args: unknown[]) => {
         p5Harness.materialTrace.push({ method, args });
       });
+      let geometryOrdinal = 0;
       const target: Record<PropertyKey, unknown> = {
         width: 320,
         height: 240,
@@ -93,6 +94,16 @@ vi.mock("p5", () => {
         resizeCanvas: vi.fn(),
         noLoop: vi.fn(),
         loop: vi.fn(),
+        buildGeometry: vi.fn((callback: () => void) => {
+          callback();
+          geometryOrdinal += 1;
+          return {
+            gid: `fake-relief-geometry-${geometryOrdinal}`,
+            clearColors: vi.fn(),
+          };
+        }),
+        model: vi.fn(),
+        freeGeometry: vi.fn(),
         remove: vi.fn(),
       };
       const instance = new Proxy(target, {
@@ -603,6 +614,62 @@ describe("Relief renderer telemetry", () => {
     expect(telemetry.rawFrameIntervalMeanMs ?? 0).toBeGreaterThan(0);
     expect(telemetry.drawCpuMeanMs ?? 0).toBeGreaterThan(0);
     harness.renderer.destroy();
+  });
+
+  it("retains terrain batches across frames and owns their complete GPU lifecycle", () => {
+    const source = view("retained-relief", { x: 48, y: 48 });
+    const harness = renderHarness(source);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const model = harness.instance.model as ReturnType<typeof vi.fn>;
+    const freeGeometry = harness.instance.freeGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const firstBuildCount = buildGeometry.mock.calls.length;
+    const firstModelCount = model.mock.calls.length;
+    expect(firstBuildCount).toBeGreaterThan(0);
+    expect(firstModelCount).toBeGreaterThan(0);
+    for (const [geometry] of model.mock.calls) {
+      expect(geometry).toEqual(expect.objectContaining({
+        gid: expect.stringContaining("fake-relief-geometry-"),
+      }));
+      expect(geometry.clearColors).toHaveBeenCalledOnce();
+    }
+
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(firstBuildCount);
+    expect(model.mock.calls.length).toBeGreaterThan(firstModelCount);
+    expect(freeGeometry).not.toHaveBeenCalled();
+
+    harness.setView({
+      ...source,
+      terrain: {
+        ...source.terrain,
+        revision: "retained-relief-raised",
+        tiles: source.terrain.tiles.map((tile, index) => ({
+          ...tile,
+          elevation: index === 5 ? 0.75 : tile.elevation,
+        })),
+      },
+    });
+    harness.draw();
+    expect(buildGeometry.mock.calls.length).toBeGreaterThan(firstBuildCount);
+    expect(freeGeometry.mock.calls.length).toBeGreaterThan(0);
+
+    const buildsBeforeContextLoss = buildGeometry.mock.calls.length;
+    freeGeometry.mockClear();
+    const preventDefault = vi.fn();
+    harness.canvas.fire("webglcontextlost", { preventDefault });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    // The browser owns buffer disposal after context loss; calling back into
+    // WebGL here would itself be unsafe.
+    expect(freeGeometry).not.toHaveBeenCalled();
+    harness.canvas.fire("webglcontextrestored");
+    harness.draw();
+    expect(buildGeometry.mock.calls.length).toBeGreaterThan(buildsBeforeContextLoss);
+
+    freeGeometry.mockClear();
+    harness.renderer.destroy();
+    expect(freeGeometry.mock.calls.length).toBeGreaterThan(0);
   });
 });
 

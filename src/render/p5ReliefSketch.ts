@@ -83,6 +83,7 @@ import {
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
+import { createRetainedGeometryPool } from "./retainedGeometryPool";
 import {
   createTerrainPerceptionMemoryStore,
   type TerrainPerceptionMemoryState,
@@ -350,6 +351,9 @@ const RELIEF_AGGREGATE_EVIDENCE: Readonly<Record<
 };
 
 const DEFAULT_YAW = -0.36;
+// p5's WebGL geometry buffer cache evicts at roughly one thousand entries.
+// Leave headroom for other retained models and bound JavaScript geometry too.
+const MAX_RETAINED_RELIEF_TERRAIN_BATCHES = 768;
 const DEFAULT_PITCH = Math.PI * 0.29;
 const DEFAULT_FOV = Math.PI / 3.5;
 const RELIEF_WATER_SURFACE_LIFT = 0.45;
@@ -510,6 +514,8 @@ export function createTideweftReliefRenderer(
   let cached: CachedReliefMesh | null = null;
   let cachedPerceptionMesh: CachedReliefPerceptionMesh | null = null;
   let cachedPerception: CachedReliefPerception | null = null;
+  let releaseRetainedTerrainGeometry: (() => void) | null = null;
+  let discardRetainedTerrainGeometry: (() => void) | null = null;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
@@ -2043,6 +2049,9 @@ export function createTideweftReliefRenderer(
       contextLost = true;
       telemetry.setActive(false);
       releaseInput();
+      // WebGL already owns the context-loss cleanup. Drop JavaScript handles
+      // without asking p5 to delete buffers through an invalid context.
+      discardRetainedTerrainGeometry?.();
       instance?.noLoop();
       options.onWebGLError?.("The 3D graphics context was lost. Chart view is active; reload to retry Relief 3D.");
     };
@@ -2232,6 +2241,21 @@ export function createTideweftReliefRenderer(
   };
 
   const sketch = (p: p5): void => {
+    const durableTerrainGeometry = createRetainedGeometryPool<
+      CachedReliefMesh,
+      ReliefMaterialBatch,
+      p5.Geometry
+    >(
+      (geometry) => p.freeGeometry(geometry),
+      { maximumGeometries: MAX_RETAINED_RELIEF_TERRAIN_BATCHES },
+    );
+    releaseRetainedTerrainGeometry = () => {
+      durableTerrainGeometry.release();
+    };
+    discardRetainedTerrainGeometry = () => {
+      durableTerrainGeometry.discard();
+    };
+
     const withAlpha = (hex: string, alpha: number): p5.Color => {
       const color = p.color(hex);
       color.setAlpha(clamp(alpha, 0, 255));
@@ -2267,6 +2291,27 @@ export function createTideweftReliefRenderer(
       );
     };
 
+    const buildRetainedTerrainGeometry = (
+      chunk: TerrainMeshChunk,
+      indices: readonly number[],
+    ): p5.Geometry => {
+      const geometry = p.buildGeometry(() => {
+        p.beginShape(p.TRIANGLES);
+        for (const index of indices) {
+          const vertex = chunk.vertices[index];
+          if (!vertex) continue;
+          p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
+          p.vertex(vertex.x, -vertex.z, vertex.y);
+        }
+        p.endShape();
+      });
+      // buildGeometry captures the current fill by default. Terrain material
+      // remains presentation state, so clear internal colors and bind the
+      // current authored ambient/emissive material before every model draw.
+      geometry.clearColors();
+      return geometry;
+    };
+
     const drawTerrain = (
       view: TideweftView,
       cache: CachedReliefMesh,
@@ -2277,6 +2322,7 @@ export function createTideweftReliefRenderer(
       const viewport = { width: p.width, height: p.height };
       let drawnTiles = 0;
       p.noStroke();
+      durableTerrainGeometry.begin(cache);
       for (const batch of cache.chunks) {
         if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
         for (const material of batch.materials) {
@@ -2290,14 +2336,10 @@ export function createTideweftReliefRenderer(
           // Bind both or its default white fill washes dark terrain toward cyan.
           p.fill(surfaceColor);
           p.ambientMaterial(surfaceColor);
-          p.beginShape(p.TRIANGLES);
-          for (const index of material.indices) {
-            const vertex = batch.chunk.vertices[index];
-            if (!vertex) continue;
-            p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
-            p.vertex(vertex.x, -vertex.z, vertex.y);
-          }
-          p.endShape();
+          p.model(durableTerrainGeometry.geometryFor(
+            material,
+            () => buildRetainedTerrainGeometry(batch.chunk, material.indices),
+          ));
         }
       }
 
@@ -2323,6 +2365,9 @@ export function createTideweftReliefRenderer(
           p.emissiveMaterial(emission.red, emission.green, emission.blue);
           p.fill(surfaceColor);
           p.ambientMaterial(surfaceColor);
+          // The eased sensory overlay changes with perception and local-light
+          // bands. Keep it immediate until a separately measured bounded
+          // retained representation can avoid rebuild/free bursts.
           p.beginShape(p.TRIANGLES);
           for (const index of material.indices) {
             const vertex = batch.chunk.vertices[index];
@@ -6448,6 +6493,10 @@ export function createTideweftReliefRenderer(
       reducedMotionQuery.removeEventListener("change", reducedMotionChangeHandler);
     }
     reducedMotionQuery = null;
+    if (contextLost) discardRetainedTerrainGeometry?.();
+    else releaseRetainedTerrainGeometry?.();
+    releaseRetainedTerrainGeometry = null;
+    discardRetainedTerrainGeometry = null;
     instance?.remove();
     instance = null;
     canvasElement = null;
