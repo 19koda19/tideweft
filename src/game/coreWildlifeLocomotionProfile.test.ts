@@ -295,20 +295,18 @@ describe("core wildlife locomotion profiles", () => {
     });
     const water = tile({ terrain: "marsh", waterDepth: 24_000 });
     const land = tile({ terrain: "meadow", waterDepth: 0 });
-    const cells = coreWildlifeTraversabilityCells(
-      "american-black-duck",
-      [water, water, water, land, land, land],
-      "surface-water",
-    );
     const surface = createLivingActorTraversabilitySurface({
       forActorId: actor.actorId,
       sampledAtTick: tick,
       origin,
       widthTiles: 3,
       heightTiles: 2,
-      cells,
+      cells: coreWildlifeTraversabilityCells(
+        "american-black-duck",
+        [water, water, water, land, land, land],
+        "surface-water",
+      ),
     });
-    expect(surface.cells.every((cell, index) => cell === cells[index])).toBe(true);
     const resolution = resolveLivingActorLocomotion({
       requestId: "duck-surface-water:test/40",
       tick,

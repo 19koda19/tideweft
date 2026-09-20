@@ -38,8 +38,6 @@ const DIAGONAL_COST_UNITS = 1_414;
 
 /** Exact outputs of canonicalSurface are recursively immutable. */
 const CANONICAL_TRAVERSABILITY_SURFACES = new WeakSet<object>();
-/** Exact field-built cells may skip only the duplicate structural admission pass. */
-const CANONICAL_TRAVERSABILITY_CELLS = new WeakSet<object>();
 
 /**
  * Access is already resolved for the addressed actor's current locomotion
@@ -52,22 +50,6 @@ export interface LivingActorTraversabilityCell {
   readonly access: LivingActorTraversalAccess;
   /** Positive relative movement cost for open cells; zero for closed cells. */
   readonly travelCost: number;
-}
-
-/**
- * Construct one exact immutable cell from scalar fields. Runtime-forged field
- * values remain untrusted candidates, preserving downstream fail-closed
- * admission; only lawful combinations receive the private transient brand.
- */
-export function createLivingActorTraversabilityCell(
-  access: LivingActorTraversalAccess,
-  travelCost: number,
-): LivingActorTraversabilityCell {
-  const cell = Object.freeze({ access, travelCost });
-  if (validTraversabilityCellFields(access, travelCost)) {
-    CANONICAL_TRAVERSABILITY_CELLS.add(cell);
-  }
-  return cell;
 }
 
 /**
@@ -592,11 +574,6 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
 }
 
 function canonicalCell(value: unknown): LivingActorTraversabilityCell | null {
-  if (
-    typeof value === "object"
-    && value !== null
-    && CANONICAL_TRAVERSABILITY_CELLS.has(value)
-  ) return value as LivingActorTraversabilityCell;
   if (!plainRecord(value) || !exactKeys(value, ["access", "travelCost"])) return null;
   if (value.access !== "open" && value.access !== "blocked" && value.access !== "deep-water") {
     return null;
@@ -607,18 +584,7 @@ function canonicalCell(value: unknown): LivingActorTraversabilityCell | null {
     || (value.access !== "open" && value.travelCost !== 0)
     || value.travelCost > 1_000_000
   ) return null;
-  return createLivingActorTraversabilityCell(value.access, value.travelCost);
-}
-
-function validTraversabilityCellFields(
-  access: unknown,
-  travelCost: unknown,
-): boolean {
-  return (access === "open" || access === "blocked" || access === "deep-water")
-    && nonnegativeSafeInteger(travelCost)
-    && (access !== "open" || travelCost !== 0)
-    && (access === "open" || travelCost === 0)
-    && travelCost <= 1_000_000;
+  return Object.freeze({ access: value.access, travelCost: value.travelCost });
 }
 
 function canonicalArea(value: unknown): ObservedArea | null {
