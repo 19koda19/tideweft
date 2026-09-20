@@ -88,6 +88,97 @@ function fixture(
 }
 
 describe("species-neutral living actor locomotion", () => {
+  it("admits exactly the same own enumerable string keys regardless of insertion order", () => {
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    const createSurfaceForCell = (cell: unknown) => createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 1,
+      heightTiles: 1,
+      cells: [cell] as readonly LivingActorTraversabilityCell[],
+    });
+
+    expect(createSurfaceForCell({ travelCost: 1, access: "open" }).cells[0]).toEqual({
+      access: "open",
+      travelCost: 1,
+    });
+
+    const symbolCell = { access: "open", travelCost: 1, [Symbol("debug")]: true };
+    expect(createSurfaceForCell(symbolCell).cells[0]).toEqual({
+      access: "open",
+      travelCost: 1,
+    });
+
+    const nonEnumerableExtra = { access: "open", travelCost: 1 };
+    Object.defineProperty(nonEnumerableExtra, "debug", { enumerable: false, value: true });
+    expect(createSurfaceForCell(nonEnumerableExtra).cells[0]).toEqual({
+      access: "open",
+      travelCost: 1,
+    });
+
+    for (const extraKey of ["__proto__", "0", "debug", "潮浪"] as const) {
+      const extra = { access: "open", travelCost: 1 };
+      Object.defineProperty(extra, extraKey, { enumerable: true, value: true });
+      expect(() => createSurfaceForCell(extra)).toThrow(TypeError);
+    }
+
+    const hiddenRequired = { access: "open" } as Record<string, unknown>;
+    Object.defineProperty(hiddenRequired, "travelCost", { enumerable: false, value: 1 });
+    expect(() => createSurfaceForCell(hiddenRequired)).toThrow(TypeError);
+
+    const inherited = Object.assign(Object.create({ debug: true }), {
+      access: "open",
+      travelCost: 1,
+    });
+    expect(() => createSurfaceForCell(inherited)).toThrow(TypeError);
+  });
+
+  it("takes one Object.keys snapshot without reading rejected extra values", () => {
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    let ownKeysCalls = 0;
+    let descriptorCalls = 0;
+    const reversed = new Proxy({ access: "open" as const, travelCost: 1 }, {
+      ownKeys: () => {
+        ownKeysCalls += 1;
+        return ["travelCost", "access"];
+      },
+      getOwnPropertyDescriptor: (target, key) => {
+        descriptorCalls += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+    expect(createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 1,
+      heightTiles: 1,
+      cells: [reversed],
+    }).cells[0]).toEqual({ access: "open", travelCost: 1 });
+    expect(ownKeysCalls).toBe(1);
+    expect(descriptorCalls).toBe(2);
+
+    let getterCalls = 0;
+    const rejected = { access: "open" as const, travelCost: 1 };
+    Object.defineProperty(rejected, "debug", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return true;
+      },
+    });
+    expect(() => createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 1,
+      heightTiles: 1,
+      cells: [rejected],
+    })).toThrow(TypeError);
+    expect(getterCalls).toBe(0);
+  });
+
   it("derives a shared ordered escape fan from perceived space rather than species rules", () => {
     const actor = actorAt(createWorldPosition(createRegionCoord(0, 0), 500, 500));
     const threat = area(translateWorldPosition(actor.position, 2_000, 0));

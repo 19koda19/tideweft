@@ -1158,8 +1158,7 @@ function plainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-  const actual = Object.keys(value).sort();
-  const sortedExpected = [...expected].sort();
-  return actual.length === sortedExpected.length
-    && actual.every((key, index) => key === sortedExpected[index]);
+  const actual = Object.keys(value);
+  return actual.length === expected.length
+    && actual.every((key) => expected.includes(key));
 }
