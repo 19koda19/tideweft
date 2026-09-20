@@ -385,9 +385,13 @@ describe("adversarial temporal terrain-fog boundary", () => {
     const chart = readFileSync(new URL("./p5Sketch.ts", import.meta.url), "utf8");
     const relief = readFileSync(new URL("./p5ReliefSketch.ts", import.meta.url), "utf8");
     const composite = readFileSync(new URL("./renderer.ts", import.meta.url), "utf8");
-    expect(chart).toContain("drawTerrain(latestView, terrainMemory)");
+    expect(chart).toContain(
+      "drawTerrain(latestView, terrainMemory, detailedTelemetry)",
+    );
     expect(chart).not.toMatch(/draw(?:SurfaceCurrents|FieldResources|LooseCargo|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
-    expect(relief).toContain("drawTerrain(view, cache, camera, terrainMemory)");
+    expect(relief).toContain(
+      "drawTerrain(view, cache, camera, terrainMemory, trackCounts)",
+    );
     expect(relief).not.toMatch(/draw(?:Water|FieldResources|SurfaceCurrents|LooseCargo|Soundings|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
     expect(relief).not.toMatch(/syncReliefLabels\([^)]*terrainMemory/u);
 
