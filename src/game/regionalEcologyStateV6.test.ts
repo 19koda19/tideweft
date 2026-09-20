@@ -44,6 +44,7 @@ import {
   createFreshRegionalEcologyStateV6,
   createLegacyBaselineRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
+  isTrustedRegionalEcologyStateV6ActiveCommitTransition,
   migrateRegionalEcologyStateV5ToV6,
   projectRegionalEcologyStateV6ActiveState,
   regionalEcologyStateV6ActiveSourcePatches,
@@ -656,6 +657,15 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       },
     );
     expect(committed).not.toBeNull();
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(state, committed)).toBe(true);
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(
+      structuredClone(state),
+      committed,
+    )).toBe(false);
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(
+      state,
+      committed === null ? null : structuredClone(committed),
+    )).toBe(false);
     expect(committed?.breadthRoot.regions).toHaveLength(1);
     expect(committed?.adoption?.transactionId).toBe(state.adoption?.transactionId);
     expect(canonicalizeRegionalEcologyStateV6(committed)).toBe(committed);
@@ -667,6 +677,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
     const reloaded = deserializeRegionalEcologyStateV6(
       serializeRegionalEcologyStateV6(committed),
     );
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(state, reloaded)).toBe(false);
     expect(stableStringify(reloaded)).toBe(stableStringify(committed));
     expect(canonicalRegionalEcologyStateV6ForWorld(reloaded, {
       rootSeed: SEED,
@@ -689,10 +700,15 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       .find(({ actor }) => actor.identity.stableId === movedActor.identity.stableId);
     expect(returnedMember?.actor.address.position).toEqual(movedActor.address.position);
     expect(returned.breadthRoot.regions).toEqual(committed.breadthRoot.regions);
-    expect(commitRegionalEcologyStateV6ActiveProjection(state, projection, {
+    const rejectedCommit = commitRegionalEcologyStateV6ActiveProjection(state, projection, {
       ...input,
       breadthResidents: [],
-    })).toBeNull();
+    });
+    expect(rejectedCommit).toBeNull();
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(
+      state,
+      rejectedCommit,
+    )).toBe(false);
   });
 
   it("rederives signed/extreme windows and reports collision-free source ownership", () => {

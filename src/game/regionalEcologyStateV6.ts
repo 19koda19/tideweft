@@ -80,6 +80,10 @@ const TRANSACTION_PATTERN = /^regional-ecology-v29-wrapper:[0-9a-f]{16}$/u;
 const UTF8_ENCODER = new TextEncoder();
 const TRUSTED_STATES = new WeakSet<object>();
 const TRUSTED_PROJECTIONS = new WeakSet<object>();
+const TRUSTED_ACTIVE_COMMITS = new WeakMap<
+  RegionalEcologyStateV6,
+  RegionalEcologyStateV6
+>();
 
 export interface RegionalEcologyStateV6AdoptionReceiptV1 {
   readonly version: typeof REGIONAL_ECOLOGY_STATE_V6_ADOPTION_VERSION;
@@ -731,7 +735,7 @@ export function commitRegionalEcologyStateV6ActiveProjection(
     }
   }
   try {
-    return createRegionalEcologyStateV6({
+    const committed = createRegionalEcologyStateV6({
       base,
       breadthRoot,
       breadthActiveResidents: requireBreadthActiveResidents(
@@ -741,9 +745,21 @@ export function commitRegionalEcologyStateV6ActiveProjection(
       ),
       adoption: state.adoption,
     });
+    TRUSTED_ACTIVE_COMMITS.set(committed, state);
+    return committed;
   } catch {
     return null;
   }
+}
+
+/** Exact in-process proof that one active-projection commit produced this child. */
+export function isTrustedRegionalEcologyStateV6ActiveCommitTransition(
+  previous: RegionalEcologyStateV6,
+  value: unknown,
+): value is RegionalEcologyStateV6 {
+  return typeof value === "object"
+    && value !== null
+    && TRUSTED_ACTIVE_COMMITS.get(value as RegionalEcologyStateV6) === previous;
 }
 
 /** Exchange the v5 hot neighborhood, then derive every active breadth cohort. */

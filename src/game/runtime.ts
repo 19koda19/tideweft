@@ -452,6 +452,7 @@ import {
   createFreshRegionalEcologyStateV6,
   createLegacyBaselineRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
+  isTrustedRegionalEcologyStateV6ActiveCommitTransition,
   migrateRegionalEcologyStateV5ToV6,
   projectRegionalEcologyStateV6ActiveState,
   regionalEcologyStateV6ActiveSourcePatches,
@@ -461,6 +462,7 @@ import {
   type RegionalEcologyStateV6ActiveProjection,
   type RegionalEcologyStateV6ProjectedBreadthResidentV1,
 } from "./regionalEcologyStateV6";
+import { createRuntimeRegionalEcologyWorldBindingMemo } from "./runtimeRegionalEcologyWorldBindingMemo";
 import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
 import {
   createRuntimeCoreEcologyActivityAuthorityMemo,
@@ -975,21 +977,6 @@ const CORE_ECOLOGY_FORAGE_PROVISION = "dried-fish" as const;
 const RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT = 24;
 const runtimeCoreEcologyHabitatCache =
   new Map<string, CoreEcologyRegionalPredatorHabitatAssemblage>();
-interface RuntimeRegionalEcologyWorldBindingCacheEntry {
-  readonly rootSeed: RootSeed;
-  readonly completedTick: number;
-  readonly settlementHomeHabitat: CoreEcologyRegionalPredatorHabitatAssemblage;
-}
-/**
- * Runtime ecology states are deeply immutable. Remembering a successful world
- * binding for that exact object avoids recursively rederiving every regional
- * habitat on each same-tick save while still forcing copied, deserialized, or
- * differently bound values through the complete validator.
- */
-const runtimeRegionalEcologyWorldBindingCache = new WeakMap<
-  RegionalEcologyStateV6,
-  RuntimeRegionalEcologyWorldBindingCacheEntry
->();
 const runtimeRegionalUplandCoreEcologyHabitatCache =
   new Map<string, CoreEcologyRegionalUplandHabitatAssemblage>();
 const runtimeDomesticPenCoreEcologyHabitatCache =
@@ -1558,35 +1545,40 @@ function canonicalRuntimeRegionalEcologyState(
     bio0,
     economy,
   );
-  if (value !== null && typeof value === "object") {
-    const cached = runtimeRegionalEcologyWorldBindingCache.get(
-      value as RegionalEcologyStateV6,
-    );
-    if (
-      cached !== undefined
-      && cached.completedTick === world.meta.completedTick
-      && cached.settlementHomeHabitat === settlementHomeHabitat
-      && cached.rootSeed[0] === world.meta.rootSeed[0]
-      && cached.rootSeed[1] === world.meta.rootSeed[1]
-      && cached.rootSeed[2] === world.meta.rootSeed[2]
-      && cached.rootSeed[3] === world.meta.rootSeed[3]
-    ) {
-      return value as RegionalEcologyStateV6;
-    }
-  }
-  const canonical = canonicalRegionalEcologyStateV6ForWorld(value, {
+  return runtimeRegionalEcologyWorldBindingMemo.canonicalize(value, {
     rootSeed: world.meta.rootSeed,
     completedTick: world.meta.completedTick,
     settlementHomeHabitat,
   });
-  if (canonical !== null) {
-    runtimeRegionalEcologyWorldBindingCache.set(canonical, {
+}
+
+const runtimeRegionalEcologyWorldBindingMemo =
+  createRuntimeRegionalEcologyWorldBindingMemo<
+    RegionalEcologyStateV6,
+    CoreEcologyRegionalPredatorHabitatAssemblage
+  >({
+    validator: canonicalRegionalEcologyStateV6ForWorld,
+    completedTickOf: (state) => state.updatedAtTick,
+    isTrustedCommittedTransition:
+      isTrustedRegionalEcologyStateV6ActiveCommitTransition,
+  });
+
+function canonicalRuntimeRegionalEcologyCommittedTransition(
+  previous: RegionalEcologyStateV6,
+  value: unknown,
+  world: WorldState,
+  bio0: Bio0EcologyState,
+  economy: WorldView,
+): RegionalEcologyStateV6 | null {
+  return runtimeRegionalEcologyWorldBindingMemo.canonicalizeCommittedTransition(
+    previous,
+    value,
+    {
       rootSeed: world.meta.rootSeed,
       completedTick: world.meta.completedTick,
-      settlementHomeHabitat,
-    });
-  }
-  return canonical;
+      settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(world, bio0, economy),
+    },
+  );
 }
 
 /**
@@ -11523,7 +11515,8 @@ export async function createTideweftRuntime(
       if (committedRegionalEcology === null) {
         throw new Error("Regional ecology sources could not commit atomically");
       }
-      const acceptedRegionalEcology = canonicalRuntimeRegionalEcologyState(
+      const acceptedRegionalEcology = canonicalRuntimeRegionalEcologyCommittedTransition(
+        regionalEcology,
         committedRegionalEcology,
         world,
         bio0Ecology,
