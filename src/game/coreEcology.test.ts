@@ -201,6 +201,50 @@ describe("bounded core ecology patch", () => {
     expect(canonicalizeCoreEcologyPatch(aliased)).toBeNull();
   });
 
+  it("admits the same exact own enumerable string-key set without depending on order", () => {
+    const state = patch();
+    const reversed = Object.fromEntries(Object.entries(state).reverse());
+    expect(canonicalizeCoreEcologyPatch(reversed)).toEqual(state);
+
+    const symbolExtra = { ...state, [Symbol("debug")]: true };
+    expect(canonicalizeCoreEcologyPatch(symbolExtra)).toEqual(state);
+
+    const nonEnumerableExtra = { ...state };
+    Object.defineProperty(nonEnumerableExtra, "debug", {
+      enumerable: false,
+      value: true,
+    });
+    expect(canonicalizeCoreEcologyPatch(nonEnumerableExtra)).toEqual(state);
+
+    const inheritedExtra = Object.assign(Object.create({ debug: true }), state);
+    expect(canonicalizeCoreEcologyPatch(inheritedExtra)).toEqual(state);
+
+    for (const extraKey of ["__proto__", "0", "debug", "潮浪"] as const) {
+      const extra = { ...state };
+      Object.defineProperty(extra, extraKey, { enumerable: true, value: true });
+      expect(canonicalizeCoreEcologyPatch(extra)).toBeNull();
+    }
+
+    const hiddenRequired = { ...state };
+    Object.defineProperty(hiddenRequired, "patchKey", {
+      enumerable: false,
+      value: state.patchKey,
+    });
+    expect(canonicalizeCoreEcologyPatch(hiddenRequired)).toBeNull();
+
+    let getterCalls = 0;
+    const rejectedGetter = { ...state };
+    Object.defineProperty(rejectedGetter, "debug", {
+      enumerable: true,
+      get: () => {
+        getterCalls += 1;
+        return true;
+      },
+    });
+    expect(canonicalizeCoreEcologyPatch(rejectedGetter)).toBeNull();
+    expect(getterCalls).toBe(0);
+  });
+
   it("retains coarse member identity and dynamic state across bounded materialization changes", () => {
     const state = patch([population("deer", [0, 1], false)]);
     const [first, second] = members(state);
