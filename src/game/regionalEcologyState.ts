@@ -1,6 +1,11 @@
 import { createRegionCoord, isRegionCoord, regionKey, type RegionCoord } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
-import { compareText, hashCanonical, stableStringify } from "../sim/util";
+import {
+  canonicalIntegrityMetrics,
+  compareText,
+  hashCanonical,
+  stableStringify,
+} from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_MAX_STEP_TICKS,
@@ -1708,8 +1713,9 @@ function requireStateTransition(
 function sealState(
   base: Omit<RegionalEcologyStateV1, "integrity">,
 ): RegionalEcologyStateV1 {
-  const state = deepFreeze({ ...base, integrity: hashCanonical(base) });
-  if (serializedBytes(state) > REGIONAL_ECOLOGY_STATE_MAX_SERIALIZED_BYTES) {
+  const metrics = canonicalIntegrityMetrics(base);
+  const state = deepFreeze({ ...base, integrity: metrics.integrity });
+  if (metrics.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_MAX_SERIALIZED_BYTES) {
     throw new RangeError("Regional ecology state exceeds its save budget");
   }
   TRUSTED_STATES.add(state);

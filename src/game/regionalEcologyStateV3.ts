@@ -1,6 +1,11 @@
 import type { RootSeed } from "../sim/rng";
 import { createRegionCoord, regionKey, type RegionCoord } from "../sim/regions";
-import { compareText, hashCanonical, stableStringify } from "../sim/util";
+import {
+  canonicalIntegrityMetrics,
+  compareText,
+  hashCanonical,
+  stableStringify,
+} from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   canonicalizeCoreEcologyAggregatePatch,
@@ -1362,8 +1367,9 @@ function patchMaterializationIsGroupAtomic(
 function sealState(
   value: Omit<RegionalEcologyStateV3, "integrity">,
 ): RegionalEcologyStateV3 {
-  const state = deepFreeze({ ...value, integrity: hashCanonical(value) });
-  if (serializedBytes(state) > REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES) {
+  const metrics = canonicalIntegrityMetrics(value);
+  const state = deepFreeze({ ...value, integrity: metrics.integrity });
+  if (metrics.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES) {
     throw new RangeError("Regional ecology v3 state exceeds the composite save budget");
   }
   TRUSTED_STATES.add(state);
