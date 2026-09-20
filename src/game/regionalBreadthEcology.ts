@@ -117,11 +117,67 @@ export interface RegionalBreadthEcologyActiveResidentInput {
   readonly patch: CoreEcologyAggregatePatchState;
 }
 
+/**
+ * Authenticated V6 snapshot custody used only to prove that a hot-window
+ * receipt still describes the exact prior active lineage set. The patches
+ * themselves remain private to this module and are never accepted from the
+ * runtime commit output.
+ */
+export interface RegionalBreadthEcologyActiveReceiptClaim {
+  readonly sourceKey: string;
+  readonly cohortId: CoreEcologyBreadthCohortId;
+  readonly cohortEpoch: number;
+  readonly region: RegionCoord;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+}
+
+export interface RegionalBreadthEcologyDurableResidentInput {
+  readonly sourceKey: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+}
+
+export interface AdvanceRegionalBreadthEcologyActiveResidentsInput {
+  readonly rootSeed: RootSeed;
+  readonly completedTick: number;
+  readonly activeRegions: readonly RegionCoord[];
+  readonly expectedResidents: readonly RegionalBreadthEcologyActiveReceiptClaim[];
+  readonly durableResidents?: readonly RegionalBreadthEcologyDurableResidentInput[];
+}
+
+export interface AdvanceRegionalBreadthEcologyActiveResidentsResult {
+  readonly root: RegionalBreadthEcologyRootV1;
+  readonly residents: readonly RegionalBreadthEcologyActiveResidentInput[];
+}
+
 const HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const UINT32_MAX = 0xffff_ffff;
 const UTF8_ENCODER = new TextEncoder();
 const TRUSTED_ROOTS = new WeakSet<object>();
 const WORLD_BOUND_ROOTS = new WeakMap<object, string>();
+interface RegionalBreadthEcologyActiveReceiptResident {
+  readonly sourceKey: string;
+  readonly cohortId: CoreEcologyBreadthCohortId;
+  readonly cohortEpoch: number;
+  readonly regionKey: string;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+}
+
+interface RegionalBreadthEcologyActiveReceipt {
+  readonly rootSeed: RootSeed;
+  readonly atTick: number;
+  readonly activations: RegionalBreadthEcologyRootV1["activations"];
+  readonly activeRegionKeys: readonly string[];
+  readonly residents: readonly RegionalBreadthEcologyActiveReceiptResident[];
+}
+
+/** One bounded hot-window receipt per exact immutable root identity. */
+const ACTIVE_RESIDENT_RECEIPTS = new WeakMap<
+  object,
+  RegionalBreadthEcologyActiveReceipt
+>();
 
 export function createPristineRegionalBreadthEcologyRoot(
   binding: RegionalBreadthEcologyWorldBinding,
@@ -677,6 +733,10 @@ export function regionalBreadthEcologyResidentsForActiveRegions(
     if (
       patch === null
       || habitat === null
+      || !coreEcologyBreadthResidentPatchIsAllCoarse(patch)
+      || patch.nextMortalityOrdinal !== 0
+      || patch.mortalityTransactions.length !== 0
+      || patch.carcasses.length !== 0
       || canonicalCoreEcologyBreadthResidentPatch(patch, {
         seed: rootSeed,
         region: patch.originRegion,
@@ -733,9 +793,311 @@ export function regionalBreadthEcologyResidentsForActiveRegions(
       if (!admit(patch)) return null;
     }
   }
-  return Object.freeze([...bySource.values()].sort(
+  const residents = Object.freeze([...bySource.values()].sort(
     (left, right) => compareText(left.sourceKey, right.sourceKey),
   ));
+  seedActiveResidentReceipt(root, rootSeed, activeRegions, residents);
+  return residents;
+}
+
+/**
+ * Advances one active breadth set from a prior authoritative derivation. Any
+ * durable runtime patches are first rebound to the receipt lineage and applied
+ * through one closed sparse-root transaction. Presentation and visitation
+ * output is never accepted: unchanged sources advance only from this owner's
+ * private receipt and sparse root.
+ *
+ * Any missing custody proof fails closed so the caller can use the ordinary
+ * advance + sparse-put + full-derivation transaction.
+ */
+export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+  value: unknown,
+  input: AdvanceRegionalBreadthEcologyActiveResidentsInput,
+): AdvanceRegionalBreadthEcologyActiveResidentsResult | null {
+  if (
+    typeof value !== "object"
+    || value === null
+    || !plainRecord(input)
+    || (!exactKeys(input, [
+      "activeRegions",
+      "completedTick",
+      "expectedResidents",
+      "rootSeed",
+    ]) && !exactKeys(input, [
+      "activeRegions",
+      "completedTick",
+      "durableResidents",
+      "expectedResidents",
+      "rootSeed",
+    ]))
+    || !Array.isArray(input.activeRegions)
+    || (input.durableResidents !== undefined
+      && !Array.isArray(input.durableResidents))
+    || !Array.isArray(input.expectedResidents)
+    || !nonnegativeSafeInteger(input.completedTick)
+  ) return null;
+  const receipt = ACTIVE_RESIDENT_RECEIPTS.get(value);
+  if (receipt === undefined) return null;
+  const activeRegions = canonicalRegionsOrNull(input.activeRegions);
+  const claims = canonicalActiveReceiptClaimsOrNull(input.expectedResidents);
+  if (
+    activeRegions === null
+    || activeRegions.length === 0
+    || activeRegions.length > REGIONAL_BREADTH_COHORT_MAX_ACTIVE_REGIONS
+    || claims === null
+    || !sameRootSeed(input.rootSeed, receipt.rootSeed)
+    || input.completedTick < receipt.atTick
+    || !sameTextSequence(
+      activeRegions.map(regionKey),
+      receipt.activeRegionKeys,
+    )
+    || !claimsMatchActiveReceipt(claims, receipt.residents)
+  ) return null;
+  const root = canonicalRegionalBreadthEcologyRootForWorld(value, {
+    rootSeed: input.rootSeed,
+    completedTick: receipt.atTick,
+  });
+  if (
+    root === null
+    || root !== value
+    || root.updatedAtTick !== receipt.atTick
+    || root.activations !== receipt.activations
+  ) return null;
+
+  try {
+    const batch = applyActiveResidentDeviationBatch(
+      root,
+      input.rootSeed,
+      input.completedTick,
+      input.durableResidents ?? Object.freeze([]),
+      receipt,
+    );
+    if (batch === null) return null;
+    const nextRoot = batch.root;
+    const activeKeys = new Set(activeRegions.map(regionKey));
+    const bySource = new Map<string, RegionalBreadthEcologyActiveResidentInput>();
+    const receiptSourceKeys = new Set(
+      receipt.residents.map(({ sourceKey }) => sourceKey),
+    );
+    const admit = (
+      patch: CoreEcologyAggregatePatchState,
+      expectedLineageHash?: string,
+    ): boolean => {
+      const habitat = habitatFromPatch(patch);
+      if (
+        patch === null
+        || habitat === null
+        || !nextRoot.activations.some(({ cohortId, cohortEpoch }) => (
+          cohortId === habitat.cohortId && cohortEpoch === habitat.cohortEpoch
+        ))
+        || !coreEcologyBreadthResidentPatchIsAllCoarse(patch)
+        || patch.nextMortalityOrdinal !== 0
+        || patch.mortalityTransactions.length !== 0
+        || patch.carcasses.length !== 0
+        || canonicalCoreEcologyBreadthResidentPatch(patch, {
+          seed: input.rootSeed,
+          region: patch.originRegion,
+          completedTick: input.completedTick,
+        }) === null
+        || (expectedLineageHash !== undefined
+          && breadthResidentLineageHash(patch) !== expectedLineageHash)
+        || bySource.has(patch.patchKey)
+      ) return false;
+      bySource.set(patch.patchKey, Object.freeze({
+        kind: CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
+        cohortId: habitat.cohortId,
+        cohortEpoch: habitat.cohortEpoch,
+        sourceKey: patch.patchKey,
+        patch,
+      }));
+      return true;
+    };
+
+    for (const resident of receipt.residents) {
+      const replacement = batch.durableBySource.get(resident.sourceKey);
+      const patch = replacement ?? reconcileCoreEcologyBreadthResidentPatchAtTick(
+        resident.patch,
+        input.completedTick,
+      );
+      if (patch === null) return null;
+      const originIsActive = activeKeys.has(regionKey(patch.originRegion));
+      const residences = originIsActive
+        ? Object.freeze([]) as readonly RegionCoord[]
+        : coreEcologyBreadthResidentPatchResidenceRegions(patch);
+      if (residences === null) return null;
+      if (
+        (originIsActive
+          || residences.some((region) => activeKeys.has(regionKey(region))))
+        && !admit(patch, resident.lineageHash)
+      ) return null;
+    }
+
+    // A dormant sparse deviation can enter the window between ticks. Scan
+    // every source not represented by the prior hot receipt so physical
+    // residence—not lineage origin—continues to govern admission.
+    for (const delta of nextRoot.regions) {
+      if (receiptSourceKeys.has(delta.residentPatch.patchKey)) continue;
+      if (activeKeys.has(regionKey(delta.region))) return null;
+      const patch = reconcileCoreEcologyBreadthResidentPatchAtTick(
+        delta.residentPatch,
+        input.completedTick,
+      );
+      if (patch === null) return null;
+      const residences = coreEcologyBreadthResidentPatchResidenceRegions(patch);
+      if (residences === null) return null;
+      if (
+        residences.some((region) => activeKeys.has(regionKey(region)))
+        && !admit(patch)
+      ) return null;
+    }
+
+    const residents = Object.freeze([...bySource.values()].sort(
+      (left, right) => compareText(left.sourceKey, right.sourceKey),
+    ));
+    const maximumResidents = activeRegions.length * nextRoot.activations.length
+      + nextRoot.regions.length;
+    if (residents.length > maximumResidents) return null;
+    seedActiveResidentReceipt(nextRoot, input.rootSeed, activeRegions, residents);
+    return Object.freeze({ root: nextRoot, residents });
+  } catch {
+    return null;
+  }
+}
+
+interface RegionalBreadthEcologyActiveDeviationBatch {
+  readonly root: RegionalBreadthEcologyRootV1;
+  readonly durableBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
+}
+
+/**
+ * Reproduces source-ordered scalar put semantics while sealing the immutable
+ * root only once. Validation completes before a candidate root is assembled,
+ * so a malformed member cannot partially commit the batch.
+ */
+function applyActiveResidentDeviationBatch(
+  root: RegionalBreadthEcologyRootV1,
+  rootSeed: RootSeed,
+  completedTick: number,
+  values: readonly RegionalBreadthEcologyDurableResidentInput[],
+  receipt: RegionalBreadthEcologyActiveReceipt,
+): RegionalBreadthEcologyActiveDeviationBatch | null {
+  if (
+    completedTick < root.updatedAtTick
+    || values.length > receipt.residents.length
+  ) return null;
+  const receiptBySource = new Map(
+    receipt.residents.map((resident) => [resident.sourceKey, resident]),
+  );
+  const durableBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  for (const raw of values) {
+    if (
+      !plainRecord(raw)
+      || !exactKeys(raw, ["patch", "sourceKey"])
+      || typeof raw.sourceKey !== "string"
+      || durableBySource.has(raw.sourceKey)
+      || !plainRecord(raw.patch)
+    ) return null;
+    const prior = receiptBySource.get(raw.sourceKey);
+    if (prior === undefined) return null;
+    const bound = canonicalCoreEcologyBreadthResidentPatch(raw.patch, {
+      seed: rootSeed,
+      region: prior.patch.originRegion,
+      completedTick,
+    });
+    if (bound === null || bound.patchKey !== raw.sourceKey) return null;
+    const normalized = setCoreEcologyAggregatePatchMaterializedActors(bound, {
+      atTick: completedTick,
+      actorIds: [],
+    });
+    const habitat = habitatFromPatch(normalized);
+    if (
+      habitat === null
+      || habitat.cohortId !== prior.cohortId
+      || habitat.cohortEpoch !== prior.cohortEpoch
+      || regionKey(normalized.originRegion) !== prior.regionKey
+      || breadthResidentLineageHash(normalized) !== prior.lineageHash
+      || !coreEcologyBreadthResidentPatchIsAllCoarse(normalized)
+      || normalized.nextMortalityOrdinal !== 0
+      || normalized.mortalityTransactions.length !== 0
+      || normalized.carcasses.length !== 0
+    ) return null;
+    durableBySource.set(raw.sourceKey, normalized);
+  }
+
+  const ordered = [...durableBySource.entries()].sort(
+    ([left], [right]) => compareText(left, right),
+  );
+  const regionsByKey = new Map(root.regions.map((delta) => [delta.key, delta]));
+  let serializedUpperBound = values.length === 0
+    ? 0
+    : serializedBytes(root) + 256;
+  let revision = root.revision;
+  let eventOrdinal = root.lastEventOrdinal;
+  let changed = false;
+  for (const [, normalized] of ordered) {
+    const habitat = habitatFromPatch(normalized);
+    if (habitat === null) return null;
+    const baselineTick = breadthCohortBaselineTick(root, habitat.cohortId);
+    if (
+      baselineTick === null
+      || !root.activations.some(({ cohortId }) => cohortId === habitat.cohortId)
+    ) return null;
+    const pristine = createCoreEcologyBreadthResidentPatch({
+      seed: rootSeed,
+      habitat: deriveCoreEcologyBreadthHabitat({
+        seed: rootSeed,
+        region: normalized.originRegion,
+        cohortId: habitat.cohortId,
+      }),
+      tick: completedTick,
+      baselineTick,
+    });
+    const pristineState = stableStringify(normalized) === stableStringify(pristine);
+    const key = deltaKey(habitat.cohortId, normalized.originRegion);
+    const existing = regionsByKey.get(key);
+    if (pristineState && existing === undefined) continue;
+    revision += 1;
+    eventOrdinal += 1;
+    if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(eventOrdinal)) {
+      return null;
+    }
+    changed = true;
+    regionsByKey.delete(key);
+    if (!pristineState) {
+      const delta = createRegionalBreadthEcologyRegionDelta({
+        rootSeed,
+        cohortId: habitat.cohortId,
+        baselineTick,
+        region: normalized.originRegion,
+        baselineHash: habitat.derivationHash,
+        revision: (existing?.revision ?? 0) + 1,
+        eventOrdinal,
+        residentPatch: normalized,
+      });
+      serializedUpperBound += serializedBytes(delta) + 1;
+      if (serializedUpperBound > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES) {
+        return null;
+      }
+      regionsByKey.set(key, delta);
+    }
+    if (regionsByKey.size > REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS) return null;
+  }
+
+  let nextRoot = root;
+  if (completedTick !== root.updatedAtTick || changed) {
+    const regions = Object.freeze([...regionsByKey.values()].sort(
+      (left, right) => compareText(left.key, right.key),
+    ));
+    const { integrity: _integrity, ...base } = root;
+    nextRoot = sealAndBindRoot({
+      ...base,
+      updatedAtTick: completedTick,
+      revision,
+      lastEventOrdinal: eventOrdinal,
+      regions,
+    });
+  }
+  return Object.freeze({ root: nextRoot, durableBySource });
 }
 
 export function serializeRegionalBreadthEcologyRoot(value: unknown): string {
@@ -923,6 +1285,172 @@ function habitatFromPatch(
     readonly cohortEpoch: number;
     readonly derivationHash: string;
   }>;
+}
+
+function seedActiveResidentReceipt(
+  root: RegionalBreadthEcologyRootV1,
+  rootSeed: RootSeed,
+  activeRegions: readonly RegionCoord[],
+  residents: readonly RegionalBreadthEcologyActiveResidentInput[],
+): void {
+  const maximumResidents = activeRegions.length * root.activations.length
+    + root.regions.length;
+  if (residents.length > maximumResidents) return;
+  const receiptResidents: RegionalBreadthEcologyActiveReceiptResident[] = [];
+  const seen = new Set<string>();
+  for (const resident of residents) {
+    const habitat = habitatFromPatch(resident.patch);
+    if (
+      habitat === null
+      || resident.sourceKey !== resident.patch.patchKey
+      || resident.cohortId !== habitat.cohortId
+      || resident.cohortEpoch !== habitat.cohortEpoch
+      || resident.patch.updatedAtTick !== root.updatedAtTick
+      || seen.has(resident.sourceKey)
+      || !coreEcologyBreadthResidentPatchIsAllCoarse(resident.patch)
+      || resident.patch.nextMortalityOrdinal !== 0
+      || resident.patch.mortalityTransactions.length !== 0
+      || resident.patch.carcasses.length !== 0
+    ) return;
+    seen.add(resident.sourceKey);
+    receiptResidents.push(Object.freeze({
+      sourceKey: resident.sourceKey,
+      cohortId: resident.cohortId,
+      cohortEpoch: resident.cohortEpoch,
+      regionKey: regionKey(resident.patch.originRegion),
+      patchHash: hashCanonical(resident.patch),
+      lineageHash: breadthResidentLineageHash(resident.patch),
+      patch: resident.patch,
+    }));
+  }
+  receiptResidents.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+  ACTIVE_RESIDENT_RECEIPTS.set(root, Object.freeze({
+    rootSeed: Object.freeze([
+      rootSeed[0],
+      rootSeed[1],
+      rootSeed[2],
+      rootSeed[3],
+    ] as [number, number, number, number]),
+    atTick: root.updatedAtTick,
+    activations: root.activations,
+    activeRegionKeys: Object.freeze(activeRegions.map(regionKey)),
+    residents: Object.freeze(receiptResidents),
+  }));
+}
+
+function canonicalActiveReceiptClaimsOrNull(
+  value: unknown,
+): readonly RegionalBreadthEcologyActiveReceiptClaim[] | null {
+  if (!Array.isArray(value)) return null;
+  const claims: RegionalBreadthEcologyActiveReceiptClaim[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (
+      !plainRecord(raw)
+      || !exactKeys(raw, [
+        "cohortEpoch",
+        "cohortId",
+        "lineageHash",
+        "patchHash",
+        "region",
+        "sourceKey",
+      ])
+      || typeof raw.sourceKey !== "string"
+      || seen.has(raw.sourceKey)
+      || typeof raw.cohortId !== "string"
+      || coreEcologyBreadthCohortDefinition(
+        raw.cohortId as CoreEcologyBreadthCohortId,
+      ) === null
+      || !positiveSafeInteger(raw.cohortEpoch)
+      || !isRegionCoord(raw.region)
+      || !validHash(raw.patchHash)
+      || !validHash(raw.lineageHash)
+    ) return null;
+    seen.add(raw.sourceKey);
+    claims.push(Object.freeze({
+      sourceKey: raw.sourceKey,
+      cohortId: raw.cohortId as CoreEcologyBreadthCohortId,
+      cohortEpoch: raw.cohortEpoch,
+      region: createRegionCoord(raw.region.x, raw.region.y),
+      patchHash: raw.patchHash,
+      lineageHash: raw.lineageHash,
+    }));
+  }
+  claims.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+  return Object.freeze(claims);
+}
+
+function claimsMatchActiveReceipt(
+  claims: readonly RegionalBreadthEcologyActiveReceiptClaim[],
+  residents: readonly RegionalBreadthEcologyActiveReceiptResident[],
+): boolean {
+  if (claims.length !== residents.length) return false;
+  for (let index = 0; index < claims.length; index += 1) {
+    const claim = claims[index]!;
+    const resident = residents[index]!;
+    if (
+      claim.sourceKey !== resident.sourceKey
+      || claim.cohortId !== resident.cohortId
+      || claim.cohortEpoch !== resident.cohortEpoch
+      || regionKey(claim.region) !== resident.regionKey
+      || claim.patchHash !== resident.patchHash
+      || claim.lineageHash !== resident.lineageHash
+    ) return false;
+  }
+  return true;
+}
+
+function sameRootSeed(left: RootSeed, right: RootSeed): boolean {
+  try {
+    requireRootSeed(left);
+  } catch {
+    return false;
+  }
+  return left.length === right.length
+    && left.every((word, index) => Object.is(word, right[index]));
+}
+
+function sameTextSequence(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function breadthResidentLineageHash(
+  patch: CoreEcologyAggregatePatchState,
+): string {
+  return hashCanonical({
+    patchKey: patch.patchKey,
+    originRegion: patch.originRegion,
+    derivation: patch.derivation,
+    populations: patch.populations.map(({
+      species,
+      populationKey,
+      baselinePopulationSize,
+    }) => ({ species, populationKey, baselinePopulationSize })),
+    actorIds: patch.populations.flatMap(({ members }) => (
+      members.map(({ actor }) => actor.identity.stableId)
+    )).sort(compareText),
+    groups: patch.groups.groups.map(({ identity, memberOrdinals }) => ({
+      identity,
+      memberOrdinals,
+    })),
+    aggregates: patch.aggregatePopulations.map(({
+      aggregateId,
+      species,
+      populationKey,
+      habitatCapacity,
+      anchors,
+    }) => ({
+      aggregateId,
+      species,
+      populationKey,
+      habitatCapacity,
+      anchorOrdinals: anchors.map(({ anchorOrdinal }) => anchorOrdinal),
+    })),
+  });
 }
 
 function deltaKey(cohortId: CoreEcologyBreadthCohortId, region: RegionCoord): string {

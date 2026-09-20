@@ -12,14 +12,21 @@ import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   replaceCoreEcologyAggregatePatchActor,
+  stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import { deriveCoreEcologyRegionalPredatorHabitatAssemblage } from "./coreEcologyHabitat";
 import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH } from "./coreEcologyBreadthHabitat";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import { createCoreEcologySettlementHomePatch } from "./coreEcologySettlementHome";
-import { repositionCoreWildlifeActor } from "./coreWildlifeActor";
-import { createPristineRegionalEcologyRoot } from "./regionalEcology";
+import {
+  CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  repositionCoreWildlifeActor,
+} from "./coreWildlifeActor";
+import {
+  advanceRegionalEcologyRoot,
+  createPristineRegionalEcologyRoot,
+} from "./regionalEcology";
 import {
   createRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
@@ -372,6 +379,67 @@ function unchangedCommitInput(
       sourceKey,
       patch,
     })),
+  };
+}
+
+function advanceProjectedPatchWithoutAction(
+  patch: CoreEcologyAggregatePatchState,
+  tick: number,
+) {
+  const result = stepCoreEcologyAggregatePatch(patch, {
+    tick,
+    actorSteps: patch.populations.flatMap(({ members }) => members
+      .filter(({ materialization }) => materialization === "materialized")
+      .map(({ actor }) => ({
+        actorId: actor.identity.stableId,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      }))),
+  });
+  if (result === null) throw new Error("Wave-G projected no-action step failed");
+  return Object.freeze({ sourceKey: result.patch.patchKey, patch: result.patch });
+}
+
+function visitationCommitInput(
+  state: RegionalEcologyStateV6,
+  projection: RegionalEcologyStateV6ActiveProjection,
+  tick: number,
+): CommitRegionalEcologyStateV6ActiveProjectionInput {
+  const advance = ({ patch }: Readonly<{
+    readonly sourceKey: string;
+    readonly patch: CoreEcologyAggregatePatchState;
+  }>) => advanceProjectedPatchWithoutAction(patch, tick);
+  const v1State = state.base.base.base.base.base;
+  const v1Projection = projection.base.base.base.base.base;
+  const homeIsProjected = v1Projection.residents.some(({ sourceKey }) => (
+    sourceKey === v1State.settlementHome.sourceKey
+  ));
+  return {
+    base: {
+      base: {
+        base: {
+          base: {
+            base: {
+              root: advanceRegionalEcologyRoot(v1State.root, tick),
+              rootSeed: SEED,
+              settlementHome: homeIsProjected
+                ? null
+                : advanceProjectedPatchWithoutAction(
+                    v1State.settlementHome.patch,
+                    tick,
+                  ),
+              residents: v1Projection.residents.map(advance),
+            },
+            alpineResidents: projection.base.base.base.base.alpineResidents.map(advance),
+          },
+          polarShoreResidents: projection.base.base.base.polarShoreResidents.map(advance),
+        },
+        coldShoreResidents: projection.base.base.coldShoreResidents.map(advance),
+      },
+      polarConsumerResidents: projection.base.polarConsumerResidents.map(advance),
+    },
+    breadthResidents: projection.breadthResidents.map(advance),
   };
 }
 
@@ -743,6 +811,62 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       state,
       rejectedCommit,
     )).toBe(false);
+  });
+
+  it("falls back after reload and preserves the byte-exact presentation-only commit", () => {
+    const original = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const reloaded = deserializeRegionalEcologyStateV6(
+      serializeRegionalEcologyStateV6(original),
+    );
+    if (reloaded === null) throw new Error("Reload fallback fixture did not survive");
+    const projection = projectionOf(reloaded);
+    const committed = commitRegionalEcologyStateV6ActiveProjection(
+      reloaded,
+      projection,
+      unchangedCommitInput(reloaded, projection),
+    );
+
+    expect(committed).not.toBeNull();
+    expect(serializeRegionalEcologyStateV6(committed))
+      .toBe(serializeRegionalEcologyStateV6(reloaded));
+    expect(isTrustedRegionalEcologyStateV6ActiveCommitTransition(
+      reloaded,
+      committed,
+    )).toBe(true);
+  });
+
+  it("matches a receipt-backed visitation tick byte-for-byte after reload fallback", () => {
+    const receiptState = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const fallbackState = deserializeRegionalEcologyStateV6(
+      serializeRegionalEcologyStateV6(receiptState),
+    );
+    if (fallbackState === null) {
+      throw new Error("Visitation fallback fixture did not survive serialization");
+    }
+    const receiptProjection = projectionOf(receiptState);
+    const fallbackProjection = projectionOf(fallbackState);
+    const nextTick = receiptState.updatedAtTick + 1;
+    const receiptCommit = commitRegionalEcologyStateV6ActiveProjection(
+      receiptState,
+      receiptProjection,
+      visitationCommitInput(receiptState, receiptProjection, nextTick),
+    );
+    const fallbackCommit = commitRegionalEcologyStateV6ActiveProjection(
+      fallbackState,
+      fallbackProjection,
+      visitationCommitInput(fallbackState, fallbackProjection, nextTick),
+    );
+
+    expect(receiptCommit).not.toBeNull();
+    expect(fallbackCommit).not.toBeNull();
+    expect(receiptCommit?.updatedAtTick).toBe(nextTick);
+    expect(fallbackCommit?.updatedAtTick).toBe(nextTick);
+    expect(receiptCommit?.breadthRoot.revision)
+      .toBe(receiptState.breadthRoot.revision);
+    expect(receiptCommit?.breadthRoot.lastEventOrdinal)
+      .toBe(receiptState.breadthRoot.lastEventOrdinal);
+    expect(serializeRegionalEcologyStateV6(receiptCommit))
+      .toBe(serializeRegionalEcologyStateV6(fallbackCommit));
   });
 
   it("rederives signed/extreme windows and reports collision-free source ownership", () => {

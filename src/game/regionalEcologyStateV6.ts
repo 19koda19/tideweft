@@ -46,6 +46,7 @@ import {
   REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
   activateRegionalBreadthEcologyThroughEpoch,
+  advanceRegionalBreadthEcologyActiveResidentsFromReceipt,
   advanceRegionalBreadthEcologyRoot,
   canonicalRegionalBreadthEcologyRootForWorld,
   canonicalizeRegionalBreadthEcologyRoot,
@@ -729,15 +730,6 @@ export function commitRegionalEcologyStateV6ActiveProjection(
   }
   if (base === null || base.updatedAtTick < state.updatedAtTick) return null;
   const rootSeed = input.base.base.base.base.base.rootSeed;
-  let breadthRoot: RegionalBreadthEcologyRootV1;
-  try {
-    breadthRoot = advanceRegionalBreadthEcologyRoot(
-      state.breadthRoot,
-      base.updatedAtTick,
-    );
-  } catch {
-    return null;
-  }
   const outputBySource = canonicalResidentOutputMap(
     input.breadthResidents,
     base.updatedAtTick,
@@ -749,6 +741,7 @@ export function commitRegionalEcologyStateV6ActiveProjection(
   const originalBySource = new Map(
     state.breadthActiveResidents.map((entry) => [entry.sourceKey, entry]),
   );
+  const durableBreadthResidents: CoreEcologyAggregatePatchState[] = [];
   for (const projected of projection.breadthResidents) {
     const original = originalBySource.get(projected.sourceKey);
     const output = outputBySource.get(projected.sourceKey);
@@ -780,15 +773,66 @@ export function commitRegionalEcologyStateV6ActiveProjection(
         normalized,
       );
     if (!presentationOnly && !visitationOnly) {
-      try {
-        breadthRoot = putRegionalBreadthEcologyResidentDeviation(breadthRoot, {
-          rootSeed,
-          patch: normalized,
-        });
-      } catch {
-        return null;
-      }
+      durableBreadthResidents.push(normalized);
     }
+  }
+
+  // The breadth owner applies validated durable changes as one source-ordered
+  // sparse transaction, then advances every unchanged source from its exact
+  // prior-root receipt. Runtime visitation output is never treated as
+  // authority. Any custody miss falls through to the unchanged transaction.
+  const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+    state.breadthRoot,
+    {
+      rootSeed,
+      completedTick: base.updatedAtTick,
+      activeRegions: activeRegions(base),
+      expectedResidents: state.breadthActiveResidents.map((resident) => ({
+        sourceKey: resident.sourceKey,
+        cohortId: resident.cohortId,
+        cohortEpoch: resident.cohortEpoch,
+        region: resident.region,
+        patchHash: resident.patchHash,
+        lineageHash: resident.lineageHash,
+      })),
+      durableResidents: durableBreadthResidents.map((patch) => ({
+        sourceKey: patch.patchKey,
+        patch,
+      })),
+    },
+  );
+  if (fast !== null) {
+    try {
+      const committed = createRegionalEcologyStateV6({
+        base,
+        breadthRoot: fast.root,
+        breadthActiveResidents: fast.residents.map(({ sourceKey, patch }) => (
+          Object.freeze({ sourceKey, patch })
+        )),
+        adoption: state.adoption,
+      });
+      TRUSTED_ACTIVE_COMMITS.set(committed, state);
+      return committed;
+    } catch {
+      // The receipt path is optional acceleration. Preserve the ordinary
+      // transaction as the sole fallback authority on every mismatch.
+    }
+  }
+
+  let breadthRoot: RegionalBreadthEcologyRootV1;
+  try {
+    breadthRoot = advanceRegionalBreadthEcologyRoot(
+      state.breadthRoot,
+      base.updatedAtTick,
+    );
+    for (const patch of durableBreadthResidents) {
+      breadthRoot = putRegionalBreadthEcologyResidentDeviation(breadthRoot, {
+        rootSeed,
+        patch,
+      });
+    }
+  } catch {
+    return null;
   }
   try {
     const committed = createRegionalEcologyStateV6({

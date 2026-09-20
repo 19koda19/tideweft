@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { seedFromText } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
-import { hashCanonical, stableStringify } from "../sim/util";
+import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import { WORLD_NEW_GAME_START_TICK } from "../sim/worldTime";
 import { replaceCoreEcologyAggregatePatchActor } from "./coreEcology";
 import {
@@ -17,6 +17,7 @@ import {
   REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
   REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
   activateRegionalBreadthEcologyThroughEpoch,
+  advanceRegionalBreadthEcologyActiveResidentsFromReceipt,
   advanceRegionalBreadthEcologyRoot,
   canonicalRegionalBreadthEcologyRootForWorld,
   canonicalizeRegionalBreadthEcologyRoot,
@@ -42,6 +43,7 @@ const FOREIGN_SEED = seedFromText("alpha37 foreign breadth root");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
 const TIDAL_FLOCK_REGION = createRegionCoord(-5_179, -89_646);
 const HERON_REGION = createRegionCoord(1_050, 38_043);
+const THIRD_INDIVIDUAL_REGION = createRegionCoord(-60, -100);
 const ABSENT_REGION = createRegionCoord(-1, -1);
 const DESTINATION = createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT);
 
@@ -80,9 +82,71 @@ function movedHeronPatch() {
   );
 }
 
+function rotateFirstActor(
+  patch: ReturnType<typeof heronPatch>,
+  headingDelta: number,
+) {
+  const actor = patch.populations.flatMap(({ members }) => members)[0]?.actor;
+  if (actor === undefined) {
+    throw new Error("Durable breadth fixture needs one individual actor");
+  }
+  return replaceCoreEcologyAggregatePatchActor(
+    patch,
+    repositionCoreWildlifeActor(actor, {
+      atTick: patch.updatedAtTick,
+      position: actor.address.position,
+      heading: (actor.address.heading + headingDelta) % 1_000_000,
+    }),
+  );
+}
+
 function reseal<T extends Record<string, unknown>>(value: T) {
   const { integrity: _integrity, ...base } = value;
   return { ...base, integrity: hashCanonical(base) };
+}
+
+function activeResidentClaims(
+  residents: NonNullable<ReturnType<
+    typeof regionalBreadthEcologyResidentsForActiveRegions
+  >>,
+) {
+  return residents.map(({ cohortEpoch, cohortId, patch, sourceKey }) => ({
+    sourceKey,
+    cohortId,
+    cohortEpoch,
+    region: patch.originRegion,
+    patchHash: hashCanonical(patch),
+    lineageHash: hashCanonical({
+      patchKey: patch.patchKey,
+      originRegion: patch.originRegion,
+      derivation: patch.derivation,
+      populations: patch.populations.map(({
+        species,
+        populationKey,
+        baselinePopulationSize,
+      }) => ({ species, populationKey, baselinePopulationSize })),
+      actorIds: patch.populations.flatMap(({ members }) => (
+        members.map(({ actor }) => actor.identity.stableId)
+      )).sort(compareText),
+      groups: patch.groups.groups.map(({ identity, memberOrdinals }) => ({
+        identity,
+        memberOrdinals,
+      })),
+      aggregates: patch.aggregatePopulations.map(({
+        aggregateId,
+        species,
+        populationKey,
+        habitatCapacity,
+        anchors,
+      }) => ({
+        aggregateId,
+        species,
+        populationKey,
+        habitatCapacity,
+        anchorOrdinals: anchors.map(({ anchorOrdinal }) => anchorOrdinal),
+      })),
+    }),
+  }));
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-only sparse root`, () => {
@@ -329,6 +393,265 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       SEED,
       [DESTINATION],
     ))).toBe(stableStringify(active));
+  });
+
+  it("advances one exact active receipt byte-identically to full common-tick derivation", () => {
+    const root = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: 0,
+    });
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [TIDAL_FLOCK_REGION],
+    );
+    if (prior === null) throw new Error("Breadth receipt fixture did not derive");
+
+    const completedTick = 128;
+    const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick,
+      activeRegions: [TIDAL_FLOCK_REGION],
+      expectedResidents: activeResidentClaims(prior),
+      durableResidents: [],
+    });
+    const oracleRoot = advanceRegionalBreadthEcologyRoot(root, completedTick);
+    const oracleResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      oracleRoot,
+      SEED,
+      [TIDAL_FLOCK_REGION],
+    );
+
+    expect(fast).not.toBeNull();
+    expect(oracleResidents).not.toBeNull();
+    expect(stableStringify(fast?.root)).toBe(stableStringify(oracleRoot));
+    expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+  });
+
+  it("batches source-ordered add, update, and removal byte-identically to scalar puts", () => {
+    const activeRegions = [
+      TIDAL_FLOCK_REGION,
+      HERON_REGION,
+      THIRD_INDIVIDUAL_REGION,
+    ] as const;
+    const pristineRoot = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: 0,
+    });
+    const pristineResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      pristineRoot,
+      SEED,
+      activeRegions,
+    );
+    if (pristineResidents === null) {
+      throw new Error("Durable breadth batch fixture did not derive");
+    }
+    const individualSources = pristineResidents.filter(({ patch }) => (
+      patch.populations.some(({ members }) => members.length > 0)
+    )).sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+    if (individualSources.length < 3) {
+      throw new Error("Durable breadth batch fixture needs three individual sources");
+    }
+    const [updatedSource, removedSource, addedSource] = individualSources;
+    if (
+      updatedSource === undefined
+      || removedSource === undefined
+      || addedSource === undefined
+    ) throw new Error("Durable breadth batch source selection failed");
+
+    let existingRoot = pristineRoot;
+    for (const [ordinal, source] of [updatedSource, removedSource].entries()) {
+      existingRoot = putRegionalBreadthEcologyResidentDeviation(existingRoot, {
+        rootSeed: SEED,
+        patch: rotateFirstActor(source.patch, 101 + ordinal),
+      });
+    }
+    const currentResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      existingRoot,
+      SEED,
+      activeRegions,
+    );
+    if (currentResidents === null) {
+      throw new Error("Durable breadth batch receipt did not derive");
+    }
+    const currentBySource = new Map(
+      currentResidents.map((resident) => [resident.sourceKey, resident]),
+    );
+    const currentUpdated = currentBySource.get(updatedSource.sourceKey);
+    const currentAdded = currentBySource.get(addedSource.sourceKey);
+    if (currentUpdated === undefined || currentAdded === undefined) {
+      throw new Error("Durable breadth batch lost an active source");
+    }
+    const durableResidents = [
+      {
+        sourceKey: updatedSource.sourceKey,
+        patch: rotateFirstActor(currentUpdated.patch, 17),
+      },
+      {
+        sourceKey: removedSource.sourceKey,
+        patch: removedSource.patch,
+      },
+      {
+        sourceKey: addedSource.sourceKey,
+        patch: rotateFirstActor(currentAdded.patch, 31),
+      },
+    ];
+    const baseInput = {
+      rootSeed: SEED,
+      completedTick: 0,
+      activeRegions,
+      expectedResidents: activeResidentClaims(currentResidents),
+    } as const;
+    const forward = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      existingRoot,
+      { ...baseInput, durableResidents },
+    );
+    const reversed = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      existingRoot,
+      { ...baseInput, durableResidents: [...durableResidents].reverse() },
+    );
+
+    let oracleRoot = advanceRegionalBreadthEcologyRoot(existingRoot, 0);
+    for (const resident of [...durableResidents].sort((left, right) => (
+      compareText(left.sourceKey, right.sourceKey)
+    ))) {
+      oracleRoot = putRegionalBreadthEcologyResidentDeviation(oracleRoot, {
+        rootSeed: SEED,
+        patch: resident.patch,
+      });
+    }
+    const oracleResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      oracleRoot,
+      SEED,
+      activeRegions,
+    );
+    if (forward === null || reversed === null || oracleResidents === null) {
+      throw new Error("Durable breadth batch failed its scalar oracle");
+    }
+
+    expect(serializeRegionalBreadthEcologyRoot(forward.root))
+      .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+    expect(serializeRegionalBreadthEcologyRoot(reversed.root))
+      .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+    expect(stableStringify(forward.residents)).toBe(stableStringify(oracleResidents));
+    expect(stableStringify(reversed.residents)).toBe(stableStringify(oracleResidents));
+    expect(forward.root.revision).toBe(existingRoot.revision + 3);
+    expect(forward.root.lastEventOrdinal).toBe(existingRoot.lastEventOrdinal + 3);
+    expect(forward.root.regions.find(({ residentPatch }) => (
+      residentPatch.patchKey === updatedSource.sourceKey
+    ))?.revision).toBe(2);
+    expect(forward.root.regions.some(({ residentPatch }) => (
+      residentPatch.patchKey === removedSource.sourceKey
+    ))).toBe(false);
+    expect(forward.root.regions.find(({ residentPatch }) => (
+      residentPatch.patchKey === addedSource.sourceKey
+    ))?.revision).toBe(1);
+    expect(forward.root.regions.map(({ key, revision, eventOrdinal }) => ({
+      key,
+      revision,
+      eventOrdinal,
+    }))).toEqual(oracleRoot.regions.map(({ key, revision, eventOrdinal }) => ({
+      key,
+      revision,
+      eventOrdinal,
+    })));
+  });
+
+  it("fails the active-receipt fast path closed for clones, reloads, or another window", () => {
+    const root = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: 0,
+    });
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [TIDAL_FLOCK_REGION],
+    );
+    if (prior === null) throw new Error("Breadth receipt fixture did not derive");
+    const input = {
+      rootSeed: SEED,
+      completedTick: 1,
+      activeRegions: [TIDAL_FLOCK_REGION],
+      expectedResidents: activeResidentClaims(prior),
+      durableResidents: [],
+    } as const;
+
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      structuredClone(root),
+      input,
+    )).toBeNull();
+    const restored = deserializeRegionalBreadthEcologyRoot(
+      serializeRegionalBreadthEcologyRoot(root),
+    );
+    expect(restored).not.toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      restored,
+      input,
+    )).toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      ...input,
+      activeRegions: [ABSENT_REGION],
+    })).toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      ...input,
+      expectedResidents: input.expectedResidents.slice(1),
+    })).toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      ...input,
+      expectedResidents: input.expectedResidents.map((claim, index) => (
+        index === 0
+          ? { ...claim, patchHash: hashCanonical("forged prior breadth patch") }
+          : claim
+      )),
+    })).toBeNull();
+
+    const fallbackRoot = advanceRegionalBreadthEcologyRoot(restored, input.completedTick);
+    expect(regionalBreadthEcologyResidentsForActiveRegions(
+      fallbackRoot,
+      SEED,
+      input.activeRegions,
+    )).not.toBeNull();
+  });
+
+  it("preserves an off-origin resident at a signed extreme through the active receipt", () => {
+    const pristine = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: 0,
+    });
+    const root = putRegionalBreadthEcologyResidentDeviation(pristine, {
+      rootSeed: SEED,
+      patch: movedHeronPatch(),
+    });
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [DESTINATION],
+    );
+    if (prior === null) throw new Error("Signed receipt fixture did not derive");
+    const movedSourceKey = root.regions[0]!.residentPatch.patchKey;
+    expect(prior.find(({ sourceKey }) => sourceKey === movedSourceKey)?.patch.originRegion)
+      .toEqual(HERON_REGION);
+
+    const completedTick = 128;
+    const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick,
+      activeRegions: [DESTINATION],
+      expectedResidents: activeResidentClaims(prior),
+      durableResidents: [],
+    });
+    const oracleRoot = advanceRegionalBreadthEcologyRoot(root, completedTick);
+    const oracleResidents = regionalBreadthEcologyResidentsForActiveRegions(
+      oracleRoot,
+      SEED,
+      [DESTINATION],
+    );
+
+    expect(fast).not.toBeNull();
+    expect(stableStringify(fast?.root)).toBe(stableStringify(oracleRoot));
+    expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+    expect(fast?.residents.find(({ sourceKey }) => sourceKey === movedSourceKey)?.patch)
+      .toMatchObject({ originRegion: HERON_REGION, updatedAtTick: completedTick });
   });
 
   it("fails closed on excessive hot windows, malformed clocks, and unknown keys", () => {
