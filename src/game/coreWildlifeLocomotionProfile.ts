@@ -1,7 +1,10 @@
 import type { TerrainTileView } from "../sim/types";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import type { CoreWildlifeIntentKind } from "./coreWildlifeActor";
-import type { LivingActorTraversabilityCell } from "./livingActorLocomotion";
+import {
+  createLivingActorTraversabilityCell,
+  type LivingActorTraversabilityCell,
+} from "./livingActorLocomotion";
 import {
   createLivingActorGradeTraversalPolicy,
   type LivingActorGradeTraversalPolicy,
@@ -651,21 +654,21 @@ function evaluatePreparedCoreWildlifeTraversability(
 ): LivingActorTraversabilityCell {
   const { profile, medium } = prepared;
   if (medium === "air") {
-    return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost! });
+    return createLivingActorTraversabilityCell("open", profile.aerialTravelCost!);
   }
   if (medium === "surface-water") {
     return tile.terrain === "deep-water" || tile.waterDepth > 0
-      ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! })
-      : Object.freeze({ access: "blocked", travelCost: 0 });
+      ? createLivingActorTraversabilityCell("open", profile.surfaceWaterTravelCost!)
+      : createLivingActorTraversabilityCell("blocked", 0);
   }
   if (
     medium === "amphibious"
     && (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH)
   ) {
-    return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! });
+    return createLivingActorTraversabilityCell("open", profile.surfaceWaterTravelCost!);
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
-    return Object.freeze({ access: "deep-water", travelCost: 0 });
+    return createLivingActorTraversabilityCell("deep-water", 0);
   }
   const base = clamp(tile.baseTravelCost, 1, 1_000_000);
   const preference = profile.dampCoverPreference;
@@ -676,7 +679,7 @@ function evaluatePreparedCoreWildlifeTraversability(
   const multiplier = preferredCover
     ? preference.multiplier
     : profile.terrainMultipliers[tile.terrain] ?? profile.baseTerrainMultiplier;
-  return Object.freeze({ access: "open", travelCost: scaledCost(base, multiplier) });
+  return createLivingActorTraversabilityCell("open", scaledCost(base, multiplier));
 }
 
 /** Distinct gait distance, still bounded below one shared terrain tile. */

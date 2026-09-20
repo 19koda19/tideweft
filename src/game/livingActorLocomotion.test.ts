@@ -5,6 +5,7 @@ import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import {
   LIVING_ACTOR_LOCOMOTION_VERSION,
   MAX_LIVING_ACTOR_LOCOMOTION_STEP_UNITS,
+  createLivingActorTraversabilityCell,
   createLivingActorTraversabilitySurface,
   deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
@@ -177,6 +178,64 @@ describe("species-neutral living actor locomotion", () => {
       cells: [rejected],
     })).toThrow(TypeError);
     expect(getterCalls).toBe(0);
+  });
+
+  it("reuses only lawful field-minted cells while copies retain full admission", () => {
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    const createSurfaceForCell = (cell: unknown) => createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 1,
+      heightTiles: 1,
+      cells: [cell] as readonly LivingActorTraversabilityCell[],
+    });
+
+    for (const [access, travelCost] of [
+      ["open", 1],
+      ["open", 1_000_000],
+      ["blocked", 0],
+      ["deep-water", 0],
+    ] as const) {
+      const first = createLivingActorTraversabilityCell(access, travelCost);
+      const second = createLivingActorTraversabilityCell(access, travelCost);
+      expect(Object.isFrozen(first)).toBe(true);
+      expect(Object.keys(first)).toEqual(["access", "travelCost"]);
+      expect(createSurfaceForCell(first).cells[0]).toBe(first);
+      expect(first).toEqual(second);
+      expect(first).not.toBe(second);
+
+      for (const untrusted of [
+        Object.freeze({ ...first }),
+        structuredClone(first),
+        JSON.parse(JSON.stringify(first)) as unknown,
+        new Proxy(first, {}),
+      ]) {
+        const admitted = createSurfaceForCell(untrusted).cells[0];
+        expect(admitted).toEqual(first);
+        expect(admitted).not.toBe(untrusted);
+      }
+      expect(JSON.stringify(first)).toBe(JSON.stringify({ access, travelCost }));
+    }
+
+    for (const [access, travelCost] of [
+      ["open", 0],
+      ["open", -0],
+      ["open", Number.NaN],
+      ["open", 1.5],
+      ["open", 1_000_001],
+      ["blocked", 1],
+      ["blocked", -0],
+      ["deep-water", 1],
+      ["unregistered", 0],
+    ] as const) {
+      const candidate = createLivingActorTraversabilityCell(
+        access as LivingActorTraversalAccess,
+        travelCost,
+      );
+      expect(Object.isFrozen(candidate)).toBe(true);
+      expect(() => createSurfaceForCell(candidate)).toThrow(TypeError);
+    }
   });
 
   it("derives a shared ordered escape fan from perceived space rather than species rules", () => {
