@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { generateRegionTerrain } from "../sim/regionTerrain";
 import {
@@ -55,6 +55,7 @@ import {
   type RegionalEcologyStateV6ActiveProjection,
 } from "./regionalEcologyStateV6";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
+import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
 import {
   REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
   REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
@@ -408,6 +409,44 @@ function replaceActiveRegion(
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} regional ecology v6`, () => {
+  it("memoizes only the exact frozen authority and signed projection window", () => {
+    const state = regionalEcologyV6AtBreadthEpoch(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH);
+    const activeWindow = windowAtBreadthActor(state);
+    const direct = projectRegionalEcologyStateV6ActiveState(state, activeWindow);
+    if (direct === null) throw new Error("Alpha37 direct memo witness failed");
+    const projector = vi.fn(projectRegionalEcologyStateV6ActiveState);
+    const memo = createRuntimeRegionalEcologyProjectionMemo(projector);
+
+    const first = memo.project(state, activeWindow);
+    expect(first).not.toBeNull();
+    expect(stableStringify(first)).toBe(stableStringify(direct));
+    expect(memo.project(state, windowAtBreadthActor(state))).toBe(first);
+    expect(projector).toHaveBeenCalledTimes(1);
+
+    const replacement = createRegionalEcologyStateV6({
+      base: state.base,
+      breadthRoot: state.breadthRoot,
+      breadthActiveResidents: state.breadthActiveResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch,
+      })),
+      adoption: state.adoption,
+    });
+    expect(replacement).not.toBe(state);
+    expect(memo.project(replacement, activeWindow)).not.toBeNull();
+    expect(projector).toHaveBeenCalledTimes(2);
+
+    const shiftedWindow = Object.freeze({
+      origin: Object.freeze({
+        x: activeWindow.origin.x + 1,
+        y: activeWindow.origin.y,
+      }),
+      terrain: activeWindow.terrain,
+    });
+    expect(memo.project(replacement, shiftedWindow)).not.toBeNull();
+    expect(projector).toHaveBeenCalledTimes(3);
+  });
+
   it("wraps exact v5 custody once and authenticates a future-epoch-stable activation prefix", () => {
     const { homeHabitat, v5 } = fixture();
     const original = stableStringify(v5);

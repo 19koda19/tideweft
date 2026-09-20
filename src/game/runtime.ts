@@ -234,6 +234,7 @@ import {
   projectCoreEcologyWildlife,
   selectedCoreEcologyActor,
   setCoreEcologyMaterializationForWindow,
+  type CoreEcologyRuntimeWindow,
 } from "./coreEcologyRuntime";
 import {
   projectCoreEcologyAggregateEvidence,
@@ -456,8 +457,10 @@ import {
   replaceRegionalEcologyStateV6ActiveState,
   serializeRegionalEcologyStateV6,
   type RegionalEcologyStateV6,
+  type RegionalEcologyStateV6ActiveProjection,
   type RegionalEcologyStateV6ProjectedBreadthResidentV1,
 } from "./regionalEcologyStateV6";
+import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
 import { canonicalCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
 import { canonicalCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import { canonicalCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
@@ -1658,16 +1661,9 @@ function rebaseRuntimeRegionalEcologyState(
 }
 
 function runtimeRegionalEcologyActor(
-  state: RegionalEcologyStateV6,
-  world: WorldView,
-  window: RegionalPlayerTravelState["window"],
+  projection: RegionalEcologyStateV6ActiveProjection,
   target: RuntimeCoreWildlifeTarget,
 ): CoreWildlifeActorState | null {
-  const projection = projectRegionalEcologyStateV6ActiveState(state, {
-    origin: window.origin,
-    terrain: { width: world.terrain.width, height: world.terrain.height },
-  });
-  if (projection === null) return null;
   const matches = [
     ...projection.base.base.base.base.base.residents,
     ...projection.base.base.base.base.alpineResidents,
@@ -8911,6 +8907,9 @@ export async function createTideweftRuntime(
       worldView,
       economyView,
     );
+  const regionalEcologyProjectionMemo = createRuntimeRegionalEcologyProjectionMemo(
+    projectRegionalEcologyStateV6ActiveState,
+  );
   const alpineActivityAuthorityCache = new Map<
     string,
     CoreEcologyActivityAuthorityReceipt
@@ -9272,6 +9271,22 @@ export async function createTideweftRuntime(
     return sleeping;
   }
 
+  function projectActiveRegionalEcology(
+    actorWindow: CoreEcologyRuntimeWindow = {
+      origin: regionalTravel.window.origin,
+      terrain: {
+        width: worldView.terrain.width,
+        height: worldView.terrain.height,
+      },
+    },
+  ): RegionalEcologyStateV6ActiveProjection {
+    const projection = regionalEcologyProjectionMemo.project(regionalEcology, actorWindow);
+    if (projection === null) {
+      throw new Error("Regional ecology active projection could not be resolved");
+    }
+    return projection;
+  }
+
   function refreshViewsUnmeasured(): void {
     perception = projectPlayerPerception();
     captureNewlyObservedEvents();
@@ -9282,13 +9297,7 @@ export async function createTideweftRuntime(
         height: worldView.terrain.height,
       },
     };
-    const ecologyProjection = projectRegionalEcologyStateV6ActiveState(
-      regionalEcology,
-      actorWindow,
-    );
-    if (ecologyProjection === null) {
-      throw new Error("Regional ecology presentation projection could not be resolved");
-    }
+    const ecologyProjection = projectActiveRegionalEcology(actorWindow);
     const projectedEcologySources = [
       ...ecologyProjection.base.base.base.base.base.residents,
       ...ecologyProjection.base.base.base.base.alpineResidents,
@@ -10646,20 +10655,7 @@ export async function createTideweftRuntime(
         bio0Ecology.porterAddress.actorId,
       );
       const priorWorkingDogs = dogActorRoster.actors.map(({ address }) => address);
-      const ecologyWindow = {
-        origin: regionalTravel.window.origin,
-        terrain: {
-          width: worldView.terrain.width,
-          height: worldView.terrain.height,
-        },
-      };
-      const regionalEcologyProjectionForStep = projectRegionalEcologyStateV6ActiveState(
-        regionalEcology,
-        ecologyWindow,
-      );
-      if (regionalEcologyProjectionForStep === null) {
-        throw new Error("Regional ecology materialization could not be resolved");
-      }
+      const regionalEcologyProjectionForStep = projectActiveRegionalEcology();
       const projectedEcologySources = [
         ...regionalEcologyProjectionForStep.base.base.base.base.base.residents,
         ...regionalEcologyProjectionForStep.base.base.base.base.alpineResidents,
@@ -12450,7 +12446,7 @@ export async function createTideweftRuntime(
           && renderView.wildlife?.some(({ actorId, species }) => (
             actorId === perceivedCommand.id && species === perceivedCommand.species
           ))
-          && runtimeRegionalEcologyActor(regionalEcology, worldView, regionalTravel.window, {
+          && runtimeRegionalEcologyActor(projectActiveRegionalEcology(), {
             species: perceivedCommand.species,
             actorId: perceivedCommand.id,
           }) !== null
@@ -12647,12 +12643,7 @@ export async function createTideweftRuntime(
       ? null
       : selectedWildlifeTarget?.species === command.target.species
           && selectedWildlifeTarget.actorId === command.target.actorId
-        ? runtimeRegionalEcologyActor(
-            regionalEcology,
-            worldView,
-            regionalTravel.window,
-            selectedWildlifeTarget,
-          )
+        ? runtimeRegionalEcologyActor(projectActiveRegionalEcology(), selectedWildlifeTarget)
         : null;
     if (
       (!isDog && wildlifeActor === null)
