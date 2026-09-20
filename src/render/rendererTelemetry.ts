@@ -15,6 +15,38 @@ export interface RendererWorkCounts {
   readonly projectedEntityCandidates?: number;
   readonly labels?: number;
   readonly particles?: number;
+  /** Optional renderer-only retained-geometry diagnostics for performance audits. */
+  readonly retainedGeometry?: RendererRetainedGeometryCounts;
+}
+
+export interface RendererRetainedGeometryCounts {
+  readonly ownerTransitions: number;
+  readonly builds: number;
+  readonly frees: number;
+  readonly discarded: number;
+  readonly evictions: number;
+  readonly hits: number;
+  readonly live: number;
+  readonly peakLive: number;
+  readonly perceptionPoolOwnerTransitions: number;
+  readonly perceptionBuilds: number;
+  readonly perceptionFrees: number;
+  readonly perceptionDiscarded: number;
+  readonly perceptionEvictions: number;
+  readonly perceptionHits: number;
+  readonly perceptionLive: number;
+  readonly perceptionPeakLive: number;
+  readonly perceptionOwnerChanges: number;
+  readonly perceptionPromotions: number;
+  readonly perceptionRetainedFrames: number;
+  readonly perceptionImmediateFrames: number;
+  readonly perceptionRetainedModelDraws: number;
+  readonly perceptionImmediateBatchDraws: number;
+  readonly perceptionPeakBuildsPerFrame: number;
+  readonly perceptionOversizedOwners: number;
+  readonly perceptionOversizedFrames: number;
+  readonly perceptionCurrentOwnerBatchCount: number;
+  readonly perceptionPeakOwnerBatchCount: number;
 }
 
 export interface RendererTelemetrySnapshot extends RendererWorkCounts {
@@ -29,11 +61,13 @@ export interface RendererTelemetrySnapshot extends RendererWorkCounts {
   // source-compatible; createRendererTelemetry always publishes every field.
   /** Exact raw start-to-start intervals in the current bounded active window. */
   readonly rawFrameIntervalSampleCount?: number;
+  readonly rawFrameIntervalLatestMs?: number;
   readonly rawFrameIntervalMeanMs?: number;
   readonly rawFrameIntervalP99Ms?: number;
   readonly rawFrameIntervalWorstMs?: number;
   /** Synchronous CPU time spent composing completed draw callbacks. */
   readonly drawCpuSampleCount?: number;
+  readonly drawCpuLatestMs?: number;
   readonly drawCpuMeanMs?: number;
   readonly drawCpuP99Ms?: number;
   readonly drawCpuWorstMs?: number;
@@ -66,17 +100,60 @@ function boundedCount(value: unknown): number | undefined {
   return clamp(Math.floor(value), 0, RENDERER_TELEMETRY_MAX_DRAW_COUNT);
 }
 
+const RETAINED_GEOMETRY_FIELDS = [
+  "ownerTransitions",
+  "builds",
+  "frees",
+  "discarded",
+  "evictions",
+  "hits",
+  "live",
+  "peakLive",
+  "perceptionPoolOwnerTransitions",
+  "perceptionBuilds",
+  "perceptionFrees",
+  "perceptionDiscarded",
+  "perceptionEvictions",
+  "perceptionHits",
+  "perceptionLive",
+  "perceptionPeakLive",
+  "perceptionOwnerChanges",
+  "perceptionPromotions",
+  "perceptionRetainedFrames",
+  "perceptionImmediateFrames",
+  "perceptionRetainedModelDraws",
+  "perceptionImmediateBatchDraws",
+  "perceptionPeakBuildsPerFrame",
+  "perceptionOversizedOwners",
+  "perceptionOversizedFrames",
+  "perceptionCurrentOwnerBatchCount",
+  "perceptionPeakOwnerBatchCount",
+] as const satisfies readonly (keyof RendererRetainedGeometryCounts)[];
+
+function boundedRetainedGeometryCounts(
+  counts: RendererRetainedGeometryCounts | undefined,
+): RendererRetainedGeometryCounts | undefined {
+  if (!counts || typeof counts !== "object") return undefined;
+  const entries = RETAINED_GEOMETRY_FIELDS.map((field) => (
+    [field, boundedCount(counts[field])] as const
+  ));
+  if (entries.some(([, value]) => value === undefined)) return undefined;
+  return Object.freeze(Object.fromEntries(entries)) as unknown as RendererRetainedGeometryCounts;
+}
+
 function boundedCounts(counts: RendererWorkCounts | undefined): RendererWorkCounts {
   if (!counts || typeof counts !== "object") return {};
   const terrainTiles = boundedCount(counts.terrainTiles);
   const projectedEntityCandidates = boundedCount(counts.projectedEntityCandidates);
   const labels = boundedCount(counts.labels);
   const particles = boundedCount(counts.particles);
+  const retainedGeometry = boundedRetainedGeometryCounts(counts.retainedGeometry);
   return {
     ...(terrainTiles === undefined ? {} : { terrainTiles }),
     ...(projectedEntityCandidates === undefined ? {} : { projectedEntityCandidates }),
     ...(labels === undefined ? {} : { labels }),
     ...(particles === undefined ? {} : { particles }),
+    ...(retainedGeometry === undefined ? {} : { retainedGeometry }),
   };
 }
 
@@ -85,6 +162,7 @@ interface BoundedTimingWindow {
   readonly sorted: number[];
   nextIndex: number;
   sum: number;
+  latest: number | undefined;
 }
 
 interface TimingStatistics {
@@ -102,7 +180,7 @@ const EMPTY_TIMING_STATISTICS: TimingStatistics = Object.freeze({
 });
 
 function createTimingWindow(): BoundedTimingWindow {
-  return { samples: [], sorted: [], nextIndex: 0, sum: 0 };
+  return { samples: [], sorted: [], nextIndex: 0, sum: 0, latest: undefined };
 }
 
 function resetTimingWindow(window: BoundedTimingWindow): void {
@@ -110,6 +188,7 @@ function resetTimingWindow(window: BoundedTimingWindow): void {
   window.sorted.length = 0;
   window.nextIndex = 0;
   window.sum = 0;
+  window.latest = undefined;
 }
 
 function lowerBound(sorted: readonly number[], value: number): number {
@@ -144,6 +223,7 @@ function recordTimingSample(window: BoundedTimingWindow, value: number | undefin
     window.samples.push(value);
   }
   window.sum += value;
+  window.latest = value;
   window.sorted.splice(lowerBound(window.sorted, value), 0, value);
 }
 
@@ -182,10 +262,16 @@ function immutableSnapshot(
     active,
     detailedSampleCapacity: RENDERER_TELEMETRY_SAMPLE_CAPACITY,
     rawFrameIntervalSampleCount: rawInterval.sampleCount,
+    ...(rawFrameIntervals.latest === undefined
+      ? {}
+      : { rawFrameIntervalLatestMs: rawFrameIntervals.latest }),
     rawFrameIntervalMeanMs: rawInterval.meanMs,
     rawFrameIntervalP99Ms: rawInterval.p99Ms,
     rawFrameIntervalWorstMs: rawInterval.worstMs,
     drawCpuSampleCount: drawCpu.sampleCount,
+    ...(drawCpuDurations.latest === undefined
+      ? {}
+      : { drawCpuLatestMs: drawCpuDurations.latest }),
     drawCpuMeanMs: drawCpu.meanMs,
     drawCpuP99Ms: drawCpu.p99Ms,
     drawCpuWorstMs: drawCpu.worstMs,

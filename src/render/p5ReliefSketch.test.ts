@@ -359,6 +359,35 @@ function warmWaterView(spatialEpoch = "warm-water"): TideweftView {
   };
 }
 
+function perceivedTerrainView(
+  base: TideweftView,
+  signature: string,
+  tiles: TideweftView["terrain"]["tiles"] = base.terrain.tiles.map((tile) => ({
+    ...tile,
+    currentVisibility: 1,
+    currentDetailVisibility: 1 as const,
+  })),
+): TideweftView {
+  return {
+    ...base,
+    perception: {
+      version: 1,
+      signature,
+      valid: true,
+      visibleTileCount: tiles.length,
+      directTileCount: tiles.length,
+      peripheralTileCount: 0,
+      detailVisibleTileCount: tiles.length,
+      detailDirectTileCount: tiles.length,
+      detailPeripheralTileCount: 0,
+    },
+    terrain: {
+      ...base.terrain,
+      tiles,
+    },
+  };
+}
+
 function dogView(overrides: Partial<DogView> = {}): DogView {
   return {
     version: 1,
@@ -666,6 +695,207 @@ describe("Relief renderer telemetry", () => {
     harness.canvas.fire("webglcontextrestored");
     harness.draw();
     expect(buildGeometry.mock.calls.length).toBeGreaterThan(buildsBeforeContextLoss);
+
+    freeGeometry.mockClear();
+    harness.renderer.destroy();
+    expect(freeGeometry.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("waits for an exact perception owner, then warms at most eight overlay batches per frame", () => {
+    let now = 1;
+    vi.stubGlobal("performance", { now: () => now });
+    const base = view("retained-perception", { x: 48, y: 48 });
+    const perceived = perceivedTerrainView(
+      base,
+      "retained-perception-owner-a",
+      base.terrain.tiles.map((tile, index) => ({
+        ...tile,
+        currentVisibility: (index % 8 + 1) / 8,
+        currentDetailVisibility: 1 as const,
+        currentLocalIllumination: index < 8 ? 0 : 1,
+      })),
+    );
+    const harness = renderHarness(perceived);
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const durableBuilds = buildGeometry.mock.calls.length;
+    expect(durableBuilds).toBeGreaterThan(0);
+
+    now = 150;
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(durableBuilds);
+
+    now = 151;
+    harness.draw();
+    expect(buildGeometry.mock.calls.length - durableBuilds).toBe(8);
+
+    now = 167;
+    harness.draw();
+    expect(buildGeometry.mock.calls.length - durableBuilds).toBe(16);
+
+    now = 183;
+    harness.draw();
+    expect(buildGeometry.mock.calls.length - durableBuilds).toBe(16);
+    expect(harness.renderer.telemetry().retainedGeometry).toMatchObject({
+      perceptionOwnerChanges: 1,
+      perceptionPromotions: 1,
+      perceptionBuilds: 16,
+      perceptionLive: 16,
+      perceptionPeakLive: 16,
+      perceptionPeakBuildsPerFrame: 8,
+      perceptionCurrentOwnerBatchCount: 16,
+      perceptionPeakOwnerBatchCount: 16,
+      perceptionOversizedOwners: 0,
+      perceptionRetainedModelDraws: 40,
+      evictions: 0,
+    });
+    expect(
+      harness.renderer.telemetry().retainedGeometry?.peakLive,
+    ).toBe(harness.renderer.telemetry().retainedGeometry?.live);
+    harness.renderer.destroy();
+  });
+
+  it("never submits a stale perception owner while a changed owner is settling", () => {
+    let now = 1;
+    vi.stubGlobal("performance", { now: () => now });
+    const base = view("retained-perception-change", { x: 48, y: 48 });
+    const first = perceivedTerrainView(base, "perception-before");
+    const harness = renderHarness(first);
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const model = harness.instance.model as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const immediateOnlyModelDraws = model.mock.calls.length;
+    now = 151;
+    harness.draw();
+    const warmedBuilds = buildGeometry.mock.calls.length;
+    expect(model.mock.calls.length).toBeGreaterThan(immediateOnlyModelDraws);
+
+    const changed = perceivedTerrainView(first, "perception-after", first.terrain.tiles.map(
+      (tile, index) => ({
+        ...tile,
+        currentVisibility: index === 0 ? 0.5 : 1,
+        currentLocalIllumination: index === 0 ? 1 : 0,
+      }),
+    ));
+    harness.setView({
+      ...changed,
+      terrain: {
+        ...changed.terrain,
+        currentLocalIlluminationRevision: "lamp-changed",
+      },
+    });
+    const modelsBeforeChange = model.mock.calls.length;
+    now = 152;
+    harness.draw();
+
+    expect(buildGeometry).toHaveBeenCalledTimes(warmedBuilds);
+    expect(model.mock.calls.length - modelsBeforeChange).toBe(immediateOnlyModelDraws);
+    expect(harness.renderer.telemetry().retainedGeometry).toMatchObject({
+      perceptionOwnerChanges: 2,
+      perceptionPromotions: 1,
+      evictions: 0,
+    });
+    harness.renderer.destroy();
+  });
+
+  it("keeps an oversized perception owner wholly immediate instead of evicting in a loop", () => {
+    let now = 1;
+    vi.stubGlobal("performance", { now: () => now });
+    const base = view("retained-perception-oversized", { x: 192, y: 192 });
+    const biomes = [
+      "tide-channel",
+      "brine-flat",
+      "reed-marsh",
+      "rain-meadow",
+      "sun-meadow",
+      "wind-ridge",
+      "glimmerfen",
+    ] as const;
+    const tiles = Array.from({ length: 16 * 16 }, (_, index) => ({
+      kind: "meadow" as const,
+      biome: biomes[index % biomes.length] ?? "tide-channel",
+      elevation: 0.2,
+      discovered: 1,
+      currentVisibility: (Math.floor(index / biomes.length) % 8 + 1) / 8,
+      currentDetailVisibility: 1 as const,
+      currentLocalIllumination: (
+        Math.floor(index / (biomes.length * 8)) % 4
+      ) / 3,
+    }));
+    const oversized = perceivedTerrainView({
+      ...base,
+      terrain: {
+        ...base.terrain,
+        columns: 16,
+        rows: 16,
+        revision: "oversized-perception-owner",
+        tiles,
+      },
+      camera: {
+        ...base.camera,
+        center: { x: 192, y: 192 },
+        bounds: { minX: 0, minY: 0, maxX: 384, maxY: 384 },
+      },
+    }, "perception-oversized", tiles);
+    const harness = renderHarness(oversized);
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const durableBuilds = buildGeometry.mock.calls.length;
+    now = 500;
+    harness.draw();
+
+    expect(buildGeometry).toHaveBeenCalledTimes(durableBuilds);
+    expect(harness.renderer.telemetry().retainedGeometry).toMatchObject({
+      perceptionPromotions: 0,
+      perceptionRetainedModelDraws: 0,
+      perceptionOversizedOwners: 1,
+      perceptionOversizedFrames: 2,
+      perceptionPeakBuildsPerFrame: 0,
+      evictions: 0,
+    });
+    expect(
+      harness.renderer.telemetry().retainedGeometry?.perceptionCurrentOwnerBatchCount ?? 0,
+    ).toBeGreaterThan(128);
+    harness.renderer.destroy();
+  });
+
+  it("discards retained perception handles on context loss and rebuilds lazily after restore", () => {
+    let now = 1;
+    vi.stubGlobal("performance", { now: () => now });
+    const source = perceivedTerrainView(
+      view("retained-perception-context", { x: 48, y: 48 }),
+      "perception-context-a",
+    );
+    const harness = renderHarness(source);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const freeGeometry = harness.instance.freeGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    now = 151;
+    harness.draw();
+    const warmedBuilds = buildGeometry.mock.calls.length;
+    freeGeometry.mockClear();
+
+    harness.canvas.fire("webglcontextlost", { preventDefault: vi.fn() });
+    expect(freeGeometry).not.toHaveBeenCalled();
+    harness.canvas.fire("webglcontextrestored");
+    now = 152;
+    harness.draw();
+    const restoredDurableBuilds = buildGeometry.mock.calls.length;
+    expect(restoredDurableBuilds).toBeGreaterThan(warmedBuilds);
+
+    now = 301;
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(restoredDurableBuilds);
+    now = 302;
+    harness.draw();
+    expect(buildGeometry.mock.calls.length).toBeGreaterThan(restoredDurableBuilds);
 
     freeGeometry.mockClear();
     harness.renderer.destroy();
