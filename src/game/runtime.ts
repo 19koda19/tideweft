@@ -461,6 +461,10 @@ import {
   type RegionalEcologyStateV6ProjectedBreadthResidentV1,
 } from "./regionalEcologyStateV6";
 import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
+import {
+  createRuntimeCoreEcologyActivityAuthorityMemo,
+  type RuntimeCoreEcologyActivityAuthorityBundle,
+} from "./runtimeCoreEcologyActivityAuthorityMemo";
 import { canonicalCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
 import { canonicalCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import { canonicalCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
@@ -1436,27 +1440,43 @@ function runtimeCoreEcologyActivityAuthorities(
 }
 
 type RuntimeRegionalEcologyProjectedSource =
-  | Pick<RegionalEcologyProjectedResidentV1, "kind" | "patch" | "sourceKey">
+  | Pick<
+      RegionalEcologyProjectedResidentV1,
+      "kind" | "patch" | "region" | "sourceKey"
+    >
   | Pick<
       RegionalEcologyStateV2ProjectedAlpineResidentV1,
-      "kind" | "patch" | "sourceKey"
+      "kind" | "patch" | "region" | "sourceKey"
     >
   | Pick<
       RegionalEcologyStateV3ProjectedPolarShoreResidentV1,
-      "kind" | "patch" | "sourceKey"
+      "kind" | "patch" | "region" | "sourceKey"
     >
   | Pick<
       RegionalEcologyStateV4ProjectedColdShoreResidentV1,
-      "kind" | "patch" | "sourceKey"
+      "kind" | "patch" | "region" | "sourceKey"
     >
   | Pick<
       RegionalEcologyStateV5ProjectedPolarConsumerResidentV1,
-      "kind" | "patch" | "sourceKey"
+      "kind" | "patch" | "region" | "sourceKey"
     >
   | Pick<
       RegionalEcologyStateV6ProjectedBreadthResidentV1,
-      "kind" | "patch" | "sourceKey"
+      "kind" | "patch" | "region" | "sourceKey"
     >;
+
+function runtimeRegionalEcologyProjectedSources(
+  projection: RegionalEcologyStateV6ActiveProjection,
+): readonly RuntimeRegionalEcologyProjectedSource[] {
+  return Object.freeze([
+    ...projection.base.base.base.base.base.residents,
+    ...projection.base.base.base.base.alpineResidents,
+    ...projection.base.base.base.polarShoreResidents,
+    ...projection.base.base.coldShoreResidents,
+    ...projection.base.polarConsumerResidents,
+    ...projection.breadthResidents,
+  ]);
+}
 
 function runtimeMaterializedCoreActorIds(
   patch: CoreEcologyAggregatePatchState,
@@ -1664,14 +1684,7 @@ function runtimeRegionalEcologyActor(
   projection: RegionalEcologyStateV6ActiveProjection,
   target: RuntimeCoreWildlifeTarget,
 ): CoreWildlifeActorState | null {
-  const matches = [
-    ...projection.base.base.base.base.base.residents,
-    ...projection.base.base.base.base.alpineResidents,
-    ...projection.base.base.base.polarShoreResidents,
-    ...projection.base.base.coldShoreResidents,
-    ...projection.base.polarConsumerResidents,
-    ...projection.breadthResidents,
-  ]
+  const matches = runtimeRegionalEcologyProjectedSources(projection)
     .flatMap(({ patch }) => {
     const actor = selectedCoreEcologyActor(patch, target);
     return actor === null ? [] : [actor];
@@ -8914,6 +8927,27 @@ export async function createTideweftRuntime(
     string,
     CoreEcologyActivityAuthorityReceipt
   >();
+  const coreEcologyActivityAuthorityMemo = createRuntimeCoreEcologyActivityAuthorityMemo(
+    ({ projection, root, rootSeed, alpineSeedFingerprint }) => {
+      const authoritiesBySource = new Map<
+        string,
+        ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>
+      >();
+      for (const source of runtimeRegionalEcologyProjectedSources(projection)) {
+        if (authoritiesBySource.has(source.sourceKey)) return null;
+        const authorities = runtimeCoreEcologyActivityAuthorities(
+          rootSeed,
+          root,
+          source,
+          alpineActivityAuthorityCache,
+          alpineSeedFingerprint,
+        );
+        if (authorities === null) return null;
+        authoritiesBySource.set(source.sourceKey, authorities);
+      }
+      return authoritiesBySource;
+    },
+  );
   if (resumed === null) {
     physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, regionalEcology);
   }
@@ -9287,6 +9321,22 @@ export async function createTideweftRuntime(
     return projection;
   }
 
+  function projectCoreEcologyActivityAuthorityBundle(
+    projection: RegionalEcologyStateV6ActiveProjection,
+  ): RuntimeCoreEcologyActivityAuthorityBundle {
+    const bundle = coreEcologyActivityAuthorityMemo.project({
+      projection,
+      root: regionalEcology.base.base.base.base.base.root,
+      rootSeed: world.meta.rootSeed,
+      alpineSeedFingerprint:
+        regionalEcology.base.base.base.base.alpineRoot.seedFingerprint,
+    });
+    if (bundle === null) {
+      throw new Error("Regional ecology activity authorities could not be resolved");
+    }
+    return bundle;
+  }
+
   function refreshViewsUnmeasured(): void {
     perception = projectPlayerPerception();
     captureNewlyObservedEvents();
@@ -9298,19 +9348,11 @@ export async function createTideweftRuntime(
       },
     };
     const ecologyProjection = projectActiveRegionalEcology(actorWindow);
-    const projectedEcologySources = [
-      ...ecologyProjection.base.base.base.base.base.residents,
-      ...ecologyProjection.base.base.base.base.alpineResidents,
-      ...ecologyProjection.base.base.base.polarShoreResidents,
-      ...ecologyProjection.base.base.coldShoreResidents,
-      ...ecologyProjection.base.polarConsumerResidents,
-      ...ecologyProjection.breadthResidents,
-    ];
+    const projectedEcologySources = runtimeRegionalEcologyProjectedSources(ecologyProjection);
     const activeCoreEcologyPatches = projectedEcologySources.map(({ patch }) => patch);
-    const activityAuthoritiesBySource = new Map<
-      string,
-      ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>
-    >();
+    const activityAuthoritiesBySource = projectCoreEcologyActivityAuthorityBundle(
+      ecologyProjection,
+    );
     let wildlifeActorRecords = 0;
     let wildlifePopulationUnits = 0;
     let wildlifeAggregatePopulationUnits = 0;
@@ -9324,19 +9366,6 @@ export async function createTideweftRuntime(
           wildlifeAggregatePopulationUnits += population.populationSize;
         }
       }
-      const authorities = runtimeCoreEcologyActivityAuthorities(
-        world.meta.rootSeed,
-        regionalEcology.base.base.base.base.base.root,
-        source,
-        alpineActivityAuthorityCache,
-        regionalEcology.base.base.base.base.alpineRoot.seedFingerprint,
-      );
-      if (authorities === null) {
-        throw new Error(
-          `Regional ecology source ${source.sourceKey} lost presentation activity authority`,
-        );
-      }
-      activityAuthoritiesBySource.set(source.sourceKey, authorities);
     }
     const settlementStoreKeeper = settlementStoreKeeperAtPlayer(perception);
     const activeContract = player.activeContractId === null
@@ -10656,14 +10685,11 @@ export async function createTideweftRuntime(
       );
       const priorWorkingDogs = dogActorRoster.actors.map(({ address }) => address);
       const regionalEcologyProjectionForStep = projectActiveRegionalEcology();
-      const projectedEcologySources = [
-        ...regionalEcologyProjectionForStep.base.base.base.base.base.residents,
-        ...regionalEcologyProjectionForStep.base.base.base.base.alpineResidents,
-        ...regionalEcologyProjectionForStep.base.base.base.polarShoreResidents,
-        ...regionalEcologyProjectionForStep.base.base.coldShoreResidents,
-        ...regionalEcologyProjectionForStep.base.polarConsumerResidents,
-        ...regionalEcologyProjectionForStep.breadthResidents,
-      ];
+      const projectedEcologySources = runtimeRegionalEcologyProjectedSources(
+        regionalEcologyProjectionForStep,
+      );
+      const activityAuthoritiesBySourceForStep =
+        projectCoreEcologyActivityAuthorityBundle(regionalEcologyProjectionForStep);
       const projectedHomeSource = projectedEcologySources.find(({ sourceKey }) => (
         sourceKey === regionalEcology.base.base.base.base.base.settlementHome.sourceKey
       )) ?? null;
@@ -11050,14 +11076,22 @@ export async function createTideweftRuntime(
         prepared: NonNullable<ReturnType<typeof stepRuntimeCoreEcology>>;
       }>> = [];
       for (const source of ecologySourcesForStep) {
-        const activityAuthorities = runtimeCoreEcologyActivityAuthorities(
-          world.meta.rootSeed,
-          regionalEcology.base.base.base.base.base.root,
-          source,
-          alpineActivityAuthorityCache,
-          regionalEcology.base.base.base.base.alpineRoot.seedFingerprint,
-        );
-        if (activityAuthorities === null) {
+        let activityAuthorities = activityAuthoritiesBySourceForStep.get(source.sourceKey);
+        if (
+          activityAuthorities === undefined
+          && projectedHomeSource === null
+          && source.sourceKey
+            === regionalEcology.base.base.base.base.base.settlementHome.sourceKey
+        ) {
+          activityAuthorities = runtimeCoreEcologyActivityAuthorities(
+            world.meta.rootSeed,
+            regionalEcology.base.base.base.base.base.root,
+            source,
+            alpineActivityAuthorityCache,
+            regionalEcology.base.base.base.base.alpineRoot.seedFingerprint,
+          ) ?? undefined;
+        }
+        if (activityAuthorities === undefined) {
           throw new Error(
             `Regional ecology source ${source.sourceKey} lost activity authority`,
           );
