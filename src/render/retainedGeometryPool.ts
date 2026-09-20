@@ -16,28 +16,10 @@ export interface RetainedGeometryPool<
   readonly begin: (owner: Owner | null) => void;
   /** Returns one geometry per batch identity for the selected owner. */
   readonly geometryFor: (batch: Batch, create: () => Geometry) => Geometry;
-  /** Tests residency without creating, releasing, or refreshing a geometry. */
-  readonly hasGeometryFor: (batch: Batch) => boolean;
   /** Releases all retained GPU resources and clears the selected owner. */
   readonly release: () => void;
   /** Drops stale handles without touching an already-lost graphics context. */
   readonly discard: () => void;
-  /** Bounded diagnostic counters; never authoritative simulation state. */
-  readonly metrics: () => RetainedGeometryPoolMetrics;
-  /** Restarts diagnostic counters while preserving the live resident set. */
-  readonly resetMetrics: () => void;
-}
-
-export interface RetainedGeometryPoolMetrics {
-  /** Counts since the most recent diagnostic reset. */
-  readonly ownerTransitions: number;
-  readonly creations: number;
-  readonly releases: number;
-  readonly discards: number;
-  readonly evictions: number;
-  readonly cacheHits: number;
-  readonly live: number;
-  readonly peakLive: number;
 }
 
 export interface RetainedGeometryPoolOptions {
@@ -59,25 +41,10 @@ export function createRetainedGeometryPool<
   }
   let owner: Owner | null = null;
   const geometries = new Map<Batch, Geometry>();
-  let ownerTransitions = 0;
-  let creations = 0;
-  let releases = 0;
-  let discards = 0;
-  let evictions = 0;
-  let cacheHits = 0;
-  let peakLive = 0;
-
-  const increment = (value: number, amount = 1): number =>
-    Math.min(Number.MAX_SAFE_INTEGER, value + amount);
 
   const clear = (releaseResources: boolean): void => {
     if (releaseResources) {
-      for (const geometry of geometries.values()) {
-        releaseGeometry(geometry);
-        releases = increment(releases);
-      }
-    } else {
-      discards = increment(discards, geometries.size);
+      for (const geometry of geometries.values()) releaseGeometry(geometry);
     }
     geometries.clear();
     owner = null;
@@ -86,7 +53,6 @@ export function createRetainedGeometryPool<
   return {
     begin(nextOwner) {
       if (owner === nextOwner) return;
-      ownerTransitions = increment(ownerTransitions);
       clear(true);
       owner = nextOwner;
     },
@@ -95,59 +61,24 @@ export function createRetainedGeometryPool<
         throw new Error("Retained geometry requires an active presentation owner.");
       }
       const retained = geometries.get(batch);
-      if (retained !== undefined) {
-        cacheHits = increment(cacheHits);
-        return retained;
-      }
+      if (retained !== undefined) return retained;
       const geometry = create();
-      creations = increment(creations);
       if (geometries.size >= maximumGeometries) {
         const oldestBatch = geometries.keys().next().value as Batch | undefined;
         if (oldestBatch !== undefined) {
           const oldestGeometry = geometries.get(oldestBatch);
           geometries.delete(oldestBatch);
-          if (oldestGeometry !== undefined) {
-            releaseGeometry(oldestGeometry);
-            releases = increment(releases);
-          }
-          evictions = increment(evictions);
+          if (oldestGeometry !== undefined) releaseGeometry(oldestGeometry);
         }
       }
       geometries.set(batch, geometry);
-      peakLive = Math.max(peakLive, geometries.size);
       return geometry;
-    },
-    hasGeometryFor(batch) {
-      return geometries.has(batch);
     },
     release() {
       clear(true);
     },
     discard() {
       clear(false);
-    },
-    metrics() {
-      return {
-        ownerTransitions,
-        creations,
-        releases,
-        discards,
-        evictions,
-        cacheHits,
-        live: geometries.size,
-        peakLive,
-      };
-    },
-    resetMetrics() {
-      ownerTransitions = 0;
-      // Residents that predate the window remain visible through `live`; do
-      // not misreport them as geometry created during the measured interval.
-      creations = 0;
-      releases = 0;
-      discards = 0;
-      evictions = 0;
-      cacheHits = 0;
-      peakLive = geometries.size;
     },
   };
 }

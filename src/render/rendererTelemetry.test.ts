@@ -98,12 +98,10 @@ describe("renderer telemetry", () => {
 
     const snapshot = tracker.getSnapshot();
     expect(snapshot.rawFrameIntervalSampleCount).toBe(100);
-    expect(snapshot.rawFrameIntervalLatestMs).toBe(100);
     expect(snapshot.rawFrameIntervalMeanMs).toBe(50.5);
     expect(snapshot.rawFrameIntervalP99Ms).toBe(99);
     expect(snapshot.rawFrameIntervalWorstMs).toBe(100);
     expect(snapshot.drawCpuSampleCount).toBe(101);
-    expect(snapshot.drawCpuLatestMs).toBe(25);
     expect(snapshot.drawCpuMeanMs).toBeCloseTo(224 / 101, 12);
     expect(snapshot.drawCpuP99Ms).toBe(2);
     expect(snapshot.drawCpuWorstMs).toBe(25);
@@ -238,50 +236,6 @@ describe("renderer telemetry", () => {
     expect(tracker.getSnapshot()).not.toHaveProperty("projectedEntityCandidates");
     expect(tracker.getSnapshot()).not.toHaveProperty("labels");
     expect(tracker.getSnapshot()).not.toHaveProperty("particles");
-  });
-
-  it("copies and bounds complete retained-geometry diagnostics", () => {
-    const tracker = createRendererTelemetry();
-    const retainedGeometry = {
-      ownerTransitions: 2,
-      builds: 3,
-      frees: 1,
-      discarded: 0,
-      evictions: 0,
-      hits: 44,
-      live: 2,
-      peakLive: 3,
-      perceptionPoolOwnerTransitions: 1,
-      perceptionBuilds: 2,
-      perceptionFrees: 0,
-      perceptionDiscarded: 0,
-      perceptionEvictions: 0,
-      perceptionHits: 9,
-      perceptionLive: 2,
-      perceptionPeakLive: 2,
-      perceptionOwnerChanges: 4,
-      perceptionPromotions: 1,
-      perceptionRetainedFrames: 9,
-      perceptionImmediateFrames: 5,
-      perceptionRetainedModelDraws: 31,
-      perceptionImmediateBatchDraws: 17,
-      perceptionPeakBuildsPerFrame: 8,
-      perceptionOversizedOwners: 0,
-      perceptionOversizedFrames: 0,
-      perceptionCurrentOwnerBatchCount: 7,
-      perceptionPeakOwnerBatchCount: 8,
-    };
-
-    const snapshot = tracker.recordFrame(1, { retainedGeometry });
-    expect(snapshot.retainedGeometry).toEqual(retainedGeometry);
-    expect(snapshot.retainedGeometry).not.toBe(retainedGeometry);
-    expect(Object.isFrozen(snapshot.retainedGeometry)).toBe(true);
-
-    const incomplete = { ...retainedGeometry } as Record<string, unknown>;
-    delete incomplete.builds;
-    expect(tracker.recordFrame(2, {
-      retainedGeometry: incomplete as unknown as typeof retainedGeometry,
-    })).not.toHaveProperty("retainedGeometry");
   });
 
   it("replays the same render timestamps and lifecycle deterministically", () => {

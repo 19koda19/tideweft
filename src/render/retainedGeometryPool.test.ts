@@ -13,7 +13,6 @@ describe("retained geometry pool", () => {
 
     pool.begin(ownerA);
     const first = pool.geometryFor(batch, create);
-    expect(pool.hasGeometryFor(batch)).toBe(true);
     expect(pool.geometryFor(batch, create)).toBe(first);
     expect(create).toHaveBeenCalledOnce();
 
@@ -22,14 +21,6 @@ describe("retained geometry pool", () => {
     expect(release).toHaveBeenCalledWith(first);
     expect(pool.geometryFor(batch, create)).not.toBeUndefined();
     expect(create).toHaveBeenCalledTimes(2);
-    expect(pool.metrics()).toMatchObject({
-      ownerTransitions: 2,
-      creations: 2,
-      releases: 1,
-      cacheHits: 1,
-      live: 1,
-      peakLive: 1,
-    });
   });
 
   it("releases explicitly but discards lost-context handles without GPU calls", () => {
@@ -41,7 +32,6 @@ describe("retained geometry pool", () => {
     const lost = pool.geometryFor(batch, () => ({ id: "lost" }));
     pool.discard();
     expect(release).not.toHaveBeenCalled();
-    expect(pool.metrics()).toMatchObject({ discards: 1, live: 0 });
 
     expect(() => pool.geometryFor(batch, () => lost)).toThrow(
       "Retained geometry requires an active presentation owner.",
@@ -90,48 +80,9 @@ describe("retained geometry pool", () => {
     pool.geometryFor(thirdBatch, () => ({ id: "third" }));
     expect(release).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith(first);
-    expect(pool.metrics()).toMatchObject({
-      creations: 3,
-      releases: 1,
-      evictions: 1,
-      live: 2,
-      peakLive: 2,
-    });
 
     pool.geometryFor(firstBatch, () => ({ id: "first-rebuilt" }));
     expect(release).toHaveBeenCalledTimes(2);
-  });
-
-  it("resets diagnostics without releasing the live resident set", () => {
-    const release = vi.fn();
-    const pool = createRetainedGeometryPool<object, object, { id: string }>(release);
-    const batch = {};
-
-    pool.begin({});
-    const geometry = pool.geometryFor(batch, () => ({ id: "resident" }));
-    pool.geometryFor(batch, () => geometry);
-    pool.resetMetrics();
-
-    expect(release).not.toHaveBeenCalled();
-    expect(pool.hasGeometryFor(batch)).toBe(true);
-    const baseline = pool.metrics();
-    expect(baseline).toEqual({
-      ownerTransitions: 0,
-      creations: 0,
-      releases: 0,
-      discards: 0,
-      evictions: 0,
-      cacheHits: 0,
-      live: 1,
-      peakLive: 1,
-    });
-
-    pool.begin({});
-    pool.geometryFor({}, () => ({ id: "replacement" }));
-    const after = pool.metrics();
-    expect(
-      baseline.live + after.creations,
-    ).toBe(after.releases + after.discards + after.live);
   });
 
   it("rejects an invalid resource bound", () => {

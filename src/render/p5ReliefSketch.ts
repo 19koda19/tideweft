@@ -82,10 +82,7 @@ import {
 } from "./wildlifeVisualProfile";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
-import {
-  createRendererTelemetry,
-  type RendererRetainedGeometryCounts,
-} from "./rendererTelemetry";
+import { createRendererTelemetry } from "./rendererTelemetry";
 import { createRetainedGeometryPool } from "./retainedGeometryPool";
 import {
   createTerrainPerceptionMemoryStore,
@@ -357,11 +354,6 @@ const DEFAULT_YAW = -0.36;
 // p5's WebGL geometry buffer cache evicts at roughly one thousand entries.
 // Leave headroom for other retained models and bound JavaScript geometry too.
 const MAX_RETAINED_RELIEF_TERRAIN_BATCHES = 768;
-// Durable + transient terrain can therefore retain at most 896 entries. An
-// over-cap transient owner stays immediate as one unit instead of FIFO-thrashing.
-const MAX_RETAINED_RELIEF_PERCEPTION_BATCHES = 128;
-const RELIEF_PERCEPTION_RETAIN_QUIET_MS = 150;
-const RELIEF_PERCEPTION_BUILDS_PER_FRAME = 8;
 const DEFAULT_PITCH = Math.PI * 0.29;
 const DEFAULT_FOV = Math.PI / 3.5;
 const RELIEF_WATER_SURFACE_LIFT = 0.45;
@@ -430,7 +422,6 @@ interface ReliefPerceptionChunkBatch {
 interface CachedReliefPerception {
   readonly key: string;
   readonly chunks: readonly ReliefPerceptionChunkBatch[];
-  readonly materialBatchCount: number;
 }
 
 interface ScanRipple {
@@ -525,8 +516,6 @@ export function createTideweftReliefRenderer(
   let cachedPerception: CachedReliefPerception | null = null;
   let releaseRetainedTerrainGeometry: (() => void) | null = null;
   let discardRetainedTerrainGeometry: (() => void) | null = null;
-  let retainedGeometryDiagnostics: (() => RendererRetainedGeometryCounts) | null = null;
-  let resetRetainedGeometryDiagnostics: (() => void) | null = null;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
@@ -2200,18 +2189,16 @@ export function createTideweftReliefRenderer(
       String(view.terrain.currentLocalIlluminationRevision ?? "legacy-unlit"),
     ]);
     if (cachedPerception?.key === key) return cachedPerception;
-    const chunks = mesh.perceptionMesh.chunks.map((chunk) => ({
-      chunk,
-      materials: buildReliefPerceptionMaterialBatches(
-        chunk,
-        view.terrain,
-        terrainMemory.values,
-      ),
-    }));
     cachedPerception = {
       key,
-      chunks,
-      materialBatchCount: chunks.reduce((sum, chunk) => sum + chunk.materials.length, 0),
+      chunks: mesh.perceptionMesh.chunks.map((chunk) => ({
+        chunk,
+        materials: buildReliefPerceptionMaterialBatches(
+          chunk,
+          view.terrain,
+          terrainMemory.values,
+        ),
+      })),
     };
     return cachedPerception;
   };
@@ -2262,103 +2249,11 @@ export function createTideweftReliefRenderer(
       (geometry) => p.freeGeometry(geometry),
       { maximumGeometries: MAX_RETAINED_RELIEF_TERRAIN_BATCHES },
     );
-    const perceptionTerrainGeometry = createRetainedGeometryPool<
-      CachedReliefPerception,
-      ReliefPerceptionMaterialBatch,
-      p5.Geometry
-    >(
-      (geometry) => p.freeGeometry(geometry),
-      { maximumGeometries: MAX_RETAINED_RELIEF_PERCEPTION_BATCHES },
-    );
-    let observedPerceptionOwner: CachedReliefPerception | null = null;
-    let retainedPerceptionOwner: CachedReliefPerception | null = null;
-    let candidatePerceptionOwner: CachedReliefPerception | null = null;
-    let candidatePerceptionSince = 0;
-    let oversizedPerceptionOwner: CachedReliefPerception | null = null;
-    let perceptionOwnerChanges = 0;
-    let perceptionPromotions = 0;
-    let perceptionRetainedFrames = 0;
-    let perceptionImmediateFrames = 0;
-    let perceptionRetainedModelDraws = 0;
-    let perceptionImmediateBatchDraws = 0;
-    let perceptionPeakBuildsPerFrame = 0;
-    let perceptionOversizedOwners = 0;
-    let perceptionOversizedFrames = 0;
-    let perceptionCurrentOwnerBatchCount = 0;
-    let perceptionPeakOwnerBatchCount = 0;
-    let retainedGeometryPeakLive = 0;
-    const incrementDiagnostic = (value: number): number =>
-      Math.min(Number.MAX_SAFE_INTEGER, value + 1);
-    const resetPerceptionOwnerState = (): void => {
-      observedPerceptionOwner = null;
-      retainedPerceptionOwner = null;
-      candidatePerceptionOwner = null;
-      candidatePerceptionSince = 0;
-      oversizedPerceptionOwner = null;
-      perceptionCurrentOwnerBatchCount = 0;
-    };
     releaseRetainedTerrainGeometry = () => {
       durableTerrainGeometry.release();
-      perceptionTerrainGeometry.release();
-      resetPerceptionOwnerState();
     };
     discardRetainedTerrainGeometry = () => {
       durableTerrainGeometry.discard();
-      perceptionTerrainGeometry.discard();
-      resetPerceptionOwnerState();
-    };
-    resetRetainedGeometryDiagnostics = () => {
-      durableTerrainGeometry.resetMetrics();
-      perceptionTerrainGeometry.resetMetrics();
-      perceptionOwnerChanges = 0;
-      perceptionPromotions = 0;
-      perceptionRetainedFrames = 0;
-      perceptionImmediateFrames = 0;
-      perceptionRetainedModelDraws = 0;
-      perceptionImmediateBatchDraws = 0;
-      perceptionPeakBuildsPerFrame = 0;
-      perceptionOversizedOwners = 0;
-      perceptionOversizedFrames = 0;
-      perceptionPeakOwnerBatchCount = perceptionCurrentOwnerBatchCount;
-      retainedGeometryPeakLive = durableTerrainGeometry.metrics().live
-        + perceptionTerrainGeometry.metrics().live;
-    };
-    retainedGeometryDiagnostics = () => {
-      const durable = durableTerrainGeometry.metrics();
-      const perception = perceptionTerrainGeometry.metrics();
-      const sum = (left: number, right: number): number =>
-        Math.min(Number.MAX_SAFE_INTEGER, left + right);
-      const live = sum(durable.live, perception.live);
-      retainedGeometryPeakLive = Math.max(retainedGeometryPeakLive, live);
-      return {
-        ownerTransitions: sum(durable.ownerTransitions, perception.ownerTransitions),
-        builds: sum(durable.creations, perception.creations),
-        frees: sum(durable.releases, perception.releases),
-        discarded: sum(durable.discards, perception.discards),
-        evictions: sum(durable.evictions, perception.evictions),
-        hits: sum(durable.cacheHits, perception.cacheHits),
-        live,
-        peakLive: retainedGeometryPeakLive,
-        perceptionPoolOwnerTransitions: perception.ownerTransitions,
-        perceptionBuilds: perception.creations,
-        perceptionFrees: perception.releases,
-        perceptionDiscarded: perception.discards,
-        perceptionEvictions: perception.evictions,
-        perceptionHits: perception.cacheHits,
-        perceptionLive: perception.live,
-        perceptionPeakLive: perception.peakLive,
-        perceptionOwnerChanges,
-        perceptionPromotions,
-        perceptionRetainedFrames,
-        perceptionImmediateFrames,
-        perceptionRetainedModelDraws,
-        perceptionImmediateBatchDraws,
-        perceptionPeakBuildsPerFrame,
-        perceptionOversizedOwners,
-        perceptionOversizedFrames,
-        perceptionCurrentOwnerBatchCount,
-        perceptionPeakOwnerBatchCount,
-      };
     };
 
     const withAlpha = (hex: string, alpha: number): p5.Color => {
@@ -2396,28 +2291,19 @@ export function createTideweftReliefRenderer(
       );
     };
 
-    const drawImmediateTerrainGeometry = (
-      chunk: TerrainMeshChunk,
-      indices: readonly number[],
-      verticalOffset = 0,
-    ): void => {
-      p.beginShape(p.TRIANGLES);
-      for (const index of indices) {
-        const vertex = chunk.vertices[index];
-        if (!vertex) continue;
-        p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
-        p.vertex(vertex.x, -vertex.z + verticalOffset, vertex.y);
-      }
-      p.endShape();
-    };
-
     const buildRetainedTerrainGeometry = (
       chunk: TerrainMeshChunk,
       indices: readonly number[],
-      verticalOffset = 0,
     ): p5.Geometry => {
       const geometry = p.buildGeometry(() => {
-        drawImmediateTerrainGeometry(chunk, indices, verticalOffset);
+        p.beginShape(p.TRIANGLES);
+        for (const index of indices) {
+          const vertex = chunk.vertices[index];
+          if (!vertex) continue;
+          p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
+          p.vertex(vertex.x, -vertex.z, vertex.y);
+        }
+        p.endShape();
       });
       // buildGeometry captures the current fill by default. Terrain material
       // remains presentation state, so clear internal colors and bind the
@@ -2431,7 +2317,6 @@ export function createTideweftReliefRenderer(
       cache: CachedReliefMesh,
       camera: ReliefCameraState,
       terrainMemory: TerrainPerceptionMemoryState,
-      now: number,
       trackCounts: boolean,
     ): number => {
       const viewport = { width: p.width, height: p.height };
@@ -2459,64 +2344,7 @@ export function createTideweftReliefRenderer(
       }
 
       const perception = ensurePerceptionSurface(view, cache, terrainMemory);
-      if (!perception) {
-        if (observedPerceptionOwner !== null) {
-          perceptionOwnerChanges = incrementDiagnostic(perceptionOwnerChanges);
-        }
-        observedPerceptionOwner = null;
-        retainedPerceptionOwner = null;
-        candidatePerceptionOwner = null;
-        oversizedPerceptionOwner = null;
-        perceptionCurrentOwnerBatchCount = 0;
-        perceptionTerrainGeometry.begin(null);
-        return drawnTiles;
-      }
-      if (observedPerceptionOwner !== perception) {
-        observedPerceptionOwner = perception;
-        perceptionOwnerChanges = incrementDiagnostic(perceptionOwnerChanges);
-      }
-      perceptionCurrentOwnerBatchCount = perception.materialBatchCount;
-      perceptionPeakOwnerBatchCount = Math.max(
-        perceptionPeakOwnerBatchCount,
-        perceptionCurrentOwnerBatchCount,
-      );
-
-      const oversized = perception.materialBatchCount
-        > MAX_RETAINED_RELIEF_PERCEPTION_BATCHES;
-      if (oversized) {
-        if (oversizedPerceptionOwner !== perception) {
-          oversizedPerceptionOwner = perception;
-          perceptionOversizedOwners = incrementDiagnostic(perceptionOversizedOwners);
-        }
-        perceptionOversizedFrames = incrementDiagnostic(perceptionOversizedFrames);
-        retainedPerceptionOwner = null;
-        candidatePerceptionOwner = null;
-        perceptionTerrainGeometry.begin(null);
-      } else {
-        oversizedPerceptionOwner = null;
-        if (retainedPerceptionOwner === perception) {
-          candidatePerceptionOwner = null;
-        } else if (candidatePerceptionOwner !== perception) {
-          candidatePerceptionOwner = perception;
-          candidatePerceptionSince = now;
-        } else if (
-          Number.isFinite(now)
-          && now >= candidatePerceptionSince
-          && now - candidatePerceptionSince >= RELIEF_PERCEPTION_RETAIN_QUIET_MS
-        ) {
-          perceptionTerrainGeometry.begin(perception);
-          retainedPerceptionOwner = perception;
-          candidatePerceptionOwner = null;
-          perceptionPromotions = incrementDiagnostic(perceptionPromotions);
-        }
-      }
-
-      let buildBudget = retainedPerceptionOwner === perception
-        ? RELIEF_PERCEPTION_BUILDS_PER_FRAME
-        : 0;
-      let builtThisFrame = 0;
-      let drewRetained = false;
-      let drewImmediate = false;
+      if (!perception) return drawnTiles;
       // Re-light only the small current sensory footprint. This overlay is
       // cached by perception signature and never invalidates the durable mesh.
       // Keep this height field depth-writing: translucent overlapping
@@ -2537,38 +2365,19 @@ export function createTideweftReliefRenderer(
           p.emissiveMaterial(emission.red, emission.green, emission.blue);
           p.fill(surfaceColor);
           p.ambientMaterial(surfaceColor);
-          const resident = retainedPerceptionOwner === perception
-            && perceptionTerrainGeometry.hasGeometryFor(material);
-          if (resident || (retainedPerceptionOwner === perception && buildBudget > 0)) {
-            if (!resident) {
-              buildBudget -= 1;
-              builtThisFrame += 1;
-            }
-            p.model(perceptionTerrainGeometry.geometryFor(
-              material,
-              () => buildRetainedTerrainGeometry(batch.chunk, material.indices, -0.12),
-            ));
-            drewRetained = true;
-            perceptionRetainedModelDraws = incrementDiagnostic(perceptionRetainedModelDraws);
-          } else {
-            // Candidate, over-cap, and not-yet-built batches use the exact old
-            // path immediately. Stale retained owners are never submitted.
-            drawImmediateTerrainGeometry(batch.chunk, material.indices, -0.12);
-            drewImmediate = true;
-            perceptionImmediateBatchDraws = incrementDiagnostic(perceptionImmediateBatchDraws);
+          // The eased sensory overlay changes with perception and local-light
+          // bands. Keep it immediate until a separately measured bounded
+          // retained representation can avoid rebuild/free bursts.
+          p.beginShape(p.TRIANGLES);
+          for (const index of material.indices) {
+            const vertex = batch.chunk.vertices[index];
+            if (!vertex) continue;
+            p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
+            p.vertex(vertex.x, -vertex.z - 0.12, vertex.y);
           }
+          p.endShape();
         }
       }
-      if (drewRetained) {
-        perceptionRetainedFrames = incrementDiagnostic(perceptionRetainedFrames);
-      }
-      if (drewImmediate) {
-        perceptionImmediateFrames = incrementDiagnostic(perceptionImmediateFrames);
-      }
-      perceptionPeakBuildsPerFrame = Math.max(
-        perceptionPeakBuildsPerFrame,
-        builtThisFrame,
-      );
       p.emissiveMaterial(0, 0, 0);
       return drawnTiles;
     };
@@ -6549,7 +6358,7 @@ export function createTideweftReliefRenderer(
         0.2,
         -outdoorLight.keyDirection.z,
       );
-      const terrainTiles = drawTerrain(view, cache, camera, terrainMemory, now, trackCounts);
+      const terrainTiles = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
       drawFieldResources(view, cache);
@@ -6622,9 +6431,6 @@ export function createTideweftReliefRenderer(
           : outdoorLight.reliefSky,
       );
       if (!latestView) {
-        const retainedGeometry = detailedTelemetry
-          ? retainedGeometryDiagnostics?.()
-          : undefined;
         telemetry.recordFrame(
           drawStartedAt,
           detailedTelemetry
@@ -6633,7 +6439,6 @@ export function createTideweftReliefRenderer(
                 projectedEntityCandidates: 0,
                 labels: labelNodes.size,
                 particles: 0,
-                ...(retainedGeometry === undefined ? {} : { retainedGeometry }),
               }
             : undefined,
           detailedTelemetry ? performance.now() - drawStartedAt : undefined,
@@ -6662,9 +6467,6 @@ export function createTideweftReliefRenderer(
         detailedTelemetry,
       );
       syncReliefLabels(latestView, mesh, currentCameraState(), now);
-      const retainedGeometry = detailedTelemetry
-        ? retainedGeometryDiagnostics?.()
-        : undefined;
       telemetry.recordFrame(
         drawStartedAt,
         detailedTelemetry
@@ -6674,7 +6476,6 @@ export function createTideweftReliefRenderer(
               labels: labelNodes.size,
               // Relief currently has no generic ParticleView submission pass.
               particles: 0,
-              ...(retainedGeometry === undefined ? {} : { retainedGeometry }),
             }
           : undefined,
         detailedTelemetry ? performance.now() - drawStartedAt : undefined,
@@ -6696,8 +6497,6 @@ export function createTideweftReliefRenderer(
     else releaseRetainedTerrainGeometry?.();
     releaseRetainedTerrainGeometry = null;
     discardRetainedTerrainGeometry = null;
-    retainedGeometryDiagnostics = null;
-    resetRetainedGeometryDiagnostics = null;
     instance?.remove();
     instance = null;
     canvasElement = null;
@@ -6735,12 +6534,7 @@ export function createTideweftReliefRenderer(
   const controller: TideweftReliefRendererController = {
     canvas: () => canvasElement,
     telemetry: telemetry.getSnapshot,
-    setPerformanceTelemetryEnabled: (enabled) => {
-      if (enabled && !telemetry.isDetailedEnabled()) {
-        resetRetainedGeometryDiagnostics?.();
-      }
-      return telemetry.setDetailedEnabled(enabled);
-    },
+    setPerformanceTelemetryEnabled: telemetry.setDetailedEnabled,
     supported: () => webglSupported,
     isActive: () => active,
     setActive,

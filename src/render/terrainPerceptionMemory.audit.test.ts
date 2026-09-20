@@ -390,7 +390,7 @@ describe("adversarial temporal terrain-fog boundary", () => {
     );
     expect(chart).not.toMatch(/draw(?:SurfaceCurrents|FieldResources|LooseCargo|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
     expect(relief).toContain(
-      "drawTerrain(view, cache, camera, terrainMemory, now, trackCounts)",
+      "drawTerrain(view, cache, camera, terrainMemory, trackCounts)",
     );
     expect(relief).not.toMatch(/draw(?:Water|FieldResources|SurfaceCurrents|LooseCargo|Soundings|Settlements|Porters|Dogs)\([^)]*terrainMemory/u);
     expect(relief).not.toMatch(/syncReliefLabels\([^)]*terrainMemory/u);
