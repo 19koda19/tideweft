@@ -681,7 +681,7 @@ import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
   coreWildlifeGradeTraversalPolicy,
   coreWildlifeMaximumStepUnits,
-  coreWildlifeTraversabilityCell,
+  coreWildlifeTraversabilityCells,
   type CoreWildlifeTravelMedium,
 } from "./coreWildlifeLocomotionProfile";
 import {
@@ -5687,9 +5687,11 @@ function createRuntimeCoreTraversability(
       ),
       widthTiles: world.terrain.width,
       heightTiles: world.terrain.height,
-      cells: world.terrain.tiles.map((tile) => (
-        coreWildlifeTraversabilityCell(actor.identity.species, tile, travelMedium)
-      )),
+      cells: coreWildlifeTraversabilityCells(
+        actor.identity.species,
+        world.terrain.tiles,
+        travelMedium,
+      ),
       ...(gradePolicy === null
         ? {}
         : {

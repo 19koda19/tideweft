@@ -13,6 +13,7 @@ import {
   coreWildlifeLocomotionProfile,
   coreWildlifeMaximumStepUnits,
   coreWildlifeTraversabilityCell,
+  coreWildlifeTraversabilityCells,
 } from "./coreWildlifeLocomotionProfile";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
@@ -160,6 +161,87 @@ describe("core wildlife locomotion profiles", () => {
     }
   });
 
+  it("projects representative movement media byte-equivalently after one invariant preparation", () => {
+    const tiles = [
+      tile({ terrain: "meadow", baseTravelCost: 0, waterDepth: 0 }),
+      tile({ terrain: "marsh", moisture: 900_000, roughness: 750_000, waterDepth: 1 }),
+      tile({ terrain: "tidal-flat", waterDepth: ADRIFT_STAND_DEPTH }),
+      tile({ terrain: "ridge", baseTravelCost: 1_500_000, waterDepth: ADRIFT_STAND_DEPTH + 1 }),
+      tile({ terrain: "deep-water", waterDepth: 900_000 }),
+    ];
+    for (const [species, medium] of [
+      ["deer", undefined],
+      ["deer", "land"],
+      ["gull", undefined],
+      ["gull", "air"],
+      ["american-black-duck", "surface-water"],
+      ["north-american-river-otter", "amphibious"],
+    ] as const) {
+      const batched = coreWildlifeTraversabilityCells(species, tiles, medium);
+      expect(batched).toEqual(tiles.map((candidate) => (
+        coreWildlifeTraversabilityCell(species, candidate, medium)
+      )));
+      expect(Object.isFrozen(batched)).toBe(true);
+      expect(batched.every(Object.isFrozen)).toBe(true);
+      expect(batched).toHaveLength(tiles.length);
+    }
+
+    const repeatedTile = tile({ terrain: "meadow", baseTravelCost: 600_000 });
+    const repeated = coreWildlifeTraversabilityCells("deer", [
+      repeatedTile,
+      repeatedTile,
+    ]);
+    expect(repeated[0]).toEqual(repeated[1]);
+    expect(repeated[0]).not.toBe(repeated[1]);
+    expect(repeatedTile).toEqual(tile({ terrain: "meadow", baseTravelCost: 600_000 }));
+
+    const forgedMedium = "unregistered-medium" as never;
+    expect(coreWildlifeTraversabilityCells("gull", tiles, forgedMedium)).toEqual(
+      tiles.map((candidate) => coreWildlifeTraversabilityCell(
+        "gull",
+        candidate,
+        forgedMedium,
+      )),
+    );
+  });
+
+  it("keeps batch and single-cell validation errors exact without exporting prepared authority", () => {
+    for (const [species, medium] of [
+      ["deer", "air"],
+      ["snowy-egret", "surface-water"],
+      ["american-black-duck", "amphibious"],
+      ["gull", "land"],
+      ["north-american-river-otter", "land"],
+    ] as const) {
+      const capture = (operation: () => unknown) => {
+        try {
+          operation();
+          return null;
+        } catch (error) {
+          return {
+            name: error instanceof Error ? error.name : typeof error,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      };
+      expect(capture(() => coreWildlifeTraversabilityCells(
+        species,
+        [tile()],
+        medium,
+      ))).toEqual(capture(() => coreWildlifeTraversabilityCell(
+        species,
+        tile(),
+        medium,
+      )));
+    }
+
+    const unknownSpecies = "invented-bird" as never;
+    const unknownSingle = () => coreWildlifeTraversabilityCell(unknownSpecies, tile());
+    const unknownBatch = () => coreWildlifeTraversabilityCells(unknownSpecies, []);
+    expect(unknownSingle).toThrow("Unknown core wildlife species invented-bird");
+    expect(unknownBatch).toThrow("Unknown core wildlife species invented-bird");
+  });
+
   it("selects duck air or surface water through one shared traversability seam", () => {
     const profile = coreWildlifeLocomotionProfile("american-black-duck");
     expect(profile.mode).toBe("aerial");
@@ -219,18 +301,11 @@ describe("core wildlife locomotion profiles", () => {
       origin,
       widthTiles: 3,
       heightTiles: 2,
-      cells: [
-        ...Array.from({ length: 3 }, () => coreWildlifeTraversabilityCell(
-          "american-black-duck",
-          water,
-          "surface-water",
-        )),
-        ...Array.from({ length: 3 }, () => coreWildlifeTraversabilityCell(
-          "american-black-duck",
-          land,
-          "surface-water",
-        )),
-      ],
+      cells: coreWildlifeTraversabilityCells(
+        "american-black-duck",
+        [water, water, water, land, land, land],
+        "surface-water",
+      ),
     });
     const resolution = resolveLivingActorLocomotion({
       requestId: "duck-surface-water:test/40",

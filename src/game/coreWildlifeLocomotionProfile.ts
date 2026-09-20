@@ -49,6 +49,11 @@ export interface CoreWildlifeLocomotionProfile {
   readonly intentStepFactors: Readonly<Partial<Record<CoreWildlifeIntentKind, number>>>;
 }
 
+interface PreparedCoreWildlifeTraversability {
+  readonly profile: CoreWildlifeLocomotionProfile;
+  readonly medium: CoreWildlifeTravelMedium | null;
+}
+
 const DEFAULT_LOCOMOTION_PROFILE: CoreWildlifeLocomotionProfile = Object.freeze({
   mode: "terrestrial",
   aerialTravelCost: null,
@@ -578,6 +583,32 @@ export function coreWildlifeTraversabilityCell(
   tile: TerrainTileView,
   travelMedium?: CoreWildlifeTravelMedium,
 ): LivingActorTraversabilityCell {
+  return evaluatePreparedCoreWildlifeTraversability(
+    prepareCoreWildlifeTraversability(species, travelMedium),
+    tile,
+  );
+}
+
+/**
+ * Resolve immutable species/medium law once for one synchronous terrain
+ * projection. The prepared value never crosses this module boundary; every
+ * tile still receives the same physical evaluation and a distinct frozen cell.
+ */
+export function coreWildlifeTraversabilityCells(
+  species: CoreWildlifeSpecies,
+  tiles: readonly TerrainTileView[],
+  travelMedium?: CoreWildlifeTravelMedium,
+): readonly LivingActorTraversabilityCell[] {
+  const prepared = prepareCoreWildlifeTraversability(species, travelMedium);
+  return Object.freeze(tiles.map((tile) => (
+    evaluatePreparedCoreWildlifeTraversability(prepared, tile)
+  )));
+}
+
+function prepareCoreWildlifeTraversability(
+  species: CoreWildlifeSpecies,
+  travelMedium?: CoreWildlifeTravelMedium,
+): PreparedCoreWildlifeTraversability {
   const profile = coreWildlifeLocomotionProfile(species);
   const medium = travelMedium ?? (
     coreEcologySpeciesHasRuntimeCapability(species, "aerial-locomotion")
@@ -588,7 +619,6 @@ export function coreWildlifeTraversabilityCell(
     if (profile.mode !== "aerial" || profile.aerialTravelCost === null) {
       throw new Error(`Aerial species ${species} lacks an aerial locomotion profile`);
     }
-    return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost });
   }
   if (medium === "surface-water") {
     if (
@@ -597,9 +627,6 @@ export function coreWildlifeTraversabilityCell(
     ) {
       throw new Error(`Species ${species} lacks a surface-water locomotion profile`);
     }
-    return tile.terrain === "deep-water" || tile.waterDepth > 0
-      ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost })
-      : Object.freeze({ access: "blocked", travelCost: 0 });
   }
   if (medium === "amphibious") {
     if (
@@ -608,15 +635,34 @@ export function coreWildlifeTraversabilityCell(
     ) {
       throw new Error(`Species ${species} lacks an amphibious locomotion profile`);
     }
-    if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
-      return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost });
-    }
   }
   if (
     medium === "land"
     && coreEcologySpeciesRuntimePolicy(species)?.locomotionClass !== "terrestrial"
   ) {
     throw new Error(`Species ${species} lacks a land locomotion profile`);
+  }
+  return { profile, medium };
+}
+
+function evaluatePreparedCoreWildlifeTraversability(
+  prepared: PreparedCoreWildlifeTraversability,
+  tile: TerrainTileView,
+): LivingActorTraversabilityCell {
+  const { profile, medium } = prepared;
+  if (medium === "air") {
+    return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost! });
+  }
+  if (medium === "surface-water") {
+    return tile.terrain === "deep-water" || tile.waterDepth > 0
+      ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! })
+      : Object.freeze({ access: "blocked", travelCost: 0 });
+  }
+  if (
+    medium === "amphibious"
+    && (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH)
+  ) {
+    return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! });
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
     return Object.freeze({ access: "deep-water", travelCost: 0 });
