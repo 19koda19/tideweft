@@ -26,6 +26,7 @@ import {
 } from "./regionalAlpineResidents";
 import {
   bindRegionalEcologyActiveProjection,
+  bindRegionalEcologyActiveProjectionWithMaterializationReceipt,
   canonicalRegionalEcologyStateForWorld,
   canonicalizeRegionalEcologyState,
   commitRegionalEcologyActiveProjection,
@@ -44,6 +45,9 @@ import {
   type RegionalEcologyStateV1,
 } from "./regionalEcologyState";
 import {
+  isRegionalEcologyMaterializationBatchReceipt,
+  regionalEcologyMaterializationBatchOwnsTransition,
+  releaseRegionalEcologyMaterializationBatchReceipt,
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
@@ -440,14 +444,55 @@ export function projectRegionalEcologyStateV2ActiveState(
     window,
     state.updatedAtTick,
   );
-  return materialized === null
-    ? null
-    : bindRegionalEcologyStateV2ActiveProjection(state, materialized);
+  if (materialized === null) return null;
+  try {
+    const received = isRegionalEcologyMaterializationBatchReceipt(
+      materialized,
+      sources,
+      window,
+      state.updatedAtTick,
+    )
+      ? bindRegionalEcologyStateV2ActiveProjectionWithMaterializationReceipt(
+          state,
+          materialized,
+          materialized,
+        )
+      : null;
+    return received
+      ?? bindRegionalEcologyStateV2ActiveProjection(state, materialized);
+  } finally {
+    releaseRegionalEcologyMaterializationBatchReceipt(materialized);
+  }
 }
 
 export function bindRegionalEcologyStateV2ActiveProjection(
   value: unknown,
   materializedResidentsValue: unknown,
+): RegionalEcologyStateV2ActiveProjection | null {
+  return bindRegionalEcologyStateV2ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    null,
+  );
+}
+
+/** @internal Consume one exact still-live whole-batch materialization receipt. */
+export function bindRegionalEcologyStateV2ActiveProjectionWithMaterializationReceipt(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[],
+): RegionalEcologyStateV2ActiveProjection | null {
+  return bindRegionalEcologyStateV2ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    materializationBatch,
+  );
+}
+
+function bindRegionalEcologyStateV2ActiveProjectionInternal(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null,
 ): RegionalEcologyStateV2ActiveProjection | null {
   const state = canonicalizeRegionalEcologyStateV2(value);
   if (state === null || !Array.isArray(materializedResidentsValue)) return null;
@@ -479,8 +524,14 @@ export function bindRegionalEcologyStateV2ActiveProjection(
     seen.add(raw.sourceKey);
   }
   if (seen.size !== baseKeys.size + alpineKeys.size) return null;
-  const base = bindRegionalEcologyActiveProjection(state.base, baseResidents);
-  const alpine = bindAlpineProjection(state, alpineResidents);
+  const base = materializationBatch === null
+    ? bindRegionalEcologyActiveProjection(state.base, baseResidents)
+    : bindRegionalEcologyActiveProjectionWithMaterializationReceipt(
+        state.base,
+        baseResidents,
+        materializationBatch,
+      );
+  const alpine = bindAlpineProjection(state, alpineResidents, materializationBatch);
   if (base === null || alpine === null) return null;
   const projectedPatches = [
     ...base.residents.map(({ patch }) => patch),
@@ -865,6 +916,7 @@ function validCrossLayerOwnership(
 function bindAlpineProjection(
   state: RegionalEcologyStateV2,
   residentsValue: readonly RegionalEcologyResidentPatch[],
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null = null,
 ): readonly RegionalEcologyStateV2ProjectedAlpineResidentV1[] | null {
   if (residentsValue.length !== state.alpineActiveResidents.length) return null;
   const sourceByKey = new Map(state.alpineActiveResidents.map((source) => [source.sourceKey, source]));
@@ -882,16 +934,26 @@ function bindAlpineProjection(
       || sourceLineageHash(projected) !== source.lineageHash
     ) return null;
     const actorIds = materializedActorIds(projected);
-    let replay: CoreEcologyAggregatePatchState;
-    try {
-      replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
-        atTick: state.updatedAtTick,
-        actorIds,
-      });
-    } catch {
+    if (materializationBatch === null) {
+      let replay: CoreEcologyAggregatePatchState;
+      try {
+        replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
+          atTick: state.updatedAtTick,
+          actorIds,
+        });
+      } catch {
+        return null;
+      }
+      if (stableStringify(replay) !== stableStringify(projected)) return null;
+    } else if (!regionalEcologyMaterializationBatchOwnsTransition(
+      materializationBatch,
+      source.sourceKey,
+      source.patch,
+      projected,
+      state.updatedAtTick,
+    )) {
       return null;
     }
-    if (stableStringify(replay) !== stableStringify(projected)) return null;
     output.push(deepFreeze({
       kind: "regional-alpine" as const,
       sourceKey: source.sourceKey,

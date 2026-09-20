@@ -16,6 +16,7 @@ import {
 import {
   REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES,
   bindRegionalEcologyStateV3ActiveProjection,
+  bindRegionalEcologyStateV3ActiveProjectionWithMaterializationReceipt,
   canonicalRegionalEcologyStateV3ForWorld,
   canonicalizeRegionalEcologyStateV3,
   commitRegionalEcologyStateV3ActiveProjection,
@@ -45,6 +46,9 @@ import {
   coreEcologyColdShoreResidentPatchResidenceRegions,
 } from "./regionalColdShoreResidents";
 import {
+  isRegionalEcologyMaterializationBatchReceipt,
+  regionalEcologyMaterializationBatchOwnsTransition,
+  releaseRegionalEcologyMaterializationBatchReceipt,
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
@@ -508,14 +512,55 @@ export function projectRegionalEcologyStateV4ActiveState(
     window,
     state.updatedAtTick,
   );
-  return materialized === null
-    ? null
-    : bindRegionalEcologyStateV4ActiveProjection(state, materialized);
+  if (materialized === null) return null;
+  try {
+    const received = isRegionalEcologyMaterializationBatchReceipt(
+      materialized,
+      sources,
+      window,
+      state.updatedAtTick,
+    )
+      ? bindRegionalEcologyStateV4ActiveProjectionWithMaterializationReceipt(
+          state,
+          materialized,
+          materialized,
+        )
+      : null;
+    return received
+      ?? bindRegionalEcologyStateV4ActiveProjection(state, materialized);
+  } finally {
+    releaseRegionalEcologyMaterializationBatchReceipt(materialized);
+  }
 }
 
 export function bindRegionalEcologyStateV4ActiveProjection(
   value: unknown,
   materializedResidentsValue: unknown,
+): RegionalEcologyStateV4ActiveProjection | null {
+  return bindRegionalEcologyStateV4ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    null,
+  );
+}
+
+/** @internal Consume one exact still-live whole-batch materialization receipt. */
+export function bindRegionalEcologyStateV4ActiveProjectionWithMaterializationReceipt(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[],
+): RegionalEcologyStateV4ActiveProjection | null {
+  return bindRegionalEcologyStateV4ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    materializationBatch,
+  );
+}
+
+function bindRegionalEcologyStateV4ActiveProjectionInternal(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null,
 ): RegionalEcologyStateV4ActiveProjection | null {
   const state = canonicalizeRegionalEcologyStateV4(value);
   if (state === null || !Array.isArray(materializedResidentsValue)) return null;
@@ -553,11 +598,14 @@ export function bindRegionalEcologyStateV4ActiveProjection(
     seen.add(raw.sourceKey);
   }
   if (seen.size !== baseKeys.size + coldKeys.size) return null;
-  const base = bindRegionalEcologyStateV3ActiveProjection(
-    state.base,
-    baseResidents,
-  );
-  const cold = bindColdShoreProjection(state, coldResidents);
+  const base = materializationBatch === null
+    ? bindRegionalEcologyStateV3ActiveProjection(state.base, baseResidents)
+    : bindRegionalEcologyStateV3ActiveProjectionWithMaterializationReceipt(
+        state.base,
+        baseResidents,
+        materializationBatch,
+      );
+  const cold = bindColdShoreProjection(state, coldResidents, materializationBatch);
   if (base === null || cold === null) return null;
   const projectedPatches = [
     ...v3ProjectionPatches(base),
@@ -1028,6 +1076,7 @@ function collectV3Ids(base: RegionalEcologyStateV3): Set<string> | null {
 function bindColdShoreProjection(
   state: RegionalEcologyStateV4,
   residentsValue: readonly RegionalEcologyResidentPatch[],
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null = null,
 ): readonly RegionalEcologyStateV4ProjectedColdShoreResidentV1[] | null {
   if (residentsValue.length !== state.coldShoreActiveResidents.length) {
     return null;
@@ -1051,16 +1100,26 @@ function bindColdShoreProjection(
       return null;
     }
     const actorIds = materializedActorIds(projected);
-    let replay: CoreEcologyAggregatePatchState;
-    try {
-      replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
-        atTick: state.updatedAtTick,
-        actorIds,
-      });
-    } catch {
+    if (materializationBatch === null) {
+      let replay: CoreEcologyAggregatePatchState;
+      try {
+        replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
+          atTick: state.updatedAtTick,
+          actorIds,
+        });
+      } catch {
+        return null;
+      }
+      if (stableStringify(replay) !== stableStringify(projected)) return null;
+    } else if (!regionalEcologyMaterializationBatchOwnsTransition(
+      materializationBatch,
+      source.sourceKey,
+      source.patch,
+      projected,
+      state.updatedAtTick,
+    )) {
       return null;
     }
-    if (stableStringify(replay) !== stableStringify(projected)) return null;
     output.push(deepFreeze({
       kind: "regional-cold-shore" as const,
       sourceKey: source.sourceKey,

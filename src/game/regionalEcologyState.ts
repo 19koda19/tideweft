@@ -31,6 +31,9 @@ import {
 } from "./regionalEcologyResidents";
 import { coreEcologySpeciesCanGuardCarcass } from "./coreEcologySpeciesRuntimePolicy";
 import {
+  isRegionalEcologyMaterializationBatchReceipt,
+  regionalEcologyMaterializationBatchOwnsTransition,
+  releaseRegionalEcologyMaterializationBatchReceipt,
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
@@ -625,13 +628,30 @@ export function projectRegionalEcologyActiveState(
   const state = canonicalizeRegionalEcologyState(value);
   if (state === null) return null;
   const sources = activeSnapshots(state);
+  const sourcePatches = sources.map(({ sourceKey, patch }) => ({ sourceKey, patch }));
   const materialized = setRegionalEcologyMaterializationForWindow(
-    sources.map(({ sourceKey, patch }) => ({ sourceKey, patch })),
+    sourcePatches,
     window,
     state.updatedAtTick,
   );
   if (materialized === null || materialized.length !== sources.length) return null;
-  return bindRegionalEcologyActiveProjection(state, materialized);
+  try {
+    const received = isRegionalEcologyMaterializationBatchReceipt(
+      materialized,
+      sourcePatches,
+      window,
+      state.updatedAtTick,
+    )
+      ? bindRegionalEcologyActiveProjectionWithMaterializationReceipt(
+          state,
+          materialized,
+          materialized,
+        )
+      : null;
+    return received ?? bindRegionalEcologyActiveProjection(state, materialized);
+  } finally {
+    releaseRegionalEcologyMaterializationBatchReceipt(materialized);
+  }
 }
 
 /**
@@ -642,6 +662,31 @@ export function projectRegionalEcologyActiveState(
 export function bindRegionalEcologyActiveProjection(
   value: unknown,
   materializedResidentsValue: unknown,
+): RegionalEcologyActiveProjectionV1 | null {
+  return bindRegionalEcologyActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    null,
+  );
+}
+
+/** @internal Consume one exact still-live whole-batch materialization receipt. */
+export function bindRegionalEcologyActiveProjectionWithMaterializationReceipt(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[],
+): RegionalEcologyActiveProjectionV1 | null {
+  return bindRegionalEcologyActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    materializationBatch,
+  );
+}
+
+function bindRegionalEcologyActiveProjectionInternal(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null,
 ): RegionalEcologyActiveProjectionV1 | null {
   const state = canonicalizeRegionalEcologyState(value);
   if (state === null || !Array.isArray(materializedResidentsValue)) return null;
@@ -674,19 +719,31 @@ export function bindRegionalEcologyActiveProjection(
     ));
     materializedActorCount += materializedActorIds.length;
     if (materializedActorCount > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) return null;
-    let sourceWithMaterialization: CoreEcologyAggregatePatchState;
-    try {
-      // Replaying the exact split from the canonical all-coarse snapshot is a
-      // stronger normalization check than stripping the bit afterward: it
-      // also authenticates transient group anchors and rematerialized poses.
-      sourceWithMaterialization = setCoreEcologyAggregatePatchMaterializedActors(
-        source.patch,
-        { atTick: state.updatedAtTick, actorIds: materializedActorIds },
-      );
-    } catch {
+    if (materializationBatch === null) {
+      let sourceWithMaterialization: CoreEcologyAggregatePatchState;
+      try {
+        // Replaying the exact split from the canonical all-coarse snapshot is a
+        // stronger normalization check than stripping the bit afterward: it
+        // also authenticates transient group anchors and rematerialized poses.
+        sourceWithMaterialization = setCoreEcologyAggregatePatchMaterializedActors(
+          source.patch,
+          { atTick: state.updatedAtTick, actorIds: materializedActorIds },
+        );
+      } catch {
+        return null;
+      }
+      if (stableStringify(projected) !== stableStringify(sourceWithMaterialization)) {
+        return null;
+      }
+    } else if (!regionalEcologyMaterializationBatchOwnsTransition(
+      materializationBatch,
+      source.sourceKey,
+      source.patch,
+      projected,
+      state.updatedAtTick,
+    )) {
       return null;
     }
-    if (stableStringify(projected) !== stableStringify(sourceWithMaterialization)) return null;
     materializedBySource.set(raw.sourceKey, projected);
   }
   if (materializedBySource.size !== sourceByKey.size) return null;

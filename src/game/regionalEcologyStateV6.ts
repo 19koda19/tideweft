@@ -21,6 +21,7 @@ import {
 import {
   REGIONAL_ECOLOGY_STATE_V5_MAX_SERIALIZED_BYTES,
   bindRegionalEcologyStateV5ActiveProjection,
+  bindRegionalEcologyStateV5ActiveProjectionWithMaterializationReceipt,
   canonicalRegionalEcologyStateV5ForWorld,
   canonicalizeRegionalEcologyStateV5,
   commitRegionalEcologyStateV5ActiveProjection,
@@ -54,6 +55,9 @@ import {
   coreEcologyBreadthResidentPatchResidenceRegions,
 } from "./regionalBreadthCohort";
 import {
+  isRegionalEcologyMaterializationBatchReceipt,
+  regionalEcologyMaterializationBatchOwnsTransition,
+  releaseRegionalEcologyMaterializationBatchReceipt,
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
@@ -565,14 +569,55 @@ export function projectRegionalEcologyStateV6ActiveState(
     window,
     state.updatedAtTick,
   );
-  return materialized === null
-    ? null
-    : bindRegionalEcologyStateV6ActiveProjection(state, materialized);
+  if (materialized === null) return null;
+  try {
+    const received = isRegionalEcologyMaterializationBatchReceipt(
+      materialized,
+      sources,
+      window,
+      state.updatedAtTick,
+    )
+      ? bindRegionalEcologyStateV6ActiveProjectionWithMaterializationReceipt(
+          state,
+          materialized,
+          materialized,
+        )
+      : null;
+    return received
+      ?? bindRegionalEcologyStateV6ActiveProjection(state, materialized);
+  } finally {
+    releaseRegionalEcologyMaterializationBatchReceipt(materialized);
+  }
 }
 
 export function bindRegionalEcologyStateV6ActiveProjection(
   value: unknown,
   materializedResidentsValue: unknown,
+): RegionalEcologyStateV6ActiveProjection | null {
+  return bindRegionalEcologyStateV6ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    null,
+  );
+}
+
+/** @internal Consume one exact still-live whole-batch materialization receipt. */
+export function bindRegionalEcologyStateV6ActiveProjectionWithMaterializationReceipt(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[],
+): RegionalEcologyStateV6ActiveProjection | null {
+  return bindRegionalEcologyStateV6ActiveProjectionInternal(
+    value,
+    materializedResidentsValue,
+    materializationBatch,
+  );
+}
+
+function bindRegionalEcologyStateV6ActiveProjectionInternal(
+  value: unknown,
+  materializedResidentsValue: unknown,
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null,
 ): RegionalEcologyStateV6ActiveProjection | null {
   const state = canonicalizeRegionalEcologyStateV6(value);
   if (state === null || !Array.isArray(materializedResidentsValue)) return null;
@@ -606,8 +651,14 @@ export function bindRegionalEcologyStateV6ActiveProjection(
     seen.add(raw.sourceKey);
   }
   if (seen.size !== baseKeys.size + breadthKeys.size) return null;
-  const base = bindRegionalEcologyStateV5ActiveProjection(state.base, baseResidents);
-  const breadth = bindBreadthProjection(state, breadthResidents);
+  const base = materializationBatch === null
+    ? bindRegionalEcologyStateV5ActiveProjection(state.base, baseResidents)
+    : bindRegionalEcologyStateV5ActiveProjectionWithMaterializationReceipt(
+        state.base,
+        baseResidents,
+        materializationBatch,
+      );
+  const breadth = bindBreadthProjection(state, breadthResidents, materializationBatch);
   if (
     base === null
     || breadth === null
@@ -1025,6 +1076,7 @@ function collectV5Ids(base: RegionalEcologyStateV5): Set<string> | null {
 function bindBreadthProjection(
   state: RegionalEcologyStateV6,
   residentsValue: readonly RegionalEcologyResidentPatch[],
+  materializationBatch: readonly RegionalEcologyResidentPatch[] | null = null,
 ): readonly RegionalEcologyStateV6ProjectedBreadthResidentV1[] | null {
   if (residentsValue.length !== state.breadthActiveResidents.length) return null;
   const sourceByKey = new Map(
@@ -1043,16 +1095,26 @@ function bindBreadthProjection(
       || projected.updatedAtTick !== state.updatedAtTick
       || sourceLineageHash(projected) !== source.lineageHash
     ) return null;
-    let replay: CoreEcologyAggregatePatchState;
-    try {
-      replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
-        atTick: state.updatedAtTick,
-        actorIds: materializedActorIds(projected),
-      });
-    } catch {
+    if (materializationBatch === null) {
+      let replay: CoreEcologyAggregatePatchState;
+      try {
+        replay = setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
+          atTick: state.updatedAtTick,
+          actorIds: materializedActorIds(projected),
+        });
+      } catch {
+        return null;
+      }
+      if (stableStringify(replay) !== stableStringify(projected)) return null;
+    } else if (!regionalEcologyMaterializationBatchOwnsTransition(
+      materializationBatch,
+      source.sourceKey,
+      source.patch,
+      projected,
+      state.updatedAtTick,
+    )) {
       return null;
     }
-    if (stableStringify(replay) !== stableStringify(projected)) return null;
     output.push(deepFreeze({
       kind: CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
       cohortId: source.cohortId,

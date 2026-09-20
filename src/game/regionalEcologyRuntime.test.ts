@@ -16,6 +16,9 @@ import {
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import {
   deriveRegionalEcologyMaterializationPlan,
+  isRegionalEcologyMaterializationBatchReceipt,
+  regionalEcologyMaterializationBatchOwnsTransition,
+  releaseRegionalEcologyMaterializationBatchReceipt,
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
@@ -191,5 +194,100 @@ describe("regional ecology global materialization", () => {
       first,
       { sourceKey: duplicatePatch.patchKey, patch: duplicatePatch },
     ], runtimeWindow())).toBeNull();
+  });
+
+  it("authenticates only the exact whole batch, patch transitions, tick, and signed window", () => {
+    const sources = [
+      resident("source:receipt-a", "gull", 8, 55),
+      resident("source:receipt-b", "marsh-rabbit", 8, 70),
+    ] as const;
+    const window = runtimeWindow();
+    const batch = setRegionalEcologyMaterializationForWindow(sources, window, 4);
+    if (batch === null) throw new Error("Expected a receipted materialization batch");
+    const firstOutput = batch.find(({ sourceKey }) => sourceKey === sources[0].sourceKey);
+    if (firstOutput === undefined) throw new Error("Expected first receipted output");
+
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, sources, window, 4)).toBe(true);
+    expect(regionalEcologyMaterializationBatchOwnsTransition(
+      batch,
+      sources[0].sourceKey,
+      sources[0].patch,
+      firstOutput.patch,
+      4,
+    )).toBe(true);
+    expect(isRegionalEcologyMaterializationBatchReceipt([...batch], sources, window, 4))
+      .toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(
+      [...batch].reverse(),
+      sources,
+      window,
+      4,
+    )).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(
+      structuredClone(batch),
+      sources,
+      window,
+      4,
+    )).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, [{
+      sourceKey: sources[0].sourceKey,
+      patch: structuredClone(sources[0].patch),
+    }, sources[1]], window, 4)).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(
+      [batch[0]!, batch[0]!],
+      sources,
+      window,
+      4,
+    )).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, sources, window, 5)).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, sources, {
+      origin: { x: window.origin.x + 1, y: window.origin.y },
+      terrain: window.terrain,
+    }, 4)).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, sources, {
+      origin: window.origin,
+      terrain: { width: window.terrain.width + 1, height: window.terrain.height },
+    }, 4)).toBe(false);
+    expect(regionalEcologyMaterializationBatchOwnsTransition(
+      batch,
+      sources[0].sourceKey,
+      sources[0].patch,
+      structuredClone(firstOutput.patch),
+      4,
+    )).toBe(false);
+
+    releaseRegionalEcologyMaterializationBatchReceipt(batch);
+    expect(isRegionalEcologyMaterializationBatchReceipt(batch, sources, window, 4)).toBe(false);
+  });
+
+  it("keeps signed-zero window coordinates distinct in the private receipt", () => {
+    const negativeZeroWindow = Object.freeze({
+      origin: Object.freeze({ x: -0, y: 0 }),
+      terrain: runtimeWindow().terrain,
+    });
+    const positiveZeroWindow = Object.freeze({
+      origin: Object.freeze({ x: 0, y: 0 }),
+      terrain: runtimeWindow().terrain,
+    });
+    const batch = setRegionalEcologyMaterializationForWindow(
+      [],
+      negativeZeroWindow,
+      0,
+    );
+    if (batch === null) throw new Error("Expected empty receipted batch");
+
+    expect(Object.is(negativeZeroWindow.origin.x, positiveZeroWindow.origin.x)).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(
+      batch,
+      [],
+      negativeZeroWindow,
+      0,
+    )).toBe(true);
+    expect(isRegionalEcologyMaterializationBatchReceipt(
+      batch,
+      [],
+      positiveZeroWindow,
+      0,
+    )).toBe(false);
   });
 });

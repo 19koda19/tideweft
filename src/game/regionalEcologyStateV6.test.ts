@@ -37,6 +37,7 @@ import {
   REGIONAL_ECOLOGY_STATE_V6_ADOPTION_POLICY_ID,
   REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES,
   bindRegionalEcologyStateV6ActiveProjection,
+  bindRegionalEcologyStateV6ActiveProjectionWithMaterializationReceipt,
   canonicalRegionalEcologyStateV6ForWorld,
   canonicalizeRegionalEcologyStateV6,
   commitRegionalEcologyStateV6ActiveProjection,
@@ -55,7 +56,10 @@ import {
   type RegionalEcologyStateV6,
   type RegionalEcologyStateV6ActiveProjection,
 } from "./regionalEcologyStateV6";
-import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
+import {
+  releaseRegionalEcologyMaterializationBatchReceipt,
+  setRegionalEcologyMaterializationForWindow,
+} from "./regionalEcologyRuntime";
 import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
 import {
   REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
@@ -619,6 +623,36 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
         expect(selected === 0 || selected === group.memberOrdinals.length).toBe(true);
       }
     }
+  });
+
+  it("binds the authenticated whole batch byte-identically to the raw fail-closed path", () => {
+    const state = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const sources = regionalEcologyStateV6ActiveSourcePatches(state);
+    if (sources === null) throw new Error("Alpha37 receipt sources failed");
+    const window = windowAtBreadthActor(state);
+    const batch = setRegionalEcologyMaterializationForWindow(
+      sources,
+      window,
+      state.updatedAtTick,
+    );
+    if (batch === null) throw new Error("Alpha37 receipt materialization failed");
+
+    const raw = bindRegionalEcologyStateV6ActiveProjection(state, batch);
+    const received = bindRegionalEcologyStateV6ActiveProjectionWithMaterializationReceipt(
+      state,
+      batch,
+      batch,
+    );
+    expect(raw).not.toBeNull();
+    expect(stableStringify(received)).toBe(stableStringify(raw));
+
+    releaseRegionalEcologyMaterializationBatchReceipt(batch);
+    expect(bindRegionalEcologyStateV6ActiveProjectionWithMaterializationReceipt(
+      state,
+      batch,
+      batch,
+    )).toBeNull();
+    expect(bindRegionalEcologyStateV6ActiveProjection(state, batch)).not.toBeNull();
   });
 
   it("commits one physical movement as a sparse delta without invalidating adoption", () => {
