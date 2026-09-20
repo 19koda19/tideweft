@@ -16,7 +16,7 @@ export const WILDLIFE_ABOUT_VERSION = 1 as const;
 export type WildlifeAboutObservation = WildlifeDirectObservation;
 export type WildlifeAboutActivityContext = NonNullable<WildlifePresentationInput["activity"]>;
 export type WildlifePopulationEvidenceAboutObservation = WildlifePopulationEvidenceObservation;
-type AggregatePopulationEvidencePresentation = Extract<
+export type AggregatePopulationEvidencePresentation = Extract<
   WildlifePopulationEvidencePresentation,
   { readonly representation: "population-evidence" }
 >;
@@ -441,6 +441,12 @@ export function projectWildlifePopulationEvidenceQuickInspect(
 ): WildlifePopulationEvidenceQuickInspect | null {
   const presentation = observePopulationEvidence(patch, evidenceId, observation);
   if (presentation === null) return null;
+  return projectWildlifePopulationEvidenceQuickInspectFromPresentation(presentation);
+}
+
+export function projectWildlifePopulationEvidenceQuickInspectFromPresentation(
+  presentation: AggregatePopulationEvidencePresentation,
+): WildlifePopulationEvidenceQuickInspect {
   return deepFreeze({
     version: WILDLIFE_ABOUT_VERSION,
     aggregateId: presentation.aggregateId,
@@ -463,6 +469,12 @@ export function projectWildlifePopulationEvidenceAbout(
 ): WildlifePopulationEvidenceAboutView | null {
   const presentation = observePopulationEvidence(patch, evidenceId, observation);
   if (presentation === null) return null;
+  return projectWildlifePopulationEvidenceAboutFromPresentation(presentation);
+}
+
+export function projectWildlifePopulationEvidenceAboutFromPresentation(
+  presentation: AggregatePopulationEvidencePresentation,
+): WildlifePopulationEvidenceAboutView {
   const observed: WildlifeAboutFact[] = [];
   if (presentation.speciesIdentified) {
     observed.push(fact(

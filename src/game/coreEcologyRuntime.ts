@@ -35,13 +35,18 @@ import {
 } from "./regionalTravel";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 import {
-  hasValidPerceptionSignature,
   type PerceptionResult,
 } from "./perception";
 import {
-  projectWildlifePresentation,
+  projectWildlifePresentationInObservationFrame,
   type WildlifePresentation,
 } from "./wildlifePresentation";
+import {
+  createWildlifeObservationFrame,
+  isWildlifeObservationFrame,
+  releaseWildlifeObservationFrame,
+  type WildlifeObservationFrame,
+} from "./wildlifeObservationFrame";
 
 /** Minimal signed-frame subset consumed by actor projection. */
 export interface CoreEcologyRuntimeWindow {
@@ -66,6 +71,15 @@ export interface ProjectCoreEcologyWildlifeInput {
   readonly weather?: Readonly<WeatherState>;
   readonly selectedTarget?: CoreWildlifeSelectionTarget | null;
   /** Transient source-authenticated activity destinations, never save data. */
+  readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityReceipt[];
+}
+
+export interface ProjectCoreEcologyWildlifeFrameInput {
+  readonly patch: unknown;
+  readonly observationFrame: WildlifeObservationFrame;
+  readonly tileSize: number;
+  readonly weather?: Readonly<WeatherState>;
+  readonly selectedTarget?: CoreWildlifeSelectionTarget | null;
   readonly activityAuthorities?: readonly CoreEcologyActivityAuthorityReceipt[];
 }
 
@@ -277,7 +291,6 @@ export function projectCoreEcologyWildlife(
   if (
     patch === null
     || window === null
-    || !validPerception(input.perception, window)
     || !Number.isFinite(input.tileSize)
     || input.tileSize <= 0
     || input.tileSize > 4_096
@@ -286,6 +299,49 @@ export function projectCoreEcologyWildlife(
       && canonicalCoreEcologyCurrentWeather(input.weather, patch.updatedAtTick) === null
     )
   ) return null;
+  const observationFrame = createWildlifeObservationFrame({
+    window,
+    perception: input.perception,
+  });
+  if (observationFrame === null) return null;
+  try {
+    return projectCoreEcologyWildlifeWithFrame(patch, observationFrame, input);
+  } finally {
+    releaseWildlifeObservationFrame(observationFrame);
+  }
+}
+
+export function projectCoreEcologyWildlifeInObservationFrame(
+  input: ProjectCoreEcologyWildlifeFrameInput,
+): readonly WildlifePresentation[] | null {
+  if (
+    !plainRecord(input)
+    || !allowedFrameProjectionInputKeys(input as unknown as Record<string, unknown>)
+    || !isWildlifeObservationFrame(input.observationFrame)
+    || canonicalWindow(input.observationFrame.window) === null
+  ) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
+  if (
+    patch === null
+    || !Number.isFinite(input.tileSize)
+    || input.tileSize <= 0
+    || input.tileSize > 4_096
+    || (
+      Object.hasOwn(input, "weather")
+      && canonicalCoreEcologyCurrentWeather(input.weather, patch.updatedAtTick) === null
+    )
+  ) return null;
+  return projectCoreEcologyWildlifeWithFrame(patch, input.observationFrame, input);
+}
+
+function projectCoreEcologyWildlifeWithFrame(
+  patch: CoreEcologyAggregatePatchState,
+  observationFrame: WildlifeObservationFrame,
+  input: Pick<
+    ProjectCoreEcologyWildlifeFrameInput,
+    "activityAuthorities" | "selectedTarget" | "tileSize" | "weather"
+  >,
+): readonly WildlifePresentation[] | null {
   if (
     !Object.hasOwn(input, "weather")
     && patch.populations.some((population) => (
@@ -312,9 +368,9 @@ export function projectCoreEcologyWildlife(
   for (const population of patch.populations) {
     for (const member of population.members) {
       if (member.materialization !== "materialized") continue;
-      const presentation = projectWildlifePresentation({
+      const presentation = projectWildlifePresentationInObservationFrame({
         actor: member.actor,
-        observation: { window, perception: input.perception },
+        observationFrame,
         tileSize: input.tileSize,
         selected: targetMatchesActor(selectedTarget, member.actor),
         ...(coreEcologySpeciesHasBoundedActivityProjection(population.species)
@@ -358,9 +414,10 @@ export function projectCoreEcologyWildlife(
       .get(population.species)
       ?.get(population.populationKey);
     if (visibleAggregateCount === undefined) return null;
-    const withVisibleCount = projectWildlifePresentation({
+    const withVisibleCount = projectWildlifePresentationInObservationFrame({
       actor: member.actor,
-      observation: { window, perception: input.perception, visibleAggregateCount },
+      observationFrame,
+      visibleAggregateCount,
       tileSize: input.tileSize,
       selected: targetMatchesActor(selectedTarget, member.actor),
       ...(coreEcologySpeciesHasBoundedActivityProjection(population.species)
@@ -433,18 +490,6 @@ function canonicalWindow(value: unknown): CoreEcologyRuntimeWindow | null {
   });
 }
 
-function validPerception(
-  value: unknown,
-  window: CoreEcologyRuntimeWindow,
-): value is PerceptionResult {
-  if (!plainRecord(value)) return false;
-  const perception = value as unknown as PerceptionResult;
-  return perception.valid === true
-    && hasValidPerceptionSignature(perception, window.terrain.width, window.terrain.height)
-    && nonnegativeSafeInteger(perception.playerTileIndex)
-    && perception.playerTileIndex < window.terrain.width * window.terrain.height;
-}
-
 function canonicalTarget(value: unknown): CoreWildlifeSelectionTarget | null {
   if (
     !plainRecord(value)
@@ -470,6 +515,14 @@ function targetMatchesActor(
 
 function allowedProjectionInputKeys(value: Record<string, unknown>): boolean {
   const expected = ["patch", "perception", "tileSize", "window"];
+  if (Object.hasOwn(value, "activityAuthorities")) expected.push("activityAuthorities");
+  if (Object.hasOwn(value, "selectedTarget")) expected.push("selectedTarget");
+  if (Object.hasOwn(value, "weather")) expected.push("weather");
+  return exactKeys(value, expected);
+}
+
+function allowedFrameProjectionInputKeys(value: Record<string, unknown>): boolean {
+  const expected = ["observationFrame", "patch", "tileSize"];
   if (Object.hasOwn(value, "activityAuthorities")) expected.push("activityAuthorities");
   if (Object.hasOwn(value, "selectedTarget")) expected.push("selectedTarget");
   if (Object.hasOwn(value, "weather")) expected.push("weather");

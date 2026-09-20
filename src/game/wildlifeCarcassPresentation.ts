@@ -6,16 +6,21 @@ import {
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import { livingSpeciesRegistryEntry } from "./livingSpeciesRegistry";
 import {
-  hasValidPerceptionSignature,
   type PerceptionResult,
 } from "./perception";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
 } from "./worldPosition";
 import {
-  wildlifeWorldPositionDirectDetail,
+  wildlifeWorldPositionDirectDetailInFrame,
   type WildlifePopulationEvidenceObservation,
 } from "./wildlifePresentation";
+import {
+  createWildlifeObservationFrame,
+  isWildlifeObservationFrame,
+  releaseWildlifeObservationFrame,
+  type WildlifeObservationFrame,
+} from "./wildlifeObservationFrame";
 
 export const WILDLIFE_CARCASS_PRESENTATION_VERSION = 1 as const;
 export const WILDLIFE_CARCASS_IDENTIFICATION_CLARITY = 600_000 as const;
@@ -24,6 +29,12 @@ export interface ProjectCoreEcologyWildlifeCarcassesInput {
   readonly patch: unknown;
   readonly window: CoreEcologyRuntimeWindow;
   readonly perception: PerceptionResult;
+  readonly tileSize: number;
+}
+
+export interface ProjectCoreEcologyWildlifeCarcassesFrameInput {
+  readonly patch: unknown;
+  readonly observationFrame: WildlifeObservationFrame;
   readonly tileSize: number;
 }
 
@@ -41,19 +52,46 @@ export function projectCoreEcologyWildlifeCarcasses(
     || !Number.isFinite(input.tileSize)
     || input.tileSize <= 0
     || input.tileSize > 4_096
-    || !validObservation(input.window, input.perception)
   ) return null;
-  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
-  if (patch === null) return null;
   const observation: WildlifePopulationEvidenceObservation = {
     window: input.window as CoreEcologyRuntimeWindow,
     perception: input.perception as PerceptionResult,
   };
+  const observationFrame = createWildlifeObservationFrame(observation);
+  if (observationFrame === null) return null;
+  try {
+    return projectCoreEcologyWildlifeCarcassesInObservationFrame({
+      patch: input.patch,
+      observationFrame,
+      tileSize: input.tileSize,
+    });
+  } finally {
+    releaseWildlifeObservationFrame(observationFrame);
+  }
+}
+
+export function projectCoreEcologyWildlifeCarcassesInObservationFrame(
+  input: ProjectCoreEcologyWildlifeCarcassesFrameInput,
+): readonly WildlifeCarcassView[] | null {
+  if (
+    !plainRecord(input)
+    || !exactKeys(input as unknown as Record<string, unknown>, [
+      "observationFrame",
+      "patch",
+      "tileSize",
+    ])
+    || !isWildlifeObservationFrame(input.observationFrame)
+    || !Number.isFinite(input.tileSize)
+    || input.tileSize <= 0
+    || input.tileSize > 4_096
+  ) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
+  if (patch === null) return null;
   const views: WildlifeCarcassView[] = [];
   for (const carcass of patch.carcasses) {
-    const detail = wildlifeWorldPositionDirectDetail(
+    const detail = wildlifeWorldPositionDirectDetailInFrame(
       carcass.deathPosition,
-      observation,
+      input.observationFrame,
     );
     if (detail === null) continue;
     const registry = livingSpeciesRegistryEntry(carcass.sourceSpecies);
@@ -107,46 +145,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function validObservation(window: unknown, perception: unknown): boolean {
-  if (
-    !plainRecord(window)
-    || !exactKeys(window, ["origin", "terrain"])
-    || !plainRecord(window.origin)
-    || !exactKeys(window.origin, ["x", "y"])
-    || !safeInteger(window.origin.x)
-    || !safeInteger(window.origin.y)
-    || !plainRecord(window.terrain)
-    || !exactKeys(window.terrain, ["height", "width"])
-    || !positiveSafeInteger(window.terrain.width)
-    || !positiveSafeInteger(window.terrain.height)
-    || !plainRecord(perception)
-  ) return false;
-  const cells = window.terrain.width * window.terrain.height;
-  return Number.isSafeInteger(cells)
-    && cells > 0
-    && cells <= 1_048_576
-    && perception.valid === true
-    && hasValidPerceptionSignature(
-      perception as PerceptionResult,
-      window.terrain.width,
-      window.terrain.height,
-    )
-    && nonnegativeSafeInteger(perception.playerTileIndex)
-    && perception.playerTileIndex < cells;
-}
-
-function safeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && !Object.is(value, -0);
-}
-
-function nonnegativeSafeInteger(value: unknown): value is number {
-  return safeInteger(value) && (value as number) >= 0;
-}
-
-function positiveSafeInteger(value: unknown): value is number {
-  return safeInteger(value) && (value as number) > 0;
 }
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {

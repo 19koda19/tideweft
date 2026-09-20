@@ -231,15 +231,16 @@ import {
   type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
 import {
-  projectCoreEcologyWildlife,
+  projectCoreEcologyWildlifeInObservationFrame,
   selectedCoreEcologyActor,
   setCoreEcologyMaterializationForWindow,
   type CoreEcologyRuntimeWindow,
 } from "./coreEcologyRuntime";
 import {
-  projectCoreEcologyAggregateEvidence,
+  projectCoreEcologyAggregateEvidenceInObservationFrame,
   selectWitnessedBrownRatRedistribution,
 } from "./coreEcologyEvidenceRuntime";
+import { projectRuntimeCoreEcologyPresentationBatch } from "./runtimeCoreEcologyPresentationBatch";
 import {
   collectCoreEcologyRootAggregateActivityObservationBatches,
   collectCoreEcologyVisualObservationBatches,
@@ -662,10 +663,13 @@ import {
   type DogWorkActivityContext,
 } from "./dogPresentation";
 import {
-  isWildlifeWorldPositionDirectlyObserved,
+  isWildlifeWorldPositionDirectlyObservedInFrame,
   projectWildlifePresentation,
 } from "./wildlifePresentation";
-import { projectCoreEcologyWildlifeCarcasses } from "./wildlifeCarcassPresentation";
+import {
+  createWildlifeObservationFrame,
+  releaseWildlifeObservationFrame,
+} from "./wildlifeObservationFrame";
 import {
   createLivingActorTraversabilitySurface,
   deriveLivingActorEscapeTargets,
@@ -9416,27 +9420,30 @@ export async function createTideweftRuntime(
     ) {
       selectedDogActorId = null;
     }
-    const wildlifePresentation = projectedEcologySources.flatMap((source) => {
+    const ecologyPresentationSources = projectedEcologySources.map((source) => {
       const activityAuthorities = activityAuthoritiesBySource.get(source.sourceKey);
       if (activityAuthorities === undefined) {
         throw new Error("Regional ecology presentation lost its activity source map");
       }
-      const projected = projectCoreEcologyWildlife({
+      return Object.freeze({
+        sourceKey: source.sourceKey,
         patch: source.patch,
-        window: actorWindow,
-        perception,
-        tileSize: RENDER_TILE_SIZE,
-        weather: worldView.weather,
-        selectedTarget: selectedWildlifeTarget,
-        ...(activityAuthorities.size === 0
-          ? {}
-          : { activityAuthorities: Object.freeze([...activityAuthorities.values()]) }),
+        activityAuthorities: Object.freeze([...activityAuthorities.values()]),
       });
-      if (projected === null) {
-        throw new Error("Core wildlife presentation could not be projected");
-      }
-      return projected;
     });
+    const ecologyPresentation = projectRuntimeCoreEcologyPresentationBatch({
+      sources: ecologyPresentationSources,
+      window: actorWindow,
+      perception,
+      tileSize: RENDER_TILE_SIZE,
+      weather: worldView.weather,
+      selectedWildlifeTarget,
+      selectedEvidenceTarget: selectedWildlifeEvidenceTarget,
+    });
+    if (ecologyPresentation === null) {
+      throw new Error("Core ecology presentation batch could not be projected");
+    }
+    const wildlifePresentation = ecologyPresentation.wildlife;
     if (
       selectedWildlifeTarget !== null
       && !wildlifePresentation.some(({ actorId, species }) => (
@@ -9446,40 +9453,10 @@ export async function createTideweftRuntime(
     ) {
       selectedWildlifeTarget = null;
     }
-    const wildlifeCarcassPresentation = activeCoreEcologyPatches.flatMap((patch) => {
-      const projected = projectCoreEcologyWildlifeCarcasses({
-        patch,
-        window: actorWindow,
-        perception,
-        tileSize: RENDER_TILE_SIZE,
-      });
-      if (projected === null) {
-        throw new Error("Core wildlife carcass presentation could not be projected");
-      }
-      return projected;
-    });
-    const aggregateEvidenceProjections = activeCoreEcologyPatches.map((patch) => {
-      const projected = projectCoreEcologyAggregateEvidence({
-        patch,
-        window: actorWindow,
-        perception,
-        tileSize: RENDER_TILE_SIZE,
-        selectedTarget: selectedWildlifeEvidenceTarget,
-      });
-      if (projected === null) {
-        throw new Error("Aggregate wildlife evidence runtime projection could not be resolved");
-      }
-      return projected;
-    });
-    const selectedEvidence = aggregateEvidenceProjections
-      .map(({ selectedAbout }) => selectedAbout)
-      .filter((selected) => selected !== null);
-    if (selectedEvidence.length > 1) {
-      throw new Error("Aggregate wildlife evidence has multiple source owners");
-    }
+    const wildlifeCarcassPresentation = ecologyPresentation.carcasses;
     const aggregateEvidenceProjection = {
-      renderEvidence: aggregateEvidenceProjections.flatMap(({ renderEvidence }) => renderEvidence),
-      selectedAbout: selectedEvidence[0] ?? null,
+      renderEvidence: ecologyPresentation.aggregateEvidence,
+      selectedAbout: ecologyPresentation.selectedEvidenceAbout,
     };
     if (
       selectedWildlifeEvidenceTarget !== null
@@ -11587,57 +11564,98 @@ export async function createTideweftRuntime(
         },
         perception: eventPerception,
       } as const;
-      const witnessedCoreWildlife = [...finalRegionalPatches.values()].flatMap((patch) => {
-        const projected = projectCoreEcologyWildlife({
-          patch,
-          window: coreEventObservation.window,
-          perception: eventPerception,
-          tileSize: RENDER_TILE_SIZE,
-          weather: worldView.weather,
-        });
-        if (projected === null) {
-          throw new Error("Core ecology event perception could not be projected");
+      const eventObservationFrame = createWildlifeObservationFrame(coreEventObservation);
+      if (eventObservationFrame === null) {
+        throw new Error("Core ecology event observation frame could not be authenticated");
+      }
+      const allCoreStepEvents = coreSteps.flatMap(({ result }) => result.events);
+      const {
+        directlyWitnessedCarcassIds,
+        directlyWitnessedCoreEventIds,
+        directlyWitnessedMortalityEventIds,
+        settlementFoodLossDirectlyWitnessed,
+        witnessedAggregateEvidence,
+        witnessedCoreBeforeMortality,
+        witnessedCoreWildlife,
+      } = (() => {
+        try {
+          const current = [...finalRegionalPatches.values()].flatMap((patch) => {
+            const projected = projectCoreEcologyWildlifeInObservationFrame({
+              patch,
+              observationFrame: eventObservationFrame,
+              tileSize: RENDER_TILE_SIZE,
+              weather: worldView.weather,
+            });
+            if (projected === null) {
+              throw new Error("Core ecology event perception could not be projected");
+            }
+            return projected;
+          });
+          const beforeMortality = coreSteps.flatMap(({ beforePatch }) => {
+            const projected = projectCoreEcologyWildlifeInObservationFrame({
+              patch: beforePatch,
+              observationFrame: eventObservationFrame,
+              tileSize: RENDER_TILE_SIZE,
+              weather: worldView.weather,
+            });
+            if (projected === null) {
+              throw new Error("Core ecology pre-mortality perception could not be projected");
+            }
+            return projected;
+          });
+          const witnessedEventIds = new Set(allCoreStepEvents
+            .filter((event) => isWildlifeWorldPositionDirectlyObservedInFrame(
+              event.position,
+              eventObservationFrame,
+            ))
+            .map(({ eventId }) => eventId));
+          const evidence = [...finalRegionalPatches.values()].flatMap((patch) => {
+            const projected = projectCoreEcologyAggregateEvidenceInObservationFrame({
+              patch,
+              observationFrame: eventObservationFrame,
+              tileSize: RENDER_TILE_SIZE,
+            });
+            if (projected === null) {
+              throw new Error("Aggregate wildlife event perception could not be projected");
+            }
+            return projected.renderEvidence;
+          });
+          const witnessedMortalityIds = new Set(allCoreMortalityEvents
+            .filter((event) => isWildlifeWorldPositionDirectlyObservedInFrame(
+              event.victimPosition,
+              eventObservationFrame,
+            ))
+            .map(({ eventId }) => eventId));
+          const witnessedCarcassIds = new Set([...finalRegionalPatches.values()]
+            .flatMap(({ carcasses }) => carcasses)
+            .filter((carcass) => isWildlifeWorldPositionDirectlyObservedInFrame(
+              carcass.deathPosition,
+              eventObservationFrame,
+            ))
+            .map(({ carcassId }) => carcassId));
+          return {
+            directlyWitnessedCarcassIds: witnessedCarcassIds,
+            directlyWitnessedCoreEventIds: witnessedEventIds,
+            directlyWitnessedMortalityEventIds: witnessedMortalityIds,
+            settlementFoodLossDirectlyWitnessed:
+              isWildlifeWorldPositionDirectlyObservedInFrame(
+                settlementEcology.identity.position,
+                eventObservationFrame,
+              ),
+            witnessedAggregateEvidence: evidence,
+            witnessedCoreBeforeMortality: beforeMortality,
+            witnessedCoreWildlife: current,
+          };
+        } finally {
+          releaseWildlifeObservationFrame(eventObservationFrame);
         }
-        return projected;
-      });
-      const witnessedCoreBeforeMortality = coreSteps.flatMap(({ beforePatch }) => {
-        const projected = projectCoreEcologyWildlife({
-          patch: beforePatch,
-          window: coreEventObservation.window,
-          perception: eventPerception,
-          tileSize: RENDER_TILE_SIZE,
-          weather: worldView.weather,
-        });
-        if (projected === null) {
-          throw new Error("Core ecology pre-mortality perception could not be projected");
-        }
-        return projected;
-      });
+      })();
       const witnessedCoreById = new Map(witnessedCoreWildlife.map((animal) => (
         [animal.actorId, animal] as const
       )));
       const witnessedCoreBeforeById = new Map(witnessedCoreBeforeMortality.map((animal) => (
         [animal.actorId, animal] as const
       )));
-      const allCoreStepEvents = coreSteps.flatMap(({ result }) => result.events);
-      const directlyWitnessedCoreEventIds = new Set(allCoreStepEvents
-        .filter((event) => isWildlifeWorldPositionDirectlyObserved(
-          event.position,
-          coreEventObservation,
-        ))
-        .map(({ eventId }) => eventId));
-      const witnessedAggregateEvidence = [...finalRegionalPatches.values()].flatMap((patch) => {
-        const projected = projectCoreEcologyAggregateEvidence({
-          patch,
-          window: coreEventObservation.window,
-          perception: eventPerception,
-          tileSize: RENDER_TILE_SIZE,
-        });
-        if (projected === null) {
-          throw new Error("Aggregate wildlife event perception could not be projected");
-        }
-        return projected.renderEvidence;
-      });
       const lawfullyHeardAlarm = canonicalPlayerEventTimeAlarms.some((observation) => (
         observation.channel === "hearing"
         && observation.perceivedClass === "animal-alarm"
@@ -11666,10 +11684,7 @@ export async function createTideweftRuntime(
       });
       let ecologyConsequenceAnnounced = false;
       for (const event of allCoreMortalityEvents) {
-        if (!isWildlifeWorldPositionDirectlyObserved(
-          event.victimPosition,
-          coreEventObservation,
-        )) continue;
+        if (!directlyWitnessedMortalityEventIds.has(event.eventId)) continue;
         const victim = witnessedCoreBeforeById.get(event.victimId);
         if (victim === undefined) continue;
         const attacker = witnessedCoreBeforeById.get(event.attackerId)
@@ -11691,10 +11706,7 @@ export async function createTideweftRuntime(
       }
       if (
         settlementFoodLossApplied
-        && isWildlifeWorldPositionDirectlyObserved(
-          settlementEcology.identity.position,
-          coreEventObservation,
-        )
+        && settlementFoodLossDirectlyWitnessed
       ) {
         announce(
           session,
@@ -11711,10 +11723,7 @@ export async function createTideweftRuntime(
           );
           if (
             body === undefined
-            || !isWildlifeWorldPositionDirectlyObserved(
-              body.deathPosition,
-              coreEventObservation,
-            )
+            || !directlyWitnessedCarcassIds.has(body.carcassId)
           ) continue;
         }
         announce(

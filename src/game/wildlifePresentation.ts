@@ -18,6 +18,7 @@ import {
   canonicalizeCoreEcologyAggregatePatch,
   coreEcologyAggregatePatchActor,
   type CoreEcologyAggregateEvidenceKind,
+  type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import {
   canonicalCoreEcologyCurrentWeather,
@@ -60,6 +61,10 @@ import {
   worldPositionDelta,
   type WorldPosition,
 } from "./worldPosition";
+import {
+  isWildlifeObservationFrame,
+  type WildlifeObservationFrame,
+} from "./wildlifeObservationFrame";
 
 export const WILDLIFE_PRESENTATION_VERSION = 1 as const;
 export const WILDLIFE_POPULATION_EVIDENCE_PRESENTATION_VERSION = 1 as const;
@@ -146,6 +151,16 @@ export interface WildlifePresentationInput {
   }>;
 }
 
+/** Internal batch path after one current-frame perception authentication. */
+export interface WildlifePresentationFrameInput {
+  readonly actor: unknown;
+  readonly observationFrame: WildlifeObservationFrame;
+  readonly visibleAggregateCount?: number;
+  readonly tileSize: number;
+  readonly selected?: boolean;
+  readonly activity?: NonNullable<WildlifePresentationInput["activity"]>;
+}
+
 /** Signed direct-detail frame for physical wildlife evidence, with no count channel. */
 export interface WildlifePopulationEvidenceObservation {
   readonly window: WildlifeDirectObservation["window"];
@@ -205,6 +220,14 @@ export interface WildlifePopulationEvidencePresentationInput {
   readonly selectedEvidenceId?: string;
 }
 
+/** Internal batch path after one current-frame perception authentication. */
+export interface WildlifePopulationEvidenceFrameInput {
+  readonly patch: unknown;
+  readonly observationFrame: WildlifeObservationFrame;
+  readonly tileSize: number;
+  readonly selectedEvidenceId?: string;
+}
+
 /**
  * Tests one authoritative wildlife event locus against the same signed direct
  * detail field used by actors and physical signs. The caller must pass the
@@ -215,6 +238,13 @@ export function isWildlifeWorldPositionDirectlyObserved(
   observation: WildlifePopulationEvidenceObservation,
 ): boolean {
   return wildlifeWorldPositionDirectDetail(position, observation) !== null;
+}
+
+export function isWildlifeWorldPositionDirectlyObservedInFrame(
+  position: WorldPosition,
+  observationFrame: WildlifeObservationFrame,
+): boolean {
+  return wildlifeWorldPositionDirectDetailInFrame(position, observationFrame) !== null;
 }
 
 /**
@@ -230,6 +260,14 @@ export function wildlifeWorldPositionDirectDetail(
   return context === null ? null : directEvidenceDetail(position, context);
 }
 
+export function wildlifeWorldPositionDirectDetailInFrame(
+  position: WorldPosition,
+  observationFrame: WildlifeObservationFrame,
+): WildlifeWorldPositionDirectDetail | null {
+  const context = directObservationContextFromFrame(observationFrame);
+  return context === null ? null : directEvidenceDetail(position, context);
+}
+
 interface DirectDetail {
   readonly point: Readonly<{ x: number; y: number }>;
   readonly heading: number;
@@ -238,12 +276,15 @@ interface DirectDetail {
   readonly groupSize: number | undefined;
 }
 
-interface DirectEvidenceObservationContext {
+interface DirectObservationContext {
   readonly window: WildlifePopulationEvidenceObservation["window"];
-  readonly perception: PerceptionResult;
   readonly playerPoint: Readonly<{ x: number; y: number }>;
   readonly frameOrigin: WorldPosition;
+  readonly detailVisibilityGradeAt: (tileIndex: number) => number | undefined;
+  readonly terrainVisibilityStrengthAt: (tileIndex: number) => number | undefined;
 }
+
+type DirectEvidenceObservationContext = DirectObservationContext;
 
 interface DirectEvidenceDetail {
   readonly point: Readonly<{ x: number; y: number }>;
@@ -1389,6 +1430,49 @@ export function projectWildlifePresentation(
   if (descriptor.representation !== "actor") return null;
   const detail = directDetail(actor, input.observation);
   if (detail === null) return null;
+  return projectCanonicalWildlifePresentation(actor, detail, input);
+}
+
+/**
+ * Reuses a live, module-authenticated observation frame. This function retains
+ * every actor/activity/range/clarity check; only the repeated full-mask hash is
+ * replaced by the frame's O(1) brand check and scalar readers.
+ */
+export function projectWildlifePresentationInObservationFrame(
+  input: WildlifePresentationFrameInput,
+): WildlifePresentation | null {
+  if (
+    !plainRecord(input)
+    || !allowedFrameInputKeys(input as unknown as Record<string, unknown>)
+    || !isWildlifeObservationFrame(input.observationFrame)
+    || !Number.isFinite(input.tileSize)
+    || input.tileSize <= 0
+    || input.tileSize > 4_096
+    || (input.selected !== undefined && typeof input.selected !== "boolean")
+  ) return null;
+  const actor = canonicalizeCoreWildlifeActorState(input.actor);
+  if (actor === null) return null;
+  const species = actor.identity.species;
+  if (!isIndividualWildlifeSpecies(species)) return null;
+  const descriptor = PRESENTATION_BY_SPECIES[species];
+  if (descriptor.representation !== "actor") return null;
+  const detail = directDetailInObservationFrame(
+    actor,
+    input.observationFrame,
+    input.visibleAggregateCount,
+  );
+  if (detail === null) return null;
+  return projectCanonicalWildlifePresentation(actor, detail, input);
+}
+
+function projectCanonicalWildlifePresentation(
+  actor: CoreWildlifeActorState,
+  detail: DirectDetail,
+  input: Pick<WildlifePresentationInput, "activity" | "selected" | "tileSize">,
+): WildlifePresentation | null {
+  const species = actor.identity.species;
+  if (!isIndividualWildlifeSpecies(species)) return null;
+  const descriptor = PRESENTATION_BY_SPECIES[species];
   const activity = resolvePresentationActivity(actor, input.activity);
   if (!activity.valid) return null;
 
@@ -1473,6 +1557,38 @@ export function projectWildlifePopulationEvidencePresentations(
   const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
   const context = directEvidenceObservationContext(input.observation);
   if (patch === null || context === null) return null;
+  return projectWildlifePopulationEvidenceWithContext(patch, context, input);
+}
+
+export function projectWildlifePopulationEvidencePresentationsInObservationFrame(
+  input: WildlifePopulationEvidenceFrameInput,
+): readonly WildlifePopulationEvidencePresentation[] | null {
+  if (
+    !plainRecord(input)
+    || !allowedPopulationEvidenceFrameInputKeys(input as unknown as Record<string, unknown>)
+    || !isWildlifeObservationFrame(input.observationFrame)
+    || !Number.isFinite(input.tileSize)
+    || input.tileSize <= 0
+    || input.tileSize > 4_096
+    || (input.selectedEvidenceId !== undefined
+      && (typeof input.selectedEvidenceId !== "string"
+        || input.selectedEvidenceId.length === 0
+        || input.selectedEvidenceId.length > 256))
+  ) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
+  const context = directObservationContextFromFrame(input.observationFrame);
+  if (patch === null || context === null) return null;
+  return projectWildlifePopulationEvidenceWithContext(patch, context, input);
+}
+
+function projectWildlifePopulationEvidenceWithContext(
+  patch: CoreEcologyAggregatePatchState,
+  context: DirectEvidenceObservationContext,
+  input: Pick<
+    WildlifePopulationEvidencePresentationInput,
+    "selectedEvidenceId" | "tileSize"
+  >,
+): readonly WildlifePopulationEvidencePresentation[] | null {
   const ownsTidalProjection = coreEcologyPatchHasTidalTableAuthority(patch);
   const tidal = ownsTidalProjection
     ? projectCoreEcologyTidalTable(patch, patch.updatedAtTick)
@@ -1683,42 +1799,54 @@ function directDetail(
   }
   const window = value.window as unknown as WildlifeDirectObservation["window"];
   const perception = value.perception as unknown as PerceptionResult;
-  if (
-    perception.valid !== true
-    || !hasValidPerceptionSignature(perception, window.terrain.width, window.terrain.height)
-    || !nonnegativeSafeInteger(perception.playerTileIndex)
-    || perception.playerTileIndex >= window.terrain.width * window.terrain.height
-  ) return null;
+  const context = directObservationContext(window, perception);
+  if (context === null) return null;
+  return directDetailInContext(actor, context, value.visibleAggregateCount);
+}
+
+function directDetailInObservationFrame(
+  actor: CoreWildlifeActorState,
+  observationFrame: WildlifeObservationFrame,
+  visibleAggregateCount: number | undefined,
+): DirectDetail | null {
+  const context = directObservationContextFromFrame(observationFrame);
+  return context === null
+    ? null
+    : directDetailInContext(actor, context, visibleAggregateCount);
+}
+
+function directDetailInContext(
+  actor: CoreWildlifeActorState,
+  context: DirectObservationContext,
+  visibleAggregateCount: number | undefined,
+): DirectDetail | null {
+  const { window } = context;
   const placement = livingActorAddressInRegionalWindow(actor.address, window);
   if (
     placement === null
-    || perception.detailVisibilityGrades[placement.tileIndex] !== VISIBILITY_DIRECT
+    || context.detailVisibilityGradeAt(placement.tileIndex) !== VISIBILITY_DIRECT
   ) return null;
 
   let groupSize: number | undefined;
-  if (value.visibleAggregateCount !== undefined) {
+  if (visibleAggregateCount !== undefined) {
     const maximum = getCoreWildlifeProfile(actor.identity.species).maximumPatchPopulation;
     if (
       coreEcologySpeciesRuntimePolicy(actor.identity.species)?.presentationModel !== "visible-flock"
-      || !positiveSafeInteger(value.visibleAggregateCount)
-      || value.visibleAggregateCount > maximum
+      || !positiveSafeInteger(visibleAggregateCount)
+      || visibleAggregateCount > maximum
     ) return null;
-    groupSize = approximateVisibleGroupSize(value.visibleAggregateCount);
+    groupSize = approximateVisibleGroupSize(visibleAggregateCount);
   }
 
-  const playerX = (perception.playerTileIndex % window.terrain.width)
-    * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2;
-  const playerY = Math.floor(perception.playerTileIndex / window.terrain.width)
-    * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2;
   const distanceUnits = Math.round(Math.hypot(
-    placement.point.x - playerX,
-    placement.point.y - playerY,
+    placement.point.x - context.playerPoint.x,
+    placement.point.y - context.playerPoint.y,
   ));
   if (
     !nonnegativeSafeInteger(distanceUnits)
     || distanceUnits > WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS
   ) return null;
-  const terrainStrength = perception.terrainVisibilityStrengths[placement.tileIndex];
+  const terrainStrength = context.terrainVisibilityStrengthAt(placement.tileIndex);
   if (terrainStrength === undefined) return null;
   const distanceClarity = Math.max(0, ACTOR_PERCEPTION_SCALE - Math.round(
     distanceUnits * ACTOR_PERCEPTION_SCALE / WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS,
@@ -1744,6 +1872,13 @@ function directEvidenceObservationContext(
   ) return null;
   const window = value.window as unknown as WildlifePopulationEvidenceObservation["window"];
   const perception = value.perception as unknown as PerceptionResult;
+  return directObservationContext(window, perception);
+}
+
+function directObservationContext(
+  window: WildlifePopulationEvidenceObservation["window"],
+  perception: PerceptionResult,
+): DirectObservationContext | null {
   if (
     perception.valid !== true
     || !hasValidPerceptionSignature(perception, window.terrain.width, window.terrain.height)
@@ -1754,7 +1889,6 @@ function directEvidenceObservationContext(
     const origin = globalTileToRegion(window.origin.x, window.origin.y);
     return Object.freeze({
       window,
-      perception,
       playerPoint: Object.freeze({
         x: (perception.playerTileIndex % window.terrain.width)
           * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
@@ -1766,10 +1900,23 @@ function directEvidenceObservationContext(
         origin.localX * WORLD_POSITION_UNITS_PER_TILE,
         origin.localY * WORLD_POSITION_UNITS_PER_TILE,
       ),
+      detailVisibilityGradeAt: (tileIndex: number): number | undefined => (
+        perception.detailVisibilityGrades[tileIndex]
+      ),
+      terrainVisibilityStrengthAt: (tileIndex: number): number | undefined => (
+        perception.terrainVisibilityStrengths[tileIndex]
+      ),
     });
   } catch {
     return null;
   }
+}
+
+function directObservationContextFromFrame(
+  observationFrame: WildlifeObservationFrame,
+): DirectObservationContext | null {
+  if (!isWildlifeObservationFrame(observationFrame)) return null;
+  return observationFrame;
 }
 
 function directEvidenceDetail(
@@ -1793,7 +1940,7 @@ function directEvidenceDetail(
   const tileX = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
   const tileY = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
   const tileIndex = tileY * context.window.terrain.width + tileX;
-  if (context.perception.detailVisibilityGrades[tileIndex] !== VISIBILITY_DIRECT) return null;
+  if (context.detailVisibilityGradeAt(tileIndex) !== VISIBILITY_DIRECT) return null;
   const distanceUnits = Math.round(Math.hypot(
     point.x - context.playerPoint.x,
     point.y - context.playerPoint.y,
@@ -1802,7 +1949,7 @@ function directEvidenceDetail(
     !nonnegativeSafeInteger(distanceUnits)
     || distanceUnits > WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS
   ) return null;
-  const terrainStrength = context.perception.terrainVisibilityStrengths[tileIndex];
+  const terrainStrength = context.terrainVisibilityStrengthAt(tileIndex);
   if (terrainStrength === undefined) return null;
   const distanceClarity = Math.max(0, ACTOR_PERCEPTION_SCALE - Math.round(
     distanceUnits * ACTOR_PERCEPTION_SCALE / WILDLIFE_DIRECT_DETAIL_MAX_DISTANCE_UNITS,
@@ -2132,10 +2279,25 @@ function allowedInputKeys(value: Record<string, unknown>): boolean {
   return exactKeys(value, expected);
 }
 
+function allowedFrameInputKeys(value: Record<string, unknown>): boolean {
+  const expected = ["actor", "observationFrame", "tileSize"];
+  if (value.activity !== undefined) expected.push("activity");
+  if (value.selected !== undefined) expected.push("selected");
+  if (value.visibleAggregateCount !== undefined) expected.push("visibleAggregateCount");
+  return exactKeys(value, expected);
+}
+
 function allowedPopulationEvidenceInputKeys(value: Record<string, unknown>): boolean {
   const expected = value.selectedEvidenceId === undefined
     ? ["observation", "patch", "tileSize"]
     : ["observation", "patch", "selectedEvidenceId", "tileSize"];
+  return exactKeys(value, expected);
+}
+
+function allowedPopulationEvidenceFrameInputKeys(value: Record<string, unknown>): boolean {
+  const expected = value.selectedEvidenceId === undefined
+    ? ["observationFrame", "patch", "tileSize"]
+    : ["observationFrame", "patch", "selectedEvidenceId", "tileSize"];
   return exactKeys(value, expected);
 }
 

@@ -3,7 +3,10 @@ import type {
   WildlifeEvidenceAboutProjection,
   WildlifeEvidenceTargetUIView,
 } from "../ui/types";
-import { projectWildlifeEvidenceAboutProjection } from "../ui/wildlifeEvidenceAbout";
+import {
+  projectWildlifeEvidenceAboutProjection,
+  projectWildlifeEvidenceAboutProjectionFromPresentation,
+} from "../ui/wildlifeEvidenceAbout";
 import { isCoreEcologyAggregateSpecies } from "./coreEcologyAggregatePolicy";
 import {
   canonicalizeCoreEcologyAggregatePatch,
@@ -14,8 +17,13 @@ import type { CoreEcologySettlementShadowsEvent } from "./coreEcologySmallWorld"
 import type { PerceptionResult } from "./perception";
 import {
   projectWildlifePopulationEvidencePresentations,
+  projectWildlifePopulationEvidencePresentationsInObservationFrame,
   type WildlifePopulationEvidenceObservation,
 } from "./wildlifePresentation";
+import {
+  isWildlifeObservationFrame,
+  type WildlifeObservationFrame,
+} from "./wildlifeObservationFrame";
 
 /** Runtime selection identity for one physical sign; never an individual actor target. */
 export type CoreEcologyAggregateEvidenceTarget = WildlifeEvidenceTargetUIView;
@@ -24,6 +32,13 @@ export interface ProjectCoreEcologyAggregateEvidenceInput {
   readonly patch: unknown;
   readonly window: CoreEcologyRuntimeWindow;
   readonly perception: PerceptionResult;
+  readonly tileSize: number;
+  readonly selectedTarget?: CoreEcologyAggregateEvidenceTarget | null;
+}
+
+export interface ProjectCoreEcologyAggregateEvidenceFrameInput {
+  readonly patch: unknown;
+  readonly observationFrame: WildlifeObservationFrame;
   readonly tileSize: number;
   readonly selectedTarget?: CoreEcologyAggregateEvidenceTarget | null;
 }
@@ -138,6 +153,74 @@ export function projectCoreEcologyAggregateEvidence(
   return Object.freeze({ renderEvidence, selectedAbout });
 }
 
+/**
+ * Batch path after one current-frame perception authentication. Selected ABOUT
+ * derives from the exact already-projected physical sign, so it cannot trigger
+ * a second perception read or disagree with renderer disclosure.
+ */
+export function projectCoreEcologyAggregateEvidenceInObservationFrame(
+  input: ProjectCoreEcologyAggregateEvidenceFrameInput,
+): CoreEcologyAggregateEvidenceRuntimeProjection | null {
+  if (
+    !plainRecord(input)
+    || !allowedFrameInputKeys(input as unknown as Record<string, unknown>)
+    || !isWildlifeObservationFrame(input.observationFrame)
+    || !Number.isFinite(input.tileSize)
+    || input.tileSize <= 0
+    || input.tileSize > 4_096
+  ) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(input.patch);
+  if (patch === null) return null;
+  let selectedTarget: CoreEcologyAggregateEvidenceTarget | null = null;
+  if (input.selectedTarget !== undefined && input.selectedTarget !== null) {
+    selectedTarget = canonicalizeCoreEcologyAggregateEvidenceTarget(input.selectedTarget);
+    if (selectedTarget === null) return null;
+  }
+  const targetExists = selectedTarget !== null
+    && aggregateEvidenceTargetExists(patch, selectedTarget);
+  const presentations = projectWildlifePopulationEvidencePresentationsInObservationFrame({
+    patch,
+    observationFrame: input.observationFrame,
+    tileSize: input.tileSize,
+    ...(targetExists && selectedTarget !== null
+      ? { selectedEvidenceId: selectedTarget.evidenceId }
+      : {}),
+  });
+  if (presentations === null) return null;
+  const renderEvidence: readonly AggregateWildlifeEvidenceView[] = presentations;
+  if (!targetExists || selectedTarget === null) {
+    if (renderEvidence.some(({ selected }) => selected)) return null;
+    return Object.freeze({ renderEvidence, selectedAbout: null });
+  }
+  const selectedPresentations = presentations.filter((candidate) => (
+    candidate.representation === "population-evidence"
+    && evidenceTargetMatchesView(selectedTarget, candidate)
+  ));
+  if (selectedPresentations.length === 0) {
+    if (renderEvidence.some(({ selected }) => selected)) return null;
+    return Object.freeze({ renderEvidence, selectedAbout: null });
+  }
+  if (
+    selectedPresentations.length !== 1
+    || renderEvidence.filter(({ selected }) => selected).length !== 1
+  ) return null;
+  const selectedPresentation = selectedPresentations[0];
+  if (
+    selectedPresentation === undefined
+    || selectedPresentation.representation !== "population-evidence"
+    || selectedPresentation.selected !== true
+  ) return null;
+  const selectedAbout = projectWildlifeEvidenceAboutProjectionFromPresentation(
+    selectedTarget,
+    selectedPresentation,
+  );
+  if (
+    selectedAbout === null
+    || !sameCoreEcologyAggregateEvidenceTarget(selectedAbout.target, selectedTarget)
+  ) return null;
+  return Object.freeze({ renderEvidence, selectedAbout });
+}
+
 /** Strict target admission for renderer/UI commands and runtime rollback state. */
 export function canonicalizeCoreEcologyAggregateEvidenceTarget(
   value: unknown,
@@ -200,6 +283,13 @@ function allowedInputKeys(value: Record<string, unknown>): boolean {
   const expected = Object.hasOwn(value, "selectedTarget")
     ? ["patch", "perception", "selectedTarget", "tileSize", "window"]
     : ["patch", "perception", "tileSize", "window"];
+  return exactKeys(value, expected);
+}
+
+function allowedFrameInputKeys(value: Record<string, unknown>): boolean {
+  const expected = Object.hasOwn(value, "selectedTarget")
+    ? ["observationFrame", "patch", "selectedTarget", "tileSize"]
+    : ["observationFrame", "patch", "tileSize"];
   return exactKeys(value, expected);
 }
 

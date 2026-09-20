@@ -1,6 +1,9 @@
 import {
   projectWildlifePopulationEvidenceAbout,
+  projectWildlifePopulationEvidenceAboutFromPresentation,
   projectWildlifePopulationEvidenceQuickInspect,
+  projectWildlifePopulationEvidenceQuickInspectFromPresentation,
+  type AggregatePopulationEvidencePresentation,
   type WildlifePopulationEvidenceAboutObservation,
 } from "../game/wildlifeAbout";
 import { isCoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
@@ -52,6 +55,25 @@ export function projectWildlifeEvidenceAboutProjection(
     selectedTarget.evidenceId,
     currentObservation,
   );
+  return assembleWildlifeEvidenceAboutProjection(selectedTarget, quick, about);
+}
+
+/** Build ABOUT from the exact already-observed sign without a second projection. */
+export function projectWildlifeEvidenceAboutProjectionFromPresentation(
+  selectedTarget: unknown,
+  presentation: AggregatePopulationEvidencePresentation,
+): WildlifeEvidenceAboutProjection | null {
+  if (!validTarget(selectedTarget)) return null;
+  const quick = projectWildlifePopulationEvidenceQuickInspectFromPresentation(presentation);
+  const about = projectWildlifePopulationEvidenceAboutFromPresentation(presentation);
+  return assembleWildlifeEvidenceAboutProjection(selectedTarget, quick, about);
+}
+
+function assembleWildlifeEvidenceAboutProjection(
+  selectedTarget: WildlifeEvidenceTargetUIView,
+  quick: ReturnType<typeof projectWildlifePopulationEvidenceQuickInspect>,
+  about: ReturnType<typeof projectWildlifePopulationEvidenceAbout>,
+): WildlifeEvidenceAboutProjection | null {
   if (
     quick === null
     || about === null

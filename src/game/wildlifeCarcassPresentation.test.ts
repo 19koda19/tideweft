@@ -37,7 +37,12 @@ import {
   resolveCoreWildlifePredatorContact,
   type CoreWildlifeMortalityResult,
 } from "./coreWildlifeMortality";
-import { evaluatePerception, type PerceptionCell } from "./perception";
+import {
+  VISIBILITY_DIRECT,
+  VISIBILITY_HIDDEN,
+  evaluatePerception,
+  type PerceptionCell,
+} from "./perception";
 import {
   projectCoreEcologyWildlifeCarcasses,
 } from "./wildlifeCarcassPresentation";
@@ -303,6 +308,31 @@ describe("knowledge-honest wildlife carcass presentation", () => {
     const carcass = patch.carcasses[0];
     if (carcass === undefined) throw new Error("Missing representative carcass");
     expect(project(patch, carcass.deathPosition, Math.PI)).toEqual([]);
+  });
+
+  it("rejects a copied perception after its body-detail byte is mutated", () => {
+    const { patch } = committedDeath();
+    const carcass = patch.carcasses[0];
+    if (carcass === undefined) throw new Error("Missing representative carcass");
+    const observation = directObservation(carcass.deathPosition);
+    const bodyGlobalX = carcass.deathPosition.region.x * WORLD_WIDTH
+      + Math.floor(carcass.deathPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const bodyTileIndex = bodyGlobalX - observation.window.origin.x;
+    const forgedDetail = observation.perception.detailVisibilityGrades.slice();
+    expect(forgedDetail[bodyTileIndex]).toBe(VISIBILITY_DIRECT);
+    forgedDetail[bodyTileIndex] = VISIBILITY_HIDDEN;
+    const forgedPerception = {
+      ...observation.perception,
+      detailVisibilityGrades: forgedDetail,
+    };
+    expect(forgedPerception.signature).toBe(observation.perception.signature);
+
+    expect(projectCoreEcologyWildlifeCarcasses({
+      patch,
+      window: observation.window,
+      perception: forgedPerception,
+      tileSize: 16,
+    })).toBeNull();
   });
 
   it("retains and distinguishes a depleted body instead of deleting it", () => {
