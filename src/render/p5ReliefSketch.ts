@@ -1,5 +1,7 @@
 import p5 from "p5";
 
+import { configureP5RuntimePolicy } from "./p5RuntimePolicy";
+
 import {
   biomeEnvironmentalEmphasis,
   visibleBiomePresentation,
@@ -496,6 +498,7 @@ export function createTideweftReliefRenderer(
     readonly terrainPerceptionMemory?: TerrainPerceptionMemoryStore;
   },
 ): TideweftReliefRendererController {
+  configureP5RuntimePolicy(p5, import.meta.env.PROD);
   let instance: p5 | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
   let resizeObserver: ResizeObserver | null = null;
