@@ -79,6 +79,10 @@ import {
   type SaveRecord,
   type SaveRepository,
 } from "../platform/persistence";
+import {
+  createRuntimePerformanceTelemetry,
+  type RuntimePerformanceSnapshot,
+} from "../performance/runtimePerformanceTelemetry";
 import { acceptsRestartPhrase } from "./restartPolicy";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { deriveWaterFlowProfile } from "./waterFlow";
@@ -820,12 +824,95 @@ export interface TideweftRuntime {
   readonly destroy: () => void;
   readonly getRenderView: () => TideweftView;
   readonly getUIView: () => TideweftUIView;
+  readonly getPerformanceTelemetry: () => TideweftRuntimePerformanceTelemetry;
+  readonly setPerformanceTelemetryEnabled: (
+    enabled: boolean,
+  ) => TideweftRuntimePerformanceTelemetry;
+  readonly resetPerformanceTelemetry: () => TideweftRuntimePerformanceTelemetry;
   readonly dispatchRenderer: (command: RendererCommand) => void;
   readonly dispatchUI: (command: TideweftUICommand) => void;
   /** Called from the title's armed user gesture; shares the gameplay graph. */
   readonly playTitleCrescendo: (openingOrdinal: number) => Promise<void>;
   readonly save: () => Promise<void>;
   readonly setFocusHandler: (handler: ((point: WorldPoint, zoom?: number) => void) | undefined) => void;
+}
+
+export interface TideweftRuntimePerformanceCounts {
+  readonly actorsTotal: number;
+  readonly actorsMaterialized: number;
+  readonly actorsVisible: number;
+  readonly humans: number;
+  readonly humansVisible: number;
+  readonly dogs: number;
+  readonly dogsVisible: number;
+  /** Persistent individual wildlife records, independent of represented units. */
+  readonly wildlifeActorRecords: number;
+  /** Ecological units represented by individual wildlife records. */
+  readonly wildlifePopulationUnits: number;
+  /** Coarse ecological units that are evidence/populations, never actors. */
+  readonly wildlifeAggregatePopulationUnits: number;
+  readonly wildlifeMaterialized: number;
+  readonly wildlifeVisible: number;
+}
+
+export interface TideweftRuntimePerformanceTelemetry {
+  /** Inclusive fail-closed fixed-step cost, including presentation when requested. */
+  readonly fixedStep: RuntimePerformanceSnapshot;
+  /** Inclusive fixed-step cost for the one-in-ten step that advances the world. */
+  readonly worldAdvanceStep: RuntimePerformanceSnapshot;
+  /** Every complete Chart/Relief/UI view projection, including command-driven refreshes. */
+  readonly viewProjection: RuntimePerformanceSnapshot;
+  /** Tick-driven ambience perception and soundscape projection. */
+  readonly audioProjection: RuntimePerformanceSnapshot;
+  /** Synchronous authoritative snapshot validation and JSON serialization only. */
+  readonly saveSnapshot: RuntimePerformanceSnapshot;
+  readonly counts: TideweftRuntimePerformanceCounts;
+  readonly lastSerializedSaveBytes: number;
+}
+
+function runtimePerformanceNow(): number {
+  try {
+    const now = globalThis.performance?.now();
+    if (Number.isFinite(now) && now >= 0) return now;
+  } catch {
+    // Telemetry must never become an authoritative runtime failure boundary.
+  }
+  try {
+    const fallback = Date.now();
+    if (Number.isFinite(fallback) && fallback >= 0) return fallback;
+  } catch {
+    // A hostile clock still cannot stop authoritative simulation work.
+  }
+  return 0;
+}
+
+function serializedSaveByteLength(value: string): number {
+  // Count exact UTF-8 without allocating another save-sized byte buffer. This
+  // probe runs only when profiling and, deliberately, after the timed snapshot.
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit <= 0x7f) {
+      bytes += 1;
+    } else if (codeUnit <= 0x7ff) {
+      bytes += 2;
+    } else if (
+      codeUnit >= 0xd800
+      && codeUnit <= 0xdbff
+      && index + 1 < value.length
+    ) {
+      const trailing = value.charCodeAt(index + 1);
+      if (trailing >= 0xdc00 && trailing <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
 }
 
 interface PendingPlayerWait {
@@ -8889,6 +8976,27 @@ export async function createTideweftRuntime(
     suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
   const soundscape = new TideweftSoundscape();
+  const fixedStepPerformance = createRuntimePerformanceTelemetry();
+  const worldAdvanceStepPerformance = createRuntimePerformanceTelemetry();
+  const viewProjectionPerformance = createRuntimePerformanceTelemetry();
+  const audioProjectionPerformance = createRuntimePerformanceTelemetry();
+  const saveSnapshotPerformance = createRuntimePerformanceTelemetry();
+  let performanceTelemetryEnabled = false;
+  let performanceCounts: TideweftRuntimePerformanceCounts = Object.freeze({
+    actorsTotal: 0,
+    actorsMaterialized: 0,
+    actorsVisible: 0,
+    humans: 0,
+    humansVisible: 0,
+    dogs: 0,
+    dogsVisible: 0,
+    wildlifeActorRecords: 0,
+    wildlifePopulationUnits: 0,
+    wildlifeAggregatePopulationUnits: 0,
+    wildlifeMaterialized: 0,
+    wildlifeVisible: 0,
+  });
+  let lastSerializedSaveBytes = 0;
   let focusHandler: ((point: WorldPoint, zoom?: number) => void) | undefined;
   let animationFrame = 0;
   let running = false;
@@ -9164,7 +9272,7 @@ export async function createTideweftRuntime(
     return sleeping;
   }
 
-  function refreshViews(): void {
+  function refreshViewsUnmeasured(): void {
     perception = projectPlayerPerception();
     captureNewlyObservedEvents();
     const actorWindow = {
@@ -9194,7 +9302,19 @@ export async function createTideweftRuntime(
       string,
       ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>
     >();
+    let wildlifeActorRecords = 0;
+    let wildlifePopulationUnits = 0;
+    let wildlifeAggregatePopulationUnits = 0;
     for (const source of projectedEcologySources) {
+      if (performanceTelemetryEnabled) {
+        for (const population of source.patch.populations) {
+          wildlifeActorRecords += population.members.length;
+          wildlifePopulationUnits += population.populationSize;
+        }
+        for (const population of source.patch.aggregatePopulations) {
+          wildlifeAggregatePopulationUnits += population.populationSize;
+        }
+      }
       const authorities = runtimeCoreEcologyActivityAuthorities(
         world.meta.rootSeed,
         regionalEcology.base.base.base.base.base.root,
@@ -9588,6 +9708,39 @@ export async function createTideweftRuntime(
         ? {}
         : { selectedWildlifeEvidence: wildlifeEvidenceSelection }),
     };
+    if (performanceTelemetryEnabled) {
+      const humans = economyView.residents.length;
+      const humansVisible = renderView.porters.length;
+      const dogs = 1 + dogActorRoster.actors.length;
+      const dogsVisible = dogPresentations.length;
+      const wildlifeMaterialized = coreActorAddresses.length;
+      const wildlifeVisible = wildlifePresentation.length;
+      performanceCounts = Object.freeze({
+        actorsTotal: humans + dogs + wildlifeActorRecords,
+        actorsMaterialized: humans + dogs + wildlifeMaterialized,
+        actorsVisible: humansVisible + dogsVisible + wildlifeVisible,
+        humans,
+        humansVisible,
+        dogs,
+        dogsVisible,
+        wildlifeActorRecords,
+        wildlifePopulationUnits,
+        wildlifeAggregatePopulationUnits,
+        wildlifeMaterialized,
+        wildlifeVisible,
+      });
+    }
+  }
+
+  function refreshViews(): void {
+    const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
+    try {
+      refreshViewsUnmeasured();
+    } finally {
+      if (startedAtMs !== null) {
+        viewProjectionPerformance.recordSpan(startedAtMs, runtimePerformanceNow());
+      }
+    }
   }
 
   function captureNewlyObservedEvents(
@@ -11890,13 +12043,20 @@ export async function createTideweftRuntime(
   }
 
   function refreshRuntimePresentation(): void {
-    const ambiencePerception = projectPerception(worldView, player);
-    soundscape.updateAmbience(
-      worldView.tide.level / 1_000_000,
-      worldView.weather.intensity / 1_000_000,
-      averageObservedRouteStrength(worldView, ambiencePerception.detailVisibilityGrades),
-      localWaterAmbience(worldView, player),
-    );
+    const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
+    try {
+      const ambiencePerception = projectPerception(worldView, player);
+      soundscape.updateAmbience(
+        worldView.tide.level / 1_000_000,
+        worldView.weather.intensity / 1_000_000,
+        averageObservedRouteStrength(worldView, ambiencePerception.detailVisibilityGrades),
+        localWaterAmbience(worldView, player),
+      );
+    } finally {
+      if (startedAtMs !== null) {
+        audioProjectionPerformance.recordSpan(startedAtMs, runtimePerformanceNow());
+      }
+    }
     refreshViews();
   }
 
@@ -13371,6 +13531,10 @@ export async function createTideweftRuntime(
     replacementSeedRequired = false;
     beginSession();
     commandQueue = [];
+    // A new authoritative world never inherits a fractional fixed-step debt
+    // from time spent on the prior title/session loop.
+    accumulator = 0;
+    previousFrame = 0;
     playerStepsSinceWorldTick = 0;
     clearPlayerSenseSamples();
     terrainPrefetchJobs = [];
@@ -14639,6 +14803,28 @@ export async function createTideweftRuntime(
           ? "A newer local save is temporarily unavailable."
           : "The local save replacement counter is exhausted.");
     }
+    const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
+    return captureAndQueueSave(startedAtMs);
+  }
+
+  function captureAndQueueSave(startedAtMs: number | null): Promise<void> {
+    let synchronousSnapshotRecorded = false;
+    try {
+      return captureAndQueueSaveValidated(startedAtMs, () => {
+        synchronousSnapshotRecorded = true;
+      });
+    } catch (error) {
+      if (startedAtMs !== null && !synchronousSnapshotRecorded) {
+        saveSnapshotPerformance.recordSpan(startedAtMs, runtimePerformanceNow());
+      }
+      throw error;
+    }
+  }
+
+  function captureAndQueueSaveValidated(
+    startedAtMs: number | null,
+    markSnapshotRecorded: () => void,
+  ): Promise<void> {
     const regionalTravelSnapshot = capturePlayerRegionalTravel(regionalTravel, player);
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
@@ -14798,6 +14984,11 @@ export async function createTideweftRuntime(
       integrity: gameSaveEnvelopeIntegrity(envelopeBase),
     };
     const worldJson = JSON.stringify(envelope);
+    if (startedAtMs !== null) {
+      saveSnapshotPerformance.recordSpan(startedAtMs, runtimePerformanceNow());
+      markSnapshotRecorded();
+      lastSerializedSaveBytes = serializedSaveByteLength(worldJson);
+    }
     if (worldJson.length > SAVE_WORLD_JSON_MAX_CHARACTERS) {
       throw new Error("The perpetual world has reached this browser save's safe size limit; nothing was overwritten.");
     }
@@ -14882,6 +15073,7 @@ export async function createTideweftRuntime(
   }
 
   function runTickFailClosed(present = true): boolean {
+    const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
     const worldWillAdvance = playerStepsSinceWorldTick + 1 >= PLAYER_STEPS_PER_WORLD_TICK;
     const priorWorld = worldWillAdvance ? structuredClone(world) : null;
     const prior = {
@@ -15002,6 +15194,14 @@ export async function createTideweftRuntime(
       running = false;
       refreshViews();
       return false;
+    } finally {
+      if (startedAtMs !== null) {
+        const finishedAtMs = runtimePerformanceNow();
+        fixedStepPerformance.recordSpan(startedAtMs, finishedAtMs);
+        if (worldWillAdvance) {
+          worldAdvanceStepPerformance.recordSpan(startedAtMs, finishedAtMs);
+        }
+      }
     }
   }
 
@@ -15082,6 +15282,42 @@ export async function createTideweftRuntime(
     soundscape.destroy();
   }
 
+  function getPerformanceTelemetry(): TideweftRuntimePerformanceTelemetry {
+    return Object.freeze({
+      fixedStep: fixedStepPerformance.getSnapshot(),
+      worldAdvanceStep: worldAdvanceStepPerformance.getSnapshot(),
+      viewProjection: viewProjectionPerformance.getSnapshot(),
+      audioProjection: audioProjectionPerformance.getSnapshot(),
+      saveSnapshot: saveSnapshotPerformance.getSnapshot(),
+      counts: performanceCounts,
+      lastSerializedSaveBytes,
+    });
+  }
+
+  function resetPerformanceTelemetry(): TideweftRuntimePerformanceTelemetry {
+    fixedStepPerformance.reset();
+    worldAdvanceStepPerformance.reset();
+    viewProjectionPerformance.reset();
+    audioProjectionPerformance.reset();
+    saveSnapshotPerformance.reset();
+    // Counts describe the live scene and remain useful immediately. Save bytes
+    // reset so each profiling scenario reports only a save it actually made.
+    lastSerializedSaveBytes = 0;
+    return getPerformanceTelemetry();
+  }
+
+  function setPerformanceTelemetryEnabled(
+    enabled: boolean,
+  ): TideweftRuntimePerformanceTelemetry {
+    fixedStepPerformance.setEnabled(enabled);
+    worldAdvanceStepPerformance.setEnabled(enabled);
+    viewProjectionPerformance.setEnabled(enabled);
+    audioProjectionPerformance.setEnabled(enabled);
+    saveSnapshotPerformance.setEnabled(enabled);
+    performanceTelemetryEnabled = enabled;
+    return getPerformanceTelemetry();
+  }
+
   refreshViews();
 
   return {
@@ -15090,6 +15326,9 @@ export async function createTideweftRuntime(
     destroy,
     getRenderView: () => renderView,
     getUIView: () => uiView,
+    getPerformanceTelemetry,
+    setPerformanceTelemetryEnabled,
+    resetPerformanceTelemetry,
     dispatchRenderer,
     dispatchUI,
     playTitleCrescendo,

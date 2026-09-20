@@ -577,6 +577,35 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Relief renderer telemetry", () => {
+  it("measures completed draw CPU time and publishes cheap truthful draw counts", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => {
+      clock += 2;
+      return clock;
+    } });
+    const harness = renderHarness(view("relief-telemetry", { x: 48, y: 48 }));
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+
+    harness.draw();
+    harness.draw();
+
+    const telemetry = harness.renderer.telemetry();
+    expect(telemetry).toMatchObject({
+      frameCount: 2,
+      rawFrameIntervalSampleCount: 1,
+      drawCpuSampleCount: 2,
+      terrainTiles: 16,
+      projectedEntityCandidates: 1,
+      labels: 0,
+      particles: 0,
+    });
+    expect(telemetry.rawFrameIntervalMeanMs ?? 0).toBeGreaterThan(0);
+    expect(telemetry.drawCpuMeanMs ?? 0).toBeGreaterThan(0);
+    harness.renderer.destroy();
+  });
+});
+
 describe("Relief shared outdoor illumination", () => {
   it("uses the projected clock for sky and lights while blue water stays unlit", () => {
     // Reduced motion removes camera/actor decoration, never the physical time

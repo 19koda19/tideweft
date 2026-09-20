@@ -467,6 +467,21 @@ type ReliefHoverTarget = WorldTapTarget | {
   readonly id: string;
 };
 
+/** Projected records considered by entity passes; pass-local culling happens later. */
+function projectedRendererEntityCandidateCount(view: TideweftView): number {
+  return 1
+    + view.settlements.length
+    + view.fieldResources.length
+    + (view.looseCargo?.length ?? 0)
+    + view.porters.length
+    + (view.dogs?.length ?? 0)
+    + (view.wildlife?.length ?? 0)
+    + (view.wildlifeCarcasses?.length ?? 0)
+    + (view.aggregateWildlifeEvidence?.length ?? 0)
+    + view.wayknots.length
+    + view.tideHarps.length;
+}
+
 /**
  * Optional, actual 3D estuary presentation. It deliberately shares only the
  * projection and command contracts with the flat renderer, so hosts can swap
@@ -518,7 +533,7 @@ export function createTideweftReliefRenderer(
   const heldOrbitKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const pointerParallax = createPointerParallaxState();
-  const telemetry = createRendererTelemetry();
+  const telemetry = createRendererTelemetry(undefined, false);
   telemetry.setActive(active && webglSupported);
   const discoverySignatureFor = createReliefDiscoverySignatureMemo();
   const terrainGeometrySignaturesFor = createReliefTerrainGeometrySignaturesMemo();
@@ -2257,12 +2272,15 @@ export function createTideweftReliefRenderer(
       cache: CachedReliefMesh,
       camera: ReliefCameraState,
       terrainMemory: TerrainPerceptionMemoryState,
-    ): void => {
+      trackCounts: boolean,
+    ): number => {
       const viewport = { width: p.width, height: p.height };
+      let drawnTiles = 0;
       p.noStroke();
       for (const batch of cache.chunks) {
         if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
         for (const material of batch.materials) {
+          if (trackCounts) drawnTiles += Math.floor(material.indices.length / 6);
           const surfaceColor = materialColor(material, 0, view.perception !== undefined);
           // emissiveMaterial survives across p5 draw calls and frames. Water,
           // actors, or markers drawn last frame must never tint this frame's
@@ -2284,7 +2302,7 @@ export function createTideweftReliefRenderer(
       }
 
       const perception = ensurePerceptionSurface(view, cache, terrainMemory);
-      if (!perception) return;
+      if (!perception) return drawnTiles;
       // Re-light only the small current sensory footprint. This overlay is
       // cached by perception signature and never invalidates the durable mesh.
       // Keep this height field depth-writing: translucent overlapping
@@ -2293,6 +2311,7 @@ export function createTideweftReliefRenderer(
       for (const batch of perception.chunks) {
         if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
         for (const material of batch.materials) {
+          if (trackCounts) drawnTiles += Math.floor(material.indices.length / 6);
           const surfaceColor = materialColor(
             material,
             0,
@@ -2315,6 +2334,7 @@ export function createTideweftReliefRenderer(
         }
       }
       p.emissiveMaterial(0, 0, 0);
+      return drawnTiles;
     };
 
     const drawBiomeDetails = (view: TideweftView, cache: CachedReliefMesh): void => {
@@ -6265,7 +6285,8 @@ export function createTideweftReliefRenderer(
       cache: CachedReliefMesh,
       terrainMemory: TerrainPerceptionMemoryState,
       now: number,
-    ): void => {
+      trackCounts: boolean,
+    ): number => {
       const camera = currentCameraState();
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       setCamera(camera);
@@ -6292,7 +6313,7 @@ export function createTideweftReliefRenderer(
         0.2,
         -outdoorLight.keyDirection.z,
       );
-      drawTerrain(view, cache, camera, terrainMemory);
+      const terrainTiles = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
       drawFieldResources(view, cache);
@@ -6314,6 +6335,7 @@ export function createTideweftReliefRenderer(
       setCamera(camera);
       drawWind(view.weather, now);
       drawRain(view.weather, now);
+      return terrainTiles;
     };
 
     p.setup = (): void => {
@@ -6351,10 +6373,11 @@ export function createTideweftReliefRenderer(
 
     p.draw = (): void => {
       if (!active || contextLost || !webglSupported) return;
+      const drawStartedAt = performance.now();
+      const now = drawStartedAt;
+      const detailedTelemetry = telemetry.isDetailedEnabled();
       refreshLatestView();
       syncCarcassAccessibility(latestView);
-      const now = performance.now();
-      telemetry.recordFrame(now);
       advancePointerParallax(pointerParallax, now, reducedMotion);
       const outdoorLight = outdoorIlluminationPresentation(latestView?.worldTime);
       p.background(
@@ -6362,7 +6385,21 @@ export function createTideweftReliefRenderer(
           ? outdoorLight.reliefMistSky
           : outdoorLight.reliefSky,
       );
-      if (!latestView) return;
+      if (!latestView) {
+        telemetry.recordFrame(
+          drawStartedAt,
+          detailedTelemetry
+            ? {
+                terrainTiles: 0,
+                projectedEntityCandidates: 0,
+                labels: labelNodes.size,
+                particles: 0,
+              }
+            : undefined,
+          detailedTelemetry ? performance.now() - drawStartedAt : undefined,
+        );
+        return;
+      }
       const terrainMemory = terrainPerceptionMemory.sample({
         terrain: latestView.terrain,
         ...(latestView.spatialEpoch === undefined
@@ -6377,8 +6414,27 @@ export function createTideweftReliefRenderer(
       const mesh = ensureMesh(latestView);
       advanceHeldOrbit(now);
       updateCamera(latestView, now, mesh.mesh);
-      drawScene(latestView, mesh, terrainMemory, now);
+      const terrainTiles = drawScene(
+        latestView,
+        mesh,
+        terrainMemory,
+        now,
+        detailedTelemetry,
+      );
       syncReliefLabels(latestView, mesh, currentCameraState(), now);
+      telemetry.recordFrame(
+        drawStartedAt,
+        detailedTelemetry
+          ? {
+              terrainTiles,
+              projectedEntityCandidates: projectedRendererEntityCandidateCount(latestView),
+              labels: labelNodes.size,
+              // Relief currently has no generic ParticleView submission pass.
+              particles: 0,
+            }
+          : undefined,
+        detailedTelemetry ? performance.now() - drawStartedAt : undefined,
+      );
     };
   };
 
@@ -6429,6 +6485,7 @@ export function createTideweftReliefRenderer(
   const controller: TideweftReliefRendererController = {
     canvas: () => canvasElement,
     telemetry: telemetry.getSnapshot,
+    setPerformanceTelemetryEnabled: telemetry.setDetailedEnabled,
     supported: () => webglSupported,
     isActive: () => active,
     setActive,

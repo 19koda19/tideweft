@@ -763,6 +763,8 @@ export interface TideweftRendererController {
   readonly pulseScan: (point?: WorldPoint) => void;
   /** Actual frames produced by this renderer, never simulation-tick estimates. */
   readonly telemetry: () => RendererTelemetrySnapshot;
+  /** Opt-in raw/cpu/count probes; legacy HUD cadence remains available. */
+  readonly setPerformanceTelemetryEnabled?: (enabled: boolean) => RendererTelemetrySnapshot;
   /** Optional on leaf renderers; the composed renderer uses it to stop hidden draw loops. */
   readonly isActive?: () => boolean;
   readonly setActive?: (active: boolean) => void;

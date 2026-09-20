@@ -27,6 +27,7 @@
     "package:desktop": "npm run check:player-facing-sync && electron-forge package",
     "make:desktop": "npm run check:player-facing-sync && electron-forge make",
     "smoke:desktop": "node electron/smoke.cjs",
+    "profile:baseline": "node scripts/performance-baseline.cjs",
     "smoke:web": "node scripts/web-smoke.cjs",
     "check": "npm run check:public-boundary && npm run check:player-facing-sync && npm run typecheck && npm run test:ci && npm run build:web && npm run smoke:web"
   },

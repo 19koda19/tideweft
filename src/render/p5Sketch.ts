@@ -368,6 +368,21 @@ const lineDashForStatus = (status: SettlementStatus, scale: number): number[] =>
   }
 };
 
+/** Projected records considered by entity passes; pass-local culling happens later. */
+function projectedRendererEntityCandidateCount(view: TideweftView): number {
+  return 1
+    + view.settlements.length
+    + view.fieldResources.length
+    + (view.looseCargo?.length ?? 0)
+    + view.porters.length
+    + (view.dogs?.length ?? 0)
+    + (view.wildlife?.length ?? 0)
+    + (view.wildlifeCarcasses?.length ?? 0)
+    + (view.aggregateWildlifeEvidence?.length ?? 0)
+    + view.wayknots.length
+    + view.tideHarps.length;
+}
+
 /**
  * Creates the browser-pure p5 presentation. The projection remains authoritative;
  * all local state here is cosmetic camera/input state and can be discarded safely.
@@ -402,7 +417,7 @@ export function createTideweftRenderer(
   const heldBraceKeys = new Set<string>();
   const ripples: ScanRipple[] = [];
   const pointerParallax = createPointerParallaxState();
-  const telemetry = createRendererTelemetry();
+  const telemetry = createRendererTelemetry(undefined, false);
   const labelPositions = new Map<string, EasedScreenPoint>();
   const usedLabelPositions = new Set<string>();
   const tideHarpGeometryFor = createTideHarpGeometryMemo();
@@ -1401,7 +1416,8 @@ export function createTideweftRenderer(
     const drawTerrain = (
       view: TideweftView,
       terrainMemory: TerrainPerceptionMemoryState,
-    ): void => {
+      trackCounts: boolean,
+    ): number => {
       const grid = view.terrain;
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = Math.max(0.1, grid.tileSize);
@@ -1429,6 +1445,9 @@ export function createTideweftRenderer(
       );
 
       p.noStroke();
+      const drawnTiles = trackCounts
+        ? Math.max(0, lastRow - firstRow + 1) * Math.max(0, lastColumn - firstColumn + 1)
+        : 0;
       for (let row = firstRow; row <= lastRow; row += 1) {
         for (let column = firstColumn; column <= lastColumn; column += 1) {
           const tile = grid.tiles[row * grid.columns + column];
@@ -1556,6 +1575,7 @@ export function createTideweftRenderer(
           }
         }
       }
+      return drawnTiles;
     };
 
     const drawSurfaceCurrents = (view: TideweftView, now: number): void => {
@@ -5406,13 +5426,18 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawParticles = (particles: readonly ParticleView[]): void => {
+    const drawParticles = (
+      particles: readonly ParticleView[],
+      trackCounts: boolean,
+    ): number => {
+      let drawnParticles = 0;
       p.noStroke();
       for (const particle of particles) {
         if (
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, particle.position, true)
         ) continue;
+        if (trackCounts) drawnParticles += 1;
         const life = unit(particle.life, 1);
         const radius = (particle.radius ?? 2.4) / camera.zoom;
         const color = particle.color ?? (particle.kind === "splash" ? PALETTE.sky : PALETTE.tide);
@@ -5433,6 +5458,7 @@ export function createTideweftRenderer(
           p.circle(particle.position.x, particle.position.y, radius * (particle.kind === "spark" ? 1.3 : 2));
         }
       }
+      return drawnParticles;
     };
 
     const eventColor = (event: WorldEventView): string => {
@@ -5677,8 +5703,9 @@ export function createTideweftRenderer(
 
     p.draw = (): void => {
       if (!active) return;
-      const now = performance.now();
-      telemetry.recordFrame(now);
+      const drawStartedAt = performance.now();
+      const now = drawStartedAt;
+      const detailedTelemetry = telemetry.isDetailedEnabled();
       advancePointerParallax(pointerParallax, now, reducedMotion);
       usedLabelPositions.clear();
       latestView = options.getView() ?? null;
@@ -5686,6 +5713,13 @@ export function createTideweftRenderer(
       if (!latestView) {
         labelPositions.clear();
         drawEmptyEstuary(now);
+        telemetry.recordFrame(
+          drawStartedAt,
+          detailedTelemetry
+            ? { terrainTiles: 0, projectedEntityCandidates: 0, labels: 0, particles: 0 }
+            : undefined,
+          detailedTelemetry ? performance.now() - drawStartedAt : undefined,
+        );
         return;
       }
 
@@ -5710,7 +5744,7 @@ export function createTideweftRenderer(
       );
       p.scale(camera.zoom);
       p.translate(-camera.x, -camera.y);
-      drawTerrain(latestView, terrainMemory);
+      const terrainTiles = drawTerrain(latestView, terrainMemory, detailedTelemetry);
       drawSurfaceCurrents(latestView, now);
       drawTraces(latestView.traces, now);
       drawRoutes(latestView.routes, now);
@@ -5726,7 +5760,7 @@ export function createTideweftRenderer(
       drawPorters(latestView.porters, now);
       drawDogs(latestView.dogs ?? [], now);
       drawWildlife(latestView.wildlife ?? [], now);
-      drawParticles(latestView.particles ?? []);
+      const particles = drawParticles(latestView.particles ?? [], detailedTelemetry);
       drawPlayer(latestView, now);
       drawRipples(now);
       drawPointerTarget();
@@ -5737,6 +5771,18 @@ export function createTideweftRenderer(
       drawPlayerIncident(latestView, now);
       if (latestView.paused) drawPausedVeil();
       cleanupWorldLabelPositions();
+      telemetry.recordFrame(
+        drawStartedAt,
+        detailedTelemetry
+          ? {
+              terrainTiles,
+              projectedEntityCandidates: projectedRendererEntityCandidateCount(latestView),
+              labels: usedLabelPositions.size,
+              particles,
+            }
+          : undefined,
+        detailedTelemetry ? performance.now() - drawStartedAt : undefined,
+      );
     };
   };
 
@@ -5766,6 +5812,7 @@ export function createTideweftRenderer(
   return {
     canvas: () => canvasElement,
     telemetry: telemetry.getSnapshot,
+    setPerformanceTelemetryEnabled: telemetry.setDetailedEnabled,
     isActive: () => active,
     setActive: (nextActive) => {
       if (nextActive) observeCurrentSpatialEpoch();

@@ -7,6 +7,7 @@ import type {
   WeatherKind,
 } from "../render/types";
 import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
+import type { RuntimePerformanceSnapshot } from "../performance/runtimePerformanceTelemetry";
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 
@@ -620,6 +621,8 @@ export interface TideweftUIOptions {
   readonly getView: () => TideweftUIView | null | undefined;
   /** Live renderer instrumentation; intentionally excluded from saved/view revision state. */
   readonly getRendererTelemetry?: () => RendererTelemetrySnapshot;
+  /** Opt-in presentation profiling; disabled during ordinary play by default. */
+  readonly performanceTelemetryEnabled?: boolean;
   readonly dispatch: (command: TideweftUICommand) => void;
   /** Feeds the touch hold control into the same brace bit as desktop Shift. */
   readonly setBrace: (active: boolean) => void;
@@ -632,6 +635,12 @@ export interface TideweftUIOptions {
 
 export interface TideweftUIController {
   readonly update: (view?: TideweftUIView | null) => void;
+  /** Non-authoritative presentation measurements; never enters view/save state. */
+  readonly getPerformanceTelemetry: () => TideweftUIPerformanceTelemetry;
+  readonly setPerformanceTelemetryEnabled: (
+    enabled: boolean,
+  ) => TideweftUIPerformanceTelemetry;
+  readonly resetPerformanceTelemetry: () => TideweftUIPerformanceTelemetry;
   readonly start: () => void;
   readonly stop: () => void;
   readonly destroy: () => void;
@@ -644,4 +653,9 @@ export interface TideweftUIController {
   readonly closePatchNotes: () => void;
   readonly openKit: (tab?: KitTabId) => void;
   readonly closeKit: () => void;
+}
+
+export interface TideweftUIPerformanceTelemetry {
+  readonly update: RuntimePerformanceSnapshot;
+  readonly domNodeCount: number;
 }

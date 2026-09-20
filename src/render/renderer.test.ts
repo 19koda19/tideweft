@@ -8,6 +8,8 @@ const leaf = vi.hoisted(() => ({
   reliefYaw: -0.36,
   chartSetActive: vi.fn(),
   reliefSetActive: vi.fn(),
+  chartSetPerformanceTelemetryEnabled: vi.fn(),
+  reliefSetPerformanceTelemetryEnabled: vi.fn(),
   chartDestroy: vi.fn(),
   reliefDestroy: vi.fn(),
   compassSetHeading: vi.fn(),
@@ -34,6 +36,8 @@ vi.mock("./p5Sketch", () => ({
     resize: vi.fn(),
     focusWorld: vi.fn(),
     pulseScan: vi.fn(),
+    telemetry: () => ({ fps: 60, frameTimeMs: 1000 / 60, frameCount: 1, active: true }),
+    setPerformanceTelemetryEnabled: leaf.chartSetPerformanceTelemetryEnabled,
     setActive: leaf.chartSetActive,
     destroy: leaf.chartDestroy,
     });
@@ -54,6 +58,8 @@ vi.mock("./p5ReliefSketch", () => ({
       resize: vi.fn(),
       focusWorld: vi.fn(),
       pulseScan: vi.fn(),
+      telemetry: () => ({ fps: 60, frameTimeMs: 1000 / 60, frameCount: 1, active: true }),
+      setPerformanceTelemetryEnabled: leaf.reliefSetPerformanceTelemetryEnabled,
       supported: () => leaf.reliefSupported,
       isActive: vi.fn(),
       setActive: leaf.reliefSetActive,
@@ -87,6 +93,18 @@ function options(onModeChange: (mode: string, reliefAvailable: boolean) => void)
 }
 
 describe("composite renderer fallback", () => {
+  it("enables detailed telemetry in both disposable leaf renderers", () => {
+    const renderer = createTideweftRenderer(options(vi.fn()));
+
+    expect(renderer.setPerformanceTelemetryEnabled(true)).toMatchObject({
+      fps: 60,
+      frameCount: 1,
+      active: true,
+    });
+    expect(leaf.chartSetPerformanceTelemetryEnabled).toHaveBeenCalledWith(true);
+    expect(leaf.reliefSetPerformanceTelemetryEnabled).toHaveBeenCalledWith(true);
+  });
+
   it("shares one bounded terrain impression across quick view toggles and clears it only on destroy", () => {
     const renderer = createTideweftRenderer(options(vi.fn()));
     expect(leaf.chartMemory).toBeDefined();

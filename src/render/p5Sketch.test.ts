@@ -428,6 +428,56 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("Chart renderer telemetry", () => {
+  it("measures completed draw CPU time and publishes cheap truthful draw counts", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => {
+      clock += 2;
+      return clock;
+    } });
+    const base = view("chart-telemetry", { x: 12, y: 12 });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 1,
+        }],
+      },
+      particles: [{
+        id: "chart-telemetry-particle",
+        kind: "mote",
+        life: 1,
+        position: { x: 12, y: 12 },
+      }],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    renderer.setPerformanceTelemetryEnabled?.(true);
+
+    draw();
+    draw();
+
+    expect(renderer.telemetry()).toMatchObject({
+      frameCount: 2,
+      rawFrameIntervalSampleCount: 1,
+      rawFrameIntervalMeanMs: 4,
+      drawCpuSampleCount: 2,
+      drawCpuMeanMs: 2,
+      terrainTiles: 1,
+      projectedEntityCandidates: 1,
+      labels: 0,
+      particles: 1,
+    });
+    renderer.destroy();
+  });
+});
+
 describe("Chart shared outdoor illumination", () => {
   it("paints the clock-derived sky directly without a screen-darkening pane", () => {
     const nightTime = {

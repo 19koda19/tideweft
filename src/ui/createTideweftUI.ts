@@ -1,5 +1,6 @@
 import type { SettlementStatus, TidePhase, WeatherKind } from "../render/types";
 import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
+import { createRuntimePerformanceTelemetry } from "../performance/runtimePerformanceTelemetry";
 import { acceptsRestartPhrase, RESTART_PHRASE } from "../game/restartPolicy";
 import {
   PERPETUAL_SESSION_SHAPE,
@@ -11,6 +12,7 @@ import {
   type ResidentAboutUIView,
   type SettlementInspectorUIView,
   type TideweftUIController,
+  type TideweftUIPerformanceTelemetry,
   type TideweftUIOptions,
   type TideweftUICommand,
   type TideweftUIView,
@@ -46,6 +48,75 @@ export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
 export const MOBILE_INSPECTOR_PANEL_ID = "settlement-inspector";
 const COMPACT_HUD_MEDIA_QUERY = "(max-width: 44rem), (max-height: 34rem) and (max-width: 64rem)";
+
+function uiPerformanceNow(): number {
+  try {
+    const now = globalThis.performance?.now();
+    if (Number.isFinite(now) && now >= 0) return now;
+  } catch {
+    // Presentation telemetry must never interrupt the UI.
+  }
+  try {
+    const fallback = Date.now();
+    if (Number.isFinite(fallback) && fallback >= 0) return fallback;
+  } catch {
+    // An unavailable host clock cannot become a UI failure boundary.
+  }
+  return 0;
+}
+
+export interface TideweftUIPerformanceProbeOptions {
+  readonly enabled?: boolean;
+  readonly countDomNodes: () => number;
+}
+
+export interface TideweftUIPerformanceProbe {
+  readonly measureUpdate: <Argument, Result>(
+    work: (argument: Argument) => Result,
+    argument: Argument,
+  ) => Result;
+  readonly getSnapshot: () => TideweftUIPerformanceTelemetry;
+  readonly setEnabled: (enabled: boolean) => TideweftUIPerformanceTelemetry;
+  readonly reset: () => TideweftUIPerformanceTelemetry;
+}
+
+/** Opt-in observer around UI work; it never receives or mutates authoritative view state. */
+export function createTideweftUIPerformanceProbe(
+  options: TideweftUIPerformanceProbeOptions,
+): TideweftUIPerformanceProbe {
+  let enabled = options.enabled ?? false;
+  const update = createRuntimePerformanceTelemetry({ enabled });
+  const getSnapshot = (): TideweftUIPerformanceTelemetry => Object.freeze({
+    update: update.getSnapshot(),
+    domNodeCount: options.countDomNodes(),
+  });
+
+  return Object.freeze({
+    measureUpdate<Argument, Result>(
+      work: (argument: Argument) => Result,
+      argument: Argument,
+    ): Result {
+      if (!enabled) return work(argument);
+      const startedAtMs = uiPerformanceNow();
+      try {
+        return work(argument);
+      } finally {
+        update.recordSpan(startedAtMs, uiPerformanceNow());
+      }
+    },
+    getSnapshot,
+    setEnabled(nextEnabled: boolean) {
+      update.setEnabled(nextEnabled);
+      enabled = nextEnabled;
+      return getSnapshot();
+    },
+    reset() {
+      update.reset();
+      return getSnapshot();
+    },
+  });
+}
+
 export const TIDE_HARP_HELP_COPY =
   "Place one Reed mat, one Tide anchor, and one Wind knot as a compact triangle to tune a Tide Harp. Stand inside its triangle for +900 Loom charge each tick; a Space pulse then sounds from you and all three knots.";
 export const RECOVERY_SEED_REQUIRED_MESSAGE =
@@ -2204,6 +2275,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
 export function createTideweftUI(options: TideweftUIOptions): TideweftUIController {
   const refs = buildShell(options);
+  const updatePerformance = createTideweftUIPerformanceProbe({
+    countDomNodes: () => options.root.ownerDocument.getElementsByTagName("*").length,
+    ...(options.performanceTelemetryEnabled === undefined
+      ? {}
+      : { enabled: options.performanceTelemetryEnabled }),
+  });
   const mobileBrace = bindMobileBraceHold({
     button: refs.braceButton,
     documentTarget: document,
@@ -2806,7 +2883,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     syncDialog(refs.quietDialog, (forcedQuietHour ?? quiet.visible) && !refs.patchNotes.isOpen());
   };
 
-  const update = (providedView?: TideweftUIView | null): void => {
+  const updateUnmeasured = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
     const actorAbout = view ? resolveTideweftAboutSurface(view) : undefined;
@@ -3100,6 +3177,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
   };
 
+  const update = (providedView?: TideweftUIView | null): void => {
+    updatePerformance.measureUpdate(updateUnmeasured, providedView);
+  };
+
   refs.contractList.addEventListener("pointerdown", () => {
     contractPointerActive = true;
   });
@@ -3293,6 +3374,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   return {
     update,
+    getPerformanceTelemetry: updatePerformance.getSnapshot,
+    setPerformanceTelemetryEnabled: updatePerformance.setEnabled,
+    resetPerformanceTelemetry: updatePerformance.reset,
     start,
     stop,
     announce,

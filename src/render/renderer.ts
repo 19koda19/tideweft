@@ -22,6 +22,9 @@ export interface TideweftCompositeRendererController extends TideweftRendererCon
   readonly reliefSupported: () => boolean;
   readonly isActive: () => boolean;
   readonly setActive: (active: boolean) => void;
+  readonly setPerformanceTelemetryEnabled: (enabled: boolean) => ReturnType<
+    TideweftRendererController["telemetry"]
+  >;
 }
 
 /**
@@ -86,6 +89,11 @@ export function createTideweftRenderer(
   return {
     canvas: () => activeRenderer().canvas(),
     telemetry: () => activeRenderer().telemetry(),
+    setPerformanceTelemetryEnabled: (enabled) => {
+      chart.setPerformanceTelemetryEnabled?.(enabled);
+      relief.setPerformanceTelemetryEnabled?.(enabled);
+      return activeRenderer().telemetry();
+    },
     mode: () => currentMode,
     setMode: applyMode,
     toggleMode: () => applyMode(currentMode === "chart-2d" ? "relief-3d" : "chart-2d"),
