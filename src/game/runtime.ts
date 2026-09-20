@@ -468,12 +468,21 @@ import {
   createRuntimeCoreEcologyActivityAuthorityMemo,
   type RuntimeCoreEcologyActivityAuthorityBundle,
 } from "./runtimeCoreEcologyActivityAuthorityMemo";
+import {
+  createRuntimeCoreEcologyActivityAuthorityReceiptCache,
+  type RuntimeCoreEcologyActivityAuthorityCustody,
+  type RuntimeCoreEcologyActivityAuthorityReceiptCache,
+  type RuntimeCoreEcologyActivityAuthorityRequest,
+} from "./runtimeCoreEcologyActivityAuthorityReceiptCache";
 import { canonicalCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
 import { canonicalCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
 import { canonicalCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreResidents";
 import { canonicalCoreEcologyPolarConsumerResidentPatch } from "./regionalPolarConsumerResidents";
 import { canonicalCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
-import { projectCoreEcologyPolarConsumerActivityAuthority } from "./coreEcologyPolarConsumerActivity";
+import {
+  isTrustedCoreEcologyPolarConsumerActivityAuthority,
+  projectCoreEcologyPolarConsumerActivityAuthority,
+} from "./coreEcologyPolarConsumerActivity";
 import {
   stepCoreEcologySettlementShadows,
   stepCoreEcologySmallWorldSourceSet,
@@ -553,10 +562,14 @@ import {
   type CoreEcologyActivityAuthorityReceipt,
 } from "./coreEcologyActivity";
 import {
+  isTrustedCoreEcologyActivityAuthority,
   projectCoreEcologyActivityAuthority,
   projectCoreEcologyBreadthActivityAuthority,
 } from "./coreEcologyActivityAuthority";
-import { projectCoreEcologyAlpineRidgeActivityAuthority } from "./coreEcologyAlpineRidgeActivity";
+import {
+  isTrustedCoreEcologyAlpineRidgeActivityAuthority,
+  projectCoreEcologyAlpineRidgeActivityAuthority,
+} from "./coreEcologyAlpineRidgeActivity";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
   CORE_WILDLIFE_EVENT_VERSION,
@@ -1010,7 +1023,6 @@ const CORE_ECOLOGY_CONTACT_REACH_LOOSE_UNITS = Math.trunc(LOOSE_CARGO_TILE_UNITS
 const CORE_ECOLOGY_DOMESTIC_STORE_ACCESS_REACH_UNITS =
   3 * WORLD_POSITION_UNITS_PER_TILE;
 const CORE_ECOLOGY_MOVING_SOURCE_SALIENCE = 780_000;
-const RUNTIME_ALPINE_ACTIVITY_AUTHORITY_CACHE_LIMIT = 128;
 /** Focused keeper attention toward a known worksite; ordinary detail sight remains unchanged. */
 const SETTLEMENT_KEEPER_WORKSITE_DIRECT_SIGHT_RANGE_TILES = 32;
 
@@ -1360,74 +1372,229 @@ function deriveRuntimeRegionalResidentInputs(
  * frozen habitat; sparse regional and migration owners must present a current
  * root-bound receipt for every materialized activity actor.
  */
-function runtimeCoreEcologyActivityAuthorities(
+function runtimeCoreEcologyActivityAuthorityBundle(
   rootSeed: RootSeed,
   root: RegionalEcologyRootV1,
-  source: RuntimeRegionalEcologyProjectedSource,
-  alpineAuthorityCache: Map<string, CoreEcologyActivityAuthorityReceipt>,
+  sources: readonly RuntimeRegionalEcologyProjectedSource[],
+  receiptCache: RuntimeCoreEcologyActivityAuthorityReceiptCache<
+    CoreEcologyActivityAuthorityReceipt
+  >,
   alpineSeedFingerprint: string,
-): ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt> | null {
-  const activityActors = source.patch.populations
-    .flatMap(({ members }) => members)
-    .filter(({ actor, materialization }) => (
-      materialization === "materialized"
-      && coreEcologySpeciesHasBoundedActivityProjection(actor.identity.species)
-    ))
-    .map(({ actor }) => actor)
-    .sort((left, right) => compareText(
-      left.identity.stableId,
-      right.identity.stableId,
-    ));
-  if (source.kind === "settlement-home") {
-    return coreEcologyPatchHasBoundedActivityAuthority(source.patch)
-      ? new Map()
-      : null;
-  }
-  if (
-    source.kind === "regional-polar-shore"
-    || source.kind === "regional-cold-shore"
-  ) {
-    return activityActors.length === 0 ? new Map() : null;
-  }
-  if (coreEcologyPatchHasBoundedActivityAuthority(source.patch)) return null;
-  const authorities = new Map<string, CoreEcologyActivityAuthorityReceipt>();
-  for (const actor of activityActors) {
-    const authority = source.kind === "regional-breadth-v1"
-      ? projectCoreEcologyBreadthActivityAuthority({
-          rootSeed,
-          patch: source.patch,
-          actorId: actor.identity.stableId,
-        })
-      : source.kind === "regional-polar-consumer-v1"
-      ? projectCoreEcologyPolarConsumerActivityAuthority({
-          rootSeed,
-          patch: source.patch,
-          actorId: actor.identity.stableId,
-        })
-      : source.kind === "regional-alpine"
-      ? cachedRuntimeAlpineRidgeActivityAuthority(
-          rootSeed,
-          source,
-          actor.identity.stableId,
-          alpineSeedFingerprint,
-          alpineAuthorityCache,
-        )
-      : projectCoreEcologyActivityAuthority({
-          rootSeed,
-          root,
-          sourceKind: source.kind,
-          patch: source.patch,
-          actorId: actor.identity.stableId,
-        });
+): RuntimeCoreEcologyActivityAuthorityBundle | null {
+  const sourceKeys: string[] = [];
+  const requests: RuntimeCoreEcologyActivityAuthorityRequest<
+    CoreEcologyActivityAuthorityReceipt
+  >[] = [];
+  for (const source of sources) {
+    sourceKeys.push(source.sourceKey);
+    const activityOwners = source.patch.populations
+      .flatMap((population) => population.members
+        .filter(({ actor, materialization }) => (
+          materialization === "materialized"
+          && coreEcologySpeciesHasBoundedActivityProjection(actor.identity.species)
+        ))
+        .map((member) => Object.freeze({
+          actor: member.actor,
+          member,
+          population,
+        })))
+      .sort((left, right) => compareText(
+        left.actor.identity.stableId,
+        right.actor.identity.stableId,
+      ));
+    if (source.kind === "settlement-home") {
+      if (!coreEcologyPatchHasBoundedActivityAuthority(source.patch)) return null;
+      continue;
+    }
     if (
-      authority === null
-      || authority.sourceKey !== source.sourceKey
-      || ("species" in authority && authority.species !== actor.identity.species)
-      || authorities.has(authority.actorId)
-    ) return null;
-    authorities.set(authority.actorId, authority);
+      source.kind === "regional-polar-shore"
+      || source.kind === "regional-cold-shore"
+    ) {
+      if (activityOwners.length > 0) return null;
+      continue;
+    }
+    for (const { actor, member, population } of activityOwners) {
+      const lineage = runtimeCoreEcologyActivityAuthorityLineage(
+        root,
+        source,
+        actor.identity.stableId,
+      );
+      if (lineage === null) return null;
+      const custody: RuntimeCoreEcologyActivityAuthorityCustody = Object.freeze({
+        rootSeed,
+        sourceKind: source.kind,
+        sourceKey: source.sourceKey,
+        sourceRegionX: source.patch.originRegion.x,
+        sourceRegionY: source.patch.originRegion.y,
+        derivationKind: source.patch.derivation.kind,
+        lineageKey: lineage.lineageKey,
+        actorId: actor.identity.stableId,
+        species: actor.identity.species,
+        populationKey: population.populationKey,
+        populationOrdinal: member.populationOrdinal,
+        representedUnits: member.representedUnits,
+        alpineSeedFingerprint: source.kind === "regional-alpine"
+          ? alpineSeedFingerprint
+          : null,
+        legacyCustodyKey: lineage.legacyCustodyKey,
+      });
+      requests.push(Object.freeze({
+        sourceKey: source.sourceKey,
+        custody,
+        project: () => source.kind === "regional-breadth-v1"
+          ? projectCoreEcologyBreadthActivityAuthority({
+              rootSeed,
+              patch: source.patch,
+              actorId: actor.identity.stableId,
+            })
+          : source.kind === "regional-polar-consumer-v1"
+          ? projectCoreEcologyPolarConsumerActivityAuthority({
+              rootSeed,
+              patch: source.patch,
+              actorId: actor.identity.stableId,
+            })
+          : source.kind === "regional-alpine"
+          ? projectCoreEcologyAlpineRidgeActivityAuthority({
+              rootSeed,
+              patch: source.patch,
+              actorId: actor.identity.stableId,
+            })
+          : source.kind === "regional-habitat" || source.kind === "legacy-cohort"
+          ? projectCoreEcologyActivityAuthority({
+              rootSeed,
+              root,
+              sourceKind: source.kind,
+              patch: source.patch,
+              actorId: actor.identity.stableId,
+            })
+          : null,
+        validate: (
+          authority: unknown,
+        ): authority is CoreEcologyActivityAuthorityReceipt => (
+          runtimeCoreEcologyActivityAuthorityReceiptIsValid(
+            source,
+            actor,
+            lineage.expectedProvenance,
+            authority,
+          )
+        ),
+      }));
+    }
   }
-  return authorities;
+  return receiptCache.project({ sourceKeys, requests });
+}
+
+type RuntimeCoreEcologyActivityAuthorityProvenance =
+  | "breadth-habitat"
+  | "legacy-habitat"
+  | "regional-habitat"
+  | null;
+
+function runtimeCoreEcologyActivityAuthorityLineage(
+  root: RegionalEcologyRootV1,
+  source: RuntimeRegionalEcologyProjectedSource,
+  actorId: string,
+): Readonly<{
+  expectedProvenance: RuntimeCoreEcologyActivityAuthorityProvenance;
+  legacyCustodyKey: string | null;
+  lineageKey: string;
+}> | null {
+  const derivation = source.patch.derivation;
+  if (source.kind === "regional-habitat") {
+    if (
+      derivation.kind !== "regional-habitat-v1"
+      && derivation.kind !== "regional-habitat-v1-with-adoption-suppression"
+    ) return null;
+    return Object.freeze({
+      expectedProvenance: "regional-habitat" as const,
+      legacyCustodyKey: null,
+      lineageKey: derivation.kind === "regional-habitat-v1"
+        ? derivation.habitat.derivationHash
+        : hashCanonical([
+            derivation.habitat.derivationHash,
+            derivation.suppression,
+          ]),
+    });
+  }
+  if (source.kind === "legacy-cohort") {
+    if (
+      derivation.kind !== "legacy-cohort-v1"
+      || root.adoption === null
+      || root.legacyCohort === null
+    ) return null;
+    const disposition = root.adoption.actorDispositions.find((candidate) => (
+      candidate.actorId === actorId
+    ));
+    if (disposition === undefined || disposition.disposition === "retired") return null;
+    return Object.freeze({
+      expectedProvenance: disposition.disposition === "redistributed"
+        ? "regional-habitat" as const
+        : "legacy-habitat" as const,
+      legacyCustodyKey: hashCanonical(disposition),
+      lineageKey: hashCanonical([
+        derivation.adoptionTransactionId,
+        derivation.rootSeedFingerprint,
+        derivation.sourcePatchHash,
+        root.adoption.transactionId,
+        root.legacyCohort.sourcePatchHash,
+      ]),
+    });
+  }
+  if (source.kind === "regional-alpine") {
+    return derivation.kind !== "regional-alpine-v1"
+      ? null
+      : Object.freeze({
+          expectedProvenance: null,
+          legacyCustodyKey: null,
+          lineageKey: derivation.habitat.derivationHash,
+        });
+  }
+  if (source.kind === "regional-polar-consumer-v1") {
+    return derivation.kind !== "regional-polar-consumer-v1"
+      ? null
+      : Object.freeze({
+          expectedProvenance: "regional-habitat" as const,
+          legacyCustodyKey: null,
+          lineageKey: derivation.habitat.derivationHash,
+        });
+  }
+  if (source.kind === "regional-breadth-v1") {
+    return derivation.kind !== "regional-breadth-v1"
+      ? null
+      : Object.freeze({
+          expectedProvenance: "breadth-habitat" as const,
+          legacyCustodyKey: null,
+          lineageKey: derivation.habitat.derivationHash,
+        });
+  }
+  return null;
+}
+
+function runtimeCoreEcologyActivityAuthorityReceiptIsValid(
+  source: RuntimeRegionalEcologyProjectedSource,
+  actor: CoreWildlifeActorState,
+  expectedProvenance: RuntimeCoreEcologyActivityAuthorityProvenance,
+  authority: unknown,
+): authority is CoreEcologyActivityAuthorityReceipt {
+  if (
+    typeof authority !== "object"
+    || authority === null
+    || !("sourceKey" in authority)
+    || authority.sourceKey !== source.sourceKey
+    || !("actorId" in authority)
+    || authority.actorId !== actor.identity.stableId
+  ) return false;
+  if (source.kind === "regional-alpine") {
+    return actor.identity.species === "golden-eagle"
+      && isTrustedCoreEcologyAlpineRidgeActivityAuthority(authority);
+  }
+  if (!isTrustedCoreEcologyActivityAuthority(authority)) return false;
+  if (
+    authority.species !== actor.identity.species
+    || authority.provenance !== expectedProvenance
+  ) return false;
+  return source.kind !== "regional-polar-consumer-v1"
+    || isTrustedCoreEcologyPolarConsumerActivityAuthority(authority);
 }
 
 type RuntimeRegionalEcologyProjectedSource =
@@ -1477,35 +1644,6 @@ function runtimeMaterializedCoreActorIds(
     .filter(({ materialization }) => materialization === "materialized")
     .map(({ actor }) => actor.identity.stableId)
     .sort(compareText));
-}
-
-function cachedRuntimeAlpineRidgeActivityAuthority(
-  rootSeed: RootSeed,
-  source: Extract<RuntimeRegionalEcologyProjectedSource, { readonly kind: "regional-alpine" }>,
-  actorId: string,
-  alpineSeedFingerprint: string,
-  cache: Map<string, CoreEcologyActivityAuthorityReceipt>,
-): CoreEcologyActivityAuthorityReceipt | null {
-  const cacheKey = `${alpineSeedFingerprint}:${source.sourceKey}:${actorId}`;
-  const cached = cache.get(cacheKey);
-  if (cached !== undefined) {
-    cache.delete(cacheKey);
-    cache.set(cacheKey, cached);
-    return cached;
-  }
-  const authority = projectCoreEcologyAlpineRidgeActivityAuthority({
-    rootSeed,
-    patch: source.patch,
-    actorId,
-  });
-  if (authority === null) return null;
-  cache.set(cacheKey, authority);
-  while (cache.size > RUNTIME_ALPINE_ACTIVITY_AUTHORITY_CACHE_LIMIT) {
-    const oldestKey = cache.keys().next().value as string | undefined;
-    if (oldestKey === undefined) break;
-    cache.delete(oldestKey);
-  }
-  return authority;
 }
 
 function canonicalRuntimeRegionalEcologyStateV1(
@@ -8921,30 +9059,20 @@ export async function createTideweftRuntime(
   const regionalEcologyProjectionMemo = createRuntimeRegionalEcologyProjectionMemo(
     projectRegionalEcologyStateV6ActiveState,
   );
-  const alpineActivityAuthorityCache = new Map<
-    string,
-    CoreEcologyActivityAuthorityReceipt
-  >();
+  const coreEcologyActivityAuthorityReceiptCache =
+    createRuntimeCoreEcologyActivityAuthorityReceiptCache<
+      CoreEcologyActivityAuthorityReceipt
+    >();
   const coreEcologyActivityAuthorityMemo = createRuntimeCoreEcologyActivityAuthorityMemo(
-    ({ projection, root, rootSeed, alpineSeedFingerprint }) => {
-      const authoritiesBySource = new Map<
-        string,
-        ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>
-      >();
-      for (const source of runtimeRegionalEcologyProjectedSources(projection)) {
-        if (authoritiesBySource.has(source.sourceKey)) return null;
-        const authorities = runtimeCoreEcologyActivityAuthorities(
-          rootSeed,
-          root,
-          source,
-          alpineActivityAuthorityCache,
-          alpineSeedFingerprint,
-        );
-        if (authorities === null) return null;
-        authoritiesBySource.set(source.sourceKey, authorities);
-      }
-      return authoritiesBySource;
-    },
+    ({ projection, root, rootSeed, alpineSeedFingerprint }) => (
+      runtimeCoreEcologyActivityAuthorityBundle(
+        rootSeed,
+        root,
+        runtimeRegionalEcologyProjectedSources(projection),
+        coreEcologyActivityAuthorityReceiptCache,
+        alpineSeedFingerprint,
+      )
+    ),
   );
   if (resumed === null) {
     physicalCargo = seedRuntimeCoreEcologyProvision(physicalCargo, regionalEcology);
@@ -11054,13 +11182,13 @@ export async function createTideweftRuntime(
           && source.sourceKey
             === regionalEcology.base.base.base.base.base.settlementHome.sourceKey
         ) {
-          activityAuthorities = runtimeCoreEcologyActivityAuthorities(
+          activityAuthorities = runtimeCoreEcologyActivityAuthorityBundle(
             world.meta.rootSeed,
             regionalEcology.base.base.base.base.base.root,
-            source,
-            alpineActivityAuthorityCache,
+            [source],
+            coreEcologyActivityAuthorityReceiptCache,
             regionalEcology.base.base.base.base.alpineRoot.seedFingerprint,
-          ) ?? undefined;
+          )?.get(source.sourceKey);
         }
         if (activityAuthorities === undefined) {
           throw new Error(
