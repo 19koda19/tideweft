@@ -9,6 +9,7 @@ import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   createCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  setCoreEcologyAggregateActivityIntensity,
   setCoreEcologyAggregatePatchMaterializedActors,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
@@ -475,6 +476,70 @@ describe(`${ALPHA33_ALPINE_SHARED_INVARIANTS_OWNER_INTENT} Wave-F regional ecolo
       completedTick: nextTick,
       settlementHomeHabitat: homeHabitat,
     })).toBe(committed);
+  });
+
+  it("commits a tick-advancing durable Alpine output byte-identically through receipt and reload fallback", () => {
+    const { base } = fixture();
+    const targetTick = TICK + 1;
+    const receiptState = createFreshRegionalEcologyStateV2(base, SEED);
+    const fallbackState = deserializeRegionalEcologyStateV2(
+      serializeRegionalEcologyStateV2(receiptState),
+    );
+    if (fallbackState === null) {
+      throw new Error("Alpine receipt integration fixture did not reload");
+    }
+
+    const commitDurable = (state: RegionalEcologyStateV2) => {
+      const projection = projectionResidents(state);
+      const alpineOutputs = projection.alpineResidents.map(({ patch }, index) => {
+        const advanced = advanceProjectedPatchWithoutAction(patch, targetTick).patch;
+        const population = advanced.aggregatePopulations[0];
+        if (population === undefined) {
+          throw new Error("Alpine receipt integration output needs one aggregate population");
+        }
+        if (index !== 0) {
+          return Object.freeze({ sourceKey: advanced.patchKey, patch: advanced });
+        }
+        const intensity = population.activitySignal.intensity === 1_000_000
+          ? 999_999
+          : population.activitySignal.intensity + 1;
+        const changed = setCoreEcologyAggregateActivityIntensity(advanced, {
+          aggregateId: population.aggregateId,
+          atTick: targetTick,
+          intensity,
+        });
+        if (changed === null) {
+          throw new Error("Alpine receipt integration deviation was rejected");
+        }
+        return Object.freeze({ sourceKey: changed.patchKey, patch: changed });
+      });
+      return commitRegionalEcologyStateV2ActiveProjection(state, projection, {
+        base: {
+          root: advanceRegionalEcologyRoot(state.base.root, targetTick),
+          rootSeed: SEED,
+          settlementHome: null,
+          residents: projection.base.residents.map(({ patch }) => (
+            advanceProjectedPatchWithoutAction(patch, targetTick)
+          )),
+        },
+        alpineResidents: alpineOutputs,
+      });
+    };
+
+    const fast = commitDurable(receiptState);
+    const fallback = commitDurable(fallbackState);
+    expect(fast).not.toBeNull();
+    expect(fallback).not.toBeNull();
+    expect(serializeRegionalEcologyStateV2(fast))
+      .toBe(serializeRegionalEcologyStateV2(fallback));
+    expect(fast?.updatedAtTick).toBe(targetTick);
+    expect(fast?.alpineRoot.revision).toBe(receiptState.alpineRoot.revision + 1);
+    expect(fast?.alpineRoot.lastEventOrdinal)
+      .toBe(receiptState.alpineRoot.lastEventOrdinal + 1);
+    expect(fast?.alpineRoot.regions[0]).toMatchObject({
+      revision: 1,
+      eventOrdinal: 1,
+    });
   });
 
   it("fails closed when the retained child throws on malformed off-window home output", () => {

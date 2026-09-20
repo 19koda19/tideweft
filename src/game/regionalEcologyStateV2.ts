@@ -17,12 +17,14 @@ import type { CoreEcologyRegionalPredatorHabitatAssemblage } from "./coreEcology
 import {
   REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES,
   REGIONAL_ALPINE_ECOLOGY_OWNER_ID,
+  advanceRegionalAlpineEcologyActiveResidentsFromReceipt,
   advanceRegionalAlpineEcologyRoot,
   canonicalRegionalAlpineEcologyRootForWorld,
   canonicalizeRegionalAlpineEcologyRoot,
   createPristineRegionalAlpineEcologyRoot,
   putRegionalAlpineEcologyResidentDeviation,
   regionalAlpineEcologyResidentsForActiveRegions,
+  type RegionalAlpineEcologyActiveReceiptClaim,
   type RegionalAlpineEcologyRootV1,
 } from "./regionalAlpineEcology";
 import {
@@ -600,12 +602,6 @@ export function commitRegionalEcologyStateV2ActiveProjection(
     return null;
   }
   if (base === null || base.updatedAtTick < state.updatedAtTick) return null;
-  let alpineRoot: RegionalAlpineEcologyRootV1;
-  try {
-    alpineRoot = advanceRegionalAlpineEcologyRoot(state.alpineRoot, base.updatedAtTick);
-  } catch {
-    return null;
-  }
   const outputBySource = new Map<string, CoreEcologyAggregatePatchState>();
   for (const raw of input.alpineResidents) {
     if (
@@ -629,6 +625,7 @@ export function commitRegionalEcologyStateV2ActiveProjection(
     entry.sourceKey,
     entry,
   ]));
+  const durableAlpineResidents: CoreEcologyAggregatePatchState[] = [];
   for (const projected of projection.alpineResidents) {
     const original = originalBySource.get(projected.sourceKey);
     const output = outputBySource.get(projected.sourceKey);
@@ -657,15 +654,53 @@ export function commitRegionalEcologyStateV2ActiveProjection(
     const visitationOnly = base.updatedAtTick > projection.atTick
       && regionalEcologyResidentTransitionIsVisitationOnly(normalizedProjection, normalized);
     if (!presentationOnly && !visitationOnly) {
-      try {
-        alpineRoot = putRegionalAlpineEcologyResidentDeviation(alpineRoot, {
-          rootSeed: input.base.rootSeed,
-          patch: normalized,
-        });
-      } catch {
-        return null;
-      }
+      durableAlpineResidents.push(normalized);
     }
+  }
+  durableAlpineResidents.sort((left, right) => compareText(left.patchKey, right.patchKey));
+
+  const receiptClaims = alpineActiveReceiptClaims(state.alpineActiveResidents);
+  const fast = receiptClaims === null
+    ? null
+    : advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
+        state.alpineRoot,
+        {
+          rootSeed: input.base.rootSeed,
+          completedTick: base.updatedAtTick,
+          activeRegions: base.activeRegions,
+          expectedResidents: receiptClaims,
+          durableResidents: durableAlpineResidents.map((patch) => ({
+            sourceKey: patch.patchKey,
+            patch,
+          })),
+        },
+      );
+  if (fast !== null) {
+    try {
+      return createRegionalEcologyStateV2({
+        base,
+        alpineRoot: fast.root,
+        alpineActiveResidents: fast.residents.map(({ sourceKey, patch }) => (
+          Object.freeze({ sourceKey, patch })
+        )),
+        adoption: state.adoption,
+      });
+    } catch {
+      // Optional acceleration only; the transaction below remains authority.
+    }
+  }
+
+  let alpineRoot: RegionalAlpineEcologyRootV1;
+  try {
+    alpineRoot = advanceRegionalAlpineEcologyRoot(state.alpineRoot, base.updatedAtTick);
+    for (const patch of durableAlpineResidents) {
+      alpineRoot = putRegionalAlpineEcologyResidentDeviation(alpineRoot, {
+        rootSeed: input.base.rootSeed,
+        patch,
+      });
+    }
+  } catch {
+    return null;
   }
   try {
     // Re-derive from the post-commit root and the base child's one hot-window
@@ -1181,6 +1216,26 @@ function projectionResidentInputs(value: readonly unknown[]): readonly RegionalE
     }));
   }
   return Object.freeze(residents);
+}
+
+function alpineActiveReceiptClaims(
+  snapshots: readonly RegionalEcologyStateV2AlpineSnapshotV1[],
+): readonly RegionalAlpineEcologyActiveReceiptClaim[] | null {
+  const claims: RegionalAlpineEcologyActiveReceiptClaim[] = [];
+  for (const snapshot of snapshots) {
+    if (snapshot.patch.derivation.kind !== "regional-alpine-v1") return null;
+    const habitatHash = snapshot.patch.derivation.habitat.derivationHash;
+    if (!validHash(habitatHash)) return null;
+    claims.push(Object.freeze({
+      sourceKey: snapshot.sourceKey,
+      region: createRegionCoord(snapshot.region.x, snapshot.region.y),
+      habitatHash,
+      patchHash: snapshot.patchHash,
+      lineageHash: snapshot.lineageHash,
+    }));
+  }
+  claims.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+  return Object.freeze(claims);
 }
 
 function sourceLineageHash(patch: CoreEcologyAggregatePatchState): string {

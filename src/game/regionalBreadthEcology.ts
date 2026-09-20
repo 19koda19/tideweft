@@ -985,6 +985,18 @@ function applyActiveResidentDeviationBatch(
     completedTick < root.updatedAtTick
     || values.length > receipt.residents.length
   ) return null;
+  const rootSerializedBytes = serializedBytes(root);
+  // The scalar transaction advances the root clock before applying any put.
+  // That operation changes only this nonnegative safe-integer token; the
+  // replacement integrity digest is fixed-width ASCII. This digit delta is
+  // therefore the exact clock-only sealed-root byte size without a second
+  // canonical seal, and preserves the scalar path's pre-write budget failure.
+  const clockAdvancedSerializedBytes = rootSerializedBytes
+    + String(completedTick).length
+    - String(root.updatedAtTick).length;
+  if (clockAdvancedSerializedBytes > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES) {
+    return null;
+  }
   const receiptBySource = new Map(
     receipt.residents.map((resident) => [resident.sourceKey, resident]),
   );
@@ -1030,7 +1042,7 @@ function applyActiveResidentDeviationBatch(
   const regionsByKey = new Map(root.regions.map((delta) => [delta.key, delta]));
   let serializedUpperBound = values.length === 0
     ? 0
-    : serializedBytes(root) + 256;
+    : rootSerializedBytes + 256;
   let revision = root.revision;
   let eventOrdinal = root.lastEventOrdinal;
   let changed = false;

@@ -59,11 +59,11 @@ function heronHabitat() {
   return habitat;
 }
 
-function heronPatch() {
+function heronPatch(tick = 0) {
   return createCoreEcologyBreadthResidentPatch({
     seed: SEED,
     habitat: heronHabitat(),
-    tick: 0,
+    tick,
   });
 }
 
@@ -147,6 +147,41 @@ function activeResidentClaims(
       })),
     }),
   }));
+}
+
+function withSimulatedClockBudgetEdge(
+  ownerId: string,
+  maximumBytes: number,
+  sourceTick: number,
+  targetTick: number,
+  run: () => void,
+) {
+  const originalEncode = TextEncoder.prototype.encode;
+  TextEncoder.prototype.encode = function encode(value = "") {
+    if (value.includes(`"ownerId":"${ownerId}"`)) {
+      const root = JSON.parse(value) as Readonly<{
+        ownerId?: unknown;
+        regions?: unknown;
+        updatedAtTick?: unknown;
+      }>;
+      if (
+        root.ownerId === ownerId
+        && Array.isArray(root.regions)
+        && root.regions.length > 0
+        && (root.updatedAtTick === sourceTick || root.updatedAtTick === targetTick)
+      ) {
+        return {
+          byteLength: maximumBytes + (root.updatedAtTick === targetTick ? 1 : 0),
+        } as unknown as Uint8Array<ArrayBuffer>;
+      }
+    }
+    return originalEncode.call(this, value);
+  };
+  try {
+    run();
+  } finally {
+    TextEncoder.prototype.encode = originalEncode;
+  }
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-only sparse root`, () => {
@@ -426,6 +461,54 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     expect(oracleResidents).not.toBeNull();
     expect(stableStringify(fast?.root)).toBe(stableStringify(oracleRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+  });
+
+  it("rejects a removal batch when scalar clock advance alone crosses the save budget", () => {
+    const sourceTick = 9;
+    const targetTick = 10;
+    const pristineAtSource = heronPatch(sourceTick);
+    const root = putRegionalBreadthEcologyResidentDeviation(
+      createPristineRegionalBreadthEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }, CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID),
+      { rootSeed: SEED, patch: rotateFirstActor(pristineAtSource, 101) },
+    );
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [HERON_REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Breadth clock-budget fixture did not derive");
+    }
+
+    withSimulatedClockBudgetEdge(
+      REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
+      REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
+      sourceTick,
+      targetTick,
+      () => {
+        expect(() => advanceRegionalBreadthEcologyRoot(root, targetTick)).toThrow();
+        const shrinkFirst = putRegionalBreadthEcologyResidentDeviation(root, {
+          rootSeed: SEED,
+          patch: pristineAtSource,
+        });
+        expect(advanceRegionalBreadthEcologyRoot(shrinkFirst, targetTick).regions)
+          .toEqual([]);
+        expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+          rootSeed: SEED,
+          completedTick: targetTick,
+          activeRegions: [HERON_REGION],
+          expectedResidents: activeResidentClaims(prior),
+          durableResidents: [{
+            sourceKey: prior[0]!.sourceKey,
+            patch: heronPatch(targetTick),
+          }],
+        })).toBeNull();
+      },
+    );
   });
 
   it("batches source-ordered add, update, and removal byte-identically to scalar puts", () => {

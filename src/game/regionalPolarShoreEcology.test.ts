@@ -17,6 +17,8 @@ import {
   deriveCoreEcologyPolarShoreTerritory,
 } from "./coreEcologyPolarShoreHabitat";
 import {
+  REGIONAL_POLAR_SHORE_ECOLOGY_MAX_SERIALIZED_BYTES,
+  REGIONAL_POLAR_SHORE_ECOLOGY_OWNER_ID,
   advanceRegionalPolarShoreEcologyRoot,
   advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt,
   canonicalRegionalPolarShoreEcologyRootForWorld,
@@ -142,6 +144,41 @@ function polarActiveResidentClaims(
       }) => ({ aggregateId, species, populationKey, habitatCapacity })),
     }),
   }));
+}
+
+function withSimulatedClockBudgetEdge(
+  ownerId: string,
+  maximumBytes: number,
+  sourceTick: number,
+  targetTick: number,
+  run: () => void,
+) {
+  const originalEncode = TextEncoder.prototype.encode;
+  TextEncoder.prototype.encode = function encode(value = "") {
+    if (value.includes(`"ownerId":"${ownerId}"`)) {
+      const root = JSON.parse(value) as Readonly<{
+        ownerId?: unknown;
+        regions?: unknown;
+        updatedAtTick?: unknown;
+      }>;
+      if (
+        root.ownerId === ownerId
+        && Array.isArray(root.regions)
+        && root.regions.length > 0
+        && (root.updatedAtTick === sourceTick || root.updatedAtTick === targetTick)
+      ) {
+        return {
+          byteLength: maximumBytes + (root.updatedAtTick === targetTick ? 1 : 0),
+        } as unknown as Uint8Array<ArrayBuffer>;
+      }
+    }
+    return originalEncode.call(this, value);
+  };
+  try {
+    run();
+  } finally {
+    TextEncoder.prototype.encode = originalEncode;
+  }
 }
 
 describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root`, () => {
@@ -414,6 +451,56 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
     expect(serializeRegionalPolarShoreEcologyRoot(fast?.root))
       .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+  });
+
+  it("rejects a removal batch when scalar clock advance alone crosses the save budget", () => {
+    const sourceTick = 999;
+    const targetTick = 1_000;
+    const pristineAtSource = polarPatch(REGION, sourceTick);
+    const root = putRegionalPolarShoreEcologyResidentDeviation(
+      createPristineRegionalPolarShoreEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }),
+      {
+        rootSeed: SEED,
+        patch: displacePolarPatch(pristineAtSource, "alpha34-clock-budget"),
+      },
+    );
+    const prior = regionalPolarShoreEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Polar clock-budget fixture did not derive");
+    }
+
+    withSimulatedClockBudgetEdge(
+      REGIONAL_POLAR_SHORE_ECOLOGY_OWNER_ID,
+      REGIONAL_POLAR_SHORE_ECOLOGY_MAX_SERIALIZED_BYTES,
+      sourceTick,
+      targetTick,
+      () => {
+        expect(() => advanceRegionalPolarShoreEcologyRoot(root, targetTick)).toThrow();
+        const shrinkFirst = putRegionalPolarShoreEcologyResidentDeviation(root, {
+          rootSeed: SEED,
+          patch: pristineAtSource,
+        });
+        expect(advanceRegionalPolarShoreEcologyRoot(shrinkFirst, targetTick).regions)
+          .toEqual([]);
+        expect(advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(root, {
+          rootSeed: SEED,
+          completedTick: targetTick,
+          activeRegions: [REGION],
+          expectedResidents: polarActiveResidentClaims(prior),
+          durableResidents: [{
+            sourceKey: prior[0]!.sourceKey,
+            patch: polarPatch(REGION, targetTick),
+          }],
+        })).toBeNull();
+      },
+    );
   });
 
   it("batches source-ordered add, update, removal, and no-op exactly like scalar puts", () => {
