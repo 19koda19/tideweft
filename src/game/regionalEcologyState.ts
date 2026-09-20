@@ -180,7 +180,11 @@ export function createRegionalEcologyState(
     "settlementHome",
   ])) throw new TypeError("Regional ecology state input is malformed");
   const root = canonicalizeRegionalEcologyRoot(input.root);
-  if (root === null || stableStringify(root) !== stableStringify(input.root)) {
+  if (
+    root === null
+    || (root !== input.root
+      && stableStringify(root) !== stableStringify(input.root))
+  ) {
     throw new TypeError("Regional ecology state requires one canonical root");
   }
   if (!Array.isArray(input.activeRegions) || !Array.isArray(input.activeResidents)) {
@@ -658,7 +662,8 @@ export function bindRegionalEcologyActiveProjection(
     if (
       source === undefined
       || projected === null
-      || stableStringify(projected) !== stableStringify(raw.patch)
+      || (projected !== raw.patch
+        && stableStringify(projected) !== stableStringify(raw.patch))
       || projected.patchKey !== source.sourceKey
       || projected.updatedAtTick !== state.updatedAtTick
       || sourceLineageHash(projected) !== source.lineageHash
@@ -754,7 +759,8 @@ export function commitRegionalEcologyActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
       || patch.updatedAtTick !== root.updatedAtTick
       || !projectedBySource.has(raw.sourceKey)
@@ -1351,7 +1357,8 @@ function canonicalProjection(
     if (
       source === undefined
       || patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || raw.kind !== source.kind
       || !isRegionCoord(raw.region)
       || regionKey(raw.region) !== regionKey(source.region)

@@ -184,8 +184,12 @@ export function createRegionalEcologyStateV2(
   if (
     base === null
     || alpineRoot === null
-    || stableStringify(base) !== stableStringify(input.base)
-    || stableStringify(alpineRoot) !== stableStringify(input.alpineRoot)
+    || (base !== input.base
+      && stableStringify(base) !== stableStringify(input.base))
+    || (
+      alpineRoot !== input.alpineRoot
+      && stableStringify(alpineRoot) !== stableStringify(input.alpineRoot)
+    )
     || alpineRoot.updatedAtTick !== base.updatedAtTick
     || alpineRoot.seedFingerprint !== base.root.seedFingerprint
   ) throw new RangeError("Regional ecology v2 children are not canonical at one clock");
@@ -464,7 +468,8 @@ export function bindRegionalEcologyStateV2ActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) return null;
     const resident = Object.freeze({ sourceKey: raw.sourceKey, patch });
@@ -556,7 +561,8 @@ export function commitRegionalEcologyStateV2ActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
       || patch.updatedAtTick !== base.updatedAtTick
     ) return null;
@@ -869,7 +875,8 @@ function bindAlpineProjection(
     if (
       source === undefined
       || projected === null
-      || stableStringify(projected) !== stableStringify(raw.patch)
+      || (projected !== raw.patch
+        && stableStringify(projected) !== stableStringify(raw.patch))
       || projected.patchKey !== source.sourceKey
       || projected.updatedAtTick !== state.updatedAtTick
       || sourceLineageHash(projected) !== source.lineageHash
@@ -1206,7 +1213,8 @@ function projectedMaterializationPlanIsHonored(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) return false;
     outputBySource.set(raw.sourceKey, patch);

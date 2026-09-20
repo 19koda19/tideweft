@@ -208,8 +208,10 @@ export function createRegionalEcologyStateV6(
   if (
     base === null
     || breadthRoot === null
-    || stableStringify(base) !== stableStringify(input.base)
-    || stableStringify(breadthRoot) !== stableStringify(input.breadthRoot)
+    || (base !== input.base
+      && stableStringify(base) !== stableStringify(input.base))
+    || (breadthRoot !== input.breadthRoot
+      && stableStringify(breadthRoot) !== stableStringify(input.breadthRoot))
     || breadthRoot.updatedAtTick !== base.updatedAtTick
     || breadthRoot.seedFingerprint !== base.polarConsumerRoot.seedFingerprint
   ) {
@@ -588,7 +590,8 @@ export function bindRegionalEcologyStateV6ActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) return null;
     const resident = Object.freeze({ sourceKey: raw.sourceKey, patch });
@@ -1018,7 +1021,8 @@ function bindBreadthProjection(
     if (
       source === undefined
       || projected === null
-      || stableStringify(projected) !== stableStringify(raw.patch)
+      || (projected !== raw.patch
+        && stableStringify(projected) !== stableStringify(raw.patch))
       || projected.patchKey !== source.sourceKey
       || projected.updatedAtTick !== state.updatedAtTick
       || sourceLineageHash(projected) !== source.lineageHash
@@ -1432,7 +1436,8 @@ function canonicalResidentOutputMap(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
       || (tick !== undefined && patch.updatedAtTick !== tick)
     ) return null;

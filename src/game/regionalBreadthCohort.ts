@@ -202,7 +202,7 @@ export function canonicalCoreEcologyBreadthResidentPatch(
   const derivation = patch?.derivation;
   if (
     patch === null
-    || stableStringify(patch) !== stableStringify(value)
+    || (patch !== value && stableStringify(patch) !== stableStringify(value))
     || patch.updatedAtTick !== binding.completedTick
     || patch.originRegion.x !== binding.region.x
     || patch.originRegion.y !== binding.region.y

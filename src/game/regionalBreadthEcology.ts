@@ -881,7 +881,7 @@ function canonicalDeltaPatch(
   }> | undefined;
   if (
     patch === null
-    || stableStringify(patch) !== stableStringify(value)
+    || (patch !== value && stableStringify(patch) !== stableStringify(value))
     || derivation?.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND
     || derivation.habitat?.cohortId !== cohortId
     || derivation.habitat.derivationHash !== baselineHash

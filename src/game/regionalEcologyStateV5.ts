@@ -192,8 +192,10 @@ export function createRegionalEcologyStateV5(
   if (
     base === null
     || polarConsumerRoot === null
-    || stableStringify(base) !== stableStringify(input.base)
-    || stableStringify(polarConsumerRoot) !== stableStringify(input.polarConsumerRoot)
+    || (base !== input.base
+      && stableStringify(base) !== stableStringify(input.base))
+    || (polarConsumerRoot !== input.polarConsumerRoot
+      && stableStringify(polarConsumerRoot) !== stableStringify(input.polarConsumerRoot))
     || polarConsumerRoot.updatedAtTick !== base.updatedAtTick
     || polarConsumerRoot.seedFingerprint !== base.coldShoreRoot.seedFingerprint
   ) {
@@ -524,7 +526,8 @@ export function bindRegionalEcologyStateV5ActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) {
       return null;
@@ -632,7 +635,8 @@ export function commitRegionalEcologyStateV5ActiveProjection(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
       || patch.updatedAtTick !== base.updatedAtTick
     ) {
@@ -978,7 +982,8 @@ function bindPolarConsumerProjection(
     if (
       source === undefined
       || projected === null
-      || stableStringify(projected) !== stableStringify(raw.patch)
+      || (projected !== raw.patch
+        && stableStringify(projected) !== stableStringify(raw.patch))
       || projected.patchKey !== source.sourceKey
       || projected.updatedAtTick !== state.updatedAtTick
       || sourceLineageHash(projected) !== source.lineageHash
@@ -1447,7 +1452,8 @@ function projectedMaterializationTransitionIsHonored(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) {
       return false;
@@ -1511,7 +1517,8 @@ function projectedMaterializationSelectionIsHonored(
     const patch = canonicalizeCoreEcologyAggregatePatch(raw.patch);
     if (
       patch === null
-      || stableStringify(patch) !== stableStringify(raw.patch)
+      || (patch !== raw.patch
+        && stableStringify(patch) !== stableStringify(raw.patch))
       || patch.patchKey !== raw.sourceKey
     ) {
       return false;

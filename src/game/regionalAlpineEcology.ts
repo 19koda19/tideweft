@@ -565,7 +565,11 @@ function canonicalAlpinePatchShape(
   // the shared patch and Alpine shape here; the world-bound pass below does the
   // authoritative identity check.
   const structural = canonicalizeCoreEcologyAggregatePatch(value);
-  if (structural === null || stableStringify(structural) !== stableStringify(value)) return null;
+  if (
+    structural === null
+    || (!Object.is(structural, value)
+      && stableStringify(structural) !== stableStringify(value))
+  ) return null;
   const derivation = structural.derivation as unknown as Readonly<{
     readonly kind?: unknown;
     readonly habitat?: Readonly<{ readonly derivationHash?: unknown }>;
