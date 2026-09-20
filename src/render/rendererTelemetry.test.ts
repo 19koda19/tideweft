@@ -213,6 +213,8 @@ describe("renderer telemetry", () => {
     const tracker = createRendererTelemetry();
     const snapshot = tracker.recordFrame(0, {
       terrainTiles: 12.9,
+      perceptionMaterialSubmissions: 4.9,
+      perceptionMaterialSegments: 11.8,
       projectedEntityCandidates: -3,
       labels: Number.MAX_SAFE_INTEGER,
       particles: 8,
@@ -220,6 +222,8 @@ describe("renderer telemetry", () => {
 
     expect(snapshot).toMatchObject({
       terrainTiles: 12,
+      perceptionMaterialSubmissions: 4,
+      perceptionMaterialSegments: 11,
       projectedEntityCandidates: 0,
       labels: RENDERER_TELEMETRY_MAX_DRAW_COUNT,
       particles: 8,
@@ -228,12 +232,16 @@ describe("renderer telemetry", () => {
 
     const malformedCounts = {
       terrainTiles: 9,
+      perceptionMaterialSubmissions: Number.NaN,
+      perceptionMaterialSegments: Number.POSITIVE_INFINITY,
       projectedEntityCandidates: Number.NaN,
       labels: Number.POSITIVE_INFINITY,
       particles: "many",
     } as unknown as RendererWorkCounts;
     expect(tracker.recordFrame(16, malformedCounts)).toMatchObject({ terrainTiles: 9 });
     expect(tracker.getSnapshot()).not.toHaveProperty("projectedEntityCandidates");
+    expect(tracker.getSnapshot()).not.toHaveProperty("perceptionMaterialSubmissions");
+    expect(tracker.getSnapshot()).not.toHaveProperty("perceptionMaterialSegments");
     expect(tracker.getSnapshot()).not.toHaveProperty("labels");
     expect(tracker.getSnapshot()).not.toHaveProperty("particles");
   });

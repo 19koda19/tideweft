@@ -11,6 +11,10 @@ const MAX_REPORTED_FPS = 1_000;
 
 export interface RendererWorkCounts {
   readonly terrainTiles?: number;
+  /** Immediate Relief perception material submissions after visible-chunk coalescing. */
+  readonly perceptionMaterialSubmissions?: number;
+  /** Visible chunk-local segments consumed by those perception submissions. */
+  readonly perceptionMaterialSegments?: number;
   /** Projected entity records considered by render passes, before pass-local culling. */
   readonly projectedEntityCandidates?: number;
   readonly labels?: number;
@@ -69,11 +73,17 @@ function boundedCount(value: unknown): number | undefined {
 function boundedCounts(counts: RendererWorkCounts | undefined): RendererWorkCounts {
   if (!counts || typeof counts !== "object") return {};
   const terrainTiles = boundedCount(counts.terrainTiles);
+  const perceptionMaterialSubmissions = boundedCount(counts.perceptionMaterialSubmissions);
+  const perceptionMaterialSegments = boundedCount(counts.perceptionMaterialSegments);
   const projectedEntityCandidates = boundedCount(counts.projectedEntityCandidates);
   const labels = boundedCount(counts.labels);
   const particles = boundedCount(counts.particles);
   return {
     ...(terrainTiles === undefined ? {} : { terrainTiles }),
+    ...(perceptionMaterialSubmissions === undefined
+      ? {}
+      : { perceptionMaterialSubmissions }),
+    ...(perceptionMaterialSegments === undefined ? {} : { perceptionMaterialSegments }),
     ...(projectedEntityCandidates === undefined ? {} : { projectedEntityCandidates }),
     ...(labels === undefined ? {} : { labels }),
     ...(particles === undefined ? {} : { particles }),

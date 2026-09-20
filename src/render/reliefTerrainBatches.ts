@@ -27,6 +27,35 @@ export interface ReliefPerceptionMaterialBatch extends ReliefMaterialBatch {
   readonly currentLocalIllumination: number;
 }
 
+/**
+ * One chunk's already-validated transient material batches. The coalescer uses
+ * the source-array position as the stable chunk index so the renderer can cull
+ * that chunk against the current camera without rebuilding presentation data.
+ */
+export interface ReliefPerceptionChunkMaterialSource {
+  readonly materials: readonly ReliefPerceptionMaterialBatch[];
+}
+
+/** One chunk-local index segment retained under a cross-chunk material group. */
+export interface ReliefPerceptionMaterialSegment {
+  readonly chunkIndex: number;
+  readonly indices: readonly number[];
+}
+
+/**
+ * Exact effective transient material state plus its deterministic chunk-local
+ * segments. Indices remain local to the chunk identified by each segment.
+ */
+export interface ReliefPerceptionMaterialGroup {
+  readonly kind: TerrainKind;
+  readonly biome?: BiomeId;
+  readonly environment: number;
+  readonly visibility: number;
+  readonly currentVisibility: number;
+  readonly currentLocalIllumination: number;
+  readonly segments: readonly ReliefPerceptionMaterialSegment[];
+}
+
 /** Transient sight uses a small, visibly smooth set of lightness steps. */
 export const RELIEF_PERCEPTION_VISIBILITY_BANDS = TERRAIN_PERCEPTION_MEMORY_BANDS;
 export const RELIEF_LOCAL_ILLUMINATION_BANDS = 3;
@@ -38,6 +67,51 @@ export const RELIEF_LOCAL_ILLUMINATION_BANDS = 3;
  */
 export const MAX_RELIEF_PERCEPTION_MATERIAL_BATCHES_PER_CHUNK =
   RELIEF_PERCEPTION_VISIBILITY_BANDS * 17 * (RELIEF_LOCAL_ILLUMINATION_BANDS + 1);
+
+/**
+ * Coalesces chunk-local transient batches by the exact material state the
+ * Relief renderer applies. No geometry is flattened: every source batch
+ * becomes one ordered segment that retains its original chunk-local indices.
+ *
+ * Group order is the order in which each material is first encountered while
+ * traversing chunks and their material arrays. Segment order follows that same
+ * traversal. This function owns no camera, frame, or GPU state; callers remain
+ * responsible for culling `segment.chunkIndex` before emitting its indices.
+ */
+export function coalesceReliefPerceptionMaterialBatches(
+  chunks: readonly ReliefPerceptionChunkMaterialSource[],
+): readonly ReliefPerceptionMaterialGroup[] {
+  const groups = new Map<string, {
+    kind: TerrainKind;
+    biome?: BiomeId;
+    environment: number;
+    visibility: number;
+    currentVisibility: number;
+    currentLocalIllumination: number;
+    segments: ReliefPerceptionMaterialSegment[];
+  }>();
+
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+    const chunk = chunks[chunkIndex];
+    if (!chunk) continue;
+    for (const material of chunk.materials) {
+      const key = reliefPerceptionEffectiveMaterialKey(material);
+      const group = groups.get(key) ?? {
+        kind: material.kind,
+        ...(material.biome ? { biome: material.biome } : {}),
+        environment: material.environment,
+        visibility: material.visibility,
+        currentVisibility: material.currentVisibility,
+        currentLocalIllumination: material.currentLocalIllumination,
+        segments: [],
+      };
+      group.segments.push({ chunkIndex, indices: material.indices });
+      groups.set(key, group);
+    }
+  }
+
+  return [...groups.values()];
+}
 
 /**
  * Groups one chunk's triangles by material without ever drawing uncharted land.
@@ -192,4 +266,22 @@ function visibleTerrainKind(
   const wet = Number.isFinite(source?.waterDepth) && (source?.waterDepth ?? 0) > 0;
   const waterTerrain = fallback === "deep-water" || fallback === "channel" || fallback === "shallows";
   return wet && waterTerrain && !isWaterDepthDisclosed(source) ? "channel" : fallback;
+}
+
+function reliefPerceptionEffectiveMaterialKey(
+  material: Omit<ReliefPerceptionMaterialBatch, "indices">,
+): string {
+  // Non-built biome presentation is the complete authored surface-color
+  // identity; its underlying terrain kind is deliberately immaterial. Built
+  // surfaces and legacy/no-biome surfaces retain their terrain-kind identity.
+  const surfaceIdentity = material.kind === "built" || material.biome === undefined
+    ? ["kind", material.kind]
+    : ["biome", material.biome];
+  return JSON.stringify([
+    ...surfaceIdentity,
+    material.environment,
+    material.visibility,
+    material.currentVisibility,
+    material.currentLocalIllumination,
+  ]);
 }

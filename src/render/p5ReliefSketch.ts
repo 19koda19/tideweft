@@ -17,8 +17,10 @@ import {
 import {
   buildReliefMaterialBatches,
   buildReliefPerceptionMaterialBatches,
+  coalesceReliefPerceptionMaterialBatches,
   type ReliefMaterialBatch,
   type ReliefPerceptionMaterialBatch,
+  type ReliefPerceptionMaterialGroup,
 } from "./reliefTerrainBatches";
 import {
   buildReliefWaterMaterialBatches,
@@ -424,6 +426,13 @@ interface ReliefPerceptionChunkBatch {
 interface CachedReliefPerception {
   readonly key: string;
   readonly chunks: readonly ReliefPerceptionChunkBatch[];
+  readonly materials: readonly ReliefPerceptionMaterialGroup[];
+}
+
+interface ReliefTerrainDrawResult {
+  readonly terrainTiles: number;
+  readonly perceptionMaterialSubmissions: number;
+  readonly perceptionMaterialSegments: number;
 }
 
 interface ScanRipple {
@@ -2192,16 +2201,18 @@ export function createTideweftReliefRenderer(
       String(view.terrain.currentLocalIlluminationRevision ?? "legacy-unlit"),
     ]);
     if (cachedPerception?.key === key) return cachedPerception;
+    const chunks = mesh.perceptionMesh.chunks.map((chunk) => ({
+      chunk,
+      materials: buildReliefPerceptionMaterialBatches(
+        chunk,
+        view.terrain,
+        terrainMemory.values,
+      ),
+    }));
     cachedPerception = {
       key,
-      chunks: mesh.perceptionMesh.chunks.map((chunk) => ({
-        chunk,
-        materials: buildReliefPerceptionMaterialBatches(
-          chunk,
-          view.terrain,
-          terrainMemory.values,
-        ),
-      })),
+      chunks,
+      materials: coalesceReliefPerceptionMaterialBatches(chunks),
     };
     return cachedPerception;
   };
@@ -2258,6 +2269,7 @@ export function createTideweftReliefRenderer(
     discardRetainedTerrainGeometry = () => {
       durableTerrainGeometry.discard();
     };
+    let perceptionChunkVisibility = new Uint8Array(0);
 
     const withAlpha = (hex: string, alpha: number): p5.Color => {
       const color = p.color(hex);
@@ -2266,7 +2278,7 @@ export function createTideweftReliefRenderer(
     };
 
     const materialColor = (
-      material: ReliefMaterialBatch,
+      material: Omit<ReliefMaterialBatch, "indices">,
       fog: number,
       memoryOnly = false,
       currentVisibility = 1,
@@ -2321,9 +2333,11 @@ export function createTideweftReliefRenderer(
       camera: ReliefCameraState,
       terrainMemory: TerrainPerceptionMemoryState,
       trackCounts: boolean,
-    ): number => {
+    ): ReliefTerrainDrawResult => {
       const viewport = { width: p.width, height: p.height };
       let drawnTiles = 0;
+      let perceptionMaterialSubmissions = 0;
+      let perceptionMaterialSegments = 0;
       p.noStroke();
       durableTerrainGeometry.begin(cache);
       for (const batch of cache.chunks) {
@@ -2347,42 +2361,71 @@ export function createTideweftReliefRenderer(
       }
 
       const perception = ensurePerceptionSurface(view, cache, terrainMemory);
-      if (!perception) return drawnTiles;
+      if (!perception) {
+        return {
+          terrainTiles: drawnTiles,
+          perceptionMaterialSubmissions,
+          perceptionMaterialSegments,
+        };
+      }
       // Re-light only the small current sensory footprint. This overlay is
       // cached by perception signature and never invalidates the durable mesh.
       // Keep this height field depth-writing: translucent overlapping
       // triangles accumulate into a bright silhouette in an oblique camera.
       // Visibility is instead eased in RGB all the way to the background ink.
-      for (const batch of perception.chunks) {
-        if (!reliefBoundsVisible(batch.chunk.bounds, camera, viewport, view.terrain.tileSize * 2)) continue;
-        for (const material of batch.materials) {
-          if (trackCounts) drawnTiles += Math.floor(material.indices.length / 6);
-          const surfaceColor = materialColor(
-            material,
-            0,
-            false,
-            material.currentVisibility,
-            material.currentLocalIllumination,
-          );
-          const emission = outdoorLocalLightEmission(material.currentLocalIllumination);
-          p.emissiveMaterial(emission.red, emission.green, emission.blue);
-          p.fill(surfaceColor);
-          p.ambientMaterial(surfaceColor);
-          // The eased sensory overlay changes with perception and local-light
-          // bands. Keep it immediate until a separately measured bounded
-          // retained representation can avoid rebuild/free bursts.
-          p.beginShape(p.TRIANGLES);
-          for (const index of material.indices) {
-            const vertex = batch.chunk.vertices[index];
+      if (perceptionChunkVisibility.length !== perception.chunks.length) {
+        perceptionChunkVisibility = new Uint8Array(perception.chunks.length);
+      }
+      for (let chunkIndex = 0; chunkIndex < perception.chunks.length; chunkIndex += 1) {
+        const chunk = perception.chunks[chunkIndex]?.chunk;
+        perceptionChunkVisibility[chunkIndex] = chunk && reliefBoundsVisible(
+          chunk.bounds,
+          camera,
+          viewport,
+          view.terrain.tileSize * 2,
+        ) ? 1 : 0;
+      }
+      for (const material of perception.materials) {
+        let shapeStarted = false;
+        for (const segment of material.segments) {
+          if (perceptionChunkVisibility[segment.chunkIndex] !== 1) continue;
+          const chunk = perception.chunks[segment.chunkIndex]?.chunk;
+          if (!chunk) continue;
+          if (!shapeStarted) {
+            const surfaceColor = materialColor(
+              material,
+              0,
+              false,
+              material.currentVisibility,
+              material.currentLocalIllumination,
+            );
+            const emission = outdoorLocalLightEmission(material.currentLocalIllumination);
+            p.emissiveMaterial(emission.red, emission.green, emission.blue);
+            p.fill(surfaceColor);
+            p.ambientMaterial(surfaceColor);
+            p.beginShape(p.TRIANGLES);
+            shapeStarted = true;
+            if (trackCounts) perceptionMaterialSubmissions += 1;
+          }
+          if (trackCounts) {
+            drawnTiles += Math.floor(segment.indices.length / 6);
+            perceptionMaterialSegments += 1;
+          }
+          for (const index of segment.indices) {
+            const vertex = chunk.vertices[index];
             if (!vertex) continue;
             p.normal(vertex.normal.x, -vertex.normal.z, vertex.normal.y);
             p.vertex(vertex.x, -vertex.z - 0.12, vertex.y);
           }
-          p.endShape();
         }
+        if (shapeStarted) p.endShape();
       }
       p.emissiveMaterial(0, 0, 0);
-      return drawnTiles;
+      return {
+        terrainTiles: drawnTiles,
+        perceptionMaterialSubmissions,
+        perceptionMaterialSegments,
+      };
     };
 
     const drawBiomeDetails = (view: TideweftView, cache: CachedReliefMesh): void => {
@@ -6334,7 +6377,7 @@ export function createTideweftReliefRenderer(
       terrainMemory: TerrainPerceptionMemoryState,
       now: number,
       trackCounts: boolean,
-    ): number => {
+    ): ReliefTerrainDrawResult => {
       const camera = currentCameraState();
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       setCamera(camera);
@@ -6361,7 +6404,7 @@ export function createTideweftReliefRenderer(
         0.2,
         -outdoorLight.keyDirection.z,
       );
-      const terrainTiles = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
+      const terrain = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
       drawFieldResources(view, cache);
@@ -6383,7 +6426,7 @@ export function createTideweftReliefRenderer(
       setCamera(camera);
       drawWind(view.weather, now);
       drawRain(view.weather, now);
-      return terrainTiles;
+      return terrain;
     };
 
     p.setup = (): void => {
@@ -6439,6 +6482,8 @@ export function createTideweftReliefRenderer(
           detailedTelemetry
             ? {
                 terrainTiles: 0,
+                perceptionMaterialSubmissions: 0,
+                perceptionMaterialSegments: 0,
                 projectedEntityCandidates: 0,
                 labels: labelNodes.size,
                 particles: 0,
@@ -6462,7 +6507,7 @@ export function createTideweftReliefRenderer(
       const mesh = ensureMesh(latestView);
       advanceHeldOrbit(now);
       updateCamera(latestView, now, mesh.mesh);
-      const terrainTiles = drawScene(
+      const terrain = drawScene(
         latestView,
         mesh,
         terrainMemory,
@@ -6474,7 +6519,9 @@ export function createTideweftReliefRenderer(
         drawStartedAt,
         detailedTelemetry
           ? {
-              terrainTiles,
+              terrainTiles: terrain.terrainTiles,
+              perceptionMaterialSubmissions: terrain.perceptionMaterialSubmissions,
+              perceptionMaterialSegments: terrain.perceptionMaterialSegments,
               projectedEntityCandidates: projectedRendererEntityCandidateCount(latestView),
               labels: labelNodes.size,
               // Relief currently has no generic ParticleView submission pass.

@@ -6,6 +6,8 @@ import {
   RELIEF_PERCEPTION_VISIBILITY_BANDS,
   buildReliefMaterialBatches,
   buildReliefPerceptionMaterialBatches,
+  coalesceReliefPerceptionMaterialBatches,
+  type ReliefPerceptionMaterialBatch,
 } from "./reliefTerrainBatches";
 import { buildTerrainMesh } from "./terrainMesh";
 import { currentTerrainDetailVisibility } from "./perceptionPresentation";
@@ -398,5 +400,118 @@ describe("Relief terrain material batches", () => {
     expect(batches.every((batch) => batch.environment === 0.5)).toBe(true);
     expect(new Set(batches.map(({ currentLocalIllumination }) => currentLocalIllumination)))
       .toEqual(new Set([0, 1 / 3, 2 / 3, 1]));
+  });
+});
+
+describe("cross-chunk Relief perception material coalescing", () => {
+  const material = (
+    indices: readonly number[],
+    overrides: Partial<ReliefPerceptionMaterialBatch> = {},
+  ): ReliefPerceptionMaterialBatch => ({
+    kind: "meadow",
+    environment: 0.5,
+    visibility: 0.75,
+    currentVisibility: 0.75,
+    currentLocalIllumination: 1 / 3,
+    indices,
+    ...overrides,
+  });
+
+  it("groups exact effective materials in first-seen order and preserves ordered chunk segments", () => {
+    const rainFirst = material([0, 1, 2, 3, 4, 5], { biome: "rain-meadow" });
+    const locallyLit = material([6, 7, 8, 9, 10, 11], {
+      biome: "rain-meadow",
+      currentLocalIllumination: 2 / 3,
+    });
+    const ridge = material([12, 13, 14, 15, 16, 17], {
+      kind: "ridge",
+    });
+    // A biome is the complete effective surface identity, so the underlying
+    // kind may differ without changing the authored transient material.
+    const rainSecond = material([18, 19, 20, 21, 22, 23], {
+      kind: "salt-marsh",
+      biome: "rain-meadow",
+    });
+    const rainThird = material([24, 25, 26, 27, 28, 29], { biome: "rain-meadow" });
+    const chunks = [
+      { materials: [rainFirst, locallyLit] },
+      { materials: [ridge, rainSecond] },
+      { materials: [rainThird] },
+    ] as const;
+
+    const groups = coalesceReliefPerceptionMaterialBatches(chunks);
+
+    expect(groups).toHaveLength(3);
+    expect(groups.map(({ biome, kind, currentLocalIllumination }) => ({
+      identity: biome ?? kind,
+      currentLocalIllumination,
+    }))).toEqual([
+      { identity: "rain-meadow", currentLocalIllumination: 1 / 3 },
+      { identity: "rain-meadow", currentLocalIllumination: 2 / 3 },
+      { identity: "ridge", currentLocalIllumination: 1 / 3 },
+    ]);
+    expect(groups[0]?.segments).toEqual([
+      { chunkIndex: 0, indices: rainFirst.indices },
+      { chunkIndex: 1, indices: rainSecond.indices },
+      { chunkIndex: 2, indices: rainThird.indices },
+    ]);
+    expect(groups[1]?.segments).toEqual([
+      { chunkIndex: 0, indices: locallyLit.indices },
+    ]);
+    expect(groups[2]?.segments).toEqual([
+      { chunkIndex: 1, indices: ridge.indices },
+    ]);
+  });
+
+  it("keeps every effective material field exact", () => {
+    const groups = coalesceReliefPerceptionMaterialBatches([{
+      materials: [
+        material([0]),
+        material([1], { biome: "sun-meadow" }),
+        material([2], { environment: 0.25 }),
+        material([3], { visibility: 0.5 }),
+        material([4], { currentVisibility: 0.5 }),
+        material([5], { currentLocalIllumination: 2 / 3 }),
+        material([6], { kind: "built" }),
+        material([7], { kind: "ridge" }),
+      ],
+    }]);
+
+    expect(groups).toHaveLength(8);
+    expect(groups.flatMap(({ segments }) => segments.flatMap(({ indices }) => indices)))
+      .toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it("retains every input index exactly once without mutating or copying input segments", () => {
+    const first = material([31, 32, 33]);
+    const second = material([41, 42]);
+    const third = material([51, 52, 53, 54], { currentVisibility: 0.5 });
+    const chunks = [
+      { materials: [first] },
+      { materials: [second, third] },
+    ] as const;
+    const before = chunks.map(({ materials }) => ({
+      materials: materials.map((entry) => ({ ...entry, indices: [...entry.indices] })),
+    }));
+
+    const groups = coalesceReliefPerceptionMaterialBatches(chunks);
+    const outputIndices = groups.flatMap(({ segments }) =>
+      segments.flatMap(({ indices }) => indices)
+    );
+
+    expect([...outputIndices].sort((left, right) => left - right)).toEqual([
+      31, 32, 33, 41, 42, 51, 52, 53, 54,
+    ]);
+    expect(new Set(outputIndices).size).toBe(outputIndices.length);
+    expect(chunks).toEqual(before);
+    expect(groups[0]?.segments[0]?.indices).toBe(first.indices);
+    expect(groups[0]?.segments[1]?.indices).toBe(second.indices);
+    expect(groups[1]?.segments[0]?.indices).toBe(third.indices);
+    expect(coalesceReliefPerceptionMaterialBatches(chunks)).toEqual(groups);
+  });
+
+  it("returns no groups when no chunk supplies transient material", () => {
+    expect(coalesceReliefPerceptionMaterialBatches([])).toEqual([]);
+    expect(coalesceReliefPerceptionMaterialBatches([{ materials: [] }])).toEqual([]);
   });
 });

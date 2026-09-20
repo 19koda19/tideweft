@@ -542,7 +542,10 @@ function pointer(
   };
 }
 
-function renderHarness(initial: TideweftView) {
+function renderHarness(
+  initial: TideweftView,
+  options: { readonly chunkSize?: number } = {},
+) {
   const mount = new FakeElement();
   const canvas = new FakeCanvas();
   const documentTarget = new FakeDocument();
@@ -558,6 +561,7 @@ function renderHarness(initial: TideweftView) {
     mount: mount as unknown as HTMLElement,
     getView: () => current,
     dispatch,
+    ...options,
   });
   const instance = p5Harness.instances.at(-1);
   if (!instance) throw new Error("Relief p5 harness did not create an instance");
@@ -670,6 +674,127 @@ describe("Relief renderer telemetry", () => {
     freeGeometry.mockClear();
     harness.renderer.destroy();
     expect(freeGeometry.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("coalesces exact perception materials across visible chunks without merging local light", () => {
+    const base = view("perception-material-coalescing", { x: 48, y: 48 });
+    const perception = {
+      version: 1,
+      signature: "uniform-perception",
+      valid: true,
+      visibleTileCount: 16,
+      directTileCount: 16,
+      peripheralTileCount: 0,
+      detailVisibleTileCount: 16,
+      detailDirectTileCount: 16,
+      detailPeripheralTileCount: 0,
+    } as const;
+    const uniform: TideweftView = {
+      ...base,
+      perception,
+      terrain: {
+        ...base.terrain,
+        currentLocalIlluminationRevision: "uniform-dark",
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+    };
+    const harness = renderHarness(uniform, { chunkSize: 2 });
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const beginShape = harness.instance.beginShape as ReturnType<typeof vi.fn>;
+    const endShape = harness.instance.endShape as ReturnType<typeof vi.fn>;
+
+    // Warm durable retained geometry, then establish the frame's unrelated
+    // immediate-shape baseline before isolating perception submissions.
+    harness.draw();
+    beginShape.mockClear();
+    endShape.mockClear();
+    const { perception: _perception, ...withoutPerception } = uniform;
+    harness.setView(withoutPerception);
+    harness.draw();
+    const baselineBeginShapes = beginShape.mock.calls.length;
+    const baselineEndShapes = endShape.mock.calls.length;
+    beginShape.mockClear();
+    endShape.mockClear();
+    harness.setView(uniform);
+    harness.draw();
+    expect(beginShape).toHaveBeenCalledTimes(baselineBeginShapes + 1);
+    expect(endShape).toHaveBeenCalledTimes(baselineEndShapes + 1);
+    expect(harness.renderer.telemetry()).toMatchObject({
+      terrainTiles: 32,
+      perceptionMaterialSubmissions: 1,
+      perceptionMaterialSegments: 4,
+    });
+
+    harness.setView({
+      ...uniform,
+      perception: { ...perception, signature: "top-left-lit" },
+      terrain: {
+        ...uniform.terrain,
+        currentLocalIlluminationRevision: "top-left-lit",
+        tiles: uniform.terrain.tiles.map((tile, index) => ({
+          ...tile,
+          currentLocalIllumination: [0, 1, 4, 5].includes(index) ? 1 : 0,
+        })),
+      },
+    });
+    beginShape.mockClear();
+    endShape.mockClear();
+    harness.draw();
+    expect(beginShape).toHaveBeenCalledTimes(baselineBeginShapes + 2);
+    expect(endShape).toHaveBeenCalledTimes(baselineEndShapes + 2);
+    expect(harness.renderer.telemetry()).toMatchObject({
+      terrainTiles: 32,
+      perceptionMaterialSubmissions: 2,
+      perceptionMaterialSegments: 4,
+    });
+
+    const columns = 64;
+    const rows = 4;
+    const wide: TideweftView = {
+      ...uniform,
+      perception: {
+        ...perception,
+        signature: "wide-uniform-perception",
+        visibleTileCount: columns * rows,
+        directTileCount: columns * rows,
+        detailVisibleTileCount: columns * rows,
+        detailDirectTileCount: columns * rows,
+      },
+      terrain: {
+        ...uniform.terrain,
+        columns,
+        rows,
+        revision: "wide-uniform-perception",
+        currentLocalIlluminationRevision: "wide-uniform-dark",
+        tiles: Array.from({ length: columns * rows }, () => ({
+          kind: "meadow" as const,
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+      camera: {
+        ...uniform.camera,
+        bounds: { minX: 0, minY: 0, maxX: columns * 24, maxY: rows * 24 },
+      },
+    };
+    harness.setView(wide);
+    harness.draw();
+    const culled = harness.renderer.telemetry();
+    const visibleSegments = culled.perceptionMaterialSegments ?? 0;
+    const totalChunks = (columns / 2) * (rows / 2);
+    expect(culled.perceptionMaterialSubmissions).toBe(1);
+    expect(visibleSegments).toBeGreaterThan(0);
+    expect(visibleSegments).toBeLessThan(totalChunks);
+    expect(culled.terrainTiles).toBe(visibleSegments * 8);
+    harness.renderer.destroy();
   });
 });
 
