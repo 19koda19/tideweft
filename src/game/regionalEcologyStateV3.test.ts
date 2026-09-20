@@ -447,6 +447,82 @@ describe(`${ALPHA34_POLAR_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} regional eco
     )).toBe(stableStringify(polarOutputs.map(({ patch }) => patch)));
   });
 
+  it("commits a tick-advancing durable polar output byte-identically through receipt and reload fallback", () => {
+    const sourceTick = 138;
+    const targetTick = sourceTick + 1;
+    const receiptState = createFreshRegionalEcologyStateV3(
+      fixtureAtTick(sourceTick).v2,
+      SEED,
+    );
+    const fallbackState = deserializeRegionalEcologyStateV3(
+      serializeRegionalEcologyStateV3(receiptState),
+    );
+    if (fallbackState === null) {
+      throw new Error("Polar receipt integration fixture did not reload");
+    }
+
+    const commitDurable = (state: RegionalEcologyStateV3) => {
+      const projection = projectionOf(state);
+      const polarOutputs = projection.polarShoreResidents.map(({ patch }, index) => {
+        const advanced = reconcileCoreEcologyPolarShoreResidentPatchAtTick(
+          patch,
+          targetTick,
+        );
+        const school = advanced?.aggregatePopulations[0];
+        if (advanced === null || school === undefined) {
+          throw new Error("Polar receipt integration output did not advance");
+        }
+        if (index !== 0) {
+          return Object.freeze({ sourceKey: advanced.patchKey, patch: advanced });
+        }
+        const intensity = school.activitySignal.intensity === 1_000_000
+          ? 999_999
+          : school.activitySignal.intensity + 1;
+        const changed = setCoreEcologyAggregateActivityIntensity(advanced, {
+          aggregateId: school.aggregateId,
+          atTick: targetTick,
+          intensity,
+        });
+        if (changed === null) {
+          throw new Error("Polar receipt integration deviation was rejected");
+        }
+        return Object.freeze({ sourceKey: changed.patchKey, patch: changed });
+      });
+      return commitRegionalEcologyStateV3ActiveProjection(state, projection, {
+        base: {
+          base: {
+            root: advanceRegionalEcologyRoot(state.base.base.root, targetTick),
+            rootSeed: SEED,
+            settlementHome: null,
+            residents: projection.base.base.residents.map(({ patch }) => (
+              advanceProjectedPatchWithoutAction(patch, targetTick)
+            )),
+          },
+          alpineResidents: projection.base.alpineResidents.map(({ patch }) => (
+            advanceProjectedPatchWithoutAction(patch, targetTick)
+          )),
+        },
+        polarShoreResidents: polarOutputs,
+      });
+    };
+
+    const fast = commitDurable(receiptState);
+    const fallback = commitDurable(fallbackState);
+    expect(fast).not.toBeNull();
+    expect(fallback).not.toBeNull();
+    expect(serializeRegionalEcologyStateV3(fast))
+      .toBe(serializeRegionalEcologyStateV3(fallback));
+    expect(fast?.updatedAtTick).toBe(targetTick);
+    expect(fast?.polarShoreRoot.revision)
+      .toBe(receiptState.polarShoreRoot.revision + 1);
+    expect(fast?.polarShoreRoot.lastEventOrdinal)
+      .toBe(receiptState.polarShoreRoot.lastEventOrdinal + 1);
+    expect(fast?.polarShoreRoot.regions[0]).toMatchObject({
+      revision: 1,
+      eventOrdinal: 1,
+    });
+  });
+
   it("accepts an unchanged same-tick polar presentation without rewriting sparse authority", () => {
     const state = createFreshRegionalEcologyStateV3(fixture().v2, SEED);
     const projection = projectionOf(state);

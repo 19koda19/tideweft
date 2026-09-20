@@ -38,6 +38,7 @@ import {
 import {
   REGIONAL_POLAR_SHORE_ECOLOGY_MAX_SERIALIZED_BYTES,
   REGIONAL_POLAR_SHORE_ECOLOGY_OWNER_ID,
+  advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt,
   advanceRegionalPolarShoreEcologyRoot,
   canonicalRegionalPolarShoreEcologyRootForWorld,
   canonicalizeRegionalPolarShoreEcologyRoot,
@@ -597,15 +598,6 @@ export function commitRegionalEcologyStateV3ActiveProjection(
   }
   if (base === null || base.updatedAtTick < state.updatedAtTick) return null;
   const rootSeed = input.base.base.rootSeed;
-  let polarShoreRoot: RegionalPolarShoreEcologyRootV1;
-  try {
-    polarShoreRoot = advanceRegionalPolarShoreEcologyRoot(
-      state.polarShoreRoot,
-      base.updatedAtTick,
-    );
-  } catch {
-    return null;
-  }
   const outputBySource = new Map<string, CoreEcologyAggregatePatchState>();
   for (const raw of input.polarShoreResidents) {
     if (
@@ -629,6 +621,7 @@ export function commitRegionalEcologyStateV3ActiveProjection(
     entry.sourceKey,
     entry,
   ]));
+  const durablePolarShoreResidents: CoreEcologyAggregatePatchState[] = [];
   for (const projected of projection.polarShoreResidents) {
     const original = originalBySource.get(projected.sourceKey);
     const output = outputBySource.get(projected.sourceKey);
@@ -660,15 +653,60 @@ export function commitRegionalEcologyStateV3ActiveProjection(
         normalized,
       );
     if (!presentationOnly && !visitationOnly) {
-      try {
-        polarShoreRoot = putRegionalPolarShoreEcologyResidentDeviation(
-          polarShoreRoot,
-          { rootSeed, patch: normalized },
-        );
-      } catch {
-        return null;
-      }
+      durablePolarShoreResidents.push(normalized);
     }
+  }
+
+  // The polar owner can advance the exact prior active lineage and apply all
+  // durable deviations in one source-ordered sparse transaction. Any receipt
+  // miss falls through to the established scalar/full-derivation authority.
+  const fast = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+    state.polarShoreRoot,
+    {
+      rootSeed,
+      completedTick: base.updatedAtTick,
+      activeRegions: base.base.activeRegions,
+      expectedResidents: state.polarShoreActiveResidents.map((resident) => ({
+        sourceKey: resident.sourceKey,
+        region: resident.region,
+        patchHash: resident.patchHash,
+        lineageHash: resident.lineageHash,
+      })),
+      durableResidents: durablePolarShoreResidents.map((patch) => ({
+        sourceKey: patch.patchKey,
+        patch,
+      })),
+    },
+  );
+  if (fast !== null) {
+    try {
+      return createRegionalEcologyStateV3({
+        base,
+        polarShoreRoot: fast.root,
+        polarShoreActiveResidents: fast.residents.map(({ sourceKey, patch }) =>
+          Object.freeze({ sourceKey, patch }),
+        ),
+        adoption: state.adoption,
+      });
+    } catch {
+      // Optional acceleration only; the transaction below remains authority.
+    }
+  }
+
+  let polarShoreRoot: RegionalPolarShoreEcologyRootV1;
+  try {
+    polarShoreRoot = advanceRegionalPolarShoreEcologyRoot(
+      state.polarShoreRoot,
+      base.updatedAtTick,
+    );
+    for (const patch of durablePolarShoreResidents) {
+      polarShoreRoot = putRegionalPolarShoreEcologyResidentDeviation(
+        polarShoreRoot,
+        { rootSeed, patch },
+      );
+    }
+  } catch {
+    return null;
   }
   try {
     const polarShoreActiveResidents = requirePolarShoreActiveResidents(

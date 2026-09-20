@@ -79,11 +79,59 @@ export interface RegionalPolarShoreEcologyActiveResidentInput {
   readonly patch: CoreEcologyAggregatePatchState;
 }
 
+/** Exact prior V3 snapshot custody; runtime output never supplies authority. */
+export interface RegionalPolarShoreEcologyActiveReceiptClaim {
+  readonly sourceKey: string;
+  readonly region: RegionCoord;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+}
+
+export interface RegionalPolarShoreEcologyDurableResidentInput {
+  readonly sourceKey: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+}
+
+export interface AdvanceRegionalPolarShoreEcologyActiveResidentsInput {
+  readonly rootSeed: RootSeed;
+  readonly completedTick: number;
+  readonly activeRegions: readonly RegionCoord[];
+  readonly expectedResidents: readonly RegionalPolarShoreEcologyActiveReceiptClaim[];
+  readonly durableResidents?: readonly RegionalPolarShoreEcologyDurableResidentInput[];
+}
+
+export interface AdvanceRegionalPolarShoreEcologyActiveResidentsResult {
+  readonly root: RegionalPolarShoreEcologyRootV1;
+  readonly residents: readonly RegionalPolarShoreEcologyActiveResidentInput[];
+}
+
 const HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const UINT32_MAX = 0xffff_ffff;
 const UTF8_ENCODER = new TextEncoder();
 const TRUSTED_ROOTS = new WeakSet<object>();
 const WORLD_BOUND_ROOTS = new WeakMap<object, string>();
+
+interface RegionalPolarShoreEcologyActiveReceiptResident {
+  readonly sourceKey: string;
+  readonly regionKey: string;
+  readonly habitatHash: string;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+  readonly patch: CoreEcologyAggregatePatchState;
+}
+
+interface RegionalPolarShoreEcologyActiveReceipt {
+  readonly rootSeed: RootSeed;
+  readonly atTick: number;
+  readonly activeRegionKeys: readonly string[];
+  readonly residents: readonly RegionalPolarShoreEcologyActiveReceiptResident[];
+}
+
+/** One bounded hot-window receipt per exact immutable root identity. */
+const ACTIVE_RESIDENT_RECEIPTS = new WeakMap<
+  object,
+  RegionalPolarShoreEcologyActiveReceipt
+>();
 
 export function createPristineRegionalPolarShoreEcologyRoot(
   binding: RegionalPolarShoreEcologyWorldBinding,
@@ -605,11 +653,295 @@ export function regionalPolarShoreEcologyResidentsForActiveRegions(
     )
       return null;
   }
-  return Object.freeze(
+  const residents = Object.freeze(
     [...bySource.values()].sort((left, right) =>
       compareText(left.sourceKey, right.sourceKey),
     ),
   );
+  seedActiveResidentReceipt(root, rootSeed, activeRegions, residents);
+  return residents;
+}
+
+/**
+ * Advances one exact active polar-shore set from this owner's private prior
+ * derivation. Durable outputs are rebound and committed in source-key order;
+ * presentation or visitation output is never accepted as authority. Any
+ * custody miss returns null so callers retain the ordinary scalar transaction.
+ */
+export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+  value: unknown,
+  input: AdvanceRegionalPolarShoreEcologyActiveResidentsInput,
+): AdvanceRegionalPolarShoreEcologyActiveResidentsResult | null {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !plainRecord(input) ||
+    (!exactKeys(input, [
+      "activeRegions",
+      "completedTick",
+      "expectedResidents",
+      "rootSeed",
+    ]) &&
+      !exactKeys(input, [
+        "activeRegions",
+        "completedTick",
+        "durableResidents",
+        "expectedResidents",
+        "rootSeed",
+      ])) ||
+    !Array.isArray(input.activeRegions) ||
+    !Array.isArray(input.expectedResidents) ||
+    (input.durableResidents !== undefined &&
+      !Array.isArray(input.durableResidents)) ||
+    !nonnegativeSafeInteger(input.completedTick)
+  )
+    return null;
+  const receipt = ACTIVE_RESIDENT_RECEIPTS.get(value);
+  if (receipt === undefined) return null;
+  const activeRegions = canonicalRegionsOrNull(input.activeRegions);
+  const claims = canonicalActiveReceiptClaimsOrNull(input.expectedResidents);
+  if (
+    activeRegions === null ||
+    activeRegions.length === 0 ||
+    activeRegions.length > REGIONAL_POLAR_SHORE_ECOLOGY_ACTIVE_REGION_LIMIT ||
+    claims === null ||
+    !sameRootSeed(input.rootSeed, receipt.rootSeed) ||
+    input.completedTick < receipt.atTick ||
+    !sameTextSequence(activeRegions.map(regionKey), receipt.activeRegionKeys) ||
+    !claimsMatchActiveReceipt(claims, receipt.residents)
+  )
+    return null;
+  const root = canonicalRegionalPolarShoreEcologyRootForWorld(value, {
+    rootSeed: input.rootSeed,
+    completedTick: receipt.atTick,
+  });
+  if (
+    root === null ||
+    root !== value ||
+    root.updatedAtTick !== receipt.atTick
+  )
+    return null;
+
+  try {
+    const batch = applyActiveResidentDeviationBatch(
+      root,
+      input.rootSeed,
+      input.completedTick,
+      input.durableResidents ?? Object.freeze([]),
+      receipt,
+    );
+    if (batch === null) return null;
+    const nextRoot = batch.root;
+    const activeKeys = new Set(activeRegions.map(regionKey));
+    const receiptSourceKeys = new Set(
+      receipt.residents.map(({ sourceKey }) => sourceKey),
+    );
+    const bySource = new Map<
+      string,
+      RegionalPolarShoreEcologyActiveResidentInput
+    >();
+    const admit = (
+      patch: CoreEcologyAggregatePatchState,
+      prior: RegionalPolarShoreEcologyActiveReceiptResident,
+    ): boolean => {
+      if (
+        patch.patchKey !== prior.sourceKey ||
+        regionKey(patch.originRegion) !== prior.regionKey ||
+        !activeKeys.has(prior.regionKey) ||
+        !isPolarDerivation(patch) ||
+        patch.derivation.habitat.derivationHash !== prior.habitatHash ||
+        polarResidentLineageHash(patch) !== prior.lineageHash ||
+        canonicalCoreEcologyPolarShoreResidentPatch(patch, {
+          seed: input.rootSeed,
+          region: patch.originRegion,
+          completedTick: input.completedTick,
+        }) === null ||
+        bySource.has(patch.patchKey)
+      )
+        return false;
+      bySource.set(
+        patch.patchKey,
+        Object.freeze({
+          kind: CORE_ECOLOGY_POLAR_SHORE_DERIVATION_KIND,
+          sourceKey: patch.patchKey,
+          patch,
+        }),
+      );
+      return true;
+    };
+
+    for (const resident of receipt.residents) {
+      const replacement = batch.durableBySource.get(resident.sourceKey);
+      const patch =
+        replacement ??
+        reconcileCoreEcologyPolarShoreResidentPatchAtTick(
+          resident.patch,
+          input.completedTick,
+        );
+      if (patch === null || !admit(patch, resident)) return null;
+    }
+
+    // Polar admission is origin-key based. Probe only the bounded hot window:
+    // an active-origin sparse row absent from the exact prior receipt proves
+    // incomplete custody, while off-window rows remain dormant/unreconciled.
+    for (const region of activeRegions) {
+      const delta = regionalDeltaByKey(nextRoot.regions, regionKey(region));
+      if (
+        delta !== undefined &&
+        !receiptSourceKeys.has(delta.residentPatch.patchKey)
+      )
+        return null;
+    }
+
+    const residents = Object.freeze(
+      [...bySource.values()].sort((left, right) =>
+        compareText(left.sourceKey, right.sourceKey),
+      ),
+    );
+    if (residents.length > activeRegions.length + nextRoot.regions.length) {
+      return null;
+    }
+    seedActiveResidentReceipt(nextRoot, input.rootSeed, activeRegions, residents);
+    return Object.freeze({ root: nextRoot, residents });
+  } catch {
+    return null;
+  }
+}
+
+interface RegionalPolarShoreEcologyActiveDeviationBatch {
+  readonly root: RegionalPolarShoreEcologyRootV1;
+  readonly durableBySource: ReadonlyMap<
+    string,
+    CoreEcologyAggregatePatchState
+  >;
+}
+
+/** Replays scalar add/update/remove/no-op semantics with one final root seal. */
+function applyActiveResidentDeviationBatch(
+  root: RegionalPolarShoreEcologyRootV1,
+  rootSeed: RootSeed,
+  completedTick: number,
+  values: readonly RegionalPolarShoreEcologyDurableResidentInput[],
+  receipt: RegionalPolarShoreEcologyActiveReceipt,
+): RegionalPolarShoreEcologyActiveDeviationBatch | null {
+  if (
+    completedTick < root.updatedAtTick ||
+    values.length > receipt.residents.length
+  )
+    return null;
+  const receiptBySource = new Map(
+    receipt.residents.map((resident) => [resident.sourceKey, resident]),
+  );
+  const durableBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  for (const raw of values) {
+    if (
+      !plainRecord(raw) ||
+      !exactKeys(raw, ["patch", "sourceKey"]) ||
+      typeof raw.sourceKey !== "string" ||
+      durableBySource.has(raw.sourceKey) ||
+      !plainRecord(raw.patch)
+    )
+      return null;
+    const prior = receiptBySource.get(raw.sourceKey);
+    if (prior === undefined) return null;
+    const reconciled = reconcileCoreEcologyPolarShoreResidentPatchAtTick(
+      raw.patch,
+      completedTick,
+    );
+    if (
+      reconciled === null ||
+      reconciled.patchKey !== raw.sourceKey ||
+      regionKey(reconciled.originRegion) !== prior.regionKey ||
+      !isPolarDerivation(reconciled) ||
+      reconciled.derivation.habitat.derivationHash !== prior.habitatHash ||
+      polarResidentLineageHash(reconciled) !== prior.lineageHash ||
+      canonicalCoreEcologyPolarShoreResidentPatch(reconciled, {
+        seed: rootSeed,
+        region: reconciled.originRegion,
+        completedTick,
+      }) === null
+    )
+      return null;
+    durableBySource.set(raw.sourceKey, reconciled);
+  }
+
+  const ordered = [...durableBySource.entries()].sort(([left], [right]) =>
+    compareText(left, right),
+  );
+  const regionsByKey = new Map(root.regions.map((delta) => [delta.key, delta]));
+  let serializedUpperBound =
+    values.length === 0 ? 0 : serializedBytes(root) + 256;
+  let revision = root.revision;
+  let eventOrdinal = root.lastEventOrdinal;
+  let changed = false;
+  for (const [, normalized] of ordered) {
+    if (!isPolarDerivation(normalized)) return null;
+    const habitat = deriveCoreEcologyPolarShoreHabitat({
+      seed: rootSeed,
+      region: normalized.originRegion,
+    });
+    if (
+      habitat.totalPopulationUnits === 0 ||
+      habitat.derivationHash !== normalized.derivation.habitat.derivationHash
+    )
+      return null;
+    const pristine = createCoreEcologyPolarShoreResidentPatch({
+      seed: rootSeed,
+      habitat,
+      tick: completedTick,
+    });
+    const pristineState =
+      stableStringify(normalized) === stableStringify(pristine);
+    const key = regionKey(normalized.originRegion);
+    const existing = regionsByKey.get(key);
+    if (pristineState && existing === undefined) continue;
+    revision += 1;
+    eventOrdinal += 1;
+    if (!Number.isSafeInteger(revision) || !Number.isSafeInteger(eventOrdinal)) {
+      return null;
+    }
+    changed = true;
+    regionsByKey.delete(key);
+    if (!pristineState) {
+      const delta = createRegionalPolarShoreEcologyRegionDelta({
+        rootSeed,
+        region: normalized.originRegion,
+        baselineHash: habitat.derivationHash,
+        revision: (existing?.revision ?? 0) + 1,
+        eventOrdinal,
+        residentPatch: normalized,
+      });
+      serializedUpperBound += serializedBytes(delta) + 1;
+      if (
+        serializedUpperBound >
+        REGIONAL_POLAR_SHORE_ECOLOGY_MAX_SERIALIZED_BYTES
+      )
+        return null;
+      regionsByKey.set(key, delta);
+    }
+    if (regionsByKey.size > REGIONAL_POLAR_SHORE_ECOLOGY_MAX_REGIONS) {
+      return null;
+    }
+  }
+
+  let nextRoot = root;
+  if (completedTick !== root.updatedAtTick || changed) {
+    const regions = Object.freeze(
+      [...regionsByKey.values()].sort((left, right) =>
+        compareText(left.key, right.key),
+      ),
+    );
+    const { integrity: _integrity, ...base } = root;
+    nextRoot = sealRoot({
+      ...base,
+      updatedAtTick: completedTick,
+      revision,
+      lastEventOrdinal: eventOrdinal,
+      regions,
+    });
+    WORLD_BOUND_ROOTS.set(nextRoot, nextRoot.seedFingerprint);
+  }
+  return Object.freeze({ root: nextRoot, durableBySource });
 }
 
 export function serializeRegionalPolarShoreEcologyRoot(value: unknown): string {
@@ -643,6 +975,174 @@ export function deserializeRegionalPolarShoreEcologyRoot(
   } catch {
     return null;
   }
+}
+
+function seedActiveResidentReceipt(
+  root: RegionalPolarShoreEcologyRootV1,
+  rootSeed: RootSeed,
+  activeRegions: readonly RegionCoord[],
+  residents: readonly RegionalPolarShoreEcologyActiveResidentInput[],
+): void {
+  if (residents.length > activeRegions.length + root.regions.length) return;
+  const activeKeys = new Set(activeRegions.map(regionKey));
+  const receiptResidents: RegionalPolarShoreEcologyActiveReceiptResident[] = [];
+  const seen = new Set<string>();
+  for (const resident of residents) {
+    const patch = resident.patch;
+    if (
+      resident.kind !== CORE_ECOLOGY_POLAR_SHORE_DERIVATION_KIND ||
+      resident.sourceKey !== patch.patchKey ||
+      patch.updatedAtTick !== root.updatedAtTick ||
+      seen.has(resident.sourceKey) ||
+      !activeKeys.has(regionKey(patch.originRegion)) ||
+      !isPolarDerivation(patch) ||
+      canonicalCoreEcologyPolarShoreResidentPatch(patch, {
+        seed: rootSeed,
+        region: patch.originRegion,
+        completedTick: root.updatedAtTick,
+      }) === null
+    )
+      return;
+    seen.add(resident.sourceKey);
+    receiptResidents.push(
+      Object.freeze({
+        sourceKey: resident.sourceKey,
+        regionKey: regionKey(patch.originRegion),
+        habitatHash: patch.derivation.habitat.derivationHash,
+        patchHash: hashCanonical(patch),
+        lineageHash: polarResidentLineageHash(patch),
+        patch,
+      }),
+    );
+  }
+  receiptResidents.sort((left, right) =>
+    compareText(left.sourceKey, right.sourceKey),
+  );
+  ACTIVE_RESIDENT_RECEIPTS.set(
+    root,
+    Object.freeze({
+      rootSeed: Object.freeze([
+        rootSeed[0],
+        rootSeed[1],
+        rootSeed[2],
+        rootSeed[3],
+      ] as [number, number, number, number]),
+      atTick: root.updatedAtTick,
+      activeRegionKeys: Object.freeze(activeRegions.map(regionKey)),
+      residents: Object.freeze(receiptResidents),
+    }),
+  );
+}
+
+function canonicalActiveReceiptClaimsOrNull(
+  value: unknown,
+): readonly RegionalPolarShoreEcologyActiveReceiptClaim[] | null {
+  if (!Array.isArray(value)) return null;
+  const claims: RegionalPolarShoreEcologyActiveReceiptClaim[] = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (
+      !plainRecord(raw) ||
+      !exactKeys(raw, [
+        "lineageHash",
+        "patchHash",
+        "region",
+        "sourceKey",
+      ]) ||
+      typeof raw.sourceKey !== "string" ||
+      seen.has(raw.sourceKey) ||
+      !isRegionCoord(raw.region) ||
+      !validHash(raw.patchHash) ||
+      !validHash(raw.lineageHash)
+    )
+      return null;
+    seen.add(raw.sourceKey);
+    claims.push(
+      Object.freeze({
+        sourceKey: raw.sourceKey,
+        region: createRegionCoord(raw.region.x, raw.region.y),
+        patchHash: raw.patchHash,
+        lineageHash: raw.lineageHash,
+      }),
+    );
+  }
+  claims.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+  return Object.freeze(claims);
+}
+
+function claimsMatchActiveReceipt(
+  claims: readonly RegionalPolarShoreEcologyActiveReceiptClaim[],
+  residents: readonly RegionalPolarShoreEcologyActiveReceiptResident[],
+): boolean {
+  if (claims.length !== residents.length) return false;
+  for (let index = 0; index < claims.length; index += 1) {
+    const claim = claims[index]!;
+    const resident = residents[index]!;
+    if (
+      claim.sourceKey !== resident.sourceKey ||
+      regionKey(claim.region) !== resident.regionKey ||
+      claim.patchHash !== resident.patchHash ||
+      claim.lineageHash !== resident.lineageHash
+    )
+      return false;
+  }
+  return true;
+}
+
+function sameRootSeed(left: RootSeed, right: RootSeed): boolean {
+  try {
+    requireRootSeed(left);
+  } catch {
+    return false;
+  }
+  return (
+    left.length === right.length &&
+    left.every((word, index) => Object.is(word, right[index]))
+  );
+}
+
+function sameTextSequence(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+/** Must remain byte-identical to the V3 snapshot's independent lineage oracle. */
+function polarResidentLineageHash(
+  patch: CoreEcologyAggregatePatchState,
+): string {
+  const livingActorIds = patch.populations.flatMap(({ members }) =>
+    members.map(({ actor }) => actor.identity.stableId),
+  );
+  const retiredActorIds = patch.mortalityTransactions.map(
+    ({ retiredActor }) => retiredActor.identity.stableId,
+  );
+  return hashCanonical({
+    patchKey: patch.patchKey,
+    originRegion: patch.originRegion,
+    derivation: patch.derivation,
+    populations: patch.populations.map(
+      ({ species, populationKey, baselinePopulationSize }) => ({
+        species,
+        populationKey,
+        baselinePopulationSize,
+      }),
+    ),
+    actorIds: [...livingActorIds, ...retiredActorIds].sort(compareText),
+    groupIds: patch.groups.groups
+      .map(({ identity }) => identity.stableId)
+      .sort(compareText),
+    aggregates: patch.aggregatePopulations.map((population) => ({
+      aggregateId: population.aggregateId,
+      species: population.species,
+      populationKey: population.populationKey,
+      habitatCapacity: population.habitatCapacity,
+    })),
+  });
 }
 
 function canonicalPolarPatchShape(
