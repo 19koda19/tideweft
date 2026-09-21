@@ -30,6 +30,9 @@ export const LIVING_ACTOR_SEARCH_PROBE_VERSION = 1 as const;
 export const MAX_LIVING_ACTOR_TRAVERSABILITY_CELLS = 16_384 as const;
 export const MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES = 256 as const;
 export const MAX_LIVING_ACTOR_LOCOMOTION_STEP_UNITS = 64_000 as const;
+/** Compact construction-only code: positive values are open travel costs. */
+export const LIVING_ACTOR_BLOCKED_TRAVERSABILITY_CODE = 0 as const;
+export const LIVING_ACTOR_DEEP_WATER_TRAVERSABILITY_CODE = -1 as const;
 
 const MAX_OBSERVED_AREA_RADIUS_UNITS = 10_000_000;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
@@ -38,6 +41,15 @@ const DIAGONAL_COST_UNITS = 1_414;
 
 /** Exact outputs of canonicalSurface are recursively immutable. */
 const CANONICAL_TRAVERSABILITY_SURFACES = new WeakSet<object>();
+/**
+ * Process-local construction receipts for cells and arrays created through
+ * this module's batch validators. Structural twins and loaded values never
+ * inherit these receipts and therefore retain the full fail-closed path. A
+ * receipt is issued once per array, never once per cell: per-cell ephemeron
+ * pressure is explicitly prohibited by the performance architecture.
+ */
+const CANONICAL_TRAVERSABILITY_CELL_ARRAYS = new WeakSet<object>();
+const CANONICAL_TRAVERSABILITY_ELEVATION_ARRAYS = new WeakSet<object>();
 
 /**
  * Access is already resolved for the addressed actor's current locomotion
@@ -83,6 +95,84 @@ export interface LivingActorTraversabilitySurfaceInput {
   readonly cells: readonly LivingActorTraversabilityCell[];
   readonly edgeGradePolicy?: LivingActorGradeTraversalPolicy;
   readonly elevations?: readonly number[];
+}
+
+/**
+ * Construct one immutable canonical cell from explicit scalar law. This is a
+ * construction seam, not a parser: raw objects still pass through
+ * canonicalCell before they can enter a surface.
+ */
+export function createLivingActorTraversabilityCell(
+  access: LivingActorTraversalAccess,
+  travelCost: number,
+): LivingActorTraversabilityCell {
+  const cell = canonicalCellScalars(access, travelCost);
+  if (cell === null) throw new TypeError("Living actor traversability cell is invalid");
+  return cell;
+}
+
+/**
+ * Construct one immutable canonical batch from compact scalar codes. Positive
+ * values are open travel costs, zero is blocked, and -1 is deep water. The
+ * caller array is only a temporary input: every dense own slot is read once,
+ * validated, and copied before one batch receipt is issued.
+ */
+export function createLivingActorTraversabilityCellsFromCodes(
+  codes: readonly number[],
+): readonly LivingActorTraversabilityCell[] {
+  if (
+    !Array.isArray(codes)
+    || codes.length > MAX_LIVING_ACTOR_TRAVERSABILITY_CELLS
+  ) throw new TypeError("Living actor traversability cells are not canonical");
+  const parsed: LivingActorTraversabilityCell[] = new Array(codes.length);
+  for (let index = 0; index < codes.length; index += 1) {
+    if (!Object.hasOwn(codes, index)) {
+      throw new TypeError("Living actor traversability cells are not canonical");
+    }
+    const code = codes[index];
+    if (
+      !Number.isSafeInteger(code)
+      || Object.is(code, -0)
+      || code < LIVING_ACTOR_DEEP_WATER_TRAVERSABILITY_CODE
+      || code > 1_000_000
+    ) throw new TypeError("Living actor traversability cells are not canonical");
+    parsed[index] = Object.freeze(code > 0
+      ? { access: "open", travelCost: code }
+      : code === LIVING_ACTOR_BLOCKED_TRAVERSABILITY_CODE
+        ? { access: "blocked", travelCost: 0 }
+        : { access: "deep-water", travelCost: 0 });
+  }
+  const cells = Object.freeze(parsed);
+  CANONICAL_TRAVERSABILITY_CELL_ARRAYS.add(cells);
+  return cells;
+}
+
+/**
+ * Snapshot a locally projected elevation vector once so several actor-bound
+ * surfaces at the same exact terrain frame do not recopy it. Sparse or
+ * caller mutations cannot alter the receipt-owned copy.
+ */
+export function createLivingActorTraversabilityElevations(
+  value: readonly number[],
+): readonly number[] {
+  if (
+    !Array.isArray(value)
+    || value.length > MAX_LIVING_ACTOR_TRAVERSABILITY_CELLS
+  ) throw new TypeError("Living actor traversability elevations are invalid");
+  const parsed: number[] = new Array(value.length);
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) {
+      throw new TypeError("Living actor traversability elevations are invalid");
+    }
+    const elevation = value[index];
+    if (!nonnegativeSafeInteger(elevation) || elevation > 1_000_000) {
+      throw new TypeError("Living actor traversability elevations are invalid");
+    }
+    parsed[index] = elevation;
+  }
+  const elevations = Object.freeze(parsed);
+  CANONICAL_TRAVERSABILITY_ELEVATION_ARRAYS.add(elevations);
+  return elevations;
 }
 
 export interface LivingActorLocomotionInput {
@@ -508,65 +598,91 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
   const gradeKeys = [...baseKeys, "edgeGradePolicy", "elevations"] as const;
   const gradeAware = exactKeys(value, gradeKeys);
   if (!exactKeys(value, baseKeys) && !gradeAware) return null;
+  const version = value.version;
+  const forActorId = value.forActorId;
+  const sampledAtTick = value.sampledAtTick;
+  const origin = value.origin;
+  const widthTiles = value.widthTiles;
+  const heightTiles = value.heightTiles;
+  const rawCells = value.cells;
+  const rawEdgeGradePolicy = gradeAware ? value.edgeGradePolicy : undefined;
+  const rawElevations = gradeAware ? value.elevations : undefined;
   if (
-    value.version !== LIVING_ACTOR_TRAVERSABILITY_VERSION
-    || !validId(value.forActorId)
-    || !nonnegativeSafeInteger(value.sampledAtTick)
-    || !isWorldPosition(value.origin)
-    || value.origin.localX % WORLD_POSITION_UNITS_PER_TILE !== 0
-    || value.origin.localY % WORLD_POSITION_UNITS_PER_TILE !== 0
-    || !positiveSafeInteger(value.widthTiles)
-    || !positiveSafeInteger(value.heightTiles)
-    || value.widthTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES
-    || value.heightTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES
-    || value.widthTiles * value.heightTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_CELLS
-    || !Array.isArray(value.cells)
-    || value.cells.length !== value.widthTiles * value.heightTiles
+    version !== LIVING_ACTOR_TRAVERSABILITY_VERSION
+    || !validId(forActorId)
+    || !nonnegativeSafeInteger(sampledAtTick)
+    || !isWorldPosition(origin)
+    || origin.localX % WORLD_POSITION_UNITS_PER_TILE !== 0
+    || origin.localY % WORLD_POSITION_UNITS_PER_TILE !== 0
+    || !positiveSafeInteger(widthTiles)
+    || !positiveSafeInteger(heightTiles)
+    || widthTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES
+    || heightTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_AXIS_TILES
+    || widthTiles * heightTiles > MAX_LIVING_ACTOR_TRAVERSABILITY_CELLS
+    || !Array.isArray(rawCells)
+    || rawCells.length !== widthTiles * heightTiles
   ) return null;
 
-  const cells: LivingActorTraversabilityCell[] = [];
-  for (const rawCell of value.cells as readonly unknown[]) {
-    const cell = canonicalCell(rawCell);
-    if (cell === null) return null;
-    cells.push(cell);
+  const receivedCells = CANONICAL_TRAVERSABILITY_CELL_ARRAYS.has(rawCells);
+  let cells: readonly LivingActorTraversabilityCell[];
+  if (receivedCells) {
+    cells = rawCells as readonly LivingActorTraversabilityCell[];
+  } else {
+    const parsed: LivingActorTraversabilityCell[] = new Array(rawCells.length);
+    for (let index = 0; index < rawCells.length; index += 1) {
+      const rawCell = rawCells[index];
+      const cell = canonicalCell(rawCell);
+      if (cell === null) return null;
+      parsed[index] = cell;
+    }
+    cells = Object.freeze(parsed);
+    CANONICAL_TRAVERSABILITY_CELL_ARRAYS.add(cells);
   }
   const edgeGradePolicy = gradeAware
-    ? canonicalLivingActorGradeTraversalPolicy(value.edgeGradePolicy)
+    ? canonicalLivingActorGradeTraversalPolicy(rawEdgeGradePolicy)
     : null;
-  const elevations: number[] = [];
+  let elevations: readonly number[] | undefined;
   if (gradeAware) {
     if (
       edgeGradePolicy === null
-      || !Array.isArray(value.elevations)
-      || value.elevations.length !== value.cells.length
+      || !Array.isArray(rawElevations)
+      || rawElevations.length !== rawCells.length
     ) return null;
-    for (const elevation of value.elevations as readonly unknown[]) {
-      if (!nonnegativeSafeInteger(elevation) || elevation > 1_000_000) return null;
-      elevations.push(elevation);
+    if (CANONICAL_TRAVERSABILITY_ELEVATION_ARRAYS.has(rawElevations)) {
+      elevations = rawElevations as readonly number[];
+    } else {
+      const parsed: number[] = new Array(rawElevations.length);
+      for (let index = 0; index < rawElevations.length; index += 1) {
+        const elevation = rawElevations[index];
+        if (!nonnegativeSafeInteger(elevation) || elevation > 1_000_000) return null;
+        parsed[index] = elevation;
+      }
+      elevations = Object.freeze(parsed);
+      CANONICAL_TRAVERSABILITY_ELEVATION_ARRAYS.add(elevations);
     }
   }
   try {
     createSpatialFrame(
-      value.origin,
-      value.widthTiles * WORLD_POSITION_UNITS_PER_TILE,
-      value.heightTiles * WORLD_POSITION_UNITS_PER_TILE,
+      origin,
+      widthTiles * WORLD_POSITION_UNITS_PER_TILE,
+      heightTiles * WORLD_POSITION_UNITS_PER_TILE,
     );
   } catch {
     return null;
   }
   const surface = Object.freeze({
     version: LIVING_ACTOR_TRAVERSABILITY_VERSION,
-    forActorId: value.forActorId,
-    sampledAtTick: value.sampledAtTick,
-    origin: clonePosition(value.origin),
-    widthTiles: value.widthTiles,
-    heightTiles: value.heightTiles,
-    cells: Object.freeze(cells),
+    forActorId,
+    sampledAtTick,
+    origin: clonePosition(origin),
+    widthTiles,
+    heightTiles,
+    cells,
     ...(edgeGradePolicy === null
       ? {}
       : {
           edgeGradePolicy,
-          elevations: Object.freeze(elevations),
+          elevations: elevations!,
         }),
   });
   CANONICAL_TRAVERSABILITY_SURFACES.add(surface);
@@ -575,16 +691,23 @@ function canonicalSurface(value: unknown): LivingActorTraversabilitySurface | nu
 
 function canonicalCell(value: unknown): LivingActorTraversabilityCell | null {
   if (!plainRecord(value) || !exactKeys(value, ["access", "travelCost"])) return null;
-  if (value.access !== "open" && value.access !== "blocked" && value.access !== "deep-water") {
-    return null;
-  }
+  const access = value.access;
+  const travelCost = value.travelCost;
+  return canonicalCellScalars(access, travelCost);
+}
+
+function canonicalCellScalars(
+  access: unknown,
+  travelCost: unknown,
+): LivingActorTraversabilityCell | null {
+  if (access !== "open" && access !== "blocked" && access !== "deep-water") return null;
   if (
-    !nonnegativeSafeInteger(value.travelCost)
-    || (value.access === "open" && value.travelCost === 0)
-    || (value.access !== "open" && value.travelCost !== 0)
-    || value.travelCost > 1_000_000
+    !nonnegativeSafeInteger(travelCost)
+    || (access === "open" && travelCost === 0)
+    || (access !== "open" && travelCost !== 0)
+    || travelCost > 1_000_000
   ) return null;
-  return Object.freeze({ access: value.access, travelCost: value.travelCost });
+  return Object.freeze({ access, travelCost });
 }
 
 function canonicalArea(value: unknown): ObservedArea | null {

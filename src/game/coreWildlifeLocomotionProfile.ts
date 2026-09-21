@@ -1,7 +1,13 @@
 import type { TerrainTileView } from "../sim/types";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import type { CoreWildlifeIntentKind } from "./coreWildlifeActor";
-import type { LivingActorTraversabilityCell } from "./livingActorLocomotion";
+import {
+  LIVING_ACTOR_BLOCKED_TRAVERSABILITY_CODE,
+  LIVING_ACTOR_DEEP_WATER_TRAVERSABILITY_CODE,
+  createLivingActorTraversabilityCell,
+  createLivingActorTraversabilityCellsFromCodes,
+  type LivingActorTraversabilityCell,
+} from "./livingActorLocomotion";
 import {
   createLivingActorGradeTraversalPolicy,
   type LivingActorGradeTraversalPolicy,
@@ -583,9 +589,13 @@ export function coreWildlifeTraversabilityCell(
   tile: TerrainTileView,
   travelMedium?: CoreWildlifeTravelMedium,
 ): LivingActorTraversabilityCell {
-  return evaluatePreparedCoreWildlifeTraversability(
+  const code = evaluatePreparedCoreWildlifeTraversabilityCode(
     prepareCoreWildlifeTraversability(species, travelMedium),
     tile,
+  );
+  return createLivingActorTraversabilityCell(
+    accessForTraversabilityCode(code),
+    travelCostForTraversabilityCode(code),
   );
 }
 
@@ -600,9 +610,11 @@ export function coreWildlifeTraversabilityCells(
   travelMedium?: CoreWildlifeTravelMedium,
 ): readonly LivingActorTraversabilityCell[] {
   const prepared = prepareCoreWildlifeTraversability(species, travelMedium);
-  return Object.freeze(tiles.map((tile) => (
-    evaluatePreparedCoreWildlifeTraversability(prepared, tile)
-  )));
+  const codes: number[] = new Array(tiles.length);
+  for (let index = 0; index < tiles.length; index += 1) {
+    codes[index] = evaluatePreparedCoreWildlifeTraversabilityCode(prepared, tiles[index]!);
+  }
+  return createLivingActorTraversabilityCellsFromCodes(codes);
 }
 
 function prepareCoreWildlifeTraversability(
@@ -645,27 +657,27 @@ function prepareCoreWildlifeTraversability(
   return { profile, medium };
 }
 
-function evaluatePreparedCoreWildlifeTraversability(
+function evaluatePreparedCoreWildlifeTraversabilityCode(
   prepared: PreparedCoreWildlifeTraversability,
   tile: TerrainTileView,
-): LivingActorTraversabilityCell {
+): number {
   const { profile, medium } = prepared;
   if (medium === "air") {
-    return Object.freeze({ access: "open", travelCost: profile.aerialTravelCost! });
+    return profile.aerialTravelCost!;
   }
   if (medium === "surface-water") {
     return tile.terrain === "deep-water" || tile.waterDepth > 0
-      ? Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! })
-      : Object.freeze({ access: "blocked", travelCost: 0 });
+      ? profile.surfaceWaterTravelCost!
+      : LIVING_ACTOR_BLOCKED_TRAVERSABILITY_CODE;
   }
   if (
     medium === "amphibious"
     && (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH)
   ) {
-    return Object.freeze({ access: "open", travelCost: profile.surfaceWaterTravelCost! });
+    return profile.surfaceWaterTravelCost!;
   }
   if (tile.terrain === "deep-water" || tile.waterDepth > ADRIFT_STAND_DEPTH) {
-    return Object.freeze({ access: "deep-water", travelCost: 0 });
+    return LIVING_ACTOR_DEEP_WATER_TRAVERSABILITY_CODE;
   }
   const base = clamp(tile.baseTravelCost, 1, 1_000_000);
   const preference = profile.dampCoverPreference;
@@ -676,7 +688,19 @@ function evaluatePreparedCoreWildlifeTraversability(
   const multiplier = preferredCover
     ? preference.multiplier
     : profile.terrainMultipliers[tile.terrain] ?? profile.baseTerrainMultiplier;
-  return Object.freeze({ access: "open", travelCost: scaledCost(base, multiplier) });
+  return scaledCost(base, multiplier);
+}
+
+function accessForTraversabilityCode(code: number): LivingActorTraversabilityCell["access"] {
+  return code === LIVING_ACTOR_BLOCKED_TRAVERSABILITY_CODE
+    ? "blocked"
+    : code === LIVING_ACTOR_DEEP_WATER_TRAVERSABILITY_CODE
+      ? "deep-water"
+      : "open";
+}
+
+function travelCostForTraversabilityCode(code: number): number {
+  return code > 0 ? code : 0;
 }
 
 /** Distinct gait distance, still bounded below one shared terrain tile. */

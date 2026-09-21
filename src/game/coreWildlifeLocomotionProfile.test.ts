@@ -205,6 +205,39 @@ describe("core wildlife locomotion profiles", () => {
     );
   });
 
+  it("binds one validated species projection to distinct actor surfaces without changing bytes", () => {
+    const origin = createWorldPosition(createRegionCoord(-11, 8), 0, 0);
+    const tiles = [
+      tile({ terrain: "meadow", baseTravelCost: 420_000 }),
+      tile({ terrain: "marsh", moisture: 900_000, roughness: 800_000 }),
+    ];
+    const cells = coreWildlifeTraversabilityCells("marsh-rabbit", tiles, "land");
+    const first = createLivingActorTraversabilitySurface({
+      forActorId: "RABBIT-R-v1/one",
+      sampledAtTick: 77,
+      origin,
+      widthTiles: 2,
+      heightTiles: 1,
+      cells,
+    });
+    const second = createLivingActorTraversabilitySurface({
+      forActorId: "RABBIT-R-v1/two",
+      sampledAtTick: 77,
+      origin,
+      widthTiles: 2,
+      heightTiles: 1,
+      cells,
+    });
+
+    expect(first).not.toBe(second);
+    expect(first.forActorId).not.toBe(second.forActorId);
+    expect(first.cells).toBe(cells);
+    expect(second.cells).toBe(cells);
+    expect(first.cells).toEqual(tiles.map((candidate) => (
+      coreWildlifeTraversabilityCell("marsh-rabbit", candidate, "land")
+    )));
+  });
+
   it("keeps batch and single-cell validation errors exact without exporting prepared authority", () => {
     for (const [species, medium] of [
       ["deer", "air"],

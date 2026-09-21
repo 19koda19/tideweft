@@ -5,6 +5,9 @@ import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import {
   LIVING_ACTOR_LOCOMOTION_VERSION,
   MAX_LIVING_ACTOR_LOCOMOTION_STEP_UNITS,
+  createLivingActorTraversabilityCell,
+  createLivingActorTraversabilityCellsFromCodes,
+  createLivingActorTraversabilityElevations,
   createLivingActorTraversabilitySurface,
   deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
@@ -14,6 +17,7 @@ import {
   type LivingActorTraversabilityCell,
 } from "./livingActorLocomotion";
 import { createLivingActorAddress } from "./livingActor";
+import { createLivingActorGradeTraversalPolicy } from "./livingActorGradeTraversal";
 import {
   createWorldPosition,
   translateWorldPosition,
@@ -88,6 +92,153 @@ function fixture(
 }
 
 describe("species-neutral living actor locomotion", () => {
+  it("reuses only validated process-local construction arrays across actor-bound surfaces", () => {
+    const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
+    const sourceCodes = [2, 0, 3, 4];
+    const sourceElevations = [
+      0,
+      100_000,
+      200_000,
+      0,
+    ];
+    const cells = createLivingActorTraversabilityCellsFromCodes(sourceCodes);
+    const elevations = createLivingActorTraversabilityElevations(sourceElevations);
+    sourceCodes[0] = -1;
+    sourceElevations[0] = 900_000;
+    const edgeGradePolicy = createLivingActorGradeTraversalPolicy({
+      ascent: {
+        comfortableGrade: 100_000,
+        maximumGrade: 500_000,
+        costMultiplierAtMaximum: 1_500_000,
+      },
+      descent: {
+        comfortableGrade: 100_000,
+        maximumGrade: 500_000,
+        costMultiplierAtMaximum: 1_300_000,
+      },
+    });
+    const surfaceInput = {
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 2,
+      heightTiles: 2,
+      cells,
+      edgeGradePolicy,
+      elevations,
+    } as const;
+
+    const first = createLivingActorTraversabilitySurface(surfaceInput);
+    const second = createLivingActorTraversabilitySurface(surfaceInput);
+    expect(first).not.toBe(second);
+    expect(first.cells).toBe(cells);
+    expect(second.cells).toBe(cells);
+    expect(first.elevations).toBe(elevations);
+    expect(second.elevations).toBe(elevations);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(cells)).toBe(true);
+    expect(cells.every(Object.isFrozen)).toBe(true);
+    expect(cells[0]).toEqual({ access: "open", travelCost: 2 });
+    expect(elevations[0]).toBe(0);
+  });
+
+  it("fully validates save-like structural twins before granting local reuse", () => {
+    const origin = createWorldPosition(createRegionCoord(-7, 4), 0, 0);
+    const trustedCells = createLivingActorTraversabilityCellsFromCodes([2, 3]);
+    const trustedElevations = createLivingActorTraversabilityElevations([200_000, 300_000]);
+    const loadedCells = structuredClone(trustedCells);
+    const loadedElevations = structuredClone(trustedElevations);
+    loadedCells.forEach(Object.freeze);
+    Object.freeze(loadedCells);
+    Object.freeze(loadedElevations);
+    const edgeGradePolicy = createLivingActorGradeTraversalPolicy({
+      ascent: {
+        comfortableGrade: 100_000,
+        maximumGrade: 500_000,
+        costMultiplierAtMaximum: 1_500_000,
+      },
+      descent: {
+        comfortableGrade: 100_000,
+        maximumGrade: 500_000,
+        costMultiplierAtMaximum: 1_300_000,
+      },
+    });
+    const trusted = createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 2,
+      heightTiles: 1,
+      cells: trustedCells,
+      edgeGradePolicy,
+      elevations: trustedElevations,
+    });
+    const restored = createLivingActorTraversabilitySurface({
+      forActorId: DOG_ID,
+      sampledAtTick: TICK,
+      origin,
+      widthTiles: 2,
+      heightTiles: 1,
+      cells: loadedCells,
+      edgeGradePolicy,
+      elevations: loadedElevations,
+    });
+
+    expect(restored).toEqual(trusted);
+    expect(restored.cells).toEqual(trustedCells);
+    expect(restored.cells).not.toBe(loadedCells);
+    expect(restored.cells[0]).not.toBe(loadedCells[0]);
+    expect(restored.elevations).toEqual(trustedElevations);
+    expect(restored.elevations).not.toBe(loadedElevations);
+    const proxiedCells = new Proxy(trustedCells, {});
+    const fromProxy = createLivingActorTraversabilitySurface({
+      ...trusted,
+      cells: proxiedCells,
+    });
+    expect(fromProxy).toEqual(trusted);
+    expect(fromProxy.cells).not.toBe(proxiedCells);
+    const rebound = createLivingActorTraversabilitySurface({
+      ...restored,
+      forActorId: "D-R-v1-locomotion/dog-2",
+    });
+    expect(rebound.cells).toBe(restored.cells);
+    expect(rebound.elevations).toBe(restored.elevations);
+
+    const actor = actorAt(translateWorldPosition(origin, 500, 500));
+    const movementInput = {
+      requestId: "locomotion:trusted-parity/41",
+      tick: TICK,
+      actor,
+      targetArea: area(translateWorldPosition(origin, 1_500, 500)),
+      maximumStepUnits: 1_000,
+    } as const;
+    expect(resolveLivingActorLocomotion({ ...movementInput, surface: restored }))
+      .toEqual(resolveLivingActorLocomotion({ ...movementInput, surface: trusted }));
+
+    expect(() => createLivingActorTraversabilityCellsFromCodes(new Array(1)))
+      .toThrow("cells are not canonical");
+    expect(() => createLivingActorTraversabilityCellsFromCodes([-2]))
+      .toThrow("cells are not canonical");
+    expect(() => createLivingActorTraversabilityCellsFromCodes([-0]))
+      .toThrow("cells are not canonical");
+    expect(() => createLivingActorTraversabilityElevations([0, -1]))
+      .toThrow("elevations are invalid");
+    expect(() => createLivingActorTraversabilityElevations(new Array(1)))
+      .toThrow("elevations are invalid");
+    expect(() => createLivingActorTraversabilityCell("open", 0))
+      .toThrow("cell is invalid");
+    expect(() => createLivingActorTraversabilityCell("blocked", 1))
+      .toThrow("cell is invalid");
+    expect(() => createLivingActorTraversabilitySurface({
+      ...trusted,
+      widthTiles: 1,
+    })).toThrow("surface is invalid");
+    expect(() => createLivingActorTraversabilitySurface({
+      ...trusted,
+      elevations: trustedElevations.slice(1),
+    })).toThrow("surface is invalid");
+  });
+
   it("admits exactly the same own enumerable string keys regardless of insertion order", () => {
     const origin = createWorldPosition(createRegionCoord(0, 0), 0, 0);
     const createSurfaceForCell = (cell: unknown) => createLivingActorTraversabilitySurface({

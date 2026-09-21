@@ -273,6 +273,7 @@ import {
 } from "./regionalTravel";
 import {
   createRegionalWorldView,
+  isImmutableRegionalWorldView,
   rebindRegionalWorldViewWindow,
   regionalAddressAt,
   regionalStorageRegionsInView,
@@ -687,9 +688,11 @@ import {
 } from "./wildlifeObservationFrame";
 import {
   createLivingActorTraversabilitySurface,
+  createLivingActorTraversabilityElevations,
   deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
   resolveLivingActorLocomotion,
+  type LivingActorTraversabilityCell,
   type LivingActorTraversabilitySurface,
 } from "./livingActorLocomotion";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
@@ -1015,6 +1018,22 @@ const runtimeCoreTraversabilityCache = new WeakMap<
     sampledAtTick: number;
     surface: LivingActorTraversabilitySurface;
   }>>
+>();
+const runtimeCoreTraversabilityCellCache = new WeakMap<
+  WorldView,
+  Map<string, Readonly<{
+    sampledAtTick: number;
+    terrainTiles: WorldView["terrain"]["tiles"];
+    cells: readonly LivingActorTraversabilityCell[];
+  }>>
+>();
+const runtimeCoreTraversabilityElevationCache = new WeakMap<
+  WorldView,
+  Readonly<{
+    sampledAtTick: number;
+    terrainTiles: WorldView["terrain"]["tiles"];
+    elevations: readonly number[];
+  }>
 >();
 const CORE_ECOLOGY_CONTACT_REACH_LOOSE_UNITS = Math.trunc(LOOSE_CARGO_TILE_UNITS * 3 / 4);
 // A storehouse is a structure rather than a point parcel. Domestic custody
@@ -5798,15 +5817,61 @@ function createRuntimeCoreTraversability(
   sampledAtTick: number,
   travelMedium?: CoreWildlifeTravelMedium,
 ): LivingActorTraversabilitySurface | null {
+  const cacheEligible = isImmutableRegionalWorldView(world);
   const cacheKey = `${actor.identity.stableId}:${travelMedium ?? "default"}`;
-  const cached = runtimeCoreTraversabilityCache
-    .get(world)
-    ?.get(cacheKey);
+  const cached = cacheEligible
+    ? runtimeCoreTraversabilityCache.get(world)?.get(cacheKey)
+    : undefined;
   if (cached?.sampledAtTick === sampledAtTick) return cached.surface;
   const origin = regionalAddressAt(world, 0);
   if (origin === null) return null;
   try {
     const gradePolicy = coreWildlifeGradeTraversalPolicy(actor.identity.species);
+    const terrainKey = `${actor.identity.species}:${travelMedium ?? "default"}`;
+    let terrainCache = cacheEligible
+      ? runtimeCoreTraversabilityCellCache.get(world)
+      : undefined;
+    const cachedTerrain = terrainCache?.get(terrainKey);
+    const cells = cacheEligible
+      && cachedTerrain?.sampledAtTick === sampledAtTick
+      && cachedTerrain.terrainTiles === world.terrain.tiles
+      ? cachedTerrain.cells
+      : coreWildlifeTraversabilityCells(
+          actor.identity.species,
+          world.terrain.tiles,
+          travelMedium,
+        );
+    if (cacheEligible && cachedTerrain?.cells !== cells) {
+      if (terrainCache === undefined) {
+        terrainCache = new Map();
+        runtimeCoreTraversabilityCellCache.set(world, terrainCache);
+      }
+      terrainCache.set(terrainKey, Object.freeze({
+        sampledAtTick,
+        terrainTiles: world.terrain.tiles,
+        cells,
+      }));
+    }
+    let elevations: readonly number[] | undefined;
+    if (gradePolicy !== null) {
+      const cachedElevations = cacheEligible
+        ? runtimeCoreTraversabilityElevationCache.get(world)
+        : undefined;
+      elevations = cacheEligible
+        && cachedElevations?.sampledAtTick === sampledAtTick
+        && cachedElevations.terrainTiles === world.terrain.tiles
+        ? cachedElevations.elevations
+        : createLivingActorTraversabilityElevations(
+            world.terrain.tiles.map(({ elevation }) => elevation),
+          );
+      if (cacheEligible && cachedElevations?.elevations !== elevations) {
+        runtimeCoreTraversabilityElevationCache.set(world, Object.freeze({
+          sampledAtTick,
+          terrainTiles: world.terrain.tiles,
+          elevations,
+        }));
+      }
+    }
     const surface = createLivingActorTraversabilitySurface({
       forActorId: actor.identity.stableId,
       sampledAtTick,
@@ -5817,24 +5882,22 @@ function createRuntimeCoreTraversability(
       ),
       widthTiles: world.terrain.width,
       heightTiles: world.terrain.height,
-      cells: coreWildlifeTraversabilityCells(
-        actor.identity.species,
-        world.terrain.tiles,
-        travelMedium,
-      ),
+      cells,
       ...(gradePolicy === null
         ? {}
         : {
             edgeGradePolicy: gradePolicy,
-            elevations: world.terrain.tiles.map(({ elevation }) => elevation),
+            elevations: elevations!,
           }),
     });
-    let cache = runtimeCoreTraversabilityCache.get(world);
-    if (cache === undefined) {
-      cache = new Map();
-      runtimeCoreTraversabilityCache.set(world, cache);
+    if (cacheEligible) {
+      let cache = runtimeCoreTraversabilityCache.get(world);
+      if (cache === undefined) {
+        cache = new Map();
+        runtimeCoreTraversabilityCache.set(world, cache);
+      }
+      cache.set(cacheKey, Object.freeze({ sampledAtTick, surface }));
     }
-    cache.set(cacheKey, Object.freeze({ sampledAtTick, surface }));
     return surface;
   } catch {
     return null;
