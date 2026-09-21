@@ -5,6 +5,7 @@ import type {
   TideHarpView,
   TideweftView,
   TerrainKind as RenderTerrainKind,
+  TerrainTileView as RenderTerrainTileView,
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
@@ -68,6 +69,7 @@ import {
 import {
   regionalCompatibilityWorldForWorld,
   regionalGlobalTileAt,
+  isImmutableRegionalWorldView,
   regionalWindowForWorld,
   regionalWorldCenter,
 } from "./regionalWorldView";
@@ -133,6 +135,33 @@ interface BiomeTerrainCache {
   readonly tiles: readonly CachedBiomeTile[];
 }
 
+interface TerrainProjectionReceipt {
+  readonly world: WorldView;
+  readonly completedTick: number;
+  readonly seedText: string;
+  readonly seedKey: string;
+  readonly width: number;
+  readonly height: number;
+  readonly globalOriginX: number;
+  readonly globalOriginY: number;
+  readonly weatherKind: WorldView["weather"]["kind"];
+  readonly weatherIntensity: number;
+  readonly weatherWindX: number;
+  readonly weatherWindY: number;
+  readonly projectedBiomes: readonly ProjectedBiomeTile[];
+  readonly outdoorIllumination: OutdoorIlluminationField;
+  readonly illuminationCacheKey: string;
+  readonly perception: PerceptionResult;
+  readonly perceptionSignature: string;
+  readonly settlementTileIndices: Int32Array;
+  readonly discovered: Float64Array;
+  readonly depthSoundings: Float64Array;
+  readonly terrainVisibilityStrengths: Float64Array;
+  readonly detailVisibilityGrades: Float64Array;
+  readonly localIllumination: Float64Array;
+  readonly tiles: readonly RenderTerrainTileView[];
+}
+
 const biomeTerrainCaches: BiomeTerrainCache[] = [];
 const biomeCacheByTerrainArray = new WeakMap<readonly TerrainTileView[], BiomeTerrainCache>();
 const liveBiomeCache = new WeakMap<readonly CachedBiomeTile[], {
@@ -146,6 +175,14 @@ const perceptionCache = new WeakMap<readonly TerrainTileView[], {
   resultKey?: string;
   result?: PerceptionResult;
 }>();
+/**
+ * One presentation-only hot receipt per exact immutable runtime terrain frame.
+ * Mutable/public views never enter this cache, and no receipt is serialized.
+ */
+const terrainProjectionCache = new WeakMap<
+  readonly TerrainTileView[],
+  TerrainProjectionReceipt
+>();
 const terrainKindCode: Readonly<Record<TerrainTileView["terrain"], number>> = {
   "deep-water": 1,
   "tidal-flat": 2,
@@ -787,38 +824,15 @@ export function projectGameView(
         world.weather.windY,
       ].join(":"),
       currentLocalIlluminationRevision: outdoorIllumination?.cacheKey ?? "invalid-unlit",
-      tiles: world.terrain.tiles.map((tile, index) => {
-        const biome = projectedBiomes[index];
-        const localIllumination = outdoorIllumination?.localIllumination[index];
-        const currentTerrainVisibility = perception.terrainVisibilityStrengths[index] ?? 0;
-        return {
-          kind: renderTerrain(tile, settlementTiles.has(index)),
-          ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
-          elevation: tile.elevation / FIXED_POINT,
-          moisture: tile.moisture / FIXED_POINT,
-          roughness: tile.roughness / FIXED_POINT,
-          waterDepth: tile.waterDepth / FIXED_POINT,
-          depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
-          discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
-          currentVisibility: terrainVisibilityStrengthValue(
-            currentTerrainVisibility,
-          ),
-          currentDetailVisibility: visibilityGradeValue(perception.detailVisibilityGrades[index]),
-          // Local-light presentation is never a second disclosure channel. A
-          // physically lit but currently unseen tile projects zero, while F0
-          // has already consumed the authoritative field before this point.
-          currentLocalIllumination: currentTerrainVisibility > 0
-            && typeof localIllumination === "number"
-            && Number.isSafeInteger(localIllumination)
-            && localIllumination >= 0
-            && localIllumination <= FIXED_POINT
-            ? localIllumination / FIXED_POINT
-            : 0,
-          trace: tile.traceStrength / FIXED_POINT,
-          shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
-          blocked: false,
-        };
-      }),
+      tiles: projectTerrainTiles(
+        world,
+        player,
+        settlementTiles,
+        projectedBiomes,
+        perception,
+        outdoorIllumination,
+        worldTileOrigin ?? { x: 0, y: 0 },
+      ),
     },
     tide: {
       phase: tidePhase(world.tide.phase),
@@ -1274,6 +1288,216 @@ function perceivedWorldPoint(
   return visibilityGrades[row * columns + column] === VISIBILITY_DIRECT;
 }
 
+function projectTerrainTiles(
+  world: WorldView,
+  player: PlayerState,
+  settlementTiles: ReadonlySet<number>,
+  projectedBiomes: readonly ProjectedBiomeTile[],
+  perception: PerceptionResult,
+  outdoorIllumination: OutdoorIlluminationField | null,
+  globalOrigin: { readonly x: number; readonly y: number },
+): readonly RenderTerrainTileView[] {
+  const count = world.terrain.tiles.length;
+  const seed = world.rootSeed ?? seedFromText(world.seedText);
+  const seedKey = seed.join(",");
+  const eligible = isImmutableRegionalWorldView(world)
+    && Number.isSafeInteger(world.completedTick)
+    && world.completedTick >= 0
+    && Number.isSafeInteger(world.terrain.width)
+    && Number.isSafeInteger(world.terrain.height)
+    && world.terrain.width > 0
+    && world.terrain.height > 0
+    && world.terrain.width * world.terrain.height === count
+    && Number.isSafeInteger(globalOrigin.x)
+    && Number.isSafeInteger(globalOrigin.y)
+    && projectedBiomes.length === count
+    && outdoorIllumination !== null
+    && outdoorIllumination.columns === world.terrain.width
+    && outdoorIllumination.rows === world.terrain.height
+    && outdoorIllumination.localIllumination.length === count
+    && hasValidPerceptionSignature(
+      perception,
+      world.terrain.width,
+      world.terrain.height,
+    )
+    && validFixedProjectionSequence(player.discovered, count, FIXED_POINT)
+    && validFixedProjectionSequence(player.depthSoundings, count, FIXED_POINT)
+    && validFixedProjectionSequence(
+      perception.terrainVisibilityStrengths,
+      count,
+      255,
+    )
+    && validFixedProjectionSequence(
+      perception.detailVisibilityGrades,
+      count,
+      VISIBILITY_DIRECT,
+    )
+    && validFixedProjectionSequence(
+      outdoorIllumination.localIllumination,
+      count,
+      FIXED_POINT,
+    );
+  const settlementTileIndices = eligible
+    ? canonicalSettlementTileIndices(settlementTiles, count)
+    : null;
+  const cached = eligible && settlementTileIndices !== null
+    ? terrainProjectionCache.get(world.terrain.tiles)
+    : undefined;
+  if (
+    cached !== undefined
+    && settlementTileIndices !== null
+    && cached.world === world
+    && cached.completedTick === world.completedTick
+    && cached.seedText === world.seedText
+    && cached.seedKey === seedKey
+    && cached.width === world.terrain.width
+    && cached.height === world.terrain.height
+    && Object.is(cached.globalOriginX, globalOrigin.x)
+    && Object.is(cached.globalOriginY, globalOrigin.y)
+    && cached.weatherKind === world.weather.kind
+    && Object.is(cached.weatherIntensity, world.weather.intensity)
+    && Object.is(cached.weatherWindX, world.weather.windX)
+    && Object.is(cached.weatherWindY, world.weather.windY)
+    && cached.projectedBiomes === projectedBiomes
+    && cached.outdoorIllumination === outdoorIllumination
+    && cached.illuminationCacheKey === outdoorIllumination.cacheKey
+    && cached.perception === perception
+    && cached.perceptionSignature === perception.signature
+    && exactNumberSequence(player.discovered, cached.discovered)
+    && exactNumberSequence(player.depthSoundings, cached.depthSoundings)
+    && exactNumberSequence(
+      perception.terrainVisibilityStrengths,
+      cached.terrainVisibilityStrengths,
+    )
+    && exactNumberSequence(
+      perception.detailVisibilityGrades,
+      cached.detailVisibilityGrades,
+    )
+    && exactNumberSequence(
+      outdoorIllumination.localIllumination,
+      cached.localIllumination,
+    )
+    && exactIntegerSequence(settlementTileIndices, cached.settlementTileIndices)
+  ) return cached.tiles;
+
+  const tiles = world.terrain.tiles.map((tile, index): RenderTerrainTileView => {
+    const biome = projectedBiomes[index];
+    const localIllumination = outdoorIllumination?.localIllumination[index];
+    const currentTerrainVisibility = perception.terrainVisibilityStrengths[index] ?? 0;
+    const projected = {
+      kind: renderTerrain(tile, settlementTiles.has(index)),
+      ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
+      elevation: tile.elevation / FIXED_POINT,
+      moisture: tile.moisture / FIXED_POINT,
+      roughness: tile.roughness / FIXED_POINT,
+      waterDepth: tile.waterDepth / FIXED_POINT,
+      depthKnown: (player.depthSoundings[index] ?? 0) / FIXED_POINT,
+      discovered: (player.discovered[index] ?? 0) / FIXED_POINT,
+      currentVisibility: terrainVisibilityStrengthValue(currentTerrainVisibility),
+      currentDetailVisibility: visibilityGradeValue(
+        perception.detailVisibilityGrades[index],
+      ),
+      // Local-light presentation is never a second disclosure channel. A
+      // physically lit but currently unseen tile projects zero, while F0 has
+      // already consumed the authoritative field before this point.
+      currentLocalIllumination: currentTerrainVisibility > 0
+        && typeof localIllumination === "number"
+        && Number.isSafeInteger(localIllumination)
+        && localIllumination >= 0
+        && localIllumination <= FIXED_POINT
+        ? localIllumination / FIXED_POINT
+        : 0,
+      trace: tile.traceStrength / FIXED_POINT,
+      shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
+      blocked: false,
+    } satisfies RenderTerrainTileView;
+    if (!eligible || settlementTileIndices === null) return projected;
+    return Object.freeze(projected);
+  });
+  if (!eligible || settlementTileIndices === null || outdoorIllumination === null) return tiles;
+
+  const frozenTiles = Object.freeze(tiles);
+  const receipt: TerrainProjectionReceipt = Object.freeze({
+    world,
+    completedTick: world.completedTick,
+    seedText: world.seedText,
+    seedKey,
+    width: world.terrain.width,
+    height: world.terrain.height,
+    globalOriginX: globalOrigin.x,
+    globalOriginY: globalOrigin.y,
+    weatherKind: world.weather.kind,
+    weatherIntensity: world.weather.intensity,
+    weatherWindX: world.weather.windX,
+    weatherWindY: world.weather.windY,
+    projectedBiomes,
+    outdoorIllumination,
+    illuminationCacheKey: outdoorIllumination.cacheKey,
+    perception,
+    perceptionSignature: perception.signature,
+    settlementTileIndices,
+    discovered: Float64Array.from(player.discovered),
+    depthSoundings: Float64Array.from(player.depthSoundings),
+    terrainVisibilityStrengths: Float64Array.from(
+      perception.terrainVisibilityStrengths,
+    ),
+    detailVisibilityGrades: Float64Array.from(perception.detailVisibilityGrades),
+    localIllumination: Float64Array.from(outdoorIllumination.localIllumination),
+    tiles: frozenTiles,
+  });
+  terrainProjectionCache.set(world.terrain.tiles, receipt);
+  return frozenTiles;
+}
+
+function canonicalSettlementTileIndices(
+  values: ReadonlySet<number>,
+  count: number,
+): Int32Array | null {
+  const indices = [...values];
+  for (const value of indices) {
+    if (!Number.isSafeInteger(value) || value < 0 || value >= count) return null;
+  }
+  indices.sort((left, right) => left - right);
+  return Int32Array.from(indices);
+}
+
+function validFixedProjectionSequence(
+  values: ArrayLike<number>,
+  count: number,
+  maximum: number,
+): boolean {
+  if (values.length !== count) return false;
+  for (let index = 0; index < count; index += 1) {
+    const value = values[index];
+    if (
+      typeof value !== "number"
+      || !Number.isSafeInteger(value)
+      || value < 0
+      || value > maximum
+    ) return false;
+  }
+  return true;
+}
+
+function exactNumberSequence(
+  values: ArrayLike<number>,
+  expected: Float64Array,
+): boolean {
+  if (values.length !== expected.length) return false;
+  for (let index = 0; index < expected.length; index += 1) {
+    if (!Object.is(values[index], expected[index])) return false;
+  }
+  return true;
+}
+
+function exactIntegerSequence(left: Int32Array, right: Int32Array): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < right.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 function stableBiomeTerrain(world: WorldView): BiomeTerrainCache {
   const seed = world.rootSeed ?? seedFromText(world.seedText);
   const seedKey = seed.join(",");
@@ -1356,19 +1580,19 @@ function weatherAdjustedBiomeTiles(
   const cached = liveBiomeCache.get(baselineTiles);
   if (cached?.weatherKey === weatherKey) return cached.tiles;
 
-  const tiles = baselineTiles.map((tile): ProjectedBiomeTile => {
+  const tiles = Object.freeze(baselineTiles.map((tile): ProjectedBiomeTile => {
     const climate = applyWeatherToBiomeClimate(tile.baseline, weather);
-    return {
+    return Object.freeze({
       id: tile.id,
-      climate: {
+      climate: Object.freeze({
         rainfall: climate.rainfall / FIXED_POINT,
         heat: climate.heat / FIXED_POINT,
         salinity: climate.salinity / FIXED_POINT,
         exposure: climate.exposure / FIXED_POINT,
         magicalWater: climate.magicalWater / FIXED_POINT,
-      },
-    };
-  });
+      }),
+    });
+  }));
   liveBiomeCache.set(baselineTiles, { weatherKey, tiles });
   return tiles;
 }
