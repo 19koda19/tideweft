@@ -44,6 +44,7 @@ const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
 const TIDAL_FLOCK_REGION = createRegionCoord(-5_179, -89_646);
 const HERON_REGION = createRegionCoord(1_050, 38_043);
 const THIRD_INDIVIDUAL_REGION = createRegionCoord(-60, -100);
+const FOURTH_INDIVIDUAL_REGION = createRegionCoord(-192_134, -225_672);
 const ABSENT_REGION = createRegionCoord(-1, -1);
 const DESTINATION = createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT);
 
@@ -286,6 +287,31 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     })).toThrow(/does not persist pristine baselines/u);
   });
 
+  it("preserves the released breadth-delta construction encoding", () => {
+    const patch = rotateFirstActor(heronPatch(), 101);
+    const delta = createRegionalBreadthEcologyRegionDelta({
+      rootSeed: SEED,
+      cohortId: COHORT,
+      region: HERON_REGION,
+      baselineHash: heronHabitat().derivationHash,
+      revision: 1,
+      eventOrdinal: 1,
+      residentPatch: patch,
+    });
+
+    expect({
+      stableId: delta.stableId,
+      residentPatchHash: delta.residentPatchHash,
+      integrity: delta.integrity,
+      serializedHash: hashCanonical(delta),
+    }).toEqual({
+      stableId: "ro1:e6a006386020d7896edf1875a62f86b1:1050:38043:breadth-deviation:s:0065007300740075006100720079002d0073007500720066006100630065002d0062007200650061006b003a00650031",
+      residentPatchHash: "4454d4bf9afa76dd",
+      integrity: "b2439f4b2cfbb174",
+      serializedHash: "f9c0ff1f519a2f82",
+    });
+  });
+
   it("starts new-policy cohorts at activation while legacy roots retain exact tick-zero replay", () => {
     const startTick = WORLD_NEW_GAME_START_TICK;
     const habitat = deriveCoreEcologyBreadthHabitat({
@@ -511,11 +537,12 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     );
   });
 
-  it("batches source-ordered add, update, and removal byte-identically to scalar puts", () => {
+  it("batches source-ordered add, update, removal, and no-op byte-identically to scalar puts", () => {
     const activeRegions = [
       TIDAL_FLOCK_REGION,
       HERON_REGION,
       THIRD_INDIVIDUAL_REGION,
+      FOURTH_INDIVIDUAL_REGION,
     ] as const;
     const pristineRoot = createPristineRegionalBreadthEcologyRoot({
       rootSeed: SEED,
@@ -532,14 +559,15 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     const individualSources = pristineResidents.filter(({ patch }) => (
       patch.populations.some(({ members }) => members.length > 0)
     )).sort((left, right) => compareText(left.sourceKey, right.sourceKey));
-    if (individualSources.length < 3) {
-      throw new Error("Durable breadth batch fixture needs three individual sources");
+    if (individualSources.length < 4) {
+      throw new Error("Durable breadth batch fixture needs four individual sources");
     }
-    const [updatedSource, removedSource, addedSource] = individualSources;
+    const [updatedSource, removedSource, addedSource, noopSource] = individualSources;
     if (
       updatedSource === undefined
       || removedSource === undefined
       || addedSource === undefined
+      || noopSource === undefined
     ) throw new Error("Durable breadth batch source selection failed");
 
     let existingRoot = pristineRoot;
@@ -578,6 +606,10 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
         sourceKey: addedSource.sourceKey,
         patch: rotateFirstActor(currentAdded.patch, 31),
       },
+      {
+        sourceKey: noopSource.sourceKey,
+        patch: noopSource.patch,
+      },
     ];
     const baseInput = {
       rootSeed: SEED,
@@ -612,10 +644,17 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       throw new Error("Durable breadth batch failed its scalar oracle");
     }
 
-    expect(serializeRegionalBreadthEcologyRoot(forward.root))
-      .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+    const forwardText = serializeRegionalBreadthEcologyRoot(forward.root);
+    expect(forwardText).toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
     expect(serializeRegionalBreadthEcologyRoot(reversed.root))
       .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+    const restoredForward = deserializeRegionalBreadthEcologyRoot(forwardText);
+    expect(restoredForward).not.toBeNull();
+    expect(serializeRegionalBreadthEcologyRoot(restoredForward)).toBe(forwardText);
+    expect(canonicalRegionalBreadthEcologyRootForWorld(restoredForward, {
+      rootSeed: SEED,
+      completedTick: 0,
+    })).toBe(restoredForward);
     expect(stableStringify(forward.residents)).toBe(stableStringify(oracleResidents));
     expect(stableStringify(reversed.residents)).toBe(stableStringify(oracleResidents));
     expect(forward.root.revision).toBe(existingRoot.revision + 3);
@@ -629,6 +668,9 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     expect(forward.root.regions.find(({ residentPatch }) => (
       residentPatch.patchKey === addedSource.sourceKey
     ))?.revision).toBe(1);
+    expect(forward.root.regions.some(({ residentPatch }) => (
+      residentPatch.patchKey === noopSource.sourceKey
+    ))).toBe(false);
     expect(forward.root.regions.map(({ key, revision, eventOrdinal }) => ({
       key,
       revision,
@@ -687,6 +729,19 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
           : claim
       )),
     })).toBeNull();
+    const rootBytes = serializeRegionalBreadthEcologyRoot(root);
+    const malformedPatch = {
+      ...prior[0]!.patch,
+      preparedDeltaAuthority: true,
+    };
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      ...input,
+      durableResidents: [{
+        sourceKey: prior[0]!.sourceKey,
+        patch: malformedPatch,
+      }],
+    })).toBeNull();
+    expect(serializeRegionalBreadthEcologyRoot(root)).toBe(rootBytes);
 
     const fallbackRoot = advanceRegionalBreadthEcologyRoot(restored, input.completedTick);
     expect(regionalBreadthEcologyResidentsForActiveRegions(

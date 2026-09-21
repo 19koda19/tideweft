@@ -300,26 +300,54 @@ export function createRegionalBreadthEcologyRegionDelta(
   if (stableStringify(pristine) === stableStringify(patch)) {
     throw new RangeError("Regional breadth ecology does not persist pristine baselines");
   }
-  const key = deltaKey(cohort.cohortId, input.region);
+  return sealPreparedRegionalBreadthEcologyRegionDelta({
+    rootSeed: input.rootSeed,
+    cohort,
+    region: input.region,
+    baselineHash: input.baselineHash,
+    revision: input.revision,
+    eventOrdinal: input.eventOrdinal,
+    residentPatch: patch,
+  });
+}
+
+/**
+ * Seal one delta after its caller has already proved the canonical bound patch,
+ * cohort metadata, all-coarse state, and non-pristine baseline. This remains
+ * private so no structural clone, load, or unvalidated runtime patch can bypass
+ * the public constructor's complete authority checks.
+ */
+function sealPreparedRegionalBreadthEcologyRegionDelta(
+  input: Readonly<{
+    readonly rootSeed: RootSeed;
+    readonly cohort: CoreEcologyBreadthCohortDefinition;
+    readonly region: RegionCoord;
+    readonly baselineHash: string;
+    readonly revision: number;
+    readonly eventOrdinal: number;
+    readonly residentPatch: CoreEcologyAggregatePatchState;
+  }>,
+): RegionalBreadthEcologyRegionDeltaV1 {
+  const key = deltaKey(input.cohort.cohortId, input.region);
   const base = {
     version: REGIONAL_BREADTH_ECOLOGY_DELTA_VERSION,
     stableId: stableRegionObjectId(
       input.rootSeed,
       input.region,
       "breadth-deviation",
-      `${cohort.cohortId}:e${cohort.introducedInEpoch}`,
+      `${input.cohort.cohortId}:e${input.cohort.introducedInEpoch}`,
     ),
-    cohortId: cohort.cohortId,
-    cohortEpoch: cohort.introducedInEpoch,
-    cohortDefinitionHash: cohort.definitionHash,
+    cohortId: input.cohort.cohortId,
+    cohortEpoch: input.cohort.introducedInEpoch,
+    cohortDefinitionHash: input.cohort.definitionHash,
     region: createRegionCoord(input.region.x, input.region.y),
     key,
     regionId: stableRegionId(input.rootSeed, input.region),
     baselineHash: input.baselineHash,
     revision: input.revision,
     eventOrdinal: input.eventOrdinal,
-    residentPatch: patch,
-    residentPatchHash: hashCanonical(patch),
+    residentPatch: input.residentPatch,
+    residentPatchHash: hashCanonical(input.residentPatch),
   } as const;
   return deepFreeze({ ...base, integrity: hashCanonical(base) });
 }
@@ -1049,9 +1077,12 @@ function applyActiveResidentDeviationBatch(
   for (const [, normalized] of ordered) {
     const habitat = habitatFromPatch(normalized);
     if (habitat === null) return null;
+    const cohort = coreEcologyBreadthCohortDefinition(habitat.cohortId);
     const baselineTick = breadthCohortBaselineTick(root, habitat.cohortId);
     if (
-      baselineTick === null
+      cohort === null
+      || cohort.introducedInEpoch !== habitat.cohortEpoch
+      || baselineTick === null
       || !root.activations.some(({ cohortId }) => cohortId === habitat.cohortId)
     ) return null;
     const pristine = createCoreEcologyBreadthResidentPatch({
@@ -1076,10 +1107,9 @@ function applyActiveResidentDeviationBatch(
     changed = true;
     regionsByKey.delete(key);
     if (!pristineState) {
-      const delta = createRegionalBreadthEcologyRegionDelta({
+      const delta = sealPreparedRegionalBreadthEcologyRegionDelta({
         rootSeed,
-        cohortId: habitat.cohortId,
-        baselineTick,
+        cohort,
         region: normalized.originRegion,
         baselineHash: habitat.derivationHash,
         revision: (existing?.revision ?? 0) + 1,
