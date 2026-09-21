@@ -869,6 +869,87 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       .toBe(serializeRegionalEcologyStateV6(fallbackCommit));
   });
 
+  it("matches a durable receipt-backed snapshot byte-for-byte after full fallback", () => {
+    const receiptState = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const fallbackState = deserializeRegionalEcologyStateV6(
+      serializeRegionalEcologyStateV6(receiptState),
+    );
+    if (fallbackState === null) {
+      throw new Error("Durable receipt fallback fixture did not survive serialization");
+    }
+    const receiptProjection = projectionOf(receiptState);
+    const fallbackProjection = projectionOf(fallbackState);
+    const source = receiptProjection.breadthResidents.find(({ patch }) => (
+      patch.populations.some(({ members }) => members.some(
+        ({ materialization }) => materialization === "materialized",
+      ))
+    ));
+    if (source === undefined) {
+      throw new Error("Durable receipt fixture lost its materialized breadth source");
+    }
+    const movedInput = (
+      state: RegionalEcologyStateV6,
+      projection: RegionalEcologyStateV6ActiveProjection,
+    ): CommitRegionalEcologyStateV6ActiveProjectionInput => {
+      const localSource = projection.breadthResidents.find(({ sourceKey }) => (
+        sourceKey === source.sourceKey
+      ));
+      const member = localSource?.patch.populations.flatMap(({ members }) => members)
+        .find(({ materialization }) => materialization === "materialized");
+      if (localSource === undefined || member === undefined) {
+        throw new Error("Durable receipt fixture lost its selected actor");
+      }
+      const moved = repositionCoreWildlifeActor(member.actor, {
+        atTick: projection.atTick,
+        position: translateWorldPosition(member.actor.address.position, 1, 0),
+        heading: member.actor.address.heading,
+      });
+      const movedPatch = replaceCoreEcologyAggregatePatchActor(localSource.patch, moved);
+      const unchanged = unchangedCommitInput(state, projection);
+      return {
+        ...unchanged,
+        breadthResidents: unchanged.breadthResidents.map((resident) => (
+          resident.sourceKey === localSource.sourceKey
+            ? { sourceKey: resident.sourceKey, patch: movedPatch }
+            : resident
+        )),
+      };
+    };
+
+    const receiptCommit = commitRegionalEcologyStateV6ActiveProjection(
+      receiptState,
+      receiptProjection,
+      movedInput(receiptState, receiptProjection),
+    );
+    const fallbackCommit = commitRegionalEcologyStateV6ActiveProjection(
+      fallbackState,
+      fallbackProjection,
+      movedInput(fallbackState, fallbackProjection),
+    );
+    if (receiptCommit === null || fallbackCommit === null) {
+      throw new Error("Durable receipt or fallback commit failed");
+    }
+    const receiptText = serializeRegionalEcologyStateV6(receiptCommit);
+    const fallbackText = serializeRegionalEcologyStateV6(fallbackCommit);
+    expect(receiptCommit.breadthActiveResidents.map(({
+      sourceKey,
+      patchHash,
+      lineageHash,
+      integrity,
+    }) => ({ sourceKey, patchHash, lineageHash, integrity }))).toEqual(
+      fallbackCommit.breadthActiveResidents.map(({
+        sourceKey,
+        patchHash,
+        lineageHash,
+        integrity,
+      }) => ({ sourceKey, patchHash, lineageHash, integrity })),
+    );
+    expect(receiptCommit.integrity).toBe(fallbackCommit.integrity);
+    expect(receiptText).toBe(fallbackText);
+    expect(new TextEncoder().encode(receiptText).byteLength)
+      .toBe(new TextEncoder().encode(fallbackText).byteLength);
+  });
+
   it("rederives signed/extreme windows and reports collision-free source ownership", () => {
     const state = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
     const ownership = regionalEcologyStateV6SourceOwnership(state);

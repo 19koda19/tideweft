@@ -50,9 +50,12 @@ import {
   advanceRegionalBreadthEcologyRoot,
   canonicalRegionalBreadthEcologyRootForWorld,
   canonicalizeRegionalBreadthEcologyRoot,
+  consumeRegionalBreadthEcologyAdvanceResultReceipt,
   createPristineRegionalBreadthEcologyRoot,
   putRegionalBreadthEcologyResidentDeviation,
   regionalBreadthEcologyResidentsForActiveRegions,
+  type AdvanceRegionalBreadthEcologyActiveResidentsResult,
+  type RegionalBreadthEcologyAdvancedResidentReceipt,
   type RegionalBreadthEcologyRootV1,
 } from "./regionalBreadthEcology";
 import {
@@ -781,12 +784,13 @@ export function commitRegionalEcologyStateV6ActiveProjection(
   // sparse transaction, then advances every unchanged source from its exact
   // prior-root receipt. Runtime visitation output is never treated as
   // authority. Any custody miss falls through to the unchanged transaction.
+  const breadthActiveRegions = activeRegions(base);
   const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
     state.breadthRoot,
     {
       rootSeed,
       completedTick: base.updatedAtTick,
-      activeRegions: activeRegions(base),
+      activeRegions: breadthActiveRegions,
       expectedResidents: state.breadthActiveResidents.map((resident) => ({
         sourceKey: resident.sourceKey,
         cohortId: resident.cohortId,
@@ -803,14 +807,43 @@ export function commitRegionalEcologyStateV6ActiveProjection(
   );
   if (fast !== null) {
     try {
-      const committed = createRegionalEcologyStateV6({
-        base,
-        breadthRoot: fast.root,
-        breadthActiveResidents: fast.residents.map(({ sourceKey, patch }) => (
-          Object.freeze({ sourceKey, patch })
-        )),
-        adoption: state.adoption,
+      const prepared = consumeRegionalBreadthEcologyAdvanceResultReceipt(fast, {
+        sourceRoot: state.breadthRoot,
+        rootSeed,
+        completedTick: base.updatedAtTick,
+        activeRegions: breadthActiveRegions,
       });
+      let committed: RegionalEcologyStateV6;
+      if (prepared === null) {
+        committed = createRegionalEcologyStateV6({
+          base,
+          breadthRoot: fast.root,
+          breadthActiveResidents: fast.residents.map(({ sourceKey, patch }) => (
+            Object.freeze({ sourceKey, patch })
+          )),
+          adoption: state.adoption,
+        });
+      } else {
+        try {
+          committed = createRegionalEcologyStateV6FromAdvanceReceipt({
+            base,
+            advance: fast,
+            prepared,
+            adoption: state.adoption,
+          });
+        } catch {
+          // A prepared assembly is acceleration only. The existing public
+          // constructor remains the authority for this exact fast result.
+          committed = createRegionalEcologyStateV6({
+            base,
+            breadthRoot: fast.root,
+            breadthActiveResidents: fast.residents.map(({ sourceKey, patch }) => (
+              Object.freeze({ sourceKey, patch })
+            )),
+            adoption: state.adoption,
+          });
+        }
+      }
       TRUSTED_ACTIVE_COMMITS.set(committed, state);
       return committed;
     } catch {
@@ -973,6 +1006,109 @@ function requireBreadthActiveResidents(
     sourceKey,
     patch,
   })));
+}
+
+interface CreateRegionalEcologyStateV6FromAdvanceReceiptInput {
+  readonly base: RegionalEcologyStateV5;
+  readonly advance: AdvanceRegionalBreadthEcologyActiveResidentsResult;
+  readonly prepared: readonly RegionalBreadthEcologyAdvancedResidentReceipt[];
+  readonly adoption: RegionalEcologyStateV6AdoptionReceiptV1 | null;
+}
+
+/**
+ * Assemble the V6 wrapper from the exact one-shot breadth result. Only work
+ * already authenticated by the breadth owner is omitted: storage
+ * normalization and the patch/lineage hashes it just computed. Composite
+ * source, ownership, adoption, sealing, integrity, and byte-budget law remain
+ * the V6 owner's responsibility here.
+ */
+function createRegionalEcologyStateV6FromAdvanceReceipt(
+  input: CreateRegionalEcologyStateV6FromAdvanceReceiptInput,
+): RegionalEcologyStateV6 {
+  const base = canonicalizeRegionalEcologyStateV5(input.base);
+  const breadthRoot = canonicalizeRegionalBreadthEcologyRoot(input.advance.root);
+  if (
+    base === null
+    || breadthRoot === null
+    || (base !== input.base
+      && stableStringify(base) !== stableStringify(input.base))
+    || (breadthRoot !== input.advance.root
+      && stableStringify(breadthRoot) !== stableStringify(input.advance.root))
+    || breadthRoot.updatedAtTick !== base.updatedAtTick
+    || breadthRoot.seedFingerprint !== base.polarConsumerRoot.seedFingerprint
+    || input.prepared.length !== input.advance.residents.length
+  ) {
+    throw new RangeError("Regional ecology v6 prepared children are not canonical");
+  }
+  const breadthActiveResidents: RegionalEcologyStateV6BreadthSnapshotV1[] = [];
+  for (let index = 0; index < input.prepared.length; index += 1) {
+    const prepared = input.prepared[index]!;
+    if (prepared.resident !== input.advance.residents[index]) {
+      throw new RangeError("Regional ecology v6 prepared resident identity changed");
+    }
+    breadthActiveResidents.push(createBreadthSnapshotFromAdvanceReceipt(
+      prepared,
+      base.updatedAtTick,
+    ));
+  }
+  breadthActiveResidents.sort(compareSnapshot);
+  const adoption = canonicalAdoption(input.adoption, base, breadthRoot);
+  if (input.adoption !== null && adoption === null) {
+    throw new RangeError("Regional ecology v6 adoption receipt is malformed");
+  }
+  if (!validBreadthSources(base, breadthRoot, breadthActiveResidents)) {
+    throw new RangeError("Regional ecology v6 breadth sources escape the hot window");
+  }
+  if (!validCrossLayerOwnership(base, breadthRoot, breadthActiveResidents)) {
+    throw new RangeError("Regional ecology v6 child ownership overlaps");
+  }
+  return sealState({
+    version: REGIONAL_ECOLOGY_STATE_V6_VERSION,
+    ownerId: REGIONAL_ECOLOGY_STATE_V6_OWNER_ID,
+    updatedAtTick: base.updatedAtTick,
+    base,
+    breadthRoot,
+    breadthActiveResidents: Object.freeze(breadthActiveResidents),
+    adoption,
+  });
+}
+
+function createBreadthSnapshotFromAdvanceReceipt(
+  prepared: RegionalBreadthEcologyAdvancedResidentReceipt,
+  tick: number,
+): RegionalEcologyStateV6BreadthSnapshotV1 {
+  const patch = prepared.patch;
+  if (
+    prepared.resident.patch !== patch
+    || prepared.resident.sourceKey !== prepared.sourceKey
+    || prepared.resident.cohortId !== prepared.cohortId
+    || prepared.resident.cohortEpoch !== prepared.cohortEpoch
+    || patch.patchKey !== prepared.sourceKey
+    || patch.updatedAtTick !== tick
+    || patch.derivation.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND
+    || patch.derivation.habitat.cohortId !== prepared.cohortId
+    || patch.derivation.habitat.cohortEpoch !== prepared.cohortEpoch
+    || regionKey(patch.originRegion) !== regionKey(prepared.region)
+    || !validHash(prepared.patchHash)
+    || !validHash(prepared.lineageHash)
+    || !coreEcologyBreadthResidentPatchIsAllCoarse(patch)
+    || patch.populations.length + patch.aggregatePopulations.length < 1
+    || patch.nextMortalityOrdinal !== 0
+    || patch.mortalityTransactions.length !== 0
+    || patch.carcasses.length !== 0
+  ) throw new RangeError("Regional ecology v6 prepared breadth resident is invalid");
+  const snapshotBase = {
+    version: REGIONAL_ECOLOGY_STATE_V6_BREADTH_SNAPSHOT_VERSION,
+    kind: CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
+    cohortId: prepared.cohortId,
+    cohortEpoch: prepared.cohortEpoch,
+    sourceKey: prepared.sourceKey,
+    region: copyRegion(patch.originRegion),
+    patchHash: prepared.patchHash,
+    lineageHash: prepared.lineageHash,
+    patch,
+  };
+  return deepFreeze({ ...snapshotBase, integrity: hashCanonical(snapshotBase) });
 }
 
 function createBreadthSnapshot(

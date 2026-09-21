@@ -21,6 +21,7 @@ import {
   advanceRegionalBreadthEcologyRoot,
   canonicalRegionalBreadthEcologyRootForWorld,
   canonicalizeRegionalBreadthEcologyRoot,
+  consumeRegionalBreadthEcologyAdvanceResultReceipt,
   createPristineRegionalBreadthEcologyRoot,
   createRegionalBreadthEcologyRegionDelta,
   deserializeRegionalBreadthEcologyRoot,
@@ -487,6 +488,148 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     expect(oracleResidents).not.toBeNull();
     expect(stableStringify(fast?.root)).toBe(stableStringify(oracleRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+  });
+
+  it("issues one exact frozen V6 bridge receipt and rejects every substituted boundary", () => {
+    const sourceRoot = createPristineRegionalBreadthEcologyRoot({
+      rootSeed: SEED,
+      completedTick: 0,
+    });
+    const activeRegions = Object.freeze([TIDAL_FLOCK_REGION]);
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      sourceRoot,
+      SEED,
+      activeRegions,
+    );
+    if (prior === null) throw new Error("V6 bridge receipt fixture did not derive");
+    const completedTick = 128;
+    const advance = () => {
+      const result = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+        sourceRoot,
+        {
+          rootSeed: SEED,
+          completedTick,
+          activeRegions,
+          expectedResidents: activeResidentClaims(prior),
+          durableResidents: [],
+        },
+      );
+      if (result === null) throw new Error("V6 bridge receipt advance failed");
+      return result;
+    };
+    const input = {
+      sourceRoot,
+      rootSeed: SEED,
+      completedTick,
+      activeRegions,
+    } as const;
+
+    const exact = advance();
+    const receipt = consumeRegionalBreadthEcologyAdvanceResultReceipt(exact, input);
+    expect(receipt).not.toBeNull();
+    expect(receipt).toHaveLength(exact.residents.length);
+    expect(receipt?.every((metadata, index) => (
+      metadata.resident === exact.residents[index]
+      && metadata.patch === exact.residents[index]?.patch
+      && metadata.patchHash === hashCanonical(metadata.patch)
+    ))).toBe(true);
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(exact, input)).toBeNull();
+
+    const malformedInput = advance();
+    expect(() => consumeRegionalBreadthEcologyAdvanceResultReceipt(
+      malformedInput,
+      null as unknown as typeof input,
+    )).not.toThrow();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(malformedInput, input))
+      .toBeNull();
+
+    const cloned = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(
+      structuredClone(cloned),
+      input,
+    )).toBeNull();
+
+    const reordered = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(Object.freeze({
+      root: reordered.root,
+      residents: Object.freeze([...reordered.residents].reverse()),
+    }), input)).toBeNull();
+
+    const substituted = advance();
+    const replacement = Object.freeze({
+      ...substituted.residents[0]!,
+      patch: structuredClone(substituted.residents[0]!.patch),
+    });
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(Object.freeze({
+      root: substituted.root,
+      residents: Object.freeze([replacement, ...substituted.residents.slice(1)]),
+    }), input)).toBeNull();
+
+    const mutable = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt({
+      root: mutable.root,
+      residents: mutable.residents,
+    }, input)).toBeNull();
+
+    const mutableWindow = [...activeRegions];
+    const mutableWindowResult = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      sourceRoot,
+      {
+        rootSeed: SEED,
+        completedTick,
+        activeRegions: mutableWindow,
+        expectedResidents: activeResidentClaims(prior),
+        durableResidents: [],
+      },
+    );
+    expect(mutableWindowResult).not.toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(
+      mutableWindowResult,
+      { ...input, activeRegions: mutableWindow },
+    )).toBeNull();
+
+    const wrongWindow = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongWindow, {
+      ...input,
+      activeRegions: [...activeRegions],
+    })).toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongWindow, input))
+      .toBeNull();
+
+    const wrongSeed = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongSeed, {
+      ...input,
+      rootSeed: Object.freeze([...SEED]) as typeof SEED,
+    })).toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongSeed, input))
+      .toBeNull();
+
+    const wrongTick = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongTick, {
+      ...input,
+      completedTick: completedTick + 1,
+    })).toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongTick, input))
+      .toBeNull();
+
+    const wrongRoot = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongRoot, {
+      ...input,
+      sourceRoot: structuredClone(sourceRoot),
+    })).toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(wrongRoot, input))
+      .toBeNull();
+
+    const superseded = advance();
+    expect(regionalBreadthEcologyResidentsForActiveRegions(
+      superseded.root,
+      SEED,
+      activeRegions,
+    )).not.toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(superseded, input))
+      .toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(superseded, input))
+      .toBeNull();
   });
 
   it("rejects a removal batch when scalar clock advance alone crosses the save budget", () => {

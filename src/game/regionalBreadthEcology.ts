@@ -150,6 +150,30 @@ export interface AdvanceRegionalBreadthEcologyActiveResidentsResult {
   readonly residents: readonly RegionalBreadthEcologyActiveResidentInput[];
 }
 
+/**
+ * Private-process proof carried from one complete breadth advance into the V6
+ * wrapper. The values are exported only so the consuming owner can type its
+ * local fast path; callers cannot mint one because admission is backed by the
+ * exact result object in this module's one-shot WeakMap.
+ */
+export interface RegionalBreadthEcologyAdvancedResidentReceipt {
+  readonly resident: RegionalBreadthEcologyActiveResidentInput;
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly sourceKey: string;
+  readonly cohortId: CoreEcologyBreadthCohortId;
+  readonly cohortEpoch: number;
+  readonly region: RegionCoord;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+}
+
+export interface ConsumeRegionalBreadthEcologyAdvanceReceiptInput {
+  readonly sourceRoot: RegionalBreadthEcologyRootV1;
+  readonly rootSeed: RootSeed;
+  readonly completedTick: number;
+  readonly activeRegions: readonly RegionCoord[];
+}
+
 const HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const UINT32_MAX = 0xffff_ffff;
 const UTF8_ENCODER = new TextEncoder();
@@ -177,6 +201,25 @@ interface RegionalBreadthEcologyActiveReceipt {
 const ACTIVE_RESIDENT_RECEIPTS = new WeakMap<
   object,
   RegionalBreadthEcologyActiveReceipt
+>();
+
+interface RegionalBreadthEcologyAdvanceResultReceipt {
+  readonly sourceRoot: RegionalBreadthEcologyRootV1;
+  readonly resultRoot: RegionalBreadthEcologyRootV1;
+  readonly resultResidents: readonly RegionalBreadthEcologyActiveResidentInput[];
+  readonly rootSeedIdentity: RootSeed;
+  readonly rootSeed: RootSeed;
+  readonly completedTick: number;
+  readonly activeRegionsIdentity: readonly RegionCoord[];
+  readonly activeRegionKeys: readonly string[];
+  readonly activeReceipt: RegionalBreadthEcologyActiveReceipt;
+  readonly residents: readonly RegionalBreadthEcologyAdvancedResidentReceipt[];
+}
+
+/** One bounded bridge receipt per exact frozen advance result. */
+const ADVANCE_RESULT_RECEIPTS = new WeakMap<
+  object,
+  RegionalBreadthEcologyAdvanceResultReceipt
 >();
 
 export function createPristineRegionalBreadthEcologyRoot(
@@ -985,11 +1028,89 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
     const maximumResidents = activeRegions.length * nextRoot.activations.length
       + nextRoot.regions.length;
     if (residents.length > maximumResidents) return null;
-    seedActiveResidentReceipt(nextRoot, input.rootSeed, activeRegions, residents);
-    return Object.freeze({ root: nextRoot, residents });
+    const activeReceipt = seedActiveResidentReceipt(
+      nextRoot,
+      input.rootSeed,
+      activeRegions,
+      residents,
+    );
+    if (activeReceipt === null) return null;
+    const result = Object.freeze({ root: nextRoot, residents });
+    seedAdvanceResultReceipt(
+      result,
+      root,
+      input.rootSeed,
+      input.completedTick,
+      input.activeRegions,
+      activeReceipt,
+    );
+    return result;
   } catch {
     return null;
   }
+}
+
+/**
+ * @internal Consume the exact process-local bridge into the V6 wrapper. The
+ * receipt is deleted before any check, so a failed or successful attempt can
+ * never turn one authoritative advance into multiple prepared assemblies.
+ */
+export function consumeRegionalBreadthEcologyAdvanceResultReceipt(
+  value: unknown,
+  input: ConsumeRegionalBreadthEcologyAdvanceReceiptInput,
+): readonly RegionalBreadthEcologyAdvancedResidentReceipt[] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const receipt = ADVANCE_RESULT_RECEIPTS.get(value);
+  ADVANCE_RESULT_RECEIPTS.delete(value);
+  if (
+    receipt === undefined
+    || !plainRecord(input)
+    || !exactKeys(input, [
+      "activeRegions",
+      "completedTick",
+      "rootSeed",
+      "sourceRoot",
+    ])
+    || typeof input.sourceRoot !== "object"
+    || input.sourceRoot === null
+    || !Array.isArray(input.rootSeed)
+    || !Array.isArray(input.activeRegions)
+    || !nonnegativeSafeInteger(input.completedTick)
+    || !plainRecord(value)
+    || !exactKeys(value, ["residents", "root"])
+    || !Object.isFrozen(value)
+    || value.root !== receipt.resultRoot
+    || value.residents !== receipt.resultResidents
+    || input.sourceRoot !== receipt.sourceRoot
+    || input.rootSeed !== receipt.rootSeedIdentity
+    || !sameRootSeed(input.rootSeed, receipt.rootSeed)
+    || input.completedTick !== receipt.completedTick
+    || input.activeRegions !== receipt.activeRegionsIdentity
+    || !Object.isFrozen(receipt.resultRoot)
+    || !Object.isFrozen(receipt.resultResidents)
+    || ACTIVE_RESIDENT_RECEIPTS.get(receipt.resultRoot) !== receipt.activeReceipt
+  ) return null;
+  const activeRegions = canonicalRegionsOrNull(input.activeRegions);
+  if (
+    activeRegions === null
+    || !sameTextSequence(activeRegions.map(regionKey), receipt.activeRegionKeys)
+    || receipt.residents.length !== receipt.resultResidents.length
+  ) return null;
+  for (let index = 0; index < receipt.residents.length; index += 1) {
+    const metadata = receipt.residents[index]!;
+    const resident = receipt.resultResidents[index]!;
+    if (
+      metadata.resident !== resident
+      || metadata.patch !== resident.patch
+      || !Object.isFrozen(resident)
+      || !Object.isFrozen(resident.patch)
+      || resident.sourceKey !== metadata.sourceKey
+      || resident.cohortId !== metadata.cohortId
+      || resident.cohortEpoch !== metadata.cohortEpoch
+      || regionKey(resident.patch.originRegion) !== regionKey(metadata.region)
+    ) return null;
+  }
+  return receipt.residents;
 }
 
 interface RegionalBreadthEcologyActiveDeviationBatch {
@@ -1334,10 +1455,10 @@ function seedActiveResidentReceipt(
   rootSeed: RootSeed,
   activeRegions: readonly RegionCoord[],
   residents: readonly RegionalBreadthEcologyActiveResidentInput[],
-): void {
+): RegionalBreadthEcologyActiveReceipt | null {
   const maximumResidents = activeRegions.length * root.activations.length
     + root.regions.length;
-  if (residents.length > maximumResidents) return;
+  if (residents.length > maximumResidents) return null;
   const receiptResidents: RegionalBreadthEcologyActiveReceiptResident[] = [];
   const seen = new Set<string>();
   for (const resident of residents) {
@@ -1353,7 +1474,7 @@ function seedActiveResidentReceipt(
       || resident.patch.nextMortalityOrdinal !== 0
       || resident.patch.mortalityTransactions.length !== 0
       || resident.patch.carcasses.length !== 0
-    ) return;
+    ) return null;
     seen.add(resident.sourceKey);
     receiptResidents.push(Object.freeze({
       sourceKey: resident.sourceKey,
@@ -1366,7 +1487,7 @@ function seedActiveResidentReceipt(
     }));
   }
   receiptResidents.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
-  ACTIVE_RESIDENT_RECEIPTS.set(root, Object.freeze({
+  const receipt = Object.freeze({
     rootSeed: Object.freeze([
       rootSeed[0],
       rootSeed[1],
@@ -1377,7 +1498,80 @@ function seedActiveResidentReceipt(
     activations: root.activations,
     activeRegionKeys: Object.freeze(activeRegions.map(regionKey)),
     residents: Object.freeze(receiptResidents),
-  }));
+  });
+  ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
+  return receipt;
+}
+
+function seedAdvanceResultReceipt(
+  result: AdvanceRegionalBreadthEcologyActiveResidentsResult,
+  sourceRoot: RegionalBreadthEcologyRootV1,
+  rootSeed: RootSeed,
+  completedTick: number,
+  activeRegionsIdentity: readonly RegionCoord[],
+  activeReceipt: RegionalBreadthEcologyActiveReceipt,
+): boolean {
+  // This bridge is reachable only from the completed advance above. Every
+  // admitted result patch is either the exact all-coarse output of
+  // setCoreEcologyAggregatePatchMaterializedActors (durable replacement) or
+  // reconcileCoreEcologyBreadthResidentPatchAtTick (unchanged/dormant
+  // source), both at completedTick. The active receipt then authenticates the
+  // exact patch identities and computes the patch/lineage metadata. That
+  // private provenance is the storage-normal proof consumed by V6; structural
+  // callers, mutable windows, and reconstructed patches never receive it.
+  if (
+    !Object.isFrozen(result)
+    || !Object.isFrozen(result.root)
+    || !Object.isFrozen(result.residents)
+    || !Object.isFrozen(activeRegionsIdentity)
+    || activeRegionsIdentity.some((region) => !Object.isFrozen(region))
+    || result.root.updatedAtTick !== completedTick
+    || activeReceipt.atTick !== completedTick
+    || activeReceipt.residents.length !== result.residents.length
+  ) return false;
+  const residents: RegionalBreadthEcologyAdvancedResidentReceipt[] = [];
+  for (let index = 0; index < result.residents.length; index += 1) {
+    const resident = result.residents[index]!;
+    const metadata = activeReceipt.residents[index]!;
+    if (
+      !Object.isFrozen(resident)
+      || !Object.isFrozen(resident.patch)
+      || resident.patch !== metadata.patch
+      || resident.sourceKey !== metadata.sourceKey
+      || resident.cohortId !== metadata.cohortId
+      || resident.cohortEpoch !== metadata.cohortEpoch
+      || regionKey(resident.patch.originRegion) !== metadata.regionKey
+    ) return false;
+    residents.push(Object.freeze({
+      resident,
+      patch: resident.patch,
+      sourceKey: metadata.sourceKey,
+      cohortId: metadata.cohortId,
+      cohortEpoch: metadata.cohortEpoch,
+      region: resident.patch.originRegion,
+      patchHash: metadata.patchHash,
+      lineageHash: metadata.lineageHash,
+    }));
+  }
+  const receipt = Object.freeze({
+    sourceRoot,
+    resultRoot: result.root,
+    resultResidents: result.residents,
+    rootSeedIdentity: rootSeed,
+    rootSeed: Object.freeze([
+      rootSeed[0],
+      rootSeed[1],
+      rootSeed[2],
+      rootSeed[3],
+    ] as [number, number, number, number]),
+    completedTick,
+    activeRegionsIdentity,
+    activeRegionKeys: activeReceipt.activeRegionKeys,
+    activeReceipt,
+    residents: Object.freeze(residents),
+  });
+  ADVANCE_RESULT_RECEIPTS.set(result, receipt);
+  return true;
 }
 
 function canonicalActiveReceiptClaimsOrNull(
