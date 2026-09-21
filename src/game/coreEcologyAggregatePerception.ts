@@ -39,8 +39,16 @@ import {
   type LivingActorSpecies,
 } from "./livingSpeciesRegistry";
 import { evaluateVisualContact } from "./perception";
-import type { RegionalTerrainWindow } from "./regionalTravel";
-import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
+import {
+  isImmutableRegionalTerrainWindow,
+  type RegionalTerrainWindow,
+} from "./regionalTravel";
+import {
+  isImmutableRegionalWorldView,
+  regionalAddressAt,
+  regionalCompatibilityWorldForWorld,
+  regionalWindowForWorld,
+} from "./regionalWorldView";
 import {
   REGION_HEIGHT_UNITS,
   REGION_WIDTH_UNITS,
@@ -215,6 +223,40 @@ interface CanonicalAggregatePerceptionFrame {
   readonly illumination: OutdoorIlluminationField;
 }
 
+interface PreparedAggregatePerceptionWorld {
+  readonly world: WorldView;
+  readonly window: RegionalTerrainWindow;
+  readonly tick: number;
+  readonly frame: SpatialFrame;
+  readonly cells: NonNullable<ReturnType<typeof coreEcologyPerceptionCells>>;
+  readonly illumination: OutdoorIlluminationField;
+  readonly weather: WorldView["weather"];
+  readonly weatherKind: WorldView["weather"]["kind"];
+  readonly weatherIntensity: number;
+  readonly weatherWindX: number;
+  readonly weatherWindY: number;
+  readonly weatherNextChangeTick: number;
+  readonly weatherPrototype: object | null;
+  readonly weatherKeys: readonly string[];
+  readonly compatibilityWorld: WorldView;
+  readonly compatibilitySettlements: WorldView["settlements"];
+  readonly settlementLampInputs: readonly PreparedSettlementLampInput[];
+}
+
+interface PreparedSettlementLampInput {
+  readonly settlement: WorldView["settlements"][number];
+  readonly project: WorldView["settlements"][number]["project"];
+  readonly originKey: unknown;
+  readonly tileIndex: unknown;
+  readonly projectId: unknown;
+  readonly projectKind: unknown;
+  readonly projectStatus: unknown;
+  readonly settlementPrototype: object | null;
+  readonly settlementKeys: readonly string[];
+  readonly projectPrototype: object | null;
+  readonly projectKeys: readonly string[];
+}
+
 interface StimulusCandidate {
   readonly sourceReferenceId: string;
   readonly sourceKind: CoreEcologySettlementShadowsSourceKind;
@@ -239,7 +281,52 @@ const FULL_CIRCLE_RADIANS = Math.PI * 2;
 export function deriveCoreEcologySettlementShadowsStimulusFrame(
   value: unknown,
 ): CoreEcologySettlementShadowsStimulusFrame | null {
-  const input = canonicalInput(value);
+  return deriveCoreEcologySettlementShadowsStimulusFrameWithPreparedWorld(value, null);
+}
+
+/**
+ * @internal Prepare one exact immutable regional world for a bounded,
+ * synchronous group of aggregate-patch derivations. The supplied derive
+ * closure is revoked as soon as `run` returns or throws, so the prepared
+ * geometry cannot become a cache or an alternate source of world truth.
+ */
+export function withPreparedCoreEcologyAggregatePerceptionWorld<Result>(
+  value: unknown,
+  run: (
+    derive: typeof deriveCoreEcologySettlementShadowsStimulusFrame,
+  ) => Result,
+): Result | null {
+  if (typeof run !== "function") return null;
+  const prepared = prepareAggregatePerceptionWorld(value);
+  if (prepared === null) return null;
+  let active = true;
+  const derive = (inputValue: unknown): CoreEcologySettlementShadowsStimulusFrame | null => {
+    if (!active) return null;
+    try {
+      return deriveCoreEcologySettlementShadowsStimulusFrameWithPreparedWorld(
+        inputValue,
+        prepared,
+      );
+    } catch {
+      return null;
+    }
+  };
+  try {
+    const result = run(derive);
+    active = false;
+    return preparedAggregatePerceptionWorldStillCurrent(prepared)
+      ? result
+      : null;
+  } finally {
+    active = false;
+  }
+}
+
+function deriveCoreEcologySettlementShadowsStimulusFrameWithPreparedWorld(
+  value: unknown,
+  prepared: PreparedAggregatePerceptionWorld | null,
+): CoreEcologySettlementShadowsStimulusFrame | null {
+  const input = canonicalInput(value, prepared);
   if (input === null || input.cells === null) return null;
   const stimuli: CoreEcologySettlementShadowsStimulus[] = [];
   const populations = [...input.patch.aggregatePopulations].sort((left, right) => (
@@ -448,7 +535,10 @@ function rainCandidate(
   });
 }
 
-function canonicalInput(value: unknown): CanonicalAggregatePerceptionFrame | null {
+function canonicalInput(
+  value: unknown,
+  prepared: PreparedAggregatePerceptionWorld | null,
+): CanonicalAggregatePerceptionFrame | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "exposedFoodSources",
     "patch",
@@ -472,6 +562,31 @@ function canonicalInput(value: unknown): CanonicalAggregatePerceptionFrame | nul
   ) return null;
   const world = value.world as unknown as WorldView;
   const window = value.window as unknown as RegionalTerrainWindow;
+  if (prepared !== null) {
+    if (
+      world !== prepared.world
+      || window !== prepared.window
+      || value.tick !== prepared.tick
+    ) return null;
+    const visualSources = canonicalVisualSources(value.visualSources);
+    const exposedFoodSources = canonicalFoodSources(value.exposedFoodSources);
+    if (
+      visualSources === null
+      || exposedFoodSources === null
+      || !preparedAggregatePerceptionWorldStillCurrent(prepared)
+    ) return null;
+    return Object.freeze({
+      patch,
+      world,
+      window,
+      tick: value.tick,
+      visualSources,
+      exposedFoodSources,
+      frame: prepared.frame,
+      cells: prepared.cells,
+      illumination: prepared.illumination,
+    });
+  }
   if (
     regionalWindowForWorld(world) !== window
     || world.completedTick !== value.tick
@@ -498,6 +613,136 @@ function canonicalInput(value: unknown): CanonicalAggregatePerceptionFrame | nul
     cells,
     illumination,
   });
+}
+
+function prepareAggregatePerceptionWorld(
+  value: unknown,
+): PreparedAggregatePerceptionWorld | null {
+  try {
+    if (!plainRecord(value) || !exactKeys(value, ["tick", "window", "world"])) return null;
+    if (
+      !nonnegativeSafeInteger(value.tick)
+      || !plainRecord(value.world)
+      || !plainRecord(value.window)
+    ) return null;
+    const world = value.world as unknown as WorldView;
+    const window = value.window as unknown as RegionalTerrainWindow;
+    if (
+      !isImmutableRegionalWorldView(world)
+      || regionalWindowForWorld(world) !== window
+      || world.completedTick !== value.tick
+      || !isImmutableRegionalTerrainWindow(window)
+      || !validRegionalWorld(world, window)
+      || !validWeather(world)
+    ) return null;
+    const frame = spatialFrameForWorld(world);
+    const cells = coreEcologyPerceptionCells(world);
+    const illumination = cells === null
+      ? null
+      : buildOutdoorIlluminationField(world, cells);
+    if (frame === null || cells === null || illumination === null) return null;
+    const compatibilityWorld = regionalCompatibilityWorldForWorld(world) ?? world;
+    if (!Array.isArray(compatibilityWorld.settlements)) return null;
+    const settlementLampInputs: PreparedSettlementLampInput[] = [];
+    for (const settlementValue of compatibilityWorld.settlements) {
+      if (!plainRecord(settlementValue) || !plainRecord(settlementValue.project)) return null;
+      const settlement = settlementValue as WorldView["settlements"][number];
+      const captured: PreparedSettlementLampInput = Object.freeze({
+        settlement,
+        project: settlement.project,
+        originKey: settlement.originKey,
+        tileIndex: settlement.tileIndex,
+        projectId: settlement.project.id,
+        projectKind: settlement.project.kind,
+        projectStatus: settlement.project.status,
+        settlementPrototype: Object.getPrototypeOf(settlement),
+        settlementKeys: Object.freeze(Object.keys(settlement).sort(compareText)),
+        projectPrototype: Object.getPrototypeOf(settlement.project),
+        projectKeys: Object.freeze(Object.keys(settlement.project).sort(compareText)),
+      });
+      settlementLampInputs.push(captured);
+    }
+    return Object.freeze({
+      world,
+      window,
+      tick: value.tick,
+      frame,
+      cells,
+      illumination,
+      weather: world.weather,
+      weatherKind: world.weather.kind,
+      weatherIntensity: world.weather.intensity,
+      weatherWindX: world.weather.windX,
+      weatherWindY: world.weather.windY,
+      weatherNextChangeTick: world.weather.nextChangeTick,
+      weatherPrototype: Object.getPrototypeOf(world.weather),
+      weatherKeys: Object.freeze(Object.keys(world.weather).sort(compareText)),
+      compatibilityWorld,
+      compatibilitySettlements: compatibilityWorld.settlements,
+      settlementLampInputs: Object.freeze(settlementLampInputs),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function preparedAggregatePerceptionWorldStillCurrent(
+  prepared: PreparedAggregatePerceptionWorld,
+): boolean {
+  try {
+    const world = prepared.world;
+    const weather = world.weather;
+    if (
+      !isImmutableRegionalWorldView(world)
+      || regionalWindowForWorld(world) !== prepared.window
+      || !isImmutableRegionalTerrainWindow(prepared.window)
+      || world.completedTick !== prepared.tick
+      || weather !== prepared.weather
+      || !validWeather(world)
+      || Object.getPrototypeOf(weather) !== prepared.weatherPrototype
+      || !exactKeys(weather, prepared.weatherKeys)
+      || weather.kind !== prepared.weatherKind
+      || !Object.is(weather.intensity, prepared.weatherIntensity)
+      || !Object.is(weather.windX, prepared.weatherWindX)
+      || !Object.is(weather.windY, prepared.weatherWindY)
+      || !Object.is(weather.nextChangeTick, prepared.weatherNextChangeTick)
+    ) return false;
+    const compatibilityWorld = regionalCompatibilityWorldForWorld(world) ?? world;
+    if (
+      compatibilityWorld !== prepared.compatibilityWorld
+      || compatibilityWorld.settlements !== prepared.compatibilitySettlements
+      || compatibilityWorld.settlements.length !== prepared.settlementLampInputs.length
+    ) return false;
+    for (let index = 0; index < prepared.settlementLampInputs.length; index += 1) {
+      const captured = prepared.settlementLampInputs[index];
+      const settlement = compatibilityWorld.settlements[index];
+      if (
+        captured === undefined
+        || settlement !== captured.settlement
+        || !plainRecord(settlement)
+        || Object.getPrototypeOf(settlement) !== captured.settlementPrototype
+        || !exactKeys(
+          settlement as unknown as Readonly<Record<string, unknown>>,
+          captured.settlementKeys,
+        )
+        || !plainRecord(settlement.project)
+        || settlement.project !== captured.project
+        || Object.getPrototypeOf(settlement.project) !== captured.projectPrototype
+        || !exactKeys(
+          settlement.project as unknown as Readonly<Record<string, unknown>>,
+          captured.projectKeys,
+        )
+        || settlement.originKey !== captured.originKey
+        || !Object.is(settlement.tileIndex, captured.tileIndex)
+        || !Object.is(settlement.project.id, captured.projectId)
+        || settlement.project.kind !== captured.projectKind
+        || settlement.project.status !== captured.projectStatus
+      ) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function physicalLightVisibility(

@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT, type TerrainTileView, type WeatherKind, type WorldView } from "../sim/types";
-import { WORLD_DAY_START_TICK } from "../sim/worldTime";
+import { WORLD_DAY_START_TICK, WORLD_NIGHT_START_TICK } from "../sim/worldTime";
 import {
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_CANDIDATES,
   CORE_ECOLOGY_AGGREGATE_PERCEPTION_MAX_VISUAL_SOURCES,
@@ -14,10 +14,13 @@ import {
   deriveCoreEcologySettlementShadowsStimulusFrame,
   selectCoreEcologyAggregateExposedFoodSources,
   selectCoreEcologyAggregateVisualSources,
+  withPreparedCoreEcologyAggregatePerceptionWorld,
   type CoreEcologyAggregateExposedFoodSource,
   type CoreEcologyAggregatePerceptionFrameInput,
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
+import * as coreEcologyPerception from "./coreEcologyPerception";
+import * as outdoorIllumination from "./outdoorIllumination";
 import {
   CORE_ECOLOGY_MAX_AGGREGATE_POPULATIONS,
   createCoreEcologyAggregatePatch,
@@ -52,7 +55,10 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createCoreEcologyAlpineResidentPatch } from "./regionalAlpineResidents";
-import { createRegionalWorldView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalCompatibilityWorldForWorld,
+} from "./regionalWorldView";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
@@ -204,6 +210,308 @@ describe("aggregate ecology shared-perception adapter", () => {
     ), { terrain: "ridge", elevation: FIXED_POINT, roughness: 0 });
     const hidden = deriveCoreEcologySettlementShadowsStimulusFrame(input(blocked, [source]));
     expect(visualInfluence(hidden, rats.aggregateId, anchor.anchorOrdinal)).toBe(0);
+  });
+
+  it("prepares shared immutable world inputs once while preserving scalar bytes and source order", () => {
+    const current = fixture("rain", 650_000, true);
+    const anchor = ratPopulation(current.patch).anchors[0]!;
+    const cat: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: "CAT-prepared-batch",
+      sourceSpecies: "domestic-cat",
+      position: anchor.position,
+      movementSalience: FIXED_POINT,
+    };
+    const dog: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: "D-prepared-batch",
+      sourceSpecies: "domestic-dog",
+      position: anchor.position,
+      movementSalience: FIXED_POINT,
+    };
+    const food: CoreEcologyAggregateExposedFoodSource = {
+      sourceReferenceId: "food:prepared-batch",
+      position: anchor.position,
+      sourceStrength: FIXED_POINT,
+      packagingLeakage: FIXED_POINT,
+    };
+    const forwardInput = input(current, [cat, dog], [food]);
+    const reverseInput = input(current, [dog, cat], [food]);
+    const scalar = deriveCoreEcologySettlementShadowsStimulusFrame(forwardInput);
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(reverseInput)).toEqual(scalar);
+    if (scalar === null) throw new Error("Prepared-batch fixture failed its scalar path");
+
+    const perceptionCells = vi.spyOn(coreEcologyPerception, "coreEcologyPerceptionCells");
+    const illumination = vi.spyOn(outdoorIllumination, "buildOutdoorIlluminationField");
+    const escaped: {
+      derive?: typeof deriveCoreEcologySettlementShadowsStimulusFrame;
+    } = {};
+    try {
+      const prepared = withPreparedCoreEcologyAggregatePerceptionWorld({
+        world: current.world,
+        window: current.window,
+        tick: current.patch.updatedAtTick,
+      }, (derive) => {
+        escaped.derive = derive;
+        return [
+          derive(forwardInput),
+          derive(reverseInput),
+          derive({ ...forwardInput, patch: structuredClone(current.patch) }),
+        ] as const;
+      });
+
+      expect(prepared).not.toBeNull();
+      expect(prepared?.every((frame) => JSON.stringify(frame) === JSON.stringify(scalar)))
+        .toBe(true);
+      expect(perceptionCells).toHaveBeenCalledTimes(1);
+      expect(illumination).toHaveBeenCalledTimes(1);
+    } finally {
+      perceptionCells.mockRestore();
+      illumination.mockRestore();
+    }
+    expect(escaped.derive).toBeDefined();
+    expect(escaped.derive?.(forwardInput)).toBeNull();
+  });
+
+  it("preserves scalar bytes with an active physical beacon at night", () => {
+    const current = nightBeaconFixture();
+    const cells = coreEcologyPerception.coreEcologyPerceptionCells(current.world);
+    const illumination = cells === null
+      ? null
+      : outdoorIllumination.buildOutdoorIlluminationField(current.world, cells);
+    expect(Math.max(...(illumination?.localIllumination ?? []))).toBeGreaterThan(0);
+    const anchor = ratPopulation(current.patch).anchors[0]!;
+    const source: CoreEcologyAggregateVisualSource = {
+      sourceReferenceId: "CAT-night-beacon-parity",
+      sourceSpecies: "domestic-cat",
+      position: anchor.position,
+      movementSalience: FIXED_POINT,
+    };
+    const frameInput = input(current, [source]);
+    const scalar = deriveCoreEcologySettlementShadowsStimulusFrame(frameInput);
+    if (scalar === null) throw new Error("Night-beacon fixture failed its scalar path");
+    const prepared = withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+    }, (derive) => derive(frameInput));
+
+    expect(JSON.stringify(prepared)).toBe(JSON.stringify(scalar));
+  });
+
+  it("rejects mutable, cloned, substituted, mismatched, and malformed prepared batches", () => {
+    const current = fixture("clear", 0, true);
+    const normalInput = input(current);
+    const scalar = deriveCoreEcologySettlementShadowsStimulusFrame(normalInput);
+    expect(scalar).not.toBeNull();
+    const run = vi.fn(() => true as const);
+
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: structuredClone(current.world),
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+    }, run)).toBeNull();
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: freezeRecursively(structuredClone(current.window)),
+      tick: current.patch.updatedAtTick,
+    }, run)).toBeNull();
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick + 1,
+    }, run)).toBeNull();
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+      extra: true,
+    }, run)).toBeNull();
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld(new Proxy({}, {
+      ownKeys: () => {
+        throw new Error("malformed batch keys");
+      },
+    }), run)).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+
+    const mutableWorld = fixture();
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: mutableWorld.world,
+      window: mutableWorld.window,
+      tick: mutableWorld.patch.updatedAtTick,
+    }, run)).toBeNull();
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(mutableWorld))).not.toBeNull();
+
+    const mutableWindow = fixture("clear", 0, true, true);
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: mutableWindow.world,
+      window: mutableWindow.window,
+      tick: mutableWindow.patch.updatedAtTick,
+    }, run)).toBeNull();
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(mutableWindow))).not.toBeNull();
+
+    const accessorWindow = fixture("clear", 0, true, false, true);
+    expect(Object.getOwnPropertyDescriptor(accessorWindow.window, "addresses")?.get)
+      .toBeTypeOf("function");
+    expect(withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: accessorWindow.world,
+      window: accessorWindow.window,
+      tick: accessorWindow.patch.updatedAtTick,
+    }, run)).toBeNull();
+    expect(deriveCoreEcologySettlementShadowsStimulusFrame(input(accessorWindow))).not.toBeNull();
+
+    const substitute = fixture("clear", 0, true);
+    const inside = withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+    }, (derive) => ({
+      baseline: derive(normalInput),
+      clonedWorld: derive({ ...normalInput, world: structuredClone(current.world) }),
+      hostile: derive(new Proxy(normalInput, {
+        ownKeys: () => {
+          throw new Error("malformed derive keys");
+        },
+      })),
+      malformed: derive({ ...normalInput, extra: true }),
+      substitutedWindow: derive({ ...normalInput, window: substitute.window }),
+      wrongTick: derive({ ...normalInput, tick: current.patch.updatedAtTick + 1 }),
+    }));
+    expect(inside).toEqual({
+      baseline: scalar,
+      clonedWorld: null,
+      hostile: null,
+      malformed: null,
+      substitutedWindow: null,
+      wrongTick: null,
+    });
+  });
+
+  it("rejects nested weather or settlement-light mutation during a prepared batch", () => {
+    const current = fixture("clear", 0, true);
+    const normalInput = input(current);
+    const scalar = deriveCoreEcologySettlementShadowsStimulusFrame(normalInput);
+    if (scalar === null) throw new Error("Mutable-light fixture failed its scalar path");
+    const compatibility = regionalCompatibilityWorldForWorld(current.world);
+    const settlement = compatibility?.settlements[0];
+    if (settlement === undefined) throw new Error("Mutable-light fixture has no settlement");
+    const originalWeather = { ...current.world.weather };
+    const originalProject = {
+      kind: settlement.project.kind,
+      status: settlement.project.status,
+    };
+    const originalWeatherPrototype = Object.getPrototypeOf(current.world.weather);
+    const weatherSymbol = Symbol("prepared-weather-mutation");
+    const projectSymbol = Symbol("prepared-project-mutation");
+
+    const result = withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+    }, (derive) => {
+      const baseline = derive(normalInput);
+      Object.assign(current.world.weather, {
+        kind: "rain",
+        intensity: 500_000,
+        windX: 100_000,
+        windY: -50_000,
+        nextChangeTick: current.world.weather.nextChangeTick + 1,
+      });
+      const changedWeather = derive(normalInput);
+      Object.assign(current.world.weather, originalWeather);
+      Object.defineProperty(current.world.weather, weatherSymbol, {
+        configurable: true,
+        value: true,
+      });
+      const changedWeatherSymbol = derive(normalInput);
+      delete (current.world.weather as Record<PropertyKey, unknown>)[weatherSymbol];
+      Object.setPrototypeOf(current.world.weather, { hostile: true });
+      const changedWeatherPrototype = derive(normalInput);
+      Object.setPrototypeOf(current.world.weather, originalWeatherPrototype);
+      Object.assign(settlement.project, { kind: "beacon", status: "complete" });
+      const changedSettlementLight = derive(normalInput);
+      Object.assign(settlement.project, originalProject);
+      Object.assign(settlement, { preparedShapeMutation: true });
+      const changedSettlementShape = derive(normalInput);
+      delete (settlement as unknown as Record<string, unknown>).preparedShapeMutation;
+      Object.defineProperty(settlement.project, projectSymbol, {
+        configurable: true,
+        value: true,
+      });
+      const changedProjectShape = derive(normalInput);
+      delete (settlement.project as Record<PropertyKey, unknown>)[projectSymbol];
+      const restored = derive(normalInput);
+      return {
+        baseline,
+        changedProjectShape,
+        changedSettlementLight,
+        changedSettlementShape,
+        changedWeather,
+        changedWeatherPrototype,
+        changedWeatherSymbol,
+        restored,
+      };
+    });
+
+    expect(result).toEqual({
+      baseline: scalar,
+      changedProjectShape: null,
+      changedSettlementLight: null,
+      changedSettlementShape: null,
+      changedWeather: null,
+      changedWeatherPrototype: null,
+      changedWeatherSymbol: null,
+      restored: scalar,
+    });
+  });
+
+  it("discards post-run prepared staging before one fresh scalar fallback", () => {
+    const current = fixture("clear", 0, true);
+    const normalInput = input(current);
+    const scalar = deriveCoreEcologySettlementShadowsStimulusFrame(normalInput);
+    if (scalar === null) throw new Error("Staged-fallback fixture failed its scalar path");
+    const mutation = Symbol("post-run-weather-mutation");
+    let stagedCount = 0;
+    let prepared: readonly (typeof scalar | null)[] | null = null;
+    try {
+      prepared = withPreparedCoreEcologyAggregatePerceptionWorld({
+        world: current.world,
+        window: current.window,
+        tick: current.patch.updatedAtTick,
+      }, (derive) => {
+        const staged = [derive(normalInput), derive(normalInput)] as const;
+        stagedCount = staged.length;
+        Object.defineProperty(current.world.weather, mutation, {
+          configurable: true,
+          value: true,
+        });
+        return staged;
+      });
+      expect(prepared).toBeNull();
+    } finally {
+      delete (current.world.weather as Record<PropertyKey, unknown>)[mutation];
+    }
+    const adopted = prepared ?? [deriveCoreEcologySettlementShadowsStimulusFrame(normalInput)];
+    expect(stagedCount).toBe(2);
+    expect(adopted).toHaveLength(1);
+    expect(JSON.stringify(adopted[0])).toBe(JSON.stringify(scalar));
+  });
+
+  it("revokes a prepared derive closure even when its synchronous owner throws", () => {
+    const current = fixture("clear", 0, true);
+    const normalInput = input(current);
+    const escaped: {
+      derive?: typeof deriveCoreEcologySettlementShadowsStimulusFrame;
+    } = {};
+    expect(() => withPreparedCoreEcologyAggregatePerceptionWorld({
+      world: current.world,
+      window: current.window,
+      tick: current.patch.updatedAtTick,
+    }, (derive) => {
+      escaped.derive = derive;
+      expect(derive(normalInput)).not.toBeNull();
+      throw new Error("stop prepared batch");
+    })).toThrow("stop prepared batch");
+    expect(escaped.derive).toBeDefined();
+    expect(escaped.derive?.(normalInput)).toBeNull();
   });
 
   it("binds every visual source ID to its canonical species namespace", () => {
@@ -644,6 +952,9 @@ describe("aggregate ecology shared-perception adapter", () => {
 function fixture(
   weatherKind: WeatherKind = "clear",
   weatherIntensity = 0,
+  immutableWorld = false,
+  mutableWindow = false,
+  accessorWindow = false,
 ): Fixture {
   const state = createWorld(SEED_TEXT, "standard");
   state.meta.completedTick = TEST_DAYLIGHT_TICK;
@@ -667,7 +978,7 @@ function fixture(
     derivation: { kind: "habitat-v2", habitat },
   });
   const anchor = ratPopulation(patch).anchors[0]!;
-  const window = createRegionalTerrainWindow(
+  const generatedWindow = createRegionalTerrainWindow(
     state.meta.rootSeed,
     createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: ORIGIN }),
     regionalFrameOriginAtAddress({
@@ -676,10 +987,76 @@ function fixture(
       localY: Math.floor(anchor.position.localY / WORLD_POSITION_UNITS_PER_TILE),
     }),
   );
+  const window: RegionalTerrainWindow = accessorWindow
+    ? Object.freeze({
+        center: generatedWindow.center,
+        origin: generatedWindow.origin,
+        terrain: generatedWindow.terrain,
+        get addresses() {
+          return generatedWindow.addresses;
+        },
+      })
+    : mutableWindow
+      ? { ...generatedWindow }
+      : generatedWindow;
   const world = createRegionalWorldView(
     createWorldView(state),
     window,
     projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+    immutableWorld ? { immutable: true } : {},
+  );
+  return { patch, world, window };
+}
+
+function nightBeaconFixture(): Fixture {
+  const origin = createRegionCoord(0, 0);
+  const state = createWorld("prepared aggregate night beacon", "standard");
+  state.meta.completedTick = WORLD_NIGHT_START_TICK + 60;
+  state.weather = {
+    ...state.weather,
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+  };
+  const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
+    rootSeed: state.meta.rootSeed,
+    originRegion: origin,
+  });
+  const patch = createCoreEcologyAggregatePatch({
+    seed: state.meta.rootSeed,
+    patchKey: "prepared-aggregate:night-beacon",
+    originRegion: origin,
+    tick: state.meta.completedTick,
+    populations: individualInputs(habitat),
+    derivation: { kind: "habitat-v2", habitat },
+  });
+  const anchor = ratPopulation(patch).anchors[0]!;
+  const settlement = state.settlements[0];
+  if (settlement === undefined) throw new Error("Night-beacon fixture has no settlement");
+  const anchorX = Math.floor(anchor.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const anchorY = Math.floor(anchor.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  settlement.tileIndex = anchorY * state.terrain.width + anchorX;
+  settlement.project = {
+    ...settlement.project,
+    kind: "beacon",
+    status: "complete",
+    progress: settlement.project.target,
+  };
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: origin }),
+    regionalFrameOriginAtAddress({
+      region: anchor.position.region,
+      localX: anchorX,
+      localY: anchorY,
+    }),
+  );
+  const world = createRegionalWorldView(
+    createWorldView(state),
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+    { immutable: true },
   );
   return { patch, world, window };
 }
@@ -885,4 +1262,14 @@ function foodAtUsefulScentDistance(
     }
   }
   throw new Error("Could not place food scent fixture");
+}
+
+function freezeRecursively<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const nested of Object.values(value as Record<string, unknown>)) {
+      freezeRecursively(nested);
+    }
+    Object.freeze(value);
+  }
+  return value;
 }

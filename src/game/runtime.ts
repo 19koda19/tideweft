@@ -251,6 +251,7 @@ import {
   deriveCoreEcologySettlementShadowsStimulusFrame,
   selectCoreEcologyAggregateExposedFoodSources,
   selectCoreEcologyAggregateVisualSources,
+  withPreparedCoreEcologyAggregatePerceptionWorld,
   type CoreEcologyAggregateExposedFoodSource,
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
@@ -487,6 +488,7 @@ import {
 import {
   stepCoreEcologySettlementShadows,
   stepCoreEcologySmallWorldSourceSet,
+  type CoreEcologySmallWorldSourceStepInput,
 } from "./coreEcologySmallWorld";
 import {
   applySettlementKeeperStoreResponse,
@@ -11544,36 +11546,71 @@ export async function createTideweftRuntime(
         resolvedRegionalResources.settlementEcology,
         completedRegionalView,
       );
-      const aggregateFramesBySource = new Map<string, NonNullable<
-        ReturnType<typeof deriveCoreEcologySettlementShadowsStimulusFrame>
-      >>();
-      const aggregateSourceInputs = [];
-      for (const [sourceKey, patch] of orderedAggregateSources) {
-        const visualSources = selectCoreEcologyAggregateVisualSources(
-          patch,
-          aggregateVisualSourceCandidates,
-        );
-        const exposedFoodSources = selectCoreEcologyAggregateExposedFoodSources(
-          patch,
-          aggregateFoodSourceCandidates,
-        );
-        if (visualSources === null || exposedFoodSources === null) {
-          throw new Error(`Aggregate perception source ${sourceKey} could not be bounded`);
+      type AggregateSourceFrameBatch = Readonly<{
+        aggregateFramesBySource: Map<string, NonNullable<
+          ReturnType<typeof deriveCoreEcologySettlementShadowsStimulusFrame>
+        >>;
+        aggregateSourceInputs: CoreEcologySmallWorldSourceStepInput[];
+      }>;
+      const deriveAggregateSourceFrames = (
+        deriveStimulusFrame: typeof deriveCoreEcologySettlementShadowsStimulusFrame,
+        fallbackOnNull: boolean,
+      ): AggregateSourceFrameBatch | null => {
+        const aggregateFramesBySource = new Map<string, NonNullable<
+          ReturnType<typeof deriveCoreEcologySettlementShadowsStimulusFrame>
+        >>();
+        const aggregateSourceInputs: CoreEcologySmallWorldSourceStepInput[] = [];
+        for (const [sourceKey, patch] of orderedAggregateSources) {
+          const visualSources = selectCoreEcologyAggregateVisualSources(
+            patch,
+            aggregateVisualSourceCandidates,
+          );
+          const exposedFoodSources = selectCoreEcologyAggregateExposedFoodSources(
+            patch,
+            aggregateFoodSourceCandidates,
+          );
+          if (visualSources === null || exposedFoodSources === null) {
+            throw new Error(`Aggregate perception source ${sourceKey} could not be bounded`);
+          }
+          const stimulusFrame = deriveStimulusFrame({
+            patch,
+            world: completedRegionalView,
+            window: regionalTravel.window,
+            tick: world.meta.completedTick,
+            visualSources,
+            exposedFoodSources,
+          });
+          if (stimulusFrame === null) {
+            if (fallbackOnNull) return null;
+            throw new Error(`Aggregate perception source ${sourceKey} could not resolve a frame`);
+          }
+          aggregateFramesBySource.set(sourceKey, stimulusFrame);
+          aggregateSourceInputs.push(Object.freeze({ sourceKey, patch, stimulusFrame }));
         }
-        const stimulusFrame = deriveCoreEcologySettlementShadowsStimulusFrame({
-          patch,
+        return Object.freeze({ aggregateFramesBySource, aggregateSourceInputs });
+      };
+      const preparedAggregateBatch = withPreparedCoreEcologyAggregatePerceptionWorld(
+        {
           world: completedRegionalView,
           window: regionalTravel.window,
           tick: world.meta.completedTick,
-          visualSources,
-          exposedFoodSources,
-        });
-        if (stimulusFrame === null) {
-          throw new Error(`Aggregate perception source ${sourceKey} could not resolve a frame`);
-        }
-        aggregateFramesBySource.set(sourceKey, stimulusFrame);
-        aggregateSourceInputs.push(Object.freeze({ sourceKey, patch, stimulusFrame }));
+        },
+        (deriveStimulusFrame) => deriveAggregateSourceFrames(deriveStimulusFrame, true),
+      );
+      // Preparation refusal, a prepared derive miss, or final-currentness
+      // failure discards the callback's local collections before one fresh
+      // scalar pass constructs the adopted batch.
+      const aggregateBatch = preparedAggregateBatch
+        ?? deriveAggregateSourceFrames(
+          deriveCoreEcologySettlementShadowsStimulusFrame,
+          false,
+        );
+      if (aggregateBatch === null) {
+        // The scalar null case throws above exactly as the pre-batch loop did;
+        // this branch exists only to close the type.
+        throw new Error("Aggregate perception scalar fallback produced no batch");
       }
+      const { aggregateFramesBySource, aggregateSourceInputs } = aggregateBatch;
       const aggregateSourceResults = stepCoreEcologySmallWorldSourceSet(
         aggregateSourceInputs,
         world.meta.completedTick,

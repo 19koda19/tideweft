@@ -42,6 +42,7 @@ export const REGIONAL_TRAVEL_SAFE_MAX_Y = REGIONAL_TRAVEL_ROWS - 1
   - REGIONAL_TRAVEL_SIGHT_TILES;
 export const REGIONAL_TRAVEL_CENTER_X = Math.floor(REGIONAL_TRAVEL_COLUMNS / 2);
 export const REGIONAL_TRAVEL_CENTER_Y = Math.floor(REGIONAL_TRAVEL_ROWS / 2);
+const IMMUTABLE_REGIONAL_TERRAIN_WINDOWS = new WeakSet<object>();
 
 /** Alpha 8 v4 saves used a storage-region-aligned one-tile guard. */
 export const LEGACY_REGIONAL_TRAVEL_HALO_TILES = 1 as const;
@@ -60,6 +61,15 @@ export interface RegionalTerrainWindow {
   readonly addresses: readonly RegionTileAddress[];
 }
 
+/** @internal Exact process-local authority for windows minted by this module. */
+export function isImmutableRegionalTerrainWindow(
+  value: unknown,
+): value is RegionalTerrainWindow {
+  return typeof value === "object"
+    && value !== null
+    && IMMUTABLE_REGIONAL_TERRAIN_WINDOWS.has(value);
+}
+
 /**
  * Change only which persistence stream owns the player's current activity.
  * The bounded frame and every sampled tile retain the same interpretation.
@@ -70,12 +80,16 @@ export function rebindRegionalTerrainWindowCenter(
 ): RegionalTerrainWindow {
   if (!isRegionCoord(centerInput)) throw new RangeError("Regional stream center is not canonical");
   if (regionKey(window.center) === regionKey(centerInput)) return window;
-  return Object.freeze({
+  const rebound = Object.freeze({
     center: createRegionCoord(centerInput.x, centerInput.y),
     origin: window.origin,
     terrain: window.terrain,
     addresses: window.addresses,
   });
+  if (IMMUTABLE_REGIONAL_TERRAIN_WINDOWS.has(window)) {
+    IMMUTABLE_REGIONAL_TERRAIN_WINDOWS.add(rebound);
+  }
+  return rebound;
 }
 
 /** Default frame used by direct tools/tests; live travel centers on the player. */
@@ -190,12 +204,14 @@ export function createRegionalTerrainWindow(
     }
   }
 
-  return deepFreeze({
+  const window = deepFreeze({
     center,
     origin,
     terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS, tiles },
     addresses,
   });
+  IMMUTABLE_REGIONAL_TERRAIN_WINDOWS.add(window);
+  return window;
 }
 
 /** Shift in fixed quanta only after the player leaves the full-sight safety band. */

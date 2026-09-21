@@ -18,6 +18,8 @@ import {
   REGIONAL_TRAVEL_SAFE_MIN_Y,
   REGIONAL_TRAVEL_SHIFT_TILES,
   createRegionalTerrainWindow,
+  isImmutableRegionalTerrainWindow,
+  rebindRegionalTerrainWindowCenter,
   regionLocalToWindowTile,
   regionalWindowTileAddress,
   shiftedRegionalFrameOrigin,
@@ -153,6 +155,15 @@ describe("regional terrain travel frame", () => {
     const first = createRegionalTerrainWindow(seed, stream);
     const second = createRegionalTerrainWindow(seed, stream, first.origin);
     expect(second).toEqual(first);
+    expect(isImmutableRegionalTerrainWindow(first)).toBe(true);
+    expect(isImmutableRegionalTerrainWindow(second)).toBe(true);
+    expect(isImmutableRegionalTerrainWindow(structuredClone(first))).toBe(false);
+    const rebound = rebindRegionalTerrainWindowCenter(first, { x: 5, y: -3 });
+    expect(isImmutableRegionalTerrainWindow(rebound)).toBe(true);
+    const forged = Object.freeze({ ...first, center: Object.freeze({ x: 4, y: -3 }) });
+    const forgedRebound = rebindRegionalTerrainWindowCenter(forged, { x: 5, y: -3 });
+    expect(isImmutableRegionalTerrainWindow(forged)).toBe(false);
+    expect(isImmutableRegionalTerrainWindow(forgedRebound)).toBe(false);
     expect(Object.isFrozen(first)).toBe(true);
     expect(Object.isFrozen(first.terrain.tiles[0])).toBe(true);
     expect(Object.isFrozen(first.addresses[0]?.region)).toBe(true);
