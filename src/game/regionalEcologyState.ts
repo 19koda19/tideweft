@@ -908,24 +908,87 @@ export function commitRegionalEcologyActiveProjection(
   });
   let result: RegionalEcologyStateV1;
   try {
-    result = createRegionalEcologyState({
-      root,
-      settlementHome: {
-        sourceKey: settlementHome.sourceKey,
-        patch: settlementHome.patch,
-      },
-      activeRegions: state.activeRegions,
-      activeResidents: activeResidents.map(({ kind, sourceKey, patch }) => ({
-        kind: kind as RegionalEcologyActiveSourceKind,
-        sourceKey,
-        patch,
-      })),
-    });
+    try {
+      result = sealPreparedRegionalEcologyCommitState({
+        prior: state,
+        root,
+        settlementHome,
+        activeResidents,
+      });
+    } catch {
+      // The public constructor remains the fail-closed authority if this
+      // private prepared boundary ever stops proving its exact inputs.
+      result = createRegionalEcologyState({
+        root,
+        settlementHome: {
+          sourceKey: settlementHome.sourceKey,
+          patch: settlementHome.patch,
+        },
+        activeRegions: state.activeRegions,
+        activeResidents: activeResidents.map(({ kind, sourceKey, patch }) => ({
+          kind: kind as RegionalEcologyActiveSourceKind,
+          sourceKey,
+          patch,
+        })),
+      });
+    }
     requireStateTransition(state, result, input.rootSeed);
   } catch {
     return null;
   }
   return result;
+}
+
+/**
+ * Seal snapshots already constructed and authenticated by the commit above.
+ * This stays module-private: public callers, loads, clones, and replacements
+ * continue through createRegionalEcologyState and its complete snapshot path.
+ */
+function sealPreparedRegionalEcologyCommitState(
+  input: Readonly<{
+    readonly prior: RegionalEcologyStateV1;
+    readonly root: RegionalEcologyRootV1;
+    readonly settlementHome: RegionalEcologyResidentSnapshotV1;
+    readonly activeResidents: readonly RegionalEcologyResidentSnapshotV1[];
+  }>,
+): RegionalEcologyStateV1 {
+  if (
+    canonicalizeRegionalEcologyState(input.prior) !== input.prior
+    || canonicalizeRegionalEcologyRoot(input.root) !== input.root
+    || input.root.updatedAtTick < input.prior.updatedAtTick
+    || input.settlementHome.kind !== "settlement-home"
+    || input.settlementHome.patch.updatedAtTick !== input.root.updatedAtTick
+    || input.settlementHome.patch.patchKey !== input.settlementHome.sourceKey
+    || input.activeResidents.length !== input.prior.activeResidents.length
+    || input.activeResidents.some((resident) => (
+      (resident.kind !== "regional-habitat" && resident.kind !== "legacy-cohort")
+      || resident.patch.updatedAtTick !== input.root.updatedAtTick
+      || resident.patch.patchKey !== resident.sourceKey
+    ))
+  ) {
+    throw new RangeError("Prepared regional ecology commit lost canonical authority");
+  }
+  const activeRegions = canonicalRegions(input.prior.activeRegions);
+  const activeResidents = Object.freeze([...input.activeResidents].sort(compareSnapshot));
+  if (!validStateSources(
+    input.root,
+    input.settlementHome,
+    activeRegions,
+    activeResidents,
+  )) {
+    throw new RangeError(
+      "Prepared regional ecology sources overlap, contain invalid references, or escape the active neighborhood",
+    );
+  }
+  return sealState({
+    version: REGIONAL_ECOLOGY_STATE_VERSION,
+    ownerId: REGIONAL_ECOLOGY_STATE_OWNER_ID,
+    updatedAtTick: input.root.updatedAtTick,
+    root: input.root,
+    settlementHome: input.settlementHome,
+    activeRegions,
+    activeResidents,
+  });
 }
 
 function createSnapshot(

@@ -595,6 +595,17 @@ function retireCrossOwnerAttackerAtEventTick(
 describe("regional ecology v25 owner substrate", () => {
   it("canonicalizes one home plus a bounded order-independent hot neighborhood", () => {
     const first = stateFixture();
+    expect({
+      stateIntegrity: first.integrity,
+      settlementHomeIntegrity: first.settlementHome.integrity,
+      activeResidentIntegrity: first.activeResidents[0]?.integrity,
+      serializedHash: hashCanonical(serializeRegionalEcologyState(first)),
+    }).toEqual({
+      stateIntegrity: "79e1cf2874448e88",
+      settlementHomeIntegrity: "dfd0cda8a45ed627",
+      activeResidentIntegrity: "c50830f3296e5f2d",
+      serializedHash: "f5d223ecb797fbe3",
+    });
     const { root, home, wild } = fixture();
     const replay = createRegionalEcologyState({
       root,
@@ -1747,6 +1758,74 @@ describe("regional ecology v25 owner substrate", () => {
       settlementHome: null,
       residents: [],
     })).toBeNull();
+  });
+
+  it("seals commit-prepared snapshots byte-identically to a loaded public reconstruction", () => {
+    const { root, home, wild } = fixture();
+    const predator = patchAt(PREDATOR_REGION);
+    const state = createRegionalEcologyState({
+      root,
+      settlementHome: { sourceKey: home.patchKey, patch: home },
+      activeRegions: [HOME_REGION, WILD_REGION, PREDATOR_REGION],
+      activeResidents: [
+        { kind: "regional-habitat", sourceKey: predator.patchKey, patch: predator },
+        { kind: "regional-habitat", sourceKey: wild.patchKey, patch: wild },
+      ],
+    });
+    const projection = projectRegionalEcologyActiveState(state, windowAt(WILD_REGION));
+    if (projection === null || projection.residents.length !== 3) {
+      throw new Error("Prepared-state fixture did not project three exact sources");
+    }
+    const nextTick = TICK + 1;
+    const residents = projection.residents.map(({ sourceKey, patch }) => {
+      const stepped = stepCoreEcologyAggregatePatch(patch, {
+        tick: nextTick,
+        actorSteps: patch.populations.flatMap(({ members }) => members)
+          .filter(({ materialization }) => materialization === "materialized")
+          .map(({ actor }) => ({
+            actorId: actor.identity.stableId,
+            observations: [],
+            foodOpportunities: [],
+            accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+          })),
+      });
+      if (stepped === null) throw new Error(`Prepared-state source ${sourceKey} did not step`);
+      return { sourceKey, patch: stepped.patch };
+    });
+    const committed = commitRegionalEcologyActiveProjection(state, projection, {
+      root: advanceRegionalEcologyRoot(root, nextTick),
+      rootSeed: SEED,
+      settlementHome: null,
+      residents,
+    });
+    if (committed === null) throw new Error("Prepared-state commit failed");
+
+    const committedText = serializeRegionalEcologyState(committed);
+    const loaded = deserializeRegionalEcologyState(committedText);
+    if (loaded === null) throw new Error("Prepared-state result did not reload");
+    const publicReconstruction = createRegionalEcologyState({
+      root: structuredClone(loaded.root),
+      settlementHome: {
+        sourceKey: loaded.settlementHome.sourceKey,
+        patch: structuredClone(loaded.settlementHome.patch),
+      },
+      activeRegions: structuredClone(loaded.activeRegions),
+      activeResidents: [...loaded.activeResidents].reverse().map(({ kind, sourceKey, patch }) => ({
+        kind: kind as "regional-habitat" | "legacy-cohort",
+        sourceKey,
+        patch: structuredClone(patch),
+      })),
+    });
+    const publicText = serializeRegionalEcologyState(publicReconstruction);
+
+    expect(publicText).toBe(committedText);
+    expect([...new TextEncoder().encode(publicText)])
+      .toEqual([...new TextEncoder().encode(committedText)]);
+    expect(publicReconstruction.integrity).toBe(committed.integrity);
+    expect(publicReconstruction.settlementHome.integrity)
+      .toBe(committed.settlementHome.integrity);
+    expect(publicReconstruction.activeResidents.map(({ integrity }) => integrity))
+      .toEqual(committed.activeResidents.map(({ integrity }) => integrity));
   });
 
   it("preserves authoritative actor changes while enforcing stale-write and lineage fences", () => {
