@@ -6081,6 +6081,31 @@ interface RuntimeCoreBlockedMovement {
   readonly intent: CoreWildlifeIntentKind;
 }
 
+interface RuntimeCoreLocomotionResult {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly blocked: readonly RuntimeCoreBlockedMovement[];
+}
+
+/**
+ * A one-shot proof from the cognition dry run, not a reusable world cache.
+ * Finalization may consume it only while every authoritative input still has
+ * the exact identity used by that dry run.
+ */
+interface RuntimeCoreLocomotionReceipt {
+  readonly cognitionPatch: CoreEcologyAggregatePatchState;
+  readonly movementView: WorldView;
+  readonly tick: number;
+  readonly preparedLocalActorIds: readonly string[];
+  readonly activityAuthorities: ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>;
+  readonly activityAuthorityEntries: readonly (readonly [
+    actorId: string,
+    authority: CoreEcologyActivityAuthorityReceipt,
+  ])[];
+  readonly result: RuntimeCoreLocomotionResult;
+}
+
+const runtimeCoreLocomotionReceipts = new WeakMap<object, RuntimeCoreLocomotionReceipt>();
+
 function refreshRuntimeCoreRoutineAfterIntentMovement(
   patch: CoreEcologyAggregatePatchState,
   actorId: string,
@@ -6116,10 +6141,7 @@ function resolveRuntimeCoreLocomotion(
   tick: number,
   localActorIds: ReadonlySet<string>,
   activityAuthorities: ReadonlyMap<string, CoreEcologyActivityAuthorityReceipt>,
-): Readonly<{
-  patch: CoreEcologyAggregatePatchState;
-  blocked: readonly RuntimeCoreBlockedMovement[];
-}> | null {
+): RuntimeCoreLocomotionResult | null {
   let patch = state;
   const blocked: RuntimeCoreBlockedMovement[] = [];
   for (const member of state.populations.flatMap(({ members }) => members)
@@ -6761,6 +6783,7 @@ function stepRuntimeCoreEcology(
     ]),
   );
   let cognitionPatch: CoreEcologyAggregatePatchState | null = null;
+  let acceptedLocomotion: RuntimeCoreLocomotionResult | null = null;
   for (let refinement = 0; refinement <= CORE_WILDLIFE_INTENTS.length; refinement += 1) {
     const locomotion = resolveRuntimeCoreLocomotion(
       stepped.patch,
@@ -6772,6 +6795,7 @@ function stepRuntimeCoreEcology(
     if (locomotion === null) return null;
     if (locomotion.blocked.length === 0) {
       cognitionPatch = stepped.patch;
+      acceptedLocomotion = locomotion;
       break;
     }
     let changed = false;
@@ -6790,6 +6814,7 @@ function stepRuntimeCoreEcology(
     if (!changed) {
       if (locomotion.blocked.some(({ intent }) => intent !== "disengage")) return null;
       cognitionPatch = stepped.patch;
+      acceptedLocomotion = locomotion;
       break;
     }
     stepped = stepCoreEcologyAggregatePatch(state, {
@@ -6798,16 +6823,34 @@ function stepRuntimeCoreEcology(
     });
     if (stepped === null) return null;
   }
-  if (cognitionPatch === null) return null;
-  return Object.freeze({
+  if (cognitionPatch === null || acceptedLocomotion === null) return null;
+  const preparedLocalActorIds = Object.freeze([...localActorIds].sort(compareText));
+  const activityAuthorityEntries = Object.freeze(
+    [...activityAuthorities.entries()]
+      .sort(([leftActorId], [rightActorId]) => compareText(leftActorId, rightActorId))
+      .map(([actorId, authority]) => Object.freeze([actorId, authority] as const)),
+  );
+  const prepared = Object.freeze({
     patch: cognitionPatch,
     events: stepped.events,
     groupEvents: stepped.groupEvents,
     resourceClaims: stepped.resourceClaims,
     currentLivePreyByAttacker,
-    localActorIds: Object.freeze([...localActorIds].sort(compareText)),
+    localActorIds: preparedLocalActorIds,
     activityAuthorities,
   });
+  if (isImmutableRegionalWorldView(movementView)) {
+    runtimeCoreLocomotionReceipts.set(prepared, Object.freeze({
+      cognitionPatch,
+      movementView,
+      tick: world.meta.completedTick,
+      preparedLocalActorIds,
+      activityAuthorities,
+      activityAuthorityEntries,
+      result: acceptedLocomotion,
+    }));
+  }
+  return prepared;
 }
 
 interface RuntimeCoreEcologyFinishedStep {
@@ -6833,13 +6876,30 @@ function finishRuntimeCoreEcologyStep(
     patch: CoreEcologyAggregatePatchState,
   ) => CoreEcologyAggregatePatchState | null,
 ): RuntimeCoreEcologyFinishedStep | null {
-  const locomotion = resolveRuntimeCoreLocomotion(
-    stateAfterMortality,
-    movementView,
-    tick,
-    new Set(prepared.localActorIds),
-    prepared.activityAuthorities,
-  );
+  const receipt = runtimeCoreLocomotionReceipts.get(prepared);
+  runtimeCoreLocomotionReceipts.delete(prepared);
+  const locomotion = (
+    receipt !== undefined
+    && isImmutableRegionalWorldView(movementView)
+    && stateAfterMortality === prepared.patch
+    && prepared.patch === receipt.cognitionPatch
+    && movementView === receipt.movementView
+    && tick === receipt.tick
+    && prepared.localActorIds === receipt.preparedLocalActorIds
+    && prepared.activityAuthorities === receipt.activityAuthorities
+    && prepared.activityAuthorities.size === receipt.activityAuthorityEntries.length
+    && receipt.activityAuthorityEntries.every(([actorId, authority]) => (
+      prepared.activityAuthorities.get(actorId) === authority
+    ))
+  )
+    ? receipt.result
+    : resolveRuntimeCoreLocomotion(
+        stateAfterMortality,
+        movementView,
+        tick,
+        new Set(prepared.localActorIds),
+        prepared.activityAuthorities,
+      );
   if (locomotion === null || locomotion.blocked.some(({ intent }) => intent !== "disengage")) {
     return null;
   }
