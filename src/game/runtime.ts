@@ -694,16 +694,15 @@ import {
   deriveLivingActorEscapeTargets,
   deriveLivingActorSearchProbe,
   resolveLivingActorLocomotion,
-  type LivingActorTraversabilityCell,
   type LivingActorTraversabilitySurface,
 } from "./livingActorLocomotion";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
   coreWildlifeGradeTraversalPolicy,
   coreWildlifeMaximumStepUnits,
-  coreWildlifeTraversabilityCells,
   type CoreWildlifeTravelMedium,
 } from "./coreWildlifeLocomotionProfile";
+import { runtimeCoreTraversabilityCellBatch } from "./runtimeCoreTraversabilityCellBatch";
 import {
   LIVING_ACTOR_VISUAL_CONTACT_VERSION,
   collectLivingActorVisualContactObservations,
@@ -1019,14 +1018,6 @@ const runtimeCoreTraversabilityCache = new WeakMap<
   Map<string, Readonly<{
     sampledAtTick: number;
     surface: LivingActorTraversabilitySurface;
-  }>>
->();
-const runtimeCoreTraversabilityCellCache = new WeakMap<
-  WorldView,
-  Map<string, Readonly<{
-    sampledAtTick: number;
-    terrainTiles: WorldView["terrain"]["tiles"];
-    cells: readonly LivingActorTraversabilityCell[];
   }>>
 >();
 const runtimeCoreTraversabilityElevationCache = new WeakMap<
@@ -5829,31 +5820,12 @@ function createRuntimeCoreTraversability(
   if (origin === null) return null;
   try {
     const gradePolicy = coreWildlifeGradeTraversalPolicy(actor.identity.species);
-    const terrainKey = `${actor.identity.species}:${travelMedium ?? "default"}`;
-    let terrainCache = cacheEligible
-      ? runtimeCoreTraversabilityCellCache.get(world)
-      : undefined;
-    const cachedTerrain = terrainCache?.get(terrainKey);
-    const cells = cacheEligible
-      && cachedTerrain?.sampledAtTick === sampledAtTick
-      && cachedTerrain.terrainTiles === world.terrain.tiles
-      ? cachedTerrain.cells
-      : coreWildlifeTraversabilityCells(
-          actor.identity.species,
-          world.terrain.tiles,
-          travelMedium,
-        );
-    if (cacheEligible && cachedTerrain?.cells !== cells) {
-      if (terrainCache === undefined) {
-        terrainCache = new Map();
-        runtimeCoreTraversabilityCellCache.set(world, terrainCache);
-      }
-      terrainCache.set(terrainKey, Object.freeze({
-        sampledAtTick,
-        terrainTiles: world.terrain.tiles,
-        cells,
-      }));
-    }
+    const cells = runtimeCoreTraversabilityCellBatch(
+      world,
+      sampledAtTick,
+      actor.identity.species,
+      travelMedium,
+    );
     let elevations: readonly number[] | undefined;
     if (gradePolicy !== null) {
       const cachedElevations = cacheEligible

@@ -60,6 +60,28 @@ interface PreparedCoreWildlifeTraversability {
   readonly medium: CoreWildlifeTravelMedium | null;
 }
 
+type CoreWildlifeTraversabilityEvaluationMode =
+  | "air"
+  | "amphibious"
+  | "ground"
+  | "surface-water";
+
+declare const CORE_WILDLIFE_TRAVERSABILITY_LAW_IDENTITY: unique symbol;
+
+/**
+ * Opaque process-local equality token for the tile-dependent part of one
+ * validated traversability law. It carries no prepared authority and is useful
+ * only as a derived-cache key.
+ */
+export interface CoreWildlifeTraversabilityLawIdentity {
+  readonly [CORE_WILDLIFE_TRAVERSABILITY_LAW_IDENTITY]: true;
+}
+
+const TRAVERSABILITY_LAW_IDENTITIES = new WeakMap<
+  CoreWildlifeLocomotionProfile,
+  Map<CoreWildlifeTraversabilityEvaluationMode, CoreWildlifeTraversabilityLawIdentity>
+>();
+
 const DEFAULT_LOCOMOTION_PROFILE: CoreWildlifeLocomotionProfile = Object.freeze({
   mode: "terrestrial",
   aerialTravelCost: null,
@@ -617,6 +639,30 @@ export function coreWildlifeTraversabilityCells(
   return createLivingActorTraversabilityCellsFromCodes(codes);
 }
 
+/**
+ * Resolve exact cell-law equality only after the ordinary species/medium
+ * admission has succeeded. Ground includes default terrestrial travel,
+ * explicit land travel, and the established forged-unknown fallback because
+ * all three execute the same tile-dependent branch after preparation.
+ */
+export function coreWildlifeTraversabilityLawIdentity(
+  species: CoreWildlifeSpecies,
+  travelMedium?: CoreWildlifeTravelMedium,
+): CoreWildlifeTraversabilityLawIdentity {
+  const prepared = prepareCoreWildlifeTraversability(species, travelMedium);
+  const mode = traversabilityEvaluationMode(prepared.medium);
+  let identities = TRAVERSABILITY_LAW_IDENTITIES.get(prepared.profile);
+  if (identities === undefined) {
+    identities = new Map();
+    TRAVERSABILITY_LAW_IDENTITIES.set(prepared.profile, identities);
+  }
+  const existing = identities.get(mode);
+  if (existing !== undefined) return existing;
+  const identity = Object.freeze({}) as CoreWildlifeTraversabilityLawIdentity;
+  identities.set(mode, identity);
+  return identity;
+}
+
 function prepareCoreWildlifeTraversability(
   species: CoreWildlifeSpecies,
   travelMedium?: CoreWildlifeTravelMedium,
@@ -689,6 +735,15 @@ function evaluatePreparedCoreWildlifeTraversabilityCode(
     ? preference.multiplier
     : profile.terrainMultipliers[tile.terrain] ?? profile.baseTerrainMultiplier;
   return scaledCost(base, multiplier);
+}
+
+function traversabilityEvaluationMode(
+  medium: CoreWildlifeTravelMedium | null,
+): CoreWildlifeTraversabilityEvaluationMode {
+  if (medium === "air") return "air";
+  if (medium === "surface-water") return "surface-water";
+  if (medium === "amphibious") return "amphibious";
+  return "ground";
 }
 
 function accessForTraversabilityCode(code: number): LivingActorTraversabilityCell["access"] {

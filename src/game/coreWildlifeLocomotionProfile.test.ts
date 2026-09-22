@@ -14,6 +14,7 @@ import {
   coreWildlifeMaximumStepUnits,
   coreWildlifeTraversabilityCell,
   coreWildlifeTraversabilityCells,
+  coreWildlifeTraversabilityLawIdentity,
 } from "./coreWildlifeLocomotionProfile";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import { CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES } from "./coreEcologySpeciesRuntimePolicy";
@@ -205,6 +206,56 @@ describe("core wildlife locomotion profiles", () => {
     );
   });
 
+  it("mints one opaque token for each exact validated tile law", () => {
+    const rabbitDefault = coreWildlifeTraversabilityLawIdentity("marsh-rabbit");
+    const rabbitLand = coreWildlifeTraversabilityLawIdentity("marsh-rabbit", "land");
+    const cat = coreWildlifeTraversabilityLawIdentity("domestic-cat");
+    const chicken = coreWildlifeTraversabilityLawIdentity("domestic-chicken");
+    const domesticGoat = coreWildlifeTraversabilityLawIdentity("domestic-goat");
+    const mountainGoat = coreWildlifeTraversabilityLawIdentity("mountain-goat");
+    const arcticFox = coreWildlifeTraversabilityLawIdentity("arctic-fox");
+
+    expect(rabbitDefault).toBe(rabbitLand);
+    expect(cat).toBe(chicken);
+    expect(new Set([
+      rabbitDefault,
+      rabbitLand,
+      cat,
+      chicken,
+      domesticGoat,
+      mountainGoat,
+      arcticFox,
+    ])).toHaveLength(5);
+    expect(Object.isFrozen(rabbitDefault)).toBe(true);
+    expect(Reflect.ownKeys(rabbitDefault)).toEqual([]);
+
+    const tiles = [
+      tile({ terrain: "meadow", baseTravelCost: 1 }),
+      tile({ terrain: "meadow", baseTravelCost: 1_000_000 }),
+      tile({ terrain: "marsh", moisture: 900_000, roughness: 800_000 }),
+      tile({ terrain: "ridge", baseTravelCost: 730_000 }),
+      tile({ terrain: "tidal-flat", moisture: 990_000 }),
+      tile({ waterDepth: 1 }),
+      tile({ waterDepth: ADRIFT_STAND_DEPTH }),
+      tile({ waterDepth: ADRIFT_STAND_DEPTH + 1 }),
+      tile({ terrain: "deep-water", waterDepth: 0 }),
+    ];
+    expect(coreWildlifeTraversabilityCells("marsh-rabbit", tiles)).toEqual(
+      coreWildlifeTraversabilityCells("marsh-rabbit", tiles, "land"),
+    );
+    expect(coreWildlifeTraversabilityCells("domestic-cat", tiles)).toEqual(
+      coreWildlifeTraversabilityCells("domestic-chicken", tiles),
+    );
+
+    expect(coreWildlifeTraversabilityLawIdentity("gull")).toBe(
+      coreWildlifeTraversabilityLawIdentity("gull", "air"),
+    );
+    expect(coreWildlifeTraversabilityLawIdentity(
+      "gull",
+      "unregistered-medium" as never,
+    )).not.toBe(coreWildlifeTraversabilityLawIdentity("gull", "air"));
+  });
+
   it("binds one validated species projection to distinct actor surfaces without changing bytes", () => {
     const origin = createWorldPosition(createRegionCoord(-11, 8), 0, 0);
     const tiles = [
@@ -266,13 +317,23 @@ describe("core wildlife locomotion profiles", () => {
         tile(),
         medium,
       )));
+      expect(capture(() => coreWildlifeTraversabilityLawIdentity(
+        species,
+        medium,
+      ))).toEqual(capture(() => coreWildlifeTraversabilityCell(
+        species,
+        tile(),
+        medium,
+      )));
     }
 
     const unknownSpecies = "invented-bird" as never;
     const unknownSingle = () => coreWildlifeTraversabilityCell(unknownSpecies, tile());
     const unknownBatch = () => coreWildlifeTraversabilityCells(unknownSpecies, []);
+    const unknownLaw = () => coreWildlifeTraversabilityLawIdentity(unknownSpecies);
     expect(unknownSingle).toThrow("Unknown core wildlife species invented-bird");
     expect(unknownBatch).toThrow("Unknown core wildlife species invented-bird");
+    expect(unknownLaw).toThrow("Unknown core wildlife species invented-bird");
   });
 
   it("selects duck air or surface water through one shared traversability seam", () => {
