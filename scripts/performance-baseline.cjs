@@ -19,6 +19,9 @@ const CDP_CALL_TIMEOUT_MS = 15_000;
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 3_000;
 const TARGET_RENDERER_WARMUP_FRAMES = 30;
 const LONG_TRAVEL_MINIMUM_SAMPLE_MS = 210_000;
+const HITCH_TRACE_THRESHOLD_MS = 80;
+const HITCH_TRACE_RECORD_CAPACITY = 32;
+const HITCH_TRACE_SNAPSHOT_CAPACITY = 16;
 const MAX_CHILD_OUTPUT_CHARACTERS = 64 * 1_024;
 const BASELINE_WORLD_SEED = 'runtime baseline estuary';
 const CDP_METRIC_NAMES = Object.freeze([
@@ -41,6 +44,116 @@ const CDP_METRIC_UNITS = Object.freeze({
   ThreadTime: 'seconds',
   ProcessTime: 'seconds',
 });
+
+function retainBoundedHitchGap(records, candidate, capacity, thresholdMs) {
+  if (!Array.isArray(records)) throw new TypeError('hitch records must be an array');
+  if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+    throw new RangeError('hitch record capacity must be a positive safe integer');
+  }
+  if (!Number.isFinite(thresholdMs) || thresholdMs < 0) {
+    throw new RangeError('hitch threshold must be a finite non-negative number');
+  }
+  if (
+    candidate === null
+    || typeof candidate !== 'object'
+    || !Number.isFinite(candidate.gapMs)
+    || !Number.isFinite(candidate.after?.elapsedMs)
+  ) {
+    throw new TypeError('hitch record must have finite gap and end time');
+  }
+  if (candidate.gapMs < thresholdMs) return false;
+  records.push(candidate);
+  records.sort((left, right) => (
+    right.gapMs - left.gapMs
+    || left.after.elapsedMs - right.after.elapsedMs
+  ));
+  if (records.length > capacity) records.length = capacity;
+  return records.includes(candidate);
+}
+
+function retainBoundedHitchSnapshot(records, candidate, capacity) {
+  if (!Array.isArray(records)) throw new TypeError('hitch snapshots must be an array');
+  if (!Number.isSafeInteger(capacity) || capacity <= 0) {
+    throw new RangeError('hitch snapshot capacity must be a positive safe integer');
+  }
+  if (
+    candidate === null
+    || typeof candidate !== 'object'
+    || !Number.isFinite(candidate.elapsedMs)
+    || !Number.isFinite(candidate.gapMs)
+    || candidate.gapMs < 0
+    || !Array.isArray(candidate.reasons)
+    || candidate.reasons.length === 0
+  ) {
+    throw new TypeError('hitch snapshot must have finite time, gap, and at least one reason');
+  }
+  const isTransition = (snapshot) => snapshot.reasons.includes('canonical-region-change')
+    || snapshot.reasons.includes('spatial-epoch-change');
+  const isWorstWitness = (snapshot) => snapshot.reasons.includes('new-worst-gap');
+  const byDiagnosticValue = (left, right) => (
+    Number(isTransition(right)) - Number(isTransition(left))
+    || right.gapMs - left.gapMs
+    || right.elapsedMs - left.elapsedMs
+  );
+  records.push(candidate);
+  const worstWitness = records
+    .filter(isWorstWitness)
+    .sort((left, right) => right.gapMs - left.gapMs || right.elapsedMs - left.elapsedMs)[0];
+  records.sort(byDiagnosticValue);
+  if (records.length > capacity) {
+    records.length = capacity;
+    if (worstWitness !== undefined && !records.includes(worstWitness)) {
+      records[records.length - 1] = worstWitness;
+      records.sort(byDiagnosticValue);
+    }
+  }
+  return records.includes(candidate);
+}
+
+function buildHitchDelta(before, after) {
+  const required = [
+    before?.tick,
+    after?.tick,
+    before?.rendererFrameCount,
+    after?.rendererFrameCount,
+    before?.floatingGlobalTiles?.x,
+    before?.floatingGlobalTiles?.y,
+    after?.floatingGlobalTiles?.x,
+    after?.floatingGlobalTiles?.y,
+    before?.canonical?.region?.x,
+    before?.canonical?.region?.y,
+    after?.canonical?.region?.x,
+    after?.canonical?.region?.y,
+  ];
+  if (!required.every(Number.isFinite)) {
+    throw new TypeError('hitch witnesses must contain finite timing and position fields');
+  }
+  return {
+    tick: after.tick - before.tick,
+    rendererFrames: after.rendererFrameCount - before.rendererFrameCount,
+    distanceTiles: Math.hypot(
+      after.floatingGlobalTiles.x - before.floatingGlobalTiles.x,
+      after.floatingGlobalTiles.y - before.floatingGlobalTiles.y,
+    ),
+    regionChanged: before.canonical.region.x !== after.canonical.region.x
+      || before.canonical.region.y !== after.canonical.region.y,
+    spatialEpochChanged: before.spatialEpoch !== after.spatialEpoch,
+  };
+}
+
+function hitchSnapshotReasons(gapMs, priorWorstGapMs, delta) {
+  if (!Number.isFinite(gapMs) || !Number.isFinite(priorWorstGapMs)) {
+    throw new TypeError('hitch gaps must be finite');
+  }
+  if (delta === null || typeof delta !== 'object') {
+    throw new TypeError('hitch delta is required');
+  }
+  const reasons = [];
+  if (delta.regionChanged === true) reasons.push('canonical-region-change');
+  if (delta.spatialEpochChanged === true) reasons.push('spatial-epoch-change');
+  if (gapMs > priorWorstGapMs) reasons.push('new-worst-gap');
+  return reasons;
+}
 
 function argumentValue(argv, index, option) {
   const value = argv[index + 1];
@@ -87,6 +200,7 @@ function parseArguments(argv) {
   let output = '';
   let sampleMs = DEFAULT_SAMPLE_MS;
   let scenarioId = '';
+  let traceHitches = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -113,6 +227,8 @@ function parseArguments(argv) {
     } else if (argument.startsWith('--scenario=')) {
       scenarioId = argument.slice('--scenario='.length);
       if (scenarioId.length === 0) throw new Error('--scenario requires a value');
+    } else if (argument === '--trace-hitches') {
+      traceHitches = true;
     } else {
       throw new Error(`Unknown performance-baseline argument: ${argument}`);
     }
@@ -123,6 +239,7 @@ function parseArguments(argv) {
     output: outputPath(output),
     sampleMs,
     scenarioId,
+    traceHitches,
   };
 }
 
@@ -658,7 +775,7 @@ async function warmTargetRenderer(client, scenario) {
   return warmup.frames;
 }
 
-function assertMeasurementTelemetry(scenario, frameSample) {
+function assertMeasurementTelemetry(scenario, frameSample, traceHitches) {
   const renderer = frameSample.telemetry?.renderer;
   const runtime = frameSample.telemetry?.runtime;
   const ui = frameSample.telemetry?.ui;
@@ -868,10 +985,144 @@ function assertMeasurementTelemetry(scenario, frameSample) {
         + `at least three regions: ${JSON.stringify(travel)}`,
       );
     }
+    if (traceHitches === true) {
+      const hitchTrace = frameSample.hitchTrace;
+      if (
+        hitchTrace?.schema !== 'tideweft-hitch-trace/v1'
+        || hitchTrace.thresholdMs !== HITCH_TRACE_THRESHOLD_MS
+        || hitchTrace.recordCapacity !== HITCH_TRACE_RECORD_CAPACITY
+        || hitchTrace.telemetrySnapshotCapacity !== HITCH_TRACE_SNAPSHOT_CAPACITY
+        || !Number.isSafeInteger(hitchTrace.observedOverThreshold)
+        || hitchTrace.observedOverThreshold < 0
+        || !Number.isFinite(hitchTrace.worstGapMs)
+        || hitchTrace.worstGapMs < 0
+        || !Number.isSafeInteger(hitchTrace.discarded)
+        || hitchTrace.discarded < 0
+        || !Array.isArray(hitchTrace.records)
+        || hitchTrace.records.length > HITCH_TRACE_RECORD_CAPACITY
+        || hitchTrace.discarded !== hitchTrace.observedOverThreshold - hitchTrace.records.length
+        || !Array.isArray(hitchTrace.snapshots)
+        || hitchTrace.snapshots.length > HITCH_TRACE_SNAPSHOT_CAPACITY
+      ) {
+        throw new Error(
+          `Scenario ${scenario.id} returned an invalid bounded hitch trace: `
+          + JSON.stringify(hitchTrace),
+        );
+      }
+      const allowedSnapshotReasons = new Set([
+        'canonical-region-change',
+        'spatial-epoch-change',
+        'new-worst-gap',
+      ]);
+      for (let index = 0; index < hitchTrace.records.length; index += 1) {
+        const record = hitchTrace.records[index];
+        let expectedDelta = null;
+        try {
+          expectedDelta = buildHitchDelta(record?.before, record?.after);
+        } catch {
+          expectedDelta = null;
+        }
+        const heap = record?.after?.heap;
+        if (
+          !Number.isFinite(record?.gapMs)
+          || record.gapMs < HITCH_TRACE_THRESHOLD_MS
+          || !Number.isFinite(record?.priorTelemetrySnapshotCaptureCostMs)
+          || record.priorTelemetrySnapshotCaptureCostMs < 0
+          || !Number.isFinite(record?.before?.elapsedMs)
+          || !Number.isFinite(record?.after?.elapsedMs)
+          || record.after.elapsedMs < record.before.elapsedMs
+          || !Number.isSafeInteger(record?.before?.browserRafOrdinal)
+          || !Number.isSafeInteger(record?.after?.browserRafOrdinal)
+          || record.after.browserRafOrdinal <= record.before.browserRafOrdinal
+          || !Number.isSafeInteger(record?.before?.tick)
+          || !Number.isSafeInteger(record?.after?.tick)
+          || record.after.tick < record.before.tick
+          || !Number.isSafeInteger(record?.before?.rendererFrameCount)
+          || !Number.isSafeInteger(record?.after?.rendererFrameCount)
+          || record.after.rendererFrameCount < record.before.rendererFrameCount
+          || expectedDelta === null
+          || !Number.isFinite(record?.delta?.tick)
+          || record.delta.tick !== expectedDelta.tick
+          || !Number.isFinite(record?.delta?.rendererFrames)
+          || record.delta.rendererFrames !== expectedDelta.rendererFrames
+          || !Number.isFinite(record?.delta?.distanceTiles)
+          || record.delta.distanceTiles < 0
+          || record.delta.distanceTiles !== expectedDelta.distanceTiles
+          || record?.delta?.regionChanged !== expectedDelta.regionChanged
+          || record?.delta?.spatialEpochChanged !== expectedDelta.spatialEpochChanged
+          || !(
+            heap === null
+            || (
+              heap !== null
+              && typeof heap === 'object'
+              && Number.isFinite(heap.used)
+              && heap.used >= 0
+              && Number.isFinite(heap.total)
+              && heap.total >= heap.used
+            )
+          )
+          || (index > 0
+            && hitchTrace.records[index - 1].after.elapsedMs > record.after.elapsedMs)
+        ) {
+          throw new Error(
+            `Scenario ${scenario.id} returned a malformed hitch record: ${JSON.stringify(record)}`,
+          );
+        }
+      }
+      for (let index = 0; index < hitchTrace.snapshots.length; index += 1) {
+        const snapshot = hitchTrace.snapshots[index];
+        const reasons = Array.isArray(snapshot?.reasons) ? snapshot.reasons : [];
+        const uniqueReasons = new Set(reasons);
+        if (
+          !Number.isFinite(snapshot?.elapsedMs)
+          || !Number.isFinite(snapshot?.gapMs)
+          || snapshot.gapMs < 0
+          || !Number.isFinite(snapshot?.captureCostMs)
+          || snapshot.captureCostMs < 0
+          || !Array.isArray(snapshot?.reasons)
+          || reasons.length === 0
+          || uniqueReasons.size !== reasons.length
+          || reasons.some((reason) => !allowedSnapshotReasons.has(reason))
+          || snapshot?.runtime === null
+          || typeof snapshot?.runtime !== 'object'
+          || snapshot?.renderer === null
+          || typeof snapshot?.renderer !== 'object'
+          || snapshot?.ui === null
+          || typeof snapshot?.ui !== 'object'
+          || (index > 0
+            && hitchTrace.snapshots[index - 1].elapsedMs > snapshot.elapsedMs)
+        ) {
+          throw new Error(
+            `Scenario ${scenario.id} returned a malformed hitch snapshot: `
+            + JSON.stringify(snapshot),
+          );
+        }
+      }
+      const retainedWorstSnapshot = hitchTrace.snapshots
+        .filter(({ reasons }) => reasons.includes('new-worst-gap'))
+        .sort((left, right) => right.gapMs - left.gapMs)[0];
+      if (
+        (hitchTrace.observedOverThreshold === 0 && hitchTrace.worstGapMs !== 0)
+        || (
+          hitchTrace.observedOverThreshold > 0
+          && (
+            hitchTrace.worstGapMs < HITCH_TRACE_THRESHOLD_MS
+            || retainedWorstSnapshot?.gapMs !== hitchTrace.worstGapMs
+          )
+        )
+      ) {
+        throw new Error(
+          `Scenario ${scenario.id} did not retain its worst hitch witness: `
+          + JSON.stringify(hitchTrace),
+        );
+      }
+    } else if (Object.hasOwn(frameSample, 'hitchTrace')) {
+      throw new Error(`Scenario ${scenario.id} emitted an opt-in hitch trace while disabled`);
+    }
   }
 }
 
-async function measureScenario(client, scenario, sampleMs) {
+async function measureScenario(client, scenario, sampleMs, traceHitches) {
   await requirePerformanceInstrumentation(client, scenario);
   const warmupFrames = await warmTargetRenderer(client, scenario);
   await preparePerformanceInstrumentation(client, scenario);
@@ -881,6 +1132,11 @@ async function measureScenario(client, scenario, sampleMs) {
     const bridge = window.__TIDEWEFT__;
     const requestedMode = ${JSON.stringify(scenario.mode)};
     const travelConfig = ${JSON.stringify(scenario.travel ?? null)};
+    const hitchTraceEnabled = ${JSON.stringify(traceHitches)} && travelConfig !== null;
+    const retainBoundedHitchGap = ${retainBoundedHitchGap.toString()};
+    const retainBoundedHitchSnapshot = ${retainBoundedHitchSnapshot.toString()};
+    const buildHitchDelta = ${buildHitchDelta.toString()};
+    const hitchSnapshotReasons = ${hitchSnapshotReasons.toString()};
     const missing = [
       ['runtime.setPerformanceTelemetryEnabled', bridge.runtime?.setPerformanceTelemetryEnabled],
       ['runtime.resetPerformanceTelemetry', bridge.runtime?.resetPerformanceTelemetry],
@@ -922,6 +1178,15 @@ async function measureScenario(client, scenario, sampleMs) {
 
     const browserRafGaps = [];
     const rendererDrawGaps = [];
+    const hitchTrace = hitchTraceEnabled ? {
+      thresholdMs: ${HITCH_TRACE_THRESHOLD_MS},
+      recordCapacity: ${HITCH_TRACE_RECORD_CAPACITY},
+      telemetrySnapshotCapacity: ${HITCH_TRACE_SNAPSHOT_CAPACITY},
+      observedOverThreshold: 0,
+      worstGapMs: 0,
+      records: [],
+      snapshots: [],
+    } : null;
     const expectedDurationMs = ${sampleMs};
     bridge.renderer.setActive(true);
     bridge.ui.start();
@@ -934,6 +1199,7 @@ async function measureScenario(client, scenario, sampleMs) {
     let priorRendererFrameCount = initialRendererFrameCount;
     let browserRafCallbacks = 0;
     let unresolvedRendererFrameAdvances = 0;
+    let priorSnapshotCaptureCostMs = 0;
     let settled = false;
     const travel = travelConfig === null ? null : {
       axis: travelConfig.axis,
@@ -960,9 +1226,10 @@ async function measureScenario(client, scenario, sampleMs) {
       visitedRegions: [],
       transitions: [],
     };
+    if (hitchTraceEnabled && travel !== null) travel.spatialEpochTransitions = [];
     let previousTravelObservation = null;
     let previousTravelMode = null;
-    const globalPlayer = () => {
+    const globalPlayer = (elapsedMs, rendererFrameCount, browserRafOrdinal) => {
       const view = bridge.runtime.getRenderView();
       const navigation = bridge.runtime.getUIView().navigation;
       const origin = view.terrain.worldTileOrigin;
@@ -985,7 +1252,7 @@ async function measureScenario(client, scenario, sampleMs) {
       ) return null;
       const x = origin.x + playerPosition.x / tileSize;
       const y = origin.y + playerPosition.y / tileSize;
-      return {
+      const result = {
         x,
         y,
         localX: playerPosition.x,
@@ -1000,11 +1267,28 @@ async function measureScenario(client, scenario, sampleMs) {
         projectionConsistent: Math.floor(x) === navigation.globalX
           && Math.floor(y) === navigation.globalY,
       };
+      if (hitchTraceEnabled) {
+        Object.assign(result, {
+          elapsedMs,
+          browserRafOrdinal,
+          rendererFrameCount,
+          tick: view.tick,
+          windowOrigin: { x: origin.x, y: origin.y },
+          windowPositionUnits: { x: playerPosition.x, y: playerPosition.y },
+          floatingGlobalTiles: { x, y },
+          canonical: {
+            region: { x: navigation.regionX, y: navigation.regionY },
+            local: { x: navigation.localX, y: navigation.localY },
+            global: { x: navigation.globalX, y: navigation.globalY },
+          },
+        });
+      }
+      return result;
     };
-    const observeTravel = (elapsedMs) => {
-      if (travel === null) return;
-      const position = globalPlayer();
-      if (position === null) return;
+    const observeTravel = (elapsedMs, rendererFrameCount, browserRafOrdinal) => {
+      if (travel === null) return null;
+      const position = globalPlayer(elapsedMs, rendererFrameCount, browserRafOrdinal);
+      if (position === null) return null;
       if (travel.start === null) travel.start = position;
       travel.end = position;
       if (!position.projectionConsistent) {
@@ -1067,6 +1351,18 @@ async function measureScenario(client, scenario, sampleMs) {
             });
           }
         }
+        if (
+          hitchTrace !== null
+          && previousTravelObservation.spatialEpoch !== position.spatialEpoch
+        ) {
+          travel.spatialEpochTransitions.push({
+            elapsedMs,
+            from: previousTravelObservation.spatialEpoch,
+            to: position.spatialEpoch,
+            global: { x: position.x, y: position.y },
+            canonicalRegion: position.canonicalRegion,
+          });
+        }
       }
       previousTravelObservation = position;
       const region = position.canonicalRegion;
@@ -1101,7 +1397,7 @@ async function measureScenario(client, scenario, sampleMs) {
             position,
             availableTiles,
           };
-          return;
+          return position;
         }
         const nextDistance = Math.min(
           travel.segmentTiles,
@@ -1122,7 +1418,7 @@ async function measureScenario(client, scenario, sampleMs) {
             nextDistance,
             targetLocalCoordinate,
           };
-          return;
+          return position;
         }
         travel.targetGlobalCoordinate = globalCoordinate + nextDistance * travel.direction;
         travel.targetDistanceIssued += nextDistance;
@@ -1136,8 +1432,9 @@ async function measureScenario(client, scenario, sampleMs) {
           additive: false,
         });
       }
+      return position;
     };
-    observeTravel(0);
+    observeTravel(0, initialRendererFrameCount, 0);
     const finish = () => {
       if (settled) return;
       settled = true;
@@ -1207,6 +1504,23 @@ async function measureScenario(client, scenario, sampleMs) {
         },
         telemetry,
       };
+      if (hitchTrace !== null) {
+        result.hitchTrace = {
+          schema: 'tideweft-hitch-trace/v1',
+          thresholdMs: hitchTrace.thresholdMs,
+          recordCapacity: hitchTrace.recordCapacity,
+          telemetrySnapshotCapacity: hitchTrace.telemetrySnapshotCapacity,
+          observedOverThreshold: hitchTrace.observedOverThreshold,
+          worstGapMs: hitchTrace.worstGapMs,
+          discarded: hitchTrace.observedOverThreshold - hitchTrace.records.length,
+          records: [...hitchTrace.records].sort(
+            (left, right) => left.after.elapsedMs - right.after.elapsedMs,
+          ),
+          snapshots: [...hitchTrace.snapshots].sort(
+            (left, right) => left.elapsedMs - right.elapsedMs,
+          ),
+        };
+      }
       // Stop presentation only after taking its immutable end-of-window snapshot.
       bridge.renderer.setActive(false);
       bridge.ui.stop();
@@ -1215,11 +1529,77 @@ async function measureScenario(client, scenario, sampleMs) {
     setTimeout(finish, expectedDurationMs);
     const sample = (now) => {
       if (settled) return;
-      if (priorBrowserRafAt !== null) browserRafGaps.push(now - priorBrowserRafAt);
+      const gapMs = priorBrowserRafAt === null ? null : now - priorBrowserRafAt;
+      if (gapMs !== null) browserRafGaps.push(gapMs);
       priorBrowserRafAt = now;
       browserRafCallbacks += 1;
-      const rendererFrameCount = bridge.renderer.telemetry().frameCount;
-      observeTravel(performance.now() - startedAt);
+      const rendererTelemetry = bridge.renderer.telemetry();
+      const rendererFrameCount = rendererTelemetry.frameCount;
+      const before = previousTravelObservation;
+      const after = observeTravel(
+        performance.now() - startedAt,
+        rendererFrameCount,
+        browserRafCallbacks,
+      );
+      const observerCostBeforeGapMs = priorSnapshotCaptureCostMs;
+      priorSnapshotCaptureCostMs = 0;
+      if (hitchTrace !== null && gapMs !== null && before !== null && after !== null) {
+        const delta = buildHitchDelta(before, after);
+        const reasons = hitchSnapshotReasons(
+          gapMs,
+          gapMs < hitchTrace.thresholdMs ? gapMs : hitchTrace.worstGapMs,
+          delta,
+        );
+        if (gapMs >= hitchTrace.thresholdMs) {
+          hitchTrace.observedOverThreshold += 1;
+          const record = {
+            gapMs,
+            priorTelemetrySnapshotCaptureCostMs: observerCostBeforeGapMs,
+            before,
+            after,
+            delta,
+          };
+          const retained = retainBoundedHitchGap(
+            hitchTrace.records,
+            record,
+            hitchTrace.recordCapacity,
+            hitchTrace.thresholdMs,
+          );
+          if (retained) {
+            const memory = performance.memory;
+            record.after = {
+              ...after,
+              heap: memory ? {
+                used: memory.usedJSHeapSize,
+                total: memory.totalJSHeapSize,
+              } : null,
+            };
+          }
+          hitchTrace.worstGapMs = Math.max(hitchTrace.worstGapMs, gapMs);
+        }
+        if (reasons.length > 0) {
+          const snapshot = {
+            reasons,
+            elapsedMs: after.elapsedMs,
+            gapMs,
+          };
+          const retained = retainBoundedHitchSnapshot(
+            hitchTrace.snapshots,
+            snapshot,
+            hitchTrace.telemetrySnapshotCapacity,
+          );
+          if (retained) {
+            const captureStartedAt = performance.now();
+            Object.assign(snapshot, {
+              runtime: bridge.runtime.getPerformanceTelemetry(),
+              renderer: rendererTelemetry,
+              ui: bridge.ui.getPerformanceTelemetry(),
+            });
+            snapshot.captureCostMs = performance.now() - captureStartedAt;
+            priorSnapshotCaptureCostMs = snapshot.captureCostMs;
+          }
+        }
+      }
       if (
         travel?.dispatchFailure !== undefined
         || travel?.modesObserved?.some(
@@ -1243,7 +1623,7 @@ async function measureScenario(client, scenario, sampleMs) {
     };
     requestAnimationFrame(sample);
   })`, sampleMs + CDP_CALL_TIMEOUT_MS);
-  assertMeasurementTelemetry(scenario, frameSample);
+  assertMeasurementTelemetry(scenario, frameSample, traceHitches);
 
   const performanceAfterSample = metricsRecord(await client.call('Performance.getMetrics'));
   const browserAfterSample = await browserPointInTime(client);
@@ -1494,7 +1874,7 @@ function appendBoundedOutput(current, chunk) {
   return (current + chunk).slice(-MAX_CHILD_OUTPUT_CHARACTERS);
 }
 
-async function runIsolatedScenario(executable, scenario, sampleMs) {
+async function runIsolatedScenario(executable, scenario, sampleMs, traceHitches) {
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
   const childState = { spawnError: null };
@@ -1553,6 +1933,7 @@ async function runIsolatedScenario(executable, scenario, sampleMs) {
       scenario.minimumSampleMs === undefined
         ? sampleMs
         : Math.max(sampleMs, scenario.minimumSampleMs),
+      traceHitches,
     );
     completed = true;
     return { bootstrap, measurement };
@@ -1699,6 +2080,9 @@ async function main() {
       + scenarios.map(({ id }) => id).join(', '),
     );
   }
+  if (options.traceHitches && !selectedScenarios.some(({ travel }) => travel !== undefined)) {
+    throw new Error('--trace-hitches requires a selected travel scenario');
+  }
   const measurements = [];
   let canonicalBootstrap = null;
   const worldGroups = new Map();
@@ -1711,7 +2095,12 @@ async function main() {
       );
     }
     process.stdout.write(`Measuring ${scenario.label}…\n`);
-    const isolated = await runIsolatedScenario(executable, scenario, options.sampleMs);
+    const isolated = await runIsolatedScenario(
+      executable,
+      scenario,
+      options.sampleMs,
+      options.traceHitches,
+    );
     const packagedAfterScenario = await executableIdentity(executable);
     if (JSON.stringify(packagedAfterScenario) !== packagedIdentityJson) {
       throw new Error(
@@ -1792,6 +2181,7 @@ async function main() {
     },
     measurements,
   };
+  if (options.traceHitches) result.hitchTraceEnabled = true;
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
   process.stdout.write(
@@ -1807,9 +2197,21 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  process.stderr.write(
-    `Performance baseline failed: ${error instanceof Error ? error.stack || error.message : String(error)}\n`,
-  );
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(
+      `Performance baseline failed: ${error instanceof Error ? error.stack || error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  HITCH_TRACE_RECORD_CAPACITY,
+  HITCH_TRACE_SNAPSHOT_CAPACITY,
+  HITCH_TRACE_THRESHOLD_MS,
+  buildHitchDelta,
+  hitchSnapshotReasons,
+  retainBoundedHitchGap,
+  retainBoundedHitchSnapshot,
+};
