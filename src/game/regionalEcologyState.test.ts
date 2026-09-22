@@ -1725,11 +1725,28 @@ describe("regional ecology v25 owner substrate", () => {
     if (reloadedFirst === null) throw new Error("Receipt fallback intermediate reload failed");
     const fallbackSecond = commitNeutralRegionalVisit(reloadedFirst, TICK + 2);
 
+    const publicConstructorOracle = createRegionalEcologyState({
+      root: fastSecond.root,
+      settlementHome: {
+        sourceKey: fastSecond.settlementHome.sourceKey,
+        patch: fastSecond.settlementHome.patch,
+      },
+      activeRegions: fastSecond.activeRegions,
+      activeResidents: fastSecond.activeResidents.map(({ kind, sourceKey, patch }) => {
+        if (kind === "settlement-home") {
+          throw new Error("Active constructor oracle cannot contain the settlement home");
+        }
+        return { kind, sourceKey, patch };
+      }),
+    });
+
     expect(fastSecond.activeResidents).toHaveLength(2);
     expect(serializeRegionalEcologyState(fastFirst))
       .toBe(serializeRegionalEcologyState(fallbackFirst));
     expect(serializeRegionalEcologyState(fastSecond))
       .toBe(serializeRegionalEcologyState(fallbackSecond));
+    expect(serializeRegionalEcologyState(fastSecond))
+      .toBe(serializeRegionalEcologyState(publicConstructorOracle));
   });
 
   it("burns pristine proof on clone, interleaving, and seed mismatches", () => {
@@ -1838,6 +1855,22 @@ describe("regional ecology v25 owner substrate", () => {
       },
     );
     if (durable === null) throw new Error("Durable receipt commit failed");
+    const durablePublicConstructorOracle = createRegionalEcologyState({
+      root: durable.root,
+      settlementHome: {
+        sourceKey: durable.settlementHome.sourceKey,
+        patch: durable.settlementHome.patch,
+      },
+      activeRegions: durable.activeRegions,
+      activeResidents: durable.activeResidents.map(({ kind, sourceKey, patch }) => {
+        if (kind === "settlement-home") {
+          throw new Error("Durable constructor oracle cannot contain the settlement home");
+        }
+        return { kind, sourceKey, patch };
+      }),
+    });
+    expect(serializeRegionalEcologyState(durable))
+      .toBe(serializeRegionalEcologyState(durablePublicConstructorOracle));
 
     const presentationProjection = projectRegionalEcologyActiveState(
       durable,

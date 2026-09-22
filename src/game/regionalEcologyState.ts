@@ -899,10 +899,12 @@ export function commitRegionalEcologyActiveProjection(
     }
     const next = presentationOnly
       ? original
-      : createSnapshot(projected.kind, {
-          sourceKey: projected.sourceKey,
-          patch: committedPatch,
-        }, root.updatedAtTick);
+      : createSnapshotFromPreparedStoragePatch(
+          projected.kind,
+          projected.sourceKey,
+          committedPatch,
+          root.updatedAtTick,
+        );
     if (
       next.lineageHash !== original.lineageHash
       || next.kind !== original.kind
@@ -1049,6 +1051,30 @@ function createSnapshot(
   if (patch === null || patch.patchKey !== input.sourceKey) {
     throw new RangeError("Regional ecology resident source does not own its canonical patch");
   }
+  return createSnapshotFromPreparedStoragePatch(kind, input.sourceKey, patch, tick);
+}
+
+/**
+ * Build one snapshot from an exact canonical storage patch already produced in
+ * this module's current call. Public construction, loads, replacements, and
+ * inactive-home input continue through `createSnapshot` and its full
+ * normalization boundary.
+ */
+function createSnapshotFromPreparedStoragePatch(
+  kind: RegionalEcologyStateSourceKind,
+  sourceKey: string,
+  patch: CoreEcologyAggregatePatchState,
+  tick: number,
+): RegionalEcologyResidentSnapshotV1 {
+  if (
+    !nonnegativeSafeInteger(tick)
+    || !Object.isFrozen(patch)
+    || canonicalizeCoreEcologyAggregatePatch(patch) !== patch
+    || patch.updatedAtTick !== tick
+    || patch.patchKey !== sourceKey
+  ) {
+    throw new RangeError("Prepared regional ecology storage patch lost canonical custody");
+  }
   if (kind === "regional-habitat" && !isRegionalHabitatDerivation(patch)) {
     throw new RangeError("Regional habitat resident does not use regional habitat derivation");
   }
@@ -1068,7 +1094,7 @@ function createSnapshot(
   const base: Omit<RegionalEcologyResidentSnapshotV1, "integrity"> = {
     version: REGIONAL_ECOLOGY_STATE_SNAPSHOT_VERSION,
     kind,
-    sourceKey: input.sourceKey,
+    sourceKey,
     region: copyRegion(patch.originRegion),
     patchHash: hashCanonical(patch),
     lineageHash: sourceLineageHash(patch),
