@@ -40,6 +40,9 @@ const p5Harness = vi.hoisted(() => ({
   }>,
   initialDepthWriteEnabled: false,
   reducedMotion: false,
+  perceptionShaderSupported: false,
+  perceptionShaderThrowsAfterBind: false,
+  perceptionShaderHooks: [] as object[],
 }));
 
 function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
@@ -69,6 +72,8 @@ vi.mock("p5", () => {
         p5Harness.materialTrace.push({ method, args });
       });
       let geometryOrdinal = 0;
+      const vertex = vi.fn();
+      const modifiedPerceptionShader = { kind: "fake-perception-shader" };
       const target: Record<PropertyKey, unknown> = {
         width: 320,
         height: 240,
@@ -96,13 +101,39 @@ vi.mock("p5", () => {
         noLoop: vi.fn(),
         loop: vi.fn(),
         buildGeometry: vi.fn((callback: () => void) => {
+          const vertexCountBefore = vertex.mock.calls.length;
           callback();
           geometryOrdinal += 1;
           return {
             gid: `fake-relief-geometry-${geometryOrdinal}`,
+            vertices: Array.from(
+              { length: vertex.mock.calls.length - vertexCountBefore },
+              () => ({}),
+            ),
+            faces: Array.from(
+              { length: (vertex.mock.calls.length - vertexCountBefore) / 3 },
+              (_value, faceIndex) => [faceIndex * 3, faceIndex * 3 + 1, faceIndex * 3 + 2],
+            ),
+            uvs: [] as number[],
             clearColors: vi.fn(),
           };
         }),
+        baseMaterialShader: vi.fn(() => {
+          if (!p5Harness.perceptionShaderSupported) return undefined;
+          return {
+            modify: vi.fn((hooks: object) => {
+              p5Harness.perceptionShaderHooks.push(hooks);
+              return modifiedPerceptionShader;
+            }),
+          };
+        }),
+        shader: vi.fn(() => {
+          if (p5Harness.perceptionShaderThrowsAfterBind) {
+            throw new Error("synthetic shader compilation failure after bind");
+          }
+        }),
+        resetShader: vi.fn(),
+        vertex,
         model: vi.fn(),
         freeGeometry: vi.fn(),
         remove: vi.fn(),
@@ -589,6 +620,9 @@ beforeEach(() => {
   p5Harness.materialTrace.length = 0;
   p5Harness.initialDepthWriteEnabled = false;
   p5Harness.reducedMotion = false;
+  p5Harness.perceptionShaderSupported = false;
+  p5Harness.perceptionShaderThrowsAfterBind = false;
+  p5Harness.perceptionShaderHooks.length = 0;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -730,6 +764,335 @@ describe("Relief renderer telemetry", () => {
     freeGeometry.mockClear();
     harness.renderer.destroy();
     expect(freeGeometry.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("promotes one exact perception surface, reuses it across camera motion, and owns its lifecycle", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => clock });
+    p5Harness.reducedMotion = true;
+    p5Harness.perceptionShaderSupported = true;
+    const base = view("retained-perception", { x: 48, y: 48 });
+    const perception = {
+      version: 1,
+      signature: "retained-perception-a",
+      valid: true,
+      visibleTileCount: 16,
+      directTileCount: 16,
+      peripheralTileCount: 0,
+      detailVisibleTileCount: 16,
+      detailDirectTileCount: 16,
+      detailPeripheralTileCount: 0,
+    } as const;
+    const source: TideweftView = {
+      ...base,
+      perception,
+      terrain: {
+        ...base.terrain,
+        currentLocalIlluminationRevision: "retained-perception-light-a",
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+    };
+    const harness = renderHarness(source, { chunkSize: 2 });
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const baseMaterialShader = harness.instance.baseMaterialShader as ReturnType<typeof vi.fn>;
+    const shader = harness.instance.shader as ReturnType<typeof vi.fn>;
+    const resetShader = harness.instance.resetShader as ReturnType<typeof vi.fn>;
+    const model = harness.instance.model as ReturnType<typeof vi.fn>;
+    const freeGeometry = harness.instance.freeGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const durableBuildCount = buildGeometry.mock.calls.length;
+    clock = 149;
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(durableBuildCount);
+    expect(baseMaterialShader).not.toHaveBeenCalled();
+
+    clock = 150;
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(durableBuildCount + 1);
+    expect(baseMaterialShader).toHaveBeenCalledOnce();
+    expect(p5Harness.perceptionShaderHooks).toHaveLength(1);
+    const hooks = p5Harness.perceptionShaderHooks[0] as Record<string, string>;
+    expect(hooks["Inputs getPixelInputs"]).toContain("inputs.ambientMaterial = inputs.color.rgb");
+    expect(hooks["Inputs getPixelInputs"]).toContain(
+      "vec3(inputs.texCoord.xy, inputs.color.a)",
+    );
+    expect(hooks["Inputs getPixelInputs"]).toContain("inputs.color.a = 1.0");
+    expect(hooks["Inputs getPixelInputs"]).not.toContain("if (");
+    const retained = buildGeometry.mock.results.at(-1)?.value as {
+      readonly vertices: unknown[];
+      readonly faces: unknown[];
+      readonly uvs: number[];
+      readonly clearColors: ReturnType<typeof vi.fn>;
+    };
+    expect(retained.vertices.length).toBeGreaterThan(0);
+    expect(retained.faces).toHaveLength(0);
+    expect(retained.uvs).toHaveLength(retained.vertices.length * 2);
+    expect(retained.uvs.every(
+      (emission) => emission >= 0 && emission <= 74 / 255,
+    )).toBe(true);
+    expect(retained.clearColors).not.toHaveBeenCalled();
+    expect(model.mock.calls.some(([geometry]) => geometry === retained)).toBe(true);
+    expect(shader).toHaveBeenCalledWith({ kind: "fake-perception-shader" });
+    expect(resetShader).toHaveBeenCalled();
+    expect(harness.renderer.telemetry()).toMatchObject({
+      perceptionMaterialSubmissions: 1,
+      perceptionMaterialSegments: 4,
+    });
+
+    buildGeometry.mockClear();
+    freeGeometry.mockClear();
+    harness.renderer.setOrbit(0.42, 0.7);
+    clock = 151;
+    harness.draw();
+    expect(buildGeometry).not.toHaveBeenCalled();
+    expect(freeGeometry).not.toHaveBeenCalled();
+
+    harness.setView({
+      ...source,
+      perception: { ...perception, signature: "retained-perception-b" },
+      terrain: {
+        ...source.terrain,
+        currentLocalIlluminationRevision: "retained-perception-light-b",
+        tiles: source.terrain.tiles.map((tile, index) => ({
+          ...tile,
+          currentLocalIllumination: index === 0 ? 1 : 0,
+        })),
+      },
+    });
+    clock = 152;
+    harness.draw();
+    expect(freeGeometry).toHaveBeenCalledOnce();
+    expect(freeGeometry).toHaveBeenCalledWith(retained);
+
+    clock = 302;
+    harness.draw();
+    const replacement = buildGeometry.mock.results.at(-1)?.value as unknown;
+    expect(replacement).toBeDefined();
+    freeGeometry.mockClear();
+    const preventDefault = vi.fn();
+    harness.canvas.fire("webglcontextlost", { preventDefault });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(freeGeometry).not.toHaveBeenCalled();
+
+    harness.canvas.fire("webglcontextrestored");
+    clock = 303;
+    harness.draw();
+    const buildsAfterRestoreFallback = buildGeometry.mock.calls.length;
+    clock = 453;
+    harness.draw();
+    expect(buildGeometry.mock.calls.length).toBeGreaterThan(buildsAfterRestoreFallback);
+
+    const finalPerception = buildGeometry.mock.results.at(-1)?.value as unknown;
+    freeGeometry.mockClear();
+    harness.renderer.destroy();
+    expect(freeGeometry.mock.calls.some(([geometry]) => geometry === finalPerception)).toBe(true);
+  });
+
+  it("keeps the immediate truthful surface when retained shader support fails", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => clock });
+    const base = view("retained-perception-fallback", { x: 48, y: 48 });
+    const source: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "retained-perception-fallback",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        currentLocalIlluminationRevision: "fallback-unlit",
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+    };
+    const harness = renderHarness(source, { chunkSize: 2 });
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const beginShape = harness.instance.beginShape as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    const durableBuildCount = buildGeometry.mock.calls.length;
+    beginShape.mockClear();
+    clock = 150;
+    harness.draw();
+    expect(buildGeometry).toHaveBeenCalledTimes(durableBuildCount);
+    expect(beginShape).toHaveBeenCalled();
+    expect(harness.renderer.telemetry()).toMatchObject({
+      terrainTiles: 32,
+      perceptionMaterialSubmissions: 1,
+      perceptionMaterialSegments: 4,
+    });
+    harness.renderer.destroy();
+  });
+
+  it("resets a shader that throws after binding before drawing the immediate fallback", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => clock });
+    p5Harness.perceptionShaderSupported = true;
+    p5Harness.perceptionShaderThrowsAfterBind = true;
+    const base = view("retained-perception-compile-fallback", { x: 48, y: 48 });
+    const source: TideweftView = {
+      ...base,
+      perception: {
+        version: 1,
+        signature: "retained-perception-compile-fallback",
+        valid: true,
+        visibleTileCount: 16,
+        directTileCount: 16,
+        peripheralTileCount: 0,
+        detailVisibleTileCount: 16,
+        detailDirectTileCount: 16,
+        detailPeripheralTileCount: 0,
+      },
+      terrain: {
+        ...base.terrain,
+        currentLocalIlluminationRevision: "compile-fallback-unlit",
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+    };
+    const harness = renderHarness(source, { chunkSize: 2 });
+    harness.renderer.setPerformanceTelemetryEnabled?.(true);
+    const beginShape = harness.instance.beginShape as ReturnType<typeof vi.fn>;
+    const baseMaterialShader = harness.instance.baseMaterialShader as ReturnType<typeof vi.fn>;
+    const resetShader = harness.instance.resetShader as ReturnType<typeof vi.fn>;
+    const freeGeometry = harness.instance.freeGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    beginShape.mockClear();
+    resetShader.mockClear();
+    freeGeometry.mockClear();
+    clock = 150;
+    harness.draw();
+
+    expect(resetShader).toHaveBeenCalledOnce();
+    expect(freeGeometry).toHaveBeenCalledOnce();
+    expect(beginShape).toHaveBeenCalled();
+    expect(harness.renderer.telemetry()).toMatchObject({
+      terrainTiles: 32,
+      perceptionMaterialSubmissions: 1,
+      perceptionMaterialSegments: 4,
+    });
+
+    const shaderAttemptsAfterFailure = baseMaterialShader.mock.calls.length;
+    harness.setView({
+      ...source,
+      perception: {
+        ...source.perception!,
+        signature: "retained-perception-other-owner",
+      },
+    });
+    clock = 1000;
+    harness.draw();
+    expect(baseMaterialShader).toHaveBeenCalledTimes(shaderAttemptsAfterFailure);
+
+    p5Harness.perceptionShaderThrowsAfterBind = false;
+    harness.canvas.fire("webglcontextrestored");
+    clock = 1001;
+    harness.draw();
+    clock = 1151;
+    harness.draw();
+    expect(baseMaterialShader.mock.calls.length).toBeGreaterThan(shaderAttemptsAfterFailure);
+    harness.renderer.destroy();
+  });
+
+  it("invalidates the exact retained owner when camera culling or perception availability changes", () => {
+    let clock = 0;
+    vi.stubGlobal("performance", { now: () => clock });
+    p5Harness.reducedMotion = true;
+    p5Harness.perceptionShaderSupported = true;
+    const columns = 64;
+    const rows = 4;
+    const base = view("retained-perception-mask", { x: 48, y: 48 });
+    const perception = {
+      version: 1,
+      signature: "retained-perception-mask",
+      valid: true,
+      visibleTileCount: columns * rows,
+      directTileCount: columns * rows,
+      peripheralTileCount: 0,
+      detailVisibleTileCount: columns * rows,
+      detailDirectTileCount: columns * rows,
+      detailPeripheralTileCount: 0,
+    } as const;
+    const source: TideweftView = {
+      ...base,
+      perception,
+      terrain: {
+        ...base.terrain,
+        columns,
+        rows,
+        revision: "retained-perception-mask-terrain",
+        currentLocalIlluminationRevision: "retained-perception-mask-light",
+        tiles: Array.from({ length: columns * rows }, () => ({
+          kind: "meadow" as const,
+          elevation: 0.2,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+          currentLocalIllumination: 0,
+        })),
+      },
+      camera: {
+        ...base.camera,
+        bounds: { minX: 0, minY: 0, maxX: columns * 24, maxY: rows * 24 },
+      },
+    };
+    const harness = renderHarness(source, { chunkSize: 2 });
+    const buildGeometry = harness.instance.buildGeometry as ReturnType<typeof vi.fn>;
+    const freeGeometry = harness.instance.freeGeometry as ReturnType<typeof vi.fn>;
+
+    harness.draw();
+    clock = 150;
+    harness.draw();
+    const firstRetained = buildGeometry.mock.results.at(-1)?.value as unknown;
+    freeGeometry.mockClear();
+
+    const farPosition = { x: columns * 24 - 48, y: 48 };
+    const farView: TideweftView = {
+      ...source,
+      player: { ...source.player, position: farPosition },
+      camera: { ...source.camera, center: farPosition },
+    };
+    harness.setView(farView);
+    clock = 151;
+    harness.draw();
+    expect(freeGeometry).toHaveBeenCalledOnce();
+    expect(freeGeometry).toHaveBeenCalledWith(firstRetained);
+
+    clock = 301;
+    harness.draw();
+    const secondRetained = buildGeometry.mock.results.at(-1)?.value as unknown;
+    freeGeometry.mockClear();
+    const { perception: _perception, ...withoutPerception } = farView;
+    harness.setView(withoutPerception);
+    clock = 302;
+    harness.draw();
+    expect(freeGeometry).toHaveBeenCalledOnce();
+    expect(freeGeometry).toHaveBeenCalledWith(secondRetained);
+    harness.renderer.destroy();
   });
 
   it("coalesces exact perception materials across visible chunks without merging local light", () => {

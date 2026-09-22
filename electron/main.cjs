@@ -2866,16 +2866,60 @@ async function verifySmokeTideHarp(contents) {
       probeHasPlayableTideHarp(probe),
     SMOKE_TEST.timeoutMs,
   );
-  const announcementId = tuned.announcement?.id ?? 0;
-  const clicked = await contents.executeJavaScript(`(() => {
-    const button = document.querySelector('.action-button--scan');
-    if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
-    button.click();
-    return true;
-  })()`, true);
-  if (!clicked) throw new Error('the active Tide Harp could not pulse the real Scan control');
   const expectedEcho = `${SMOKE_TIDE_HARP.label} answered the Loom. One pulse sounded from your position and from its three knot origins: Reed mat #1, Tide anchor #3, and Wind knot #5. Each origin recorded nearby terrain and water depth.`;
-  const firstPulse = await waitForRenderer(
+  // Capture the transient action receipt in the same renderer task as the real
+  // DOM click. Tutorial progression is authoritative fixed-step work and can
+  // lawfully replace this copy before a later polling turn; the physical echo
+  // below remains the durable, independently observed consequence.
+  const pulse = await contents.executeJavaScript(`(() => {
+    const runtime = window.__TIDEWEFT__?.runtime;
+    const button = document.querySelector('.action-button--scan');
+    const beforeView = runtime?.getRenderView?.();
+    const beforeUI = runtime?.getUIView?.();
+    const beforeTile = beforeView?.terrain?.tiles?.[${SMOKE_TIDE_HARP.remoteEchoTileIndex}];
+    if (
+      !(button instanceof HTMLButtonElement) ||
+      button.disabled ||
+      !runtime ||
+      !beforeView ||
+      !beforeUI ||
+      !beforeTile
+    ) {
+      return { error: 'tide-harp-control-unavailable' };
+    }
+    const before = {
+      announcementId: Number(beforeUI.announcement?.id ?? 0),
+      discovered: Number(beforeTile.discovered || 0),
+      depthKnown: Number(beforeTile.depthKnown || 0),
+    };
+    button.click();
+    const afterView = runtime.getRenderView();
+    const afterUI = runtime.getUIView();
+    const afterTile = afterView?.terrain?.tiles?.[${SMOKE_TIDE_HARP.remoteEchoTileIndex}];
+    return {
+      before,
+      after: {
+        announcementId: Number(afterUI.announcement?.id ?? 0),
+        announcementMessage: afterUI.announcement?.message ?? null,
+        discovered: Number(afterTile?.discovered || 0),
+        depthKnown: Number(afterTile?.depthKnown || 0),
+      },
+    };
+  })()`, true);
+  if (
+    pulse?.error ||
+    !Number.isSafeInteger(pulse?.before?.announcementId) ||
+    pulse.before.discovered !== 0 ||
+    pulse.before.depthKnown !== 0 ||
+    !Number.isSafeInteger(pulse?.after?.announcementId) ||
+    pulse.after.announcementId <= pulse.before.announcementId ||
+    pulse.after.announcementMessage !== expectedEcho ||
+    !(pulse.after.discovered > 0) ||
+    !(pulse.after.depthKnown > 0)
+  ) {
+    throw new Error(`the active Tide Harp did not produce its exact action receipt: ${JSON.stringify(pulse)}`);
+  }
+  const echoed = await waitForRenderer(
     contents,
     (probe) =>
       probeHasPlayableTideHarp(probe) &&
@@ -2884,36 +2928,9 @@ async function verifySmokeTideHarp(contents) {
       probe.tideHarps.remoteEcho.depthKnown > 0,
     SMOKE_TEST.timeoutMs,
   );
-  let echoed = firstPulse;
-  if (
-    (firstPulse.announcement?.id ?? 0) <= announcementId ||
-    firstPulse.announcement?.message !== expectedEcho
-  ) {
-    const retryAnnouncementId = firstPulse.announcement?.id ?? 0;
-    const retried = await contents.executeJavaScript(`(() => {
-      const button = document.querySelector('.action-button--scan');
-      if (!(button instanceof HTMLButtonElement) || button.disabled) return false;
-      button.click();
-      return true;
-    })()`, true);
-    if (!retried) throw new Error('the active Tide Harp could not repeat Scan after queued copy');
-    echoed = await waitForRenderer(
-      contents,
-      (probe) =>
-        probeHasPlayableTideHarp(probe) &&
-        (probe.announcement?.id ?? 0) > retryAnnouncementId &&
-        probe.announcement?.message === expectedEcho &&
-        probe.tideHarps?.remoteEcho?.tileIndex === SMOKE_TIDE_HARP.remoteEchoTileIndex &&
-        probe.tideHarps.remoteEcho.discovered > 0 &&
-        probe.tideHarps.remoteEcho.depthKnown > 0,
-      SMOKE_TEST.timeoutMs,
-    );
-  }
   return {
     tuned,
-    initialAnnouncementId: announcementId,
-    firstPulse,
-    retriedAfterQueuedAnnouncement: echoed !== firstPulse,
+    pulse,
     echoed,
     expectedEcho,
   };

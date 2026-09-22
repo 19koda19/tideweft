@@ -1658,6 +1658,15 @@ async function main() {
       denseBiodiversity: true,
     },
     {
+      id: 'dense-biodiversity-retina-relief',
+      label: 'Near-budget biodiversity — Retina desktop Relief 3D',
+      seed: 'breathing room regional density 8',
+      worldGroup: 'dense-biodiversity',
+      mode: 'relief-3d',
+      viewport: { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false },
+      denseBiodiversity: true,
+    },
+    {
       id: 'continuous-regional-travel-relief',
       label: 'Continuous ordinary travel through three regions — desktop Relief 3D',
       seed: 'breathing-room all-tide corridor 187',

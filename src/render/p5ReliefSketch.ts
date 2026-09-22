@@ -18,6 +18,7 @@ import {
   buildReliefMaterialBatches,
   buildReliefPerceptionMaterialBatches,
   coalesceReliefPerceptionMaterialBatches,
+  RELIEF_LOCAL_ILLUMINATION_BANDS,
   type ReliefMaterialBatch,
   type ReliefPerceptionMaterialBatch,
   type ReliefPerceptionMaterialGroup,
@@ -88,6 +89,11 @@ import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import { createRetainedGeometryPool } from "./retainedGeometryPool";
+import {
+  buildReliefPerceptionGeometryStream,
+  type ReliefPerceptionGeometryStreamReady,
+} from "./reliefPerceptionGeometry";
+import { createSingleRetainedGeometrySlot } from "./singleRetainedGeometrySlot";
 import {
   createTerrainPerceptionMemoryStore,
   type TerrainPerceptionMemoryState,
@@ -363,6 +369,17 @@ const DEFAULT_YAW = -0.36;
 // p5's WebGL geometry buffer cache evicts at roughly one thousand entries.
 // Leave headroom for other retained models and bound JavaScript geometry too.
 const MAX_RETAINED_RELIEF_TERRAIN_BATCHES = 768;
+/** One exact sensory owner must settle before any renderer-only promotion. */
+const RELIEF_PERCEPTION_GEOMETRY_QUIET_PERIOD_MS = 150;
+const RELIEF_PERCEPTION_LIGHT_BAND_MAX = RELIEF_LOCAL_ILLUMINATION_BANDS;
+const RELIEF_PERCEPTION_LIGHT_EMISSIONS = Object.freeze(
+  Array.from(
+    { length: RELIEF_PERCEPTION_LIGHT_BAND_MAX + 1 },
+    (_value, band) => outdoorLocalLightEmission(
+      band / RELIEF_PERCEPTION_LIGHT_BAND_MAX,
+    ),
+  ),
+);
 const DEFAULT_PITCH = Math.PI * 0.29;
 const DEFAULT_FOV = Math.PI / 3.5;
 const RELIEF_WATER_SURFACE_LIFT = 0.45;
@@ -432,6 +449,13 @@ interface CachedReliefPerception {
   readonly key: string;
   readonly chunks: readonly ReliefPerceptionChunkBatch[];
   readonly materials: readonly ReliefPerceptionMaterialGroup[];
+}
+
+interface RetainedReliefPerceptionGeometry {
+  readonly geometry: p5.Geometry;
+  readonly vertexCount: number;
+  readonly visibleSegmentCount: number;
+  readonly byteLength: number;
 }
 
 interface ReliefTerrainDrawResult {
@@ -540,6 +564,12 @@ export function createTideweftReliefRenderer(
   let cachedPerception: CachedReliefPerception | null = null;
   let releaseRetainedTerrainGeometry: (() => void) | null = null;
   let discardRetainedTerrainGeometry: (() => void) | null = null;
+  let releaseRetainedPerceptionGeometry: (() => void) | null = null;
+  let discardRetainedPerceptionGeometry: (() => void) | null = null;
+  // A shader/model failure can be renderer-context-wide. Once observed, keep
+  // every owner on the truthful immediate path until WebGL restores rather
+  // than repeatedly probing an incompatible context.
+  let retainedPerceptionUnavailableForContext = false;
   let orbitDrag: OrbitDrag | null = null;
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
@@ -2076,11 +2106,13 @@ export function createTideweftReliefRenderer(
       // WebGL already owns the context-loss cleanup. Drop JavaScript handles
       // without asking p5 to delete buffers through an invalid context.
       discardRetainedTerrainGeometry?.();
+      discardRetainedPerceptionGeometry?.();
       instance?.noLoop();
       options.onWebGLError?.("The 3D graphics context was lost. Chart view is active; reload to retry Relief 3D.");
     };
     const contextRestored = (): void => {
       contextLost = false;
+      retainedPerceptionUnavailableForContext = false;
       telemetry.setActive(active && webglSupported);
       cached = null;
       cachedPerceptionMesh = null;
@@ -2281,6 +2313,21 @@ export function createTideweftReliefRenderer(
     discardRetainedTerrainGeometry = () => {
       durableTerrainGeometry.discard();
     };
+    const retainedPerceptionGeometry = createSingleRetainedGeometrySlot<
+      RetainedReliefPerceptionGeometry
+    >(
+      (retained) => p.freeGeometry(retained.geometry),
+      { quietPeriodMs: RELIEF_PERCEPTION_GEOMETRY_QUIET_PERIOD_MS },
+    );
+    let perceptionMaterialShader: p5.Shader | null = null;
+    releaseRetainedPerceptionGeometry = () => {
+      retainedPerceptionGeometry.release();
+      perceptionMaterialShader = null;
+    };
+    discardRetainedPerceptionGeometry = () => {
+      retainedPerceptionGeometry.discard();
+      perceptionMaterialShader = null;
+    };
     let perceptionChunkVisibility = new Uint8Array(0);
 
     const withAlpha = (hex: string, alpha: number): p5.Color => {
@@ -2306,6 +2353,15 @@ export function createTideweftReliefRenderer(
         currentVisibility,
         currentLocalIllumination,
       }));
+    };
+
+    const resetPerceptionMaterialBaseline = (): void => {
+      // p5 material state survives shader resets, push/pop boundaries, and
+      // frames. Both retained and immediate perception paths must therefore
+      // leave the same explicit baseline for water/details drawn afterward.
+      p.fill(255);
+      p.ambientMaterial(255);
+      p.emissiveMaterial(0, 0, 0);
     };
 
     const setCamera = (state: ReliefCameraState): void => {
@@ -2339,11 +2395,122 @@ export function createTideweftReliefRenderer(
       return geometry;
     };
 
+    const ensurePerceptionMaterialShader = (): p5.Shader => {
+      if (perceptionMaterialShader) return perceptionMaterialShader;
+      perceptionMaterialShader = p.baseMaterialShader().modify({
+        "Inputs getPixelInputs": `(Inputs inputs) {
+          vec3 localEmission = vec3(inputs.texCoord.xy, inputs.color.a);
+          inputs.color.a = 1.0;
+          inputs.ambientMaterial = inputs.color.rgb;
+          inputs.emissiveMaterial = localEmission;
+          return inputs;
+        }`,
+      });
+      return perceptionMaterialShader;
+    };
+
+    const buildRetainedPerceptionGeometry = (
+      stream: ReliefPerceptionGeometryStreamReady,
+    ): RetainedReliefPerceptionGeometry => {
+      const geometry = p.buildGeometry(() => {
+        p.noStroke();
+        p.beginShape(p.TRIANGLES);
+        let previousRed = Number.NaN;
+        let previousGreen = Number.NaN;
+        let previousBlue = Number.NaN;
+        let previousEmissionBlue = Number.NaN;
+        for (let vertexIndex = 0; vertexIndex < stream.vertexCount; vertexIndex += 1) {
+          const vectorOffset = vertexIndex * 3;
+          const colorOffset = vertexIndex * 4;
+          const red = stream.colors[colorOffset] ?? 0;
+          const green = stream.colors[colorOffset + 1] ?? 0;
+          const blue = stream.colors[colorOffset + 2] ?? 0;
+          const localLightBand = stream.localLightBands[vertexIndex] ?? 0;
+          const emission = RELIEF_PERCEPTION_LIGHT_EMISSIONS[localLightBand]
+            ?? RELIEF_PERCEPTION_LIGHT_EMISSIONS[0]!;
+          if (
+            red !== previousRed
+            || green !== previousGreen
+            || blue !== previousBlue
+            || emission.blue !== previousEmissionBlue
+          ) {
+            // Terrain is opaque. Its otherwise redundant vertex alpha carries
+            // exact blue emission while UV carries red/green, removing the
+            // old per-fragment branch ladder at high pixel densities.
+            p.fill(red * 255, green * 255, blue * 255, emission.blue);
+            previousRed = red;
+            previousGreen = green;
+            previousBlue = blue;
+            previousEmissionBlue = emission.blue;
+          }
+          p.normal(
+            stream.normals[vectorOffset] ?? 0,
+            stream.normals[vectorOffset + 1] ?? 0,
+            stream.normals[vectorOffset + 2] ?? 0,
+          );
+          p.vertex(
+            stream.positions[vectorOffset] ?? 0,
+            stream.positions[vectorOffset + 1] ?? 0,
+            stream.positions[vectorOffset + 2] ?? 0,
+          );
+        }
+        p.endShape();
+      });
+      if (geometry.vertices.length !== stream.vertexCount) {
+        p.freeGeometry(geometry);
+        throw new Error("Retained perception geometry did not capture every admitted vertex.");
+      }
+      // The stream is already expanded into ordered triangle corners. Keeping
+      // p5's redundant sequential face index would waste another GPU buffer
+      // and require WebGL1's 32-bit index extension above 65,535 vertices.
+      // Empty faces deliberately selects p5's drawArrays(TRIANGLES) path.
+      geometry.faces.length = 0;
+      const uvs = new Array<number>(stream.vertexCount * 2);
+      for (let vertexIndex = 0; vertexIndex < stream.vertexCount; vertexIndex += 1) {
+        const localLightBand = stream.localLightBands[vertexIndex] ?? 0;
+        const emission = RELIEF_PERCEPTION_LIGHT_EMISSIONS[localLightBand]
+          ?? RELIEF_PERCEPTION_LIGHT_EMISSIONS[0]!;
+        uvs[vertexIndex * 2] = emission.red / 255;
+        uvs[vertexIndex * 2 + 1] = emission.green / 255;
+      }
+      geometry.uvs = uvs;
+      return {
+        geometry,
+        vertexCount: stream.vertexCount,
+        visibleSegmentCount: stream.visibleSegmentCount,
+        byteLength: stream.byteLength,
+      };
+    };
+
+    const drawRetainedPerceptionGeometry = (
+      retained: RetainedReliefPerceptionGeometry,
+    ): void => {
+      const shader = ensurePerceptionMaterialShader();
+      try {
+        // p5 records a user shader before compiling it. Keep shader binding
+        // inside the cleanup boundary so a compile/default-uniform failure
+        // cannot poison the truthful immediate fallback or later frames.
+        p.shader(shader);
+        p.noStroke();
+        p.fill(255);
+        p.ambientMaterial(255);
+        p.emissiveMaterial(0, 0, 0);
+        p.model(retained.geometry);
+      } finally {
+        try {
+          p.resetShader();
+        } finally {
+          p.emissiveMaterial(0, 0, 0);
+        }
+      }
+    };
+
     const drawTerrain = (
       view: TideweftView,
       cache: CachedReliefMesh,
       camera: ReliefCameraState,
       terrainMemory: TerrainPerceptionMemoryState,
+      now: number,
       trackCounts: boolean,
     ): ReliefTerrainDrawResult => {
       const viewport = { width: p.width, height: p.height };
@@ -2374,6 +2541,7 @@ export function createTideweftReliefRenderer(
 
       const perception = ensurePerceptionSurface(view, cache, terrainMemory);
       if (!perception) {
+        retainedPerceptionGeometry.select(null, now);
         return {
           terrainTiles: drawnTiles,
           perceptionMaterialSubmissions,
@@ -2397,6 +2565,84 @@ export function createTideweftReliefRenderer(
           view.terrain.tileSize * 2,
         ) ? 1 : 0;
       }
+
+      let visibleChunkKey = "";
+      for (const visible of perceptionChunkVisibility) {
+        visibleChunkKey += visible === 1 ? "1" : "0";
+      }
+      const perceptionOwnerKey = `${perception.key.length}:${perception.key}:${visibleChunkKey}`;
+      const selection = retainedPerceptionGeometry.select(
+        retainedPerceptionUnavailableForContext ? null : perceptionOwnerKey,
+        now,
+      );
+      let retained: RetainedReliefPerceptionGeometry | null = selection.kind === "retained"
+        ? selection.geometry
+        : null;
+
+      if (selection.kind === "promote") {
+        const stream = buildReliefPerceptionGeometryStream({
+          chunks: perception.chunks,
+          materials: perception.materials,
+          visibleChunks: perceptionChunkVisibility,
+        });
+        if (stream.status === "ready") {
+          let shaderSupported = true;
+          try {
+            // Construct the shader contract before allocating the sole
+            // geometry. p5 compiles lazily during the guarded model draw below,
+            // where failure rejects and releases the resident immediately.
+            ensurePerceptionMaterialShader();
+          } catch {
+            shaderSupported = false;
+            retainedPerceptionUnavailableForContext = true;
+            retainedPerceptionGeometry.reject(selection.permit);
+            perceptionMaterialShader = null;
+          }
+          if (shaderSupported) {
+            try {
+              const candidate = buildRetainedPerceptionGeometry(stream);
+              if (retainedPerceptionGeometry.admit(
+                selection.permit,
+                candidate,
+                stream.vertexCount,
+                stream.byteLength,
+              )) {
+                retained = candidate;
+              }
+            } catch {
+              retainedPerceptionGeometry.reject(selection.permit);
+            }
+          }
+        } else {
+          retainedPerceptionGeometry.reject(selection.permit);
+        }
+      }
+
+      if (retained) {
+        try {
+          drawRetainedPerceptionGeometry(retained);
+          if (trackCounts) {
+            drawnTiles += Math.floor(retained.vertexCount / 6);
+            perceptionMaterialSubmissions = 1;
+            perceptionMaterialSegments = retained.visibleSegmentCount;
+          }
+          resetPerceptionMaterialBaseline();
+          return {
+            terrainTiles: drawnTiles,
+            perceptionMaterialSubmissions,
+            perceptionMaterialSegments,
+          };
+        } catch {
+          // A compile/draw failure must synchronously remove the candidate;
+          // this frame then falls through to the existing truthful path. Keep
+          // this exact owner rejected so an unsupported context cannot churn a
+          // new geometry and shader program every quiet-period interval.
+          retainedPerceptionUnavailableForContext = true;
+          retainedPerceptionGeometry.rejectResident();
+          perceptionMaterialShader = null;
+        }
+      }
+
       for (const material of perception.materials) {
         let shapeStarted = false;
         for (const segment of material.segments) {
@@ -2432,7 +2678,7 @@ export function createTideweftReliefRenderer(
         }
         if (shapeStarted) p.endShape();
       }
-      p.emissiveMaterial(0, 0, 0);
+      resetPerceptionMaterialBaseline();
       return {
         terrainTiles: drawnTiles,
         perceptionMaterialSubmissions,
@@ -6444,7 +6690,7 @@ export function createTideweftReliefRenderer(
         0.2,
         -outdoorLight.keyDirection.z,
       );
-      const terrain = drawTerrain(view, cache, camera, terrainMemory, trackCounts);
+      const terrain = drawTerrain(view, cache, camera, terrainMemory, now, trackCounts);
       drawWater(view, cache);
       drawBiomeDetails(view, cache);
       const resourceRings = drawFieldResources(view, cache, camera, trackCounts);
@@ -6587,10 +6833,17 @@ export function createTideweftReliefRenderer(
       reducedMotionQuery.removeEventListener("change", reducedMotionChangeHandler);
     }
     reducedMotionQuery = null;
-    if (contextLost) discardRetainedTerrainGeometry?.();
-    else releaseRetainedTerrainGeometry?.();
+    if (contextLost) {
+      discardRetainedTerrainGeometry?.();
+      discardRetainedPerceptionGeometry?.();
+    } else {
+      releaseRetainedTerrainGeometry?.();
+      releaseRetainedPerceptionGeometry?.();
+    }
     releaseRetainedTerrainGeometry = null;
     discardRetainedTerrainGeometry = null;
+    releaseRetainedPerceptionGeometry = null;
+    discardRetainedPerceptionGeometry = null;
     instance?.remove();
     instance = null;
     canvasElement = null;
