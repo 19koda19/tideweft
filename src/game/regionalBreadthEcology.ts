@@ -187,6 +187,13 @@ interface RegionalBreadthEcologyActiveReceiptResident {
   readonly patchHash: string;
   readonly lineageHash: string;
   readonly patch: CoreEcologyAggregatePatchState;
+  /**
+   * Exact process-local pristine baseline for this lineage. A sparse resident
+   * may retain an older tick here: the next durable comparison reconciles it
+   * through the ordinary dormant authority before use. Missing provenance is
+   * represented by null and always takes the full deterministic constructor.
+   */
+  readonly pristinePatch: CoreEcologyAggregatePatchState | null;
 }
 
 interface RegionalBreadthEcologyActiveReceipt {
@@ -1033,6 +1040,7 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       input.rootSeed,
       activeRegions,
       residents,
+      batch.pristineBySource,
     );
     if (activeReceipt === null) return null;
     const result = Object.freeze({ root: nextRoot, residents });
@@ -1116,6 +1124,7 @@ export function consumeRegionalBreadthEcologyAdvanceResultReceipt(
 interface RegionalBreadthEcologyActiveDeviationBatch {
   readonly root: RegionalBreadthEcologyRootV1;
   readonly durableBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
+  readonly pristineBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
 }
 
 /**
@@ -1150,6 +1159,12 @@ function applyActiveResidentDeviationBatch(
     receipt.residents.map((resident) => [resident.sourceKey, resident]),
   );
   const durableBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  const pristineBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  for (const resident of receipt.residents) {
+    if (resident.pristinePatch !== null) {
+      pristineBySource.set(resident.sourceKey, resident.pristinePatch);
+    }
+  }
   for (const raw of values) {
     if (
       !plainRecord(raw)
@@ -1206,16 +1221,35 @@ function applyActiveResidentDeviationBatch(
       || baselineTick === null
       || !root.activations.some(({ cohortId }) => cohortId === habitat.cohortId)
     ) return null;
-    const pristine = createCoreEcologyBreadthResidentPatch({
-      seed: rootSeed,
-      habitat: deriveCoreEcologyBreadthHabitat({
+    const prior = receiptBySource.get(normalized.patchKey);
+    if (prior === undefined) return null;
+    let pristine = prior.pristinePatch === null
+      ? null
+      : reconcileCoreEcologyBreadthResidentPatchAtTick(
+          prior.pristinePatch,
+          completedTick,
+        );
+    if (
+      pristine === null
+      || pristine.patchKey !== normalized.patchKey
+      || pristine.derivation.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND
+      || pristine.derivation.habitat.cohortId !== habitat.cohortId
+      || pristine.derivation.habitat.cohortEpoch !== habitat.cohortEpoch
+      || regionKey(pristine.originRegion) !== prior.regionKey
+      || pristine.updatedAtTick !== completedTick
+    ) {
+      pristine = createCoreEcologyBreadthResidentPatch({
         seed: rootSeed,
-        region: normalized.originRegion,
-        cohortId: habitat.cohortId,
-      }),
-      tick: completedTick,
-      baselineTick,
-    });
+        habitat: deriveCoreEcologyBreadthHabitat({
+          seed: rootSeed,
+          region: normalized.originRegion,
+          cohortId: habitat.cohortId,
+        }),
+        tick: completedTick,
+        baselineTick,
+      });
+    }
+    pristineBySource.set(normalized.patchKey, pristine);
     const pristineState = stableStringify(normalized) === stableStringify(pristine);
     const key = deltaKey(habitat.cohortId, normalized.originRegion);
     const existing = regionsByKey.get(key);
@@ -1260,7 +1294,7 @@ function applyActiveResidentDeviationBatch(
       regions,
     });
   }
-  return Object.freeze({ root: nextRoot, durableBySource });
+  return Object.freeze({ root: nextRoot, durableBySource, pristineBySource });
 }
 
 export function serializeRegionalBreadthEcologyRoot(value: unknown): string {
@@ -1455,12 +1489,17 @@ function seedActiveResidentReceipt(
   rootSeed: RootSeed,
   activeRegions: readonly RegionCoord[],
   residents: readonly RegionalBreadthEcologyActiveResidentInput[],
+  preparedPristineBySource: ReadonlyMap<
+    string,
+    CoreEcologyAggregatePatchState
+  > = new Map(),
 ): RegionalBreadthEcologyActiveReceipt | null {
   const maximumResidents = activeRegions.length * root.activations.length
     + root.regions.length;
   if (residents.length > maximumResidents) return null;
   const receiptResidents: RegionalBreadthEcologyActiveReceiptResident[] = [];
   const seen = new Set<string>();
+  const deviationKeys = new Set(root.regions.map(({ key }) => key));
   for (const resident of residents) {
     const habitat = habitatFromPatch(resident.patch);
     if (
@@ -1476,6 +1515,14 @@ function seedActiveResidentReceipt(
       || resident.patch.carcasses.length !== 0
     ) return null;
     seen.add(resident.sourceKey);
+    const hasDeviation = deviationKeys.has(deltaKey(
+      habitat.cohortId,
+      resident.patch.originRegion,
+    ));
+    const preparedPristine = preparedPristineBySource.get(resident.sourceKey);
+    const pristinePatch = hasDeviation
+      ? receiptPristinePatchOrNull(preparedPristine, resident, root.updatedAtTick)
+      : resident.patch;
     receiptResidents.push(Object.freeze({
       sourceKey: resident.sourceKey,
       cohortId: resident.cohortId,
@@ -1484,6 +1531,7 @@ function seedActiveResidentReceipt(
       patchHash: hashCanonical(resident.patch),
       lineageHash: breadthResidentLineageHash(resident.patch),
       patch: resident.patch,
+      pristinePatch,
     }));
   }
   receiptResidents.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
@@ -1501,6 +1549,33 @@ function seedActiveResidentReceipt(
   });
   ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
   return receipt;
+}
+
+/**
+ * Admit only an exact immutable baseline produced inside this module's active
+ * receipt transaction. This is acceleration metadata, never public or saved
+ * authority; any uncertainty discards it and preserves the full constructor.
+ */
+function receiptPristinePatchOrNull(
+  patch: CoreEcologyAggregatePatchState | undefined,
+  resident: RegionalBreadthEcologyActiveResidentInput,
+  receiptTick: number,
+): CoreEcologyAggregatePatchState | null {
+  const habitat = habitatFromPatch(patch ?? null);
+  return patch !== undefined
+    && Object.isFrozen(patch)
+    && habitat !== null
+    && patch.patchKey === resident.sourceKey
+    && habitat.cohortId === resident.cohortId
+    && habitat.cohortEpoch === resident.cohortEpoch
+    && regionKey(patch.originRegion) === regionKey(resident.patch.originRegion)
+    && patch.updatedAtTick <= receiptTick
+    && coreEcologyBreadthResidentPatchIsAllCoarse(patch)
+    && patch.nextMortalityOrdinal === 0
+    && patch.mortalityTransactions.length === 0
+    && patch.carcasses.length === 0
+      ? patch
+      : null;
 }
 
 function seedAdvanceResultReceipt(

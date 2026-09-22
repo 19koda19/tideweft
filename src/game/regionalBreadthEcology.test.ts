@@ -61,11 +61,12 @@ function heronHabitat() {
   return habitat;
 }
 
-function heronPatch(tick = 0) {
+function heronPatch(tick = 0, baselineTick = 0) {
   return createCoreEcologyBreadthResidentPatch({
     seed: SEED,
     habitat: heronHabitat(),
     tick,
+    baselineTick,
   });
 }
 
@@ -823,6 +824,117 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       revision,
       eventOrdinal,
     })));
+  });
+
+  it("keeps consecutive durable receipt commits byte-identical through an idle tick, two-cycle jump, and pristine removal", () => {
+    const activeRegions = Object.freeze([HERON_REGION]);
+    const sourceTick = 67;
+    for (const baseline of [
+      {
+        policy: REGIONAL_BREADTH_ECOLOGY_BASELINE_POLICY_ID,
+        baselineTick: sourceTick,
+      },
+      {
+        policy: REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID,
+        baselineTick: 0,
+      },
+    ] as const) {
+      let fastRoot = createPristineRegionalBreadthEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }, CORE_ECOLOGY_BREADTH_CURRENT_EPOCH, baseline.policy);
+      let oracleRoot = fastRoot;
+      let fastResidents = regionalBreadthEcologyResidentsForActiveRegions(
+        fastRoot,
+        SEED,
+        activeRegions,
+      );
+      if (fastResidents === null) {
+        throw new Error("Consecutive breadth receipt fixture did not derive");
+      }
+      const pristine = (tick: number) => heronPatch(tick, baseline.baselineTick);
+      const sourceKey = pristine(sourceTick).patchKey;
+      const steps = [
+        {
+          completedTick: sourceTick + 1,
+          patch: rotateFirstActor(pristine(sourceTick + 1), 17),
+          stored: true,
+          rootRevision: 1,
+          deltaRevision: 1,
+        },
+        {
+          completedTick: sourceTick + 2,
+          patch: null,
+          stored: true,
+          rootRevision: 1,
+          deltaRevision: 1,
+        },
+        {
+          completedTick: sourceTick + 1_440,
+          patch: rotateFirstActor(pristine(sourceTick + 1_440), 43),
+          stored: true,
+          rootRevision: 2,
+          deltaRevision: 2,
+        },
+        {
+          completedTick: sourceTick + 1_441,
+          patch: pristine(sourceTick + 1_441),
+          stored: false,
+          rootRevision: 3,
+          deltaRevision: null,
+        },
+      ] as const;
+
+      for (const step of steps) {
+        const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+          fastRoot,
+          {
+            rootSeed: SEED,
+            completedTick: step.completedTick,
+            activeRegions,
+            expectedResidents: activeResidentClaims(fastResidents),
+            durableResidents: step.patch === null
+              ? []
+              : [{ sourceKey, patch: step.patch }],
+          },
+        );
+        oracleRoot = advanceRegionalBreadthEcologyRoot(
+          oracleRoot,
+          step.completedTick,
+        );
+        if (step.patch !== null) {
+          oracleRoot = putRegionalBreadthEcologyResidentDeviation(oracleRoot, {
+            rootSeed: SEED,
+            patch: step.patch,
+          });
+        }
+        const oracleResidents = regionalBreadthEcologyResidentsForActiveRegions(
+          oracleRoot,
+          SEED,
+          activeRegions,
+        );
+        if (fast === null || oracleResidents === null) {
+          throw new Error("Consecutive breadth receipt commit failed its scalar oracle");
+        }
+
+        expect(serializeRegionalBreadthEcologyRoot(fast.root))
+          .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+        expect(stableStringify(fast.residents))
+          .toBe(stableStringify(oracleResidents));
+        expect(fast.root.revision).toBe(step.rootRevision);
+        expect(fast.root.lastEventOrdinal).toBe(step.rootRevision);
+        const stored = fast.root.regions.find(({ residentPatch }) => (
+          residentPatch.patchKey === sourceKey
+        ));
+        expect(stored !== undefined).toBe(step.stored);
+        if (step.deltaRevision !== null) {
+          expect(stored?.revision).toBe(step.deltaRevision);
+        }
+
+        fastRoot = fast.root;
+        fastResidents = fast.residents;
+      }
+    }
   });
 
   it("fails the active-receipt fast path closed for clones, reloads, or another window", () => {
