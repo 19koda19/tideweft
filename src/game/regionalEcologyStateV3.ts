@@ -58,6 +58,11 @@ import {
   setRegionalEcologyMaterializationForWindow,
   type RegionalEcologyResidentPatch,
 } from "./regionalEcologyRuntime";
+import {
+  prepareRegionalEcologyCanonicalParentFromReceipt,
+  publishRegionalEcologyCanonicalReceipt,
+  revokeRegionalEcologyCanonicalReceipt,
+} from "./regionalEcologyCanonicalSeal";
 
 export const REGIONAL_ECOLOGY_STATE_V3_VERSION = 3 as const;
 export const REGIONAL_ECOLOGY_STATE_V3_OWNER_ID =
@@ -1405,12 +1410,23 @@ function patchMaterializationIsGroupAtomic(
 function sealState(
   value: Omit<RegionalEcologyStateV3, "integrity">,
 ): RegionalEcologyStateV3 {
-  const metrics = canonicalIntegrityMetrics(value);
-  const state = deepFreeze({ ...value, integrity: metrics.integrity });
-  if (metrics.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES) {
+  const preparation = prepareRegionalEcologyCanonicalParentFromReceipt(value);
+  if (preparation === null) {
+    const metrics = canonicalIntegrityMetrics(value);
+    const state = deepFreeze({ ...value, integrity: metrics.integrity });
+    if (metrics.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES) {
+      throw new RangeError("Regional ecology v3 state exceeds the composite save budget");
+    }
+    TRUSTED_STATES.add(state);
+    return state;
+  }
+  const state = deepFreeze({ ...value, integrity: preparation.integrity });
+  if (preparation.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_V3_MAX_SERIALIZED_BYTES) {
+    revokeRegionalEcologyCanonicalReceipt();
     throw new RangeError("Regional ecology v3 state exceeds the composite save budget");
   }
   TRUSTED_STATES.add(state);
+  publishRegionalEcologyCanonicalReceipt(preparation, state, true);
   return state;
 }
 

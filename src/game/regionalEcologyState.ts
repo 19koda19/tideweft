@@ -1,7 +1,6 @@
 import { createRegionCoord, isRegionCoord, regionKey, type RegionCoord } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
 import {
-  canonicalIntegrityMetrics,
   compareText,
   hashCanonical,
   stableStringify,
@@ -47,6 +46,11 @@ import {
   WORLD_POSITION_UNITS_PER_TILE,
   worldPositionDelta,
 } from "./worldPosition";
+import {
+  prepareRegionalEcologyCanonicalReceiptSeed,
+  publishRegionalEcologyCanonicalReceipt,
+  revokeRegionalEcologyCanonicalReceipt,
+} from "./regionalEcologyCanonicalSeal";
 
 export const REGIONAL_ECOLOGY_STATE_VERSION = 1 as const;
 export const REGIONAL_ECOLOGY_STATE_OWNER_ID = "game:regional-ecology-state:v1" as const;
@@ -1776,12 +1780,14 @@ function requireStateTransition(
 function sealState(
   base: Omit<RegionalEcologyStateV1, "integrity">,
 ): RegionalEcologyStateV1 {
-  const metrics = canonicalIntegrityMetrics(base);
-  const state = deepFreeze({ ...base, integrity: metrics.integrity });
-  if (metrics.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_MAX_SERIALIZED_BYTES) {
+  const preparation = prepareRegionalEcologyCanonicalReceiptSeed(base);
+  const state = deepFreeze({ ...base, integrity: preparation.integrity });
+  if (preparation.sealedSerializedBytes > REGIONAL_ECOLOGY_STATE_MAX_SERIALIZED_BYTES) {
+    revokeRegionalEcologyCanonicalReceipt();
     throw new RangeError("Regional ecology state exceeds its save budget");
   }
   TRUSTED_STATES.add(state);
+  publishRegionalEcologyCanonicalReceipt(preparation, state, true);
   return state;
 }
 

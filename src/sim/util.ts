@@ -77,8 +77,8 @@ export function stableStringify(value: unknown): string {
   }
 }
 
-/** Two independent 32-bit FNV-style lanes over one canonical UTF-16 string. */
-function hashCanonicalEncoding(encoded: string): string {
+/** @internal Two independent 32-bit FNV-style lanes over one canonical UTF-16 string. */
+export function hashCanonicalEncoding(encoded: string): string {
   let high = 0x811c_9dc5;
   let low = 0x9e37_79b9;
   for (let index = 0; index < encoded.length; index += 1) {
