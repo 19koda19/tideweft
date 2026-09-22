@@ -38,6 +38,7 @@ import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import {
+  MAX_TERRAIN_PERCEPTION_MEMORY_TILES,
   createTerrainPerceptionMemoryStore,
   rememberedTerrainVisibilityAt,
   type TerrainPerceptionMemoryState,
@@ -1163,28 +1164,126 @@ export function createTideweftRenderer(
   };
 
   const sketch = (p: p5): void => {
+    interface TerrainColorReceipt {
+      readonly baseColor: string;
+      readonly daylight: number;
+      readonly elevation: number;
+      readonly localIllumination: number;
+      readonly twilight: number;
+      readonly color: p5.Color;
+    }
+
+    interface RememberedTerrainColorReceipt {
+      readonly base: TerrainColorReceipt;
+      readonly chartBackground: string;
+      readonly discovered: number;
+      readonly color: p5.Color;
+    }
+
+    interface TerrainColorCacheSlot {
+      terrain?: TerrainColorReceipt;
+      remembered?: RememberedTerrainColorReceipt;
+    }
+
+    // The active terrain frame is already bounded to 120 x 120 cells. Keep one
+    // renderer-local index cache under that same cap instead of attaching an
+    // ephemeron to every transient projected tile. A shifted frame may reuse a
+    // slot only when every scalar presentation input still matches exactly.
+    const terrainColorCache: TerrainColorCacheSlot[] = [];
+    let chartBackgroundColorReceipt: { readonly hex: string; readonly color: p5.Color } | null = null;
+    let foamColor: p5.Color | null = null;
+    let inkColor: p5.Color | null = null;
+
     const withAlpha = (hex: string, alpha: number): p5.Color => {
       const color = p.color(hex);
       color.setAlpha(clamp(alpha, 0, 255));
       return color;
     };
 
-    const terrainColor = (
+    const terrainColorReceipt = (
       tile: TerrainTileView,
+      tileIndex: number,
       outdoorLight: OutdoorIlluminationPresentation,
-    ): p5.Color => {
+    ): TerrainColorReceipt => {
       const biome = visibleBiomePresentation(tile);
+      const baseColor = tile.kind === "built"
+        ? TERRAIN_COLORS.built
+        : biome?.chartColor ?? TERRAIN_COLORS[tile.kind];
+      const elevation = unit(tile.elevation);
+      const localIllumination = unit(tile.currentLocalIllumination);
+      const cacheSlot = tileIndex >= 0 && tileIndex < MAX_TERRAIN_PERCEPTION_MEMORY_TILES
+        ? terrainColorCache[tileIndex]
+        : undefined;
+      const cached = cacheSlot?.terrain;
+      if (
+        cached !== undefined
+        && cached.baseColor === baseColor
+        && Object.is(cached.daylight, outdoorLight.daylight)
+        && Object.is(cached.elevation, elevation)
+        && Object.is(cached.localIllumination, localIllumination)
+        && Object.is(cached.twilight, outdoorLight.twilight)
+      ) return cached;
+
       const base = p.color(
         outdoorTerrainColor(
-          tile.kind === "built"
-            ? TERRAIN_COLORS.built
-            : biome?.chartColor ?? TERRAIN_COLORS[tile.kind],
+          baseColor,
           outdoorLight,
-          tile.currentLocalIllumination,
+          localIllumination,
         ),
       );
-      const lift = clamp((unit(tile.elevation) - 0.45) * 0.22, -0.08, 0.12);
-      return p.lerpColor(base, p.color(lift >= 0 ? PALETTE.foam : PALETTE.ink), Math.abs(lift));
+      const lift = clamp((elevation - 0.45) * 0.22, -0.08, 0.12);
+      foamColor ??= p.color(PALETTE.foam);
+      inkColor ??= p.color(PALETTE.ink);
+      const color = p.lerpColor(base, lift >= 0 ? foamColor : inkColor, Math.abs(lift));
+      const receipt = {
+        baseColor,
+        daylight: outdoorLight.daylight,
+        elevation,
+        localIllumination,
+        twilight: outdoorLight.twilight,
+        color,
+      } satisfies TerrainColorReceipt;
+      if (tileIndex >= 0 && tileIndex < MAX_TERRAIN_PERCEPTION_MEMORY_TILES) {
+        const slot = cacheSlot ?? {};
+        slot.terrain = receipt;
+        delete slot.remembered;
+        terrainColorCache[tileIndex] = slot;
+      }
+      return receipt;
+    };
+
+    const rememberedTerrainColor = (
+      tile: TerrainTileView,
+      tileIndex: number,
+      outdoorLight: OutdoorIlluminationPresentation,
+      chartBackground: p5.Color,
+      discovered: number,
+    ): p5.Color => {
+      const base = terrainColorReceipt(tile, tileIndex, outdoorLight);
+      const cacheSlot = tileIndex >= 0 && tileIndex < MAX_TERRAIN_PERCEPTION_MEMORY_TILES
+        ? terrainColorCache[tileIndex]
+        : undefined;
+      const cached = cacheSlot?.remembered;
+      if (
+        cached !== undefined
+        && cached.base === base
+        && cached.chartBackground === outdoorLight.chartBackground
+        && Object.is(cached.discovered, discovered)
+      ) return cached.color;
+
+      const color = p.lerpColor(chartBackground, base.color, 0.1 * discovered);
+      const receipt = {
+        base,
+        chartBackground: outdoorLight.chartBackground,
+        discovered,
+        color,
+      } satisfies RememberedTerrainColorReceipt;
+      if (tileIndex >= 0 && tileIndex < MAX_TERRAIN_PERCEPTION_MEMORY_TILES) {
+        const slot = cacheSlot ?? {};
+        slot.remembered = receipt;
+        terrainColorCache[tileIndex] = slot;
+      }
+      return color;
     };
 
     const setDash = (values: readonly number[], offset = 0): void => {
@@ -1423,6 +1522,13 @@ export function createTideweftRenderer(
     ): number => {
       const grid = view.terrain;
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
+      if (chartBackgroundColorReceipt?.hex !== outdoorLight.chartBackground) {
+        chartBackgroundColorReceipt = {
+          hex: outdoorLight.chartBackground,
+          color: p.color(outdoorLight.chartBackground),
+        };
+      }
+      const chartBackgroundColor = chartBackgroundColorReceipt.color;
       const tileSize = Math.max(0.1, grid.tileSize);
       const halfWidth = p.width / (2 * camera.zoom);
       const halfHeight = p.height / (2 * camera.zoom);
@@ -1448,12 +1554,11 @@ export function createTideweftRenderer(
       );
 
       p.noStroke();
-      const drawnTiles = trackCounts
-        ? Math.max(0, lastRow - firstRow + 1) * Math.max(0, lastColumn - firstColumn + 1)
-        : 0;
+      let drawnTiles = 0;
       for (let row = firstRow; row <= lastRow; row += 1) {
         for (let column = firstColumn; column <= lastColumn; column += 1) {
-          const tile = grid.tiles[row * grid.columns + column];
+          const tileIndex = row * grid.columns + column;
+          const tile = grid.tiles[tileIndex];
           if (!tile) continue;
           const x = grid.origin.x + column * tileSize;
           const y = grid.origin.y + row * tileSize;
@@ -1467,17 +1572,18 @@ export function createTideweftRenderer(
             row * grid.columns + column,
           );
           if (discovered <= 0 && currentVisibility <= 0) {
-            p.fill(outdoorLight.chartBackground);
-            p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
           }
+          if (trackCounts) drawnTiles += 1;
           if (currentVisibility <= 0) {
             // The Chart retains only a dim geographic memory. Live water,
             // climate, surface texture, and status cues never leak through it.
-            p.fill(p.lerpColor(
-              p.color(outdoorLight.chartBackground),
-              terrainColor(tile, outdoorLight),
-              0.1 * discovered,
+            p.fill(rememberedTerrainColor(
+              tile,
+              tileIndex,
+              outdoorLight,
+              chartBackgroundColor,
+              discovered,
             ));
             p.rect(x, y, tileSize + 0.35 / camera.zoom, tileSize + 0.35 / camera.zoom);
             continue;
@@ -1504,9 +1610,9 @@ export function createTideweftRenderer(
                 outdoorLight,
                 tile.currentLocalIllumination,
               ))
-            : terrainColor(tile, outdoorLight);
+            : terrainColorReceipt(tile, tileIndex, outdoorLight).color;
           p.fill(p.lerpColor(
-            p.color(outdoorLight.chartBackground),
+            chartBackgroundColor,
             visibleTerrainColor,
             sensoryStrength,
           ));

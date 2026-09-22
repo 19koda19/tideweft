@@ -4,10 +4,12 @@ import type {
   AggregateWildlifeEvidenceView,
   DogView,
   RendererCommand,
+  TerrainTileView,
   TideweftView,
   WildlifeCarcassView,
   WildlifeView,
 } from "./types";
+import { MAX_TERRAIN_PERCEPTION_MEMORY_TILES } from "./terrainPerceptionMemory";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import {
   outdoorIlluminationPresentation,
@@ -479,6 +481,182 @@ describe("Chart renderer telemetry", () => {
 });
 
 describe("Chart shared outdoor illumination", () => {
+  it("does not resubmit fully undisclosed cells already covered by the chart background", () => {
+    const base = view("undisclosed-chart-cell", { x: 12, y: 12 });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 3,
+        signature: "undisclosed-chart-cell",
+        valid: true,
+        visibleTileCount: 0,
+        directTileCount: 0,
+        peripheralTileCount: 0,
+      },
+      terrain: {
+        columns: 1,
+        rows: 1,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "undisclosed-chart-cell",
+        tiles: [{
+          kind: "meadow",
+          elevation: 0.2,
+          discovered: 0,
+          currentVisibility: 0,
+          currentDetailVisibility: 0,
+        }],
+      },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    renderer.setPerformanceTelemetryEnabled?.(true);
+
+    draw();
+
+    expect(renderer.telemetry()).toMatchObject({ terrainTiles: 0 });
+    expect(p5Harness.instance?.background).toHaveBeenCalled();
+    renderer.destroy();
+  });
+
+  it("reuses remembered terrain colors until an exact presentation input changes", () => {
+    const base = view("remembered-chart-color", { x: 12, y: 12 });
+    let tile: TerrainTileView = {
+      kind: "meadow",
+      elevation: 0.2,
+      discovered: 1,
+      currentVisibility: 0,
+      currentDetailVisibility: 0,
+      currentLocalIllumination: 0,
+    };
+    let current: TideweftView = {
+      ...base,
+      perception: {
+        version: 3,
+        signature: "remembered-chart-color",
+        valid: true,
+        visibleTileCount: 0,
+        directTileCount: 0,
+        peripheralTileCount: 0,
+      },
+      terrain: {
+        columns: 1,
+        rows: 1,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "remembered-chart-color",
+        tiles: [tile],
+      },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const lerpColor = p5Harness.instance?.lerpColor as ReturnType<typeof vi.fn>;
+    const updateTile = (changes: Partial<TerrainTileView>): void => {
+      tile = { ...tile, ...changes };
+      current = {
+        ...current,
+        terrain: { ...current.terrain, tiles: [tile] },
+      };
+    };
+
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(2);
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(2);
+
+    updateTile({});
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(2);
+
+    updateTile({ discovered: 0.5 });
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(3);
+
+    updateTile({ elevation: 0.9 });
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(5);
+
+    updateTile({ currentLocalIllumination: 0.6 });
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(7);
+
+    updateTile({ kind: "ridge" });
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(9);
+
+    current = {
+      ...current,
+      worldTime: {
+        version: 1,
+        dayNumber: 1,
+        dayTick: 0,
+        phase: "night",
+        phaseProgress: 0.4,
+        cycleProgress: 0,
+        solarProgress: null,
+        illumination: 0.1,
+      },
+    };
+    draw();
+    expect(lerpColor).toHaveBeenCalledTimes(11);
+    renderer.destroy();
+  });
+
+  it("bypasses remembered-color reuse outside the bounded terrain frame", () => {
+    const uncachedIndex = MAX_TERRAIN_PERCEPTION_MEMORY_TILES;
+    const tile: TerrainTileView = {
+      kind: "meadow",
+      elevation: 0.2,
+      discovered: 1,
+      currentVisibility: 0,
+      currentDetailVisibility: 0,
+    };
+    const tiles: TerrainTileView[] = [];
+    tiles.length = uncachedIndex + 1;
+    tiles[uncachedIndex] = tile;
+    const current: TideweftView = {
+      ...view(
+        "outside-bounded-chart-color",
+        { x: uncachedIndex + 0.5, y: 0.5 },
+        { bounds: { minX: 0, minY: 0, maxX: uncachedIndex + 1, maxY: 1 } },
+      ),
+      perception: {
+        version: 3,
+        signature: "outside-bounded-chart-color",
+        valid: true,
+        visibleTileCount: 0,
+        directTileCount: 0,
+        peripheralTileCount: 0,
+      },
+      terrain: {
+        columns: uncachedIndex + 1,
+        rows: 1,
+        tileSize: 1,
+        origin: { x: 0, y: 0 },
+        revision: "outside-bounded-chart-color",
+        tiles,
+      },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const lerpColor = p5Harness.instance?.lerpColor as ReturnType<typeof vi.fn>;
+
+    draw();
+    draw();
+
+    expect(lerpColor).toHaveBeenCalledTimes(4);
+    renderer.destroy();
+  });
+
   it("paints the clock-derived sky directly without a screen-darkening pane", () => {
     const nightTime = {
       version: 1 as const,
