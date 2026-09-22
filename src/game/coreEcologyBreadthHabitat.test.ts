@@ -378,6 +378,7 @@ describe(`${ALPHA38_MARSH_CHANNEL_WEB_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} ep
       cohortEpoch: 2,
       evaluatedSpeciesCount: 7,
     });
+    expect(first.derivationHash).toBe("792f8f7b8fd96370");
     expect(first.populations.map(({ species }) => species)).toEqual(
       CORE_ECOLOGY_MARSH_CHANNEL_WEB_SPECIES,
     );

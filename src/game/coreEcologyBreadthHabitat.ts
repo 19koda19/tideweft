@@ -1442,6 +1442,10 @@ function analyzeTerrain(
 }> {
   const shoreline = distanceField(terrain, (tile) => !isWaterTerrain(tile.terrain));
   const water = distanceField(terrain, (tile) => isWaterTerrain(tile.terrain));
+  const rankedProfiles = cohort.species.map((profile) => Object.freeze({
+    profile,
+    purpose: semanticPurpose(`${cohort.cohortId}:${profile.species}`),
+  }));
   const tiles: AnalyzedBreadthTile[] = [];
   let waterTileCount = 0;
   let intertidalTileCount = 0;
@@ -1503,7 +1507,7 @@ function analyzeTerrain(
     });
     const scoreBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
     const rankBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
-    for (const profile of cohort.species) {
+    for (const { profile, purpose } of rankedProfiles) {
       scoreBySpecies[profile.species] = tileEligible(profile, tile, {
         highTideDepth,
         lowTideDepth,
@@ -1516,7 +1520,7 @@ function analyzeTerrain(
         BREADTH_ANCHOR_DOMAIN,
         global.x,
         global.y,
-        semanticPurpose(`${cohort.cohortId}:${profile.species}`),
+        purpose,
       );
     }
     tiles.push(Object.freeze({
