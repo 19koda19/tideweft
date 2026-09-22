@@ -5,7 +5,7 @@ import {
   createActorObservation,
 } from "../sim/actorPerception";
 import { createRegionCoord, regionLocalToGlobalTile } from "../sim/regions";
-import { seedFromText } from "../sim/rng";
+import { seedFromText, type RootSeed } from "../sim/rng";
 import { generateRegionTerrain } from "../sim/regionTerrain";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
@@ -55,6 +55,9 @@ import {
   regionalEcologySourceOwnership,
   replaceRegionalEcologyActiveState,
   serializeRegionalEcologyState,
+  type CommitRegionalEcologyActiveProjectionInput,
+  type RegionalEcologyActiveProjectionV1,
+  type RegionalEcologyStateV1,
 } from "./regionalEcologyState";
 import { setRegionalEcologyMaterializationForWindow } from "./regionalEcologyRuntime";
 import {
@@ -261,6 +264,83 @@ function windowAt(region = HOME_REGION): CoreEcologyRuntimeWindow {
     origin: regionLocalToGlobalTile(region, 0, 0),
     terrain: Object.freeze({ width: 120, height: 120 }),
   });
+}
+
+function visitationStateFixture(): RegionalEcologyStateV1 {
+  const { root, home, wild } = fixture();
+  const predator = patchAt(PREDATOR_REGION);
+  if (predator.populations.length === 0) {
+    throw new Error("Visitation receipt fixture needs a second occupied regional source");
+  }
+  return createRegionalEcologyState({
+    root,
+    settlementHome: { sourceKey: home.patchKey, patch: home },
+    activeRegions: [WILD_REGION, PREDATOR_REGION],
+    activeResidents: [wild, predator].map((patch) => ({
+      kind: "regional-habitat" as const,
+      sourceKey: patch.patchKey,
+      patch,
+    })),
+  });
+}
+
+function prepareNeutralRegionalVisit(
+  state: RegionalEcologyStateV1,
+  tick: number,
+  rootSeed: RootSeed = SEED,
+): Readonly<{
+  projection: RegionalEcologyActiveProjectionV1;
+  input: CommitRegionalEcologyActiveProjectionInput;
+}> {
+  const projection = projectRegionalEcologyActiveState(state, windowAt(WILD_REGION));
+  if (projection === null) throw new Error("Receipt visitation projection failed");
+  const residents = projection.residents.map(({ sourceKey, patch }) => {
+    const materialized = patch.populations.flatMap(({ members }) => members)
+      .filter(({ materialization }) => materialization === "materialized");
+    const stepped = stepCoreEcologyAggregatePatch(patch, {
+      tick,
+      actorSteps: materialized.map(({ actor }) => ({
+        actorId: actor.identity.stableId,
+        observations: [],
+        foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      })),
+    });
+    if (stepped === null) throw new Error("Receipt visitation resident step failed");
+    return Object.freeze({ sourceKey, patch: stepped.patch });
+  });
+  const homeStep = stepCoreEcologyAggregatePatch(state.settlementHome.patch, {
+    tick,
+    actorSteps: [],
+  });
+  if (homeStep === null) throw new Error("Receipt visitation home step failed");
+  return Object.freeze({
+    projection,
+    input: Object.freeze({
+      root: advanceRegionalEcologyRoot(state.root, tick),
+      rootSeed,
+      settlementHome: Object.freeze({
+        sourceKey: homeStep.patch.patchKey,
+        patch: homeStep.patch,
+      }),
+      residents: Object.freeze(residents),
+    }),
+  });
+}
+
+function commitNeutralRegionalVisit(
+  state: RegionalEcologyStateV1,
+  tick: number,
+  rootSeed: RootSeed = SEED,
+): RegionalEcologyStateV1 {
+  const prepared = prepareNeutralRegionalVisit(state, tick, rootSeed);
+  const result = commitRegionalEcologyActiveProjection(
+    state,
+    prepared.projection,
+    prepared.input,
+  );
+  if (result === null) throw new Error("Receipt visitation commit failed");
+  return result;
 }
 
 let CACHED_CROSS_OWNER_PATCHES: Readonly<{
@@ -1627,6 +1707,172 @@ describe("regional ecology v25 owner substrate", () => {
       .find(({ actor: candidate }) => candidate.identity.stableId === actor.identity.stableId)
       ?.actor.memories.some(({ environmentalEvidence }) => environmentalEvidence !== undefined))
       .toBe(true);
+  });
+
+  it("keeps a two-source sequential visitation chain byte-equal to reloaded fallback", () => {
+    const initial = visitationStateFixture();
+    const fastFirst = commitNeutralRegionalVisit(initial, TICK + 1);
+    const fastSecond = commitNeutralRegionalVisit(fastFirst, TICK + 2);
+
+    const reloadedInitial = deserializeRegionalEcologyState(
+      serializeRegionalEcologyState(initial),
+    );
+    if (reloadedInitial === null) throw new Error("Receipt fallback initial reload failed");
+    const fallbackFirst = commitNeutralRegionalVisit(reloadedInitial, TICK + 1);
+    const reloadedFirst = deserializeRegionalEcologyState(
+      serializeRegionalEcologyState(fallbackFirst),
+    );
+    if (reloadedFirst === null) throw new Error("Receipt fallback intermediate reload failed");
+    const fallbackSecond = commitNeutralRegionalVisit(reloadedFirst, TICK + 2);
+
+    expect(fastSecond.activeResidents).toHaveLength(2);
+    expect(serializeRegionalEcologyState(fastFirst))
+      .toBe(serializeRegionalEcologyState(fallbackFirst));
+    expect(serializeRegionalEcologyState(fastSecond))
+      .toBe(serializeRegionalEcologyState(fallbackSecond));
+  });
+
+  it("burns pristine proof on clone, interleaving, and seed mismatches", () => {
+    const initialText = serializeRegionalEcologyState(visitationStateFixture());
+    const load = (text: string): RegionalEcologyStateV1 => {
+      const state = deserializeRegionalEcologyState(text);
+      if (state === null) throw new Error("Receipt mismatch fixture reload failed");
+      return state;
+    };
+
+    const cloneFirst = commitNeutralRegionalVisit(load(initialText), TICK + 1);
+    const cloneResult = commitNeutralRegionalVisit(
+      load(serializeRegionalEcologyState(cloneFirst)),
+      TICK + 2,
+    );
+    const cloneOracle = commitNeutralRegionalVisit(
+      load(serializeRegionalEcologyState(cloneFirst)),
+      TICK + 2,
+    );
+    expect(serializeRegionalEcologyState(cloneResult))
+      .toBe(serializeRegionalEcologyState(cloneOracle));
+
+    const interleavedFirst = commitNeutralRegionalVisit(load(initialText), TICK + 1);
+    expect(commitRegionalEcologyActiveProjection(null, null, null as never)).toBeNull();
+    const interleavedResult = commitNeutralRegionalVisit(interleavedFirst, TICK + 2);
+    const interleavedOracle = commitNeutralRegionalVisit(
+      load(serializeRegionalEcologyState(interleavedFirst)),
+      TICK + 2,
+    );
+    expect(serializeRegionalEcologyState(interleavedResult))
+      .toBe(serializeRegionalEcologyState(interleavedOracle));
+
+    const seedIdentity: [number, number, number, number] = [...SEED];
+    const seedFirst = commitNeutralRegionalVisit(load(initialText), TICK + 1, seedIdentity);
+    const equalClone: [number, number, number, number] = [...seedIdentity];
+    const seedResult = commitNeutralRegionalVisit(seedFirst, TICK + 2, equalClone);
+    const seedOracle = commitNeutralRegionalVisit(
+      load(serializeRegionalEcologyState(seedFirst)),
+      TICK + 2,
+      SEED,
+    );
+    expect(serializeRegionalEcologyState(seedResult))
+      .toBe(serializeRegionalEcologyState(seedOracle));
+
+    const mutableSeed: [number, number, number, number] = [...SEED];
+    const mutationFirst = commitNeutralRegionalVisit(load(initialText), TICK + 1, mutableSeed);
+    const rejected = prepareNeutralRegionalVisit(mutationFirst, TICK + 2, mutableSeed);
+    const originalWord = mutableSeed[0];
+    try {
+      mutableSeed[0] = (originalWord ^ 1) >>> 0;
+      expect(commitRegionalEcologyActiveProjection(
+        mutationFirst,
+        rejected.projection,
+        rejected.input,
+      )).toBeNull();
+    } finally {
+      mutableSeed[0] = originalWord;
+    }
+    const mutationResult = commitNeutralRegionalVisit(mutationFirst, TICK + 2, mutableSeed);
+    const mutationOracle = commitNeutralRegionalVisit(
+      load(serializeRegionalEcologyState(mutationFirst)),
+      TICK + 2,
+      SEED,
+    );
+    expect(serializeRegionalEcologyState(mutationResult))
+      .toBe(serializeRegionalEcologyState(mutationOracle));
+  });
+
+  it("does not discard a durable actor change on the commit after pristine refresh", () => {
+    const first = commitNeutralRegionalVisit(visitationStateFixture(), TICK + 1);
+    const durableInput = prepareNeutralRegionalVisit(first, TICK + 2);
+    const wildOutput = durableInput.input.residents.find(({ sourceKey }) => (
+      sourceKey === first.activeResidents.find(({ region }) => (
+        region.x === WILD_REGION.x && region.y === WILD_REGION.y
+      ))?.sourceKey
+    ));
+    const actor = wildOutput?.patch.populations.flatMap(({ members }) => members)[0]?.actor;
+    if (wildOutput === undefined || actor === undefined) {
+      throw new Error("Durable receipt fixture needs one wild actor");
+    }
+    const movedActor = repositionCoreWildlifeActorWithMovementEvidence(actor, {
+      atTick: TICK + 2,
+      position: createWorldPosition(WILD_REGION, 24_000, 24_000),
+      heading: (actor.address.heading + 1) % 1_000_000,
+      strength: 500_000,
+    });
+    const movedPatch = replaceCoreEcologyAggregatePatchActor(wildOutput.patch, movedActor);
+    const originalWild = first.activeResidents.find(({ sourceKey }) => (
+      sourceKey === wildOutput.sourceKey
+    ));
+    if (originalWild === undefined) throw new Error("Durable receipt source was lost");
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(
+      originalWild.patch,
+      movedPatch,
+    )).toBe(false);
+    const durable = commitRegionalEcologyActiveProjection(
+      first,
+      durableInput.projection,
+      {
+        ...durableInput.input,
+        residents: durableInput.input.residents.map((resident) => (
+          resident.sourceKey === wildOutput.sourceKey
+            ? { sourceKey: resident.sourceKey, patch: movedPatch }
+            : resident
+        )),
+      },
+    );
+    if (durable === null) throw new Error("Durable receipt commit failed");
+
+    const presentationProjection = projectRegionalEcologyActiveState(
+      durable,
+      windowAt(WILD_REGION),
+    );
+    if (presentationProjection === null) {
+      throw new Error("Durable receipt presentation projection failed");
+    }
+    const presentation = commitRegionalEcologyActiveProjection(
+      durable,
+      presentationProjection,
+      {
+        root: durable.root,
+        rootSeed: SEED,
+        settlementHome: null,
+        residents: presentationProjection.residents.map(({ sourceKey, patch }) => ({
+          sourceKey,
+          patch,
+        })),
+      },
+    );
+    if (presentation === null) throw new Error("Durable presentation commit failed");
+    expect(serializeRegionalEcologyState(presentation))
+      .toBe(serializeRegionalEcologyState(durable));
+
+    const later = commitNeutralRegionalVisit(presentation, TICK + 3);
+    const retained = later.activeResidents
+      .find(({ sourceKey }) => sourceKey === wildOutput.sourceKey)
+      ?.patch.populations.flatMap(({ members }) => members)
+      .find(({ actor: candidate }) => candidate.identity.stableId === actor.identity.stableId)
+      ?.actor;
+    expect(retained?.address).toEqual(movedActor.address);
+    expect(retained?.memories.some(({ environmentalEvidence }) => (
+      environmentalEvidence !== undefined
+    ))).toBe(true);
   });
 
   it("retains an authenticated regional roost posture across active-source exchange", () => {

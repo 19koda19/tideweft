@@ -64,6 +64,30 @@ const HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const TRUSTED_STATES = new WeakSet<object>();
 const TRUSTED_PROJECTIONS = new WeakSet<object>();
 
+interface RegionalEcologyPristineSourceReceipt {
+  readonly snapshot: RegionalEcologyResidentSnapshotV1;
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly kind: "regional-habitat";
+  readonly sourceKey: string;
+  readonly region: RegionCoord;
+  readonly regionKey: string;
+  readonly patchHash: string;
+  readonly lineageHash: string;
+  readonly snapshotIntegrity: string;
+  readonly tick: number;
+}
+
+interface PendingRegionalEcologyPristineReceipt {
+  readonly state: RegionalEcologyStateV1;
+  readonly root: RegionalEcologyRootV1;
+  readonly rootSeedIdentity: RootSeed;
+  readonly rootSeedWords: RootSeed;
+  readonly sources: readonly RegionalEcologyPristineSourceReceipt[];
+}
+
+/** One synchronous proof for only the immediately following V1 commit. */
+let pendingRegionalEcologyPristineReceipt: PendingRegionalEcologyPristineReceipt | null = null;
+
 export type RegionalEcologyStateSourceKind =
   | "settlement-home"
   | "regional-habitat"
@@ -792,6 +816,7 @@ export function commitRegionalEcologyActiveProjection(
   projectionValue: unknown,
   input: CommitRegionalEcologyActiveProjectionInput,
 ): RegionalEcologyStateV1 | null {
+  const pendingPristineReceipt = takePendingRegionalEcologyPristineReceipt();
   const state = canonicalizeRegionalEcologyState(stateValue);
   if (state === null || !plainRecord(input) || !exactKeys(input, [
     "residents",
@@ -836,7 +861,13 @@ export function commitRegionalEcologyActiveProjection(
   if (outputBySource.size !== projectedBySource.size) return null;
 
   const originalBySource = new Map(activeSnapshots(state).map((entry) => [entry.sourceKey, entry]));
+  const receiptedPristineSnapshots = pristineSnapshotsFromReceipt(
+    pendingPristineReceipt,
+    state,
+    input.rootSeed,
+  );
   const nextSnapshots = new Map<string, RegionalEcologyResidentSnapshotV1>();
+  const refreshedPristineSnapshots: RegionalEcologyResidentSnapshotV1[] = [];
   for (const projected of projection.residents) {
     const original = originalBySource.get(projected.sourceKey);
     const output = outputBySource.get(projected.sourceKey);
@@ -849,10 +880,12 @@ export function commitRegionalEcologyActiveProjection(
     );
     if (normalizedOutput === null) return null;
     let committedPatch = normalizedOutput;
+    let refreshedPristine = false;
     if (
       projected.kind === "regional-habitat"
       && root.updatedAtTick > projection.atTick
-      && regionalPatchMatchesPristineRoot(original.patch, state.root, input.rootSeed)
+      && (receiptedPristineSnapshots?.has(original) === true
+        || regionalPatchMatchesPristineRoot(original.patch, state.root, input.rootSeed))
       && regionalEcologyResidentTransitionIsVisitationOnly(original.patch, normalizedOutput)
     ) {
       const refreshed = createCoreEcologyRegionalResidentPatchForRoot({
@@ -862,6 +895,7 @@ export function commitRegionalEcologyActiveProjection(
       });
       if (refreshed === null) return null;
       committedPatch = refreshed;
+      refreshedPristine = true;
     }
     const next = presentationOnly
       ? original
@@ -875,6 +909,7 @@ export function commitRegionalEcologyActiveProjection(
       || regionKey(next.region) !== regionKey(original.region)
     ) return null;
     nextSnapshots.set(next.sourceKey, next);
+    if (refreshedPristine) refreshedPristineSnapshots.push(next);
   }
 
   const homeWasActive = projectedBySource.has(state.settlementHome.sourceKey);
@@ -940,6 +975,11 @@ export function commitRegionalEcologyActiveProjection(
   } catch {
     return null;
   }
+  publishRegionalEcologyPristineReceipt(
+    result,
+    input.rootSeed,
+    refreshedPristineSnapshots,
+  );
   return result;
 }
 
@@ -1672,6 +1712,128 @@ function regionalPatchMatchesPristineRoot(
     region: patch.originRegion,
   });
   return baseline !== null && stableStringify(baseline) === stableStringify(patch);
+}
+
+function takePendingRegionalEcologyPristineReceipt(
+): PendingRegionalEcologyPristineReceipt | null {
+  const receipt = pendingRegionalEcologyPristineReceipt;
+  pendingRegionalEcologyPristineReceipt = null;
+  return receipt;
+}
+
+/**
+ * Authenticate the one immediately preceding commit once, before source
+ * traversal. Exact identities deliberately exclude loads, clones, interleaved
+ * commits, and any caller mutation of the seed tuple.
+ */
+function pristineSnapshotsFromReceipt(
+  receipt: PendingRegionalEcologyPristineReceipt | null,
+  state: RegionalEcologyStateV1,
+  rootSeed: RootSeed,
+): ReadonlySet<RegionalEcologyResidentSnapshotV1> | null {
+  if (
+    receipt === null
+    || receipt.state !== state
+    || receipt.root !== state.root
+    || receipt.rootSeedIdentity !== rootSeed
+    || !rootSeedWordsMatch(receipt.rootSeedWords, rootSeed)
+    || receipt.sources.length === 0
+  ) return null;
+
+  const stateSources = new Map(state.activeResidents.map((source) => (
+    [source.sourceKey, source] as const
+  )));
+  const snapshots = new Set<RegionalEcologyResidentSnapshotV1>();
+  for (const proof of receipt.sources) {
+    const source = stateSources.get(proof.sourceKey);
+    if (
+      source === undefined
+      || snapshots.has(source)
+      || source !== proof.snapshot
+      || source.patch !== proof.patch
+      || source.kind !== proof.kind
+      || source.kind !== "regional-habitat"
+      || source.sourceKey !== proof.sourceKey
+      || source.patch.patchKey !== proof.sourceKey
+      || source.region !== proof.region
+      || regionKey(source.region) !== proof.regionKey
+      || source.patchHash !== proof.patchHash
+      || source.lineageHash !== proof.lineageHash
+      || source.integrity !== proof.snapshotIntegrity
+      || source.patch.updatedAtTick !== proof.tick
+      || proof.tick !== state.updatedAtTick
+      || proof.tick !== state.root.updatedAtTick
+    ) return null;
+    snapshots.add(source);
+  }
+  return snapshots;
+}
+
+/**
+ * Publish only exact regional snapshots reconstructed from the new root by the
+ * advancing visitation-only path. Presentation-only and durable outputs never
+ * enter `refreshedSnapshots`, so they cannot carry pristine authority.
+ */
+function publishRegionalEcologyPristineReceipt(
+  state: RegionalEcologyStateV1,
+  rootSeed: RootSeed,
+  refreshedSnapshots: readonly RegionalEcologyResidentSnapshotV1[],
+): void {
+  pendingRegionalEcologyPristineReceipt = null;
+  if (refreshedSnapshots.length === 0) return;
+  try {
+    const stateSources = new Map(state.activeResidents.map((source) => (
+      [source.sourceKey, source] as const
+    )));
+    const seen = new Set<RegionalEcologyResidentSnapshotV1>();
+    const sources: RegionalEcologyPristineSourceReceipt[] = [];
+    for (const snapshot of refreshedSnapshots) {
+      if (
+        seen.has(snapshot)
+        || stateSources.get(snapshot.sourceKey) !== snapshot
+        || snapshot.kind !== "regional-habitat"
+        || snapshot.patch.patchKey !== snapshot.sourceKey
+        || snapshot.patch.updatedAtTick !== state.updatedAtTick
+        || state.root.updatedAtTick !== state.updatedAtTick
+      ) return;
+      seen.add(snapshot);
+      sources.push(Object.freeze({
+        snapshot,
+        patch: snapshot.patch,
+        kind: snapshot.kind,
+        sourceKey: snapshot.sourceKey,
+        region: snapshot.region,
+        regionKey: regionKey(snapshot.region),
+        patchHash: snapshot.patchHash,
+        lineageHash: snapshot.lineageHash,
+        snapshotIntegrity: snapshot.integrity,
+        tick: state.updatedAtTick,
+      }));
+    }
+    pendingRegionalEcologyPristineReceipt = Object.freeze({
+      state,
+      root: state.root,
+      rootSeedIdentity: rootSeed,
+      rootSeedWords: Object.freeze([
+        rootSeed[0],
+        rootSeed[1],
+        rootSeed[2],
+        rootSeed[3],
+      ]) as RootSeed,
+      sources: Object.freeze(sources),
+    });
+  } catch {
+    pendingRegionalEcologyPristineReceipt = null;
+  }
+}
+
+function rootSeedWordsMatch(left: RootSeed, right: RootSeed): boolean {
+  return Array.isArray(right)
+    && right.length === 4
+    && Object.is(left[0], right[0])
+    && Object.is(left[1], right[1])
+    && Object.is(left[2], right[2])
+    && Object.is(left[3], right[3]);
 }
 
 function regionalResidentDurableSignal(
