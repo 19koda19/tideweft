@@ -118,6 +118,13 @@ interface RegionalPolarShoreEcologyActiveReceiptResident {
   readonly patchHash: string;
   readonly lineageHash: string;
   readonly patch: CoreEcologyAggregatePatchState;
+  /**
+   * Exact process-local pristine lineage for this source. Stored deviations
+   * may carry an older tick here; the next comparison must reconcile it
+   * through the ordinary polar-shore authority before use. Missing provenance
+   * is null and always falls back to the full deterministic constructor.
+   */
+  readonly pristinePatch: CoreEcologyAggregatePatchState | null;
 }
 
 interface RegionalPolarShoreEcologyActiveReceipt {
@@ -801,7 +808,13 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
     if (residents.length > activeRegions.length + nextRoot.regions.length) {
       return null;
     }
-    seedActiveResidentReceipt(nextRoot, input.rootSeed, activeRegions, residents);
+    seedActiveResidentReceipt(
+      nextRoot,
+      input.rootSeed,
+      activeRegions,
+      residents,
+      batch.pristineBySource,
+    );
     return Object.freeze({ root: nextRoot, residents });
   } catch {
     return null;
@@ -811,6 +824,10 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
 interface RegionalPolarShoreEcologyActiveDeviationBatch {
   readonly root: RegionalPolarShoreEcologyRootV1;
   readonly durableBySource: ReadonlyMap<
+    string,
+    CoreEcologyAggregatePatchState
+  >;
+  readonly pristineBySource: ReadonlyMap<
     string,
     CoreEcologyAggregatePatchState
   >;
@@ -848,6 +865,12 @@ function applyActiveResidentDeviationBatch(
     receipt.residents.map((resident) => [resident.sourceKey, resident]),
   );
   const durableBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  const pristineBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  for (const resident of receipt.residents) {
+    if (resident.pristinePatch !== null) {
+      pristineBySource.set(resident.sourceKey, resident.pristinePatch);
+    }
+  }
   for (const raw of values) {
     if (
       !plainRecord(raw) ||
@@ -891,20 +914,36 @@ function applyActiveResidentDeviationBatch(
   let changed = false;
   for (const [, normalized] of ordered) {
     if (!isPolarDerivation(normalized)) return null;
-    const habitat = deriveCoreEcologyPolarShoreHabitat({
-      seed: rootSeed,
-      region: normalized.originRegion,
-    });
+    // The durable resident was world-authenticated immediately above. Reuse
+    // that exact sealed habitat on the receipt hit instead of deriving the
+    // same baseline a second time; the constructor fallback remains the sole
+    // path that needs a fresh baseline.
+    const habitat = normalized.derivation.habitat;
+    if (habitat.totalPopulationUnits === 0) return null;
+    const prior = receiptBySource.get(normalized.patchKey);
+    if (prior === undefined) return null;
+    let pristine = prior.pristinePatch === null
+      ? null
+      : reconcileCoreEcologyPolarShoreResidentPatchAtTick(
+          prior.pristinePatch,
+          completedTick,
+        );
     if (
-      habitat.totalPopulationUnits === 0 ||
-      habitat.derivationHash !== normalized.derivation.habitat.derivationHash
-    )
-      return null;
-    const pristine = createCoreEcologyPolarShoreResidentPatch({
-      seed: rootSeed,
-      habitat,
-      tick: completedTick,
-    });
+      pristine === null
+      || pristine.patchKey !== normalized.patchKey
+      || !isPolarDerivation(pristine)
+      || pristine.derivation.habitat.derivationHash !== habitat.derivationHash
+      || regionKey(pristine.originRegion) !== prior.regionKey
+      || pristine.updatedAtTick !== completedTick
+      || polarResidentLineageHash(pristine) !== prior.lineageHash
+    ) {
+      pristine = createCoreEcologyPolarShoreResidentPatch({
+        seed: rootSeed,
+        habitat,
+        tick: completedTick,
+      });
+    }
+    pristineBySource.set(normalized.patchKey, pristine);
     const pristineState =
       stableStringify(normalized) === stableStringify(pristine);
     const key = regionKey(normalized.originRegion);
@@ -956,7 +995,7 @@ function applyActiveResidentDeviationBatch(
     });
     WORLD_BOUND_ROOTS.set(nextRoot, nextRoot.seedFingerprint);
   }
-  return Object.freeze({ root: nextRoot, durableBySource });
+  return Object.freeze({ root: nextRoot, durableBySource, pristineBySource });
 }
 
 export function serializeRegionalPolarShoreEcologyRoot(value: unknown): string {
@@ -997,11 +1036,16 @@ function seedActiveResidentReceipt(
   rootSeed: RootSeed,
   activeRegions: readonly RegionCoord[],
   residents: readonly RegionalPolarShoreEcologyActiveResidentInput[],
+  preparedPristineBySource: ReadonlyMap<
+    string,
+    CoreEcologyAggregatePatchState
+  > = new Map(),
 ): void {
   if (residents.length > activeRegions.length + root.regions.length) return;
   const activeKeys = new Set(activeRegions.map(regionKey));
   const receiptResidents: RegionalPolarShoreEcologyActiveReceiptResident[] = [];
   const seen = new Set<string>();
+  const deviationKeys = new Set(root.regions.map(({ key }) => key));
   for (const resident of residents) {
     const patch = resident.patch;
     if (
@@ -1019,6 +1063,11 @@ function seedActiveResidentReceipt(
     )
       return;
     seen.add(resident.sourceKey);
+    const hasDeviation = deviationKeys.has(regionKey(patch.originRegion));
+    const preparedPristine = preparedPristineBySource.get(resident.sourceKey);
+    const pristinePatch = hasDeviation
+      ? receiptPristinePatchOrNull(preparedPristine, resident, root.updatedAtTick)
+      : patch;
     receiptResidents.push(
       Object.freeze({
         sourceKey: resident.sourceKey,
@@ -1027,6 +1076,7 @@ function seedActiveResidentReceipt(
         patchHash: hashCanonical(patch),
         lineageHash: polarResidentLineageHash(patch),
         patch,
+        pristinePatch,
       }),
     );
   }
@@ -1047,6 +1097,38 @@ function seedActiveResidentReceipt(
       residents: Object.freeze(receiptResidents),
     }),
   );
+}
+
+/**
+ * Admit only a baseline produced inside this module's exact active-root
+ * transaction. This process-local pointer is acceleration evidence, never
+ * public or serialized authority; uncertainty keeps the constructor fallback.
+ */
+function receiptPristinePatchOrNull(
+  patch: CoreEcologyAggregatePatchState | undefined,
+  resident: RegionalPolarShoreEcologyActiveResidentInput,
+  receiptTick: number,
+): CoreEcologyAggregatePatchState | null {
+  const residentPatch = resident.patch;
+  return patch !== undefined
+    && Object.isFrozen(patch)
+    && canonicalizeCoreEcologyAggregatePatch(patch) === patch
+    && patch.patchKey === resident.sourceKey
+    && isPolarDerivation(patch)
+    && isPolarDerivation(residentPatch)
+    && patch.derivation.habitat.derivationHash
+      === residentPatch.derivation.habitat.derivationHash
+    && regionKey(patch.originRegion) === regionKey(residentPatch.originRegion)
+    && patch.updatedAtTick <= receiptTick
+    && polarResidentLineageHash(patch) === polarResidentLineageHash(residentPatch)
+    && patch.populations.length === 0
+    && patch.groups.groups.length === 0
+    && patch.aggregatePopulations.length > 0
+    && patch.nextMortalityOrdinal === 0
+    && patch.mortalityTransactions.length === 0
+    && patch.carcasses.length === 0
+      ? patch
+      : null;
 }
 
 function canonicalActiveReceiptClaimsOrNull(

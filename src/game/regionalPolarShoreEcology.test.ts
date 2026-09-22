@@ -453,6 +453,111 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
   });
 
+  it("keeps consecutive durable receipt commits byte-identical through an idle tick, tidal jump, and pristine removal", () => {
+    const activeRegions = Object.freeze([REGION]);
+    const sourceTick = 360;
+    let fastRoot = createPristineRegionalPolarShoreEcologyRoot({
+      rootSeed: SEED,
+      completedTick: sourceTick,
+    });
+    let oracleRoot = fastRoot;
+    let fastResidents = regionalPolarShoreEcologyResidentsForActiveRegions(
+      fastRoot,
+      SEED,
+      activeRegions,
+    );
+    if (fastResidents === null || fastResidents.length !== 1) {
+      throw new Error("Consecutive polar receipt fixture did not derive");
+    }
+    const sourceKey = fastResidents[0]!.sourceKey;
+    const steps = [
+      {
+        completedTick: sourceTick + 1,
+        patch: displacePolarPatch(
+          polarPatch(REGION, sourceTick + 1),
+          "alpha34-pristine-proof-first",
+        ),
+        stored: true,
+        rootRevision: 1,
+        deltaRevision: 1,
+      },
+      {
+        completedTick: sourceTick + 2,
+        patch: null,
+        stored: true,
+        rootRevision: 1,
+        deltaRevision: 1,
+      },
+      {
+        completedTick: sourceTick + 1_440,
+        patch: displacePolarPatch(
+          polarPatch(REGION, sourceTick + 1_440),
+          "alpha34-pristine-proof-jump",
+        ),
+        stored: true,
+        rootRevision: 2,
+        deltaRevision: 2,
+      },
+      {
+        completedTick: sourceTick + 1_441,
+        patch: polarPatch(REGION, sourceTick + 1_441),
+        stored: false,
+        rootRevision: 3,
+        deltaRevision: null,
+      },
+    ] as const;
+
+    for (const step of steps) {
+      const fast = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+        fastRoot,
+        {
+          rootSeed: SEED,
+          completedTick: step.completedTick,
+          activeRegions,
+          expectedResidents: polarActiveResidentClaims(fastResidents),
+          durableResidents: step.patch === null
+            ? []
+            : [{ sourceKey, patch: step.patch }],
+        },
+      );
+      oracleRoot = advanceRegionalPolarShoreEcologyRoot(
+        oracleRoot,
+        step.completedTick,
+      );
+      if (step.patch !== null) {
+        oracleRoot = putRegionalPolarShoreEcologyResidentDeviation(oracleRoot, {
+          rootSeed: SEED,
+          patch: step.patch,
+        });
+      }
+      const oracleResidents = regionalPolarShoreEcologyResidentsForActiveRegions(
+        oracleRoot,
+        SEED,
+        activeRegions,
+      );
+      if (fast === null || oracleResidents === null) {
+        throw new Error("Consecutive polar receipt commit failed its scalar oracle");
+      }
+
+      expect(serializeRegionalPolarShoreEcologyRoot(fast.root))
+        .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
+      expect(stableStringify(fast.residents))
+        .toBe(stableStringify(oracleResidents));
+      expect(fast.root.revision).toBe(step.rootRevision);
+      expect(fast.root.lastEventOrdinal).toBe(step.rootRevision);
+      const stored = fast.root.regions.find(({ residentPatch }) => (
+        residentPatch.patchKey === sourceKey
+      ));
+      expect(stored !== undefined).toBe(step.stored);
+      if (step.deltaRevision !== null) {
+        expect(stored?.revision).toBe(step.deltaRevision);
+      }
+
+      fastRoot = fast.root;
+      fastResidents = fast.residents;
+    }
+  });
+
   it("rejects a removal batch when scalar clock advance alone crosses the save budget", () => {
     const sourceTick = 999;
     const targetTick = 1_000;
@@ -724,6 +829,17 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
         ? { ...claim, lineageHash: hashCanonical("forged polar lineage") }
         : claim),
     })).toBeNull();
+
+    const replacementReceipt = regionalPolarShoreEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      newWindow,
+    );
+    expect(replacementReceipt).not.toBeNull();
+    expect(advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      root,
+      input,
+    )).toBeNull();
 
     const fallbackRoot = advanceRegionalPolarShoreEcologyRoot(root, input.completedTick);
     const entered = regionalPolarShoreEcologyResidentsForActiveRegions(
