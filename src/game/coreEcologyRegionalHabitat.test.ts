@@ -4,9 +4,19 @@ import {
   CORE_WILDLIFE_ALPHA32_SPECIES,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
+import {
+  BIOME_IDS,
+  deriveBiomeProfile,
+  deriveMagicalWaterInfluence,
+} from "../sim/biomes";
 import { generateRegionTerrain } from "../sim/regionTerrain";
 import { seedFromText } from "../sim/rng";
-import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
+import {
+  REGION_COORD_LIMIT,
+  createRegionCoord,
+  regionLocalToGlobalTile,
+} from "../sim/regions";
+import { WORLD_HEIGHT } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH,
@@ -87,6 +97,51 @@ describe("core ecology regional habitat", () => {
         "mountain-goat" as CoreWildlifeSpecies,
       ],
     })).toThrow(/complete core wild-species catalog|Unsupported core wildlife species/u);
+  });
+
+  it("retains full baseline-profile climate and glimmerfen classification on signed supplied terrain", () => {
+    clearCoreEcologyRegionalHabitatCache();
+    const testSeed = seedFromText("regional glimmerfen profile parity");
+    const region = createRegionCoord(-3, 0);
+    const terrain = generateRegionTerrain(testSeed, region);
+    const reference = terrain.tiles.map((tile) => {
+      const globalTile = regionLocalToGlobalTile(region, tile.x, tile.y);
+      return deriveBiomeProfile({
+        seed: testSeed,
+        tile,
+        gridHeight: WORLD_HEIGHT,
+        globalTile,
+        magicalWaterInfluence: deriveMagicalWaterInfluence(testSeed, tile, globalTile),
+      });
+    });
+    const sum = (values: readonly number[]): number => values.reduce(
+      (total, value) => total + value,
+      0,
+    );
+    const habitat = deriveCoreEcologyRegionalHabitat({
+      seed: testSeed,
+      region,
+      speciesOrder: [...CORE_WILDLIFE_ALPHA32_SPECIES].reverse(),
+      terrain,
+    });
+    const glimmerfenCount = reference.filter(({ id }) => id === "glimmerfen").length;
+
+    expect(glimmerfenCount).toBeGreaterThan(0);
+    expect(habitat.summary.biomeTileCounts).toEqual(Object.fromEntries(
+      BIOME_IDS.map((id) => [
+        id,
+        reference.filter((profile) => profile.id === id).length,
+      ]),
+    ));
+    expect(habitat.summary.averageRainfall).toBe(Math.trunc(
+      sum(reference.map(({ climate }) => climate.rainfall)) / reference.length,
+    ));
+    expect(habitat.summary.averageHeat).toBe(Math.trunc(
+      sum(reference.map(({ climate }) => climate.heat)) / reference.length,
+    ));
+    expect(habitat.summary.averageExposure).toBe(Math.trunc(
+      sum(reference.map(({ climate }) => climate.exposure)) / reference.length,
+    ));
   });
 
   it("shares one radius-two large-predator owner field across seams", () => {

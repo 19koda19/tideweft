@@ -4,6 +4,43 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.58 — 2026-09-23
+
+Build: `0.3.3-alpha.58` · Gameplay contract: 51 · Tutorial: 68
+
+The Breathing Room Alpha 58 internal build derives only the biome identity and baseline climate consumed by base-regional habitat analysis, omitting discarded interaction signals.
+
+### Gameplay
+
+- Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, actor-presence, and physical-custody outcomes as Alpha 57.
+- Base-regional habitat analysis still classifies every tile from the same terrain and baseline climate, and every species still applies its complete affinity, threshold, keyed rank, density, dependency, population, and anchor rules.
+
+### Fixes
+
+- Base-regional terrain analysis now derives only the stable biome identity and baseline climate it actually consumes instead of constructing interaction signals that were immediately discarded.
+- The full biome profile remains authoritative where its interaction signals are consumed; this bounded cold-expansion path retains the same biome classification and climate summaries without allocating the unused profile layer.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset; no wildlife, habitat affinity, site threshold, weather pressure, traversal cost, population law, mortality rule, or custody rule changed in this slice.
+- This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior.
+
+### Interface
+
+- Field Manual version 68 records the bounded base-regional analysis refinement and keeps planned systems clearly separated from playable behavior.
+- No gameplay, visual, control, desktop, mobile, or accessibility behavior changes in this slice.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, habitat derivation hashes, and wildlife actor schema/version 1 remain unchanged.
+- The refinement changes only transient analysis work and adds no cache, receipt, serialized field, migration, schema, or save-format change.
+
+### Known limitations
+
+- The measured two-pair base-regional owner benchmark improved from 76.203187 ms to 73.156646 ms (-3.998%), but this is attribution-only rather than a hitch or frame-rate acceptance claim.
+- Breathing Room remains active; quiet-host untouched travel timing, settled forced-GC/resource proof, prolonged soak, cumulative validation, and the release checkpoint remain open.
+- Alpha 58 is an unpublished local ordinary slice until a separately authorized release checkpoint is pushed and verified. Living Voice remains blocked until Breathing Room closes.
+
 ## 0.3.3-alpha.57 — 2026-09-23
 
 Build: `0.3.3-alpha.57` · Gameplay contract: 51 · Tutorial: 67

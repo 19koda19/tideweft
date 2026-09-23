@@ -6,7 +6,13 @@ import {
   type CoreWildlifeLocomotionClass,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
-import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
+import {
+  classifyBiome,
+  deriveBaselineBiomeClimate,
+  deriveMagicalWaterInfluence,
+  type BiomeClimate,
+  type BiomeId,
+} from "../sim/biomes";
 import {
   generateRegionTerrain,
   generatedRegionTerrainHash,
@@ -342,7 +348,10 @@ interface AnalyzedTile {
   readonly tile: TerrainTile;
   readonly globalX: number;
   readonly globalY: number;
-  readonly biome: ReturnType<typeof deriveBiomeProfile>;
+  readonly biome: {
+    readonly id: BiomeId;
+    readonly climate: BiomeClimate;
+  };
 }
 
 interface TerrainAnalysis {
@@ -672,13 +681,20 @@ function analyzeTerrain(
   for (const tile of terrain.tiles) {
     const global = regionLocalToGlobalTile(region, tile.x, tile.y);
     const magicalWaterInfluence = deriveMagicalWaterInfluence(seed, tile, global);
-    const biome = deriveBiomeProfile({
+    const climate = deriveBaselineBiomeClimate(
       seed,
       tile,
-      gridHeight: WORLD_HEIGHT,
-      globalTile: global,
+      WORLD_HEIGHT,
       magicalWaterInfluence,
-    });
+      global,
+    );
+    // Regional ecology consumes only stable biome identity and baseline
+    // climate. Building the profile's interaction signals here created a
+    // discarded object for every tile during every cold region expansion.
+    const biome = {
+      id: classifyBiome(tile.terrain, climate),
+      climate,
+    };
     tiles.push({ tile, globalX: global.x, globalY: global.y, biome });
     terrainTileCounts[tile.terrain] += 1;
     biomeTileCounts[biome.id] += 1;

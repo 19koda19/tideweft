@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(67);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(68);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -70,8 +70,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 57 · The Breathing Room is the current internal gameplay entry");
-    expect(copy).toContain("climate fit is now prepared once for each requested locomotion class");
+    expect(copy).toContain("Alpha 58 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("derives only the stable biome identity and baseline climate it actually consumes");
+    expect(copy).toContain("interaction signals that were immediately discarded");
+    expect(copy).toContain("full biome profile remains authoritative wherever those signals are used");
+    expect(copy).toContain("same biome classification, climate summaries, habitat outcomes, and species decisions");
+    expect(copy).toContain("Alpha 57 prepares climate fit once for each requested locomotion class");
     expect(copy).toContain("Every species still computes its own complete habitat affinity and identical weighted site score in original tile order");
     expect(copy).toContain("below that species's unchanged threshold skips temporary candidate allocation and species-keyed anchor ranking");
     expect(copy).toContain("every retained tile keeps the same original ordinal and keyed-random inputs");
@@ -92,9 +96,12 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("existing settlement working dog remains the honest relationship-bearing continuity witness");
     expect(copy).toContain("no bonded, named player companion exists yet");
     expect(copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
-    expect(copy).toContain("Breathing Room remains active, followed by Living Voice");
-    expect(copy).toContain("This internal entry does not itself prove deployment");
-    expect(copy).toContain("LIVE_VERIFIED status requires the separate push, remote CI, GitHub Pages, and exact deployed-build verification gate");
+    expect(copy).toContain("76.203187 ms to 73.156646 ms (-3.998%)");
+    expect(copy).toContain("attribution-only");
+    expect(copy).toContain("Quiet-host timing, settled forced-GC/resource proof, prolonged soak, cumulative validation, and the release checkpoint remain open");
+    expect(copy).toContain("Living Voice remains blocked until it closes");
+    expect(copy).toContain("This unpublished local ordinary slice does not itself prove deployment");
+    expect(copy).toContain("LIVE_VERIFIED status requires the separate release checkpoint, push, remote CI, GitHub Pages, and exact deployed-build verification gate");
   });
 
   it("describes shared outdoor light without claiming unfinished Turning Day systems", () => {
@@ -154,8 +161,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("every base-regional species retains its own habitat affinity, identical weighted score and unchanged threshold");
     expect(liveBoundary?.body).toContain("only below-threshold tiles skip candidate allocation and species-keyed ranking");
     expect(liveBoundary?.body).toContain("retained tiles keep their original ordinal and RNG inputs");
-    expect(liveBoundary?.body).toContain("None of these optimizations changes a save");
-    expect(liveBoundary?.body).toContain("This gameplay entry does not itself prove deployment");
+    expect(liveBoundary?.body).toContain("Alpha 58 derives only stable biome identity and baseline climate in base-regional analysis");
+    expect(liveBoundary?.body).toContain("full biome profile remains authoritative where those signals are consumed");
+    expect(liveBoundary?.body).toContain("None of these optimizations changes gameplay, visuals, a save");
+    expect(liveBoundary?.body).toContain("This unpublished local gameplay entry does not itself prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");
   });
 
