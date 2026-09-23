@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { generateRegionTerrain } from "../sim/regionTerrain";
-import { keyedRandomInt, seedFromText } from "../sim/rng";
+import { keyedRandomInt, seedFromText, type RootSeed } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { hashCanonical, stableStringify } from "../sim/util";
 import { CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH } from "./coreEcologyHabitat";
@@ -19,9 +19,11 @@ import {
   canonicalCoreEcologyBreadthHabitatForWorld,
   canonicalizeCoreEcologyBreadthHabitat,
   clearCoreEcologyBreadthHabitatCache,
+  coreEcologyBreadthTerrainPreparationDiagnostics,
   coreEcologyBreadthCohortsThroughEpoch,
   deriveCoreEcologyBreadthTerritory,
   deriveCoreEcologyBreadthHabitat,
+  type CoreEcologyBreadthCohortId,
   type CoreEcologyBreadthHabitat,
   type CoreEcologyBreadthSpecies,
 } from "./coreEcologyBreadthHabitat";
@@ -39,6 +41,11 @@ const FOREIGN_SEED = seedFromText("alpha37 foreign estuary breadth world");
 const COHORT = CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID;
 const MARSH_COHORT = CORE_ECOLOGY_MARSH_CHANNEL_WEB_COHORT_ID;
 const SALTMARSH_COHORT = CORE_ECOLOGY_SALTMARSH_SMALL_WORLDS_COHORT_ID;
+const COHORTS = Object.freeze([
+  COHORT,
+  MARSH_COHORT,
+  SALTMARSH_COHORT,
+] as const satisfies readonly CoreEcologyBreadthCohortId[]);
 
 function corpus() {
   const fixed = [
@@ -129,6 +136,134 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
       canonicalCoreEcologyBreadthHabitatForWorld(first, FOREIGN_SEED, region),
     ).toBeNull();
   });
+
+  it("shares one bounded common-terrain preparation while projecting every cohort independently", () => {
+    const region = createRegionCoord(-4_194_301, 3_671_113);
+    clearCoreEcologyBreadthHabitatCache();
+    const forward = new Map(COHORTS.map((cohortId) => {
+      const habitat = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId });
+      return [cohortId, stableStringify(habitat)] as const;
+    }));
+    expect(coreEcologyBreadthTerrainPreparationDiagnostics()).toEqual({
+      preparationBuildCount: 1,
+      preparationReuseCount: 2,
+      cohortProjectionCount: 3,
+      slotOccupied: true,
+    });
+    expect([...forward.values()].join("\n")).not.toMatch(
+      /preparationBuildCount|preparationReuseCount|cohortProjectionCount/iu,
+    );
+
+    clearCoreEcologyBreadthHabitatCache();
+    const reverse = new Map([...COHORTS].reverse().map((cohortId) => {
+      const habitat = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId });
+      return [cohortId, stableStringify(habitat)] as const;
+    }));
+    expect(coreEcologyBreadthTerrainPreparationDiagnostics()).toEqual({
+      preparationBuildCount: 1,
+      preparationReuseCount: 2,
+      cohortProjectionCount: 3,
+      slotOccupied: true,
+    });
+    for (const cohortId of COHORTS) {
+      expect(reverse.get(cohortId)).toBe(forward.get(cohortId));
+    }
+
+    const beforeSuppliedValidation = coreEcologyBreadthTerrainPreparationDiagnostics();
+    const terrain = generateRegionTerrain(SEED, region);
+    expect(stableStringify(deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: COHORT,
+      terrain: { ...terrain, tiles: [...terrain.tiles].reverse() },
+    }))).toBe(forward.get(COHORT));
+    expect(coreEcologyBreadthTerrainPreparationDiagnostics())
+      .toEqual(beforeSuppliedValidation);
+
+    const alteredTerrain = {
+      ...terrain,
+      tiles: terrain.tiles.map((tile, index) => index === 0
+        ? { ...tile, elevation: tile.elevation === 0 ? 1 : tile.elevation - 1 }
+        : tile),
+    };
+    expect(() => deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: COHORT,
+      terrain: alteredTerrain,
+    })).toThrow(/not the canonical terrain multiset/u);
+    expect(() => deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: COHORT,
+      terrain: generateRegionTerrain(FOREIGN_SEED, region),
+    })).toThrow(/not the canonical terrain multiset/u);
+    expect(() => deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region,
+      cohortId: COHORT,
+      terrain: { ...terrain, width: terrain.width + 1 },
+    })).toThrow(/noncanonical dimensions/u);
+    expect(coreEcologyBreadthTerrainPreparationDiagnostics())
+      .toEqual(beforeSuppliedValidation);
+  }, 20_000);
+
+  it("bounds the preparation slot to one exact world region and rejects negative-zero seed aliases", () => {
+    const firstRegion = createRegionCoord(-REGION_COORD_LIMIT, REGION_COORD_LIMIT);
+    const secondRegion = createRegionCoord(REGION_COORD_LIMIT, -REGION_COORD_LIMIT);
+    clearCoreEcologyBreadthHabitatCache();
+    const first = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: firstRegion,
+      cohortId: COHORT,
+    });
+    deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: firstRegion,
+      cohortId: MARSH_COHORT,
+    });
+    deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: secondRegion,
+      cohortId: COHORT,
+    });
+    const returned = deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: firstRegion,
+      cohortId: SALTMARSH_COHORT,
+    });
+    expect(coreEcologyBreadthTerrainPreparationDiagnostics()).toEqual({
+      preparationBuildCount: 3,
+      preparationReuseCount: 1,
+      cohortProjectionCount: 4,
+      slotOccupied: true,
+    });
+    clearCoreEcologyBreadthHabitatCache();
+    expect(stableStringify(deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: firstRegion,
+      cohortId: COHORT,
+    }))).toBe(stableStringify(first));
+    expect(stableStringify(deriveCoreEcologyBreadthHabitat({
+      seed: SEED,
+      region: firstRegion,
+      cohortId: SALTMARSH_COHORT,
+    }))).toBe(stableStringify(returned));
+
+    const zeroPrefixSeed = Object.freeze([0, 1, 2, 3] as const);
+    clearCoreEcologyBreadthHabitatCache();
+    deriveCoreEcologyBreadthHabitat({
+      seed: zeroPrefixSeed,
+      region: firstRegion,
+      cohortId: COHORT,
+    });
+    const negativeZeroSeed = Object.freeze([-0, 1, 2, 3] as const) as RootSeed;
+    expect(() => deriveCoreEcologyBreadthHabitat({
+      seed: negativeZeroSeed,
+      region: firstRegion,
+      cohortId: MARSH_COHORT,
+    })).toThrow(/canonical root seed/u);
+  }, 20_000);
 
   it("keeps one append-only cohort registry instead of requiring one new root schema per batch", () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(3);

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(65);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(66);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -70,17 +70,21 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 54 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("Alpha 56 · The Breathing Room is the current internal gameplay entry");
     expect(copy).toContain("One deterministic civil clock still carries day, dusk, night, and dawn");
     expect(copy).toContain("all forty-two current residents");
     expect(copy).toContain("seventeen existing wildlife activity profiles");
-    expect(copy).toContain("one bounded reusable fingerprint across ecology owners");
-    expect(copy).toContain("caller-supplied terrain is still checked in full");
-    expect(copy).toContain("does not remove wildlife");
-    expect(copy).toContain("simplify habitat law");
-    expect(copy).toContain("change population outcomes");
-    expect(copy).toContain("alter saves");
-    expect(copy).toContain("make the simulation camera-dependent");
+    expect(copy).toContain("all three breadth cohorts now share one bounded immutable preparation");
+    expect(copy).toContain("exact seed and signed region");
+    expect(copy).toContain("Each cohort still independently applies species eligibility, weighted scoring, keyed ranking");
+    expect(copy).toContain("Caller-supplied terrain is still checked in full and prepared separately");
+    expect(copy).toContain("Alpha 55 keeps exact authenticated ecology authority");
+    expect(copy).toContain("Alpha 54 reuses one bounded canonical terrain fingerprint across ecology owners");
+    expect(copy).toContain("None of these optimizations removes wildlife");
+    expect(copy).toContain("simplifies habitat law");
+    expect(copy).toContain("changes population outcomes");
+    expect(copy).toContain("alters saves");
+    expect(copy).toContain("makes the simulation camera-dependent");
     expect(copy).toContain("existing settlement working dog remains the honest relationship-bearing continuity witness");
     expect(copy).toContain("no bonded, named player companion exists yet");
     expect(copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
@@ -139,6 +143,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("eligible current human physically present at a settlement on an ordinary authoritative tick");
     expect(liveBoundary?.body).toContain("exact Alpha 51 resident-home digest bytes");
     expect(liveBoundary?.body).toContain("Alpha 54 reuses only a bounded internally generated terrain fingerprint across ecology owners");
+    expect(liveBoundary?.body).toContain("Alpha 55 authenticates regional ecology first");
+    expect(liveBoundary?.body).toContain("Alpha 56 shares one immutable canonical terrain, climate, tide-depth, distance-field, and common-signal preparation");
+    expect(liveBoundary?.body).toContain("retaining separate species scoring and keyed ranks");
+    expect(liveBoundary?.body).toContain("None of these optimizations changes a save");
     expect(liveBoundary?.body).toContain("This gameplay entry does not itself prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");
   });
@@ -407,7 +415,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedBoundary?.body).not.toContain("player sleep/wait");
     expect(plannedBoundary?.body).not.toContain("player WAIT");
     expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
-    expect(plannedBoundary?.body).toContain("Breathing Room is the next authorized directive");
+    expect(plannedBoundary?.body).toContain("Breathing Room is the active authorized directive");
     expect(plannedBoundary?.body).toContain("Living Voice follows it");
   });
 

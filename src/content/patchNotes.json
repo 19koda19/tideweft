@@ -2,6 +2,41 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.56",
+      "releaseDate": "2026-09-23",
+      "buildIdentity": "0.3.3-alpha.56",
+      "summary": "The Breathing Room Alpha 56 internal build removes repeated common terrain analysis from genuine cold breadth-ecology entrants while preserving independent species decisions.",
+      "gameplayContractVersion": 51,
+      "tutorialVersion": 66,
+      "categories": {
+        "gameplay": [
+          "Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, actor-presence, and physical-custody outcomes as Alpha 55.",
+          "Each breadth cohort still evaluates its own species eligibility, keyed ranks, density, dependencies, populations, and anchors; sparse absence and every existing wildlife rule remain unchanged."
+        ],
+        "fixes": [
+          "When an internally generated region enters the active world, its three breadth cohorts now share one immutable preparation of canonical terrain, baseline climate, tide depth, shoreline distance, water distance, and common habitat signals instead of deriving those facts three times.",
+          "A genuine two-region expansion now performs two common breadth preparations rather than six, while the complete changed-owner regional exchange and final V6 world authentication remain intact."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset; no wildlife, habitat checks, weather pressure, traversal cost, population law, mortality rule, or custody rule was removed to obtain the performance improvement.",
+          "This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior."
+        ],
+        "interface": [
+          "Field Manual version 66 records the bounded cold-entrant preparation and keeps planned systems clearly separated from playable behavior.",
+          "No visual, control, desktop, mobile, or accessibility behavior changes in this slice."
+        ],
+        "saves": [
+          "Outer save version 32, simulation format 4, RegionalEcologyStateV6, habitat derivation hashes, and wildlife actor schema/version 1 remain unchanged.",
+          "The single prepared region is process-local, exact-seed and signed-coordinate bound, never serialized, and cleared with its habitat cache. Caller-supplied terrain still completes full canonical multiset validation before a cached habitat can return."
+        ],
+        "knownLimitations": [
+          "Breathing Room remains active. The larger base regional-habitat entrant, the remaining cold-expansion work, settled heap/GC proof, prolonged soak, and cumulative closure gates remain open.",
+          "The short owner benchmark is attribution-only; a quiet-host untouched continuous-travel trace is still required before making a player-facing hitch or FPS claim.",
+          "Alpha 56 is an internal local checkpoint until a separately authorized push, remote CI, GitHub Pages deployment, and exact live-build verification occur. Living Voice remains blocked until Breathing Room closes."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.55",
       "releaseDate": "2026-09-23",
       "buildIdentity": "0.3.3-alpha.55",

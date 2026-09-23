@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.55",
+      version: "0.3.3-alpha.56",
       releaseDate: "2026-09-23",
-      buildIdentity: "0.3.3-alpha.55",
+      buildIdentity: "0.3.3-alpha.56",
       gameplayContractVersion: 51,
-      tutorialVersion: 65,
+      tutorialVersion: 66,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,7 +69,14 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-55 The Breathing Room and retains Alpha-54 terrain reuse and Alpha-53 The Turning Day", () => {
+  it("scopes Alpha-56 The Breathing Room and retains Alpha-55, Alpha-54, and Alpha-53 truth", () => {
+    const alpha55Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.55",
+    );
+    const alpha55Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha55Release?.categories[category] ?? [])
+      .join(" ");
     const alpha54Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.54",
     );
@@ -366,20 +373,22 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(LATEST_PATCH_NOTE.summary).toContain("The Breathing Room");
-    expect(LATEST_PATCH_NOTE.summary).toContain("exact storage-owner neighborhood");
+    expect(LATEST_PATCH_NOTE.summary).toContain("repeated common terrain analysis");
+    expect(alpha55Release?.summary).toContain("exact storage-owner neighborhood");
+    expect(alpha55Copy).toContain("five unchanged-owner rebases");
     expect(alpha54Release?.summary).toContain("removing repeated canonical terrain fingerprint work");
     expect(alpha54Copy).toContain("bounded nine-region terrain cache");
     expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
-      "five unchanged-owner rebases",
+      "three breadth cohorts",
     );
     expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
-      "two expansions and two contractions",
+      "two common breadth preparations rather than six",
     );
     expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
-      "exact world-binding authentication",
+      "Caller-supplied terrain still completes full canonical multiset validation",
     );
     expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
-      "does not remove the two genuine cold expansions",
+      "short owner benchmark is attribution-only",
     );
     expect(alpha53Release?.summary).toContain("The Turning Day");
     expect(alpha53Release?.summary).toContain("complete production-backed closure evidence");

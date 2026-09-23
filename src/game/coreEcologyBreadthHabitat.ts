@@ -335,9 +335,7 @@ interface AnalyzedBreadthTile {
   readonly tile: TerrainTile;
   readonly globalX: number;
   readonly globalY: number;
-  readonly heat: number;
   readonly salinity: number;
-  readonly exposure: number;
   readonly lowTideDepth: number;
   readonly highTideDepth: number;
   readonly shorelineDistance: number;
@@ -345,6 +343,36 @@ interface AnalyzedBreadthTile {
   readonly signals: Readonly<Record<TileSignalKey, number>>;
   readonly scoreBySpecies: Readonly<Record<CoreEcologyBreadthSpecies, number>>;
   readonly rankBySpecies: Readonly<Record<CoreEcologyBreadthSpecies, number>>;
+}
+
+interface PreparedBreadthTerrainTile {
+  readonly tile: TerrainTile;
+  readonly globalX: number;
+  readonly globalY: number;
+  readonly salinity: number;
+  readonly lowTideDepth: number;
+  readonly highTideDepth: number;
+  readonly shorelineDistance: number;
+  readonly waterDistance: number;
+  readonly signals: Readonly<Record<TileSignalKey, number>>;
+}
+
+interface PreparedBreadthTerrain {
+  readonly tiles: readonly PreparedBreadthTerrainTile[];
+  readonly summary: CoreEcologyBreadthTerrainSummary;
+}
+
+interface PreparedBreadthTerrainSlot {
+  readonly seed: RootSeed;
+  readonly region: RegionCoord;
+  readonly prepared: PreparedBreadthTerrain;
+}
+
+export interface CoreEcologyBreadthTerrainPreparationDiagnostics {
+  readonly preparationBuildCount: number;
+  readonly preparationReuseCount: number;
+  readonly cohortProjectionCount: number;
+  readonly slotOccupied: boolean;
 }
 
 interface CandidateDraft {
@@ -371,6 +399,10 @@ const BREADTH_ANCHOR_DOMAIN = 0x4252_414e;
 const HASH_PATTERN = /^(?:[0-9a-f]{16}|[0-9a-f]{32})$/u;
 const TRUSTED_HABITATS = new WeakSet<object>();
 const HABITAT_CACHE = new Map<string, CoreEcologyBreadthHabitat>();
+let preparedTerrainSlot: PreparedBreadthTerrainSlot | null = null;
+let preparationBuildCount = 0;
+let preparationReuseCount = 0;
+let cohortProjectionCount = 0;
 
 function definition(
   value: Omit<CoreEcologyBreadthSpeciesDefinition, "actorRepresentation" | "groupOrganization">,
@@ -1204,15 +1236,19 @@ export function deriveCoreEcologyBreadthHabitat(
   canonicalSpeciesOrder(cohort, input.speciesOrder);
   const region = createRegionCoord(input.region.x, input.region.y);
   const key = cacheKey(input.seed, region, cohort);
+  let prepared: PreparedBreadthTerrain;
   if (input.terrain === undefined) {
     const cached = HABITAT_CACHE.get(key);
     if (cached !== undefined) return cacheHabitat(key, cached);
+    prepared = preparedTerrainForGeneratedWorld(input.seed, region);
+  } else {
+    const terrain = canonicalTerrain(input.seed, region, input.terrain);
+    const cached = HABITAT_CACHE.get(key);
+    if (cached !== undefined) return cacheHabitat(key, cached);
+    prepared = prepareTerrain(input.seed, region, terrain);
   }
-  const terrain = canonicalTerrain(input.seed, region, input.terrain);
-  const cached = HABITAT_CACHE.get(key);
-  if (cached !== undefined) return cacheHabitat(key, cached);
 
-  const analysis = analyzeTerrain(input.seed, region, terrain, cohort);
+  const analysis = analyzePreparedTerrain(input.seed, prepared, cohort);
   const regionalQuietRoll = keyedRandomInt(
     input.seed,
     BREADTH_QUIET_DOMAIN,
@@ -1432,24 +1468,59 @@ export function canonicalCoreEcologyBreadthHabitatForWorld(
 
 export function clearCoreEcologyBreadthHabitatCache(): void {
   HABITAT_CACHE.clear();
+  preparedTerrainSlot = null;
+  preparationBuildCount = 0;
+  preparationReuseCount = 0;
+  cohortProjectionCount = 0;
 }
 
-function analyzeTerrain(
+/** Bounded counters prove common terrain work is shared without exposing it. */
+export function coreEcologyBreadthTerrainPreparationDiagnostics():
+  CoreEcologyBreadthTerrainPreparationDiagnostics {
+  return Object.freeze({
+    preparationBuildCount,
+    preparationReuseCount,
+    cohortProjectionCount,
+    slotOccupied: preparedTerrainSlot !== null,
+  });
+}
+
+function preparedTerrainForGeneratedWorld(
+  seed: RootSeed,
+  region: RegionCoord,
+): PreparedBreadthTerrain {
+  const slot = preparedTerrainSlot;
+  if (
+    slot !== null
+    && slot.seed[0] === seed[0]
+    && slot.seed[1] === seed[1]
+    && slot.seed[2] === seed[2]
+    && slot.seed[3] === seed[3]
+    && Object.is(slot.region.x, region.x)
+    && Object.is(slot.region.y, region.y)
+  ) {
+    preparationReuseCount = incrementDiagnosticCounter(preparationReuseCount);
+    return slot.prepared;
+  }
+  const terrain = canonicalTerrain(seed, region, undefined);
+  const prepared = prepareTerrain(seed, region, terrain);
+  preparedTerrainSlot = Object.freeze({
+    seed: Object.freeze([seed[0], seed[1], seed[2], seed[3]] as const),
+    region: createRegionCoord(region.x, region.y),
+    prepared,
+  });
+  return prepared;
+}
+
+function prepareTerrain(
   seed: RootSeed,
   region: RegionCoord,
   terrain: TerrainState,
-  cohort: CoreEcologyBreadthCohortDefinition,
-): Readonly<{
-  readonly tiles: readonly AnalyzedBreadthTile[];
-  readonly summary: CoreEcologyBreadthTerrainSummary;
-}> {
+): PreparedBreadthTerrain {
+  preparationBuildCount = incrementDiagnosticCounter(preparationBuildCount);
   const shoreline = distanceField(terrain, (tile) => !isWaterTerrain(tile.terrain));
   const water = distanceField(terrain, (tile) => isWaterTerrain(tile.terrain));
-  const rankedProfiles = cohort.species.map((profile) => Object.freeze({
-    profile,
-    purpose: semanticPurpose(`${cohort.cohortId}:${profile.species}`),
-  }));
-  const tiles: AnalyzedBreadthTile[] = [];
+  const tiles: PreparedBreadthTerrainTile[] = [];
   let waterTileCount = 0;
   let intertidalTileCount = 0;
   let dryShoreTileCount = 0;
@@ -1508,38 +1579,16 @@ function analyzeTerrain(
       water: isWater ? FIXED_POINT : 0,
       "water-proximity": proximitySignal(waterDistance, 20),
     });
-    const scoreBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
-    const rankBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
-    for (const { profile, purpose } of rankedProfiles) {
-      scoreBySpecies[profile.species] = tileEligible(profile, tile, {
-        highTideDepth,
-        lowTideDepth,
-        salinity: climate.salinity,
-        shorelineDistance,
-        waterDistance,
-      }) ? weightedSignals(signals, profile.signalWeights) : 0;
-      rankBySpecies[profile.species] = keyedRandomU32(
-        seed,
-        BREADTH_ANCHOR_DOMAIN,
-        global.x,
-        global.y,
-        purpose,
-      );
-    }
     tiles.push(Object.freeze({
       tile: Object.freeze({ ...tile }),
       globalX: global.x,
       globalY: global.y,
-      heat: climate.heat,
       salinity: climate.salinity,
-      exposure: climate.exposure,
       lowTideDepth,
       highTideDepth,
       shorelineDistance,
       waterDistance,
       signals,
-      scoreBySpecies: Object.freeze(scoreBySpecies),
-      rankBySpecies: Object.freeze(rankBySpecies),
     }));
   }
   const estuarySignal = fixedWeighted([
@@ -1572,6 +1621,50 @@ function analyzeTerrain(
       estuarySignal,
       surfaceBreakSignal,
     },
+  });
+}
+
+function analyzePreparedTerrain(
+  seed: RootSeed,
+  prepared: PreparedBreadthTerrain,
+  cohort: CoreEcologyBreadthCohortDefinition,
+): Readonly<{
+  readonly tiles: readonly AnalyzedBreadthTile[];
+  readonly summary: CoreEcologyBreadthTerrainSummary;
+}> {
+  cohortProjectionCount = incrementDiagnosticCounter(cohortProjectionCount);
+  const rankedProfiles = cohort.species.map((profile) => Object.freeze({
+    profile,
+    purpose: semanticPurpose(`${cohort.cohortId}:${profile.species}`),
+  }));
+  const tiles = prepared.tiles.map((tile) => {
+    const scoreBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
+    const rankBySpecies = {} as Record<CoreEcologyBreadthSpecies, number>;
+    for (const { profile, purpose } of rankedProfiles) {
+      scoreBySpecies[profile.species] = tileEligible(profile, tile.tile, {
+        highTideDepth: tile.highTideDepth,
+        lowTideDepth: tile.lowTideDepth,
+        salinity: tile.salinity,
+        shorelineDistance: tile.shorelineDistance,
+        waterDistance: tile.waterDistance,
+      }) ? weightedSignals(tile.signals, profile.signalWeights) : 0;
+      rankBySpecies[profile.species] = keyedRandomU32(
+        seed,
+        BREADTH_ANCHOR_DOMAIN,
+        tile.globalX,
+        tile.globalY,
+        purpose,
+      );
+    }
+    return Object.freeze({
+      ...tile,
+      scoreBySpecies: Object.freeze(scoreBySpecies),
+      rankBySpecies: Object.freeze(rankBySpecies),
+    });
+  });
+  return deepFreeze({
+    tiles,
+    summary: { ...prepared.summary },
   });
 }
 
@@ -2484,6 +2577,10 @@ function cacheHabitat(
   return habitat;
 }
 
+function incrementDiagnosticCounter(value: number): number {
+  return value >= Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : value + 1;
+}
+
 function clampFixed(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   if (value >= FIXED_POINT) return FIXED_POINT;
@@ -2513,7 +2610,12 @@ function requireRootSeed(value: RootSeed): void {
   if (
     !Array.isArray(value)
     || value.length !== 4
-    || value.some((word) => !Number.isSafeInteger(word) || word < 0 || word > UINT32_MAX)
+    || value.some((word) => (
+      !Number.isSafeInteger(word)
+      || word < 0
+      || word > UINT32_MAX
+      || Object.is(word, -0)
+    ))
   ) throw new TypeError("Breadth habitat requires a canonical root seed");
 }
 
