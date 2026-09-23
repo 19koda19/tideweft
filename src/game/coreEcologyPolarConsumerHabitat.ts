@@ -1,5 +1,8 @@
 import { deriveBaselineBiomeClimate } from "../sim/biomes";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   REGION_COORD_LIMIT,
@@ -843,7 +846,7 @@ export function deriveCoreEcologyPolarConsumerHabitat(
       "polar-consumer-source",
       CORE_ECOLOGY_POLAR_CONSUMER_DERIVATION_KIND,
     ),
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: generatedRegionTerrainHash(input.seed, region),
     forageSubstrate,
     bearTerritory,
     summary,

@@ -1,4 +1,7 @@
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import type { RootSeed } from "../sim/rng";
 import { stableRegionObjectId } from "../sim/regions";
 import type { TerrainTile } from "../sim/types";
@@ -108,7 +111,9 @@ export function projectCoreEcologyAlpineRidgeActivityAuthority(
     if (cached !== undefined) return cacheAlpineRidgeAuthority(cacheKey, cached);
 
     const terrain = generateRegionTerrain(rootSeed, patch.originRegion);
-    if (regionTerrainHash(terrain) !== habitat.terrainHash) return null;
+    if (generatedRegionTerrainHash(rootSeed, patch.originRegion) !== habitat.terrainHash) {
+      return null;
+    }
     const homeTile = terrain.tiles.find(({ x, y }) => (
       x === immutableAnchor.localX && y === immutableAnchor.localY
     ));

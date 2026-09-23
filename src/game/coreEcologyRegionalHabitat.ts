@@ -7,7 +7,11 @@ import {
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+  regionTerrainHash,
+} from "../sim/regionTerrain";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   REGION_COORD_LIMIT,
@@ -642,12 +646,13 @@ function analyzeTerrain(
   suppliedTerrain: TerrainState | undefined,
 ): TerrainAnalysis {
   const canonical = generateRegionTerrain(seed, region);
+  const canonicalTerrainHash = generatedRegionTerrainHash(seed, region);
   if (suppliedTerrain !== undefined) {
     if (
       suppliedTerrain.width !== WORLD_WIDTH
       || suppliedTerrain.height !== WORLD_HEIGHT
       || suppliedTerrain.tiles.length !== WORLD_WIDTH * WORLD_HEIGHT
-      || regionTerrainHash(suppliedTerrain) !== regionTerrainHash(canonical)
+      || regionTerrainHash(suppliedTerrain) !== canonicalTerrainHash
     ) {
       throw new TypeError("Supplied regional terrain is not the canonical baseline for this seed/region");
     }
@@ -723,7 +728,7 @@ function analyzeTerrain(
 
   return {
     terrain,
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: canonicalTerrainHash,
     tiles,
     summary: freezeDeep({
       tileCount,

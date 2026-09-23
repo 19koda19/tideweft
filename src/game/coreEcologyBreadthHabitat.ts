@@ -4,7 +4,10 @@ import {
   getCoreWildlifeSpeciesMetadata,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   REGION_COORD_LIMIT,
@@ -1269,7 +1272,7 @@ export function deriveCoreEcologyBreadthHabitat(
       "breadth-source",
       `${cohort.cohortId}:e${cohort.introducedInEpoch}`,
     ),
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: generatedRegionTerrainHash(input.seed, region),
     summary: analysis.summary,
     density: deepFreeze({
       regionalQuietRoll,

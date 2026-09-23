@@ -1,5 +1,8 @@
 import { deriveBaselineBiomeClimate } from "../sim/biomes";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import { keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   createRegionCoord,
@@ -501,7 +504,7 @@ export function deriveCoreEcologyColdShoreHabitat(
       "cold-shore-source",
       CORE_ECOLOGY_COLD_SHORE_DERIVATION_KIND,
     ),
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: generatedRegionTerrainHash(input.seed, region),
     forageSubstrate: substrate,
     summary: analysis.summary,
     evaluatedSpeciesCount: 1 as const,

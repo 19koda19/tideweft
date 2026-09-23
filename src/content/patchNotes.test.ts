@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.53",
-      releaseDate: "2026-09-17",
-      buildIdentity: "0.3.3-alpha.53",
+      version: "0.3.3-alpha.54",
+      releaseDate: "2026-09-22",
+      buildIdentity: "0.3.3-alpha.54",
       gameplayContractVersion: 51,
-      tutorialVersion: 63,
+      tutorialVersion: 64,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,12 +69,15 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-53 The Turning Day and retains its earlier slices", () => {
+  it("scopes Alpha-54 The Breathing Room and retains Alpha-53 The Turning Day", () => {
+    const alpha53Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.53",
+    );
     const alpha53Copy = PATCH_NOTE_CATEGORIES
       .filter((category) => category !== "knownLimitations")
-      .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .flatMap((category) => alpha53Release?.categories[category] ?? [])
       .join(" ");
-    const alpha53Limitations = LATEST_PATCH_NOTE.categories.knownLimitations.join(" ");
+    const alpha53Limitations = alpha53Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha52Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.52",
     );
@@ -355,8 +358,10 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("The Turning Day");
-    expect(LATEST_PATCH_NOTE.summary).toContain("complete production-backed closure evidence");
+    expect(LATEST_PATCH_NOTE.summary).toContain("The Breathing Room");
+    expect(LATEST_PATCH_NOTE.summary).toContain("removing repeated canonical terrain fingerprint work");
+    expect(alpha53Release?.summary).toContain("The Turning Day");
+    expect(alpha53Release?.summary).toContain("complete production-backed closure evidence");
     expect(alpha53Copy).toContain("One deterministic civil clock carries day, dusk, night, and dawn");
     expect(alpha53Copy).toContain("WAIT stops at the committed boundary of a lawfully heard strong alarm");
     expect(alpha53Copy).toContain("exact authoritative WAIT cadence");

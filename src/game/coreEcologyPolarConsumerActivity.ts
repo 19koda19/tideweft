@@ -2,7 +2,10 @@ import {
   deriveBiomeProfile,
   deriveMagicalWaterInfluence,
 } from "../sim/biomes";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import type { RootSeed } from "../sim/rng";
 import { regionLocalToGlobalTile } from "../sim/regions";
 import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
@@ -101,7 +104,9 @@ export function projectCoreEcologyPolarConsumerActivityAuthority(
     if (cached !== undefined) return cacheAuthority(cacheKey, cached);
 
     const terrain = generateRegionTerrain(rootSeed, patch.originRegion);
-    if (regionTerrainHash(terrain) !== habitat.terrainHash) return null;
+    if (generatedRegionTerrainHash(rootSeed, patch.originRegion) !== habitat.terrainHash) {
+      return null;
+    }
     const anchors = [
       activityAnchor(rootSeed, terrain, water, "foraging"),
       activityAnchor(rootSeed, terrain, haulout, "haulout"),

@@ -16,7 +16,11 @@ import {
   type GlobalTileCoord,
   type RegionCoord,
 } from "../sim/regions";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+  regionTerrainHash,
+} from "../sim/regionTerrain";
 import { MAX_TIDE_LEVEL, MIN_TIDE_LEVEL } from "../sim/terrain";
 import {
   FIXED_POINT,
@@ -1472,7 +1476,7 @@ export function deriveCoreEcologyHabitatAssemblage(
   }
   const originRegion = createRegionCoord(input.originRegion.x, input.originRegion.y);
   const canonicalTerrain = generateRegionTerrain(input.rootSeed, originRegion);
-  const terrainHash = regionTerrainHash(canonicalTerrain);
+  const terrainHash = generatedRegionTerrainHash(input.rootSeed, originRegion);
   const terrain = input.terrain === undefined
     ? canonicalTerrain
     : requireCanonicalSuppliedTerrain(input.terrain, terrainHash);
@@ -6722,7 +6726,7 @@ function prepareCoreEcologyHabitatContext(
   }
   const originRegion = createRegionCoord(input.originRegion.x, input.originRegion.y);
   const canonicalTerrain = generateRegionTerrain(input.rootSeed, originRegion);
-  const terrainHash = regionTerrainHash(canonicalTerrain);
+  const terrainHash = generatedRegionTerrainHash(input.rootSeed, originRegion);
   const terrain = input.terrain === undefined
     ? canonicalTerrain
     : requireCanonicalSuppliedTerrain(input.terrain, terrainHash);

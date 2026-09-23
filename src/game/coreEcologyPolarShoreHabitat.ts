@@ -1,5 +1,8 @@
 import { deriveBaselineBiomeClimate } from "../sim/biomes";
-import { generateRegionTerrain, regionTerrainHash } from "../sim/regionTerrain";
+import {
+  generateRegionTerrain,
+  generatedRegionTerrainHash,
+} from "../sim/regionTerrain";
 import { keyedRandomInt, keyedRandomU32, type RootSeed } from "../sim/rng";
 import {
   REGION_COORD_LIMIT,
@@ -807,7 +810,7 @@ export function deriveCoreEcologyPolarShoreHabitat(
       "polar-shore-source",
       CORE_ECOLOGY_POLAR_SHORE_DERIVATION_KIND,
     ),
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: generatedRegionTerrainHash(input.seed, region),
     summary: analysis.summary,
     density: deepFreeze({
       regionalQuietRoll,

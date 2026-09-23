@@ -12,6 +12,7 @@ import {
   createRegionTerrainSampler,
   generateRegionTerrain,
   generateRegionTerrainBundle,
+  generatedRegionTerrainHash,
   parseRegionTerrainManifest,
   regionTerrainHash,
   serializeRegionTerrainManifest,
@@ -168,6 +169,33 @@ describe("deterministic infinite-region terrain", () => {
     expect(regenerated).not.toBe(first);
     expect(regenerated.tiles).not.toBe(first.tiles);
     expect(regenerated.tiles[0]).not.toBe(firstTile);
+  });
+
+  it("reuses only the internally generated canonical hash across mutable clones", () => {
+    const seed = seedFromText("one canonical region hash serves every ecology owner");
+    const coord = { x: -91, y: 37 } as const;
+    const canonicalHash = generatedRegionTerrainHash(seed, coord);
+    const first = generateRegionTerrain(seed, coord);
+    expect(canonicalHash).toBe(regionTerrainHash(first));
+
+    const firstTile = first.tiles[0];
+    if (!firstTile) throw new Error("generated terrain omitted its first tile");
+    firstTile.elevation = firstTile.elevation === 0 ? FIXED_POINT : 0;
+    expect(regionTerrainHash(first)).not.toBe(canonicalHash);
+
+    const replay = generateRegionTerrainBundle(seed, coord);
+    expect(replay.manifest.terrainHash).toBe(canonicalHash);
+    expect(regionTerrainHash(replay.terrain)).toBe(canonicalHash);
+    const replayTile = replay.terrain.tiles[0];
+    if (!replayTile) throw new Error("generated terrain bundle omitted its first tile");
+    replayTile.moisture = replayTile.moisture === 0 ? FIXED_POINT : 0;
+    expect(regionTerrainHash(replay.terrain)).not.toBe(canonicalHash);
+
+    for (let ordinal = 0; ordinal < 10; ordinal += 1) {
+      generatedRegionTerrainHash(seed, { x: 10_000 + ordinal, y: -20_000 });
+    }
+    expect(generatedRegionTerrainHash(seed, coord)).toBe(canonicalHash);
+    expect(regionTerrainHash(generateRegionTerrain(seed, coord))).toBe(canonicalHash);
   });
 
   it("changes neighboring regions, distant regions, and seeds without repeating a whole map", () => {
@@ -390,6 +418,14 @@ describe("deterministic infinite-region terrain", () => {
     expect(() => generateRegionTerrain([1, 2, 3, 0x1_0000_0000], { x: 0, y: 0 }))
       .toThrow(TypeError);
     expect(() => generateRegionTerrain([1, 2, 3, -0], { x: 0, y: 0 }))
+      .toThrow(TypeError);
+    expect(() => generatedRegionTerrainHash(seed, { x: REGION_COORD_LIMIT + 1, y: 0 }))
+      .toThrow(RangeError);
+    expect(() => generatedRegionTerrainHash(seed, { x: 0.5, y: 0 })).toThrow(RangeError);
+    expect(() => generatedRegionTerrainHash(seed, { x: -0, y: 0 })).toThrow(RangeError);
+    expect(() => generatedRegionTerrainHash([1, 2, 3, 0x1_0000_0000], { x: 0, y: 0 }))
+      .toThrow(TypeError);
+    expect(() => generatedRegionTerrainHash([1, 2, 3, -0], { x: 0, y: 0 }))
       .toThrow(TypeError);
     expect(parseRegionTerrainManifest("not-json")).toBeNull();
     expect(parseRegionTerrainManifest("{}")).toBeNull();

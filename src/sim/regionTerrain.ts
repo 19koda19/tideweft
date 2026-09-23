@@ -87,7 +87,14 @@ const ROUGHNESS_DOMAIN = 0x5247_5206;
 const COMPATIBILITY_BLEND_TILES = 24;
 /** Enough to share one hot 3x3 ecology window without retaining world history. */
 const REGION_TERRAIN_VALUE_CACHE_LIMIT = 9;
-const REGION_TERRAIN_VALUE_CACHE = new Map<string, TerrainState>();
+interface RegionTerrainValueCacheEntry {
+  /** Never exposed directly; callers receive a deep mutable clone. */
+  readonly terrain: TerrainState;
+  /** Lazily derived only from the private canonical terrain above. */
+  terrainHash: string | null;
+}
+
+const REGION_TERRAIN_VALUE_CACHE = new Map<string, RegionTerrainValueCacheEntry>();
 
 interface TerrainSignals {
   readonly elevation: number;
@@ -392,14 +399,42 @@ function cloneRegionTerrain(terrain: TerrainState): TerrainState {
   };
 }
 
-function cacheRegionTerrain(key: string, terrain: TerrainState): void {
+function cacheRegionTerrain(key: string, entry: RegionTerrainValueCacheEntry): void {
   REGION_TERRAIN_VALUE_CACHE.delete(key);
-  REGION_TERRAIN_VALUE_CACHE.set(key, terrain);
+  REGION_TERRAIN_VALUE_CACHE.set(key, entry);
   while (REGION_TERRAIN_VALUE_CACHE.size > REGION_TERRAIN_VALUE_CACHE_LIMIT) {
     const oldest = REGION_TERRAIN_VALUE_CACHE.keys().next().value as string | undefined;
     if (oldest === undefined) break;
     REGION_TERRAIN_VALUE_CACHE.delete(oldest);
   }
+}
+
+function canonicalRegionTerrainCacheEntry(
+  rootSeed: RootSeed,
+  coord: RegionCoord,
+): RegionTerrainValueCacheEntry {
+  assertRootSeed(rootSeed);
+  if (!isRegionCoord(coord)) {
+    throw new RangeError("Region coordinate is outside the supported world");
+  }
+  const cacheKey = regionTerrainValueCacheKey(rootSeed, coord);
+  const cached = REGION_TERRAIN_VALUE_CACHE.get(cacheKey);
+  if (cached !== undefined) {
+    cacheRegionTerrain(cacheKey, cached);
+    return cached;
+  }
+  const sampler = createRegionTerrainSampler(rootSeed);
+  const entry: RegionTerrainValueCacheEntry = {
+    terrain: generateRegionTerrainWithSampler(coord, sampler),
+    terrainHash: null,
+  };
+  cacheRegionTerrain(cacheKey, entry);
+  return entry;
+}
+
+function cachedCanonicalTerrainHash(entry: RegionTerrainValueCacheEntry): string {
+  entry.terrainHash ??= regionTerrainHash(entry.terrain);
+  return entry.terrainHash;
 }
 
 /**
@@ -412,20 +447,20 @@ export function generateRegionTerrain(
   rootSeed: RootSeed,
   coord: RegionCoord,
 ): TerrainState {
-  assertRootSeed(rootSeed);
-  if (!isRegionCoord(coord)) {
-    throw new RangeError("Region coordinate is outside the supported world");
-  }
-  const cacheKey = regionTerrainValueCacheKey(rootSeed, coord);
-  const cached = REGION_TERRAIN_VALUE_CACHE.get(cacheKey);
-  if (cached !== undefined) {
-    cacheRegionTerrain(cacheKey, cached);
-    return cloneRegionTerrain(cached);
-  }
-  const sampler = createRegionTerrainSampler(rootSeed);
-  const generated = generateRegionTerrainWithSampler(coord, sampler);
-  cacheRegionTerrain(cacheKey, generated);
-  return cloneRegionTerrain(generated);
+  return cloneRegionTerrain(canonicalRegionTerrainCacheEntry(rootSeed, coord).terrain);
+}
+
+/**
+ * Hash the internally generated canonical terrain without accepting a caller
+ * terrain graph. The bounded region-value cache may retain this immutable
+ * scalar beside its private source so ecology owners do not repeatedly encode
+ * the same 6,912 tiles. Use `regionTerrainHash` for caller-supplied terrain.
+ */
+export function generatedRegionTerrainHash(
+  rootSeed: RootSeed,
+  coord: RegionCoord,
+): string {
+  return cachedCanonicalTerrainHash(canonicalRegionTerrainCacheEntry(rootSeed, coord));
 }
 
 function generateRegionTerrainWithSampler(
@@ -506,11 +541,13 @@ export function generateRegionTerrainBundle(
   rootSeed: RootSeed,
   coord: RegionCoord,
 ): GeneratedRegionTerrain {
-  assertRootSeed(rootSeed);
-  if (!isRegionCoord(coord)) {
-    throw new RangeError("Region coordinate is outside the supported world");
-  }
-  return regionTerrainBundle(rootSeed, coord, generateRegionTerrain(rootSeed, coord));
+  const entry = canonicalRegionTerrainCacheEntry(rootSeed, coord);
+  return regionTerrainBundle(
+    rootSeed,
+    coord,
+    cloneRegionTerrain(entry.terrain),
+    cachedCanonicalTerrainHash(entry),
+  );
 }
 
 /**
@@ -587,6 +624,7 @@ function regionTerrainBundle(
   rootSeed: RootSeed,
   coord: RegionCoord,
   terrain: TerrainState,
+  canonicalTerrainHash = regionTerrainHash(terrain),
 ): GeneratedRegionTerrain {
   const canonicalCoord = createRegionCoord(coord.x, coord.y);
   const manifest = Object.freeze({
@@ -594,7 +632,7 @@ function regionTerrainBundle(
     coord: canonicalCoord,
     key: regionKey(canonicalCoord),
     regionId: stableRegionId(rootSeed, canonicalCoord),
-    terrainHash: regionTerrainHash(terrain),
+    terrainHash: canonicalTerrainHash,
   });
   return Object.freeze({
     manifest,

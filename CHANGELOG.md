@@ -4,6 +4,43 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.54 — 2026-09-22
+
+Build: `0.3.3-alpha.54` · Gameplay contract: 51 · Tutorial: 64
+
+The Breathing Room Alpha 54 internal build preserves the complete Turning Day rules while removing repeated canonical terrain fingerprint work from seamless regional ecology transitions.
+
+### Gameplay
+
+- Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, and actor-presence outcomes as Alpha 53.
+- The complete Turning Day behavior remains live: weather, tides, WAIT, REST, SLEEP, humans, the settlement working dog, and current wildlife activity continue through one authoritative civil clock.
+
+### Fixes
+
+- Internally generated canonical terrain now reuses one lazily computed fingerprint within the existing bounded nine-region terrain cache instead of serializing the same 6,912 tiles separately for each ecology owner.
+- Mutable terrain clones remain isolated, while caller-supplied terrain continues through full content validation before it can influence habitat authority.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset; no wildlife, habitat checks, weather pressure, traversal cost, or population law was removed to obtain the performance improvement.
+- This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior.
+
+### Interface
+
+- Field Manual version 64 identifies this as an internal Breathing Room performance build and keeps planned systems clearly separated from playable behavior.
+- No visual, control, desktop, mobile, or accessibility behavior changes in this slice.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged.
+- The reusable terrain fingerprint is process-local performance state; it is never serialized and cannot become save, replay, or world-generation authority.
+
+### Known limitations
+
+- Breathing Room remains active. This bounded terrain-fingerprint optimization does not by itself close the directive or prove comfortable performance on every device.
+- Alpha 54 is an internal local checkpoint until a separately authorized push, remote CI, GitHub Pages deployment, and exact live-build verification occur.
+- Living Voice remains the next directive after Breathing Room and is not implemented by this build.
+
 ## 0.3.3-alpha.53 — 2026-09-17
 
 Build: `0.3.3-alpha.53` · Gameplay contract: 51 · Tutorial: 63

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(63);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(64);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -57,7 +57,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: "whats-new-turning-day",
-        title: "The Turning Day",
+        title: "The Breathing Room",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,22 +70,22 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 53 · The Turning Day is the current gameplay entry");
-    expect(copy).toContain("One deterministic civil clock now carries day, dusk, night, and dawn");
+    expect(copy).toContain("Alpha 54 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("One deterministic civil clock still carries day, dusk, night, and dawn");
     expect(copy).toContain("all forty-two current residents");
     expect(copy).toContain("seventeen existing wildlife activity profiles");
-    expect(copy).toContain("Physical arrival remains required before rest or sleep");
-    expect(copy).toContain("WAIT stops at the committed boundary of a lawfully heard strong alarm");
-    expect(copy).toContain("Mid-recovery reload resumes the same saved interval");
-    expect(copy).toContain("three-day resident and wildlife soak with daily persistence");
-    expect(copy).toContain("representative and distributed across shared owners");
-    expect(copy).toContain("Packaged mobile exercises Relief while packaged desktop exercises Chart and Relief");
-    expect(copy).toContain("regression and liveness floor");
+    expect(copy).toContain("one bounded reusable fingerprint across ecology owners");
+    expect(copy).toContain("caller-supplied terrain is still checked in full");
+    expect(copy).toContain("does not remove wildlife");
+    expect(copy).toContain("simplify habitat law");
+    expect(copy).toContain("change population outcomes");
+    expect(copy).toContain("alter saves");
+    expect(copy).toContain("make the simulation camera-dependent");
     expect(copy).toContain("existing settlement working dog remains the honest relationship-bearing continuity witness");
     expect(copy).toContain("no bonded, named player companion exists yet");
     expect(copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
-    expect(copy).toContain("Breathing Room is next, followed by Living Voice");
-    expect(copy).toContain("does not itself prove deployment");
+    expect(copy).toContain("Breathing Room remains active, followed by Living Voice");
+    expect(copy).toContain("This internal entry does not itself prove deployment");
     expect(copy).toContain("LIVE_VERIFIED status requires the separate push, remote CI, GitHub Pages, and exact deployed-build verification gate");
   });
 
@@ -138,8 +138,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("Real Promise work, route travel, storms, urgent needs, and current watch/search cognition outrank human rest");
     expect(liveBoundary?.body).toContain("eligible current human physically present at a settlement on an ordinary authoritative tick");
     expect(liveBoundary?.body).toContain("exact Alpha 51 resident-home digest bytes");
-    expect(liveBoundary?.body).toContain("Alpha 53 adds production-backed three-day persistence, bounded save-growth, frame-cadence, lawful WAIT-interruption, and packaged parity witnesses");
-    expect(liveBoundary?.body).toContain("Its gameplay entry does not itself prove deployment");
+    expect(liveBoundary?.body).toContain("Alpha 54 reuses only a bounded internally generated terrain fingerprint across ecology owners");
+    expect(liveBoundary?.body).toContain("This gameplay entry does not itself prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");
   });
 
