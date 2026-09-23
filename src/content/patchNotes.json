@@ -2,6 +2,41 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.57",
+      "releaseDate": "2026-09-23",
+      "buildIdentity": "0.3.3-alpha.57",
+      "summary": "The Breathing Room Alpha 57 internal build prepares base-regional climate scoring once per locomotion class and stops ranking tiles that already fail the unchanged species threshold.",
+      "gameplayContractVersion": 51,
+      "tutorialVersion": 67,
+      "categories": {
+        "gameplay": [
+          "Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, actor-presence, and physical-custody outcomes as Alpha 56.",
+          "Every base-regional species still evaluates its complete habitat affinity and unchanged weighted site score in original tile order before the existing threshold, density, dependency, population, and anchor rules apply."
+        ],
+        "fixes": [
+          "One exact base-regional terrain analysis now prepares each of its four locomotion climate-fit vectors once instead of recalculating the same tile values for every species that shares that locomotion class.",
+          "A tile already below a species's unchanged minimum site score no longer allocates a candidate or computes a species-keyed anchor rank; retained tiles keep the same original ordinal and keyed-random inputs."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset; no wildlife, habitat affinity, site threshold, weather pressure, traversal cost, population law, mortality rule, or custody rule was removed to obtain the performance improvement.",
+          "This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior."
+        ],
+        "interface": [
+          "Field Manual version 67 records the bounded base-regional scoring preparation and keeps planned systems clearly separated from playable behavior.",
+          "No visual, control, desktop, mobile, or accessibility behavior changes in this slice."
+        ],
+        "saves": [
+          "Outer save version 32, simulation format 4, RegionalEcologyStateV6, habitat derivation hashes, and wildlife actor schema/version 1 remain unchanged.",
+          "The four prepared climate vectors exist only inside one habitat derivation. They are neither cached beyond that call nor serialized, and no species score, rank, population, identity, or migration authority is shared."
+        ],
+        "knownLimitations": [
+          "Breathing Room remains active. The Alpha 56 continuous-travel trace is valid for route and deterministic truth but its noisy host timing is rejected for performance acceptance.",
+          "The base-regional owner benchmark is attribution-only; quiet-host untouched travel timing, settled heap/GC and resource proof, prolonged soak, cumulative validation, and the release checkpoint remain open.",
+          "Alpha 57 is an internal local checkpoint until a separately authorized push, remote CI, GitHub Pages deployment, and exact live-build verification occur. Living Voice remains blocked until Breathing Room closes."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.56",
       "releaseDate": "2026-09-23",
       "buildIdentity": "0.3.3-alpha.56",

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(66);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(67);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -70,11 +70,15 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 56 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("Alpha 57 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("climate fit is now prepared once for each requested locomotion class");
+    expect(copy).toContain("Every species still computes its own complete habitat affinity and identical weighted site score in original tile order");
+    expect(copy).toContain("below that species's unchanged threshold skips temporary candidate allocation and species-keyed anchor ranking");
+    expect(copy).toContain("every retained tile keeps the same original ordinal and keyed-random inputs");
     expect(copy).toContain("One deterministic civil clock still carries day, dusk, night, and dawn");
     expect(copy).toContain("all forty-two current residents");
     expect(copy).toContain("seventeen existing wildlife activity profiles");
-    expect(copy).toContain("all three breadth cohorts now share one bounded immutable preparation");
+    expect(copy).toContain("Alpha 56 shares one bounded immutable preparation");
     expect(copy).toContain("exact seed and signed region");
     expect(copy).toContain("Each cohort still independently applies species eligibility, weighted scoring, keyed ranking");
     expect(copy).toContain("Caller-supplied terrain is still checked in full and prepared separately");
@@ -146,6 +150,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("Alpha 55 authenticates regional ecology first");
     expect(liveBoundary?.body).toContain("Alpha 56 shares one immutable canonical terrain, climate, tide-depth, distance-field, and common-signal preparation");
     expect(liveBoundary?.body).toContain("retaining separate species scoring and keyed ranks");
+    expect(liveBoundary?.body).toContain("Alpha 57 prepares derivation-local climate fit once per requested locomotion class");
+    expect(liveBoundary?.body).toContain("every base-regional species retains its own habitat affinity, identical weighted score and unchanged threshold");
+    expect(liveBoundary?.body).toContain("only below-threshold tiles skip candidate allocation and species-keyed ranking");
+    expect(liveBoundary?.body).toContain("retained tiles keep their original ordinal and RNG inputs");
     expect(liveBoundary?.body).toContain("None of these optimizations changes a save");
     expect(liveBoundary?.body).toContain("This gameplay entry does not itself prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");

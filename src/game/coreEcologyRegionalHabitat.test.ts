@@ -4,6 +4,7 @@ import {
   CORE_WILDLIFE_ALPHA32_SPECIES,
   type CoreWildlifeSpecies,
 } from "../sim/coreWildlifeIdentity";
+import { generateRegionTerrain } from "../sim/regionTerrain";
 import { seedFromText } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { hashCanonical, stableStringify } from "../sim/util";
@@ -39,6 +40,7 @@ describe("core ecology regional habitat", () => {
     const second = deriveCoreEcologyRegionalHabitat({ seed: SEED, region: extreme });
     expect(second).toBe(first);
     expect(stableStringify(second)).toBe(stableStringify(first));
+    expect(first.derivationHash).toBe("7daf13ab8986e8cd");
   });
 
   it("is species-order independent, excludes domestic actors, and permits honest absence", () => {
@@ -50,6 +52,15 @@ describe("core ecology regional habitat", () => {
       speciesOrder: [...CORE_WILDLIFE_ALPHA32_SPECIES].reverse(),
     });
     expect(stableStringify(reversed)).toBe(stableStringify(canonical));
+    expect(canonical.derivationHash).toBe("1f4ac8b19380acab");
+    clearCoreEcologyRegionalHabitatCache();
+    const supplied = deriveCoreEcologyRegionalHabitat({
+      seed: SEED,
+      region: occupiedRegion,
+      speciesOrder: [...CORE_WILDLIFE_ALPHA32_SPECIES].reverse(),
+      terrain: generateRegionTerrain(SEED, occupiedRegion),
+    });
+    expect(stableStringify(supplied)).toBe(stableStringify(canonical));
     expect(CORE_ECOLOGY_REGIONAL_WILD_SPECIES).toHaveLength(19);
     expect(hashCanonical(CORE_ECOLOGY_REGIONAL_WILD_SPECIES))
       .toBe(CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH);
@@ -63,6 +74,7 @@ describe("core ecology regional habitat", () => {
     );
 
     const empty = deriveCoreEcologyRegionalHabitat({ seed: SEED, region: createRegionCoord(-2, 0) });
+    expect(empty.derivationHash).toBe("3e37ad53acb7d0ad");
     expect(empty.density.regionalQuiet).toBe(true);
     expect(empty.totalPopulationUnits).toBe(0);
     expect(empty.admittedSpeciesCount).toBe(0);

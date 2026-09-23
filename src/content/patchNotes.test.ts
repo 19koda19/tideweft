@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.56",
+      version: "0.3.3-alpha.57",
       releaseDate: "2026-09-23",
-      buildIdentity: "0.3.3-alpha.56",
+      buildIdentity: "0.3.3-alpha.57",
       gameplayContractVersion: 51,
-      tutorialVersion: 66,
+      tutorialVersion: 67,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,7 +69,15 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-56 The Breathing Room and retains Alpha-55, Alpha-54, and Alpha-53 truth", () => {
+  it("scopes Alpha-57 The Breathing Room and retains Alpha-56 through Alpha-53 truth", () => {
+    const alpha56Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.56",
+    );
+    const alpha56Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha56Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha56Limitations = alpha56Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha55Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.55",
     );
@@ -373,23 +381,39 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(LATEST_PATCH_NOTE.summary).toContain("The Breathing Room");
-    expect(LATEST_PATCH_NOTE.summary).toContain("repeated common terrain analysis");
+    expect(LATEST_PATCH_NOTE.summary).toContain("base-regional climate scoring");
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "four locomotion climate-fit vectors",
+    );
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "below a species's unchanged minimum site score",
+    );
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "same original ordinal and keyed-random inputs",
+    );
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
+      "only inside one habitat derivation",
+    );
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
+      "no species score, rank, population, identity, or migration authority is shared",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "noisy host timing is rejected",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "owner benchmark is attribution-only",
+    );
+    expect(alpha56Release?.summary).toContain("repeated common terrain analysis");
+    expect(alpha56Copy).toContain("three breadth cohorts");
+    expect(alpha56Copy).toContain("two common breadth preparations rather than six");
+    expect(alpha56Copy).toContain(
+      "Caller-supplied terrain still completes full canonical multiset validation",
+    );
+    expect(alpha56Limitations).toContain("short owner benchmark is attribution-only");
     expect(alpha55Release?.summary).toContain("exact storage-owner neighborhood");
     expect(alpha55Copy).toContain("five unchanged-owner rebases");
     expect(alpha54Release?.summary).toContain("removing repeated canonical terrain fingerprint work");
     expect(alpha54Copy).toContain("bounded nine-region terrain cache");
-    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
-      "three breadth cohorts",
-    );
-    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
-      "two common breadth preparations rather than six",
-    );
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
-      "Caller-supplied terrain still completes full canonical multiset validation",
-    );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
-      "short owner benchmark is attribution-only",
-    );
     expect(alpha53Release?.summary).toContain("The Turning Day");
     expect(alpha53Release?.summary).toContain("complete production-backed closure evidence");
     expect(alpha53Copy).toContain("One deterministic civil clock carries day, dusk, night, and dawn");

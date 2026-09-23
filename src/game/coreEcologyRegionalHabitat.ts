@@ -839,28 +839,51 @@ function tileProductivity(
   return summary.terrestrialProductivity;
 }
 
+function climateFitsForLocomotion(
+  locomotionClass: CoreWildlifeLocomotionClass,
+  analysis: TerrainAnalysis,
+  cache: Map<CoreWildlifeLocomotionClass, readonly number[]>,
+): readonly number[] {
+  const cached = cache.get(locomotionClass);
+  if (cached !== undefined) return cached;
+  const derived = Object.freeze(analysis.tiles.map((tile) =>
+    tileClimateFit(locomotionClass, tile),
+  ));
+  cache.set(locomotionClass, derived);
+  return derived;
+}
+
 function scoreSpeciesTiles(
   seed: RootSeed,
   species: CoreWildlifeSpecies,
   analysis: TerrainAnalysis,
+  climateFitCache: Map<CoreWildlifeLocomotionClass, readonly number[]>,
 ): readonly ScoredTile[] {
   const module = livingSpeciesModule(species);
   if (module === null) throw new TypeError(`Missing Living Weft module for ${species}`);
   const guildRule = GUILD_RULES[coreEcologyRegionalGuildForSpecies(species)];
   const locomotionClass = getCoreWildlifeSpeciesMetadata(species).locomotionClass;
   const productivity = tileProductivity(locomotionClass, analysis.summary);
+  const climateFits = climateFitsForLocomotion(locomotionClass, analysis, climateFitCache);
   const anchorRankPurpose = semanticPurpose(`anchor-rank:${species}`);
-  return analysis.tiles.map((tile, ordinal) => {
+  const suitableTiles: ScoredTile[] = [];
+  for (let ordinal = 0; ordinal < analysis.tiles.length; ordinal += 1) {
+    const tile = analysis.tiles[ordinal];
+    if (tile === undefined) continue;
     let affinity = 0;
     for (const habitatClass of module.habitat.habitatClasses) {
       affinity = Math.max(affinity, habitatClassAffinity(habitatClass, tile));
     }
-    const score = fixedWeighted([
-      [affinity, 7],
-      [tileClimateFit(locomotionClass, tile), 2],
-      [productivity, 1],
-    ]);
-    return {
+    const climateFit = climateFits[ordinal];
+    if (climateFit === undefined) {
+      throw new RangeError("Regional climate preparation does not match analyzed terrain");
+    }
+    // All three terms have already been clamped to FIXED_POINT, so this is
+    // byte-equivalent to fixedWeighted([[affinity, 7], [climateFit, 2],
+    // [productivity, 1]]) without allocating three tuples for every tile.
+    const score = Math.trunc((affinity * 7 + climateFit * 2 + productivity) / 10);
+    if (score < guildRule.minimumSiteScore) continue;
+    suitableTiles.push({
       tile,
       score,
       rank: keyedRandomU32(
@@ -871,8 +894,9 @@ function scoreSpeciesTiles(
         anchorRankPurpose,
         ordinal,
       ),
-    };
-  }).filter((entry) => entry.score >= guildRule.minimumSiteScore);
+    });
+  }
+  return suitableTiles;
 }
 
 function deriveGuildCeilings(
@@ -899,11 +923,12 @@ function populationDraft(
   species: CoreWildlifeSpecies,
   analysis: TerrainAnalysis,
   regionalQuiet: boolean,
+  climateFitCache: Map<CoreWildlifeLocomotionClass, readonly number[]>,
 ): CandidateDraft {
   const guild = coreEcologyRegionalGuildForSpecies(species);
   const guildRule = GUILD_RULES[guild];
   const territory = deriveCoreEcologyRegionalTerritory(seed, species, region);
-  const suitableTiles = scoreSpeciesTiles(seed, species, analysis);
+  const suitableTiles = scoreSpeciesTiles(seed, species, analysis, climateFitCache);
   const weightedTiles = Math.trunc(
     suitableTiles.reduce((sum, entry) => sum + entry.score, 0) / FIXED_POINT,
   );
@@ -1200,8 +1225,9 @@ export function deriveCoreEcologyRegionalHabitat(
   );
   const regionalQuiet = regionalQuietRoll >= regionalQuietThreshold;
   const guildCeilings = deriveGuildCeilings(analysis.summary);
+  const climateFitCache = new Map<CoreWildlifeLocomotionClass, readonly number[]>();
   const drafts = species.map((entry) =>
-    populationDraft(input.seed, region, entry, analysis, regionalQuiet),
+    populationDraft(input.seed, region, entry, analysis, regionalQuiet, climateFitCache),
   );
   consumeGuildBudgets(drafts, guildCeilings, false);
   applyPredatorSupport(drafts);

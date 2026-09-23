@@ -121,7 +121,7 @@ test("the explicit tutorial constant is parsed without matching unrelated versio
 test("current content contracts agree", () => {
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   assert.deepEqual(result.errors, []);
-  assert.equal(result.tutorialVersion, 66);
+  assert.equal(result.tutorialVersion, 67);
 });
 
 test("the first explicit tutorial contract advances the legacy v5 guide", () => {
