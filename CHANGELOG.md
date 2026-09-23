@@ -4,6 +4,43 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.55 — 2026-09-23
+
+Build: `0.3.3-alpha.55` · Gameplay contract: 51 · Tutorial: 65
+
+The Breathing Room Alpha 55 internal build keeps authenticated regional ecology authority intact when seamless visual-frame movement does not change its exact storage-owner neighborhood.
+
+### Gameplay
+
+- Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, actor-presence, and physical-custody outcomes as Alpha 54.
+- The complete Turning Day behavior remains live: weather, tides, WAIT, REST, SLEEP, humans, the settlement working dog, and current wildlife activity continue through one authoritative civil clock.
+
+### Fixes
+
+- A presentation-frame rebase now authenticates regional ecology and canonically orders the requested storage owners before retaining the exact existing authority when that ordered neighborhood is unchanged.
+- The canonical continuous-travel route contains five unchanged-owner rebases that no longer derive residents or rebuild six nested ecology layers; its two expansions and two contractions still perform the complete exchange.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset; no wildlife, habitat checks, weather pressure, traversal cost, population law, mortality rule, or custody rule was removed to obtain the performance improvement.
+- This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior.
+
+### Interface
+
+- Field Manual version 65 records the authenticated unchanged-owner fast path and keeps planned systems clearly separated from playable behavior.
+- No visual, control, desktop, mobile, or accessibility behavior changes in this slice.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, and wildlife actor schema/version 1 remain unchanged.
+- The shortcut is process-local and available only after exact world-binding authentication. Deserialized copies and changed bindings still take complete world validation; changed owner neighborhoods still perform the complete exchange.
+
+### Known limitations
+
+- Breathing Room remains active. This shortcut removes redundant unchanged-owner work but does not remove the two genuine cold expansions on the canonical route or close the directive.
+- Alpha 55 is an internal local checkpoint until a separately authorized push, remote CI, GitHub Pages deployment, and exact live-build verification occur.
+- Living Voice remains the next directive after Breathing Room and is not implemented by this build.
+
 ## 0.3.3-alpha.54 — 2026-09-22
 
 Build: `0.3.3-alpha.54` · Gameplay contract: 51 · Tutorial: 64

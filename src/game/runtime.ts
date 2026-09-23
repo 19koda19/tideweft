@@ -465,6 +465,10 @@ import {
   type RegionalEcologyStateV6ProjectedBreadthResidentV1,
 } from "./regionalEcologyStateV6";
 import { createRuntimeRegionalEcologyWorldBindingMemo } from "./runtimeRegionalEcologyWorldBindingMemo";
+import {
+  orderRuntimeRegionalEcologyActiveRegions,
+  reuseAuthenticatedRuntimeRegionalEcologyState,
+} from "./runtimeRegionalEcologyActiveRegions";
 import { createRuntimeRegionalEcologyProjectionMemo } from "./runtimeRegionalEcologyProjectionMemo";
 import {
   createRuntimeCoreEcologyActivityAuthorityMemo,
@@ -1748,7 +1752,19 @@ function rebaseRuntimeRegionalEcologyState(
   if (prior === null) {
     throw new Error("Regional ecology could not authenticate before a window exchange");
   }
-  const activeRegions = regionalStorageRegionsInView(regionalView);
+  // V1 owns the canonical ordering (lexicographic persistent region keys),
+  // while the spatial view enumerates row-major. Normalize the tiny bounded
+  // owner list before deciding whether this presentation-frame movement
+  // actually changed ecology storage custody.
+  const activeRegions = orderRuntimeRegionalEcologyActiveRegions(
+    regionalStorageRegionsInView(regionalView),
+  );
+  const reusable = reuseAuthenticatedRuntimeRegionalEcologyState(
+    prior,
+    prior.base.base.base.base.base.activeRegions,
+    activeRegions,
+  );
+  if (reusable !== null) return reusable;
   const desiredRegionKeys = new Set(activeRegions.map(regionKey));
   let root = prior.base.base.base.base.base.root;
   for (const resident of prior.base.base.base.base.base.activeResidents) {
