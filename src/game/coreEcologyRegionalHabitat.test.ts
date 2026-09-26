@@ -22,9 +22,11 @@ import {
   CORE_ECOLOGY_ALPHA32_DOMESTIC_SPECIES_HASH,
   CORE_ECOLOGY_ALPHA32_REGIONAL_WILD_SPECIES_HASH,
   CORE_ECOLOGY_DOMESTIC_SPECIES,
+  CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT,
   CORE_ECOLOGY_REGIONAL_WILD_SPECIES,
   clearCoreEcologyRegionalHabitatCache,
+  coreEcologyRegionalHabitatCacheDiagnostics,
   coreEcologyRegionalFloorDivide,
   deriveCoreEcologyRegionalCellIdentity,
   deriveCoreEcologyRegionalHabitat,
@@ -38,6 +40,12 @@ const LARGE_PREDATORS = ["black-bear", "brown-bear", "cougar", "gray-wolf"] as c
 describe("core ecology regional habitat", () => {
   it("uses mathematical signed cells and remains deterministic at the coordinate envelope", () => {
     clearCoreEcologyRegionalHabitatCache();
+    const emptyDiagnostics = coreEcologyRegionalHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     expect(coreEcologyRegionalFloorDivide(-1, 2)).toBe(-1);
     expect(coreEcologyRegionalFloorDivide(-2, 2)).toBe(-1);
     expect(coreEcologyRegionalFloorDivide(-3, 2)).toBe(-2);
@@ -51,6 +59,10 @@ describe("core ecology regional habitat", () => {
     expect(second).toBe(first);
     expect(stableStringify(second)).toBe(stableStringify(first));
     expect(first.derivationHash).toBe("7daf13ab8986e8cd");
+    expect(coreEcologyRegionalHabitatCacheDiagnostics()).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT,
+    });
   });
 
   it("is species-order independent, excludes domestic actors, and permits honest absence", () => {

@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(68);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(69);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -70,7 +70,14 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 58 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("Alpha 59 · The Breathing Room is the current internal gameplay entry");
+    expect(copy).toContain("passive, count-only observations of selected retained owners");
+    expect(copy).toContain("serialized world-payload bytes");
+    expect(copy).toContain("best-effort point-in-time launched-root descendant-tree summed RSS");
+    expect(copy).toContain("records passive pointer movement as hover evidence");
+    expect(copy).toContain("rejects accidental trusted presses or clicks");
+    expect(copy).toContain("do not prove exhaustive process retention, a memory plateau, leak freedom");
+    expect(copy).toContain("not evicted entries that a live external closure may retain");
     expect(copy).toContain("derives only the stable biome identity and baseline climate it actually consumes");
     expect(copy).toContain("interaction signals that were immediately discarded");
     expect(copy).toContain("full biome profile remains authoritative wherever those signals are used");
@@ -98,7 +105,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Outer save version 32 and simulation format 4 remain unchanged");
     expect(copy).toContain("76.203187 ms to 73.156646 ms (-3.998%)");
     expect(copy).toContain("attribution-only");
-    expect(copy).toContain("Quiet-host timing, settled forced-GC/resource proof, prolonged soak, cumulative validation, and the release checkpoint remain open");
+    expect(copy).toContain("The instrumentation itself does not repair the player-reported once-per-second hitch");
+    expect(copy).toContain("Quiet-host timing, prolonged soak, cumulative validation, and the release checkpoint remain open");
     expect(copy).toContain("Living Voice remains blocked until it closes");
     expect(copy).toContain("This unpublished local ordinary slice does not itself prove deployment");
     expect(copy).toContain("LIVE_VERIFIED status requires the separate release checkpoint, push, remote CI, GitHub Pages, and exact deployed-build verification gate");
@@ -163,7 +171,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("retained tiles keep their original ordinal and RNG inputs");
     expect(liveBoundary?.body).toContain("Alpha 58 derives only stable biome identity and baseline climate in base-regional analysis");
     expect(liveBoundary?.body).toContain("full biome profile remains authoritative where those signals are consumed");
-    expect(liveBoundary?.body).toContain("None of these optimizations changes gameplay, visuals, a save");
+    expect(liveBoundary?.body).toContain("Alpha 59 adds only passive count-and-limit resource telemetry and an opt-in packaged shakedown");
+    expect(liveBoundary?.body).toContain("never feeds observation back into the world");
+    expect(liveBoundary?.body).toContain("None of these optimizations or diagnostics changes gameplay, visuals, a save");
     expect(liveBoundary?.body).toContain("This unpublished local gameplay entry does not itself prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status requires the separate release gate");
   });

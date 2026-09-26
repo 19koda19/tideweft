@@ -66,6 +66,11 @@ export const CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT = 128 as const;
 export const CORE_ECOLOGY_REGIONAL_HABITAT_CATALOG_SPECIES_COUNT =
   LIVING_SPECIES_ALPHA32_CATALOG_COUNT;
 
+export interface CoreEcologyRegionalHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_DOMESTIC_SPECIES: readonly CoreWildlifeSpecies[] = Object.freeze([
   "domestic-cat",
   "domestic-chicken",
@@ -1184,6 +1189,15 @@ function regionalHabitatCacheKey(seed: RootSeed, region: RegionCoord): string {
 /** Test/debug boundary; cache occupancy is never part of ecological truth. */
 export function clearCoreEcologyRegionalHabitatCache(): void {
   REGIONAL_HABITAT_CACHE.clear();
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyRegionalHabitatCacheDiagnostics():
+  CoreEcologyRegionalHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: REGIONAL_HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_REGIONAL_HABITAT_CACHE_LIMIT,
+  });
 }
 
 function cacheRegionalHabitat(

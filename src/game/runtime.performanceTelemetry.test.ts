@@ -120,6 +120,14 @@ describe("runtime performance telemetry", () => {
     const before = runtime.getPerformanceTelemetry();
     expect(Object.isFrozen(before)).toBe(true);
     expect(Object.isFrozen(before.counts)).toBe(true);
+    expect(Object.isFrozen(before.resources)).toBe(true);
+    expect(Object.isFrozen(before.resources.regions)).toBe(true);
+    expect(Object.isFrozen(before.resources.caches)).toBe(true);
+    expect(Object.isFrozen(before.resources.pending)).toBe(true);
+    expect(Object.isFrozen(before.resources.limits)).toBe(true);
+    expect(Object.isFrozen(before.resources.limits.regions)).toBe(true);
+    expect(Object.isFrozen(before.resources.limits.caches)).toBe(true);
+    expect(Object.isFrozen(before.resources.limits.pending)).toBe(true);
     expect(Object.isFrozen(before.fixedStep)).toBe(true);
     expect(before.fixedStep.enabled).toBe(false);
     expect(before.worldAdvanceStep.enabled).toBe(false);
@@ -127,6 +135,98 @@ describe("runtime performance telemetry", () => {
     expect(before.audioProjection.enabled).toBe(false);
     expect(before.saveSnapshot.enabled).toBe(false);
     expect(before.lastSerializedSaveBytes).toBe(0);
+    expect(Object.keys(before.resources).sort()).toEqual([
+      "caches",
+      "limits",
+      "pending",
+      "regions",
+    ]);
+    expect(Object.keys(before.resources.regions).sort()).toEqual([
+      "activeEcologyRegions",
+      "chartedRegionRecords",
+      "durableEcologyRegionRecords",
+      "durableTerrainRegionRecords",
+      "inactiveCargoRegionWorlds",
+      "loadedTerrainRegions",
+    ]);
+    expect(Object.keys(before.resources.caches).sort()).toEqual([
+      "activityAuthorityReceipts",
+      "alpineHabitats",
+      "alpineRidgeAuthorities",
+      "breadthHabitats",
+      "breadthPreparationSlots",
+      "coldShoreHabitats",
+      "outdoorIlluminationFields",
+      "polarConsumerAuthorities",
+      "polarConsumerHabitats",
+      "polarShoreHabitats",
+      "regionTerrainValues",
+      "regionalHabitats",
+      "registeredTerrainGeneratorRegions",
+      "registeredTerrainGeneratorSeeds",
+      "runtimeCompatibilityHabitats",
+    ]);
+    expect(Object.keys(before.resources.pending).sort()).toEqual([
+      "activeSaveWorkers",
+      "queuedCommands",
+      "queuedSaveSnapshots",
+      "registeredTerrainPrefetchJobs",
+      "runtimeTerrainPrefetchJobs",
+      "saveWaiters",
+    ]);
+    expect(Object.keys(before.resources.limits.regions).sort())
+      .toEqual(Object.keys(before.resources.regions).sort());
+    expect(Object.keys(before.resources.limits.caches).sort())
+      .toEqual(Object.keys(before.resources.caches).sort());
+    expect(Object.keys(before.resources.limits.pending).sort()).toEqual([
+      "activeSaveWorkers",
+      "queuedSaveSnapshots",
+      "runtimeTerrainPrefetchJobs",
+    ]);
+    for (const count of [
+      ...Object.values(before.resources.regions),
+      ...Object.values(before.resources.caches),
+      ...Object.values(before.resources.pending),
+      ...Object.values(before.resources.limits.regions),
+      ...Object.values(before.resources.limits.caches),
+      ...Object.values(before.resources.limits.pending),
+    ]) {
+      expect(Number.isSafeInteger(count)).toBe(true);
+      expect(count).toBeGreaterThanOrEqual(0);
+    }
+    for (const name of Object.keys(before.resources.regions) as Array<
+      keyof typeof before.resources.regions
+    >) {
+      expect(before.resources.regions[name])
+        .toBeLessThanOrEqual(before.resources.limits.regions[name]);
+    }
+    for (const name of Object.keys(before.resources.caches) as Array<
+      keyof typeof before.resources.caches
+    >) {
+      expect(before.resources.caches[name])
+        .toBeLessThanOrEqual(before.resources.limits.caches[name]);
+    }
+    expect(before.resources.pending.runtimeTerrainPrefetchJobs)
+      .toBeLessThanOrEqual(before.resources.limits.pending.runtimeTerrainPrefetchJobs);
+    expect(before.resources.pending.queuedSaveSnapshots)
+      .toBeLessThanOrEqual(before.resources.limits.pending.queuedSaveSnapshots);
+    expect(before.resources.pending.activeSaveWorkers)
+      .toBeLessThanOrEqual(before.resources.limits.pending.activeSaveWorkers);
+    expect(before.resources.limits.regions.loadedTerrainRegions).toBe(5);
+    expect(before.resources.limits.regions.activeEcologyRegions).toBe(9);
+    expect(before.resources.limits.regions.chartedRegionRecords).toBe(131_072);
+    expect(before.resources.limits.regions.inactiveCargoRegionWorlds).toBe(131_071);
+    expect(before.resources.limits.caches.regionTerrainValues).toBe(9);
+    expect(before.resources.limits.caches.registeredTerrainGeneratorSeeds).toBe(2);
+    expect(before.resources.limits.caches.registeredTerrainGeneratorRegions).toBe(24);
+    expect(before.resources.limits.caches.outdoorIlluminationFields).toBe(4);
+    expect(before.resources.limits.caches.regionalHabitats).toBe(128);
+    expect(before.resources.limits.caches.runtimeCompatibilityHabitats).toBe(264);
+    expect(before.resources.limits.caches.alpineRidgeAuthorities).toBe(64);
+    expect(before.resources.limits.caches.polarConsumerAuthorities).toBe(64);
+    expect(before.resources.limits.caches.activityAuthorityReceipts).toBe(128);
+    expect(before.resources.limits.caches.breadthPreparationSlots).toBe(1);
+    expect(before.resources.limits.pending.runtimeTerrainPrefetchJobs).toBe(9);
     expect(before.counts).toEqual({
       actorsTotal: 0,
       actorsMaterialized: 0,
@@ -219,6 +319,7 @@ describe("runtime performance telemetry", () => {
     );
     expect(envelope).not.toHaveProperty("performanceTelemetry");
     expect(envelope).not.toHaveProperty("telemetry");
+    expect(envelope).not.toHaveProperty("resources");
     expect(saved.worldJson).not.toContain('"lastSerializedSaveBytes"');
 
     const reset = runtime.resetPerformanceTelemetry();
@@ -235,6 +336,7 @@ describe("runtime performance telemetry", () => {
     expect(reset.saveSnapshot.count).toBe(0);
     expect(reset.saveSnapshot.totalCount).toBe(0);
     expect(reset.counts).toEqual(afterSave.counts);
+    expect(reset.resources).toEqual(afterSave.resources);
     expect(reset.lastSerializedSaveBytes).toBe(0);
     await runtime.save();
     expect(repository.snapshot().worldJson).toBe(saved.worldJson);

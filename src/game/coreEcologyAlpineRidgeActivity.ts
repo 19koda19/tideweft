@@ -35,12 +35,27 @@ export interface ProjectCoreEcologyAlpineRidgeActivityAuthorityInput {
 const GOLDEN_EAGLE_SPECIES = "golden-eagle" as const;
 const TERRAIN_TILE_OWNER_KIND = "terrain-tile" as const;
 const TILE_CENTER_OFFSET = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
-const ALPINE_RIDGE_AUTHORITY_CACHE_LIMIT = 64;
+export const CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT = 64 as const;
+
+export interface CoreEcologyAlpineRidgeActivityCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT;
+}
+
 const WORLD_BOUND_ALPINE_AUTHORITIES = new WeakSet<object>();
 const ALPINE_RIDGE_AUTHORITY_CACHE = new Map<
   string,
   CoreEcologyRidgeActivityAuthorityV1
 >();
+
+/** Read-only occupancy only; never exposes authority keys or receipts. */
+export function coreEcologyAlpineRidgeActivityCacheDiagnostics():
+  CoreEcologyAlpineRidgeActivityCacheDiagnostics {
+  return Object.freeze({
+    entryCount: ALPINE_RIDGE_AUTHORITY_CACHE.size,
+    capacity: CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+  });
+}
 
 /**
  * Reprojects a golden eagle's ridge destinations from canonical world facts.
@@ -158,7 +173,10 @@ function cacheAlpineRidgeAuthority(
   WORLD_BOUND_ALPINE_AUTHORITIES.add(authority);
   ALPINE_RIDGE_AUTHORITY_CACHE.delete(key);
   ALPINE_RIDGE_AUTHORITY_CACHE.set(key, authority);
-  while (ALPINE_RIDGE_AUTHORITY_CACHE.size > ALPINE_RIDGE_AUTHORITY_CACHE_LIMIT) {
+  while (
+    ALPINE_RIDGE_AUTHORITY_CACHE.size
+      > CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT
+  ) {
     const oldest = ALPINE_RIDGE_AUTHORITY_CACHE.keys().next().value as string | undefined;
     if (oldest === undefined) break;
     ALPINE_RIDGE_AUTHORITY_CACHE.delete(oldest);

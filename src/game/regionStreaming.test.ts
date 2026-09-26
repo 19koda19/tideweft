@@ -4,6 +4,7 @@ import { generateRegionTerrainBundle } from "../sim/regionTerrain";
 import { REGION_COORD_LIMIT, regionKey, type RegionCoord } from "../sim/regions";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
+  admitTerrainRegionPrefetchJob,
   collectStreamingRegionIdentity,
   commitStreamingRegionModification,
   createRegionStreamingState,
@@ -20,9 +21,11 @@ import {
   restoreRegionStreamingState,
   restoreTerrainRegionStreamingState,
   serializeRegionStreamingState,
+  terrainRegionStreamingCacheDiagnostics,
   type GeneratedStreamRegion,
   type RegionStreamGenerator,
   type RegionStreamingState,
+  type TerrainRegionPrefetchJob,
 } from "./regionStreaming";
 import { getDurableRegionRecord, serializeRegionManifest } from "./regionManifest";
 
@@ -83,6 +86,105 @@ function regionRecord<T>(state: RegionStreamingState<T>, coord: RegionCoord) {
 }
 
 describe("bounded deterministic region streaming", () => {
+  it("rejects a tenth runtime prefetch before its factory can register pending work", () => {
+    const seed = seedFromText("terrain prefetch admission stops before ten");
+    const jobs: TerrainRegionPrefetchJob[] = [];
+    try {
+      for (let x = 0; x < 9; x += 1) {
+        const job = createTerrainRegionPrefetchJob(
+          seed,
+          { x: 41_000 + x, y: -41_000 },
+        );
+        if (job.complete) {
+          throw new Error("prefetch-cap fixture unexpectedly reused completed terrain");
+        }
+        jobs.push(job);
+      }
+      const registeredAtCapacity = terrainRegionStreamingCacheDiagnostics()
+        .registeredPendingJobCount;
+      let factoryCalls = 0;
+
+      const admitted = admitTerrainRegionPrefetchJob(jobs, 9, () => {
+        factoryCalls += 1;
+        return createTerrainRegionPrefetchJob(seed, { x: 41_009, y: -41_000 });
+      });
+
+      expect(admitted).toBe(false);
+      expect(factoryCalls).toBe(0);
+      expect(jobs).toHaveLength(9);
+      expect(terrainRegionStreamingCacheDiagnostics().registeredPendingJobCount)
+        .toBe(registeredAtCapacity);
+    } finally {
+      for (const job of jobs) job.cancel();
+    }
+  });
+
+  it("admits one incomplete job to capacity and never retains completed work", () => {
+    const stubJob = (key: string, complete = false): TerrainRegionPrefetchJob =>
+      Object.freeze({
+        coord: { x: 0, y: 0 },
+        key,
+        totalTiles: 1,
+        completedTiles: complete ? 1 : 0,
+        complete,
+        cancelled: false,
+        step: () => true,
+        cancel: () => undefined,
+      });
+    const jobs = Array.from({ length: 8 }, (_, ordinal) => stubJob(`held-${ordinal}`));
+
+    expect(admitTerrainRegionPrefetchJob(jobs, 9, () => stubJob("ninth"))).toBe(true);
+    expect(jobs.map(({ key }) => key)).toEqual([
+      "held-0",
+      "held-1",
+      "held-2",
+      "held-3",
+      "held-4",
+      "held-5",
+      "held-6",
+      "held-7",
+      "ninth",
+    ]);
+
+    jobs.pop();
+    expect(admitTerrainRegionPrefetchJob(jobs, 9, () => stubJob("cached", true))).toBe(false);
+    expect(jobs).toHaveLength(8);
+  });
+
+  it("reports frozen count-only terrain cache state without touching shared work", () => {
+    const seed = seedFromText("stream cache diagnostics remain observational");
+    const generator = createTerrainRegionGenerator(seed);
+    const baseline = terrainRegionStreamingCacheDiagnostics();
+    const job = createTerrainRegionPrefetchJob(seed, { x: 21_987, y: -34_567 });
+    if (job.complete) throw new Error("diagnostic prefetch fixture was unexpectedly cached");
+    const pending = terrainRegionStreamingCacheDiagnostics();
+    const replay = terrainRegionStreamingCacheDiagnostics();
+
+    expect(Object.isFrozen(pending)).toBe(true);
+    expect(Object.keys(pending).sort()).toEqual([
+      "registeredCachedRegionCapacity",
+      "registeredCachedRegionCount",
+      "registeredPendingJobCount",
+      "registeredSeedCapacity",
+      "registeredSeedEntryCount",
+    ]);
+    expect(pending).toEqual(replay);
+    expect(pending.registeredSeedCapacity).toBe(2);
+    expect(pending.registeredCachedRegionCapacity).toBe(24);
+    expect(pending.registeredSeedEntryCount)
+      .toBeLessThanOrEqual(pending.registeredSeedCapacity);
+    expect(pending.registeredCachedRegionCount)
+      .toBeLessThanOrEqual(pending.registeredCachedRegionCapacity);
+    expect(pending.registeredPendingJobCount)
+      .toBe(baseline.registeredPendingJobCount + 1);
+    expect(createTerrainRegionGenerator([...seed] as RootSeed)).toBe(generator);
+
+    job.cancel();
+    expect(job.cancelled).toBe(true);
+    expect(terrainRegionStreamingCacheDiagnostics().registeredPendingJobCount)
+      .toBe(baseline.registeredPendingJobCount);
+  });
+
   it("reuses a bounded immutable terrain generator cache across stream transitions", () => {
     const seed = seedFromText("the prefetched ground is still the same ground");
     const first = createTerrainRegionGenerator(seed);
@@ -95,6 +197,25 @@ describe("bounded deterministic region streaming", () => {
     expect(Object.isFrozen(generated)).toBe(true);
     expect(Object.isFrozen(generated.value)).toBe(true);
     expect(generated.contentHash).toBe(generateRegionTerrainBundle(seed, coord).manifest.terrainHash);
+  });
+
+  it("labels registry counts honestly when an evicted generator closure remains usable", () => {
+    const firstSeed = seedFromText("registered terrain owner one");
+    const secondSeed = seedFromText("registered terrain owner two");
+    const thirdSeed = seedFromText("registered terrain owner three");
+    const coord = { x: -8, y: 13 } as const;
+    const first = createTerrainRegionGenerator(firstSeed);
+    const retained = first(coord);
+
+    createTerrainRegionGenerator(secondSeed);
+    createTerrainRegionGenerator(thirdSeed);
+    const registered = terrainRegionStreamingCacheDiagnostics();
+
+    expect(registered.registeredSeedEntryCount).toBe(2);
+    expect(registered.registeredCachedRegionCount)
+      .toBeLessThanOrEqual(registered.registeredCachedRegionCapacity);
+    expect(first(coord)).toBe(retained);
+    expect(createTerrainRegionGenerator(firstSeed)).not.toBe(first);
   });
 
   it("prefetches terrain in bounded deterministic slices and shares the completed bundle", () => {

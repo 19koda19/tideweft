@@ -45,6 +45,12 @@ export const CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID =
 export const CORE_ECOLOGY_BREADTH_DERIVATION_KIND =
   "regional-breadth-v1" as const;
 export const CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT = 128 as const;
+
+export interface CoreEcologyBreadthHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_BREADTH_MAX_COHORTS = 64 as const;
 export const CORE_ECOLOGY_BREADTH_MAX_SPECIES_PER_COHORT = 12 as const;
 export const CORE_ECOLOGY_BREADTH_MAX_AGGREGATE_SPECIES_PER_COHORT = 4 as const;
@@ -1472,6 +1478,15 @@ export function clearCoreEcologyBreadthHabitatCache(): void {
   preparationBuildCount = 0;
   preparationReuseCount = 0;
   cohortProjectionCount = 0;
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyBreadthHabitatCacheDiagnostics():
+  CoreEcologyBreadthHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT,
+  });
 }
 
 /** Bounded counters prove common terrain work is shared without exposing it. */

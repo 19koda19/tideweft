@@ -96,6 +96,19 @@ interface RegionTerrainValueCacheEntry {
 
 const REGION_TERRAIN_VALUE_CACHE = new Map<string, RegionTerrainValueCacheEntry>();
 
+export interface RegionTerrainCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: number;
+}
+
+/** Count-only observation of bounded derived terrain; never touches LRU order. */
+export function regionTerrainCacheDiagnostics(): RegionTerrainCacheDiagnostics {
+  return Object.freeze({
+    entryCount: REGION_TERRAIN_VALUE_CACHE.size,
+    capacity: REGION_TERRAIN_VALUE_CACHE_LIMIT,
+  });
+}
+
 interface TerrainSignals {
   readonly elevation: number;
   readonly moisture: number;

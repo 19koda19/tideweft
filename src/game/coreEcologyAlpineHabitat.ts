@@ -37,6 +37,12 @@ export const CORE_ECOLOGY_ALPINE_HABITAT_OWNER_ID =
   "game:core-ecology-alpine-habitat:v1" as const;
 export const CORE_ECOLOGY_ALPINE_DERIVATION_KIND = "regional-alpine-v1" as const;
 export const CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT = 128 as const;
+
+export interface CoreEcologyAlpineHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_ALPINE_TERRITORY_SPAN_BY_SPECIES = Object.freeze({
   "mountain-goat": 2,
   "american-pika": 1,
@@ -706,6 +712,15 @@ function cacheHabitat(key: string, habitat: CoreEcologyAlpineHabitat): CoreEcolo
 /** Cache state is a performance detail and never participates in habitat truth. */
 export function clearCoreEcologyAlpineHabitatCache(): void {
   HABITAT_CACHE.clear();
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyAlpineHabitatCacheDiagnostics():
+  CoreEcologyAlpineHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT,
+  });
 }
 
 /**

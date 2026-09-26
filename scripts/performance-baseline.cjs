@@ -24,6 +24,92 @@ const HITCH_TRACE_RECORD_CAPACITY = 32;
 const HITCH_TRACE_SNAPSHOT_CAPACITY = 16;
 const MAX_CHILD_OUTPUT_CHARACTERS = 64 * 1_024;
 const BASELINE_WORLD_SEED = 'runtime baseline estuary';
+const RESOURCE_SHAKEDOWN_WORLD_SEED = 'breathing-room all-tide corridor 187';
+const RESOURCE_SHAKEDOWN_CYCLES = 2;
+const RESOURCE_SHAKEDOWN_OUTBOUND_GLOBAL_Y = -8;
+const RESOURCE_SHAKEDOWN_SETTLE_MS = 5_000;
+const RESOURCE_SHAKEDOWN_GC_SETTLE_MS = 1_000;
+const RESOURCE_SHAKEDOWN_CYCLE_TIMEOUT_MS = 240_000;
+const RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES = 1.5;
+const RESOURCE_SHAKEDOWN_MAX_OBSERVED_STEP_TILES = 4;
+const RESOURCE_CHECKPOINT_LABELS = Object.freeze([
+  'pre',
+  'half',
+  'post',
+  'settled',
+  'forced-gc-1',
+  'forced-gc-2',
+  'post-save',
+]);
+const RESOURCE_CDP_METRIC_NAMES = Object.freeze([
+  'AudioHandlers',
+  'Documents',
+  'Frames',
+  'JSEventListeners',
+  'LayoutObjects',
+  'Nodes',
+  'Resources',
+  'ContextLifecycleStateObservers',
+  'V8PerContextDatas',
+  'WorkerGlobalScopes',
+  'ResourceFetchers',
+  'ArrayBufferContents',
+  'JSHeapUsedSize',
+  'JSHeapTotalSize',
+]);
+const RESOURCE_COUNT_FIELDS = Object.freeze({
+  regions: Object.freeze([
+    'loadedTerrainRegions',
+    'activeEcologyRegions',
+    'durableTerrainRegionRecords',
+    'durableEcologyRegionRecords',
+    'chartedRegionRecords',
+    'inactiveCargoRegionWorlds',
+  ]),
+  caches: Object.freeze([
+    'regionTerrainValues',
+    'registeredTerrainGeneratorSeeds',
+    'registeredTerrainGeneratorRegions',
+    'outdoorIlluminationFields',
+    'regionalHabitats',
+    'alpineHabitats',
+    'polarShoreHabitats',
+    'coldShoreHabitats',
+    'polarConsumerHabitats',
+    'breadthHabitats',
+    'runtimeCompatibilityHabitats',
+    'alpineRidgeAuthorities',
+    'polarConsumerAuthorities',
+    'activityAuthorityReceipts',
+    'breadthPreparationSlots',
+  ]),
+  pending: Object.freeze([
+    'runtimeTerrainPrefetchJobs',
+    'registeredTerrainPrefetchJobs',
+    'queuedCommands',
+    'queuedSaveSnapshots',
+    'saveWaiters',
+    'activeSaveWorkers',
+  ]),
+});
+const RESOURCE_LIMIT_FIELDS = Object.freeze({
+  regions: RESOURCE_COUNT_FIELDS.regions,
+  caches: RESOURCE_COUNT_FIELDS.caches,
+  pending: Object.freeze([
+    'runtimeTerrainPrefetchJobs',
+    'queuedSaveSnapshots',
+    'activeSaveWorkers',
+  ]),
+});
+const ELECTRON_PROCESS_ROLES = Object.freeze([
+  'browser',
+  'renderer',
+  'gpu',
+  'audio-service',
+  'utility',
+  'crashpad/zygote',
+  'other',
+]);
 const CDP_METRIC_NAMES = Object.freeze([
   'LayoutCount',
   'RecalcStyleCount',
@@ -174,13 +260,13 @@ function parseSampleMs(rawValue) {
   return sampleMs;
 }
 
-function outputPath(rawOutput) {
+function outputPath(rawOutput, defaultStem = 'runtime-baseline') {
   const resolved = rawOutput
     ? path.resolve(rawOutput)
     : path.join(
       artifactRoot,
       'performance',
-      `runtime-baseline-${new Date().toISOString().replace(/[:.]/gu, '-')}.json`,
+      `${defaultStem}-${new Date().toISOString().replace(/[:.]/gu, '-')}.json`,
     );
   const relative = path.relative(artifactRoot, resolved);
   if (
@@ -199,8 +285,10 @@ function parseArguments(argv) {
   let executable = process.env.TIDEWEFT_PACKAGED_EXECUTABLE || '';
   let output = '';
   let sampleMs = DEFAULT_SAMPLE_MS;
+  let sampleMsSpecified = false;
   let scenarioId = '';
   let traceHitches = false;
+  let resourceShakedown = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -218,9 +306,11 @@ function parseArguments(argv) {
       if (output.length === 0) throw new Error('--output requires a value');
     } else if (argument === '--sample-ms') {
       sampleMs = parseSampleMs(argumentValue(argv, index, '--sample-ms'));
+      sampleMsSpecified = true;
       index += 1;
     } else if (argument.startsWith('--sample-ms=')) {
       sampleMs = parseSampleMs(argument.slice('--sample-ms='.length));
+      sampleMsSpecified = true;
     } else if (argument === '--scenario') {
       scenarioId = argumentValue(argv, index, '--scenario');
       index += 1;
@@ -229,17 +319,33 @@ function parseArguments(argv) {
       if (scenarioId.length === 0) throw new Error('--scenario requires a value');
     } else if (argument === '--trace-hitches') {
       traceHitches = true;
+    } else if (argument === '--resource-shakedown') {
+      resourceShakedown = true;
     } else {
       throw new Error(`Unknown performance-baseline argument: ${argument}`);
     }
   }
 
+  if (resourceShakedown && scenarioId.length > 0) {
+    throw new Error('--resource-shakedown cannot be combined with --scenario');
+  }
+  if (resourceShakedown && traceHitches) {
+    throw new Error('--resource-shakedown cannot be combined with --trace-hitches');
+  }
+  if (resourceShakedown && sampleMsSpecified) {
+    throw new Error('--resource-shakedown uses a fixed route and cannot be combined with --sample-ms');
+  }
+
   return {
     executable: executable ? path.resolve(executable) : '',
-    output: outputPath(output),
+    output: outputPath(
+      output,
+      resourceShakedown ? 'resource-shakedown' : 'runtime-baseline',
+    ),
     sampleMs,
     scenarioId,
     traceHitches,
+    resourceShakedown,
   };
 }
 
@@ -483,6 +589,8 @@ class CdpClient {
     this.socket = new WebSocket(url);
     this.sequence = 0;
     this.pending = new Map();
+    this.notificationListeners = new Map();
+    this.notificationError = null;
     this.closed = false;
   }
 
@@ -510,7 +618,12 @@ class CdpClient {
         this.rejectPending(new Error('CDP returned malformed JSON'));
         return;
       }
-      if (!Number.isSafeInteger(message.id)) return;
+      if (!Number.isSafeInteger(message.id)) {
+        if (typeof message.method === 'string') {
+          this.dispatchNotification(message.method, message.params ?? {});
+        }
+        return;
+      }
       const deferred = this.pending.get(message.id);
       if (!deferred) return;
       this.pending.delete(message.id);
@@ -533,6 +646,42 @@ class CdpClient {
       deferred.reject(error);
     }
     this.pending.clear();
+  }
+
+  onNotification(method, listener) {
+    if (typeof method !== 'string' || method.length === 0) {
+      throw new TypeError('CDP notification method must be a non-empty string');
+    }
+    if (typeof listener !== 'function') {
+      throw new TypeError('CDP notification listener must be a function');
+    }
+    const listeners = this.notificationListeners.get(method) ?? new Set();
+    listeners.add(listener);
+    this.notificationListeners.set(method, listeners);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0) this.notificationListeners.delete(method);
+    };
+  }
+
+  dispatchNotification(method, params) {
+    const listeners = this.notificationListeners.get(method);
+    if (listeners === undefined) return;
+    for (const listener of listeners) {
+      try {
+        listener(params);
+      } catch {
+        if (this.notificationError === null) {
+          this.notificationError = new Error(
+            `CDP notification handler failed for ${method}`,
+          );
+        }
+      }
+    }
+  }
+
+  throwIfNotificationFailed() {
+    if (this.notificationError !== null) throw this.notificationError;
   }
 
   call(method, params = {}, timeoutMs = CDP_CALL_TIMEOUT_MS) {
@@ -585,6 +734,7 @@ class CdpClient {
     if (this.closed || this.socket.readyState === WebSocket.CLOSED) return;
     this.closed = true;
     this.rejectPending(new Error('CDP client closed'));
+    this.notificationListeners.clear();
     await new Promise((resolve) => {
       const timer = setTimeout(resolve, 500);
       this.socket.addEventListener('close', () => {
@@ -599,6 +749,587 @@ class CdpClient {
       }
     });
   }
+}
+
+function incrementCount(record, key) {
+  record[key] = (record[key] ?? 0) + 1;
+}
+
+function sortedCountRecord(values, selector) {
+  const counts = {};
+  for (const value of values) {
+    const key = selector(value);
+    if (typeof key === 'string' && key.length > 0) incrementCount(counts, key);
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => (
+    left.localeCompare(right)
+  )));
+}
+
+function createWebAudioLifecycleTracker() {
+  const contexts = new Map();
+  const listeners = new Set();
+  const nodes = new Map();
+  const params = new Set();
+  const eventTotals = {};
+  let unmatchedDestroyEvents = 0;
+  let malformedLifecycleEvents = 0;
+
+  const identifier = (value, field) => (
+    value !== null
+    && typeof value === 'object'
+    && typeof value[field] === 'string'
+    && value[field].length > 0
+      ? value[field]
+      : null
+  );
+  const destroy = (setOrMap, id) => {
+    if (typeof id !== 'string' || id.length === 0 || !setOrMap.delete(id)) {
+      unmatchedDestroyEvents += 1;
+    }
+  };
+
+  return Object.freeze({
+    handle(method, event = {}) {
+      incrementCount(eventTotals, method);
+      if (method === 'WebAudio.contextCreated' || method === 'WebAudio.contextChanged') {
+        const id = identifier(event.context, 'contextId');
+        if (id === null) {
+          malformedLifecycleEvents += 1;
+        } else {
+          contexts.set(id, {
+            type: typeof event.context.contextType === 'string'
+              ? event.context.contextType
+              : 'unknown',
+            state: typeof event.context.contextState === 'string'
+              ? event.context.contextState
+              : 'unknown',
+          });
+        }
+      } else if (method === 'WebAudio.contextWillBeDestroyed') {
+        if (typeof event.contextId !== 'string' || event.contextId.length === 0) {
+          malformedLifecycleEvents += 1;
+        }
+        destroy(contexts, event.contextId);
+      } else if (method === 'WebAudio.audioListenerCreated') {
+        const id = identifier(event.listener, 'listenerId');
+        if (id === null) malformedLifecycleEvents += 1;
+        else listeners.add(id);
+      } else if (method === 'WebAudio.audioListenerWillBeDestroyed') {
+        if (typeof event.listenerId !== 'string' || event.listenerId.length === 0) {
+          malformedLifecycleEvents += 1;
+        }
+        destroy(listeners, event.listenerId);
+      } else if (method === 'WebAudio.audioNodeCreated') {
+        const id = identifier(event.node, 'nodeId');
+        if (id === null) {
+          malformedLifecycleEvents += 1;
+        } else {
+          nodes.set(id, typeof event.node.nodeType === 'string' ? event.node.nodeType : 'unknown');
+        }
+      } else if (method === 'WebAudio.audioNodeWillBeDestroyed') {
+        if (typeof event.nodeId !== 'string' || event.nodeId.length === 0) {
+          malformedLifecycleEvents += 1;
+        }
+        destroy(nodes, event.nodeId);
+      } else if (method === 'WebAudio.audioParamCreated') {
+        const id = identifier(event.param, 'paramId');
+        if (id === null) malformedLifecycleEvents += 1;
+        else params.add(id);
+      } else if (method === 'WebAudio.audioParamWillBeDestroyed') {
+        if (typeof event.paramId !== 'string' || event.paramId.length === 0) {
+          malformedLifecycleEvents += 1;
+        }
+        destroy(params, event.paramId);
+      }
+    },
+    snapshot() {
+      return {
+        scope: 'CDP WebAudio lifecycle events observed since WebAudio.enable; counts only',
+        live: {
+          contexts: contexts.size,
+          listeners: listeners.size,
+          nodes: nodes.size,
+          params: params.size,
+          contextsByType: sortedCountRecord(contexts.values(), ({ type }) => type),
+          contextsByState: sortedCountRecord(contexts.values(), ({ state }) => state),
+          nodesByType: sortedCountRecord(nodes.values(), (type) => type),
+        },
+        eventTotals: Object.fromEntries(
+          Object.entries(eventTotals).sort(([left], [right]) => left.localeCompare(right)),
+        ),
+        unmatchedDestroyEvents,
+        malformedLifecycleEvents,
+      };
+    },
+  });
+}
+
+function assertWebAudioLifecycleEvidence(snapshot, checkpointLabel = 'resource checkpoint') {
+  const collectedNodeGraphIsRequired = checkpointLabel === 'forced-gc-1'
+    || checkpointLabel === 'forced-gc-2'
+    || checkpointLabel === 'post-save';
+  const label = RESOURCE_CHECKPOINT_LABELS.includes(checkpointLabel)
+    ? `resource checkpoint ${checkpointLabel}`
+    : checkpointLabel;
+  const liveCountsAreValid = ['contexts', 'listeners', 'nodes', 'params'].every((key) => (
+    Number.isSafeInteger(snapshot?.live?.[key]) && snapshot.live[key] >= 0
+  ));
+  const countRecordTotal = (record) => {
+    if (record === null || typeof record !== 'object' || Array.isArray(record)) return null;
+    let total = 0;
+    for (const value of Object.values(record)) {
+      if (!Number.isSafeInteger(value) || value < 0) return null;
+      total += value;
+      if (!Number.isSafeInteger(total)) return null;
+    }
+    return total;
+  };
+  const liveBreakdownsAreValid = (
+    countRecordTotal(snapshot?.live?.contextsByType) === snapshot?.live?.contexts
+    && countRecordTotal(snapshot?.live?.contextsByState) === snapshot?.live?.contexts
+    && countRecordTotal(snapshot?.live?.nodesByType) === snapshot?.live?.nodes
+  );
+  const eventTotalsAreValid = (
+    snapshot?.eventTotals !== null
+    && typeof snapshot?.eventTotals === 'object'
+    && !Array.isArray(snapshot.eventTotals)
+    && Object.values(snapshot.eventTotals).every((value) => (
+      Number.isSafeInteger(value) && value >= 0
+    ))
+  );
+  const eventTotal = (method) => snapshot?.eventTotals?.[method] ?? 0;
+  const lifecycleBalancesAreExact = [
+    ['contexts', 'WebAudio.contextCreated', 'WebAudio.contextWillBeDestroyed'],
+    ['listeners', 'WebAudio.audioListenerCreated', 'WebAudio.audioListenerWillBeDestroyed'],
+    ['nodes', 'WebAudio.audioNodeCreated', 'WebAudio.audioNodeWillBeDestroyed'],
+    ['params', 'WebAudio.audioParamCreated', 'WebAudio.audioParamWillBeDestroyed'],
+  ].every(([liveKey, createdMethod, destroyedMethod]) => {
+    const created = eventTotal(createdMethod);
+    const destroyed = eventTotal(destroyedMethod);
+    return Number.isSafeInteger(created)
+      && created >= 0
+      && Number.isSafeInteger(destroyed)
+      && destroyed >= 0
+      && destroyed <= created
+      && created - destroyed === snapshot?.live?.[liveKey];
+  });
+  const persistentContextWitnessIsValid = (
+    eventTotal('WebAudio.contextCreated') === 1
+    && eventTotal('WebAudio.contextWillBeDestroyed') === 0
+    && snapshot?.live?.contexts === 1
+    && eventTotal('WebAudio.audioNodeCreated') >= 1
+  );
+  const checkpointGraphShapeIsValid = collectedNodeGraphIsRequired
+    ? (
+      snapshot?.live?.listeners === 0
+      && snapshot?.live?.nodes === 0
+      && snapshot?.live?.params === 0
+    )
+    : snapshot?.live?.nodes >= 1;
+  if (
+    !liveCountsAreValid
+    || !liveBreakdownsAreValid
+    || !eventTotalsAreValid
+    || !lifecycleBalancesAreExact
+    || !persistentContextWitnessIsValid
+    || !checkpointGraphShapeIsValid
+    || snapshot?.unmatchedDestroyEvents !== 0
+    || snapshot?.malformedLifecycleEvents !== 0
+  ) {
+    throw new Error(
+      `${label} did not retain a complete, internally consistent CDP WebAudio lifecycle witness`,
+    );
+  }
+  return true;
+}
+
+const WEB_AUDIO_LIFECYCLE_METHODS = Object.freeze([
+  'WebAudio.contextCreated',
+  'WebAudio.contextWillBeDestroyed',
+  'WebAudio.contextChanged',
+  'WebAudio.audioListenerCreated',
+  'WebAudio.audioListenerWillBeDestroyed',
+  'WebAudio.audioNodeCreated',
+  'WebAudio.audioNodeWillBeDestroyed',
+  'WebAudio.audioParamCreated',
+  'WebAudio.audioParamWillBeDestroyed',
+  'WebAudio.nodesConnected',
+  'WebAudio.nodesDisconnected',
+  'WebAudio.nodeParamConnected',
+  'WebAudio.nodeParamDisconnected',
+]);
+
+function attachWebAudioLifecycleTracker(client) {
+  const tracker = createWebAudioLifecycleTracker();
+  const unsubscribe = WEB_AUDIO_LIFECYCLE_METHODS.map((method) => (
+    client.onNotification(method, (params) => tracker.handle(method, params))
+  ));
+  return Object.freeze({
+    snapshot: () => tracker.snapshot(),
+    detach: () => unsubscribe.forEach((remove) => remove()),
+  });
+}
+
+function parsePosixProcessTable(source) {
+  if (typeof source !== 'string') throw new TypeError('POSIX process table must be text');
+  const rows = [];
+  const lines = source.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (lines[index].trim().length === 0) continue;
+    const match = lines[index].match(/^\s*(\d+)\s+(\d+)\s+(-?\d+)(?:\s+(.*))?$/u);
+    if (match === null) {
+      throw new Error(`Invalid POSIX process table row at line ${index + 1}`);
+    }
+    const pid = Number(match[1]);
+    const parentPid = Number(match[2]);
+    const rssKibibytes = Number(match[3]);
+    if (
+      !Number.isSafeInteger(pid)
+      || pid <= 0
+      || !Number.isSafeInteger(parentPid)
+      || parentPid < 0
+      || !Number.isSafeInteger(rssKibibytes)
+      || rssKibibytes < 0
+      || !Number.isSafeInteger(rssKibibytes * 1_024)
+    ) {
+      throw new Error(`Invalid POSIX process table values at line ${index + 1}`);
+    }
+    rows.push({
+      pid,
+      parentPid,
+      rssBytes: rssKibibytes * 1_024,
+      command: match[4] ?? '',
+    });
+  }
+  return rows;
+}
+
+function parseWindowsProcessTable(source) {
+  if (typeof source !== 'string') throw new TypeError('Windows process table must be text');
+  let parsed;
+  try {
+    parsed = JSON.parse(source.replace(/^\uFEFF/u, ''));
+  } catch {
+    throw new Error('Invalid Windows process table JSON');
+  }
+  const entries = parsed === null ? [] : (Array.isArray(parsed) ? parsed : [parsed]);
+  return entries.map((entry, index) => {
+    const pid = Number(entry?.ProcessId);
+    const parentPid = Number(entry?.ParentProcessId);
+    const rssBytes = Number(entry?.WorkingSetSize);
+    if (
+      !Number.isSafeInteger(pid)
+      || pid <= 0
+      || !Number.isSafeInteger(parentPid)
+      || parentPid < 0
+      || !Number.isSafeInteger(rssBytes)
+      || rssBytes < 0
+    ) {
+      throw new Error(`Invalid Windows process table values at row ${index + 1}`);
+    }
+    return {
+      pid,
+      parentPid,
+      rssBytes,
+      command: typeof entry.CommandLine === 'string' ? entry.CommandLine : '',
+    };
+  });
+}
+
+function classifyElectronProcessRole(command, root = false) {
+  if (root) return 'browser';
+  const normalized = typeof command === 'string' ? command.toLowerCase() : '';
+  const typeMatch = normalized.match(/(?:^|\s)--type=([^\s]+)/u);
+  const type = typeMatch?.[1] ?? '';
+  if (type === 'renderer') return 'renderer';
+  if (type === 'gpu-process') return 'gpu';
+  if (type === 'utility') {
+    const utilityMatch = normalized.match(/(?:^|\s)--utility-sub-type=([^\s]+)/u);
+    if ((utilityMatch?.[1] ?? '').includes('audio')) return 'audio-service';
+    return 'utility';
+  }
+  if (
+    type === 'zygote'
+    || type === 'crashpad-handler'
+    || normalized.includes('crashpad_handler')
+    || normalized.includes('crashpad-handler')
+  ) return 'crashpad/zygote';
+  return 'other';
+}
+
+function aggregateElectronProcessTree(rows, rootPid, method) {
+  if (!Array.isArray(rows)) throw new TypeError('Process table rows must be an array');
+  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
+    throw new RangeError('Electron root PID must be a positive safe integer');
+  }
+  const byPid = new Map();
+  const childrenByParent = new Map();
+  for (const row of rows) {
+    if (
+      !Number.isSafeInteger(row?.pid)
+      || row.pid <= 0
+      || !Number.isSafeInteger(row?.parentPid)
+      || row.parentPid < 0
+      || !Number.isSafeInteger(row?.rssBytes)
+      || row.rssBytes < 0
+      || typeof row?.command !== 'string'
+      || byPid.has(row.pid)
+    ) {
+      throw new Error('Process table contains an invalid or duplicate row');
+    }
+    byPid.set(row.pid, row);
+    const children = childrenByParent.get(row.parentPid) ?? [];
+    children.push(row.pid);
+    childrenByParent.set(row.parentPid, children);
+  }
+  if (!byPid.has(rootPid)) throw new Error('Electron root process was absent from the process table');
+
+  const descendants = [];
+  const pending = [rootPid];
+  const seen = new Set();
+  while (pending.length > 0) {
+    const pid = pending.shift();
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    const row = byPid.get(pid);
+    if (row === undefined) continue;
+    descendants.push(row);
+    pending.push(...(childrenByParent.get(pid) ?? []));
+  }
+
+  const roleTotals = Object.fromEntries(ELECTRON_PROCESS_ROLES.map((role) => [role, {
+    role,
+    processCount: 0,
+    summedRssBytes: 0,
+  }]));
+  for (const row of descendants) {
+    const role = classifyElectronProcessRole(row.command, row.pid === rootPid);
+    roleTotals[role].processCount += 1;
+    roleTotals[role].summedRssBytes += row.rssBytes;
+  }
+  const summedRssBytes = descendants.reduce((sum, row) => sum + row.rssBytes, 0);
+  return {
+    scope: 'launched Electron root and descendants present in one process-table capture',
+    method,
+    completeness: 'best-effort point-in-time descendant tree; process churn may race capture',
+    rssInterpretation: 'summed RSS double-counts shared pages and is not unique physical memory',
+    processCount: descendants.length,
+    summedRssBytes,
+    roles: ELECTRON_PROCESS_ROLES.map((role) => roleTotals[role]),
+  };
+}
+
+function sanitizeRuntimeResourceCounts(resources) {
+  if (resources === null || typeof resources !== 'object' || Array.isArray(resources)) {
+    throw new Error('Resource shakedown requires performance telemetry resources');
+  }
+  const sanitized = {};
+  for (const [group, fields] of Object.entries(RESOURCE_COUNT_FIELDS)) {
+    const source = resources[group];
+    if (
+      source === null
+      || typeof source !== 'object'
+      || Array.isArray(source)
+      || Object.keys(source).sort().join(',') !== [...fields].sort().join(',')
+    ) {
+      throw new Error(`Resource telemetry has malformed or unexpected count group ${group}`);
+    }
+    sanitized[group] = {};
+    for (const field of fields) {
+      const value = source[field];
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`Resource telemetry has invalid count ${group}.${field}`);
+      }
+      sanitized[group][field] = value;
+    }
+  }
+  if (
+    resources.limits === null
+    || typeof resources.limits !== 'object'
+    || Array.isArray(resources.limits)
+    || Object.keys(resources.limits).sort().join(',') !== Object.keys(RESOURCE_LIMIT_FIELDS).sort().join(',')
+  ) {
+    throw new Error('Resource telemetry has malformed or unexpected limit groups');
+  }
+  sanitized.limits = {};
+  for (const [group, fields] of Object.entries(RESOURCE_LIMIT_FIELDS)) {
+    const source = resources.limits[group];
+    if (
+      source === null
+      || typeof source !== 'object'
+      || Array.isArray(source)
+      || Object.keys(source).sort().join(',') !== [...fields].sort().join(',')
+    ) {
+      throw new Error(`Resource telemetry has malformed or unexpected ${group} limits`);
+    }
+    sanitized.limits[group] = {};
+    for (const field of fields) {
+      const limit = source[field];
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new Error(`Resource telemetry has invalid limit ${group}.${field}`);
+      }
+      if (sanitized[group][field] > limit) {
+        throw new Error(
+          `Resource telemetry count ${group}.${field} exceeded its declared limit`,
+        );
+      }
+      sanitized.limits[group][field] = limit;
+    }
+  }
+  return sanitized;
+}
+
+function assertSettledResourcePendingDrained(resources, label) {
+  const requiredLabels = new Set([
+    'settled',
+    'forced-gc-1',
+    'forced-gc-2',
+    'post-save',
+  ]);
+  if (!requiredLabels.has(label)) return true;
+  const pending = resources?.pending;
+  const undrained = Object.entries(pending ?? {}).filter(([, value]) => value !== 0);
+  if (
+    pending === null
+    || typeof pending !== 'object'
+    || Array.isArray(pending)
+    || undrained.length > 0
+  ) {
+    throw new Error(
+      `Resource checkpoint ${label} retained pending work: `
+      + undrained.map(([field, value]) => `${field}=${value}`).join(', '),
+    );
+  }
+  return true;
+}
+
+function assertResourceCheckpointOrder(checkpoints) {
+  if (!Array.isArray(checkpoints)) throw new TypeError('Resource checkpoints must be an array');
+  const labels = checkpoints.map((checkpoint) => checkpoint?.label);
+  if (
+    labels.length !== RESOURCE_CHECKPOINT_LABELS.length
+    || labels.some((label, index) => label !== RESOURCE_CHECKPOINT_LABELS[index])
+  ) {
+    throw new Error(
+      `Resource checkpoint order must be ${RESOURCE_CHECKPOINT_LABELS.join(' -> ')}`,
+    );
+  }
+  return true;
+}
+
+function assertNoResourceInputContamination(input, label = 'resource checkpoint') {
+  const trusted = input?.trustedInputs;
+  const baseline = input?.baselineViewport;
+  const current = input?.currentViewport;
+  const numericViewportFields = [
+    'layoutWidth',
+    'layoutHeight',
+    'devicePixelRatio',
+    'visualWidth',
+    'visualHeight',
+    'visualScale',
+  ];
+  if (
+    !trusted
+    || !Number.isSafeInteger(trusted.total)
+    || trusted.total < 0
+    || !Number.isSafeInteger(trusted.blockingTotal)
+    || trusted.blockingTotal < 0
+    || !['wheel', 'pointerDown', 'pointerMove', 'pointerUp', 'key', 'touch']
+      .every((field) => Number.isSafeInteger(trusted[field]) && trusted[field] >= 0)
+    || trusted.blockingTotal !== (
+      trusted.wheel
+      + trusted.pointerDown
+      + trusted.pointerUp
+      + trusted.key
+      + trusted.touch
+    )
+    || trusted.total !== trusted.blockingTotal + trusted.pointerMove
+    || !Number.isSafeInteger(input?.viewportChangeEvents)
+    || input.viewportChangeEvents < 0
+    || baseline === null
+    || typeof baseline !== 'object'
+    || current === null
+    || typeof current !== 'object'
+  ) {
+    throw new Error(`${label} returned invalid input-contamination evidence`);
+  }
+  const viewportDriftFields = numericViewportFields.filter((field) => {
+    const left = baseline[field];
+    const right = current[field];
+    if (left === null || right === null) return left !== right;
+    return !Number.isFinite(left) || !Number.isFinite(right) || Math.abs(left - right) > 0.001;
+  });
+  if (
+    trusted.blockingTotal > 0
+    || input.viewportChangeEvents > 0
+    || viewportDriftFields.length > 0
+  ) {
+    throw new Error(
+      `${label} was contaminated by trusted input or viewport/zoom drift: `
+      + `trusted=${JSON.stringify(trusted)}, `
+      + `viewportChangeEvents=${input.viewportChangeEvents}, `
+      + `driftFields=${JSON.stringify(viewportDriftFields)}`,
+    );
+  }
+  return true;
+}
+
+function assertResourceShakedownCycle(cycle, route, expectedOrdinal) {
+  const expectedRegions = ['0:0', '0:-1', '0:0'];
+  const allowedModes = new Set(['foot', 'wading', 'skiff', 'camp']);
+  const distance = (left, right) => Math.hypot(left.x - right.x, left.y - right.y);
+  if (
+    cycle?.schema !== 'tideweft-resource-route-cycle/v1'
+    || cycle.reason !== 'complete'
+    || cycle.failure !== null
+    || cycle.ordinal !== expectedOrdinal
+    || !Number.isFinite(cycle.durationMs)
+    || cycle.durationMs <= 0
+    || !Number.isSafeInteger(cycle.startTick)
+    || !Number.isSafeInteger(cycle.endTick)
+    || cycle.endTick <= cycle.startTick
+    || !Number.isFinite(cycle.observedDistanceTiles)
+    || !Number.isFinite(cycle.maxObservedStepTiles)
+    || cycle.maxObservedStepTiles > RESOURCE_SHAKEDOWN_MAX_OBSERVED_STEP_TILES
+    || cycle.projectionMismatchCount !== 0
+    || cycle.discontinuityCount !== 0
+    || !Number.isSafeInteger(cycle.targetsIssued)
+    || cycle.targetsIssued < 4
+    || !Array.isArray(cycle.visitedRegionKeys)
+    || cycle.visitedRegionKeys.length !== expectedRegions.length
+    || cycle.visitedRegionKeys.some((key, index) => key !== expectedRegions[index])
+    || !Array.isArray(cycle.modesObserved)
+    || cycle.modesObserved.length === 0
+    || cycle.modesObserved.some((mode) => !allowedModes.has(mode))
+    || !cycle.start?.projectionConsistent
+    || !cycle.turn?.projectionConsistent
+    || !cycle.end?.projectionConsistent
+    || cycle.start?.canonicalRegion?.x !== 0
+    || cycle.start?.canonicalRegion?.y !== 0
+    || cycle.turn?.canonicalRegion?.x !== 0
+    || cycle.turn?.canonicalRegion?.y !== -1
+    || cycle.end?.canonicalRegion?.x !== 0
+    || cycle.end?.canonicalRegion?.y !== 0
+    || !Number.isFinite(route?.anchorGlobal?.x)
+    || !Number.isFinite(route?.anchorGlobal?.y)
+    || !Number.isFinite(route?.outboundGlobal?.x)
+    || !Number.isFinite(route?.outboundGlobal?.y)
+    || distance(cycle.start, route.anchorGlobal) > RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES
+    || distance(cycle.turn, route.outboundGlobal) > RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES
+    || distance(cycle.end, route.anchorGlobal) > RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES
+    || cycle.observedDistanceTiles < (
+      Math.abs(route.anchorGlobal.y - route.outboundGlobal.y) * 2
+      - RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES * 4
+    )
+  ) {
+    throw new Error(
+      `Resource shakedown cycle ${expectedOrdinal} did not complete the absolute `
+      + `0:0 -> 0:-1 -> 0:0 corridor: ${JSON.stringify(cycle)}`,
+    );
+  }
+  return true;
 }
 
 function metricsRecord(result) {
@@ -674,6 +1405,604 @@ async function browserPointInTime(client) {
   };
 }
 
+async function captureElectronProcessTree(rootPid) {
+  try {
+    if (process.platform === 'win32') {
+      const command = [
+        'Get-CimInstance Win32_Process',
+        '| Select-Object ProcessId,ParentProcessId,WorkingSetSize,CommandLine',
+        '| ConvertTo-Json -Compress',
+      ].join(' ');
+      const result = await execFileAsync('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        command,
+      ], { maxBuffer: 16 * 1_024 * 1_024 });
+      return aggregateElectronProcessTree(
+        parseWindowsProcessTable(result.stdout),
+        rootPid,
+        'Windows CIM process snapshot',
+      );
+    }
+    const result = await execFileAsync('ps', [
+      '-ww',
+      '-axo',
+      'pid=,ppid=,rss=,command=',
+    ], { maxBuffer: 16 * 1_024 * 1_024 });
+    return aggregateElectronProcessTree(
+      parsePosixProcessTable(result.stdout),
+      rootPid,
+      'POSIX ps point-in-time process snapshot',
+    );
+  } catch {
+    throw new Error(
+      `Could not capture a sanitized Electron descendant-process RSS snapshot on ${process.platform}`,
+    );
+  }
+}
+
+async function installResourceInputGuard(client) {
+  const evidence = await client.evaluate(`(() => {
+    const property = '__TIDEWEFT_RESOURCE_SHAKEDOWN_INPUT_GUARD__';
+    const prior = window[property];
+    if (prior && typeof prior.dispose === 'function') prior.dispose();
+    const trustedInputs = {
+      total: 0,
+      blockingTotal: 0,
+      wheel: 0,
+      pointerDown: 0,
+      pointerMove: 0,
+      pointerUp: 0,
+      key: 0,
+      touch: 0,
+    };
+    let viewportChangeEvents = 0;
+    const viewport = () => ({
+      layoutWidth: innerWidth,
+      layoutHeight: innerHeight,
+      devicePixelRatio,
+      visualWidth: visualViewport?.width ?? null,
+      visualHeight: visualViewport?.height ?? null,
+      visualScale: visualViewport?.scale ?? null,
+    });
+    let baselineViewport = viewport();
+    const listeners = [];
+    const listen = (target, type, callback) => {
+      target.addEventListener(type, callback, { capture: true, passive: true });
+      listeners.push(() => target.removeEventListener(type, callback, { capture: true }));
+    };
+    const trusted = (category, blocksEvidence = true) => (event) => {
+      if (!event.isTrusted) return;
+      trustedInputs.total += 1;
+      if (blocksEvidence) trustedInputs.blockingTotal += 1;
+      trustedInputs[category] += 1;
+    };
+    listen(window, 'wheel', trusted('wheel'));
+    listen(window, 'pointerdown', trusted('pointerDown'));
+    listen(window, 'pointermove', trusted('pointerMove', false));
+    listen(window, 'pointerup', trusted('pointerUp'));
+    listen(window, 'keydown', trusted('key'));
+    listen(window, 'keyup', trusted('key'));
+    listen(window, 'touchstart', trusted('touch'));
+    listen(window, 'touchmove', trusted('touch'));
+    listen(window, 'touchend', trusted('touch'));
+    listen(window, 'resize', () => { viewportChangeEvents += 1; });
+    if (visualViewport) {
+      listen(visualViewport, 'resize', () => { viewportChangeEvents += 1; });
+    }
+    const snapshot = () => ({
+      scope: 'count-only trusted browser input and viewport/zoom evidence from the stable packaged gameplay document through bootstrap and measurement',
+      trustedInputs: { ...trustedInputs },
+      viewportChangeEvents,
+      baselineViewport: { ...baselineViewport },
+      currentViewport: viewport(),
+    });
+    Object.defineProperty(window, property, {
+      configurable: true,
+      value: {
+        snapshot,
+        rebaseViewport: (expected) => {
+          const current = viewport();
+          const matchesExpected = expected
+            && current.layoutWidth === expected.width
+            && current.layoutHeight === expected.height
+            && Math.abs(current.devicePixelRatio - expected.deviceScaleFactor) < 0.001
+            && (current.visualScale === null || Math.abs(current.visualScale - 1) < 0.001);
+          if (trustedInputs.blockingTotal > 0 || !matchesExpected) {
+            return { ok: false, evidence: snapshot() };
+          }
+          baselineViewport = current;
+          viewportChangeEvents = 0;
+          return { ok: true, evidence: snapshot() };
+        },
+        dispose: () => listeners.splice(0).forEach((remove) => remove()),
+      },
+    });
+    return snapshot();
+  })()`);
+  assertNoResourceInputContamination(evidence, 'resource input-guard installation');
+  return evidence;
+}
+
+async function rebaseResourceInputGuardAfterViewport(client, viewport) {
+  const result = await client.evaluate(`(() => {
+    const guard = window.__TIDEWEFT_RESOURCE_SHAKEDOWN_INPUT_GUARD__;
+    if (typeof guard?.rebaseViewport !== 'function') return null;
+    return guard.rebaseViewport(${JSON.stringify(viewport)});
+  })()`);
+  if (!result?.ok) {
+    throw new Error(
+      'Resource shakedown received trusted input or zoom drift during controlled viewport setup: '
+      + JSON.stringify(result?.evidence ?? null),
+    );
+  }
+  assertNoResourceInputContamination(
+    result.evidence,
+    'resource input-guard viewport rebase',
+  );
+  return result.evidence;
+}
+
+function resourceMetricsRecord(metrics) {
+  return Object.fromEntries(RESOURCE_CDP_METRIC_NAMES.map((name) => [
+    name,
+    Number.isFinite(metrics[name]) ? metrics[name] : null,
+  ]));
+}
+
+async function resourceCheckpoint(client, rootPid, webAudioTracker, label) {
+  if (!RESOURCE_CHECKPOINT_LABELS.includes(label)) {
+    throw new Error(`Unknown resource checkpoint ${JSON.stringify(label)}`);
+  }
+  client.throwIfNotificationFailed();
+  const captureStartedAt = new Date().toISOString();
+  const [performanceResult, dom, heap, page, processTree] = await Promise.all([
+    client.call('Performance.getMetrics'),
+    client.call('Memory.getDOMCounters'),
+    client.call('Runtime.getHeapUsage'),
+    client.evaluate(`(() => {
+      const bridge = window.__TIDEWEFT__;
+      const telemetry = bridge.runtime.getPerformanceTelemetry();
+      const elements = [...document.getElementsByTagName('*')];
+      const tagCounts = {};
+      const classCounts = {};
+      for (const element of elements) {
+        const tag = element.tagName.toLowerCase();
+        tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+        for (const className of element.classList) {
+          classCounts[className] = (classCounts[className] ?? 0) + 1;
+        }
+      }
+      const ordered = (record) => Object.fromEntries(
+        Object.entries(record).sort(([left], [right]) => left.localeCompare(right)),
+      );
+      const guard = window.__TIDEWEFT_RESOURCE_SHAKEDOWN_INPUT_GUARD__;
+      return {
+        attachedDom: {
+          elementCount: elements.length,
+          byTag: ordered(tagCounts),
+          byClass: ordered(classCounts),
+        },
+        runtimeResources: telemetry?.resources ?? null,
+        lastSerializedSaveBytes: telemetry?.lastSerializedSaveBytes ?? null,
+        inputContamination: typeof guard?.snapshot === 'function' ? guard.snapshot() : null,
+      };
+    })()`),
+    captureElectronProcessTree(rootPid),
+  ]);
+  client.throwIfNotificationFailed();
+  if (
+    !Number.isSafeInteger(dom?.documents)
+    || dom.documents < 0
+    || !Number.isSafeInteger(dom?.nodes)
+    || dom.nodes < 0
+    || !Number.isSafeInteger(dom?.jsEventListeners)
+    || dom.jsEventListeners < 0
+    || !Number.isSafeInteger(page?.attachedDom?.elementCount)
+    || page.attachedDom.elementCount < 0
+  ) {
+    throw new Error(`Resource checkpoint ${label} returned invalid DOM counters`);
+  }
+  assertNoResourceInputContamination(page.inputContamination, `resource checkpoint ${label}`);
+  const runtimeResources = sanitizeRuntimeResourceCounts(page.runtimeResources);
+  assertSettledResourcePendingDrained(runtimeResources, label);
+  const performance = resourceMetricsRecord(metricsRecord(performanceResult));
+  const webAudio = webAudioTracker.snapshot();
+  assertWebAudioLifecycleEvidence(webAudio, label);
+  return {
+    label,
+    captureStartedAt,
+    captureFinishedAt: new Date().toISOString(),
+    processTree,
+    renderer: {
+      scope: 'renderer-process CDP point-in-time measurements',
+      performance,
+      heap,
+      dom: {
+        cdp: dom,
+        attached: page.attachedDom,
+        interpretation: 'CDP Nodes minus attached element count is not labeled or treated as detached nodes',
+      },
+      webAudio,
+      viewportAndInput: page.inputContamination,
+    },
+    runtimeResources,
+    lastSerializedSaveBytes: Number.isSafeInteger(page.lastSerializedSaveBytes)
+      && page.lastSerializedSaveBytes >= 0
+      ? page.lastSerializedSaveBytes
+      : null,
+  };
+}
+
+async function resourceRoutePlan(client) {
+  const anchor = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getRenderView();
+    const navigation = bridge.runtime.getUIView().navigation;
+    const origin = view.terrain.worldTileOrigin;
+    const tileSize = view.terrain.tileSize;
+    const position = view.player?.position;
+    if (!origin || !position || !navigation || !Number.isFinite(tileSize) || tileSize <= 0) {
+      return null;
+    }
+    return {
+      x: origin.x + position.x / tileSize,
+      y: origin.y + position.y / tileSize,
+      canonicalRegion: { x: navigation.regionX, y: navigation.regionY },
+      canonicalGlobal: { x: navigation.globalX, y: navigation.globalY },
+    };
+  })()`);
+  if (
+    !Number.isFinite(anchor?.x)
+    || !Number.isFinite(anchor?.y)
+    || anchor?.canonicalRegion?.x !== 0
+    || anchor?.canonicalRegion?.y !== 0
+    || Math.floor(anchor.x) !== anchor?.canonicalGlobal?.x
+    || Math.floor(anchor.y) !== anchor?.canonicalGlobal?.y
+  ) {
+    throw new Error(
+      `Resource shakedown seed did not begin at the absolute 0:0 corridor anchor: `
+      + JSON.stringify(anchor),
+    );
+  }
+  return {
+    scope: 'two complete ordinary-travel cycles through the absolute 0:0 <-> 0:-1 corridor',
+    cycles: RESOURCE_SHAKEDOWN_CYCLES,
+    anchorGlobal: { x: anchor.x, y: anchor.y },
+    outboundGlobal: { x: anchor.x, y: RESOURCE_SHAKEDOWN_OUTBOUND_GLOBAL_Y },
+    endpointToleranceTiles: RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES,
+    maximumObservedStepTiles: RESOURCE_SHAKEDOWN_MAX_OBSERVED_STEP_TILES,
+  };
+}
+
+async function runResourceTravelCycle(client, route, ordinal) {
+  const cycle = await client.evaluate(`new Promise((resolve) => {
+    const bridge = window.__TIDEWEFT__;
+    const route = ${JSON.stringify(route)};
+    const ordinal = ${JSON.stringify(ordinal)};
+    const tolerance = ${RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES};
+    const maximumStep = ${RESOURCE_SHAKEDOWN_MAX_OBSERVED_STEP_TILES};
+    const segmentTiles = 26;
+    const allowedModes = new Set(['foot', 'wading', 'skiff', 'camp']);
+    const startedAt = performance.now();
+    const startTick = bridge.runtime.getRenderView().tick;
+    let phase = 'outbound';
+    let issuedTarget = null;
+    let previous = null;
+    let start = null;
+    let turn = null;
+    let end = null;
+    let observedDistanceTiles = 0;
+    let maxObservedStepTiles = 0;
+    let projectionMismatchCount = 0;
+    let discontinuityCount = 0;
+    let targetsIssued = 0;
+    let settled = false;
+    let braceActive = false;
+    const visitedRegionKeys = [];
+    const modesObserved = [];
+    let timeoutTimer = null;
+
+    const position = () => {
+      const view = bridge.runtime.getRenderView();
+      const navigation = bridge.runtime.getUIView().navigation;
+      const origin = view.terrain.worldTileOrigin;
+      const tileSize = view.terrain.tileSize;
+      const player = view.player?.position;
+      if (
+        !origin || !navigation || !player || !Number.isFinite(tileSize) || tileSize <= 0
+        || !Number.isFinite(origin.x) || !Number.isFinite(origin.y)
+        || !Number.isFinite(player.x) || !Number.isFinite(player.y)
+      ) return null;
+      const x = origin.x + player.x / tileSize;
+      const y = origin.y + player.y / tileSize;
+      return {
+        x,
+        y,
+        localX: player.x,
+        localY: player.y,
+        tileSize,
+        columns: view.terrain.columns,
+        rows: view.terrain.rows,
+        worldTileOrigin: { x: origin.x, y: origin.y },
+        canonicalRegion: { x: navigation.regionX, y: navigation.regionY },
+        canonicalGlobal: { x: navigation.globalX, y: navigation.globalY },
+        projectionConsistent: Math.floor(x) === navigation.globalX
+          && Math.floor(y) === navigation.globalY,
+        mode: view.player.mode,
+      };
+    };
+
+    const finish = (reason, finalPosition, failure = null) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutTimer !== null) clearTimeout(timeoutTimer);
+      if (braceActive) bridge.runtime.dispatchRenderer({ type: 'brace', active: false });
+      bridge.runtime.stop();
+      end = finalPosition ?? position();
+      const result = {
+        schema: 'tideweft-resource-route-cycle/v1',
+        ordinal,
+        reason,
+        failure,
+        durationMs: performance.now() - startedAt,
+        startTick,
+        endTick: bridge.runtime.getRenderView().tick,
+        start,
+        turn,
+        end,
+        observedDistanceTiles,
+        maxObservedStepTiles,
+        projectionMismatchCount,
+        discontinuityCount,
+        targetsIssued,
+        visitedRegionKeys,
+        modesObserved,
+      };
+      bridge.renderer.setActive(false);
+      bridge.ui.stop();
+      resolve(result);
+    };
+
+    const observe = () => {
+      const current = position();
+      if (current === null) return null;
+      if (start === null) start = current;
+      if (!current.projectionConsistent) projectionMismatchCount += 1;
+      if (!modesObserved.includes(current.mode)) modesObserved.push(current.mode);
+      const key = current.canonicalRegion.x + ':' + current.canonicalRegion.y;
+      if (visitedRegionKeys.at(-1) !== key) visitedRegionKeys.push(key);
+      const shouldBrace = current.mode === 'wading' || current.mode === 'skiff';
+      if (braceActive !== shouldBrace) {
+        braceActive = shouldBrace;
+        bridge.runtime.dispatchRenderer({ type: 'brace', active: shouldBrace });
+      }
+      if (previous !== null) {
+        const step = Math.hypot(current.x - previous.x, current.y - previous.y);
+        if (Number.isFinite(step)) {
+          observedDistanceTiles += step;
+          maxObservedStepTiles = Math.max(maxObservedStepTiles, step);
+          if (step > maximumStep) discontinuityCount += 1;
+        }
+      }
+      previous = current;
+      return current;
+    };
+
+    const destination = () => phase === 'outbound'
+      ? route.outboundGlobal
+      : route.anchorGlobal;
+    const atDestination = (current, target) => (
+      Math.hypot(current.x - target.x, current.y - target.y) <= tolerance
+    );
+    const targetReached = (current) => issuedTarget === null
+      || Math.hypot(current.x - issuedTarget.x, current.y - issuedTarget.y) <= tolerance;
+    const issueTarget = (current, target) => {
+      const deltaY = target.y - current.y;
+      const direction = Math.sign(deltaY);
+      let distanceTiles = 0;
+      let targetLocalY = (target.y - current.worldTileOrigin.y) * current.tileSize;
+      let targetGlobalY = target.y;
+      if (Math.abs(deltaY) > tolerance) {
+        const safeEdge = direction > 0
+          ? (current.rows - 1.5) * current.tileSize
+          : 1.5 * current.tileSize;
+        const availableTiles = direction > 0
+          ? Math.max(0, (safeEdge - current.localY) / current.tileSize)
+          : Math.max(0, (current.localY - safeEdge) / current.tileSize);
+        if (availableTiles < 0.5) {
+          issuedTarget = null;
+          return true;
+        }
+        distanceTiles = Math.min(Math.abs(deltaY), segmentTiles, availableTiles);
+        targetLocalY = current.localY + direction * distanceTiles * current.tileSize;
+        targetGlobalY = current.y + direction * distanceTiles;
+      }
+      const desiredLocalX = (target.x - current.worldTileOrigin.x) * current.tileSize;
+      const minimumLocalX = 1.5 * current.tileSize;
+      const maximumLocalX = (current.columns - 1.5) * current.tileSize;
+      if (
+        (distanceTiles > 0 && distanceTiles < 0.25)
+        || !Number.isFinite(desiredLocalX)
+        || desiredLocalX < minimumLocalX
+        || desiredLocalX > maximumLocalX
+        || !Number.isFinite(targetLocalY)
+      ) return false;
+      issuedTarget = { x: target.x, y: targetGlobalY };
+      targetsIssued += 1;
+      bridge.runtime.dispatchRenderer({
+        type: 'move-target',
+        point: { x: desiredLocalX, y: targetLocalY },
+        additive: false,
+      });
+      return true;
+    };
+
+    const sample = () => {
+      if (settled) return;
+      const current = observe();
+      if (current === null) {
+        finish('invalid-position', null, { phase });
+        return;
+      }
+      if (!allowedModes.has(current.mode)) {
+        finish('invalid-mode', current, { phase, mode: current.mode });
+        return;
+      }
+      const target = destination();
+      if (atDestination(current, target)) {
+        if (phase === 'outbound') {
+          turn = current;
+          phase = 'return';
+          issuedTarget = null;
+        } else {
+          finish('complete', current);
+          return;
+        }
+      }
+      if (targetReached(current) && !issueTarget(current, destination())) {
+        finish('target-dispatch-failed', current, { phase });
+        return;
+      }
+      requestAnimationFrame(sample);
+    };
+
+    bridge.renderer.setActive(true);
+    bridge.ui.start();
+    bridge.runtime.start();
+    timeoutTimer = setTimeout(() => {
+      finish('cycle-timeout', position(), {
+        phase,
+        targetOutstanding: issuedTarget !== null,
+      });
+    }, ${RESOURCE_SHAKEDOWN_CYCLE_TIMEOUT_MS});
+    requestAnimationFrame(sample);
+  })`, RESOURCE_SHAKEDOWN_CYCLE_TIMEOUT_MS + CDP_CALL_TIMEOUT_MS);
+  assertResourceShakedownCycle(cycle, route, ordinal);
+  return cycle;
+}
+
+async function forceRendererGarbageCollection(client, ordinal) {
+  const startedAt = new Date().toISOString();
+  const monotonicStart = performance.now();
+  try {
+    await client.call('HeapProfiler.collectGarbage');
+  } catch {
+    throw new Error(
+      `Renderer forced-GC request ${ordinal} was unavailable; resource shakedown refuses unforced evidence`,
+    );
+  }
+  return {
+    ordinal,
+    scope: 'CDP HeapProfiler.collectGarbage in the renderer V8 isolate only',
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    requestDurationMs: performance.now() - monotonicStart,
+  };
+}
+
+async function measureResourceShakedown(client, scenario, rootPid, webAudioTracker) {
+  await requirePerformanceInstrumentation(client, scenario);
+  const controlledWarmupFrames = await warmTargetRenderer(client, scenario, true);
+  await preparePerformanceInstrumentation(client, scenario);
+  const route = await resourceRoutePlan(client);
+  const checkpoints = [];
+  const cycles = [];
+  const forcedGarbageCollections = [];
+
+  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'pre'));
+  cycles.push(await runResourceTravelCycle(client, route, 1));
+  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'half'));
+  cycles.push(await runResourceTravelCycle(client, route, 2));
+  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'post'));
+
+  await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_SETTLE_MS));
+  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'settled'));
+
+  try {
+    await client.call('HeapProfiler.enable');
+  } catch {
+    throw new Error(
+      'Renderer HeapProfiler domain was unavailable; resource shakedown refuses unforced evidence',
+    );
+  }
+  try {
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 1));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'forced-gc-1',
+    ));
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 2));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'forced-gc-2',
+    ));
+  } finally {
+    await client.call('HeapProfiler.disable').catch(() => undefined);
+  }
+
+  const saveSample = await client.evaluate(`(async () => {
+    const bridge = window.__TIDEWEFT__;
+    const startedAt = performance.now();
+    await bridge.runtime.save();
+    const finishedAt = performance.now();
+    const telemetry = bridge.runtime.getPerformanceTelemetry();
+    return {
+      endToEndMs: finishedAt - startedAt,
+      serializedBytes: telemetry.lastSerializedSaveBytes,
+      synchronousSnapshot: telemetry.saveSnapshot,
+    };
+  })()`);
+  if (
+    !Number.isFinite(saveSample?.endToEndMs)
+    || saveSample.endToEndMs < 0
+    || !Number.isSafeInteger(saveSample?.serializedBytes)
+    || saveSample.serializedBytes <= 0
+    || !Number.isSafeInteger(saveSample?.synchronousSnapshot?.totalCount)
+    || saveSample.synchronousSnapshot.totalCount < 1
+  ) {
+    throw new Error(`Resource shakedown did not produce a valid save: ${JSON.stringify(saveSample)}`);
+  }
+  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'post-save'));
+  assertResourceCheckpointOrder(checkpoints);
+  return {
+    schema: 'tideweft-performance-resource-shakedown-measurement/v1',
+    id: scenario.id,
+    label: scenario.label,
+    seed: scenario.seed,
+    mode: scenario.mode,
+    viewport: scenario.viewport,
+    controlledWarmupFrames,
+    route,
+    cycles,
+    settle: {
+      durationMs: RESOURCE_SHAKEDOWN_SETTLE_MS,
+      scope: 'runtime, renderer, and UI loops remained stopped',
+    },
+    forcedGarbageCollections,
+    saveSample,
+    checkpoints,
+    interpretation: {
+      scope: 'bounded two-cycle instrumentation shakedown, not a prolonged soak or leak-freedom proof',
+      forcedGc: 'renderer V8 only; Electron browser, GPU, audio, and utility processes were not forced',
+      rss: 'summed descendant RSS double-counts shared pages and is not unique physical memory',
+      dom: 'CDP Nodes and attached element counts are independent observations; their difference is not called detached nodes',
+      webAudio: 'CDP lifecycle observations are diagnostic and enabling the domain may add instrumentation overhead',
+      runtimeResources: 'primitive counts cover selected exposed retained owners only; they are not an exhaustive inventory of process-wide retention',
+      terrainRegistry: 'registered terrain-generator and job counts exclude generators or jobs retained solely by external closures and are not exhaustive process-wide terrain-retention evidence',
+      saveBytes: 'UTF-8 byte length of the serialized world JSON payload, not total storage-record or on-disk bytes',
+      pointInTimeNoise: 'DOM and heap checkpoint calls are concurrent diagnostic observations; the page-side attached-element inventory allocates temporary observation records',
+    },
+  };
+}
+
 async function requirePerformanceInstrumentation(client, scenario) {
   const missing = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
@@ -732,8 +2061,8 @@ async function preparePerformanceInstrumentation(client, scenario) {
   }
 }
 
-async function warmTargetRenderer(client, scenario) {
-  await setViewport(client, scenario.viewport);
+async function warmTargetRenderer(client, scenario, viewportAlreadyPrepared = false) {
+  if (!viewportAlreadyPrepared) await setViewport(client, scenario.viewport);
   const warmup = await client.evaluate(`new Promise((resolve) => {
     const bridge = window.__TIDEWEFT__;
     const requestedMode = ${JSON.stringify(scenario.mode)};
@@ -1836,6 +3165,17 @@ async function bootstrapWorld(client, seed) {
   };
 }
 
+async function waitForStablePackagedGameplayDocument(client) {
+  return client.waitFor(`Boolean(
+    location.protocol === 'app:'
+    && location.hostname === 'bundle'
+    && window.__TIDEWEFT__?.runtime
+    && window.__TIDEWEFT__?.renderer
+    && window.__TIDEWEFT__?.ui
+    && document.querySelector('#game-ui .ui-layer')?.getAttribute('data-ready') === 'true'
+  )`);
+}
+
 function waitForChildExit(child, timeoutMs) {
   if (childExited(child)) return Promise.resolve(true);
   return new Promise((resolve) => {
@@ -1874,7 +3214,13 @@ function appendBoundedOutput(current, chunk) {
   return (current + chunk).slice(-MAX_CHILD_OUTPUT_CHARACTERS);
 }
 
-async function runIsolatedScenario(executable, scenario, sampleMs, traceHitches) {
+async function runIsolatedScenario(
+  executable,
+  scenario,
+  sampleMs,
+  traceHitches,
+  resourceShakedown = false,
+) {
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
   const childState = { spawnError: null };
@@ -1893,6 +3239,7 @@ async function runIsolatedScenario(executable, scenario, sampleMs, traceHitches)
   let childOutput = '';
   let completed = false;
   let client = null;
+  let webAudioTracker = null;
   let signalCount = 0;
   const interrupt = () => {
     signalCount += 1;
@@ -1926,15 +3273,40 @@ async function runIsolatedScenario(executable, scenario, sampleMs, traceHitches)
     const page = await waitForPage(port, child, childState);
     client = new CdpClient(page.webSocketDebuggerUrl);
     await client.open();
+    if (resourceShakedown) {
+      // CDP discovery can observe the final app:// URL before its first
+      // renderer document has finished initializing. Wait for that stable
+      // gameplay document so the guard cannot be lost with the startup
+      // execution context before controlled viewport setup or bootstrap.
+      await waitForStablePackagedGameplayDocument(client);
+      await installResourceInputGuard(client);
+      webAudioTracker = attachWebAudioLifecycleTracker(client);
+      try {
+        await client.call('WebAudio.enable');
+      } catch {
+        throw new Error(
+          'CDP WebAudio lifecycle instrumentation was unavailable; resource shakedown cannot continue',
+        );
+      }
+      await setViewport(client, scenario.viewport);
+      await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
+    }
     const bootstrap = await bootstrapWorld(client, scenario.seed);
-    const measurement = await measureScenario(
-      client,
-      scenario,
-      scenario.minimumSampleMs === undefined
-        ? sampleMs
-        : Math.max(sampleMs, scenario.minimumSampleMs),
-      traceHitches,
-    );
+    const measurement = resourceShakedown
+      ? await measureResourceShakedown(
+        client,
+        scenario,
+        child.pid,
+        webAudioTracker,
+      )
+      : await measureScenario(
+        client,
+        scenario,
+        scenario.minimumSampleMs === undefined
+          ? sampleMs
+          : Math.max(sampleMs, scenario.minimumSampleMs),
+        traceHitches,
+      );
     completed = true;
     return { bootstrap, measurement };
   } catch (error) {
@@ -1946,6 +3318,10 @@ async function runIsolatedScenario(executable, scenario, sampleMs, traceHitches)
     throw failure;
   } finally {
     try {
+      if (resourceShakedown && client !== null && !client.closed) {
+        await client.call('WebAudio.disable').catch(() => undefined);
+      }
+      webAudioTracker?.detach();
       if (client !== null && !client.closed && !childExited(child)) {
         await client.call('Browser.close', {}, 2_000).catch(() => undefined);
         await waitForChildExit(child, PROCESS_SHUTDOWN_TIMEOUT_MS);
@@ -2071,9 +3447,19 @@ async function main() {
       },
     },
   ];
-  const selectedScenarios = options.scenarioId.length === 0
-    ? scenarios
-    : scenarios.filter(({ id }) => id === options.scenarioId);
+  const resourceScenario = {
+    id: 'repeated-region-resource-shakedown-relief',
+    label: 'Two-cycle absolute 0:0 <-> 0:-1 resource shakedown — desktop Relief 3D',
+    seed: RESOURCE_SHAKEDOWN_WORLD_SEED,
+    worldGroup: 'repeated-region-resource-shakedown',
+    mode: 'relief-3d',
+    viewport: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
+  };
+  const selectedScenarios = options.resourceShakedown
+    ? [resourceScenario]
+    : options.scenarioId.length === 0
+      ? scenarios
+      : scenarios.filter(({ id }) => id === options.scenarioId);
   if (selectedScenarios.length === 0) {
     throw new Error(
       `Unknown --scenario ${JSON.stringify(options.scenarioId)}. Expected one of: `
@@ -2100,6 +3486,7 @@ async function main() {
       scenario,
       options.sampleMs,
       options.traceHitches,
+      options.resourceShakedown,
     );
     const packagedAfterScenario = await executableIdentity(executable);
     if (JSON.stringify(packagedAfterScenario) !== packagedIdentityJson) {
@@ -2137,17 +3524,8 @@ async function main() {
     measurements.push(isolated.measurement);
   }
 
-  const result = {
-    schema: 'tideweft-performance-baseline/v2',
+  const commonResult = {
     capturedAt: new Date().toISOString(),
-    captureScope: {
-      kind: selectedScenarios.length === scenarios.length
-        ? 'complete-baseline'
-        : 'partial-diagnostic',
-      complete: selectedScenarios.length === scenarios.length,
-      expectedScenarioIds: scenarios.map(({ id }) => id),
-      selectedScenarioIds: selectedScenarios.map(({ id }) => id),
-    },
     repositoryAtCapture: await repositoryAtCapture(),
     host: {
       platform: process.platform,
@@ -2167,7 +3545,6 @@ async function main() {
     },
     packagedExecutable: packagedIdentity,
     profilerHarness,
-    requestedSampleWindowMs: options.sampleMs,
     controlledRendererWarmupFrames: TARGET_RENDERER_WARMUP_FRAMES,
     identity: canonicalBootstrap.identity,
     worlds: Object.fromEntries(worldGroups),
@@ -2179,21 +3556,59 @@ async function main() {
         residualLimitation: 'the private fixed-step accumulator phase is intentionally neither inspected nor mutated',
       },
     },
+  };
+  const result = options.resourceShakedown ? {
+    schema: 'tideweft-performance-resource-shakedown/v1',
+    ...commonResult,
+    captureScope: {
+      kind: 'resource-shakedown',
+      complete: true,
+      expectedScenarioIds: [resourceScenario.id],
+      selectedScenarioIds: [resourceScenario.id],
+    },
+    instrumentation: {
+      checkpoints: RESOURCE_CHECKPOINT_LABELS,
+      cycles: RESOURCE_SHAKEDOWN_CYCLES,
+      processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
+      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
+      runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
+    },
+    measurements,
+  } : {
+    schema: 'tideweft-performance-baseline/v2',
+    ...commonResult,
+    captureScope: {
+      kind: selectedScenarios.length === scenarios.length
+        ? 'complete-baseline'
+        : 'partial-diagnostic',
+      complete: selectedScenarios.length === scenarios.length,
+      expectedScenarioIds: scenarios.map(({ id }) => id),
+      selectedScenarioIds: selectedScenarios.map(({ id }) => id),
+    },
+    requestedSampleWindowMs: options.sampleMs,
     measurements,
   };
   if (options.traceHitches) result.hitchTraceEnabled = true;
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
-  process.stdout.write(
-    `${result.captureScope.complete ? 'Complete performance baseline' : 'Partial performance diagnostic'} `
-    + `written to ${options.output}\n`,
-  );
-  for (const measurement of measurements) {
+  if (options.resourceShakedown) {
+    process.stdout.write(`Resource shakedown written to ${options.output}\n`);
     process.stdout.write(
-      `${measurement.id}: ${measurement.frameSample.rendererCadence.averageFps.toFixed(2)} renderer FPS average; `
-      + `${measurement.frameSample.rendererCadence.p99IntervalEquivalentFps.toFixed(2)} FPS p99-gap equivalent; `
-      + `${measurement.frameSample.rendererCadence.worstIntervalMs.toFixed(1)} ms worst renderer gap\n`,
+      `${measurements[0].id}: ${measurements[0].cycles.length} complete corridor cycles; `
+      + `${measurements[0].checkpoints.length} resource checkpoints\n`,
     );
+  } else {
+    process.stdout.write(
+      `${result.captureScope.complete ? 'Complete performance baseline' : 'Partial performance diagnostic'} `
+      + `written to ${options.output}\n`,
+    );
+    for (const measurement of measurements) {
+      process.stdout.write(
+        `${measurement.id}: ${measurement.frameSample.rendererCadence.averageFps.toFixed(2)} renderer FPS average; `
+        + `${measurement.frameSample.rendererCadence.p99IntervalEquivalentFps.toFixed(2)} FPS p99-gap equivalent; `
+        + `${measurement.frameSample.rendererCadence.worstIntervalMs.toFixed(1)} ms worst renderer gap\n`,
+      );
+    }
   }
 }
 
@@ -2207,11 +3622,28 @@ if (require.main === module) {
 }
 
 module.exports = {
+  CdpClient,
+  ELECTRON_PROCESS_ROLES,
   HITCH_TRACE_RECORD_CAPACITY,
   HITCH_TRACE_SNAPSHOT_CAPACITY,
   HITCH_TRACE_THRESHOLD_MS,
+  RESOURCE_CHECKPOINT_LABELS,
+  RESOURCE_SHAKEDOWN_CYCLES,
+  aggregateElectronProcessTree,
+  assertNoResourceInputContamination,
+  assertResourceCheckpointOrder,
+  assertResourceShakedownCycle,
+  assertSettledResourcePendingDrained,
+  assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  classifyElectronProcessRole,
+  createWebAudioLifecycleTracker,
+  forceRendererGarbageCollection,
   hitchSnapshotReasons,
+  parseArguments,
+  parsePosixProcessTable,
+  parseWindowsProcessTable,
   retainBoundedHitchGap,
   retainBoundedHitchSnapshot,
+  sanitizeRuntimeResourceCounts,
 };

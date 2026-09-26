@@ -8,6 +8,7 @@ import { FIXED_POINT } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_POLAR_SHORE_DERIVATION_KIND,
+  CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_POLAR_SHORE_HABITAT_OWNER_ID,
   CORE_ECOLOGY_POLAR_SHORE_MAXIMUM_ANCHORS,
   CORE_ECOLOGY_POLAR_SHORE_MAXIMUM_POPULATION,
@@ -16,6 +17,7 @@ import {
   canonicalCoreEcologyPolarShoreHabitatForWorld,
   canonicalizeCoreEcologyPolarShoreHabitat,
   clearCoreEcologyPolarShoreHabitatCache,
+  coreEcologyPolarShoreHabitatCacheDiagnostics,
   deriveCoreEcologyPolarShoreHabitat,
   deriveCoreEcologyPolarShoreTerritory,
   type CoreEcologyPolarShoreHabitat,
@@ -72,6 +74,12 @@ function derive(
 describe(`${ALPHA34_POLAR_SHORE_SHARED_INVARIANTS_OWNER_INTENT} habitat authority`, () => {
   it("is deterministic, caller-order independent, and bound to canonical terrain", () => {
     clearCoreEcologyPolarShoreHabitatCache();
+    const emptyDiagnostics = coreEcologyPolarShoreHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     const region = createRegionCoord(-37, 12);
     const terrain = generateRegionTerrain(SEED, region);
     const first = deriveCoreEcologyPolarShoreHabitat({ seed: SEED, region });
@@ -92,6 +100,10 @@ describe(`${ALPHA34_POLAR_SHORE_SHARED_INVARIANTS_OWNER_INTENT} habitat authorit
     expect(
       canonicalCoreEcologyPolarShoreHabitatForWorld(first, SEED, region),
     ).toBe(first);
+    expect(coreEcologyPolarShoreHabitatCacheDiagnostics()).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT,
+    });
   });
 
   it("keeps absence honest and admits only cold saline shores with a refuge and tidal edge", () => {

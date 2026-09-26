@@ -8,10 +8,12 @@ import { stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_POLAR_CONSUMER_BEAR_DENSITY_THRESHOLD,
   CORE_ECOLOGY_POLAR_CONSUMER_DERIVATION_KIND,
+  CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_OWNER_ID,
   canonicalCoreEcologyPolarConsumerHabitatForWorld,
   canonicalizeCoreEcologyPolarConsumerHabitat,
   clearCoreEcologyPolarConsumerHabitatCache,
+  coreEcologyPolarConsumerHabitatCacheDiagnostics,
   deriveCoreEcologyPolarConsumerHabitat,
   deriveCoreEcologyPolarConsumerTerritory,
   type CoreEcologyPolarConsumerHabitat,
@@ -55,6 +57,12 @@ function representativeCorpus() {
 describe(`${ALPHA36_POLAR_CONSUMER_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} habitat`, () => {
   it("replays canonical terrain and exposes the fixed two-species dependency order", () => {
     clearCoreEcologyPolarConsumerHabitatCache();
+    const emptyDiagnostics = coreEcologyPolarConsumerHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     const terrain = generateRegionTerrain(OCCUPIED_SEED, OCCUPIED_REGION);
     const first = deriveCoreEcologyPolarConsumerHabitat({
       seed: OCCUPIED_SEED,
@@ -83,6 +91,10 @@ describe(`${ALPHA36_POLAR_CONSUMER_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} habit
         OCCUPIED_REGION,
       ),
     ).toBe(first);
+    expect(coreEcologyPolarConsumerHabitatCacheDiagnostics()).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT,
+    });
   });
 
   it("admits a seal only from exact capelin, water, and dry-haulout evidence, then applies the rarer bear gate", () => {

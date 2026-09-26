@@ -4,6 +4,46 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.59 — 2026-09-23
+
+Build: `0.3.3-alpha.59` · Gameplay contract: 51 · Tutorial: 69
+
+The Breathing Room Alpha 59 internal build adds selected count-only retained-owner instrumentation and an opt-in packaged two-cycle travel shakedown.
+
+### Gameplay
+
+- Seamless regional travel keeps the same deterministic habitat, population, identity, mortality, routine, actor-presence, physical-custody, and save outcomes as Alpha 58.
+- Resource observations are passive developer evidence only. They never feed back into simulation decisions, culling, ecology, movement, visibility, or player knowledge.
+
+### Fixes
+
+- The packaged runtime can now report deeply frozen count-only snapshots for selected loaded, active, durable, cache, and pending-work owners; their exact declared hard limits; and the most recent explicitly measured serialized world-payload bytes.
+- An opt-in packaged-app shakedown repeats one ordinary signed-region out-and-back route twice, records passive pointer movement as hover evidence, rejects accidental interaction-bearing input or zoom contamination, then records point-in-time DOM and renderer heap, WebAudio lifecycle, best-effort launched-root descendant-tree summed RSS, forced renderer-GC, and post-save checkpoints.
+- Runtime terrain-prefetch admission now enforces its declared nine-job bound before a new job factory can register shared pending work.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset; no wildlife, habitat, weather, traversal, mortality, custody, difficulty, density, eviction, or cleanup rule changes in this observational slice.
+- This build adds no species, resources, cargo, reward, health, mortality, companion, settlement, or Living Voice behavior.
+
+### Interface
+
+- Field Manual version 69 records the internal long-run instrumentation boundary and keeps diagnostic evidence separate from playable behavior.
+- No player HUD, gameplay, visual, control, desktop, mobile, or accessibility behavior changes in this slice.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, habitat derivation hashes, and wildlife actor schema/version 1 remain unchanged.
+- Resource telemetry contains only transient primitive counts and limits, performs no save serialization merely to answer a query, and never enters the authoritative save envelope.
+
+### Known limitations
+
+- A two-cycle resource shakedown can reveal an immediate signal or hard-bound violation among the selected owners, but it cannot establish exhaustive process retention, a memory plateau, leak freedom, prolonged-soak acceptance, ordinary unforced-GC behavior, or Directive 04\_1B closure.
+- Registered terrain-generator counters cover only entries still owned by the bounded global registry; live external generator or prefetch closures may retain evicted entries and are intentionally outside those counters.
+- Descendant-tree RSS is a best-effort point-in-time process snapshot: shared pages are double-counted and process churn can race capture.
+- The instrumentation itself does not repair the player-reported once-per-second hitch; quiet-host travel timing, prolonged soak, cumulative validation, and the release checkpoint remain open.
+- Alpha 59 is an unpublished local ordinary slice until a separately authorized release checkpoint is pushed and verified. Living Voice remains blocked until Breathing Room closes.
+
 ## 0.3.3-alpha.58 — 2026-09-23
 
 Build: `0.3.3-alpha.58` · Gameplay contract: 51 · Tutorial: 68

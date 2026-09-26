@@ -8,6 +8,7 @@ import { CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH } from "./coreEcologyHabitat";
 import {
   CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS,
   CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+  CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID,
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_COHORT_ID,
   CORE_ECOLOGY_ESTUARY_SURFACE_BREAK_SPECIES,
@@ -19,6 +20,7 @@ import {
   canonicalCoreEcologyBreadthHabitatForWorld,
   canonicalizeCoreEcologyBreadthHabitat,
   clearCoreEcologyBreadthHabitatCache,
+  coreEcologyBreadthHabitatCacheDiagnostics,
   coreEcologyBreadthTerrainPreparationDiagnostics,
   coreEcologyBreadthCohortsThroughEpoch,
   deriveCoreEcologyBreadthTerritory,
@@ -106,6 +108,13 @@ function admittedBySpecies(habitats: readonly CoreEcologyBreadthHabitat[]) {
 
 describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} append-only habitat authority`, () => {
   it("replays canonical terrain independent of evaluation order and binds authority to its world", () => {
+    clearCoreEcologyBreadthHabitatCache();
+    const emptyDiagnostics = coreEcologyBreadthHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     const region = createRegionCoord(-4_194_301, 3_671_113);
     const terrain = generateRegionTerrain(SEED, region);
     const first = deriveCoreEcologyBreadthHabitat({
@@ -132,9 +141,19 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
     );
     expect(canonicalizeCoreEcologyBreadthHabitat(first)).toBe(first);
     expect(canonicalCoreEcologyBreadthHabitatForWorld(first, SEED, region)).toBe(first);
+    const populatedDiagnostics = coreEcologyBreadthHabitatCacheDiagnostics();
+    expect(populatedDiagnostics).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT,
+    });
+    expect(coreEcologyBreadthHabitatCacheDiagnostics()).toEqual(populatedDiagnostics);
     expect(
       canonicalCoreEcologyBreadthHabitatForWorld(first, FOREIGN_SEED, region),
     ).toBeNull();
+    expect(coreEcologyBreadthHabitatCacheDiagnostics()).toEqual({
+      entryCount: 2,
+      capacity: CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT,
+    });
   });
 
   it("shares one bounded common-terrain preparation while projecting every cohort independently", () => {

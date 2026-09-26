@@ -44,6 +44,12 @@ export const CORE_ECOLOGY_POLAR_CONSUMER_SPECIES = Object.freeze([
   "polar-bear",
 ] as const);
 export const CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT = 128 as const;
+
+export interface CoreEcologyPolarConsumerHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_POLAR_CONSUMER_TERRITORY_SPAN_REGIONS = 2 as const;
 export const CORE_ECOLOGY_POLAR_CONSUMER_MAXIMUM_FORAGE_DISTANCE_TILES =
   64 as const;
@@ -631,6 +637,15 @@ function cacheHabitat(
 
 export function clearCoreEcologyPolarConsumerHabitatCache(): void {
   HABITAT_CACHE.clear();
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyPolarConsumerHabitatCacheDiagnostics():
+  CoreEcologyPolarConsumerHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_POLAR_CONSUMER_HABITAT_CACHE_LIMIT,
+  });
 }
 
 export function deriveCoreEcologyPolarConsumerHabitat(

@@ -8,11 +8,13 @@ import { hashCanonical, stableStringify } from "../sim/util";
 import { deriveCoreEcologyRegionalHabitat } from "./coreEcologyRegionalHabitat";
 import {
   CORE_ECOLOGY_ALPINE_DERIVATION_KIND,
+  CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_ALPINE_HABITAT_OWNER_ID,
   CORE_ECOLOGY_ALPINE_SPECIES,
   canonicalCoreEcologyAlpineHabitatForWorld,
   canonicalizeCoreEcologyAlpineHabitat,
   clearCoreEcologyAlpineHabitatCache,
+  coreEcologyAlpineHabitatCacheDiagnostics,
   deriveCoreEcologyAlpineHabitat,
   deriveCoreEcologyAlpineTerritory,
   type CoreEcologyAlpineHabitat,
@@ -55,6 +57,12 @@ function derive(entry: Readonly<{ readonly seedText: string; readonly x: number;
 describe(`${ALPHA33_ALPINE_SHARED_INVARIANTS_OWNER_INTENT} Wave-F Alpine habitat authority`, () => {
   it("is append-owned, deterministic, caller-order independent, and bound to canonical Alpha-32 terrain facts", () => {
     clearCoreEcologyAlpineHabitatCache();
+    const emptyDiagnostics = coreEcologyAlpineHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     const region = createRegionCoord(-37, 12);
     const terrain = generateRegionTerrain(SEED, region);
     const reversedTerrain = {
@@ -87,6 +95,10 @@ describe(`${ALPHA33_ALPINE_SHARED_INVARIANTS_OWNER_INTENT} Wave-F Alpine habitat
     expect(Object.isFrozen(first)).toBe(true);
     expect(canonicalizeCoreEcologyAlpineHabitat(first)).toBe(first);
     expect(canonicalCoreEcologyAlpineHabitatForWorld(first, SEED, region)).toBe(first);
+    expect(coreEcologyAlpineHabitatCacheDiagnostics()).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_ALPINE_HABITAT_CACHE_LIMIT,
+    });
 
     expect(() => deriveCoreEcologyAlpineHabitat({
       seed: SEED,

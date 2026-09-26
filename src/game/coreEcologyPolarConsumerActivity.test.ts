@@ -10,6 +10,8 @@ import {
 } from "./coreEcologyActivityAuthority";
 import { deriveCoreEcologyPolarConsumerHabitat } from "./coreEcologyPolarConsumerHabitat";
 import {
+  CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+  coreEcologyPolarConsumerActivityCacheDiagnostics,
   isTrustedCoreEcologyPolarConsumerActivityAuthority,
   projectCoreEcologyPolarConsumerActivityAuthority,
 } from "./coreEcologyPolarConsumerActivity";
@@ -39,6 +41,10 @@ function fixture() {
 
 describe(`${ALPHA36_POLAR_CONSUMER_ACTIVITY_AUTHORITY_OWNER_INTENT} shared shore-water authority`, () => {
   it("reuses one bounded amphibious archetype over exact water and haulout anchors", () => {
+    const beforeDiagnostics = coreEcologyPolarConsumerActivityCacheDiagnostics();
+    expect(Object.isFrozen(beforeDiagnostics)).toBe(true);
+    expect(beforeDiagnostics.capacity)
+      .toBe(CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT);
     const { patch, seal } = fixture();
     const materialized = setCoreEcologyAggregatePatchMaterializedActors(patch, {
       atTick: patch.updatedAtTick,
@@ -56,6 +62,15 @@ describe(`${ALPHA36_POLAR_CONSUMER_ACTIVITY_AUTHORITY_OWNER_INTENT} shared shore
     });
     expect(authority).not.toBeNull();
     expect(replay).toBe(authority);
+    const populatedDiagnostics = coreEcologyPolarConsumerActivityCacheDiagnostics();
+    expect(populatedDiagnostics.entryCount).toBeGreaterThan(0);
+    expect(populatedDiagnostics.entryCount).toBeLessThanOrEqual(
+      CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+    );
+    expect(populatedDiagnostics.entryCount).toBeGreaterThanOrEqual(
+      beforeDiagnostics.entryCount,
+    );
+    expect(Object.isFrozen(populatedDiagnostics)).toBe(true);
     expect(isTrustedCoreEcologyPolarConsumerActivityAuthority(authority)).toBe(true);
     expect(authority).toMatchObject({
       sourceKey: patch.patchKey,

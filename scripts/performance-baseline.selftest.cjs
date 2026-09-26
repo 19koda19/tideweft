@@ -3,13 +3,30 @@
 const assert = require('node:assert/strict');
 
 const {
+  CdpClient,
+  ELECTRON_PROCESS_ROLES,
   HITCH_TRACE_RECORD_CAPACITY,
   HITCH_TRACE_SNAPSHOT_CAPACITY,
   HITCH_TRACE_THRESHOLD_MS,
+  RESOURCE_CHECKPOINT_LABELS,
+  RESOURCE_SHAKEDOWN_CYCLES,
+  aggregateElectronProcessTree,
+  assertNoResourceInputContamination,
+  assertResourceCheckpointOrder,
+  assertResourceShakedownCycle,
+  assertSettledResourcePendingDrained,
+  assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  classifyElectronProcessRole,
+  createWebAudioLifecycleTracker,
+  forceRendererGarbageCollection,
   hitchSnapshotReasons,
+  parseArguments,
+  parsePosixProcessTable,
+  parseWindowsProcessTable,
   retainBoundedHitchGap,
   retainBoundedHitchSnapshot,
+  sanitizeRuntimeResourceCounts,
 } = require('./performance-baseline.cjs');
 
 function witness({
@@ -168,4 +185,569 @@ assert.throws(
 assert.throws(() => buildHitchDelta({}, {}), TypeError);
 assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeError);
 
-process.stdout.write('performance baseline hitch tracing self-test passed\n');
+{
+  const normal = parseArguments([]);
+  assert.equal(normal.resourceShakedown, false);
+  assert.match(normal.output, /runtime-baseline-[^/]+\.json$/u);
+  const resource = parseArguments(['--resource-shakedown']);
+  assert.equal(resource.resourceShakedown, true);
+  assert.equal(resource.scenarioId, '');
+  assert.equal(resource.traceHitches, false);
+  assert.match(resource.output, /resource-shakedown-[^/]+\.json$/u);
+  assert.throws(
+    () => parseArguments(['--resource-shakedown', '--scenario=x']),
+    /cannot be combined with --scenario/u,
+  );
+  assert.throws(
+    () => parseArguments(['--resource-shakedown', '--trace-hitches']),
+    /cannot be combined with --trace-hitches/u,
+  );
+  assert.throws(
+    () => parseArguments(['--resource-shakedown', '--sample-ms=1000']),
+    /cannot be combined with --sample-ms/u,
+  );
+}
+
+{
+  const client = Object.create(CdpClient.prototype);
+  client.notificationListeners = new Map();
+  client.notificationError = null;
+  const observed = [];
+  const remove = client.onNotification('WebAudio.contextCreated', (params) => {
+    observed.push(params.count);
+  });
+  client.dispatchNotification('WebAudio.contextCreated', { count: 1 });
+  remove();
+  client.dispatchNotification('WebAudio.contextCreated', { count: 2 });
+  assert.deepEqual(observed, [1]);
+  assert.equal(client.notificationListeners.size, 0);
+  assert.doesNotThrow(() => client.throwIfNotificationFailed());
+
+  client.onNotification('WebAudio.contextCreated', () => {
+    throw new Error('secret notification contents');
+  });
+  client.dispatchNotification('WebAudio.contextCreated', { secret: 'not retained' });
+  assert.throws(
+    () => client.throwIfNotificationFailed(),
+    /CDP notification handler failed for WebAudio\.contextCreated/u,
+  );
+  assert.doesNotMatch(client.notificationError.message, /secret notification|not retained/u);
+}
+
+{
+  const processSource = [
+    '100 1 10000 /Applications/Tideweft.app/Contents/MacOS/Tideweft --private-root-argument',
+    '101 100 20000 /private/renderer --type=renderer --secret=do-not-serialize',
+    '102 100 30000 /private/gpu --type=gpu-process',
+    '103 100 40000 /private/utility --type=utility --utility-sub-type=audio.mojom.AudioService',
+    '104 100 50000 /private/utility --type=utility --utility-sub-type=network.mojom.NetworkService',
+    '105 100 60000 /private/zygote --type=zygote',
+    '106 101 70000 /private/other-child --type=renderer',
+    '999 1 99999 /private/unrelated --type=renderer --secret=unrelated',
+  ].join('\n');
+  const aggregate = aggregateElectronProcessTree(
+    parsePosixProcessTable(processSource),
+    100,
+    'self-test',
+  );
+  assert.equal(aggregate.processCount, 7);
+  assert.equal(aggregate.summedRssBytes, 280_000 * 1_024);
+  assert.deepEqual(aggregate.roles.map(({ role }) => role), ELECTRON_PROCESS_ROLES);
+  assert.deepEqual(
+    aggregate.roles.find(({ role }) => role === 'renderer'),
+    { role: 'renderer', processCount: 2, summedRssBytes: 90_000 * 1_024 },
+  );
+  assert.deepEqual(
+    aggregate.roles.find(({ role }) => role === 'audio-service'),
+    { role: 'audio-service', processCount: 1, summedRssBytes: 40_000 * 1_024 },
+  );
+  const serialized = JSON.stringify(aggregate);
+  assert.doesNotMatch(serialized, /Applications|private|--type|secret|do-not-serialize/u);
+  assert.equal(classifyElectronProcessRole('--type=renderer'), 'renderer');
+  assert.equal(
+    classifyElectronProcessRole('--type=utility --utility-sub-type=audio.mojom.AudioService'),
+    'audio-service',
+  );
+  assert.equal(classifyElectronProcessRole('--type=mystery'), 'other');
+
+  let unsafeError;
+  try {
+    parsePosixProcessTable('101 100 -1 /private/secret-command');
+  } catch (error) {
+    unsafeError = error;
+  }
+  assert.ok(unsafeError instanceof Error);
+  assert.doesNotMatch(unsafeError.message, /private|secret-command/u);
+}
+
+{
+  const rows = parseWindowsProcessTable(JSON.stringify([
+    {
+      ProcessId: 200,
+      ParentProcessId: 1,
+      WorkingSetSize: 1_000,
+      CommandLine: 'C:\\private\\Tideweft.exe --private-root-argument',
+    },
+    {
+      ProcessId: 201,
+      ParentProcessId: 200,
+      WorkingSetSize: 2_000,
+      CommandLine: 'C:\\private\\Tideweft.exe --type=renderer --secret=value',
+    },
+  ]));
+  const aggregate = aggregateElectronProcessTree(rows, 200, 'windows-self-test');
+  assert.equal(aggregate.processCount, 2);
+  assert.equal(aggregate.summedRssBytes, 3_000);
+  assert.doesNotMatch(JSON.stringify(aggregate), /private|Tideweft\.exe|--type|secret=value/u);
+  assert.throws(
+    () => parseWindowsProcessTable(JSON.stringify({
+      ProcessId: 1,
+      ParentProcessId: 0,
+      WorkingSetSize: -1,
+      CommandLine: 'C:\\private\\secret-command.exe',
+    })),
+    /Invalid Windows process table values at row 1/u,
+  );
+}
+
+{
+  const tracker = createWebAudioLifecycleTracker();
+  tracker.handle('WebAudio.contextCreated', {
+    context: {
+      contextId: 'context-secret-id',
+      contextType: 'realtime',
+      contextState: 'suspended',
+    },
+  });
+  tracker.handle('WebAudio.contextChanged', {
+    context: {
+      contextId: 'context-secret-id',
+      contextType: 'realtime',
+      contextState: 'running',
+    },
+  });
+  tracker.handle('WebAudio.audioListenerCreated', {
+    listener: { listenerId: 'listener-secret-id' },
+  });
+  tracker.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'node-secret-id', nodeType: 'Gain' },
+  });
+  tracker.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'node-secret-id', nodeType: 'Gain' },
+  });
+  tracker.handle('WebAudio.audioParamCreated', {
+    param: { paramId: 'param-secret-id' },
+  });
+  tracker.handle('WebAudio.nodesConnected', {});
+  tracker.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'unknown-id' });
+  let snapshot = tracker.snapshot();
+  assert.deepEqual(snapshot.live, {
+    contexts: 1,
+    listeners: 1,
+    nodes: 1,
+    params: 1,
+    contextsByType: { realtime: 1 },
+    contextsByState: { running: 1 },
+    nodesByType: { Gain: 1 },
+  });
+  assert.equal(snapshot.eventTotals['WebAudio.audioNodeCreated'], 2);
+  assert.equal(snapshot.eventTotals['WebAudio.nodesConnected'], 1);
+  assert.equal(snapshot.unmatchedDestroyEvents, 1);
+  assert.equal(snapshot.malformedLifecycleEvents, 0);
+  assert.doesNotMatch(JSON.stringify(snapshot), /secret-id|unknown-id/u);
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(snapshot),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  tracker.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'node-secret-id' });
+  tracker.handle('WebAudio.audioParamWillBeDestroyed', { paramId: 'param-secret-id' });
+  tracker.handle('WebAudio.audioListenerWillBeDestroyed', { listenerId: 'listener-secret-id' });
+  tracker.handle('WebAudio.contextWillBeDestroyed', { contextId: 'context-secret-id' });
+  snapshot = tracker.snapshot();
+  assert.equal(snapshot.live.contexts, 0);
+  assert.equal(snapshot.live.listeners, 0);
+  assert.equal(snapshot.live.nodes, 0);
+  assert.equal(snapshot.live.params, 0);
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(snapshot),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  const healthy = createWebAudioLifecycleTracker();
+  healthy.handle('WebAudio.contextCreated', {
+    context: { contextId: 'healthy-context', contextType: 'realtime', contextState: 'running' },
+  });
+  healthy.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'healthy-node', nodeType: 'Gain' },
+  });
+  assert.equal(assertWebAudioLifecycleEvidence(healthy.snapshot()), true);
+  for (const label of ['forced-gc-1', 'forced-gc-2', 'post-save']) {
+    assert.throws(
+      () => assertWebAudioLifecycleEvidence(healthy.snapshot(), label),
+      /complete, internally consistent CDP WebAudio lifecycle witness/u,
+    );
+  }
+
+  const collected = createWebAudioLifecycleTracker();
+  collected.handle('WebAudio.contextCreated', {
+    context: { contextId: 'collected-context', contextType: 'realtime', contextState: 'running' },
+  });
+  collected.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'collected-node', nodeType: 'Oscillator' },
+  });
+  collected.handle('WebAudio.audioParamCreated', {
+    param: { paramId: 'collected-param' },
+  });
+  collected.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'collected-node' });
+  collected.handle('WebAudio.audioParamWillBeDestroyed', { paramId: 'collected-param' });
+  const collectedSnapshot = collected.snapshot();
+  for (const label of ['resource checkpoint', 'pre', 'half', 'post', 'settled']) {
+    assert.throws(
+      () => assertWebAudioLifecycleEvidence(collectedSnapshot, label),
+      /complete, internally consistent CDP WebAudio lifecycle witness/u,
+    );
+  }
+  for (const label of ['forced-gc-1', 'forced-gc-2', 'post-save']) {
+    assert.equal(assertWebAudioLifecycleEvidence(collectedSnapshot, label), true);
+  }
+  const malformed = createWebAudioLifecycleTracker();
+  malformed.handle('WebAudio.contextCreated', { context: {} });
+  malformed.handle('WebAudio.audioNodeCreated', { node: {} });
+  const malformedSnapshot = malformed.snapshot();
+  assert.equal(malformedSnapshot.malformedLifecycleEvents, 2);
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(malformedSnapshot),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  const invalidCollectedSnapshot = structuredClone(collectedSnapshot);
+  invalidCollectedSnapshot.live.nodes = -1;
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(invalidCollectedSnapshot, 'forced-gc-2'),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  for (const mutate of [
+    (candidate) => { delete candidate.eventTotals['WebAudio.audioNodeWillBeDestroyed']; },
+    (candidate) => { delete candidate.eventTotals['WebAudio.audioParamWillBeDestroyed']; },
+    (candidate) => {
+      candidate.live.params = 1;
+      delete candidate.eventTotals['WebAudio.audioParamWillBeDestroyed'];
+    },
+    (candidate) => { candidate.live.contexts = 0; candidate.live.contextsByType = {}; candidate.live.contextsByState = {}; },
+    (candidate) => { candidate.unmatchedDestroyEvents = 1; },
+    (candidate) => { candidate.malformedLifecycleEvents = 1; },
+  ]) {
+    const candidate = structuredClone(collectedSnapshot);
+    mutate(candidate);
+    assert.throws(
+      () => assertWebAudioLifecycleEvidence(candidate, 'post-save'),
+      /complete, internally consistent CDP WebAudio lifecycle witness/u,
+    );
+  }
+
+  const retainedListener = createWebAudioLifecycleTracker();
+  retainedListener.handle('WebAudio.contextCreated', {
+    context: { contextId: 'listener-context', contextType: 'realtime', contextState: 'running' },
+  });
+  retainedListener.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'listener-node', nodeType: 'Gain' },
+  });
+  retainedListener.handle('WebAudio.audioListenerCreated', {
+    listener: { listenerId: 'retained-listener' },
+  });
+  retainedListener.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'listener-node' });
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(retainedListener.snapshot(), 'forced-gc-1'),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  const recreatedContext = createWebAudioLifecycleTracker();
+  recreatedContext.handle('WebAudio.contextCreated', {
+    context: { contextId: 'old-context', contextType: 'realtime', contextState: 'running' },
+  });
+  recreatedContext.handle('WebAudio.contextWillBeDestroyed', { contextId: 'old-context' });
+  recreatedContext.handle('WebAudio.contextCreated', {
+    context: { contextId: 'new-context', contextType: 'realtime', contextState: 'running' },
+  });
+  recreatedContext.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'new-node', nodeType: 'Gain' },
+  });
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(recreatedContext.snapshot(), 'pre'),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  const duplicateNode = createWebAudioLifecycleTracker();
+  duplicateNode.handle('WebAudio.contextCreated', {
+    context: { contextId: 'duplicate-context', contextType: 'realtime', contextState: 'running' },
+  });
+  duplicateNode.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'duplicate-node', nodeType: 'Gain' },
+  });
+  duplicateNode.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'duplicate-node', nodeType: 'Gain' },
+  });
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(duplicateNode.snapshot(), 'pre'),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+
+  const unknownContextChange = createWebAudioLifecycleTracker();
+  unknownContextChange.handle('WebAudio.contextCreated', {
+    context: { contextId: 'known-context', contextType: 'realtime', contextState: 'running' },
+  });
+  unknownContextChange.handle('WebAudio.contextChanged', {
+    context: { contextId: 'unknown-context', contextType: 'realtime', contextState: 'running' },
+  });
+  unknownContextChange.handle('WebAudio.audioNodeCreated', {
+    node: { nodeId: 'known-node', nodeType: 'Gain' },
+  });
+  assert.throws(
+    () => assertWebAudioLifecycleEvidence(unknownContextChange.snapshot(), 'pre'),
+    /complete, internally consistent CDP WebAudio lifecycle witness/u,
+  );
+}
+
+function resourceCountsFixture() {
+  const regions = {
+    loadedTerrainRegions: 9,
+    activeEcologyRegions: 9,
+    durableTerrainRegionRecords: 3,
+    durableEcologyRegionRecords: 3,
+    chartedRegionRecords: 3,
+    inactiveCargoRegionWorlds: 1,
+  };
+  const caches = {
+    regionTerrainValues: 9,
+    registeredTerrainGeneratorSeeds: 2,
+    registeredTerrainGeneratorRegions: 12,
+    outdoorIlluminationFields: 3,
+    regionalHabitats: 24,
+    alpineHabitats: 24,
+    polarShoreHabitats: 24,
+    coldShoreHabitats: 24,
+    polarConsumerHabitats: 24,
+    breadthHabitats: 24,
+    runtimeCompatibilityHabitats: 24,
+    alpineRidgeAuthorities: 24,
+    polarConsumerAuthorities: 24,
+    activityAuthorityReceipts: 128,
+    breadthPreparationSlots: 1,
+  };
+  const pending = {
+    runtimeTerrainPrefetchJobs: 0,
+    registeredTerrainPrefetchJobs: 0,
+    queuedCommands: 0,
+    queuedSaveSnapshots: 0,
+    saveWaiters: 0,
+    activeSaveWorkers: 0,
+  };
+  return {
+    regions,
+    caches,
+    pending,
+    limits: {
+      regions: {
+        loadedTerrainRegions: 9,
+        activeEcologyRegions: 9,
+        durableTerrainRegionRecords: 131_072,
+        durableEcologyRegionRecords: 294_912,
+        chartedRegionRecords: 131_072,
+        inactiveCargoRegionWorlds: 131_071,
+      },
+      caches: {
+        regionTerrainValues: 9,
+        registeredTerrainGeneratorSeeds: 2,
+        registeredTerrainGeneratorRegions: 24,
+        outdoorIlluminationFields: 4,
+        regionalHabitats: 128,
+        alpineHabitats: 128,
+        polarShoreHabitats: 128,
+        coldShoreHabitats: 128,
+        polarConsumerHabitats: 128,
+        breadthHabitats: 128,
+        runtimeCompatibilityHabitats: 264,
+        alpineRidgeAuthorities: 64,
+        polarConsumerAuthorities: 64,
+        activityAuthorityReceipts: 128,
+        breadthPreparationSlots: 1,
+      },
+      pending: {
+        runtimeTerrainPrefetchJobs: 8,
+        queuedSaveSnapshots: 1,
+        activeSaveWorkers: 1,
+      },
+    },
+  };
+}
+
+{
+  const fixture = resourceCountsFixture();
+  const sanitized = sanitizeRuntimeResourceCounts({ ...fixture, ignoredSecret: 'not retained' });
+  assert.deepEqual(sanitized, fixture);
+  assert.doesNotMatch(JSON.stringify(sanitized), /ignoredSecret/u);
+  assert.equal(assertSettledResourcePendingDrained(sanitized, 'settled'), true);
+  const pendingAtHalf = resourceCountsFixture();
+  pendingAtHalf.pending.queuedCommands = 1;
+  assert.equal(assertSettledResourcePendingDrained(pendingAtHalf, 'half'), true);
+  assert.throws(
+    () => assertSettledResourcePendingDrained(pendingAtHalf, 'forced-gc-1'),
+    /retained pending work: queuedCommands=1/u,
+  );
+  const exceeded = resourceCountsFixture();
+  exceeded.caches.regionTerrainValues = 10;
+  assert.throws(
+    () => sanitizeRuntimeResourceCounts(exceeded),
+    /exceeded its declared limit/u,
+  );
+  const unexpectedLimit = resourceCountsFixture();
+  unexpectedLimit.limits.pending.unboundedInventedLimit = 99;
+  assert.throws(
+    () => sanitizeRuntimeResourceCounts(unexpectedLimit),
+    /malformed or unexpected pending limits/u,
+  );
+  const unexpectedCount = resourceCountsFixture();
+  unexpectedCount.caches.untrackedOwner = 1;
+  assert.throws(
+    () => sanitizeRuntimeResourceCounts(unexpectedCount),
+    /malformed or unexpected count group caches/u,
+  );
+}
+
+function cleanInputEvidence() {
+  const viewport = {
+    layoutWidth: 1440,
+    layoutHeight: 900,
+    devicePixelRatio: 1,
+    visualWidth: 1440,
+    visualHeight: 900,
+    visualScale: 1,
+  };
+  return {
+    trustedInputs: {
+      total: 0,
+      blockingTotal: 0,
+      wheel: 0,
+      pointerDown: 0,
+      pointerMove: 0,
+      pointerUp: 0,
+      key: 0,
+      touch: 0,
+    },
+    viewportChangeEvents: 0,
+    baselineViewport: { ...viewport },
+    currentViewport: { ...viewport },
+  };
+}
+
+{
+  assert.equal(assertNoResourceInputContamination(cleanInputEvidence()), true);
+  const trusted = cleanInputEvidence();
+  trusted.trustedInputs.total = 1;
+  trusted.trustedInputs.blockingTotal = 1;
+  trusted.trustedInputs.wheel = 1;
+  assert.throws(
+    () => assertNoResourceInputContamination(trusted),
+    /contaminated by trusted input/u,
+  );
+  const passiveHover = cleanInputEvidence();
+  passiveHover.trustedInputs.total = 4;
+  passiveHover.trustedInputs.pointerMove = 4;
+  assert.equal(assertNoResourceInputContamination(passiveHover), true);
+  const zoomed = cleanInputEvidence();
+  zoomed.currentViewport.visualScale = 1.25;
+  assert.throws(
+    () => assertNoResourceInputContamination(zoomed),
+    /viewport\/zoom drift/u,
+  );
+}
+
+{
+  assert.equal(RESOURCE_SHAKEDOWN_CYCLES, 2);
+  assert.deepEqual(RESOURCE_CHECKPOINT_LABELS, [
+    'pre',
+    'half',
+    'post',
+    'settled',
+    'forced-gc-1',
+    'forced-gc-2',
+    'post-save',
+  ]);
+  assert.equal(
+    assertResourceCheckpointOrder(RESOURCE_CHECKPOINT_LABELS.map((label) => ({ label }))),
+    true,
+  );
+  assert.throws(
+    () => assertResourceCheckpointOrder([
+      ...RESOURCE_CHECKPOINT_LABELS.slice(0, 3).map((label) => ({ label })),
+      { label: 'forced-gc-1' },
+      { label: 'settled' },
+      ...RESOURCE_CHECKPOINT_LABELS.slice(5).map((label) => ({ label })),
+    ]),
+    /Resource checkpoint order must be/u,
+  );
+
+  const route = {
+    anchorGlobal: { x: 76.5, y: 27.5 },
+    outboundGlobal: { x: 76.5, y: -8 },
+  };
+  const position = (x, y, regionY) => ({
+    x,
+    y,
+    canonicalRegion: { x: 0, y: regionY },
+    projectionConsistent: true,
+  });
+  const cycle = {
+    schema: 'tideweft-resource-route-cycle/v1',
+    ordinal: 1,
+    reason: 'complete',
+    failure: null,
+    durationMs: 100_000,
+    startTick: 10,
+    endTick: 50,
+    start: position(76.5, 27.5, 0),
+    turn: position(76.5, -8, -1),
+    end: position(76.5, 27.5, 0),
+    observedDistanceTiles: 71,
+    maxObservedStepTiles: 1,
+    projectionMismatchCount: 0,
+    discontinuityCount: 0,
+    targetsIssued: 4,
+    visitedRegionKeys: ['0:0', '0:-1', '0:0'],
+    modesObserved: ['foot', 'wading'],
+  };
+  assert.equal(assertResourceShakedownCycle(cycle, route, 1), true);
+  assert.throws(
+    () => assertResourceShakedownCycle({
+      ...cycle,
+      visitedRegionKeys: ['0:0', '0:1', '0:0'],
+    }, route, 1),
+    /absolute 0:0 -> 0:-1 -> 0:0 corridor/u,
+  );
+  assert.throws(
+    () => assertResourceShakedownCycle({ ...cycle, maxObservedStepTiles: 4.01 }, route, 1),
+    /absolute 0:0 -> 0:-1 -> 0:0 corridor/u,
+  );
+}
+
+(async () => {
+  const calls = [];
+  const collected = await forceRendererGarbageCollection({
+    call: async (method) => { calls.push(method); },
+  }, 1);
+  assert.deepEqual(calls, ['HeapProfiler.collectGarbage']);
+  assert.equal(collected.ordinal, 1);
+  assert.match(collected.scope, /renderer V8 isolate only/u);
+  await assert.rejects(
+    forceRendererGarbageCollection({
+      call: async () => { throw new Error('unsupported'); },
+    }, 2),
+    /refuses unforced evidence/u,
+  );
+  process.stdout.write('performance baseline and resource shakedown self-test passed\n');
+})().catch((error) => {
+  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+  process.exitCode = 1;
+});

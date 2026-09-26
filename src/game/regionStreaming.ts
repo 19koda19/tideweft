@@ -84,12 +84,66 @@ export interface TerrainRegionPrefetchJob {
   readonly cancel: () => void;
 }
 
+/**
+ * Lazily admit one ephemeral terrain job without allowing its factory to
+ * register work after the runtime queue has reached its declared capacity.
+ * The factory boundary matters because creating a job also registers it in
+ * the shared terrain-generator entry.
+ */
+export function admitTerrainRegionPrefetchJob(
+  jobs: TerrainRegionPrefetchJob[],
+  capacity: number,
+  createJob: () => TerrainRegionPrefetchJob,
+): boolean {
+  if (!Number.isSafeInteger(capacity) || capacity < 0) {
+    throw new RangeError("Terrain prefetch capacity must be a nonnegative safe integer");
+  }
+  if (jobs.length >= capacity) return false;
+  const job = createJob();
+  if (job.complete) return false;
+  jobs.push(job);
+  return true;
+}
+
 interface TerrainGeneratorCacheEntry {
   readonly seed: RootSeed;
   readonly source: RegionTerrainBundleSource;
   readonly regionCache: Map<string, GeneratedStreamRegion<TerrainState>>;
   readonly pending: Map<string, TerrainRegionPrefetchJob>;
   readonly generator: RegionStreamGenerator<TerrainState>;
+}
+
+export interface TerrainRegionStreamingCacheDiagnostics {
+  readonly registeredSeedEntryCount: number;
+  readonly registeredSeedCapacity: number;
+  readonly registeredCachedRegionCount: number;
+  readonly registeredCachedRegionCapacity: number;
+  readonly registeredPendingJobCount: number;
+}
+
+/**
+ * Count-only observation of derived terrain work still owned by the bounded
+ * global registry. Generator and prefetch closures may outlive registry
+ * eviction, so these counts deliberately do not claim process-wide retained
+ * terrain ownership. Reading this snapshot never creates a seed entry,
+ * promotes LRU state, or advances pending generation.
+ */
+export function terrainRegionStreamingCacheDiagnostics():
+  TerrainRegionStreamingCacheDiagnostics {
+  let cachedRegionCount = 0;
+  let pendingJobCount = 0;
+  for (const entry of TERRAIN_GENERATORS.values()) {
+    cachedRegionCount += entry.regionCache.size;
+    pendingJobCount += entry.pending.size;
+  }
+  return Object.freeze({
+    registeredSeedEntryCount: TERRAIN_GENERATORS.size,
+    registeredSeedCapacity: TERRAIN_GENERATOR_SEED_CACHE_LIMIT,
+    registeredCachedRegionCount: cachedRegionCount,
+    registeredCachedRegionCapacity:
+      TERRAIN_GENERATOR_SEED_CACHE_LIMIT * TERRAIN_GENERATOR_REGION_CACHE_LIMIT,
+    registeredPendingJobCount: pendingJobCount,
+  });
 }
 
 export interface LoadedRegion<T> {

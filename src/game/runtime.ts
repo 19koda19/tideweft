@@ -26,6 +26,7 @@ import {
   findTilePath,
   MAX_TIDE_LEVEL,
 } from "../sim/terrain";
+import { regionTerrainCacheDiagnostics } from "../sim/regionTerrain";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
   stableDogId,
@@ -171,6 +172,7 @@ import {
 import {
   buildOutdoorIlluminationField,
   buildWorldPerceptionCells,
+  outdoorIlluminationFieldCacheDiagnostics,
   type OutdoorIlluminationField,
 } from "./outdoorIllumination";
 import {
@@ -212,6 +214,7 @@ import {
   sampleLooseCargoRegionalNeighborhood,
 } from "./looseCargoRuntime";
 import {
+  PHYSICAL_CARGO_MAX_INACTIVE_WORLDS,
   adoptPhysicalCargoStateV1,
   commitPhysicalCargoRegionalMutation,
   commitPhysicalCargoState,
@@ -272,6 +275,7 @@ import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
 } from "./regionalTravel";
+import { REGIONAL_CARTOGRAPHY_MAX_REGIONS } from "./regionalCartography";
 import {
   createRegionalWorldView,
   isImmutableRegionalWorldView,
@@ -304,8 +308,10 @@ import {
 } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
 import {
+  admitTerrainRegionPrefetchJob,
   createTerrainRegionPrefetchJob,
   desiredRegionCoords,
+  terrainRegionStreamingCacheDiagnostics,
   type TerrainRegionPrefetchJob,
 } from "./regionStreaming";
 import { regionalWayknotContextAt } from "./regionalWayknots";
@@ -390,14 +396,32 @@ import {
   advanceRegionalEcologyRoot,
   createPristineRegionalEcologyRoot,
   putRegionalEcologyResidentDeviation,
+  REGIONAL_ECOLOGY_MAX_REGIONS,
   type RegionalEcologyRootV1,
 } from "./regionalEcology";
+import { REGIONAL_ALPINE_ECOLOGY_MAX_REGIONS } from "./regionalAlpineEcology";
+import { REGIONAL_POLAR_SHORE_ECOLOGY_MAX_REGIONS } from "./regionalPolarShoreEcology";
+import { REGIONAL_COLD_SHORE_ECOLOGY_MAX_REGIONS } from "./regionalColdShoreEcology";
+import { REGIONAL_POLAR_CONSUMER_ECOLOGY_MAX_REGIONS } from "./regionalPolarConsumerEcology";
+import { REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS } from "./regionalBreadthEcology";
+import { REGION_MANIFEST_MAX_REGIONS } from "./regionManifest";
 import {
   canonicalCoreEcologyRegionalResidentPatchForRoot,
   createCoreEcologyRegionalResidentPatchForRoot,
 } from "./regionalEcologyResidents";
-import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
-import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH } from "./coreEcologyBreadthHabitat";
+import {
+  CORE_ECOLOGY_DOMESTIC_SPECIES,
+  coreEcologyRegionalHabitatCacheDiagnostics,
+} from "./coreEcologyRegionalHabitat";
+import {
+  CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+  coreEcologyBreadthHabitatCacheDiagnostics,
+  coreEcologyBreadthTerrainPreparationDiagnostics,
+} from "./coreEcologyBreadthHabitat";
+import { coreEcologyAlpineHabitatCacheDiagnostics } from "./coreEcologyAlpineHabitat";
+import { coreEcologyPolarShoreHabitatCacheDiagnostics } from "./coreEcologyPolarShoreHabitat";
+import { coreEcologyColdShoreHabitatCacheDiagnostics } from "./coreEcologyColdShoreHabitat";
+import { coreEcologyPolarConsumerHabitatCacheDiagnostics } from "./coreEcologyPolarConsumerHabitat";
 import {
   canonicalRegionalEcologyLegacyCohortPatchForWorld,
   projectRegionalEcologyLegacyCohort,
@@ -407,6 +431,7 @@ import {
   createRegionalEcologyState,
   deserializeRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
+  REGIONAL_ECOLOGY_ACTIVE_REGION_LIMIT,
   serializeRegionalEcologyState,
   type RegionalEcologyActiveResidentInput,
   type RegionalEcologyProjectedResidentV1,
@@ -476,6 +501,7 @@ import {
 } from "./runtimeCoreEcologyActivityAuthorityMemo";
 import {
   createRuntimeCoreEcologyActivityAuthorityReceiptCache,
+  RUNTIME_CORE_ECOLOGY_ACTIVITY_AUTHORITY_RECEIPT_CACHE_LIMIT,
   type RuntimeCoreEcologyActivityAuthorityCustody,
   type RuntimeCoreEcologyActivityAuthorityReceiptCache,
   type RuntimeCoreEcologyActivityAuthorityRequest,
@@ -486,6 +512,7 @@ import { canonicalCoreEcologyColdShoreResidentPatch } from "./regionalColdShoreR
 import { canonicalCoreEcologyPolarConsumerResidentPatch } from "./regionalPolarConsumerResidents";
 import { canonicalCoreEcologyBreadthResidentPatch } from "./regionalBreadthCohort";
 import {
+  coreEcologyPolarConsumerActivityCacheDiagnostics,
   isTrustedCoreEcologyPolarConsumerActivityAuthority,
   projectCoreEcologyPolarConsumerActivityAuthority,
 } from "./coreEcologyPolarConsumerActivity";
@@ -574,6 +601,7 @@ import {
   projectCoreEcologyBreadthActivityAuthority,
 } from "./coreEcologyActivityAuthority";
 import {
+  coreEcologyAlpineRidgeActivityCacheDiagnostics,
   isTrustedCoreEcologyAlpineRidgeActivityAuthority,
   projectCoreEcologyAlpineRidgeActivityAuthority,
 } from "./coreEcologyAlpineRidgeActivity";
@@ -889,6 +917,72 @@ export interface TideweftRuntimePerformanceCounts {
   readonly wildlifeVisible: number;
 }
 
+export interface TideweftRuntimeResourceRegionCounts {
+  readonly loadedTerrainRegions: number;
+  readonly activeEcologyRegions: number;
+  readonly durableTerrainRegionRecords: number;
+  readonly durableEcologyRegionRecords: number;
+  readonly chartedRegionRecords: number;
+  readonly inactiveCargoRegionWorlds: number;
+}
+
+export interface TideweftRuntimeResourceCacheCounts {
+  readonly regionTerrainValues: number;
+  readonly registeredTerrainGeneratorSeeds: number;
+  readonly registeredTerrainGeneratorRegions: number;
+  readonly outdoorIlluminationFields: number;
+  readonly regionalHabitats: number;
+  readonly alpineHabitats: number;
+  readonly polarShoreHabitats: number;
+  readonly coldShoreHabitats: number;
+  readonly polarConsumerHabitats: number;
+  readonly breadthHabitats: number;
+  readonly runtimeCompatibilityHabitats: number;
+  readonly alpineRidgeAuthorities: number;
+  readonly polarConsumerAuthorities: number;
+  readonly activityAuthorityReceipts: number;
+  readonly breadthPreparationSlots: number;
+}
+
+export interface TideweftRuntimePendingResourceCounts {
+  readonly runtimeTerrainPrefetchJobs: number;
+  readonly registeredTerrainPrefetchJobs: number;
+  readonly queuedCommands: number;
+  readonly queuedSaveSnapshots: number;
+  readonly saveWaiters: number;
+  readonly activeSaveWorkers: number;
+}
+
+export type TideweftRuntimeResourceRegionLimits = Readonly<Record<
+  keyof TideweftRuntimeResourceRegionCounts,
+  number
+>>;
+
+export type TideweftRuntimeResourceCacheLimits = Readonly<Record<
+  keyof TideweftRuntimeResourceCacheCounts,
+  number
+>>;
+
+export interface TideweftRuntimePendingResourceLimits {
+  readonly runtimeTerrainPrefetchJobs: number;
+  readonly queuedSaveSnapshots: number;
+  readonly activeSaveWorkers: number;
+}
+
+export interface TideweftRuntimeResourceLimits {
+  readonly regions: TideweftRuntimeResourceRegionLimits;
+  readonly caches: TideweftRuntimeResourceCacheLimits;
+  readonly pending: TideweftRuntimePendingResourceLimits;
+}
+
+export interface TideweftRuntimeResourceCounts {
+  readonly regions: TideweftRuntimeResourceRegionCounts;
+  readonly caches: TideweftRuntimeResourceCacheCounts;
+  readonly pending: TideweftRuntimePendingResourceCounts;
+  /** Hard bounds only; intentionally omits queues without a declared maximum. */
+  readonly limits: TideweftRuntimeResourceLimits;
+}
+
 export interface TideweftRuntimePerformanceTelemetry {
   /** Inclusive fail-closed fixed-step cost, including presentation when requested. */
   readonly fixedStep: RuntimePerformanceSnapshot;
@@ -901,6 +995,8 @@ export interface TideweftRuntimePerformanceTelemetry {
   /** Synchronous authoritative snapshot validation and JSON serialization only. */
   readonly saveSnapshot: RuntimePerformanceSnapshot;
   readonly counts: TideweftRuntimePerformanceCounts;
+  /** Primitive-only retained-owner counts; never authoritative or serialized. */
+  readonly resources: TideweftRuntimeResourceCounts;
   readonly lastSerializedSaveBytes: number;
 }
 
@@ -10772,9 +10868,12 @@ export async function createTideweftRuntime(
     for (const coord of planned) {
       const key = regionKey(coord);
       if (loadedKeys.has(key) || queuedKeys.has(key)) continue;
-      const job = createTerrainRegionPrefetchJob(world.meta.rootSeed, coord);
-      if (!job.complete) {
-        terrainPrefetchJobs.push(job);
+      const admitted = admitTerrainRegionPrefetchJob(
+        terrainPrefetchJobs,
+        TERRAIN_PREFETCH_MAX_JOBS,
+        () => createTerrainRegionPrefetchJob(world.meta.rootSeed, coord),
+      );
+      if (admitted) {
         queuedKeys.add(key);
       }
       if (terrainPrefetchJobs.length >= TERRAIN_PREFETCH_MAX_JOBS) return;
@@ -15587,6 +15686,123 @@ export async function createTideweftRuntime(
     soundscape.destroy();
   }
 
+  function getResourceCounts(): TideweftRuntimeResourceCounts {
+    const terrainValues = regionTerrainCacheDiagnostics();
+    const terrainStreaming = terrainRegionStreamingCacheDiagnostics();
+    const outdoorIlluminationFields = outdoorIlluminationFieldCacheDiagnostics();
+    const regionalHabitats = coreEcologyRegionalHabitatCacheDiagnostics();
+    const alpineHabitats = coreEcologyAlpineHabitatCacheDiagnostics();
+    const polarShoreHabitats = coreEcologyPolarShoreHabitatCacheDiagnostics();
+    const coldShoreHabitats = coreEcologyColdShoreHabitatCacheDiagnostics();
+    const polarConsumerHabitats = coreEcologyPolarConsumerHabitatCacheDiagnostics();
+    const breadthHabitats = coreEcologyBreadthHabitatCacheDiagnostics();
+    const alpineRidgeAuthorities = coreEcologyAlpineRidgeActivityCacheDiagnostics();
+    const polarConsumerAuthorities = coreEcologyPolarConsumerActivityCacheDiagnostics();
+    const breadthPreparation = coreEcologyBreadthTerrainPreparationDiagnostics();
+    const durableEcologyRegionRecords =
+      regionalEcology.base.base.base.base.base.root.regions.length
+      + regionalEcology.base.base.base.base.alpineRoot.regions.length
+      + regionalEcology.base.base.base.polarShoreRoot.regions.length
+      + regionalEcology.base.base.coldShoreRoot.regions.length
+      + regionalEcology.base.polarConsumerRoot.regions.length
+      + regionalEcology.breadthRoot.regions.length;
+    const runtimeCompatibilityHabitatCaches = [
+      runtimeCoreEcologyHabitatCache,
+      runtimeRegionalUplandCoreEcologyHabitatCache,
+      runtimeDomesticPenCoreEcologyHabitatCache,
+      runtimeDomesticYardCoreEcologyHabitatCache,
+      runtimeTidalWebCoreEcologyHabitatCache,
+      runtimeWaterfowlCoreEcologyHabitatCache,
+      runtimeTidalTableCoreEcologyHabitatCache,
+      runtimeRainChorusCoreEcologyHabitatCache,
+      runtimeMarshEdgeCoreEcologyHabitatCache,
+      runtimeHarborEdgeCoreEcologyHabitatCache,
+      runtimeWaveACoreEcologyHabitatCache,
+    ] as const;
+    const runtimeCompatibilityHabitats = runtimeCompatibilityHabitatCaches
+      .reduce((total, cache) => total + cache.size, 0);
+
+    return Object.freeze({
+      regions: Object.freeze({
+        loadedTerrainRegions: regionalTravel.stream.loaded.length,
+        activeEcologyRegions:
+          regionalEcology.base.base.base.base.base.activeRegions.length,
+        durableTerrainRegionRecords: regionalTravel.stream.manifest.regions.length,
+        durableEcologyRegionRecords,
+        chartedRegionRecords: regionalTravel.cartography.regions.length,
+        inactiveCargoRegionWorlds: physicalCargo.inactiveWorldIndex.size,
+      }),
+      caches: Object.freeze({
+        regionTerrainValues: terrainValues.entryCount,
+        registeredTerrainGeneratorSeeds: terrainStreaming.registeredSeedEntryCount,
+        registeredTerrainGeneratorRegions:
+          terrainStreaming.registeredCachedRegionCount,
+        outdoorIlluminationFields: outdoorIlluminationFields.entryCount,
+        regionalHabitats: regionalHabitats.entryCount,
+        alpineHabitats: alpineHabitats.entryCount,
+        polarShoreHabitats: polarShoreHabitats.entryCount,
+        coldShoreHabitats: coldShoreHabitats.entryCount,
+        polarConsumerHabitats: polarConsumerHabitats.entryCount,
+        breadthHabitats: breadthHabitats.entryCount,
+        runtimeCompatibilityHabitats,
+        alpineRidgeAuthorities: alpineRidgeAuthorities.entryCount,
+        polarConsumerAuthorities: polarConsumerAuthorities.entryCount,
+        activityAuthorityReceipts: coreEcologyActivityAuthorityReceiptCache.entryCount(),
+        breadthPreparationSlots: breadthPreparation.slotOccupied ? 1 : 0,
+      }),
+      pending: Object.freeze({
+        runtimeTerrainPrefetchJobs: terrainPrefetchJobs.length,
+        registeredTerrainPrefetchJobs: terrainStreaming.registeredPendingJobCount,
+        queuedCommands: commandQueue.length,
+        queuedSaveSnapshots: pendingSave === undefined ? 0 : 1,
+        saveWaiters: saveWaiters.length,
+        activeSaveWorkers: saveWorkerRunning ? 1 : 0,
+      }),
+      limits: Object.freeze({
+        regions: Object.freeze({
+          loadedTerrainRegions: regionalTravel.stream.config.maxLoadedRegions,
+          activeEcologyRegions: REGIONAL_ECOLOGY_ACTIVE_REGION_LIMIT,
+          durableTerrainRegionRecords: REGION_MANIFEST_MAX_REGIONS,
+          durableEcologyRegionRecords:
+            REGIONAL_ECOLOGY_MAX_REGIONS
+            + REGIONAL_ALPINE_ECOLOGY_MAX_REGIONS
+            + REGIONAL_POLAR_SHORE_ECOLOGY_MAX_REGIONS
+            + REGIONAL_COLD_SHORE_ECOLOGY_MAX_REGIONS
+            + REGIONAL_POLAR_CONSUMER_ECOLOGY_MAX_REGIONS
+            + REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS,
+          chartedRegionRecords: REGIONAL_CARTOGRAPHY_MAX_REGIONS,
+          inactiveCargoRegionWorlds: PHYSICAL_CARGO_MAX_INACTIVE_WORLDS,
+        }),
+        caches: Object.freeze({
+          regionTerrainValues: terrainValues.capacity,
+          registeredTerrainGeneratorSeeds: terrainStreaming.registeredSeedCapacity,
+          registeredTerrainGeneratorRegions:
+            terrainStreaming.registeredCachedRegionCapacity,
+          outdoorIlluminationFields: outdoorIlluminationFields.capacity,
+          regionalHabitats: regionalHabitats.capacity,
+          alpineHabitats: alpineHabitats.capacity,
+          polarShoreHabitats: polarShoreHabitats.capacity,
+          coldShoreHabitats: coldShoreHabitats.capacity,
+          polarConsumerHabitats: polarConsumerHabitats.capacity,
+          breadthHabitats: breadthHabitats.capacity,
+          runtimeCompatibilityHabitats:
+            runtimeCompatibilityHabitatCaches.length
+            * RUNTIME_CORE_ECOLOGY_HABITAT_CACHE_LIMIT,
+          alpineRidgeAuthorities: alpineRidgeAuthorities.capacity,
+          polarConsumerAuthorities: polarConsumerAuthorities.capacity,
+          activityAuthorityReceipts:
+            RUNTIME_CORE_ECOLOGY_ACTIVITY_AUTHORITY_RECEIPT_CACHE_LIMIT,
+          breadthPreparationSlots: 1,
+        }),
+        pending: Object.freeze({
+          runtimeTerrainPrefetchJobs: TERRAIN_PREFETCH_MAX_JOBS,
+          queuedSaveSnapshots: 1,
+          activeSaveWorkers: 1,
+        }),
+      }),
+    });
+  }
+
   function getPerformanceTelemetry(): TideweftRuntimePerformanceTelemetry {
     return Object.freeze({
       fixedStep: fixedStepPerformance.getSnapshot(),
@@ -15595,6 +15811,7 @@ export async function createTideweftRuntime(
       audioProjection: audioProjectionPerformance.getSnapshot(),
       saveSnapshot: saveSnapshotPerformance.getSnapshot(),
       counts: performanceCounts,
+      resources: getResourceCounts(),
       lastSerializedSaveBytes,
     });
   }

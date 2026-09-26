@@ -7,11 +7,13 @@ import { MAX_TIDE_LEVEL } from "../sim/terrain";
 import { stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_COLD_SHORE_DERIVATION_KIND,
+  CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT,
   CORE_ECOLOGY_COLD_SHORE_HABITAT_OWNER_ID,
   CORE_ECOLOGY_COLD_SHORE_MAXIMUM_FORAGE_DISTANCE_TILES,
   canonicalCoreEcologyColdShoreHabitatForWorld,
   canonicalizeCoreEcologyColdShoreHabitat,
   clearCoreEcologyColdShoreHabitatCache,
+  coreEcologyColdShoreHabitatCacheDiagnostics,
   deriveCoreEcologyColdShoreHabitat,
   type CoreEcologyColdShoreHabitat,
 } from "./coreEcologyColdShoreHabitat";
@@ -51,6 +53,12 @@ function corpus() {
 describe(`${ALPHA35_COLD_SHORE_SHARED_INVARIANTS_OWNER_INTENT} habitat`, () => {
   it("replays over canonical terrain and binds the one-species source", () => {
     clearCoreEcologyColdShoreHabitatCache();
+    const emptyDiagnostics = coreEcologyColdShoreHabitatCacheDiagnostics();
+    expect(emptyDiagnostics).toEqual({
+      entryCount: 0,
+      capacity: CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT,
+    });
+    expect(Object.isFrozen(emptyDiagnostics)).toBe(true);
     const terrain = generateRegionTerrain(OCCUPIED_SEED, OCCUPIED_REGION);
     const first = deriveCoreEcologyColdShoreHabitat({
       seed: OCCUPIED_SEED,
@@ -77,6 +85,10 @@ describe(`${ALPHA35_COLD_SHORE_SHARED_INVARIANTS_OWNER_INTENT} habitat`, () => {
         OCCUPIED_REGION,
       ),
     ).toBe(first);
+    expect(coreEcologyColdShoreHabitatCacheDiagnostics()).toEqual({
+      entryCount: 1,
+      capacity: CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT,
+    });
   });
 
   it("admits at most one fox and only above an admitted capelin substrate", () => {

@@ -41,6 +41,12 @@ export const CORE_ECOLOGY_COLD_SHORE_SPECIES = Object.freeze([
   "arctic-fox",
 ] as const);
 export const CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT = 128 as const;
+
+export interface CoreEcologyColdShoreHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_COLD_SHORE_MAXIMUM_POPULATION = 1 as const;
 export const CORE_ECOLOGY_COLD_SHORE_MAXIMUM_ANCHORS = 1 as const;
 /**
@@ -429,6 +435,15 @@ function cacheHabitat(
 
 export function clearCoreEcologyColdShoreHabitatCache(): void {
   HABITAT_CACHE.clear();
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyColdShoreHabitatCacheDiagnostics():
+  CoreEcologyColdShoreHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_COLD_SHORE_HABITAT_CACHE_LIMIT,
+  });
 }
 
 /**

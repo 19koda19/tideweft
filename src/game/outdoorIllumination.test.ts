@@ -38,6 +38,7 @@ import {
   buildOutdoorIlluminationField,
   buildWorldPerceptionCells,
   deriveSettlementLampSources,
+  outdoorIlluminationFieldCacheDiagnostics,
   outdoorIlluminationCacheKey,
   sampleOutdoorIlluminationAtTile,
   settlementLampIntensityAtTick,
@@ -269,12 +270,18 @@ describe("game outdoor illumination bridge", () => {
     const key = outdoorIlluminationCacheKey(night);
     const field = buildOutdoorIlluminationField(night)!;
     const cached = buildOutdoorIlluminationField(laterNight)!;
+    const cacheDiagnostics = outdoorIlluminationFieldCacheDiagnostics();
     const source = beaconSettlement(night).tileIndex;
     const target = tileFourStepsFrom(night, source);
 
     expect(key).toMatch(/^outdoor-light-v1:[0-9a-f]{16}$/);
     expect(outdoorIlluminationCacheKey(laterNight)).toBe(key);
     expect(cached).toBe(field);
+    expect(Object.isFrozen(cacheDiagnostics)).toBe(true);
+    expect(cacheDiagnostics.capacity).toBe(4);
+    expect(cacheDiagnostics.entryCount).toBeGreaterThan(0);
+    expect(cacheDiagnostics.entryCount).toBeLessThanOrEqual(cacheDiagnostics.capacity);
+    expect(outdoorIlluminationFieldCacheDiagnostics()).toEqual(cacheDiagnostics);
     expect(field.physicalIllumination).toHaveLength(
       field.columns * field.rows,
     );

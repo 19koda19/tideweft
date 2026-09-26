@@ -7,6 +7,8 @@ import { stableStringify } from "../sim/util";
 import { setCoreEcologyAggregatePatchMaterializedActors } from "./coreEcology";
 import { projectCoreEcologyActivity } from "./coreEcologyActivity";
 import {
+  CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+  coreEcologyAlpineRidgeActivityCacheDiagnostics,
   isTrustedCoreEcologyAlpineRidgeActivityAuthority,
   projectCoreEcologyAlpineRidgeActivityAuthority,
 } from "./coreEcologyAlpineRidgeActivity";
@@ -27,6 +29,10 @@ const TILE_CENTER_OFFSET = Math.trunc(WORLD_POSITION_UNITS_PER_TILE / 2);
 
 describe("canonical Alpine ridge activity projection", () => {
   it("world-binds every receipt anchor to canonical ridge terrain and drives day/rest activity", () => {
+    const beforeDiagnostics = coreEcologyAlpineRidgeActivityCacheDiagnostics();
+    expect(Object.isFrozen(beforeDiagnostics)).toBe(true);
+    expect(beforeDiagnostics.capacity)
+      .toBe(CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT);
     const daylight = materializedEaglePatch(SEED, REGION, 360);
     const authority = projectCoreEcologyAlpineRidgeActivityAuthority({
       rootSeed: SEED,
@@ -47,6 +53,15 @@ describe("canonical Alpine ridge activity projection", () => {
     expect(isTrustedCoreEcologyAlpineRidgeActivityAuthority(authority)).toBe(true);
     expect(isTrustedCoreEcologyAlpineRidgeActivityAuthority(replay)).toBe(true);
     expect(stableStringify(replay)).toBe(stableStringify(authority));
+    const populatedDiagnostics = coreEcologyAlpineRidgeActivityCacheDiagnostics();
+    expect(populatedDiagnostics.entryCount).toBeGreaterThan(0);
+    expect(populatedDiagnostics.entryCount).toBeLessThanOrEqual(
+      CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+    );
+    expect(populatedDiagnostics.entryCount).toBeGreaterThanOrEqual(
+      beforeDiagnostics.entryCount,
+    );
+    expect(Object.isFrozen(populatedDiagnostics)).toBe(true);
     expect(authority).toMatchObject({
       sourceKey: daylight.patch.patchKey,
       actorId: daylight.actorId,
@@ -78,6 +93,8 @@ describe("canonical Alpine ridge activity projection", () => {
     if (establishedAuthority === null) {
       throw new Error("Established-daylight ridge authority fixture failed");
     }
+    expect(coreEcologyAlpineRidgeActivityCacheDiagnostics().entryCount)
+      .toBeLessThanOrEqual(CORE_ECOLOGY_ALPINE_RIDGE_ACTIVITY_AUTHORITY_CACHE_LIMIT);
     expect(projectCoreEcologyActivity(establishedDaylight.patch, {
       actorId: establishedDaylight.actorId,
       atTick: 420,

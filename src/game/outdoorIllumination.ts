@@ -111,6 +111,24 @@ const managedRegionalGeometryCache = new WeakMap<object, WorldLightGeometry>();
 const managedSettlementLampIndexCache = new WeakMap<object, SettlementLampIndex>();
 const illuminationFieldCache = new Map<string, OutdoorIlluminationField>();
 
+export interface OutdoorIlluminationFieldCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: number;
+}
+
+/**
+ * Count-only observation of the strong illumination-field cache. The
+ * identity-keyed geometry and lamp indexes are WeakMaps and deliberately do
+ * not expose process-retention counts.
+ */
+export function outdoorIlluminationFieldCacheDiagnostics():
+  OutdoorIlluminationFieldCacheDiagnostics {
+  return Object.freeze({
+    entryCount: illuminationFieldCache.size,
+    capacity: MAX_CACHED_OUTDOOR_ILLUMINATION_FIELDS,
+  });
+}
+
 /**
  * Builds the shared physical terrain/structure surface consumed by both F0
  * sight and outdoor-light rays. Mutable caller-owned arrays are revalidated and

@@ -14,6 +14,7 @@ import {
   generateRegionTerrainBundle,
   generatedRegionTerrainHash,
   parseRegionTerrainManifest,
+  regionTerrainCacheDiagnostics,
   regionTerrainHash,
   serializeRegionTerrainManifest,
   validateRegionTerrainManifest,
@@ -85,6 +86,23 @@ function bundle(seed: RootSeed, x: number, y: number): GeneratedRegionTerrain {
 }
 
 describe("deterministic infinite-region terrain", () => {
+  it("reports only frozen bounded cache counts without changing derived terrain", () => {
+    const seed = seedFromText("terrain cache diagnostics remain observational");
+    const coord = { x: -17, y: 23 } as const;
+    const before = generateRegionTerrain(seed, coord);
+    const first = regionTerrainCacheDiagnostics();
+    const second = regionTerrainCacheDiagnostics();
+
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.keys(first).sort()).toEqual(["capacity", "entryCount"]);
+    expect(first).toEqual(second);
+    expect(Number.isSafeInteger(first.entryCount)).toBe(true);
+    expect(first.entryCount).toBeGreaterThanOrEqual(0);
+    expect(first.entryCount).toBeLessThanOrEqual(first.capacity);
+    expect(first.capacity).toBe(9);
+    expect(generateRegionTerrain(seed, coord)).toEqual(before);
+  });
+
   it("preserves compatibility region 0,0 exactly, including its canonical hash", () => {
     const seed = seedFromText("the first estuary remains itself");
     const legacy = generateTerrain(seed);

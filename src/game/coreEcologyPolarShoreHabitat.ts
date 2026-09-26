@@ -38,6 +38,12 @@ export const CORE_ECOLOGY_POLAR_SHORE_SPECIES = Object.freeze([
   "atlantic-capelin",
 ] as const);
 export const CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT = 128 as const;
+
+export interface CoreEcologyPolarShoreHabitatCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT;
+}
+
 export const CORE_ECOLOGY_POLAR_SHORE_TERRITORY_SPAN_REGIONS = 2 as const;
 export const CORE_ECOLOGY_POLAR_SHORE_MAXIMUM_POPULATION = 64 as const;
 export const CORE_ECOLOGY_POLAR_SHORE_MAXIMUM_ANCHORS = 4 as const;
@@ -668,6 +674,15 @@ function cacheHabitat(
 /** Cache state is a performance detail and never contributes to habitat truth. */
 export function clearCoreEcologyPolarShoreHabitatCache(): void {
   HABITAT_CACHE.clear();
+}
+
+/** Read-only occupancy only; never exposes cache keys or authoritative values. */
+export function coreEcologyPolarShoreHabitatCacheDiagnostics():
+  CoreEcologyPolarShoreHabitatCacheDiagnostics {
+  return Object.freeze({
+    entryCount: HABITAT_CACHE.size,
+    capacity: CORE_ECOLOGY_POLAR_SHORE_HABITAT_CACHE_LIMIT,
+  });
 }
 
 /**

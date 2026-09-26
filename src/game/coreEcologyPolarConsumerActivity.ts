@@ -33,9 +33,24 @@ export interface ProjectCoreEcologyPolarConsumerActivityAuthorityInput {
 }
 
 const HARBOR_SEAL_SPECIES = "harbor-seal" as const;
-const AUTHORITY_CACHE_LIMIT = 64;
+export const CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT = 64 as const;
+
+export interface CoreEcologyPolarConsumerActivityCacheDiagnostics {
+  readonly entryCount: number;
+  readonly capacity: typeof CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT;
+}
+
 const AUTHORITY_CACHE = new Map<string, CoreEcologyActivityAuthorityV1>();
 const WORLD_BOUND_AUTHORITIES = new WeakSet<object>();
+
+/** Read-only occupancy only; never exposes authority keys or receipts. */
+export function coreEcologyPolarConsumerActivityCacheDiagnostics():
+  CoreEcologyPolarConsumerActivityCacheDiagnostics {
+  return Object.freeze({
+    entryCount: AUTHORITY_CACHE.size,
+    capacity: CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT,
+  });
+}
 
 /**
  * Reprojects one seal's amphibious destinations from its authenticated
@@ -193,7 +208,10 @@ function cacheAuthority(
   WORLD_BOUND_AUTHORITIES.add(authority);
   AUTHORITY_CACHE.delete(key);
   AUTHORITY_CACHE.set(key, authority);
-  while (AUTHORITY_CACHE.size > AUTHORITY_CACHE_LIMIT) {
+  while (
+    AUTHORITY_CACHE.size
+      > CORE_ECOLOGY_POLAR_CONSUMER_ACTIVITY_AUTHORITY_CACHE_LIMIT
+  ) {
     const oldest = AUTHORITY_CACHE.keys().next().value as string | undefined;
     if (oldest === undefined) break;
     AUTHORITY_CACHE.delete(oldest);

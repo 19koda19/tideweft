@@ -19,11 +19,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.58",
+      version: "0.3.3-alpha.59",
       releaseDate: "2026-09-23",
-      buildIdentity: "0.3.3-alpha.58",
+      buildIdentity: "0.3.3-alpha.59",
       gameplayContractVersion: 51,
-      tutorialVersion: 68,
+      tutorialVersion: 69,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -69,7 +69,15 @@ describe("canonical offline patch notes", () => {
     expect(() => validatePatchNotesDocument(markdown)).toThrow(/plain text/u);
   });
 
-  it("scopes Alpha-58 The Breathing Room and retains Alpha-57 through Alpha-53 truth", () => {
+  it("scopes Alpha-59 The Breathing Room and retains Alpha-58 through Alpha-53 truth", () => {
+    const alpha58Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.58",
+    );
+    const alpha58Copy = PATCH_NOTE_CATEGORIES
+      .filter((category) => category !== "knownLimitations")
+      .flatMap((category) => alpha58Release?.categories[category] ?? [])
+      .join(" ");
+    const alpha58Limitations = alpha58Release?.categories.knownLimitations.join(" ") ?? "";
     const alpha57Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.57",
     );
@@ -389,29 +397,53 @@ describe("canonical offline patch notes", () => {
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
     expect(LATEST_PATCH_NOTE.summary).toContain("The Breathing Room");
-    expect(LATEST_PATCH_NOTE.summary).toContain("biome identity and baseline climate");
+    expect(LATEST_PATCH_NOTE.summary).toContain("selected count-only retained-owner instrumentation");
     expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
-      "interaction signals that were immediately discarded",
+      "deeply frozen count-only snapshots for selected",
     );
     expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "serialized world-payload bytes",
+    );
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "best-effort launched-root descendant-tree summed RSS",
+    );
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "enforces its declared nine-job bound before a new job factory",
+    );
+    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+      "rejects accidental interaction-bearing input or zoom contamination",
+    );
+    expect(LATEST_PATCH_NOTE.categories.gameplay.join(" ")).toContain("passive developer evidence only");
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
+      "transient primitive counts and limits",
+    );
+    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
+      "never enters the authoritative save envelope",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "cannot establish exhaustive process retention, a memory plateau, leak freedom",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "live external generator or prefetch closures",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "shared pages are double-counted and process churn can race capture",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "does not repair the player-reported once-per-second hitch",
+    );
+    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+      "quiet-host travel timing, prolonged soak, cumulative validation, and the release checkpoint remain open",
+    );
+    expect(alpha58Release?.summary).toContain("biome identity and baseline climate");
+    expect(alpha58Copy).toContain("interaction signals that were immediately discarded");
+    expect(alpha58Copy).toContain(
       "full biome profile remains authoritative where its interaction signals are consumed",
     );
-    expect(LATEST_PATCH_NOTE.categories.gameplay.join(" ")).toContain("same deterministic habitat");
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
-      "transient analysis work",
-    );
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
-      "no cache, receipt, serialized field, migration, schema, or save-format change",
-    );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
-      "76.203187 ms to 73.156646 ms",
-    );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
-      "attribution-only rather than a hitch or frame-rate acceptance claim",
-    );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
-      "quiet-host untouched travel timing, settled forced-GC/resource proof, prolonged soak, cumulative validation, and the release checkpoint remain open",
-    );
+    expect(alpha58Copy).toContain("same deterministic habitat");
+    expect(alpha58Copy).toContain("transient analysis work");
+    expect(alpha58Limitations).toContain("76.203187 ms to 73.156646 ms");
+    expect(alpha58Limitations).toContain("attribution-only rather than a hitch or frame-rate acceptance claim");
     expect(alpha57Release?.summary).toContain("base-regional climate scoring");
     expect(alpha57Copy).toContain("four locomotion climate-fit vectors");
     expect(alpha57Copy).toContain("below a species's unchanged minimum site score");
