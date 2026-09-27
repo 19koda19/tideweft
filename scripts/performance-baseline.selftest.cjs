@@ -9,10 +9,18 @@ const {
   HITCH_TRACE_SNAPSHOT_CAPACITY,
   HITCH_TRACE_THRESHOLD_MS,
   RESOURCE_CHECKPOINT_LABELS,
+  RESOURCE_SOAK_MINIMUM_CYCLES,
+  RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
+  RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES,
+  RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
+  RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES,
   RESOURCE_SHAKEDOWN_CYCLES,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
   assertResourceCheckpointOrder,
+  assertResourceSaveSample,
+  assertResourceSoakCheckpointOrder,
+  assertResourceSoakMeasurement,
   assertResourceShakedownCycle,
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
@@ -24,6 +32,10 @@ const {
   parseArguments,
   parsePosixProcessTable,
   parseWindowsProcessTable,
+  resourceSoakCadenceSummary,
+  resourceSoakCycleCheckpointLabel,
+  resourceSoakRetentionSummary,
+  resourceSoakSaveGrowthSummary,
   retainBoundedHitchGap,
   retainBoundedHitchSnapshot,
   sanitizeRuntimeResourceCounts,
@@ -188,9 +200,11 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
 {
   const normal = parseArguments([]);
   assert.equal(normal.resourceShakedown, false);
+  assert.equal(normal.resourceSoak, false);
   assert.match(normal.output, /runtime-baseline-[^/]+\.json$/u);
   const resource = parseArguments(['--resource-shakedown']);
   assert.equal(resource.resourceShakedown, true);
+  assert.equal(resource.resourceSoak, false);
   assert.equal(resource.scenarioId, '');
   assert.equal(resource.traceHitches, false);
   assert.match(resource.output, /resource-shakedown-[^/]+\.json$/u);
@@ -205,6 +219,28 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   assert.throws(
     () => parseArguments(['--resource-shakedown', '--sample-ms=1000']),
     /cannot be combined with --sample-ms/u,
+  );
+  const soak = parseArguments(['--resource-soak']);
+  assert.equal(soak.resourceShakedown, false);
+  assert.equal(soak.resourceSoak, true);
+  assert.equal(soak.scenarioId, '');
+  assert.equal(soak.traceHitches, false);
+  assert.match(soak.output, /resource-soak-[^/]+\.json$/u);
+  assert.throws(
+    () => parseArguments(['--resource-soak', '--scenario=x']),
+    /cannot be combined with --scenario/u,
+  );
+  assert.throws(
+    () => parseArguments(['--resource-soak', '--trace-hitches']),
+    /cannot be combined with --trace-hitches/u,
+  );
+  assert.throws(
+    () => parseArguments(['--resource-soak', '--sample-ms=1000']),
+    /cannot be combined with --sample-ms/u,
+  );
+  assert.throws(
+    () => parseArguments(['--resource-soak', '--resource-shakedown']),
+    /mutually exclusive/u,
   );
 }
 
@@ -382,9 +418,16 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
     node: { nodeId: 'healthy-node', nodeType: 'Gain' },
   });
   assert.equal(assertWebAudioLifecycleEvidence(healthy.snapshot()), true);
-  for (const label of ['forced-gc-1', 'forced-gc-2', 'post-save']) {
+  for (const label of [
+    'forced-gc-1',
+    'forced-gc-2',
+    'post-save',
+    'soak-baseline-forced-gc-1',
+    'soak-final-forced-gc-2',
+    'soak-post-save',
+  ]) {
     assert.throws(
-      () => assertWebAudioLifecycleEvidence(healthy.snapshot(), label),
+      () => assertWebAudioLifecycleEvidence(healthy.snapshot(), label, 'collected'),
       /complete, internally consistent CDP WebAudio lifecycle witness/u,
     );
   }
@@ -402,14 +445,37 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   collected.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'collected-node' });
   collected.handle('WebAudio.audioParamWillBeDestroyed', { paramId: 'collected-param' });
   const collectedSnapshot = collected.snapshot();
-  for (const label of ['resource checkpoint', 'pre', 'half', 'post', 'settled']) {
+  for (const label of [
+    'resource checkpoint',
+    'pre',
+    'half',
+    'post',
+    'settled',
+    'soak-pre',
+    'soak-warmup-post',
+    'soak-cycle-001',
+    'soak-settled',
+  ]) {
     assert.throws(
       () => assertWebAudioLifecycleEvidence(collectedSnapshot, label),
       /complete, internally consistent CDP WebAudio lifecycle witness/u,
     );
   }
-  for (const label of ['forced-gc-1', 'forced-gc-2', 'post-save']) {
-    assert.equal(assertWebAudioLifecycleEvidence(collectedSnapshot, label), true);
+  assert.equal(
+    assertWebAudioLifecycleEvidence(collectedSnapshot, 'soak-cycle-001', 'ordinary'),
+    true,
+  );
+  for (const label of [
+    'forced-gc-1',
+    'forced-gc-2',
+    'post-save',
+    'soak-baseline-forced-gc-1',
+    'soak-baseline-forced-gc-2',
+    'soak-final-forced-gc-1',
+    'soak-final-forced-gc-2',
+    'soak-post-save',
+  ]) {
+    assert.equal(assertWebAudioLifecycleEvidence(collectedSnapshot, label, 'collected'), true);
   }
   const malformed = createWebAudioLifecycleTracker();
   malformed.handle('WebAudio.contextCreated', { context: {} });
@@ -424,7 +490,11 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   const invalidCollectedSnapshot = structuredClone(collectedSnapshot);
   invalidCollectedSnapshot.live.nodes = -1;
   assert.throws(
-    () => assertWebAudioLifecycleEvidence(invalidCollectedSnapshot, 'forced-gc-2'),
+    () => assertWebAudioLifecycleEvidence(
+      invalidCollectedSnapshot,
+      'forced-gc-2',
+      'collected',
+    ),
     /complete, internally consistent CDP WebAudio lifecycle witness/u,
   );
 
@@ -442,7 +512,7 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
     const candidate = structuredClone(collectedSnapshot);
     mutate(candidate);
     assert.throws(
-      () => assertWebAudioLifecycleEvidence(candidate, 'post-save'),
+      () => assertWebAudioLifecycleEvidence(candidate, 'post-save', 'collected'),
       /complete, internally consistent CDP WebAudio lifecycle witness/u,
     );
   }
@@ -459,7 +529,11 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   });
   retainedListener.handle('WebAudio.audioNodeWillBeDestroyed', { nodeId: 'listener-node' });
   assert.throws(
-    () => assertWebAudioLifecycleEvidence(retainedListener.snapshot(), 'forced-gc-1'),
+    () => assertWebAudioLifecycleEvidence(
+      retainedListener.snapshot(),
+      'forced-gc-1',
+      'collected',
+    ),
     /complete, internally consistent CDP WebAudio lifecycle witness/u,
   );
 
@@ -591,9 +665,13 @@ function resourceCountsFixture() {
   assert.equal(assertSettledResourcePendingDrained(sanitized, 'settled'), true);
   const pendingAtHalf = resourceCountsFixture();
   pendingAtHalf.pending.queuedCommands = 1;
-  assert.equal(assertSettledResourcePendingDrained(pendingAtHalf, 'half'), true);
+  assert.equal(assertSettledResourcePendingDrained(pendingAtHalf, 'half', false), true);
   assert.throws(
     () => assertSettledResourcePendingDrained(pendingAtHalf, 'forced-gc-1'),
+    /retained pending work: queuedCommands=1/u,
+  );
+  assert.throws(
+    () => assertSettledResourcePendingDrained(pendingAtHalf, 'soak-cycle-001'),
     /retained pending work: queuedCommands=1/u,
   );
   const exceeded = resourceCountsFixture();
@@ -700,7 +778,7 @@ function cleanInputEvidence() {
     projectionConsistent: true,
   });
   const cycle = {
-    schema: 'tideweft-resource-route-cycle/v1',
+    schema: 'tideweft-resource-route-cycle/v2',
     ordinal: 1,
     reason: 'complete',
     failure: null,
@@ -717,6 +795,15 @@ function cleanInputEvidence() {
     targetsIssued: 4,
     visitedRegionKeys: ['0:0', '0:-1', '0:0'],
     modesObserved: ['foot', 'wading'],
+    presentationCadence: {
+      scope: 'requestAnimationFrame intervals observed by the ordinary route driver',
+      frameCount: 6_001,
+      intervalCount: 6_000,
+      averageIntervalMs: 16.667,
+      averageFps: 59.9988,
+      p99IntervalUpperBoundMs: 18,
+      worstIntervalMs: 42,
+    },
   };
   assert.equal(assertResourceShakedownCycle(cycle, route, 1), true);
   assert.throws(
@@ -729,6 +816,241 @@ function cleanInputEvidence() {
   assert.throws(
     () => assertResourceShakedownCycle({ ...cycle, maxObservedStepTiles: 4.01 }, route, 1),
     /absolute 0:0 -> 0:-1 -> 0:0 corridor/u,
+  );
+}
+
+{
+  assert.equal(RESOURCE_SOAK_MINIMUM_TRAVEL_MS, 3_600_000);
+  assert.equal(RESOURCE_SOAK_MINIMUM_CYCLES, 12);
+  assert.equal(RESOURCE_SOAK_SAVE_INTERVAL_CYCLES, 4);
+  assert.equal(RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES, 4 * 1_024 * 1_024);
+  assert.equal(RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES, 512 * 1_024);
+  assert.equal(resourceSoakCycleCheckpointLabel(1), 'soak-cycle-001');
+  assert.equal(resourceSoakCycleCheckpointLabel(120), 'soak-cycle-120');
+  assert.throws(() => resourceSoakCycleCheckpointLabel(0), RangeError);
+
+  const soakCheckpoints = [
+    'soak-pre',
+    'soak-warmup-post',
+    'soak-baseline-forced-gc-1',
+    'soak-baseline-forced-gc-2',
+    ...Array.from(
+      { length: RESOURCE_SOAK_MINIMUM_CYCLES },
+      (_, index) => resourceSoakCycleCheckpointLabel(index + 1),
+    ),
+    'soak-settled',
+    'soak-final-forced-gc-1',
+    'soak-final-forced-gc-2',
+    'soak-post-save',
+  ].map((label) => ({
+    label,
+    renderer: { viewportAndInput: cleanInputEvidence() },
+  }));
+  assert.equal(
+    assertResourceSoakCheckpointOrder(soakCheckpoints, RESOURCE_SOAK_MINIMUM_CYCLES),
+    true,
+  );
+  const swapped = structuredClone(soakCheckpoints);
+  [swapped[5], swapped[6]] = [swapped[6], swapped[5]];
+  assert.throws(
+    () => assertResourceSoakCheckpointOrder(swapped, RESOURCE_SOAK_MINIMUM_CYCLES),
+    /Resource-soak checkpoint order must be/u,
+  );
+
+  const cadenceCycles = Array.from({ length: RESOURCE_SOAK_MINIMUM_CYCLES }, (_, index) => ({
+    presentationCadence: {
+      averageFps: 60 - index * 0.1,
+      averageIntervalMs: 1_000 / (60 - index * 0.1),
+      p99IntervalUpperBoundMs: 20 + index * 0.1,
+      worstIntervalMs: 40 + index,
+    },
+  }));
+  const cadence = resourceSoakCadenceSummary(cadenceCycles);
+  assert.equal(cadence.windowSize, 3);
+  assert.equal(cadence.opening.cycleCount, 3);
+  assert.equal(cadence.closing.cycleCount, 3);
+  assert.equal(cadence.medianAverageFpsRatio < 1, true);
+  const degradedFps = structuredClone(cadenceCycles);
+  for (const cycle of degradedFps.slice(-3)) cycle.presentationCadence.averageFps = 47;
+  assert.throws(
+    () => resourceSoakCadenceSummary(degradedFps),
+    /closing cadence degraded/u,
+  );
+  const degradedP99 = structuredClone(cadenceCycles);
+  for (const cycle of degradedP99.slice(-3)) {
+    cycle.presentationCadence.p99IntervalUpperBoundMs = 26;
+  }
+  assert.throws(
+    () => resourceSoakCadenceSummary(degradedP99),
+    /closing cadence degraded/u,
+  );
+
+  const saveSample = (
+    ordinal,
+    kind,
+    afterMeasuredCycle,
+    serializedBytes,
+    tick,
+    before,
+  ) => ({
+    ordinal,
+    kind,
+    afterMeasuredCycle,
+    tick,
+    endToEndMs: 20,
+    serializedBytes,
+    saveSnapshotCountBefore: before,
+    saveSnapshotCountAfter: before + 1,
+    synchronousSnapshot: { totalCount: before + 1 },
+  });
+  const saves = [
+    saveSample(1, 'baseline', 0, 1_800_000, 10, 0),
+    saveSample(2, 'periodic', 4, 1_800_100, 50, 3),
+    saveSample(3, 'periodic', 8, 1_800_200, 90, 6),
+    saveSample(4, 'final', 12, 1_800_300, 130, 9),
+    saveSample(5, 'stationary-repeat-1', 12, 1_800_300, 130, 10),
+    saveSample(6, 'stationary-repeat-2', 12, 1_800_300, 130, 11),
+  ];
+  assert.equal(assertResourceSaveSample(saves[1], 2), true);
+  const autosaveAttributed = structuredClone(saves[1]);
+  autosaveAttributed.saveSnapshotCountBefore = 12;
+  autosaveAttributed.saveSnapshotCountAfter = 13;
+  autosaveAttributed.synchronousSnapshot.totalCount = 13;
+  assert.equal(assertResourceSaveSample(autosaveAttributed, 2), true);
+  const missingExplicitSave = structuredClone(autosaveAttributed);
+  missingExplicitSave.saveSnapshotCountAfter = 12;
+  missingExplicitSave.synchronousSnapshot.totalCount = 12;
+  assert.throws(
+    () => assertResourceSaveSample(missingExplicitSave, 2),
+    /did not produce save sample/u,
+  );
+  const growth = resourceSoakSaveGrowthSummary(saves, 12);
+  assert.equal(growth.sampleCount, 6);
+  assert.equal(growth.rangeBytes, 300);
+  assert.equal(growth.deltaBytes, 300);
+  const oversizedSaves = structuredClone(saves);
+  oversizedSaves.at(-3).serializedBytes = 1_800_000
+    + RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES + 1;
+  oversizedSaves.at(-2).serializedBytes = oversizedSaves.at(-3).serializedBytes;
+  oversizedSaves.at(-1).serializedBytes = oversizedSaves.at(-3).serializedBytes;
+  assert.throws(
+    () => resourceSoakSaveGrowthSummary(oversizedSaves, 12),
+    /save growth exceeded/u,
+  );
+  const unequalRepeat = structuredClone(saves);
+  unequalRepeat.at(-1).serializedBytes += 1;
+  assert.throws(
+    () => resourceSoakSaveGrowthSummary(unequalRepeat, 12),
+    /save tail changed tick or payload length/u,
+  );
+
+  const retentionCheckpoint = (
+    label,
+    rendererHeapUsedBytes,
+    attachedDomElements,
+    cdpNodes,
+    summedRssBytes,
+  ) => ({
+    label,
+    processTree: { summedRssBytes },
+    renderer: {
+      heap: { usedSize: rendererHeapUsedBytes },
+      dom: {
+        attached: { elementCount: attachedDomElements },
+        cdp: { nodes: cdpNodes },
+      },
+    },
+  });
+  const retentionCheckpoints = [
+    retentionCheckpoint('soak-baseline-forced-gc-1', 80_500_000, 3_500, 6_000, 1_400_000_000),
+    retentionCheckpoint('soak-baseline-forced-gc-2', 80_000_000, 3_500, 6_000, 1_400_000_000),
+    retentionCheckpoint('soak-final-forced-gc-1', 85_400_000, 3_505, 6_020, 1_450_000_000),
+    retentionCheckpoint('soak-final-forced-gc-2', 85_000_000, 3_505, 6_020, 1_450_000_000),
+  ];
+  const retention = resourceSoakRetentionSummary(retentionCheckpoints);
+  assert.equal(retention.delta.rendererHeapUsedBytes, 5_000_000);
+  assert.equal(retention.delta.attachedDomElements, 5);
+  assert.equal(retention.delta.cdpNodes, 20);
+  const retainedDom = structuredClone(retentionCheckpoints);
+  retainedDom[3].renderer.dom.attached.elementCount = 3_565;
+  assert.throws(
+    () => resourceSoakRetentionSummary(retainedDom),
+    /forced-GC bookends exceeded/u,
+  );
+  const divergentGc = structuredClone(retentionCheckpoints);
+  divergentGc[3].renderer.heap.usedSize = 83_000_000;
+  assert.throws(
+    () => resourceSoakRetentionSummary(divergentGc),
+    /forced-GC bookends exceeded/u,
+  );
+
+  const soakRoute = {
+    anchorGlobal: { x: 76.5, y: 27.5 },
+    outboundGlobal: { x: 76.5, y: -8 },
+  };
+  const soakPosition = (x, y, regionY) => ({
+    x,
+    y,
+    canonicalRegion: { x: 0, y: regionY },
+    projectionConsistent: true,
+  });
+  const soakCycle = (ordinal, startTick, endTick) => ({
+    schema: 'tideweft-resource-route-cycle/v2',
+    ordinal,
+    reason: 'complete',
+    failure: null,
+    durationMs: 300_000,
+    startTick,
+    endTick,
+    start: soakPosition(76.5, 27.5, 0),
+    turn: soakPosition(76.5, -8, -1),
+    end: soakPosition(76.5, 27.5, 0),
+    observedDistanceTiles: 71,
+    maxObservedStepTiles: 1,
+    projectionMismatchCount: 0,
+    discontinuityCount: 0,
+    targetsIssued: 4,
+    visitedRegionKeys: ['0:0', '0:-1', '0:0'],
+    modesObserved: ['foot', 'wading'],
+    presentationCadence: {
+      scope: 'requestAnimationFrame intervals observed by the ordinary route driver',
+      frameCount: 6_001,
+      intervalCount: 6_000,
+      averageIntervalMs: 16.667,
+      averageFps: 59.9988,
+      p99IntervalUpperBoundMs: 18,
+      worstIntervalMs: 42,
+    },
+  });
+  const warmupCycle = soakCycle(0, 0, 10);
+  const measuredCycles = Array.from(
+    { length: RESOURCE_SOAK_MINIMUM_CYCLES },
+    (_, index) => soakCycle(index + 1, 10 + index * 10, 20 + index * 10),
+  );
+  const measurementFixture = {
+    route: soakRoute,
+    warmupCycle,
+    measuredCycles,
+    measuredTravelDurationMs: RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
+    saveSamples: saves,
+    checkpoints: soakCheckpoints,
+  };
+  assert.equal(assertResourceSoakMeasurement(measurementFixture), true);
+  assert.throws(
+    () => assertResourceSoakMeasurement({
+      ...measurementFixture,
+      measuredTravelDurationMs: RESOURCE_SOAK_MINIMUM_TRAVEL_MS - 1,
+    }),
+    /did not reconcile sixty active travel minutes/u,
+  );
+  const discontinuousCycles = structuredClone(measuredCycles);
+  discontinuousCycles[5].startTick += 1;
+  assert.throws(
+    () => assertResourceSoakMeasurement({
+      ...measurementFixture,
+      measuredCycles: discontinuousCycles,
+    }),
+    /did not continue from the prior authoritative tick/u,
   );
 }
 
@@ -746,7 +1068,7 @@ function cleanInputEvidence() {
     }, 2),
     /refuses unforced evidence/u,
   );
-  process.stdout.write('performance baseline and resource shakedown self-test passed\n');
+  process.stdout.write('performance baseline, resource shakedown, and resource soak self-test passed\n');
 })().catch((error) => {
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
   process.exitCode = 1;

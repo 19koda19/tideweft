@@ -32,6 +32,22 @@ const RESOURCE_SHAKEDOWN_GC_SETTLE_MS = 1_000;
 const RESOURCE_SHAKEDOWN_CYCLE_TIMEOUT_MS = 240_000;
 const RESOURCE_SHAKEDOWN_ENDPOINT_TOLERANCE_TILES = 1.5;
 const RESOURCE_SHAKEDOWN_MAX_OBSERVED_STEP_TILES = 4;
+const RESOURCE_SOAK_MINIMUM_TRAVEL_MS = 60 * 60 * 1_000;
+const RESOURCE_SOAK_MINIMUM_CYCLES = 12;
+const RESOURCE_SOAK_MAXIMUM_CYCLES = 120;
+const RESOURCE_SOAK_SAVE_INTERVAL_CYCLES = 4;
+const RESOURCE_SOAK_PENDING_DRAIN_TIMEOUT_MS = 5_000;
+const RESOURCE_SOAK_PENDING_DRAIN_POLL_MS = 100;
+const RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES = 4 * 1_024 * 1_024;
+const RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES = 512 * 1_024;
+const RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FLOOR_BYTES = 16 * 1_024 * 1_024;
+const RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FRACTION = 0.25;
+const RESOURCE_SOAK_GC_CONVERGENCE_FLOOR_BYTES = 1 * 1_024 * 1_024;
+const RESOURCE_SOAK_GC_CONVERGENCE_FRACTION = 0.01;
+const RESOURCE_SOAK_ATTACHED_DOM_GROWTH_BUDGET = 64;
+const RESOURCE_SOAK_CDP_DOM_GROWTH_BUDGET = 512;
+const RESOURCE_SOAK_CLOSING_FPS_RATIO_FLOOR = 0.8;
+const RESOURCE_SOAK_CLOSING_P99_RATIO_CEILING = 1.25;
 const RESOURCE_CHECKPOINT_LABELS = Object.freeze([
   'pre',
   'half',
@@ -41,6 +57,43 @@ const RESOURCE_CHECKPOINT_LABELS = Object.freeze([
   'forced-gc-2',
   'post-save',
 ]);
+const RESOURCE_SOAK_OPENING_CHECKPOINT_LABELS = Object.freeze([
+  'soak-pre',
+  'soak-warmup-post',
+  'soak-baseline-forced-gc-1',
+  'soak-baseline-forced-gc-2',
+]);
+const RESOURCE_SOAK_CLOSING_CHECKPOINT_LABELS = Object.freeze([
+  'soak-settled',
+  'soak-final-forced-gc-1',
+  'soak-final-forced-gc-2',
+  'soak-post-save',
+]);
+const RESOURCE_CHECKPOINT_POLICY_ACTIVE_FULL = Object.freeze({
+  requirePendingDrained: false,
+  audioGraph: 'active',
+  domDetail: 'full',
+});
+const RESOURCE_CHECKPOINT_POLICY_SETTLED_ACTIVE_FULL = Object.freeze({
+  requirePendingDrained: true,
+  audioGraph: 'active',
+  domDetail: 'full',
+});
+const RESOURCE_CHECKPOINT_POLICY_ORDINARY_FULL = Object.freeze({
+  requirePendingDrained: true,
+  audioGraph: 'ordinary',
+  domDetail: 'full',
+});
+const RESOURCE_CHECKPOINT_POLICY_ORDINARY_COARSE = Object.freeze({
+  requirePendingDrained: true,
+  audioGraph: 'ordinary',
+  domDetail: 'coarse',
+});
+const RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL = Object.freeze({
+  requirePendingDrained: true,
+  audioGraph: 'collected',
+  domDetail: 'full',
+});
 const RESOURCE_CDP_METRIC_NAMES = Object.freeze([
   'AudioHandlers',
   'Documents',
@@ -289,6 +342,7 @@ function parseArguments(argv) {
   let scenarioId = '';
   let traceHitches = false;
   let resourceShakedown = false;
+  let resourceSoak = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -321,31 +375,41 @@ function parseArguments(argv) {
       traceHitches = true;
     } else if (argument === '--resource-shakedown') {
       resourceShakedown = true;
+    } else if (argument === '--resource-soak') {
+      resourceSoak = true;
     } else {
       throw new Error(`Unknown performance-baseline argument: ${argument}`);
     }
   }
 
-  if (resourceShakedown && scenarioId.length > 0) {
-    throw new Error('--resource-shakedown cannot be combined with --scenario');
+  if (resourceShakedown && resourceSoak) {
+    throw new Error('--resource-shakedown and --resource-soak are mutually exclusive');
   }
-  if (resourceShakedown && traceHitches) {
-    throw new Error('--resource-shakedown cannot be combined with --trace-hitches');
+  const resourceDiagnostic = resourceShakedown || resourceSoak;
+  const resourceFlag = resourceSoak ? '--resource-soak' : '--resource-shakedown';
+  if (resourceDiagnostic && scenarioId.length > 0) {
+    throw new Error(`${resourceFlag} cannot be combined with --scenario`);
   }
-  if (resourceShakedown && sampleMsSpecified) {
-    throw new Error('--resource-shakedown uses a fixed route and cannot be combined with --sample-ms');
+  if (resourceDiagnostic && traceHitches) {
+    throw new Error(`${resourceFlag} cannot be combined with --trace-hitches`);
+  }
+  if (resourceDiagnostic && sampleMsSpecified) {
+    throw new Error(`${resourceFlag} uses a fixed route and cannot be combined with --sample-ms`);
   }
 
   return {
     executable: executable ? path.resolve(executable) : '',
     output: outputPath(
       output,
-      resourceShakedown ? 'resource-shakedown' : 'runtime-baseline',
+      resourceSoak
+        ? 'resource-soak'
+        : resourceShakedown ? 'resource-shakedown' : 'runtime-baseline',
     ),
     sampleMs,
     scenarioId,
     traceHitches,
     resourceShakedown,
+    resourceSoak,
   };
 }
 
@@ -865,10 +929,14 @@ function createWebAudioLifecycleTracker() {
   });
 }
 
-function assertWebAudioLifecycleEvidence(snapshot, checkpointLabel = 'resource checkpoint') {
-  const collectedNodeGraphIsRequired = checkpointLabel === 'forced-gc-1'
-    || checkpointLabel === 'forced-gc-2'
-    || checkpointLabel === 'post-save';
+function assertWebAudioLifecycleEvidence(
+  snapshot,
+  checkpointLabel = 'resource checkpoint',
+  graphExpectation = 'active',
+) {
+  if (!['active', 'ordinary', 'collected'].includes(graphExpectation)) {
+    throw new TypeError('WebAudio graph expectation must be active, ordinary, or collected');
+  }
   const label = RESOURCE_CHECKPOINT_LABELS.includes(checkpointLabel)
     ? `resource checkpoint ${checkpointLabel}`
     : checkpointLabel;
@@ -920,13 +988,13 @@ function assertWebAudioLifecycleEvidence(snapshot, checkpointLabel = 'resource c
     && snapshot?.live?.contexts === 1
     && eventTotal('WebAudio.audioNodeCreated') >= 1
   );
-  const checkpointGraphShapeIsValid = collectedNodeGraphIsRequired
+  const checkpointGraphShapeIsValid = graphExpectation === 'collected'
     ? (
       snapshot?.live?.listeners === 0
       && snapshot?.live?.nodes === 0
       && snapshot?.live?.params === 0
     )
-    : snapshot?.live?.nodes >= 1;
+    : graphExpectation === 'active' ? snapshot?.live?.nodes >= 1 : true;
   if (
     !liveCountsAreValid
     || !liveBreakdownsAreValid
@@ -1180,14 +1248,8 @@ function sanitizeRuntimeResourceCounts(resources) {
   return sanitized;
 }
 
-function assertSettledResourcePendingDrained(resources, label) {
-  const requiredLabels = new Set([
-    'settled',
-    'forced-gc-1',
-    'forced-gc-2',
-    'post-save',
-  ]);
-  if (!requiredLabels.has(label)) return true;
+function assertSettledResourcePendingDrained(resources, label, required = true) {
+  if (!required) return true;
   const pending = resources?.pending;
   const undrained = Object.entries(pending ?? {}).filter(([, value]) => value !== 0);
   if (
@@ -1204,6 +1266,21 @@ function assertSettledResourcePendingDrained(resources, label) {
   return true;
 }
 
+function resourceSoakCycleCheckpointLabel(ordinal) {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 1) {
+    throw new RangeError('Resource-soak cycle ordinal must be a positive safe integer');
+  }
+  return `soak-cycle-${String(ordinal).padStart(3, '0')}`;
+}
+
+function isResourceCheckpointLabel(label) {
+  if (typeof label !== 'string') return false;
+  return RESOURCE_CHECKPOINT_LABELS.includes(label)
+    || RESOURCE_SOAK_OPENING_CHECKPOINT_LABELS.includes(label)
+    || RESOURCE_SOAK_CLOSING_CHECKPOINT_LABELS.includes(label)
+    || /^soak-cycle-\d{3}$/u.test(label);
+}
+
 function assertResourceCheckpointOrder(checkpoints) {
   if (!Array.isArray(checkpoints)) throw new TypeError('Resource checkpoints must be an array');
   const labels = checkpoints.map((checkpoint) => checkpoint?.label);
@@ -1213,6 +1290,31 @@ function assertResourceCheckpointOrder(checkpoints) {
   ) {
     throw new Error(
       `Resource checkpoint order must be ${RESOURCE_CHECKPOINT_LABELS.join(' -> ')}`,
+    );
+  }
+  return true;
+}
+
+function assertResourceSoakCheckpointOrder(checkpoints, cycleCount) {
+  if (!Array.isArray(checkpoints)) throw new TypeError('Resource-soak checkpoints must be an array');
+  if (!Number.isSafeInteger(cycleCount) || cycleCount < RESOURCE_SOAK_MINIMUM_CYCLES) {
+    throw new RangeError('Resource-soak cycle count is below its minimum');
+  }
+  const expected = [
+    ...RESOURCE_SOAK_OPENING_CHECKPOINT_LABELS,
+    ...Array.from(
+      { length: cycleCount },
+      (_, index) => resourceSoakCycleCheckpointLabel(index + 1),
+    ),
+    ...RESOURCE_SOAK_CLOSING_CHECKPOINT_LABELS,
+  ];
+  const labels = checkpoints.map((checkpoint) => checkpoint?.label);
+  if (
+    labels.length !== expected.length
+    || labels.some((label, index) => label !== expected[index])
+  ) {
+    throw new Error(
+      `Resource-soak checkpoint order must be ${expected.join(' -> ')}`,
     );
   }
   return true;
@@ -1281,7 +1383,7 @@ function assertResourceShakedownCycle(cycle, route, expectedOrdinal) {
   const allowedModes = new Set(['foot', 'wading', 'skiff', 'camp']);
   const distance = (left, right) => Math.hypot(left.x - right.x, left.y - right.y);
   if (
-    cycle?.schema !== 'tideweft-resource-route-cycle/v1'
+    cycle?.schema !== 'tideweft-resource-route-cycle/v2'
     || cycle.reason !== 'complete'
     || cycle.failure !== null
     || cycle.ordinal !== expectedOrdinal
@@ -1303,6 +1405,21 @@ function assertResourceShakedownCycle(cycle, route, expectedOrdinal) {
     || !Array.isArray(cycle.modesObserved)
     || cycle.modesObserved.length === 0
     || cycle.modesObserved.some((mode) => !allowedModes.has(mode))
+    || cycle.presentationCadence?.scope
+      !== 'requestAnimationFrame intervals observed by the ordinary route driver'
+    || !Number.isSafeInteger(cycle.presentationCadence?.frameCount)
+    || cycle.presentationCadence.frameCount < 2
+    || !Number.isSafeInteger(cycle.presentationCadence?.intervalCount)
+    || cycle.presentationCadence.intervalCount !== cycle.presentationCadence.frameCount - 1
+    || !Number.isFinite(cycle.presentationCadence?.averageIntervalMs)
+    || cycle.presentationCadence.averageIntervalMs <= 0
+    || !Number.isFinite(cycle.presentationCadence?.averageFps)
+    || cycle.presentationCadence.averageFps <= 0
+    || !Number.isFinite(cycle.presentationCadence?.p99IntervalUpperBoundMs)
+    || cycle.presentationCadence.p99IntervalUpperBoundMs <= 0
+    || !Number.isFinite(cycle.presentationCadence?.worstIntervalMs)
+    || cycle.presentationCadence.p99IntervalUpperBoundMs
+      > Math.ceil(cycle.presentationCadence.worstIntervalMs)
     || !cycle.start?.projectionConsistent
     || !cycle.turn?.projectionConsistent
     || !cycle.end?.projectionConsistent
@@ -1551,10 +1668,23 @@ function resourceMetricsRecord(metrics) {
   ]));
 }
 
-async function resourceCheckpoint(client, rootPid, webAudioTracker, label) {
-  if (!RESOURCE_CHECKPOINT_LABELS.includes(label)) {
+async function resourceCheckpoint(
+  client,
+  rootPid,
+  webAudioTracker,
+  label,
+  policy,
+) {
+  if (!isResourceCheckpointLabel(label)) {
     throw new Error(`Unknown resource checkpoint ${JSON.stringify(label)}`);
   }
+  if (
+    policy === null
+    || typeof policy !== 'object'
+    || typeof policy.requirePendingDrained !== 'boolean'
+    || !['active', 'ordinary', 'collected'].includes(policy.audioGraph)
+    || !['coarse', 'full'].includes(policy.domDetail)
+  ) throw new Error(`Resource checkpoint ${label} requires an explicit valid policy`);
   client.throwIfNotificationFailed();
   const captureStartedAt = new Date().toISOString();
   const [performanceResult, dom, heap, page, processTree] = await Promise.all([
@@ -1564,14 +1694,17 @@ async function resourceCheckpoint(client, rootPid, webAudioTracker, label) {
     client.evaluate(`(() => {
       const bridge = window.__TIDEWEFT__;
       const telemetry = bridge.runtime.getPerformanceTelemetry();
-      const elements = [...document.getElementsByTagName('*')];
+      const detail = ${JSON.stringify(policy.domDetail)};
+      const elementCollection = document.getElementsByTagName('*');
       const tagCounts = {};
       const classCounts = {};
-      for (const element of elements) {
-        const tag = element.tagName.toLowerCase();
-        tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
-        for (const className of element.classList) {
-          classCounts[className] = (classCounts[className] ?? 0) + 1;
+      if (detail === 'full') {
+        for (const element of elementCollection) {
+          const tag = element.tagName.toLowerCase();
+          tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+          for (const className of element.classList) {
+            classCounts[className] = (classCounts[className] ?? 0) + 1;
+          }
         }
       }
       const ordered = (record) => Object.fromEntries(
@@ -1580,9 +1713,12 @@ async function resourceCheckpoint(client, rootPid, webAudioTracker, label) {
       const guard = window.__TIDEWEFT_RESOURCE_SHAKEDOWN_INPUT_GUARD__;
       return {
         attachedDom: {
-          elementCount: elements.length,
-          byTag: ordered(tagCounts),
-          byClass: ordered(classCounts),
+          detail,
+          elementCount: elementCollection.length,
+          ...(detail === 'full' ? {
+            byTag: ordered(tagCounts),
+            byClass: ordered(classCounts),
+          } : {}),
         },
         runtimeResources: telemetry?.resources ?? null,
         lastSerializedSaveBytes: telemetry?.lastSerializedSaveBytes ?? null,
@@ -1606,12 +1742,17 @@ async function resourceCheckpoint(client, rootPid, webAudioTracker, label) {
   }
   assertNoResourceInputContamination(page.inputContamination, `resource checkpoint ${label}`);
   const runtimeResources = sanitizeRuntimeResourceCounts(page.runtimeResources);
-  assertSettledResourcePendingDrained(runtimeResources, label);
+  assertSettledResourcePendingDrained(
+    runtimeResources,
+    label,
+    policy.requirePendingDrained,
+  );
   const performance = resourceMetricsRecord(metricsRecord(performanceResult));
   const webAudio = webAudioTracker.snapshot();
-  assertWebAudioLifecycleEvidence(webAudio, label);
+  assertWebAudioLifecycleEvidence(webAudio, label, policy.audioGraph);
   return {
     label,
+    policy: { ...policy },
     captureStartedAt,
     captureFinishedAt: new Date().toISOString(),
     processTree,
@@ -1698,6 +1839,12 @@ async function runResourceTravelCycle(client, route, ordinal) {
     let projectionMismatchCount = 0;
     let discontinuityCount = 0;
     let targetsIssued = 0;
+    let presentationFrameCount = 0;
+    let presentationIntervalCount = 0;
+    let presentationIntervalTotalMs = 0;
+    let presentationIntervalWorstMs = 0;
+    let previousPresentationFrameAt = null;
+    const presentationIntervalHistogram = new Uint32Array(1_002);
     let settled = false;
     let braceActive = false;
     const visitedRegionKeys = [];
@@ -1741,8 +1888,24 @@ async function runResourceTravelCycle(client, route, ordinal) {
       if (braceActive) bridge.runtime.dispatchRenderer({ type: 'brace', active: false });
       bridge.runtime.stop();
       end = finalPosition ?? position();
+      const percentileUpperBound = (quantile) => {
+        if (presentationIntervalCount === 0) return null;
+        const target = Math.ceil(presentationIntervalCount * quantile);
+        let cumulative = 0;
+        for (let bucket = 0; bucket < presentationIntervalHistogram.length; bucket += 1) {
+          cumulative += presentationIntervalHistogram[bucket];
+          if (cumulative < target) continue;
+          return bucket === presentationIntervalHistogram.length - 1
+            ? presentationIntervalWorstMs
+            : bucket + 1;
+        }
+        return presentationIntervalWorstMs;
+      };
+      const averageIntervalMs = presentationIntervalCount === 0
+        ? null
+        : presentationIntervalTotalMs / presentationIntervalCount;
       const result = {
-        schema: 'tideweft-resource-route-cycle/v1',
+        schema: 'tideweft-resource-route-cycle/v2',
         ordinal,
         reason,
         failure,
@@ -1759,6 +1922,19 @@ async function runResourceTravelCycle(client, route, ordinal) {
         targetsIssued,
         visitedRegionKeys,
         modesObserved,
+        presentationCadence: {
+          scope: 'requestAnimationFrame intervals observed by the ordinary route driver',
+          frameCount: presentationFrameCount,
+          intervalCount: presentationIntervalCount,
+          averageIntervalMs,
+          averageFps: averageIntervalMs === null || averageIntervalMs <= 0
+            ? null
+            : 1_000 / averageIntervalMs,
+          p99IntervalUpperBoundMs: percentileUpperBound(0.99),
+          worstIntervalMs: presentationIntervalCount === 0
+            ? null
+            : presentationIntervalWorstMs,
+        },
       };
       bridge.renderer.setActive(false);
       bridge.ui.stop();
@@ -1839,8 +2015,22 @@ async function runResourceTravelCycle(client, route, ordinal) {
       return true;
     };
 
-    const sample = () => {
+    const sample = (frameAt) => {
       if (settled) return;
+      presentationFrameCount += 1;
+      if (previousPresentationFrameAt !== null) {
+        const interval = frameAt - previousPresentationFrameAt;
+        if (Number.isFinite(interval) && interval >= 0) {
+          presentationIntervalCount += 1;
+          presentationIntervalTotalMs += interval;
+          presentationIntervalWorstMs = Math.max(presentationIntervalWorstMs, interval);
+          const bucket = interval >= presentationIntervalHistogram.length - 1
+            ? presentationIntervalHistogram.length - 1
+            : Math.floor(interval);
+          presentationIntervalHistogram[bucket] += 1;
+        }
+      }
+      previousPresentationFrameAt = frameAt;
       const current = observe();
       if (current === null) {
         finish('invalid-position', null, { phase });
@@ -1902,6 +2092,388 @@ async function forceRendererGarbageCollection(client, ordinal) {
   };
 }
 
+function assertResourceSaveSample(sample, ordinal) {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 1) {
+    throw new RangeError('Resource save-sample ordinal must be a positive safe integer');
+  }
+  if (
+    !Number.isSafeInteger(sample?.tick)
+    || sample.tick < 0
+    || !Number.isFinite(sample?.endToEndMs)
+    || sample.endToEndMs < 0
+    || !Number.isSafeInteger(sample?.serializedBytes)
+    || sample.serializedBytes <= 0
+    || !Number.isSafeInteger(sample?.saveSnapshotCountBefore)
+    || sample.saveSnapshotCountBefore < 0
+    || !Number.isSafeInteger(sample?.saveSnapshotCountAfter)
+    || sample.saveSnapshotCountAfter !== sample.saveSnapshotCountBefore + 1
+    || !Number.isSafeInteger(sample?.synchronousSnapshot?.totalCount)
+    || sample.synchronousSnapshot.totalCount !== sample.saveSnapshotCountAfter
+  ) {
+    throw new Error(`Resource diagnostic did not produce save sample ${ordinal}: ${JSON.stringify(sample)}`);
+  }
+  return true;
+}
+
+async function captureResourceSaveSample(client, ordinal, kind, afterMeasuredCycle) {
+  if (!Number.isSafeInteger(ordinal) || ordinal < 1) {
+    throw new RangeError('Resource save-sample ordinal must be a positive safe integer');
+  }
+  if (typeof kind !== 'string' || kind.length === 0) {
+    throw new TypeError('Resource save-sample kind must be non-empty text');
+  }
+  if (!Number.isSafeInteger(afterMeasuredCycle) || afterMeasuredCycle < 0) {
+    throw new RangeError('Resource save-sample cycle must be a non-negative safe integer');
+  }
+  const sample = await client.evaluate(`(async () => {
+    const bridge = window.__TIDEWEFT__;
+    const before = bridge.runtime.getPerformanceTelemetry().saveSnapshot.totalCount;
+    const startedAt = performance.now();
+    await bridge.runtime.save();
+    const finishedAt = performance.now();
+    const telemetry = bridge.runtime.getPerformanceTelemetry();
+    const view = bridge.runtime.getRenderView();
+    return {
+      tick: view.tick,
+      endToEndMs: finishedAt - startedAt,
+      serializedBytes: telemetry.lastSerializedSaveBytes,
+      saveSnapshotCountBefore: before,
+      saveSnapshotCountAfter: telemetry.saveSnapshot.totalCount,
+      synchronousSnapshot: telemetry.saveSnapshot,
+    };
+  })()`);
+  assertResourceSaveSample(sample, ordinal);
+  return {
+    ordinal,
+    kind,
+    afterMeasuredCycle,
+    ...sample,
+  };
+}
+
+function median(values) {
+  if (!Array.isArray(values) || values.length === 0 || values.some((value) => (
+    !Number.isFinite(value)
+  ))) throw new TypeError('Median requires a non-empty finite-number array');
+  const ordered = [...values].sort((left, right) => left - right);
+  const midpoint = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 0
+    ? (ordered[midpoint - 1] + ordered[midpoint]) / 2
+    : ordered[midpoint];
+}
+
+function resourceSoakCadenceSummary(cycles) {
+  if (!Array.isArray(cycles) || cycles.length < RESOURCE_SOAK_MINIMUM_CYCLES) {
+    throw new RangeError('Resource-soak cadence requires the minimum measured cycles');
+  }
+  const windowSize = Math.max(3, Math.floor(cycles.length / 4));
+  const summarize = (window) => ({
+    cycleCount: window.length,
+    medianAverageFps: median(window.map(({ presentationCadence }) => (
+      presentationCadence.averageFps
+    ))),
+    medianAverageIntervalMs: median(window.map(({ presentationCadence }) => (
+      presentationCadence.averageIntervalMs
+    ))),
+    medianP99IntervalUpperBoundMs: median(window.map(({ presentationCadence }) => (
+      presentationCadence.p99IntervalUpperBoundMs
+    ))),
+    worstIntervalMs: Math.max(...window.map(({ presentationCadence }) => (
+      presentationCadence.worstIntervalMs
+    ))),
+  });
+  const opening = summarize(cycles.slice(0, windowSize));
+  const closing = summarize(cycles.slice(-windowSize));
+  const medianAverageFpsRatio = closing.medianAverageFps / opening.medianAverageFps;
+  const medianP99IntervalRatio = closing.medianP99IntervalUpperBoundMs
+    / opening.medianP99IntervalUpperBoundMs;
+  if (
+    medianAverageFpsRatio < RESOURCE_SOAK_CLOSING_FPS_RATIO_FLOOR
+    || medianP99IntervalRatio > RESOURCE_SOAK_CLOSING_P99_RATIO_CEILING
+  ) {
+    throw new Error(
+      `Resource-soak closing cadence degraded beyond its same-corridor budget: `
+      + `fpsRatio=${medianAverageFpsRatio}, p99Ratio=${medianP99IntervalRatio}`,
+    );
+  }
+  return {
+    scope: 'first-versus-last measured-cycle requestAnimationFrame cadence; natural world conditions are not held constant',
+    windowSize,
+    opening,
+    closing,
+    budget: {
+      minimumClosingMedianAverageFpsRatio: RESOURCE_SOAK_CLOSING_FPS_RATIO_FLOOR,
+      maximumClosingMedianP99IntervalRatio: RESOURCE_SOAK_CLOSING_P99_RATIO_CEILING,
+    },
+    medianAverageFpsRatio,
+    medianP99IntervalRatio,
+  };
+}
+
+function resourceSoakSaveGrowthSummary(saveSamples, finalCycleCount) {
+  if (!Array.isArray(saveSamples) || saveSamples.length < 2) {
+    throw new RangeError('Resource-soak save growth requires at least two samples');
+  }
+  const expectedCycles = [0];
+  for (
+    let cycle = RESOURCE_SOAK_SAVE_INTERVAL_CYCLES;
+    cycle < finalCycleCount;
+    cycle += RESOURCE_SOAK_SAVE_INTERVAL_CYCLES
+  ) expectedCycles.push(cycle);
+  expectedCycles.push(finalCycleCount);
+  expectedCycles.push(finalCycleCount);
+  expectedCycles.push(finalCycleCount);
+  if (
+    saveSamples.length !== expectedCycles.length
+    || saveSamples.some((sample, index) => (
+      sample.ordinal !== index + 1
+      || sample.afterMeasuredCycle !== expectedCycles[index]
+      || (index > 0 && sample.tick < saveSamples[index - 1].tick)
+    ))
+  ) throw new Error('Resource-soak save samples do not match their deterministic cadence');
+  const finalSample = saveSamples.at(-3);
+  const stationaryRepeats = saveSamples.slice(-2);
+  if (
+    finalSample.kind !== 'final'
+    || stationaryRepeats.length !== 2
+    || stationaryRepeats.some((sample, index) => (
+      sample.kind !== `stationary-repeat-${index + 1}`
+      || sample.tick !== finalSample.tick
+      || sample.serializedBytes !== finalSample.serializedBytes
+    ))
+  ) {
+    throw new Error('Resource-soak stopped-world save tail changed tick or payload length');
+  }
+  const bytes = saveSamples.map(({ serializedBytes }) => serializedBytes);
+  const minimumBytes = Math.min(...bytes);
+  const maximumBytes = Math.max(...bytes);
+  const rangeBytes = maximumBytes - minimumBytes;
+  const deltaBytes = bytes.at(-1) - bytes[0];
+  if (
+    maximumBytes > RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES
+    || rangeBytes > RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES
+    || Math.abs(deltaBytes) > RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES
+  ) {
+    throw new Error(
+      `Resource-soak save growth exceeded its bounded witness budget: `
+      + `max=${maximumBytes}, range=${rangeBytes}, delta=${deltaBytes}`,
+    );
+  }
+  return {
+    scope: 'exact UTF-8 bytes of periodic serialized worldJson payloads; excludes storage-record and database overhead',
+    sampleCount: saveSamples.length,
+    budget: {
+      maximumPayloadBytes: RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES,
+      maximumRangeBytes: RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES,
+      maximumAbsoluteEndpointDeltaBytes: RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES,
+    },
+    minimumBytes,
+    maximumBytes,
+    rangeBytes,
+    initialBytes: bytes[0],
+    finalBytes: bytes.at(-1),
+    deltaBytes,
+    stoppedWorldRepeat: {
+      tick: finalSample.tick,
+      sampleCount: 3,
+      byteLengths: [
+        finalSample.serializedBytes,
+        ...stationaryRepeats.map(({ serializedBytes }) => serializedBytes),
+      ],
+      exactLengthMatch: true,
+    },
+  };
+}
+
+function assertResourceSoakMeasurement({
+  route,
+  warmupCycle,
+  measuredCycles,
+  measuredTravelDurationMs,
+  saveSamples,
+  checkpoints,
+}) {
+  if (!Array.isArray(measuredCycles) || measuredCycles.length < RESOURCE_SOAK_MINIMUM_CYCLES) {
+    throw new Error('Resource-soak measurement did not complete its minimum cycle count');
+  }
+  assertResourceShakedownCycle(warmupCycle, route, 0);
+  let summedTravelDurationMs = 0;
+  let priorCycle = warmupCycle;
+  for (let index = 0; index < measuredCycles.length; index += 1) {
+    const cycle = measuredCycles[index];
+    assertResourceShakedownCycle(cycle, route, index + 1);
+    if (cycle.startTick !== priorCycle.endTick) {
+      throw new Error(
+        `Resource-soak cycle ${index + 1} did not continue from the prior authoritative tick`,
+      );
+    }
+    summedTravelDurationMs += cycle.durationMs;
+    priorCycle = cycle;
+  }
+  if (
+    !Number.isFinite(measuredTravelDurationMs)
+    || measuredTravelDurationMs < RESOURCE_SOAK_MINIMUM_TRAVEL_MS
+    || Math.abs(measuredTravelDurationMs - summedTravelDurationMs) > 0.001
+  ) throw new Error('Resource-soak measurement did not reconcile sixty active travel minutes');
+
+  const progressionSamples = saveSamples.filter(({ kind }) => (
+    !kind.startsWith('stationary-repeat-')
+  ));
+  if (progressionSamples[0]?.kind !== 'baseline') {
+    throw new Error('Resource-soak save series did not begin from the warmed baseline');
+  }
+  for (let index = 0; index < progressionSamples.length; index += 1) {
+    const sample = progressionSamples[index];
+    const expectedTick = sample.afterMeasuredCycle === 0
+      ? warmupCycle.endTick
+      : measuredCycles[sample.afterMeasuredCycle - 1]?.endTick;
+    if (
+      sample.tick !== expectedTick
+      || (index > 0 && sample.tick <= progressionSamples[index - 1].tick)
+    ) throw new Error('Resource-soak progression-save ticks were missing or non-increasing');
+  }
+  assertResourceSoakCheckpointOrder(checkpoints, measuredCycles.length);
+  for (const checkpoint of checkpoints) {
+    assertNoResourceInputContamination(
+      checkpoint?.renderer?.viewportAndInput,
+      `resource-soak checkpoint ${checkpoint?.label ?? 'unknown'}`,
+    );
+  }
+  return true;
+}
+
+function resourceSoakRetentionSummary(checkpoints) {
+  const byLabel = new Map(checkpoints.map((checkpoint) => [checkpoint.label, checkpoint]));
+  const baselineFirst = byLabel.get('soak-baseline-forced-gc-1');
+  const baseline = byLabel.get('soak-baseline-forced-gc-2');
+  const finalFirst = byLabel.get('soak-final-forced-gc-1');
+  const final = byLabel.get('soak-final-forced-gc-2');
+  if (
+    baselineFirst === undefined
+    || baseline === undefined
+    || finalFirst === undefined
+    || final === undefined
+  ) {
+    throw new Error('Resource-soak retention summary is missing forced-GC bookends');
+  }
+  const baselineFirstHeap = baselineFirst.renderer?.heap?.usedSize;
+  const baselineHeap = baseline.renderer?.heap?.usedSize;
+  const finalFirstHeap = finalFirst.renderer?.heap?.usedSize;
+  const finalHeap = final.renderer?.heap?.usedSize;
+  const baselineAttached = baseline.renderer?.dom?.attached?.elementCount;
+  const finalAttached = final.renderer?.dom?.attached?.elementCount;
+  const baselineNodes = baseline.renderer?.dom?.cdp?.nodes;
+  const finalNodes = final.renderer?.dom?.cdp?.nodes;
+  if (
+    !Number.isFinite(baselineFirstHeap)
+    || baselineFirstHeap < 0
+    || !Number.isFinite(baselineHeap)
+    || baselineHeap < 0
+    || !Number.isFinite(finalFirstHeap)
+    || finalFirstHeap < 0
+    || !Number.isFinite(finalHeap)
+    || finalHeap < 0
+    || !Number.isSafeInteger(baselineAttached)
+    || !Number.isSafeInteger(finalAttached)
+    || !Number.isSafeInteger(baselineNodes)
+    || !Number.isSafeInteger(finalNodes)
+  ) throw new Error('Resource-soak retention bookends are malformed');
+  const rendererHeapDeltaBytes = finalHeap - baselineHeap;
+  const attachedDomDelta = finalAttached - baselineAttached;
+  const cdpNodeDelta = finalNodes - baselineNodes;
+  const rendererHeapGrowthBudgetBytes = Math.max(
+    RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FLOOR_BYTES,
+    baselineHeap * RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FRACTION,
+  );
+  const baselineGcConvergenceBudgetBytes = Math.max(
+    RESOURCE_SOAK_GC_CONVERGENCE_FLOOR_BYTES,
+    baselineFirstHeap * RESOURCE_SOAK_GC_CONVERGENCE_FRACTION,
+  );
+  const finalGcConvergenceBudgetBytes = Math.max(
+    RESOURCE_SOAK_GC_CONVERGENCE_FLOOR_BYTES,
+    finalFirstHeap * RESOURCE_SOAK_GC_CONVERGENCE_FRACTION,
+  );
+  const baselineGcConvergenceDeltaBytes = Math.abs(baselineHeap - baselineFirstHeap);
+  const finalGcConvergenceDeltaBytes = Math.abs(finalHeap - finalFirstHeap);
+  if (
+    rendererHeapDeltaBytes > rendererHeapGrowthBudgetBytes
+    || attachedDomDelta > RESOURCE_SOAK_ATTACHED_DOM_GROWTH_BUDGET
+    || cdpNodeDelta > RESOURCE_SOAK_CDP_DOM_GROWTH_BUDGET
+    || baselineGcConvergenceDeltaBytes > baselineGcConvergenceBudgetBytes
+    || finalGcConvergenceDeltaBytes > finalGcConvergenceBudgetBytes
+  ) {
+    throw new Error(
+      `Resource-soak forced-GC bookends exceeded their bounded growth budget: `
+      + `heap=${rendererHeapDeltaBytes}/${rendererHeapGrowthBudgetBytes}, `
+      + `attached=${attachedDomDelta}, nodes=${cdpNodeDelta}, `
+      + `baselineGc=${baselineGcConvergenceDeltaBytes}/${baselineGcConvergenceBudgetBytes}, `
+      + `finalGc=${finalGcConvergenceDeltaBytes}/${finalGcConvergenceBudgetBytes}`,
+    );
+  }
+  return {
+    scope: 'renderer-only forced-GC bookends after one warmup corridor cycle and after the measured soak; not process-wide leak proof',
+    budget: {
+      rendererHeapGrowthFloorBytes: RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FLOOR_BYTES,
+      rendererHeapGrowthFraction: RESOURCE_SOAK_RENDERER_HEAP_GROWTH_FRACTION,
+      maximumRendererHeapGrowthBytes: rendererHeapGrowthBudgetBytes,
+      gcConvergenceFloorBytes: RESOURCE_SOAK_GC_CONVERGENCE_FLOOR_BYTES,
+      gcConvergenceFraction: RESOURCE_SOAK_GC_CONVERGENCE_FRACTION,
+      maximumAttachedDomGrowth: RESOURCE_SOAK_ATTACHED_DOM_GROWTH_BUDGET,
+      maximumCdpNodeGrowth: RESOURCE_SOAK_CDP_DOM_GROWTH_BUDGET,
+    },
+    baseline: {
+      firstRendererHeapUsedBytes: baselineFirstHeap,
+      rendererHeapUsedBytes: baselineHeap,
+      gcConvergenceDeltaBytes: baselineGcConvergenceDeltaBytes,
+      gcConvergenceBudgetBytes: baselineGcConvergenceBudgetBytes,
+      attachedDomElements: baselineAttached,
+      cdpNodes: baselineNodes,
+      descendantProcessSummedRssBytes: baseline.processTree.summedRssBytes,
+    },
+    final: {
+      firstRendererHeapUsedBytes: finalFirstHeap,
+      rendererHeapUsedBytes: finalHeap,
+      gcConvergenceDeltaBytes: finalGcConvergenceDeltaBytes,
+      gcConvergenceBudgetBytes: finalGcConvergenceBudgetBytes,
+      attachedDomElements: finalAttached,
+      cdpNodes: finalNodes,
+      descendantProcessSummedRssBytes: final.processTree.summedRssBytes,
+    },
+    delta: {
+      rendererHeapUsedBytes: rendererHeapDeltaBytes,
+      attachedDomElements: attachedDomDelta,
+      cdpNodes: cdpNodeDelta,
+      descendantProcessSummedRssBytes:
+        final.processTree.summedRssBytes - baseline.processTree.summedRssBytes,
+    },
+  };
+}
+
+async function waitForResourcePendingDrain(client, label) {
+  const startedAt = performance.now();
+  let pollCount = 0;
+  let latest = null;
+  while (performance.now() - startedAt <= RESOURCE_SOAK_PENDING_DRAIN_TIMEOUT_MS) {
+    pollCount += 1;
+    latest = sanitizeRuntimeResourceCounts(await client.evaluate(`(() => (
+      window.__TIDEWEFT__.runtime.getPerformanceTelemetry().resources
+    ))()`));
+    const pending = Object.entries(latest.pending).filter(([, value]) => value !== 0);
+    if (pending.length === 0) {
+      return {
+        label,
+        pollCount,
+        durationMs: performance.now() - startedAt,
+      };
+    }
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SOAK_PENDING_DRAIN_POLL_MS));
+  }
+  throw new Error(
+    `Resource soak pending work did not drain for ${label}: `
+    + Object.entries(latest?.pending ?? {}).map(([key, value]) => `${key}=${value}`).join(', '),
+  );
+}
+
 async function measureResourceShakedown(client, scenario, rootPid, webAudioTracker) {
   await requirePerformanceInstrumentation(client, scenario);
   const controlledWarmupFrames = await warmTargetRenderer(client, scenario, true);
@@ -1911,14 +2483,38 @@ async function measureResourceShakedown(client, scenario, rootPid, webAudioTrack
   const cycles = [];
   const forcedGarbageCollections = [];
 
-  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'pre'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'pre',
+    RESOURCE_CHECKPOINT_POLICY_ACTIVE_FULL,
+  ));
   cycles.push(await runResourceTravelCycle(client, route, 1));
-  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'half'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'half',
+    RESOURCE_CHECKPOINT_POLICY_ACTIVE_FULL,
+  ));
   cycles.push(await runResourceTravelCycle(client, route, 2));
-  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'post'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'post',
+    RESOURCE_CHECKPOINT_POLICY_ACTIVE_FULL,
+  ));
 
   await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_SETTLE_MS));
-  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'settled'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'settled',
+    RESOURCE_CHECKPOINT_POLICY_SETTLED_ACTIVE_FULL,
+  ));
 
   try {
     await client.call('HeapProfiler.enable');
@@ -1935,6 +2531,7 @@ async function measureResourceShakedown(client, scenario, rootPid, webAudioTrack
       rootPid,
       webAudioTracker,
       'forced-gc-1',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
     ));
     forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 2));
     await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
@@ -1943,34 +2540,25 @@ async function measureResourceShakedown(client, scenario, rootPid, webAudioTrack
       rootPid,
       webAudioTracker,
       'forced-gc-2',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
     ));
   } finally {
     await client.call('HeapProfiler.disable').catch(() => undefined);
   }
 
-  const saveSample = await client.evaluate(`(async () => {
-    const bridge = window.__TIDEWEFT__;
-    const startedAt = performance.now();
-    await bridge.runtime.save();
-    const finishedAt = performance.now();
-    const telemetry = bridge.runtime.getPerformanceTelemetry();
-    return {
-      endToEndMs: finishedAt - startedAt,
-      serializedBytes: telemetry.lastSerializedSaveBytes,
-      synchronousSnapshot: telemetry.saveSnapshot,
-    };
-  })()`);
-  if (
-    !Number.isFinite(saveSample?.endToEndMs)
-    || saveSample.endToEndMs < 0
-    || !Number.isSafeInteger(saveSample?.serializedBytes)
-    || saveSample.serializedBytes <= 0
-    || !Number.isSafeInteger(saveSample?.synchronousSnapshot?.totalCount)
-    || saveSample.synchronousSnapshot.totalCount < 1
-  ) {
-    throw new Error(`Resource shakedown did not produce a valid save: ${JSON.stringify(saveSample)}`);
-  }
-  checkpoints.push(await resourceCheckpoint(client, rootPid, webAudioTracker, 'post-save'));
+  const saveSample = await captureResourceSaveSample(
+    client,
+    1,
+    'post-shakedown',
+    RESOURCE_SHAKEDOWN_CYCLES,
+  );
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'post-save',
+    RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+  ));
   assertResourceCheckpointOrder(checkpoints);
   return {
     schema: 'tideweft-performance-resource-shakedown-measurement/v1',
@@ -1999,6 +2587,248 @@ async function measureResourceShakedown(client, scenario, rootPid, webAudioTrack
       terrainRegistry: 'registered terrain-generator and job counts exclude generators or jobs retained solely by external closures and are not exhaustive process-wide terrain-retention evidence',
       saveBytes: 'UTF-8 byte length of the serialized world JSON payload, not total storage-record or on-disk bytes',
       pointInTimeNoise: 'DOM and heap checkpoint calls are concurrent diagnostic observations; the page-side attached-element inventory allocates temporary observation records',
+    },
+  };
+}
+
+async function measureResourceSoak(client, scenario, rootPid, webAudioTracker) {
+  await requirePerformanceInstrumentation(client, scenario);
+  const controlledWarmupFrames = await warmTargetRenderer(client, scenario, true);
+  await preparePerformanceInstrumentation(client, scenario);
+  const shakedownRoute = await resourceRoutePlan(client);
+  const route = {
+    ...shakedownRoute,
+    scope: 'one warmup cycle followed by at least sixty aggregate active-travel minutes through the absolute 0:0 <-> 0:-1 corridor, with bounded stopped checkpoint/save intervals',
+    cycles: {
+      warmup: 1,
+      measuredMinimum: RESOURCE_SOAK_MINIMUM_CYCLES,
+      measuredMaximum: RESOURCE_SOAK_MAXIMUM_CYCLES,
+      minimumMeasuredTravelMs: RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
+    },
+  };
+  const checkpoints = [];
+  const measuredCycles = [];
+  const saveSamples = [];
+  const pendingDrainSamples = [];
+  const forcedGarbageCollections = [];
+  const measurementStartedAt = new Date().toISOString();
+  const measurementMonotonicStart = performance.now();
+
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-pre'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'soak-pre',
+    RESOURCE_CHECKPOINT_POLICY_ORDINARY_FULL,
+  ));
+  const warmupCycle = await runResourceTravelCycle(client, route, 0);
+  process.stdout.write(
+    `Resource soak warmup cycle complete in ${(warmupCycle.durationMs / 1_000).toFixed(1)} s\n`,
+  );
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-warmup-post'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'soak-warmup-post',
+    RESOURCE_CHECKPOINT_POLICY_ORDINARY_FULL,
+  ));
+  saveSamples.push(await captureResourceSaveSample(client, 1, 'baseline', 0));
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-baseline-save'));
+  await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_SETTLE_MS));
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-baseline-settled'));
+
+  try {
+    await client.call('HeapProfiler.enable');
+  } catch {
+    throw new Error(
+      'Renderer HeapProfiler domain was unavailable; resource soak refuses unbookended evidence',
+    );
+  }
+  try {
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 1));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'soak-baseline-forced-gc-1',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+    ));
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 2));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'soak-baseline-forced-gc-2',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+    ));
+  } finally {
+    await client.call('HeapProfiler.disable').catch(() => undefined);
+  }
+
+  let measuredTravelDurationMs = 0;
+  while (
+    measuredCycles.length < RESOURCE_SOAK_MINIMUM_CYCLES
+    || measuredTravelDurationMs < RESOURCE_SOAK_MINIMUM_TRAVEL_MS
+  ) {
+    if (measuredCycles.length >= RESOURCE_SOAK_MAXIMUM_CYCLES) {
+      throw new Error(
+        `Resource soak reached ${RESOURCE_SOAK_MAXIMUM_CYCLES} cycles before its `
+        + `${RESOURCE_SOAK_MINIMUM_TRAVEL_MS} ms active-travel minimum`,
+      );
+    }
+    const ordinal = measuredCycles.length + 1;
+    const cycle = await runResourceTravelCycle(client, route, ordinal);
+    measuredCycles.push(cycle);
+    measuredTravelDurationMs += cycle.durationMs;
+    const complete = measuredCycles.length >= RESOURCE_SOAK_MINIMUM_CYCLES
+      && measuredTravelDurationMs >= RESOURCE_SOAK_MINIMUM_TRAVEL_MS;
+    if (!complete && ordinal % RESOURCE_SOAK_SAVE_INTERVAL_CYCLES === 0) {
+      saveSamples.push(await captureResourceSaveSample(
+        client,
+        saveSamples.length + 1,
+        'periodic',
+        ordinal,
+      ));
+    }
+    pendingDrainSamples.push(await waitForResourcePendingDrain(
+      client,
+      resourceSoakCycleCheckpointLabel(ordinal),
+    ));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      resourceSoakCycleCheckpointLabel(ordinal),
+      RESOURCE_CHECKPOINT_POLICY_ORDINARY_COARSE,
+    ));
+    process.stdout.write(
+      `Resource soak measured cycle ${ordinal} complete; `
+      + `${(measuredTravelDurationMs / 60_000).toFixed(2)} active travel minutes\n`,
+    );
+  }
+
+  saveSamples.push(await captureResourceSaveSample(
+    client,
+    saveSamples.length + 1,
+    'final',
+    measuredCycles.length,
+  ));
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-final-save'));
+  for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
+    saveSamples.push(await captureResourceSaveSample(
+      client,
+      saveSamples.length + 1,
+      `stationary-repeat-${ordinal}`,
+      measuredCycles.length,
+    ));
+    pendingDrainSamples.push(await waitForResourcePendingDrain(
+      client,
+      `soak-stationary-repeat-${ordinal}`,
+    ));
+  }
+  await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_SETTLE_MS));
+  pendingDrainSamples.push(await waitForResourcePendingDrain(client, 'soak-settled'));
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'soak-settled',
+    RESOURCE_CHECKPOINT_POLICY_ORDINARY_FULL,
+  ));
+  try {
+    await client.call('HeapProfiler.enable');
+  } catch {
+    throw new Error(
+      'Renderer HeapProfiler domain was unavailable; resource soak refuses unbookended evidence',
+    );
+  }
+  try {
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 3));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'soak-final-forced-gc-1',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+    ));
+    forcedGarbageCollections.push(await forceRendererGarbageCollection(client, 4));
+    await new Promise((resolve) => setTimeout(resolve, RESOURCE_SHAKEDOWN_GC_SETTLE_MS));
+    checkpoints.push(await resourceCheckpoint(
+      client,
+      rootPid,
+      webAudioTracker,
+      'soak-final-forced-gc-2',
+      RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+    ));
+  } finally {
+    await client.call('HeapProfiler.disable').catch(() => undefined);
+  }
+
+  checkpoints.push(await resourceCheckpoint(
+    client,
+    rootPid,
+    webAudioTracker,
+    'soak-post-save',
+    RESOURCE_CHECKPOINT_POLICY_COLLECTED_FULL,
+  ));
+  assertResourceSoakMeasurement({
+    route,
+    warmupCycle,
+    measuredCycles,
+    measuredTravelDurationMs,
+    saveSamples,
+    checkpoints,
+  });
+  const saveGrowth = resourceSoakSaveGrowthSummary(saveSamples, measuredCycles.length);
+  const retention = resourceSoakRetentionSummary(checkpoints);
+  const cadence = resourceSoakCadenceSummary(measuredCycles);
+  return {
+    schema: 'tideweft-performance-resource-soak-measurement/v1',
+    id: scenario.id,
+    label: scenario.label,
+    seed: scenario.seed,
+    mode: scenario.mode,
+    viewport: scenario.viewport,
+    controlledWarmupFrames,
+    measurementStartedAt,
+    measurementFinishedAt: new Date().toISOString(),
+    elapsedHarnessMs: performance.now() - measurementMonotonicStart,
+    route,
+    warmupCycle,
+    measuredCycles,
+    measuredTravelDurationMs,
+    saveSamples,
+    saveGrowth,
+    cadence,
+    pendingDrainSamples,
+    settle: {
+      pendingDrainTimeoutMs: RESOURCE_SOAK_PENDING_DRAIN_TIMEOUT_MS,
+      pendingDrainPollMs: RESOURCE_SOAK_PENDING_DRAIN_POLL_MS,
+      baselineDurationMs: RESOURCE_SHAKEDOWN_SETTLE_MS,
+      finalDurationMs: RESOURCE_SHAKEDOWN_SETTLE_MS,
+      scope: 'runtime, renderer, and UI loops remained stopped while bounded polling proved selected pending work drained; symmetric baseline/final stopped settles preceded their forced-GC bookends',
+    },
+    forcedGarbageCollections,
+    checkpoints,
+    retention,
+    interpretation: {
+      scope: 'one warmed corridor plus at least sixty aggregate active-travel minutes of repeated ordinary packaged Relief travel, bounded stopped checkpoint/save intervals, and successful saves with exact UTF-8 payload byte lengths',
+      cadence: 'first-versus-last route-driver requestAnimationFrame observations include changing weather, light, water, actors, and movement mode; they are trend evidence, not controlled scene equivalence',
+      forcedGc: 'renderer V8 only at warmed baseline and final bookends; Electron browser, GPU, audio, and utility processes were not forced',
+      ordinaryGc: 'intermediate cycle checkpoints are unforced observations, but forced-GC bookends mean this is not proof of an entirely untouched process lifecycle',
+      rss: 'summed descendant RSS double-counts shared pages and is not unique physical memory',
+      dom: 'CDP Nodes and attached element counts are independent observations; their difference is not called detached nodes',
+      webAudio: 'CDP lifecycle observations are diagnostic and enabling the domain may add instrumentation overhead',
+      runtimeResources: 'primitive counts cover selected exposed retained owners only; they are not an exhaustive inventory of process-wide retention',
+      terrainRegistry: 'registered terrain-generator and job counts exclude generators or jobs retained solely by external closures and are not exhaustive process-wide terrain-retention evidence',
+      saveBytes: 'UTF-8 byte lengths cover serialized worldJson payloads only; the stopped-world tail proves equal lengths, not payload-byte identity, and excludes total storage-record, database, or on-disk bytes',
+      routeBreadth: 'the repeated signed two-region corridor audits accumulation and cleanup but not broad unique-region growth, other seeds, Chart, mobile, or other operating systems',
+      pointInTimeNoise: 'DOM, heap, and process-tree checkpoints are concurrent diagnostic observations and page-side inventories allocate temporary observation records',
     },
   };
 }
@@ -3220,6 +4050,7 @@ async function runIsolatedScenario(
   sampleMs,
   traceHitches,
   resourceShakedown = false,
+  resourceSoak = false,
 ) {
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
@@ -3273,7 +4104,7 @@ async function runIsolatedScenario(
     const page = await waitForPage(port, child, childState);
     client = new CdpClient(page.webSocketDebuggerUrl);
     await client.open();
-    if (resourceShakedown) {
+    if (resourceShakedown || resourceSoak) {
       // CDP discovery can observe the final app:// URL before its first
       // renderer document has finished initializing. Wait for that stable
       // gameplay document so the guard cannot be lost with the startup
@@ -3285,15 +4116,21 @@ async function runIsolatedScenario(
         await client.call('WebAudio.enable');
       } catch {
         throw new Error(
-          'CDP WebAudio lifecycle instrumentation was unavailable; resource shakedown cannot continue',
+          'CDP WebAudio lifecycle instrumentation was unavailable; resource diagnostic cannot continue',
         );
       }
       await setViewport(client, scenario.viewport);
       await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
     }
     const bootstrap = await bootstrapWorld(client, scenario.seed);
-    const measurement = resourceShakedown
-      ? await measureResourceShakedown(
+    const measurement = resourceSoak
+      ? await measureResourceSoak(
+        client,
+        scenario,
+        child.pid,
+        webAudioTracker,
+      )
+      : resourceShakedown ? await measureResourceShakedown(
         client,
         scenario,
         child.pid,
@@ -3318,7 +4155,7 @@ async function runIsolatedScenario(
     throw failure;
   } finally {
     try {
-      if (resourceShakedown && client !== null && !client.closed) {
+      if ((resourceShakedown || resourceSoak) && client !== null && !client.closed) {
         await client.call('WebAudio.disable').catch(() => undefined);
       }
       webAudioTracker?.detach();
@@ -3455,8 +4292,17 @@ async function main() {
     mode: 'relief-3d',
     viewport: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
   };
-  const selectedScenarios = options.resourceShakedown
-    ? [resourceScenario]
+  const resourceSoakScenario = {
+    id: 'prolonged-repeated-region-resource-soak-relief',
+    label: 'At least sixty active travel minutes across absolute 0:0 <-> 0:-1 — desktop Relief 3D',
+    seed: RESOURCE_SHAKEDOWN_WORLD_SEED,
+    worldGroup: 'prolonged-repeated-region-resource-soak',
+    mode: 'relief-3d',
+    viewport: { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false },
+  };
+  const selectedScenarios = options.resourceSoak
+    ? [resourceSoakScenario]
+    : options.resourceShakedown ? [resourceScenario]
     : options.scenarioId.length === 0
       ? scenarios
       : scenarios.filter(({ id }) => id === options.scenarioId);
@@ -3487,6 +4333,7 @@ async function main() {
       options.sampleMs,
       options.traceHitches,
       options.resourceShakedown,
+      options.resourceSoak,
     );
     const packagedAfterScenario = await executableIdentity(executable);
     if (JSON.stringify(packagedAfterScenario) !== packagedIdentityJson) {
@@ -3557,7 +4404,26 @@ async function main() {
       },
     },
   };
-  const result = options.resourceShakedown ? {
+  const result = options.resourceSoak ? {
+    schema: 'tideweft-performance-resource-soak/v1',
+    ...commonResult,
+    captureScope: {
+      kind: 'resource-soak',
+      complete: true,
+      expectedScenarioIds: [resourceSoakScenario.id],
+      selectedScenarioIds: [resourceSoakScenario.id],
+    },
+    instrumentation: {
+      minimumActiveTravelMs: RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
+      minimumMeasuredCycles: RESOURCE_SOAK_MINIMUM_CYCLES,
+      maximumMeasuredCycles: RESOURCE_SOAK_MAXIMUM_CYCLES,
+      saveIntervalCycles: RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
+      processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
+      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
+      runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
+    },
+    measurements,
+  } : options.resourceShakedown ? {
     schema: 'tideweft-performance-resource-shakedown/v1',
     ...commonResult,
     captureScope: {
@@ -3591,7 +4457,14 @@ async function main() {
   if (options.traceHitches) result.hitchTraceEnabled = true;
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
-  if (options.resourceShakedown) {
+  if (options.resourceSoak) {
+    process.stdout.write(`Resource soak written to ${options.output}\n`);
+    process.stdout.write(
+      `${measurements[0].id}: ${measurements[0].measuredCycles.length} measured corridor cycles; `
+      + `${(measurements[0].measuredTravelDurationMs / 60_000).toFixed(2)} active travel minutes; `
+      + `${measurements[0].saveSamples.length} exact save samples\n`,
+    );
+  } else if (options.resourceShakedown) {
     process.stdout.write(`Resource shakedown written to ${options.output}\n`);
     process.stdout.write(
       `${measurements[0].id}: ${measurements[0].cycles.length} complete corridor cycles; `
@@ -3628,10 +4501,18 @@ module.exports = {
   HITCH_TRACE_SNAPSHOT_CAPACITY,
   HITCH_TRACE_THRESHOLD_MS,
   RESOURCE_CHECKPOINT_LABELS,
+  RESOURCE_SOAK_MINIMUM_CYCLES,
+  RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
+  RESOURCE_SOAK_SAVE_GROWTH_BUDGET_BYTES,
+  RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
+  RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES,
   RESOURCE_SHAKEDOWN_CYCLES,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
   assertResourceCheckpointOrder,
+  assertResourceSaveSample,
+  assertResourceSoakCheckpointOrder,
+  assertResourceSoakMeasurement,
   assertResourceShakedownCycle,
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
@@ -3643,6 +4524,10 @@ module.exports = {
   parseArguments,
   parsePosixProcessTable,
   parseWindowsProcessTable,
+  resourceSoakCadenceSummary,
+  resourceSoakCycleCheckpointLabel,
+  resourceSoakRetentionSummary,
+  resourceSoakSaveGrowthSummary,
   retainBoundedHitchGap,
   retainBoundedHitchSnapshot,
   sanitizeRuntimeResourceCounts,
