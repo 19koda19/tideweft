@@ -1324,6 +1324,7 @@ function assertNoResourceInputContamination(input, label = 'resource checkpoint'
   const trusted = input?.trustedInputs;
   const baseline = input?.baselineViewport;
   const current = input?.currentViewport;
+  const lifecycle = input?.pageLifecycle;
   const numericViewportFields = [
     'layoutWidth',
     'layoutHeight',
@@ -1354,6 +1355,22 @@ function assertNoResourceInputContamination(input, label = 'resource checkpoint'
     || typeof baseline !== 'object'
     || current === null
     || typeof current !== 'object'
+    || lifecycle === null
+    || typeof lifecycle !== 'object'
+    || typeof lifecycle.baselineVisibility !== 'string'
+    || typeof lifecycle.currentVisibility !== 'string'
+    || ![
+      'visibilityChangeEvents',
+      'hiddenTransitions',
+      'pageHideEvents',
+      'freezeEvents',
+      'focusEvents',
+      'blurEvents',
+    ].every((field) => Number.isSafeInteger(lifecycle[field]) && lifecycle[field] >= 0)
+    || !Number.isFinite(lifecycle.hiddenDurationMs)
+    || lifecycle.hiddenDurationMs < 0
+    || typeof lifecycle.baselineHasFocus !== 'boolean'
+    || typeof lifecycle.currentHasFocus !== 'boolean'
   ) {
     throw new Error(`${label} returned invalid input-contamination evidence`);
   }
@@ -1367,12 +1384,18 @@ function assertNoResourceInputContamination(input, label = 'resource checkpoint'
     trusted.blockingTotal > 0
     || input.viewportChangeEvents > 0
     || viewportDriftFields.length > 0
+    || lifecycle.baselineVisibility !== 'visible'
+    || lifecycle.currentVisibility !== 'visible'
+    || lifecycle.hiddenTransitions > 0
+    || lifecycle.pageHideEvents > 0
+    || lifecycle.freezeEvents > 0
   ) {
     throw new Error(
-      `${label} was contaminated by trusted input or viewport/zoom drift: `
+      `${label} was contaminated by trusted input, viewport/zoom drift, or a hidden/frozen page lifecycle: `
       + `trusted=${JSON.stringify(trusted)}, `
       + `viewportChangeEvents=${input.viewportChangeEvents}, `
-      + `driftFields=${JSON.stringify(viewportDriftFields)}`,
+      + `driftFields=${JSON.stringify(viewportDriftFields)}, `
+      + `pageLifecycle=${JSON.stringify(lifecycle)}`,
     );
   }
   return true;
@@ -1584,6 +1607,16 @@ async function installResourceInputGuard(client) {
       visualScale: visualViewport?.scale ?? null,
     });
     let baselineViewport = viewport();
+    const baselineVisibility = document.visibilityState;
+    const baselineHasFocus = document.hasFocus();
+    let visibilityChangeEvents = 0;
+    let hiddenTransitions = 0;
+    let hiddenDurationMs = 0;
+    let hiddenSince = baselineVisibility === 'hidden' ? performance.now() : null;
+    let pageHideEvents = 0;
+    let freezeEvents = 0;
+    let focusEvents = 0;
+    let blurEvents = 0;
     const listeners = [];
     const listen = (target, type, callback) => {
       target.addEventListener(type, callback, { capture: true, passive: true });
@@ -1608,12 +1641,41 @@ async function installResourceInputGuard(client) {
     if (visualViewport) {
       listen(visualViewport, 'resize', () => { viewportChangeEvents += 1; });
     }
+    listen(document, 'visibilitychange', () => {
+      visibilityChangeEvents += 1;
+      if (document.visibilityState === 'hidden' && hiddenSince === null) {
+        hiddenTransitions += 1;
+        hiddenSince = performance.now();
+      } else if (document.visibilityState === 'visible' && hiddenSince !== null) {
+        hiddenDurationMs += performance.now() - hiddenSince;
+        hiddenSince = null;
+      }
+    });
+    listen(window, 'pagehide', () => { pageHideEvents += 1; });
+    listen(document, 'freeze', () => { freezeEvents += 1; });
+    listen(window, 'focus', () => { focusEvents += 1; });
+    listen(window, 'blur', () => { blurEvents += 1; });
     const snapshot = () => ({
       scope: 'count-only trusted browser input and viewport/zoom evidence from the stable packaged gameplay document through bootstrap and guarded measurement',
       trustedInputs: { ...trustedInputs },
       viewportChangeEvents,
       baselineViewport: { ...baselineViewport },
       currentViewport: viewport(),
+      pageLifecycle: {
+        baselineVisibility,
+        currentVisibility: document.visibilityState,
+        visibilityChangeEvents,
+        hiddenTransitions,
+        hiddenDurationMs: hiddenDurationMs + (
+          hiddenSince === null ? 0 : performance.now() - hiddenSince
+        ),
+        pageHideEvents,
+        freezeEvents,
+        baselineHasFocus,
+        currentHasFocus: document.hasFocus(),
+        focusEvents,
+        blurEvents,
+      },
     });
     Object.defineProperty(window, property, {
       configurable: true,
@@ -4130,6 +4192,7 @@ async function runIsolatedScenario(
       // gameplay document so the guard cannot be lost with the startup
       // execution context before controlled viewport setup or bootstrap.
       await waitForStablePackagedGameplayDocument(client);
+      await client.waitFor(`document.visibilityState === 'visible'`);
       await installResourceInputGuard(client);
     }
     if (resourceShakedown || resourceSoak) {
@@ -4483,6 +4546,15 @@ async function main() {
     result.hitchTraceEnabled = true;
     result.instrumentation = {
       trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
+      pageLifecycleGuard: 'requires a visible document throughout guarded measurement; hidden transitions, pagehide, or freeze invalidate evidence, while focus/blur is retained as context rather than treated as contamination',
+      backgroundExecutionPolicy: {
+        launchSwitches: [
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
+        ],
+        limitation: 'ordinary operating-system window overlap is not directly observable; launch switches mitigate background and occlusion scheduling, while page lifecycle evidence rejects hidden, pagehide, or frozen documents',
+      },
     };
   }
   await fs.mkdir(path.dirname(options.output), { recursive: true });

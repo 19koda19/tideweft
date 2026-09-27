@@ -718,6 +718,19 @@ function cleanInputEvidence() {
     viewportChangeEvents: 0,
     baselineViewport: { ...viewport },
     currentViewport: { ...viewport },
+    pageLifecycle: {
+      baselineVisibility: 'visible',
+      currentVisibility: 'visible',
+      visibilityChangeEvents: 0,
+      hiddenTransitions: 0,
+      hiddenDurationMs: 0,
+      pageHideEvents: 0,
+      freezeEvents: 0,
+      baselineHasFocus: true,
+      currentHasFocus: true,
+      focusEvents: 0,
+      blurEvents: 0,
+    },
   };
 }
 
@@ -740,6 +753,29 @@ function cleanInputEvidence() {
   assert.throws(
     () => assertNoResourceInputContamination(zoomed),
     /viewport\/zoom drift/u,
+  );
+  const focusChanged = cleanInputEvidence();
+  focusChanged.pageLifecycle.baselineHasFocus = true;
+  focusChanged.pageLifecycle.currentHasFocus = false;
+  focusChanged.pageLifecycle.blurEvents = 1;
+  assert.equal(assertNoResourceInputContamination(focusChanged), true);
+  for (const contaminated of [
+    { currentVisibility: 'hidden', visibilityChangeEvents: 1, hiddenTransitions: 1 },
+    { pageHideEvents: 1 },
+    { freezeEvents: 1 },
+  ]) {
+    const lifecycle = cleanInputEvidence();
+    Object.assign(lifecycle.pageLifecycle, contaminated);
+    assert.throws(
+      () => assertNoResourceInputContamination(lifecycle),
+      /hidden\/frozen page lifecycle/u,
+    );
+  }
+  const malformedLifecycle = cleanInputEvidence();
+  delete malformedLifecycle.pageLifecycle.hiddenDurationMs;
+  assert.throws(
+    () => assertNoResourceInputContamination(malformedLifecycle),
+    /invalid input-contamination evidence/u,
   );
 }
 
