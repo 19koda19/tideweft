@@ -25,6 +25,7 @@ const {
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
   forceRendererGarbageCollection,
@@ -1055,6 +1056,23 @@ function cleanInputEvidence() {
 }
 
 (async () => {
+  const cleanGuard = cleanInputEvidence();
+  assert.deepEqual(
+    await captureInputGuardEvidence({
+      evaluate: async () => cleanGuard,
+    }, 'guarded hitch trace'),
+    cleanGuard,
+  );
+  const contaminatedGuard = cleanInputEvidence();
+  contaminatedGuard.trustedInputs.total = 1;
+  contaminatedGuard.trustedInputs.blockingTotal = 1;
+  contaminatedGuard.trustedInputs.key = 1;
+  await assert.rejects(
+    captureInputGuardEvidence({
+      evaluate: async () => contaminatedGuard,
+    }, 'guarded hitch trace'),
+    /contaminated by trusted input/u,
+  );
   const calls = [];
   const collected = await forceRendererGarbageCollection({
     call: async (method) => { calls.push(method); },

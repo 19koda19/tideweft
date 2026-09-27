@@ -1609,7 +1609,7 @@ async function installResourceInputGuard(client) {
       listen(visualViewport, 'resize', () => { viewportChangeEvents += 1; });
     }
     const snapshot = () => ({
-      scope: 'count-only trusted browser input and viewport/zoom evidence from the stable packaged gameplay document through bootstrap and measurement',
+      scope: 'count-only trusted browser input and viewport/zoom evidence from the stable packaged gameplay document through bootstrap and guarded measurement',
       trustedInputs: { ...trustedInputs },
       viewportChangeEvents,
       baselineViewport: { ...baselineViewport },
@@ -1650,7 +1650,7 @@ async function rebaseResourceInputGuardAfterViewport(client, viewport) {
   })()`);
   if (!result?.ok) {
     throw new Error(
-      'Resource shakedown received trusted input or zoom drift during controlled viewport setup: '
+      'Guarded performance measurement received trusted input or zoom drift during controlled viewport setup: '
       + JSON.stringify(result?.evidence ?? null),
     );
   }
@@ -1659,6 +1659,15 @@ async function rebaseResourceInputGuardAfterViewport(client, viewport) {
     'resource input-guard viewport rebase',
   );
   return result.evidence;
+}
+
+async function captureInputGuardEvidence(client, label) {
+  const evidence = await client.evaluate(`(() => {
+    const guard = window.__TIDEWEFT_RESOURCE_SHAKEDOWN_INPUT_GUARD__;
+    return typeof guard?.snapshot === 'function' ? guard.snapshot() : null;
+  })()`);
+  assertNoResourceInputContamination(evidence, label);
+  return evidence;
 }
 
 function resourceMetricsRecord(metrics) {
@@ -3281,9 +3290,15 @@ function assertMeasurementTelemetry(scenario, frameSample, traceHitches) {
   }
 }
 
-async function measureScenario(client, scenario, sampleMs, traceHitches) {
+async function measureScenario(
+  client,
+  scenario,
+  sampleMs,
+  traceHitches,
+  viewportAlreadyPrepared = false,
+) {
   await requirePerformanceInstrumentation(client, scenario);
-  const warmupFrames = await warmTargetRenderer(client, scenario);
+  const warmupFrames = await warmTargetRenderer(client, scenario, viewportAlreadyPrepared);
   await preparePerformanceInstrumentation(client, scenario);
   const browserBefore = await browserPointInTime(client);
   const performanceBefore = metricsRecord(await client.call('Performance.getMetrics'));
@@ -3847,6 +3862,9 @@ async function measureScenario(client, scenario, sampleMs, traceHitches) {
   ) {
     throw new Error(`Scenario ${scenario.id} measured the wrong viewport: ${JSON.stringify(snapshot.viewport)}`);
   }
+  const viewportAndInput = traceHitches
+    ? await captureInputGuardEvidence(client, `hitch trace ${scenario.id}`)
+    : null;
 
   return {
     id: scenario.id,
@@ -3857,6 +3875,7 @@ async function measureScenario(client, scenario, sampleMs, traceHitches) {
     frameSample,
     saveSample,
     snapshot,
+    ...(viewportAndInput === null ? {} : { viewportAndInput }),
     browser: {
       cdpMetricUnits: CDP_METRIC_UNITS,
       metricWindowScope: {
@@ -4104,13 +4123,16 @@ async function runIsolatedScenario(
     const page = await waitForPage(port, child, childState);
     client = new CdpClient(page.webSocketDebuggerUrl);
     await client.open();
-    if (resourceShakedown || resourceSoak) {
+    const strictInputGuard = resourceShakedown || resourceSoak || traceHitches;
+    if (strictInputGuard) {
       // CDP discovery can observe the final app:// URL before its first
       // renderer document has finished initializing. Wait for that stable
       // gameplay document so the guard cannot be lost with the startup
       // execution context before controlled viewport setup or bootstrap.
       await waitForStablePackagedGameplayDocument(client);
       await installResourceInputGuard(client);
+    }
+    if (resourceShakedown || resourceSoak) {
       webAudioTracker = attachWebAudioLifecycleTracker(client);
       try {
         await client.call('WebAudio.enable');
@@ -4119,6 +4141,8 @@ async function runIsolatedScenario(
           'CDP WebAudio lifecycle instrumentation was unavailable; resource diagnostic cannot continue',
         );
       }
+    }
+    if (strictInputGuard) {
       await setViewport(client, scenario.viewport);
       await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
     }
@@ -4142,6 +4166,7 @@ async function runIsolatedScenario(
         scenario.minimumSampleMs === undefined
           ? sampleMs
           : Math.max(sampleMs, scenario.minimumSampleMs),
+        traceHitches,
         traceHitches,
       );
     completed = true;
@@ -4454,7 +4479,12 @@ async function main() {
     requestedSampleWindowMs: options.sampleMs,
     measurements,
   };
-  if (options.traceHitches) result.hitchTraceEnabled = true;
+  if (options.traceHitches) {
+    result.hitchTraceEnabled = true;
+    result.instrumentation = {
+      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
+    };
+  }
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
   if (options.resourceSoak) {
@@ -4517,6 +4547,7 @@ module.exports = {
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
   forceRendererGarbageCollection,
