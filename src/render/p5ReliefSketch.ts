@@ -140,8 +140,12 @@ import {
   type LooseCargoPointerPress,
 } from "./looseCargoPresentation";
 import {
+  actorCalloutViewport,
   placeIncidentCallout,
   playerBalancePresentation,
+  selectSituatedExpression,
+  situatedExpressionCalloutText,
+  situatedExpressionPresentation,
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
@@ -996,6 +1000,7 @@ export function createTideweftReliefRenderer(
     now: number,
   ): void => {
     if (!labelLayer || !instance) return;
+    const activeInstance = instance;
     const used = new Set<string>();
     const destination = view.player.destination;
     const tileSize = view.terrain.tileSize;
@@ -1490,56 +1495,51 @@ export function createTideweftReliefRenderer(
         harp.active,
       );
     }
-    const incident = view.player.incident;
-    if (incident && typeof incident.id === "string" && incident.id.length > 0) {
-      const compact = instance.width <= 704
-        || (instance.height <= 544 && instance.width <= 1_024);
-      const text = incident.label;
-      const node = labelNode(`player-incident-${incident.id}`, text);
-      const playerSurface = discoveredReliefSurfaceHeightAt(
+    const placeActorCallout = (
+      id: string,
+      text: string,
+      point: WorldPoint,
+      progress: number,
+      variantSeed: number,
+      presentation: { readonly fill: string; readonly outline: string },
+      configure: (node: HTMLSpanElement) => void,
+    ): void => {
+      const node = labelNode(id, text);
+      const sourceSurface = discoveredReliefSurfaceHeightAt(
         view.terrain,
-        view.player.position,
+        point,
         cache.mesh.verticalScale,
         true,
       );
       const projected = projectReliefPoint(
-        view.player.position,
-        playerSurface + tileSize * 0.72,
+        point,
+        sourceSurface + tileSize * 0.72,
         camera,
-        { width: instance.width, height: instance.height },
+        { width: activeInstance.width, height: activeInstance.height },
       );
       node.hidden = !projected.visible;
       if (projected.visible) {
-        const presentation = playerBalancePresentation(view.player.balanceState);
-        const variant = Number.isSafeInteger(incident.variantSeed)
-          ? ((incident.variantSeed % 3) + 3) % 3 - 1
+        const variant = Number.isSafeInteger(variantSeed)
+          ? ((variantSeed % 3) + 3) % 3 - 1
           : 0;
+        const viewport = actorCalloutViewport(activeInstance.width, activeInstance.height);
         const desiredWidth = Math.min(
-          compact ? 226 : 310,
-          Math.max(86, text.length * (compact ? 5.8 : 6.4) + 22),
+          viewport.compact ? 226 : 310,
+          Math.max(86, text.length * (viewport.compact ? 5.8 : 6.4) + 22),
         );
         const eased = easeWorldLabelPoint(
-          labelPositions.get(`player-incident-${incident.id}`),
+          labelPositions.get(id),
           projected,
           now,
           reducedMotion,
         );
-        labelPositions.set(`player-incident-${incident.id}`, eased);
+        labelPositions.set(id, eased);
         const placed = placeIncidentCallout(
           { x: eased.x + variant * 3, y: eased.y },
           desiredWidth,
-          {
-            width: instance.width,
-            height: instance.height,
-            safeTop: compact ? 76 : 70,
-            safeBottom: compact ? 92 : 58,
-            compact,
-          },
+          viewport,
         );
-        const progress = unit(incident.progress);
-        node.dataset.tone = "incident";
         node.dataset.selected = "false";
-        node.dataset.incidentKind = incident.kind;
         node.dataset.placement = placed.aboveCourier ? "above" : "below";
         node.style.left = `${placed.x.toFixed(1)}px`;
         node.style.top = `${placed.y.toFixed(1)}px`;
@@ -1549,11 +1549,45 @@ export function createTideweftReliefRenderer(
         node.style.color = presentation.outline;
         node.style.borderLeftColor = presentation.fill;
         node.style.boxShadow = `0 0 0 1px ${presentation.fill}55`;
-        node.style.opacity = `${(0.98 - progress * 0.14).toFixed(3)}`;
+        node.style.opacity = `${(0.98 - unit(progress) * 0.14).toFixed(3)}`;
         node.style.transform = "translate(-50%, -50%)";
+        configure(node);
       } else {
-        labelPositions.delete(`player-incident-${incident.id}`);
+        labelPositions.delete(id);
       }
+    };
+    const expression = view.expressions === undefined
+      ? undefined
+      : selectSituatedExpression(view.expressions);
+    if (expression) {
+      placeActorCallout(
+        `situated-expression-${expression.id}`,
+        situatedExpressionCalloutText(expression),
+        expression.position,
+        expression.progress,
+        expression.variantSeed,
+        situatedExpressionPresentation(expression.tone),
+        (node) => {
+          node.dataset.tone = "expression";
+          node.dataset.expressionTone = expression.tone;
+          node.dataset.sourceKind = expression.sourceKind;
+        },
+      );
+    }
+    const incident = view.expressions === undefined ? view.player.incident : undefined;
+    if (incident && typeof incident.id === "string" && incident.id.length > 0) {
+      placeActorCallout(
+        `player-incident-${incident.id}`,
+        incident.label,
+        view.player.position,
+        incident.progress,
+        incident.variantSeed,
+        playerBalancePresentation(view.player.balanceState),
+        (node) => {
+          node.dataset.tone = "incident";
+          node.dataset.incidentKind = incident.kind;
+        },
+      );
     }
     for (const [id, node] of labelNodes) {
       if (used.has(id)) continue;

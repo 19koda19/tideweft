@@ -259,6 +259,13 @@ export function mobileClockCopy(clock: TideweftUIView["clock"]): string {
   return `${clock.dayLabel ?? `Day ${clock.day}`} · ${clock.timeLabel}`;
 }
 
+/** Shared visible and live-region wording for one situated expression. */
+export function situatedExpressionCaptionCopy(
+  caption: NonNullable<TideweftUIView["expressionCaption"]>,
+): string {
+  return `${caption.speakerLabel}: ${caption.text}`;
+}
+
 export interface UnderfootTerrainSample {
   readonly terrainLabel: string;
   readonly isWater: boolean;
@@ -1139,6 +1146,9 @@ interface UIRefs {
   chronicleCount: HTMLSpanElement;
   chroniclePreview: HTMLSpanElement;
   chronicleList: HTMLOListElement;
+  expressionCaption: HTMLParagraphElement;
+  expressionCaptionSpeaker: HTMLSpanElement;
+  expressionCaptionText: HTMLSpanElement;
   scanButton: HTMLButtonElement;
   interactButton: HTMLButtonElement;
   waitButton: HTMLButtonElement;
@@ -1823,6 +1833,19 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   chronicleList.setAttribute("aria-label", "Events the courier saw, heard, or directly caused");
   chronicleDetails.append(chronicleSummary, chronicleList);
 
+  const expressionCaption = createElement("p", "situated-expression-caption");
+  expressionCaption.hidden = true;
+  expressionCaption.dataset.ui = "situated-expression-caption";
+  const expressionCaptionSpeaker = createElement(
+    "span",
+    "situated-expression-caption__speaker",
+  );
+  const expressionCaptionText = createElement(
+    "span",
+    "situated-expression-caption__text",
+  );
+  expressionCaption.append(expressionCaptionSpeaker, expressionCaptionText);
+
   const actionDock = createElement("nav", "action-dock glass-panel");
   actionDock.setAttribute("aria-label", "Journey actions");
   const scanButton = createButton("action-button action-button--scan", "Sound / Scan", "Pulse the Loom to reveal terrain and water depth");
@@ -2113,6 +2136,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     inspector,
     residentAbout,
     chronicleDetails,
+    expressionCaption,
     actionDock,
     titleDialog,
     quietDialog,
@@ -2228,6 +2252,9 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     chronicleCount,
     chroniclePreview,
     chronicleList,
+    expressionCaption,
+    expressionCaptionSpeaker,
+    expressionCaptionText,
     scanButton,
     interactButton,
     waitButton,
@@ -2301,6 +2328,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastChronicle = "";
   let lastResidentAbout = "__unrendered__";
   let lastAnnouncement = "";
+  let lastExpressionAnnouncementId = "";
   let lastNavigationCopy = "";
   let lastMobileNavigationCopy = "";
   let lastNavigationTitle = "";
@@ -2343,6 +2371,25 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     window.setTimeout(() => {
       announcer.textContent = message;
     }, 20);
+  };
+
+  const renderExpressionCaption = (
+    caption: TideweftUIView["expressionCaption"],
+  ): void => {
+    if (!caption) {
+      refs.expressionCaption.hidden = true;
+      return;
+    }
+    const copy = situatedExpressionCaptionCopy(caption);
+    refs.expressionCaptionSpeaker.textContent = `${caption.speakerLabel}:`;
+    refs.expressionCaptionText.textContent = caption.text;
+    refs.expressionCaption.dataset.tone = caption.tone;
+    refs.expressionCaption.dataset.expressionId = caption.id;
+    refs.expressionCaption.setAttribute("aria-label", copy);
+    refs.expressionCaption.hidden = false;
+    if (caption.id === lastExpressionAnnouncementId) return;
+    lastExpressionAnnouncementId = caption.id;
+    announce(copy, caption.assertive === true);
   };
 
   const titleAtmosphere = bindTitleAtmosphere({
@@ -2886,6 +2933,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const updateUnmeasured = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
+    renderExpressionCaption(view?.expressionCaption);
     const actorAbout = view ? resolveTideweftAboutSurface(view) : undefined;
     refs.kit.update(view?.kit);
     renderSaveWarning(view?.saveWarning);

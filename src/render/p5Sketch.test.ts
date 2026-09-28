@@ -480,6 +480,87 @@ describe("Chart renderer telemetry", () => {
   });
 });
 
+describe("Chart situated expression presentation", () => {
+  it("renders one deterministically selected expression and preserves only undefined legacy fallback", () => {
+    const base = view("chart-situated-expression", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      player: {
+        ...base.player,
+        incident: {
+          id: "legacy-fall",
+          kind: "fall",
+          label: "LEGACY INCIDENT",
+          progress: 0.2,
+          variantSeed: 1,
+        },
+      },
+      expressions: [
+        {
+          id: "z-low",
+          sourceActorId: "human:z-low",
+          sourceKind: "human",
+          speakerLabel: "Distant porter",
+          text: "LOW EXPRESSION",
+          position: { x: 12, y: 12 },
+          progress: 0.2,
+          priority: 1,
+          tone: "restrained",
+          variantSeed: 1,
+        },
+        {
+          id: "b-high",
+          sourceActorId: "animal:b-high",
+          sourceKind: "animal",
+          speakerLabel: "Nearby animal",
+          text: "LATER HIGH EXPRESSION",
+          position: { x: 12, y: 12 },
+          progress: 0.3,
+          priority: 8,
+          tone: "strained",
+          variantSeed: 2,
+        },
+        {
+          id: "a-high",
+          sourceActorId: "player",
+          sourceKind: "player",
+          speakerLabel: "You",
+          text: "SELECTED SHORT EXPRESSION",
+          position: { x: 12, y: 12 },
+          progress: 0.4,
+          priority: 8,
+          tone: "alarmed",
+          variantSeed: 3,
+        },
+      ],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "SELECTED SHORT EXPRESSION")).toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "LATER HIGH EXPRESSION")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LOW EXPRESSION")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY INCIDENT")).toBe(false);
+
+    text.mockClear();
+    current = { ...current, expressions: [] };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY INCIDENT")).toBe(false);
+
+    text.mockClear();
+    const { expressions: _expressions, ...legacy } = current;
+    current = legacy;
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY INCIDENT")).toBe(true);
+    renderer.destroy();
+  });
+});
+
 describe("Chart shared outdoor illumination", () => {
   it("does not resubmit fully undisclosed cells already covered by the chart background", () => {
     const base = view("undisclosed-chart-cell", { x: 12, y: 12 });

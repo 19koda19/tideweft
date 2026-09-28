@@ -232,6 +232,27 @@ export interface PlayerIncidentView {
 }
 
 /**
+ * One knowledge-safe, actor-situated expression projected for presentation.
+ * The projection owns wording and lifetime; renderers only arbitrate the
+ * bounded callout budget and never infer additional dialogue.
+ */
+export interface SituatedExpressionView {
+  readonly id: string;
+  readonly sourceActorId: string;
+  readonly sourceKind: "player" | "human" | "animal" | "supernatural";
+  readonly speakerLabel: string;
+  /** Deliberately short on-world copy shared by Chart and Relief. */
+  readonly text: string;
+  readonly position: WorldPoint;
+  /** 0 at birth, 1 when presentation should end. */
+  readonly progress: number;
+  readonly priority: number;
+  readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
+  /** Presentation variation only. This is not the expression's identity. */
+  readonly variantSeed: number;
+}
+
+/**
  * Current physical ADRIFT facts. This object is absent outside swept mode so
  * legacy render fixtures remain valid. Shore distance is intentionally
  * optional: free steering can invalidate a planned-bank estimate immediately.
@@ -695,6 +716,12 @@ export interface TideweftView {
   readonly aggregateWildlifeEvidence?: readonly AggregateWildlifeEvidenceView[];
   readonly particles?: readonly ParticleView[];
   readonly events?: readonly WorldEventView[];
+  /**
+   * Optional while situated expression projection rolls through older hosts
+   * and fixtures. A defined (including empty) list supersedes the legacy
+   * player incident callout path.
+   */
+  readonly expressions?: readonly SituatedExpressionView[];
   readonly camera: CameraView;
   readonly paused?: boolean;
 }

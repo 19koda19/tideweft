@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { PlayerBalanceView } from "./types";
+import type { PlayerBalanceView, SituatedExpressionView } from "./types";
 import {
+  actorCalloutViewport,
   placeIncidentCallout,
   playerBalancePresentation,
+  selectSituatedExpression,
+  situatedExpressionCalloutText,
 } from "./playerPresentation";
 
 const STATES: readonly PlayerBalanceView[] = [
@@ -59,6 +62,16 @@ describe("incident callout placement", () => {
     expect(placed.y).toBeLessThanOrEqual(portrait.height - portrait.safeBottom - 12);
   });
 
+  it("reserves the full compact touch dock in the mobile callout aperture", () => {
+    const viewport = actorCalloutViewport(320, 640);
+    const placed = placeIncidentCallout({ x: 160, y: 620 }, 226, viewport);
+    expect(viewport).toMatchObject({ safeTop: 76, safeBottom: 112, compact: true });
+    expect(placed.y).toBeGreaterThanOrEqual(viewport.safeTop + 12);
+    expect(placed.y).toBeLessThanOrEqual(640 - viewport.safeBottom - 12);
+    expect(placed.x - placed.width / 2).toBeGreaterThanOrEqual(12);
+    expect(placed.x + placed.width / 2).toBeLessThanOrEqual(308);
+  });
+
   it("prefers the lane above the courier when that lane is available", () => {
     expect(placeIncidentCallout(
       { x: 190, y: 260 },
@@ -112,5 +125,45 @@ describe("incident callout placement", () => {
     expect(Object.values(placed).every((value) =>
       typeof value === "boolean" || Number.isFinite(value))).toBe(true);
     expect(placed.width).toBe(72);
+  });
+});
+
+describe("situated expression callout budget", () => {
+  const expression = (
+    id: string,
+    priority: number,
+    text = id,
+  ): SituatedExpressionView => ({
+    id,
+    sourceActorId: `actor:${id}`,
+    sourceKind: "human",
+    speakerLabel: "Nearby courier",
+    text,
+    position: { x: 10, y: 20 },
+    progress: 0.25,
+    priority,
+    tone: "restrained",
+    variantSeed: 7,
+  });
+
+  it("selects one highest-priority expression with stable ID arbitration", () => {
+    const candidates = [
+      expression("z-last", 4),
+      expression("b-equal", 9),
+      expression("a-equal", 9, "Shared short copy"),
+    ];
+    const selected = selectSituatedExpression(candidates);
+    expect(selected?.id).toBe("a-equal");
+    expect(situatedExpressionCalloutText(selected!)).toBe("Shared short copy");
+    expect(candidates.map(({ id }) => id)).toEqual(["z-last", "b-equal", "a-equal"]);
+  });
+
+  it("treats malformed priorities as lowest without destabilizing ID order", () => {
+    expect(selectSituatedExpression([
+      expression("z-invalid", Number.NaN),
+      expression("a-invalid", Number.POSITIVE_INFINITY),
+      expression("finite", -100),
+    ])?.id).toBe("finite");
+    expect(selectSituatedExpression([])).toBeUndefined();
   });
 });

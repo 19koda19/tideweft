@@ -6633,7 +6633,58 @@ body {
   display: none;
 }
 
+.situated-expression-caption {
+  position: absolute;
+  z-index: 4;
+  right: auto;
+  bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 3.75rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(34rem, calc(100% - 2rem));
+  margin: 0;
+  color: var(--foam);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: clamp(0.65rem, 1.1vw, 0.82rem);
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-shadow: var(--floating-type-shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.situated-expression-caption[hidden] {
+  display: none !important;
+}
+
+.situated-expression-caption__speaker {
+  margin-right: 0.38rem;
+  color: var(--tide-bright);
+  font-weight: 820;
+}
+
+.situated-expression-caption[data-tone="strained"] .situated-expression-caption__speaker {
+  color: var(--gold);
+}
+
+.situated-expression-caption[data-tone="alarmed"] .situated-expression-caption__speaker {
+  color: var(--danger);
+}
+
+.situated-expression-caption[data-tone="relieved"] .situated-expression-caption__speaker {
+  color: var(--mauve);
+}
+
 @media (max-width: 58rem) {
+  #game-ui .situated-expression-caption {
+    right: auto;
+    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
+    left: 50%;
+    width: auto;
+    max-width: calc(100% - 1.1rem);
+    font-size: 0.68rem;
+  }
+
   #game-ui .chronicle-panel {
     right: 0.55rem;
     bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 4.35rem);

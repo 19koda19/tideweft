@@ -84,8 +84,12 @@ import {
   type LooseCargoTouchSequence,
 } from "./looseCargoPresentation";
 import {
+  actorCalloutViewport,
   placeIncidentCallout,
   playerBalancePresentation,
+  selectSituatedExpression,
+  situatedExpressionCalloutText,
+  situatedExpressionPresentation,
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
@@ -5344,34 +5348,45 @@ export function createTideweftRenderer(
       if (player.recoveryKind === undefined) drawPlayerBalanceMark(presentation, radius);
     };
 
-    const drawPlayerIncident = (view: TideweftView, now: number): void => {
-      const incident = view.player.incident;
-      if (!incident || typeof incident.id !== "string" || incident.id.length === 0) return;
-      const presentation = playerBalancePresentation(view.player.balanceState);
-      const variant = Number.isSafeInteger(incident.variantSeed)
-        ? ((incident.variantSeed % 3) + 3) % 3 - 1
+    const drawSituatedExpressionOrIncident = (view: TideweftView, now: number): void => {
+      const expression = view.expressions === undefined
+        ? undefined
+        : selectSituatedExpression(view.expressions);
+      const incident = view.expressions === undefined ? view.player.incident : undefined;
+      if (!expression && (!incident || typeof incident.id !== "string" || incident.id.length === 0)) {
+        return;
+      }
+      const presentation = expression
+        ? situatedExpressionPresentation(expression.tone)
+        : playerBalancePresentation(view.player.balanceState);
+      const variantSeed = expression?.variantSeed ?? incident!.variantSeed;
+      const variant = Number.isSafeInteger(variantSeed)
+        ? ((variantSeed % 3) + 3) % 3 - 1
         : 0;
-      const courier = worldLabelScreen(`incident-${incident.id}`, view.player.position, now);
-      const compact = p.width <= 704 || (p.height <= 544 && p.width <= 1_024);
-      const label = incident.label;
+      const calloutId = expression
+        ? `situated-expression-${expression.id}`
+        : `incident-${incident!.id}`;
+      const anchor = expression?.position ?? view.player.position;
+      const courier = worldLabelScreen(calloutId, anchor, now);
+      const viewport = actorCalloutViewport(p.width, p.height);
+      const label = expression
+        ? situatedExpressionCalloutText(expression)
+        : incident!.label;
       p.push();
       p.resetMatrix();
       p.textAlign(p.CENTER, p.CENTER);
       p.textStyle(p.BOLD);
-      p.textSize(compact ? 10 : 11);
-      const desiredWidth = Math.min(compact ? 226 : 310, p.textWidth(label) + 22);
+      p.textSize(viewport.compact ? 10 : 11);
+      const desiredWidth = Math.min(
+        viewport.compact ? 226 : 310,
+        p.textWidth(label) + 22,
+      );
       const placed = placeIncidentCallout(
         { x: courier.x + variant * 3, y: courier.y },
         desiredWidth,
-        {
-          width: p.width,
-          height: p.height,
-          safeTop: compact ? 76 : 70,
-          safeBottom: compact ? 92 : 58,
-          compact,
-        },
+        viewport,
       );
-      const progress = unit(incident.progress);
+      const progress = unit(expression?.progress ?? incident!.progress);
       const alpha = 246 - Math.trunc(progress * 38);
       const connectorY = placed.y + (placed.aboveCourier ? 11 : -11);
       p.stroke(withAlpha(presentation.fill, alpha * 0.82));
@@ -5877,7 +5892,7 @@ export function createTideweftRenderer(
       drawEvents(latestView.events ?? [], now);
       drawWind(latestView.weather, now);
       drawWeather(latestView.weather, now);
-      drawPlayerIncident(latestView, now);
+      drawSituatedExpressionOrIncident(latestView, now);
       if (latestView.paused) drawPausedVeil();
       cleanupWorldLabelPositions();
       telemetry.recordFrame(

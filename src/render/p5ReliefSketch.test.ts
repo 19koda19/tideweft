@@ -2081,6 +2081,81 @@ describe("Relief ADRIFT presentation path", () => {
   });
 });
 
+describe("Relief situated expression presentation", () => {
+  it("shares bounded arbitration with Chart and removes stale expression nodes", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-situated-expression", { x: 48, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      player: {
+        ...base.player,
+        incident: {
+          id: "legacy-stumble",
+          kind: "stumble",
+          label: "LEGACY INCIDENT",
+          progress: 0.2,
+          variantSeed: 1,
+        },
+      },
+      expressions: [
+        {
+          id: "b-equal",
+          sourceActorId: "human:b",
+          sourceKind: "human",
+          speakerLabel: "Nearby porter",
+          text: "LATER EXPRESSION",
+          position: { x: 48, y: 48 },
+          progress: 0.2,
+          priority: 5,
+          tone: "restrained",
+          variantSeed: 4,
+        },
+        {
+          id: "a-equal",
+          sourceActorId: "animal:a",
+          sourceKind: "animal",
+          speakerLabel: "Nearby animal",
+          text: "SELECTED SHORT EXPRESSION",
+          position: { x: 48, y: 48 },
+          progress: 0.3,
+          priority: 5,
+          tone: "alarmed",
+          variantSeed: 9,
+        },
+      ],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const selected = layer?.children.find((child) =>
+      child.textContent === "SELECTED SHORT EXPRESSION" && !child.removed);
+    if (!selected) throw new Error("expected selected situated expression label");
+    expect(selected.dataset).toMatchObject({
+      tone: "expression",
+      expressionTone: "alarmed",
+      sourceKind: "animal",
+    });
+    expect(layer?.children.some((child) =>
+      child.textContent === "LATER EXPRESSION" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY INCIDENT" && !child.removed)).toBe(false);
+
+    current = { ...current, expressions: [] };
+    harness.setView(current);
+    harness.draw();
+    expect(selected.removed).toBe(true);
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY INCIDENT" && !child.removed)).toBe(false);
+
+    const { expressions: _expressions, ...legacy } = current;
+    harness.setView(legacy);
+    harness.draw();
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY INCIDENT" && !child.removed)).toBe(true);
+    harness.renderer.destroy();
+  });
+});
+
 describe("Relief dog presentation", () => {
   it("renders a readable quadruped with honest coat/wetness, hover/selection emphasis, and detail gating", () => {
     vi.stubGlobal("performance", { now: () => 0 });

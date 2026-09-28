@@ -1,4 +1,8 @@
-import type { PlayerBalanceView, WorldPoint } from "./types";
+import type {
+  PlayerBalanceView,
+  SituatedExpressionView,
+  WorldPoint,
+} from "./types";
 
 /**
  * One semantic presentation table shared by Chart and Relief. The `mark` and
@@ -105,6 +109,77 @@ export interface IncidentViewport {
 export interface IncidentCalloutPlacement extends WorldPoint {
   readonly width: number;
   readonly aboveCourier: boolean;
+}
+
+/** Shared Chart/Relief palette for the four projected expression tones. */
+export interface SituatedExpressionPresentation {
+  readonly fill: string;
+  readonly outline: string;
+}
+
+const SITUATED_EXPRESSION_PRESENTATION: Readonly<Record<
+  SituatedExpressionView["tone"],
+  SituatedExpressionPresentation
+>> = {
+  restrained: { fill: "#61e6d2", outline: "#d9f8ea" },
+  strained: { fill: "#ffc071", outline: "#fff1c7" },
+  alarmed: { fill: "#ff796c", outline: "#fff2e8" },
+  relieved: { fill: "#bea9ff", outline: "#f4eeff" },
+};
+
+/**
+ * Enforces the first-slice clutter budget without relying on projection order.
+ * Higher priority wins; equal-priority expressions use ascending stable ID.
+ */
+export function selectSituatedExpression(
+  expressions: readonly SituatedExpressionView[],
+): SituatedExpressionView | undefined {
+  let selected: SituatedExpressionView | undefined;
+  for (const candidate of expressions) {
+    if (!selected) {
+      selected = candidate;
+      continue;
+    }
+    const candidatePriority = Number.isFinite(candidate.priority)
+      ? candidate.priority
+      : Number.NEGATIVE_INFINITY;
+    const selectedPriority = Number.isFinite(selected.priority)
+      ? selected.priority
+      : Number.NEGATIVE_INFINITY;
+    if (
+      candidatePriority > selectedPriority
+      || (candidatePriority === selectedPriority && candidate.id < selected.id)
+    ) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
+/** The projected short text is the exact copy used by both world renderers. */
+export const situatedExpressionCalloutText = (
+  expression: SituatedExpressionView,
+): string => expression.text;
+
+export const situatedExpressionPresentation = (
+  tone: SituatedExpressionView["tone"],
+): SituatedExpressionPresentation => SITUATED_EXPRESSION_PRESENTATION[tone];
+
+/**
+ * Shared playable aperture for actor callouts. Compact bottom space covers the
+ * two-row touch dock rather than merely the physical safe-area inset.
+ */
+export function actorCalloutViewport(width: number, height: number): IncidentViewport {
+  const safeWidth = Math.max(1, Number.isFinite(width) ? width : 1);
+  const safeHeight = Math.max(1, Number.isFinite(height) ? height : 1);
+  const compact = safeWidth <= 704 || (safeHeight <= 544 && safeWidth <= 1_024);
+  return {
+    width: safeWidth,
+    height: safeHeight,
+    safeTop: compact ? 76 : 70,
+    safeBottom: compact ? 112 : 58,
+    compact,
+  };
 }
 
 /**

@@ -467,6 +467,16 @@ export interface AnnouncementUIView {
   readonly assertive?: boolean;
 }
 
+/** One bounded, visible caption for the currently presented actor expression. */
+export interface SituatedExpressionCaptionUIView {
+  readonly id: string;
+  readonly speakerLabel: string;
+  readonly text: string;
+  readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
+  /** Urgency is explicit and is never inferred from visual tone. */
+  readonly assertive?: boolean;
+}
+
 /** Persistent storage health is separate from transient gameplay announcements. */
 export interface SaveWarningUIView {
   readonly id: string;
@@ -523,6 +533,7 @@ export interface TideweftUIView {
   readonly title: TitleOverlayUIView;
   readonly quietHour?: QuietHourUIView;
   readonly announcement?: AnnouncementUIView;
+  readonly expressionCaption?: SituatedExpressionCaptionUIView;
   readonly saveWarning?: SaveWarningUIView;
   readonly controls?: ControlAvailabilityUIView;
   /** Additive while the gathering runtime migrates; absent renders an empty KIT. */
