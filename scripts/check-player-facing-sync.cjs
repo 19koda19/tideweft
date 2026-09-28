@@ -10,6 +10,28 @@ const packageRelativePath = "package.json";
 const htmlMetadataRelativePath = "index.html";
 const electronMainRelativePath = "electron/main.cjs";
 const runtimeRelativePath = "src/game/runtime.ts";
+const tutorialSourceRelativePath = "src/ui/tutorialGuide.ts";
+const patchNoteSourceRelativePath = "src/content/patchNotes.json";
+const generatedPatchNotesRelativePath = "CHANGELOG.md";
+const requiredAuthoritativeExactPaths = [
+  electronMainRelativePath,
+  htmlMetadataRelativePath,
+  manifestRelativePath,
+];
+const allowedAuthoritativeExcludedPaths = [
+  patchNoteSourceRelativePath,
+  tutorialSourceRelativePath,
+];
+const allowedAuthoritativeExcludedSuffixes = [
+  ".test.cjs",
+  ".test.js",
+  ".test.ts",
+  ".test.tsx",
+  ".spec.cjs",
+  ".spec.js",
+  ".spec.ts",
+  ".spec.tsx",
+];
 const releaseCategoryKeys = [
   "gameplay",
   "fixes",
@@ -76,6 +98,12 @@ function isStringList(value, { nonEmpty = true } = {}) {
     && new Set(value).size === value.length;
 }
 
+function hasSameStringMembers(actual, expected) {
+  return isStringList(actual)
+    && actual.length === expected.length
+    && expected.every((entry) => actual.includes(entry));
+}
+
 function validateGameplayContract(manifest) {
   const errors = [];
   const keys = [
@@ -121,6 +149,15 @@ function validateGameplayContract(manifest) {
   for (const key of ["tutorialSourcePath", "patchNoteSourcePath", "generatedPatchNotesPath"]) {
     if (!isCanonicalRepoPath(manifest[key])) errors.push(`${key} must be a canonical repository path.`);
   }
+  if (manifest.tutorialSourcePath !== tutorialSourceRelativePath) {
+    errors.push(`tutorialSourcePath must remain ${tutorialSourceRelativePath}.`);
+  }
+  if (manifest.patchNoteSourcePath !== patchNoteSourceRelativePath) {
+    errors.push(`patchNoteSourcePath must remain ${patchNoteSourceRelativePath}.`);
+  }
+  if (manifest.generatedPatchNotesPath !== generatedPatchNotesRelativePath) {
+    errors.push(`generatedPatchNotesPath must remain ${generatedPatchNotesRelativePath}.`);
+  }
   if (!isStringList(manifest.reviewSurface)) {
     errors.push("reviewSurface must be a non-empty unique string list.");
   } else {
@@ -146,19 +183,33 @@ function validateGameplayContract(manifest) {
   ) {
     errors.push("authoritativeExcludedSuffixes must be a non-empty unique list of dotted suffixes.");
   }
-  if (!manifest.authoritativeExactPaths.includes(manifestRelativePath)) {
-    errors.push("The gameplay contract manifest must classify itself as authoritative.");
-  }
-  if (!manifest.authoritativePathPrefixes.includes("src/")) {
-    errors.push("authoritativePathPrefixes must retain the src/ production-source safety net.");
+  if (Array.isArray(manifest.authoritativeExactPaths)) {
+    for (const requiredPath of requiredAuthoritativeExactPaths) {
+      if (!manifest.authoritativeExactPaths.includes(requiredPath)) {
+        errors.push(`authoritativeExactPaths must retain ${requiredPath}.`);
+      }
+    }
   }
   if (
-    !manifest.authoritativeExcludedPaths.includes(manifest.tutorialSourcePath)
-    || !manifest.authoritativeExcludedPaths.includes(manifest.patchNoteSourcePath)
+    Array.isArray(manifest.authoritativePathPrefixes)
+    && !manifest.authoritativePathPrefixes.includes("src/")
   ) {
-    errors.push("Tutorial and canonical patch-note review sources must be explicit authoritative-path exclusions.");
+    errors.push("authoritativePathPrefixes must retain the src/ production-source safety net.");
   }
-  if (manifest.authoritativeExcludedPaths.includes(manifestRelativePath)) {
+  if (!hasSameStringMembers(manifest.authoritativeExcludedPaths, allowedAuthoritativeExcludedPaths)) {
+    errors.push(
+      `authoritativeExcludedPaths may contain exactly ${allowedAuthoritativeExcludedPaths.join(", ")}.`,
+    );
+  }
+  if (!hasSameStringMembers(manifest.authoritativeExcludedSuffixes, allowedAuthoritativeExcludedSuffixes)) {
+    errors.push(
+      "authoritativeExcludedSuffixes may contain only the supported test/spec filename suffixes.",
+    );
+  }
+  if (
+    Array.isArray(manifest.authoritativeExcludedPaths)
+    && manifest.authoritativeExcludedPaths.includes(manifestRelativePath)
+  ) {
     errors.push("The gameplay contract manifest cannot exclude itself from release review.");
   }
   return errors;
@@ -178,6 +229,52 @@ function isCalendarDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.valueOf()) && date.toISOString().startsWith(value);
+}
+
+function parseSemanticVersion(value) {
+  if (typeof value !== "string") return null;
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/u.exec(value);
+  if (match === null) return null;
+  const core = match.slice(1, 4).map(Number);
+  if (!core.every(Number.isSafeInteger)) return null;
+  return {
+    core,
+    prerelease: match[4] === undefined ? null : match[4].split("."),
+  };
+}
+
+function compareSemanticVersions(leftValue, rightValue) {
+  const left = parseSemanticVersion(leftValue);
+  const right = parseSemanticVersion(rightValue);
+  if (left === null || right === null) return null;
+  for (let index = 0; index < left.core.length; index += 1) {
+    if (left.core[index] !== right.core[index]) return Math.sign(left.core[index] - right.core[index]);
+  }
+  if (left.prerelease === null || right.prerelease === null) {
+    if (left.prerelease === right.prerelease) return 0;
+    return left.prerelease === null ? 1 : -1;
+  }
+  const width = Math.max(left.prerelease.length, right.prerelease.length);
+  for (let index = 0; index < width; index += 1) {
+    const leftPart = left.prerelease[index];
+    const rightPart = right.prerelease[index];
+    if (leftPart === undefined || rightPart === undefined) {
+      if (leftPart === rightPart) return 0;
+      return leftPart === undefined ? -1 : 1;
+    }
+    if (leftPart === rightPart) continue;
+    const leftNumeric = /^\d+$/u.test(leftPart);
+    const rightNumeric = /^\d+$/u.test(rightPart);
+    if (leftNumeric && rightNumeric) {
+      const leftNumber = BigInt(leftPart);
+      const rightNumber = BigInt(rightPart);
+      if (leftNumber !== rightNumber) return leftNumber < rightNumber ? -1 : 1;
+      continue;
+    }
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+    return leftPart < rightPart ? -1 : 1;
+  }
+  return 0;
 }
 
 function validatePatchNotes(document, manifest, tutorialVersion, packageDocument) {
@@ -439,6 +536,7 @@ function validateLocalContent(root = projectRoot) {
     ],
     manifest,
     patchNotes,
+    packageDocument,
   };
 }
 
@@ -520,6 +618,10 @@ function assertRevisionAvailable(root, revision, label) {
 }
 
 function resolveChangedFiles({ root = projectRoot, base = "", head = "HEAD", eventName = "" } = {}) {
+  if (eventName === "workflow_dispatch") {
+    assertRevisionAvailable(root, head, "Head revision");
+    return { paths: [], mode: "history", base: "", head };
+  }
   if (base && !isAllZeroSha(base)) {
     assertRevisionAvailable(root, base, "Base revision");
     assertRevisionAvailable(root, head, "Head revision");
@@ -530,14 +632,14 @@ function resolveChangedFiles({ root = projectRoot, base = "", head = "HEAD", eve
     throw new Error(`${eventName} validation requires TIDEWEFT_SYNC_BASE; refusing a content-only pass.`);
   }
   if (base && isAllZeroSha(base)) {
-    return { paths: [], mode: "zero-base-content-only", base, head };
+    assertRevisionAvailable(root, head, "Head revision");
+    return { paths: [], mode: "history", base: "", head };
   }
-
   const diff = runGit(root, ["diff", "--name-status", "-z", "HEAD", "--"]);
   const untracked = runGit(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
   return {
     paths: [...parseNameStatusZ(diff.stdout), ...untracked.stdout.split("\0").filter(Boolean)],
-    mode: eventName === "workflow_dispatch" ? "dispatch-content-only" : "working-tree",
+    mode: "working-tree",
     base: "",
     head,
   };
@@ -548,12 +650,25 @@ function readGitFile(root, revision, relativePath) {
   return result.status === 0 ? result.stdout : null;
 }
 
-function validateReviewAdvancement({ root, base, evaluation, manifest, tutorialVersion, patchNotes }) {
+function validateReviewAdvancement({
+  root,
+  base,
+  evaluation,
+  manifest,
+  tutorialVersion,
+  patchNotes,
+  packageDocument,
+  requirePriorSources = false,
+}) {
   const errors = [];
   if (evaluation.authoritativeFiles.length === 0 || !base || isAllZeroSha(base)) return errors;
 
   const previousTutorialSource = readGitFile(root, base, manifest.tutorialSourcePath);
-  if (previousTutorialSource !== null) {
+  if (previousTutorialSource === null) {
+    if (requirePriorSources) {
+      errors.push(`Prior release checkpoint is missing ${manifest.tutorialSourcePath}.`);
+    }
+  } else {
     const previousTutorialVersion = extractTutorialVersion(previousTutorialSource, { allowLegacyGuideObject: true });
     if (previousTutorialVersion === null) {
       errors.push(`Base ${manifest.tutorialSourcePath} lacks TUTORIAL_CONTENT_VERSION; migrate it in this release.`);
@@ -565,7 +680,11 @@ function validateReviewAdvancement({ root, base, evaluation, manifest, tutorialV
   }
 
   const previousPatchSource = readGitFile(root, base, manifest.patchNoteSourcePath);
-  if (previousPatchSource !== null) {
+  if (previousPatchSource === null) {
+    if (requirePriorSources) {
+      errors.push(`Prior release checkpoint is missing ${manifest.patchNoteSourcePath}.`);
+    }
+  } else {
     try {
       const previous = JSON.parse(previousPatchSource);
       const oldLatest = previous?.releases?.[0];
@@ -576,9 +695,47 @@ function validateReviewAdvancement({ root, base, evaluation, manifest, tutorialV
       ) {
         errors.push("Patch-note review must add a new release/build identity for this player-facing build.");
       }
+      const previousReleases = previous?.releases;
+      const currentReleases = patchNotes?.releases;
+      const currentTail = Array.isArray(previousReleases) && Array.isArray(currentReleases)
+        ? currentReleases.slice(-previousReleases.length)
+        : [];
+      const identityKeys = [
+        "version",
+        "releaseDate",
+        "buildIdentity",
+        "gameplayContractVersion",
+        "tutorialVersion",
+      ];
+      const preservedTail = Array.isArray(previousReleases)
+        && Array.isArray(currentReleases)
+        && previousReleases.length > 0
+        && currentReleases.length > previousReleases.length
+        && previousReleases.every((release, index) => (
+          identityKeys.every((key) => release?.[key] === currentTail[index]?.[key])
+        ));
+      if (!preservedTail) {
+        errors.push("Patch-note review must append a new release while preserving prior release identities and order.");
+      }
     } catch {
-      // The current strict schema validation is authoritative; a malformed
-      // historical source cannot safely provide a comparable release identity.
+      errors.push("The prior canonical patch-note source is invalid and cannot establish release advancement.");
+    }
+  }
+
+  const previousPackageSource = readGitFile(root, base, packageRelativePath);
+  if (previousPackageSource === null) {
+    if (requirePriorSources) {
+      errors.push(`Prior release checkpoint is missing ${packageRelativePath}.`);
+    }
+  } else {
+    try {
+      const previousPackage = JSON.parse(previousPackageSource);
+      const comparison = compareSemanticVersions(packageDocument?.version, previousPackage?.version);
+      if (comparison === null || comparison <= 0) {
+        errors.push("package.json version must advance beyond the prior release checkpoint.");
+      }
+    } catch {
+      errors.push("The prior package.json is invalid and cannot establish release advancement.");
     }
   }
   return errors;
@@ -640,9 +797,8 @@ function changedPathsForCommit(root, commit, parents) {
     return parseNameStatusZ(diff.stdout);
   }
   // A merge is an explicit first-parent integration commit. Every newly
-  // reachable non-merge commit is also evaluated on its own, so a merge can
-  // neither launder an earlier split change nor depend on parent ordering that
-  // is not already recorded authoritatively in the commit object.
+  // reachable non-merge commit is inspected in the same range, while novel
+  // merge-authored resolutions are classified separately below.
   const diff = runGit(root, [
     "diff",
     "--name-status",
@@ -662,12 +818,78 @@ function objectAtPath(root, revision, relativePath) {
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+function isCommitAncestor(root, ancestor, descendant) {
+  const result = runGit(root, ["merge-base", "--is-ancestor", ancestor, descendant], {
+    allowFailure: true,
+  });
+  if (result.status === 0) return true;
+  if (result.status === 1) return false;
+  const detail = (result.stderr || result.stdout || "unknown git error").trim();
+  throw new Error(`Unable to compare commit ancestry: ${detail}`);
+}
+
 function novelMergeResolutionPaths(root, commit, parents, changedPaths) {
   if (parents.length < 2) return [];
   return changedPaths.filter((relativePath) => {
     const mergedObject = objectAtPath(root, commit, relativePath);
     return parents.every((parent) => objectAtPath(root, parent, relativePath) !== mergedObject);
   });
+}
+
+function isAtomicReviewCheckpoint(result) {
+  return result.parents.length < 2
+    && result.tutorialReviewed
+    && result.patchNotesReviewed
+    && result.packageReviewed;
+}
+
+function isReviewSurfaceMutation(result) {
+  return result.tutorialReviewed || result.patchNotesReviewed || result.packageReviewed;
+}
+
+function isCoherentCheckpoint(root, candidate, fallbackManifest) {
+  const loadedManifest = manifestAtRevision(root, candidate.commit, fallbackManifest);
+  if (loadedManifest.errors.length > 0) return false;
+  const reviewState = reviewStateAtCommit(root, candidate.commit, loadedManifest.manifest);
+  return reviewState.errors.length === 0
+    && reviewState.tutorialVersion !== null
+    && reviewState.patchNotes !== null
+    && reviewState.packageDocument !== null;
+}
+
+function historicalCheckpointCandidates(root, checkpoint, inRangeCandidates, fallbackManifest) {
+  const candidates = new Map(inRangeCandidates.map((candidate) => [candidate.commit, candidate]));
+  if (checkpoint.parents.length === 0) return [...candidates.values()];
+  const listed = runGit(root, [
+    "rev-list",
+    "--reverse",
+    "--topo-order",
+    "--full-history",
+    ...checkpoint.parents,
+    "--",
+    tutorialSourceRelativePath,
+    patchNoteSourceRelativePath,
+    packageRelativePath,
+  ]);
+  const commits = listed.stdout.trim().length === 0
+    ? []
+    : listed.stdout.trim().split(/\s+/u);
+  for (const commit of commits) {
+    if (candidates.has(commit)) continue;
+    const parents = commitParents(root, commit);
+    if (parents.length > 1) continue;
+    const changedPaths = changedPathsForCommit(root, commit, parents);
+    if (
+      changedPaths.includes(tutorialSourceRelativePath)
+      && changedPaths.includes(patchNoteSourceRelativePath)
+      && changedPaths.includes(packageRelativePath)
+    ) {
+      candidates.set(commit, { commit, parents });
+    }
+  }
+  return [...candidates.values()].filter((candidate) => (
+    isCoherentCheckpoint(root, candidate, fallbackManifest)
+  ));
 }
 
 function reviewStateAtCommit(root, commit, manifest) {
@@ -697,13 +919,16 @@ function reviewStateAtCommit(root, commit, manifest) {
     errors,
     tutorialVersion,
     patchNotes: parsedPatchNotes.value,
+    packageDocument: parsedPackage.value,
   };
 }
 
 function evaluateCommitRange({ root = projectRoot, base, head, fallbackManifest }) {
-  assertRevisionAvailable(root, base, "Base revision");
+  const includesRepositoryRoots = !base;
+  if (!includesRepositoryRoots) assertRevisionAvailable(root, base, "Base revision");
   assertRevisionAvailable(root, head, "Head revision");
-  const listed = runGit(root, ["rev-list", "--reverse", "--topo-order", `${base}..${head}`, "--"]);
+  const revisionSet = includesRepositoryRoots ? head : `${base}..${head}`;
+  const listed = runGit(root, ["rev-list", "--reverse", "--topo-order", revisionSet, "--"]);
   const commits = listed.stdout.trim().length === 0
     ? []
     : listed.stdout.trim().split(/\s+/u);
@@ -720,37 +945,17 @@ function evaluateCommitRange({ root = projectRoot, base, head, fallbackManifest 
     const prefix = `Commit ${commit.slice(0, 12)} (${kind})`;
     const commitErrors = [];
     const mergeResolutionPaths = novelMergeResolutionPaths(root, commit, parents, changedPaths);
-    const mergeResolutionEvaluation = evaluateChangedFiles(mergeResolutionPaths, manifest);
+    // A merge that changes authoritative state relative to its first parent is
+    // itself an integration change, even when the selected object came intact
+    // from another parent. Counting the full first-parent net prevents a stale
+    // reviewed parent from laundering a gameplay revert.
+    const rangeAuthoritativeFiles = evaluation.authoritativeFiles;
+    const rangeReviewPaths = changedPaths;
     if (
       loadedManifest.errors.length > 0
       && (evaluation.authoritativeFiles.length > 0 || changedPaths.includes(manifestRelativePath))
     ) {
       commitErrors.push(...loadedManifest.errors);
-    }
-    commitErrors.push(...evaluation.errors);
-    if (mergeResolutionEvaluation.authoritativeFiles.length > 0) {
-      commitErrors.push(...mergeResolutionEvaluation.errors.map(
-        (error) => `novel merge resolution: ${error}`,
-      ));
-    }
-
-    if (
-      evaluation.authoritativeFiles.length > 0
-      && evaluation.tutorialReviewed
-      && evaluation.patchNotesReviewed
-    ) {
-      const reviewState = reviewStateAtCommit(root, commit, manifest);
-      commitErrors.push(...reviewState.errors);
-      if (reviewState.tutorialVersion !== null && reviewState.patchNotes !== null) {
-        commitErrors.push(...validateReviewAdvancement({
-          root,
-          base: parents[0] ?? "",
-          evaluation,
-          manifest,
-          tutorialVersion: reviewState.tutorialVersion,
-          patchNotes: reviewState.patchNotes,
-        }));
-      }
     }
 
     errors.push(...commitErrors.map((error) => `${prefix}: ${error}`));
@@ -760,9 +965,117 @@ function evaluateCommitRange({ root = projectRoot, base, head, fallbackManifest 
       kind: parents.length > 1 ? "merge-first-parent" : "non-merge",
       changedPaths,
       mergeResolutionPaths,
-      authoritativeFiles: evaluation.authoritativeFiles,
+      authoritativeFiles: rangeAuthoritativeFiles,
+      tutorialReviewed: rangeReviewPaths.includes(manifest.tutorialSourcePath),
+      patchNotesReviewed: rangeReviewPaths.includes(manifest.patchNoteSourcePath),
+      packageReviewed: rangeReviewPaths.includes(packageRelativePath),
       errors: commitErrors,
     });
+  }
+
+  const lastAuthoritativeIndex = results.findLastIndex(
+    (result) => result.authoritativeFiles.length > 0,
+  );
+  if (lastAuthoritativeIndex >= 0) {
+    const authoritativeCommits = results.filter(
+      (result) => result.authoritativeFiles.length > 0,
+    );
+    const reviewMutationCommits = results.filter(isReviewSurfaceMutation);
+    const checkpointCandidates = results.filter(isAtomicReviewCheckpoint);
+    const checkpoint = checkpointCandidates.findLast((candidate) => (
+      authoritativeCommits.every((authoritative) => (
+        isCommitAncestor(root, authoritative.commit, candidate.commit)
+      ))
+      && reviewMutationCommits.every((mutation) => (
+        isCommitAncestor(root, mutation.commit, candidate.commit)
+      ))
+    ));
+
+    if (checkpointCandidates.length === 0) {
+      errors.push(
+        "Authoritative player-facing changes require one final atomic release checkpoint that updates "
+        + `${fallbackManifest.tutorialSourcePath}, ${fallbackManifest.patchNoteSourcePath}, and ${packageRelativePath}.`,
+      );
+    } else if (checkpoint === undefined) {
+      const finalCandidate = checkpointCandidates.at(-1);
+      if (finalCandidate === undefined) {
+        throw new Error("Unable to resolve cumulative release-checkpoint coverage.");
+      }
+      const uncovered = authoritativeCommits.findLast((authoritative) => (
+        !isCommitAncestor(root, authoritative.commit, finalCandidate.commit)
+      ));
+      if (uncovered !== undefined) {
+        errors.push(
+          `Authoritative commit ${uncovered.commit.slice(0, 12)} is not contained in final release checkpoint `
+          + `${finalCandidate.commit.slice(0, 12)}; add a new atomic tutorial, patch-note, and version review after integration.`,
+        );
+      } else {
+        const uncoveredReview = reviewMutationCommits.findLast((mutation) => (
+          !isCommitAncestor(root, mutation.commit, finalCandidate.commit)
+        ));
+        if (uncoveredReview === undefined) {
+          throw new Error("Unable to resolve cumulative release-checkpoint coverage.");
+        }
+        errors.push(
+          `Review-surface commit ${uncoveredReview.commit.slice(0, 12)} is not contained in final release checkpoint `
+          + `${finalCandidate.commit.slice(0, 12)}; tutorial, patch-note, and version review must finish atomically.`,
+        );
+      }
+    } else {
+      const loadedManifest = manifestAtRevision(root, checkpoint.commit, fallbackManifest);
+      const checkpointManifest = loadedManifest.manifest;
+      const checkpointEvaluation = {
+        authoritativeFiles: authoritativeCommits.flatMap((result) => result.authoritativeFiles),
+        tutorialReviewed: true,
+        patchNotesReviewed: true,
+      };
+      const reviewState = reviewStateAtCommit(root, checkpoint.commit, checkpointManifest);
+      const checkpointErrors = [
+        ...loadedManifest.errors,
+        ...reviewState.errors,
+      ];
+      for (const relativePath of [
+        checkpointManifest.tutorialSourcePath,
+        checkpointManifest.patchNoteSourcePath,
+        packageRelativePath,
+      ]) {
+        if (objectAtPath(root, checkpoint.commit, relativePath) !== objectAtPath(root, head, relativePath)) {
+          checkpointErrors.push(
+            `${relativePath} at the validated head must match the final release checkpoint.`,
+          );
+        }
+      }
+      if (reviewState.tutorialVersion !== null && reviewState.patchNotes !== null) {
+        const historicalCandidates = historicalCheckpointCandidates(
+          root,
+          checkpoint,
+          checkpointCandidates,
+          fallbackManifest,
+        );
+        const priorCheckpoints = historicalCandidates.filter((candidate) => (
+          candidate.commit !== checkpoint.commit
+          && isCommitAncestor(root, candidate.commit, checkpoint.commit)
+        ));
+        const comparisonBases = priorCheckpoints.length > 0
+          ? priorCheckpoints.map((prior) => prior.commit)
+          : checkpoint.parents.slice(0, 1);
+        for (const comparisonBase of comparisonBases) {
+          checkpointErrors.push(...validateReviewAdvancement({
+            root,
+            base: comparisonBase,
+            evaluation: checkpointEvaluation,
+            manifest: checkpointManifest,
+            tutorialVersion: reviewState.tutorialVersion,
+            patchNotes: reviewState.patchNotes,
+            packageDocument: reviewState.packageDocument,
+            requirePriorSources: priorCheckpoints.length > 0,
+          }));
+        }
+      }
+      errors.push(...[...new Set(checkpointErrors)].map(
+        (error) => `Release checkpoint ${checkpoint.commit.slice(0, 12)}: ${error}`,
+      ));
+    }
   }
   return { commits: results, errors };
 }
@@ -786,7 +1099,7 @@ function run(options = {}) {
     return { errors, mode: "unresolved", authoritativeFiles: [] };
   }
 
-  if (changed.mode === "range") {
+  if (changed.mode === "range" || changed.mode === "history") {
     try {
       const range = evaluateCommitRange({
         root,
@@ -810,7 +1123,7 @@ function run(options = {}) {
   const evaluation = evaluateChangedFiles(changed.paths, local.manifest);
   errors.push(...evaluation.errors);
   if (local.tutorialVersion !== null && local.patchNotes !== undefined) {
-    const comparisonBase = changed.mode === "working-tree" || changed.mode === "dispatch-content-only"
+    const comparisonBase = changed.mode === "working-tree"
       ? "HEAD"
       : changed.base;
     errors.push(...validateReviewAdvancement({
@@ -820,6 +1133,7 @@ function run(options = {}) {
       manifest: local.manifest,
       tutorialVersion: local.tutorialVersion,
       patchNotes: local.patchNotes,
+      packageDocument: local.packageDocument,
     }));
   }
   return { errors, mode: changed.mode, authoritativeFiles: evaluation.authoritativeFiles, commits: [] };
@@ -836,7 +1150,7 @@ if (require.main === module) {
       ? "no authoritative rule changes"
       : `${result.authoritativeFiles.length} authoritative file(s) with tutorial and patch-note review`;
     const commitScope = result.commits.length > 0
-      ? `; ${result.commits.length} commit(s) independently checked`
+      ? `; ${result.commits.length} commit(s) examined under cumulative checkpoint rules`
       : "";
     console.log(`Player-facing synchronization passed (${result.mode}; ${scope}${commitScope}).`);
   }
