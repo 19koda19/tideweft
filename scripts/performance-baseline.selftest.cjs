@@ -15,8 +15,10 @@ const {
   RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
   RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES,
   RESOURCE_SHAKEDOWN_CYCLES,
+  WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
+  assertWorldAdvancePhaseTelemetry,
   assertResourceCheckpointOrder,
   assertResourceSaveSample,
   assertResourceSoakCheckpointOrder,
@@ -41,6 +43,73 @@ const {
   retainBoundedHitchSnapshot,
   sanitizeRuntimeResourceCounts,
 } = require('./performance-baseline.cjs');
+
+function runtimePerformanceSnapshot({
+  capacity = 2_048,
+  count = 12,
+  totalCount = 12,
+  meanMs = 1,
+  p99Ms = meanMs,
+  maxMs = meanMs,
+} = {}) {
+  return {
+    enabled: true,
+    capacity,
+    count,
+    totalCount,
+    meanMs,
+    p99Ms,
+    maxMs,
+  };
+}
+
+function worldAdvancePhaseTelemetryFixture() {
+  return {
+    worldAdvanceStep: runtimePerformanceSnapshot({ meanMs: 10, p99Ms: 12, maxMs: 14 }),
+    worldAdvancePhases: Object.fromEntries(
+      WORLD_ADVANCE_PHASE_KEYS.map((key) => [
+        key,
+        runtimePerformanceSnapshot({ meanMs: 1.5, p99Ms: 2, maxMs: 2.5 }),
+      ]),
+    ),
+  };
+}
+
+{
+  const valid = worldAdvancePhaseTelemetryFixture();
+  assert.equal(assertWorldAdvancePhaseTelemetry(valid, 'phase-fixture'), true);
+
+  const missing = structuredClone(valid);
+  delete missing.worldAdvancePhases.observedAftermath;
+  assert.throws(
+    () => assertWorldAdvancePhaseTelemetry(missing, 'phase-fixture'),
+    /exactly the five world-advance phases/u,
+  );
+
+  const countMismatch = structuredClone(valid);
+  countMismatch.worldAdvancePhases.regionalEcologyActors.totalCount -= 1;
+  countMismatch.worldAdvancePhases.regionalEcologyActors.count -= 1;
+  assert.throws(
+    () => assertWorldAdvancePhaseTelemetry(countMismatch, 'phase-fixture'),
+    /world-advance phase sample-window mismatch/u,
+  );
+
+  const capacityMismatch = structuredClone(valid);
+  capacityMismatch.worldAdvancePhases.regionalEcologyAggregateCommit.capacity = 1_024;
+  assert.throws(
+    () => assertWorldAdvancePhaseTelemetry(capacityMismatch, 'phase-fixture'),
+    /world-advance phase sample-window mismatch/u,
+  );
+
+  const impossibleMean = structuredClone(valid);
+  impossibleMean.worldAdvancePhases.observedAftermath.meanMs = 5;
+  impossibleMean.worldAdvancePhases.observedAftermath.p99Ms = 5;
+  impossibleMean.worldAdvancePhases.observedAftermath.maxMs = 5;
+  assert.throws(
+    () => assertWorldAdvancePhaseTelemetry(impossibleMean, 'phase-fixture'),
+    /impossible world-advance phase mean total/u,
+  );
+}
 
 function witness({
   elapsedMs,

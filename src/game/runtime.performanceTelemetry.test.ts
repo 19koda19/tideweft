@@ -6,6 +6,13 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 vi.setConfig({ testTimeout: 120_000 });
 
 const TELEMETRY_WORLD_SEED = "breathing room—é🌊 runtime telemetry";
+const WORLD_ADVANCE_PHASE_KEYS = [
+  "failClosedCheckpoint",
+  "observedAftermath",
+  "regionalEcologyActors",
+  "regionalEcologyAggregateCommit",
+  "worldAndLocalActors",
+] as const;
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
@@ -129,6 +136,14 @@ describe("runtime performance telemetry", () => {
     expect(Object.isFrozen(before.resources.limits.caches)).toBe(true);
     expect(Object.isFrozen(before.resources.limits.pending)).toBe(true);
     expect(Object.isFrozen(before.fixedStep)).toBe(true);
+    expect(Object.isFrozen(before.worldAdvancePhases)).toBe(true);
+    expect(Object.keys(before.worldAdvancePhases).sort()).toEqual(WORLD_ADVANCE_PHASE_KEYS);
+    for (const phase of Object.values(before.worldAdvancePhases)) {
+      expect(Object.isFrozen(phase)).toBe(true);
+      expect(phase.enabled).toBe(false);
+      expect(phase.count).toBe(0);
+      expect(phase.totalCount).toBe(0);
+    }
     expect(before.fixedStep.enabled).toBe(false);
     expect(before.worldAdvanceStep.enabled).toBe(false);
     expect(before.viewProjection.enabled).toBe(false);
@@ -245,6 +260,9 @@ describe("runtime performance telemetry", () => {
     const enabled = runtime.setPerformanceTelemetryEnabled(true);
     expect(enabled.fixedStep.enabled).toBe(true);
     expect(enabled.worldAdvanceStep.enabled).toBe(true);
+    for (const phase of Object.values(enabled.worldAdvancePhases)) {
+      expect(phase.enabled).toBe(true);
+    }
     expect(enabled.viewProjection.enabled).toBe(true);
     expect(enabled.audioProjection.enabled).toBe(true);
     expect(enabled.saveSnapshot.enabled).toBe(true);
@@ -255,6 +273,16 @@ describe("runtime performance telemetry", () => {
     expect(afterSteps.fixedStep.totalCount - before.fixedStep.totalCount).toBe(10);
     expect(afterSteps.worldAdvanceStep.count - before.worldAdvanceStep.count).toBe(1);
     expect(afterSteps.worldAdvanceStep.totalCount - before.worldAdvanceStep.totalCount).toBe(1);
+    for (const phase of Object.values(afterSteps.worldAdvancePhases)) {
+      expect(phase.count).toBe(afterSteps.worldAdvanceStep.count);
+      expect(phase.totalCount).toBe(afterSteps.worldAdvanceStep.totalCount);
+      expect(phase.meanMs).toBeGreaterThan(0);
+    }
+    const attributedWorldAdvanceMeanMs = Object.values(afterSteps.worldAdvancePhases)
+      .reduce((total, phase) => total + phase.meanMs, 0);
+    expect(attributedWorldAdvanceMeanMs).toBeLessThanOrEqual(
+      afterSteps.worldAdvanceStep.meanMs,
+    );
     expect(afterSteps.viewProjection.count - before.viewProjection.count).toBe(10);
     expect(afterSteps.viewProjection.totalCount - before.viewProjection.totalCount).toBe(10);
     expect(afterSteps.audioProjection.count - before.audioProjection.count).toBe(10);
@@ -329,6 +357,11 @@ describe("runtime performance telemetry", () => {
     expect(reset.fixedStep.enabled).toBe(true);
     expect(reset.worldAdvanceStep.count).toBe(0);
     expect(reset.worldAdvanceStep.totalCount).toBe(0);
+    for (const phase of Object.values(reset.worldAdvancePhases)) {
+      expect(phase.enabled).toBe(true);
+      expect(phase.count).toBe(0);
+      expect(phase.totalCount).toBe(0);
+    }
     expect(reset.viewProjection.count).toBe(0);
     expect(reset.viewProjection.totalCount).toBe(0);
     expect(reset.audioProjection.count).toBe(0);

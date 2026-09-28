@@ -983,11 +983,26 @@ export interface TideweftRuntimeResourceCounts {
   readonly limits: TideweftRuntimeResourceLimits;
 }
 
+export interface TideweftRuntimeWorldAdvancePhaseTelemetry {
+  /** Fail-closed rollback authority captured before an advancing fixed step. */
+  readonly failClosedCheckpoint: RuntimePerformanceSnapshot;
+  /** World perception, the economy step, BIO0, and settlement working animals. */
+  readonly worldAndLocalActors: RuntimePerformanceSnapshot;
+  /** Regional actor cognition, locomotion, mortality, and resource arbitration. */
+  readonly regionalEcologyActors: RuntimePerformanceSnapshot;
+  /** Aggregate response, validation, atomic commit, and regional-view rebuild. */
+  readonly regionalEcologyAggregateCommit: RuntimePerformanceSnapshot;
+  /** Lawfully observed event projection and player-facing ecology consequences. */
+  readonly observedAftermath: RuntimePerformanceSnapshot;
+}
+
 export interface TideweftRuntimePerformanceTelemetry {
   /** Inclusive fail-closed fixed-step cost, including presentation when requested. */
   readonly fixedStep: RuntimePerformanceSnapshot;
   /** Inclusive fixed-step cost for the one-in-ten step that advances the world. */
   readonly worldAdvanceStep: RuntimePerformanceSnapshot;
+  /** Exclusive, sequential attribution within a world-advance step. */
+  readonly worldAdvancePhases: TideweftRuntimeWorldAdvancePhaseTelemetry;
   /** Every complete Chart/Relief/UI view projection, including command-driven refreshes. */
   readonly viewProjection: RuntimePerformanceSnapshot;
   /** Tick-driven ambience perception and soundscape projection. */
@@ -9346,6 +9361,12 @@ export async function createTideweftRuntime(
   const soundscape = new TideweftSoundscape();
   const fixedStepPerformance = createRuntimePerformanceTelemetry();
   const worldAdvanceStepPerformance = createRuntimePerformanceTelemetry();
+  const worldAdvanceFailClosedCheckpointPerformance = createRuntimePerformanceTelemetry();
+  const worldAdvanceWorldAndLocalActorsPerformance = createRuntimePerformanceTelemetry();
+  const worldAdvanceRegionalEcologyActorsPerformance = createRuntimePerformanceTelemetry();
+  const worldAdvanceRegionalEcologyAggregateCommitPerformance =
+    createRuntimePerformanceTelemetry();
+  const worldAdvanceObservedAftermathPerformance = createRuntimePerformanceTelemetry();
   const viewProjectionPerformance = createRuntimePerformanceTelemetry();
   const audioProjectionPerformance = createRuntimePerformanceTelemetry();
   const saveSnapshotPerformance = createRuntimePerformanceTelemetry();
@@ -10987,6 +11008,9 @@ export async function createTideweftRuntime(
     playerStepsSinceWorldTick += 1;
     const worldAdvanced = playerStepsSinceWorldTick >= PLAYER_STEPS_PER_WORLD_TICK;
     if (worldAdvanced) {
+      let worldAdvancePhaseStartedAtMs = performanceTelemetryEnabled
+        ? runtimePerformanceNow()
+        : null;
       playerStepsSinceWorldTick = 0;
       const elapsedWeather = { ...world.weather };
       const targetTick = world.meta.completedTick + 1;
@@ -11354,6 +11378,14 @@ export async function createTideweftRuntime(
         throw new Error("Domestic-animal recovery search linkage was rejected");
       }
       settlementDomesticAnimalRecovery = searchLinkedRecovery;
+      if (worldAdvancePhaseStartedAtMs !== null) {
+        const finishedAtMs = runtimePerformanceNow();
+        worldAdvanceWorldAndLocalActorsPerformance.recordSpan(
+          worldAdvancePhaseStartedAtMs,
+          finishedAtMs,
+        );
+        worldAdvancePhaseStartedAtMs = runtimePerformanceNow();
+      }
       const regionalRootForStep = advanceRegionalEcologyRoot(
         regionalEcology.base.base.base.base.base.root,
         world.meta.completedTick,
@@ -11604,6 +11636,14 @@ export async function createTideweftRuntime(
       );
       if (resolvedRegionalResources === null) {
         throw new Error("Core ecology physical resource claims could not be resolved");
+      }
+      if (worldAdvancePhaseStartedAtMs !== null) {
+        const finishedAtMs = runtimePerformanceNow();
+        worldAdvanceRegionalEcologyActorsPerformance.recordSpan(
+          worldAdvancePhaseStartedAtMs,
+          finishedAtMs,
+        );
+        worldAdvancePhaseStartedAtMs = runtimePerformanceNow();
       }
       const orderedAggregateSources = [...resolvedRegionalResources.patches]
         .sort(([left], [right]) => compareText(left, right));
@@ -11923,6 +11963,14 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      if (worldAdvancePhaseStartedAtMs !== null) {
+        const finishedAtMs = runtimePerformanceNow();
+        worldAdvanceRegionalEcologyAggregateCommitPerformance.recordSpan(
+          worldAdvancePhaseStartedAtMs,
+          finishedAtMs,
+        );
+        worldAdvancePhaseStartedAtMs = runtimePerformanceNow();
+      }
       const eventPerception = projectPlayerPerception();
       const coreEventObservation = {
         window: {
@@ -12275,6 +12323,13 @@ export async function createTideweftRuntime(
         } else {
           announce(session, cueCaption);
         }
+      }
+      if (worldAdvancePhaseStartedAtMs !== null) {
+        const finishedAtMs = runtimePerformanceNow();
+        worldAdvanceObservedAftermathPerformance.recordSpan(
+          worldAdvancePhaseStartedAtMs,
+          finishedAtMs,
+        );
       }
     }
 
@@ -15479,6 +15534,7 @@ export async function createTideweftRuntime(
   function runTickFailClosed(present = true): boolean {
     const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
     const worldWillAdvance = playerStepsSinceWorldTick + 1 >= PLAYER_STEPS_PER_WORLD_TICK;
+    const failClosedCheckpointStartedAtMs = worldWillAdvance ? startedAtMs : null;
     const priorWorld = worldWillAdvance ? structuredClone(world) : null;
     const prior = {
       player: structuredClone(player),
@@ -15527,6 +15583,12 @@ export async function createTideweftRuntime(
       lastAutosaveTick,
       lastCargoDamageNoticeMs,
     };
+    if (failClosedCheckpointStartedAtMs !== null) {
+      worldAdvanceFailClosedCheckpointPerformance.recordSpan(
+        failClosedCheckpointStartedAtMs,
+        runtimePerformanceNow(),
+      );
+    }
     try {
       tick(present);
       return true;
@@ -15807,6 +15869,14 @@ export async function createTideweftRuntime(
     return Object.freeze({
       fixedStep: fixedStepPerformance.getSnapshot(),
       worldAdvanceStep: worldAdvanceStepPerformance.getSnapshot(),
+      worldAdvancePhases: Object.freeze({
+        failClosedCheckpoint: worldAdvanceFailClosedCheckpointPerformance.getSnapshot(),
+        worldAndLocalActors: worldAdvanceWorldAndLocalActorsPerformance.getSnapshot(),
+        regionalEcologyActors: worldAdvanceRegionalEcologyActorsPerformance.getSnapshot(),
+        regionalEcologyAggregateCommit:
+          worldAdvanceRegionalEcologyAggregateCommitPerformance.getSnapshot(),
+        observedAftermath: worldAdvanceObservedAftermathPerformance.getSnapshot(),
+      }),
       viewProjection: viewProjectionPerformance.getSnapshot(),
       audioProjection: audioProjectionPerformance.getSnapshot(),
       saveSnapshot: saveSnapshotPerformance.getSnapshot(),
@@ -15819,6 +15889,11 @@ export async function createTideweftRuntime(
   function resetPerformanceTelemetry(): TideweftRuntimePerformanceTelemetry {
     fixedStepPerformance.reset();
     worldAdvanceStepPerformance.reset();
+    worldAdvanceFailClosedCheckpointPerformance.reset();
+    worldAdvanceWorldAndLocalActorsPerformance.reset();
+    worldAdvanceRegionalEcologyActorsPerformance.reset();
+    worldAdvanceRegionalEcologyAggregateCommitPerformance.reset();
+    worldAdvanceObservedAftermathPerformance.reset();
     viewProjectionPerformance.reset();
     audioProjectionPerformance.reset();
     saveSnapshotPerformance.reset();
@@ -15833,6 +15908,11 @@ export async function createTideweftRuntime(
   ): TideweftRuntimePerformanceTelemetry {
     fixedStepPerformance.setEnabled(enabled);
     worldAdvanceStepPerformance.setEnabled(enabled);
+    worldAdvanceFailClosedCheckpointPerformance.setEnabled(enabled);
+    worldAdvanceWorldAndLocalActorsPerformance.setEnabled(enabled);
+    worldAdvanceRegionalEcologyActorsPerformance.setEnabled(enabled);
+    worldAdvanceRegionalEcologyAggregateCommitPerformance.setEnabled(enabled);
+    worldAdvanceObservedAftermathPerformance.setEnabled(enabled);
     viewProjectionPerformance.setEnabled(enabled);
     audioProjectionPerformance.setEnabled(enabled);
     saveSnapshotPerformance.setEnabled(enabled);

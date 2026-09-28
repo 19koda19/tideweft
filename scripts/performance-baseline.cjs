@@ -22,6 +22,14 @@ const LONG_TRAVEL_MINIMUM_SAMPLE_MS = 210_000;
 const HITCH_TRACE_THRESHOLD_MS = 80;
 const HITCH_TRACE_RECORD_CAPACITY = 32;
 const HITCH_TRACE_SNAPSHOT_CAPACITY = 16;
+const WORLD_ADVANCE_PHASE_KEYS = Object.freeze([
+  'failClosedCheckpoint',
+  'worldAndLocalActors',
+  'regionalEcologyActors',
+  'regionalEcologyAggregateCommit',
+  'observedAftermath',
+]);
+const WORLD_ADVANCE_PHASE_MEAN_TOLERANCE_MS = 1e-9;
 const MAX_CHILD_OUTPUT_CHARACTERS = 64 * 1_024;
 const BASELINE_WORLD_SEED = 'runtime baseline estuary';
 const RESOURCE_SHAKEDOWN_WORLD_SEED = 'breathing-room all-tide corridor 187';
@@ -3005,6 +3013,99 @@ async function warmTargetRenderer(client, scenario, viewportAlreadyPrepared = fa
   return warmup.frames;
 }
 
+function assertBoundedRuntimePerformanceSnapshot(snapshot, label) {
+  if (
+    snapshot === null
+    || typeof snapshot !== 'object'
+    || Array.isArray(snapshot)
+    || typeof snapshot.enabled !== 'boolean'
+    || !Number.isSafeInteger(snapshot.capacity)
+    || snapshot.capacity <= 0
+    || !Number.isSafeInteger(snapshot.count)
+    || !Number.isSafeInteger(snapshot.totalCount)
+    || snapshot.count < 0
+    || snapshot.totalCount < 0
+    || snapshot.count !== Math.min(snapshot.totalCount, snapshot.capacity)
+    || !Number.isFinite(snapshot.meanMs)
+    || snapshot.meanMs < 0
+    || !Number.isFinite(snapshot.p99Ms)
+    || snapshot.p99Ms < 0
+    || !Number.isFinite(snapshot.maxMs)
+    || snapshot.maxMs < 0
+    || snapshot.meanMs > snapshot.maxMs + WORLD_ADVANCE_PHASE_MEAN_TOLERANCE_MS
+    || snapshot.p99Ms > snapshot.maxMs + WORLD_ADVANCE_PHASE_MEAN_TOLERANCE_MS
+    || (
+      snapshot.count === 0
+      && (snapshot.meanMs !== 0 || snapshot.p99Ms !== 0 || snapshot.maxMs !== 0)
+    )
+  ) {
+    throw new Error(`Invalid bounded ${label} snapshot: ${JSON.stringify(snapshot)}`);
+  }
+  return true;
+}
+
+function assertWorldAdvancePhaseTelemetry(runtime, scenarioId = 'performance measurement') {
+  const inclusive = runtime?.worldAdvanceStep;
+  assertBoundedRuntimePerformanceSnapshot(
+    inclusive,
+    `runtime world-advance for scenario ${scenarioId}`,
+  );
+
+  const phases = runtime?.worldAdvancePhases;
+  const phaseKeys = phases !== null && typeof phases === 'object' && !Array.isArray(phases)
+    ? Object.keys(phases)
+    : [];
+  if (
+    phaseKeys.length !== WORLD_ADVANCE_PHASE_KEYS.length
+    || !WORLD_ADVANCE_PHASE_KEYS.every((key) => phaseKeys.includes(key))
+  ) {
+    throw new Error(
+      `Scenario ${scenarioId} must return exactly the five world-advance phases: `
+      + JSON.stringify({ expected: WORLD_ADVANCE_PHASE_KEYS, actual: phaseKeys }),
+    );
+  }
+
+  let phaseMeanTotalMs = 0;
+  for (const key of WORLD_ADVANCE_PHASE_KEYS) {
+    const snapshot = phases[key];
+    assertBoundedRuntimePerformanceSnapshot(
+      snapshot,
+      `runtime world-advance phase ${key} for scenario ${scenarioId}`,
+    );
+    if (
+      snapshot.capacity !== inclusive.capacity
+      || snapshot.count !== inclusive.count
+      || snapshot.totalCount !== inclusive.totalCount
+    ) {
+      throw new Error(
+        `Scenario ${scenarioId} returned a world-advance phase sample-window mismatch: `
+        + JSON.stringify({
+          phase: key,
+          phaseCapacity: snapshot.capacity,
+          worldAdvanceCapacity: inclusive.capacity,
+          phaseCount: snapshot.count,
+          worldAdvanceCount: inclusive.count,
+          phaseTotalCount: snapshot.totalCount,
+          worldAdvanceTotalCount: inclusive.totalCount,
+        }),
+      );
+    }
+    phaseMeanTotalMs += snapshot.meanMs;
+  }
+
+  if (phaseMeanTotalMs > inclusive.meanMs + WORLD_ADVANCE_PHASE_MEAN_TOLERANCE_MS) {
+    throw new Error(
+      `Scenario ${scenarioId} returned an impossible world-advance phase mean total: `
+      + JSON.stringify({
+        phaseMeanTotalMs,
+        worldAdvanceMeanMs: inclusive.meanMs,
+        toleranceMs: WORLD_ADVANCE_PHASE_MEAN_TOLERANCE_MS,
+      }),
+    );
+  }
+  return true;
+}
+
 function assertMeasurementTelemetry(scenario, frameSample, traceHitches) {
   const renderer = frameSample.telemetry?.renderer;
   const runtime = frameSample.telemetry?.runtime;
@@ -3018,23 +3119,16 @@ function assertMeasurementTelemetry(scenario, frameSample, traceHitches) {
     ['UI update', ui?.update],
   ];
   for (const [label, snapshot] of boundedSnapshots) {
-    if (
-      snapshot === null
-      || typeof snapshot !== 'object'
-      || !Number.isSafeInteger(snapshot.capacity)
-      || snapshot.capacity <= 0
-      || !Number.isSafeInteger(snapshot.count)
-      || !Number.isSafeInteger(snapshot.totalCount)
-      || snapshot.count < 0
-      || snapshot.totalCount < 0
-      || snapshot.count !== Math.min(snapshot.totalCount, snapshot.capacity)
-    ) {
+    try {
+      assertBoundedRuntimePerformanceSnapshot(snapshot, label);
+    } catch {
       throw new Error(
         `Scenario ${scenario.id} returned an invalid bounded ${label} snapshot: `
         + JSON.stringify(snapshot),
       );
     }
   }
+  assertWorldAdvancePhaseTelemetry(runtime, scenario.id);
   const requiredFinite = [
     ['browser rAF average interval', frameSample.browserAnimationFrameCadence?.meanIntervalMs],
     ['renderer draw count', frameSample.rendererCadence?.frameCount],
@@ -4609,8 +4703,10 @@ module.exports = {
   RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
   RESOURCE_SOAK_SAVE_PAYLOAD_BUDGET_BYTES,
   RESOURCE_SHAKEDOWN_CYCLES,
+  WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
+  assertWorldAdvancePhaseTelemetry,
   assertResourceCheckpointOrder,
   assertResourceSaveSample,
   assertResourceSoakCheckpointOrder,
