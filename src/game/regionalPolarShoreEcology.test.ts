@@ -31,7 +31,10 @@ import {
   serializeRegionalPolarShoreEcologyRoot,
   type RegionalPolarShoreEcologyRootV1,
 } from "./regionalPolarShoreEcology";
-import { createCoreEcologyPolarShoreResidentPatch } from "./regionalPolarShoreResidents";
+import {
+  canonicalCoreEcologyPolarShoreResidentPatch,
+  createCoreEcologyPolarShoreResidentPatch,
+} from "./regionalPolarShoreResidents";
 
 export const ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT =
   "test:alpha34-polar-shore-root-shared-invariants:v1" as const;
@@ -430,15 +433,24 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
       [REGION],
     );
     if (prior === null) throw new Error("Polar receipt fixture did not derive");
+    const sourceBytes = serializeRegionalPolarShoreEcologyRoot(root);
 
     const completedTick = 720;
-    const fast = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(root, {
+    const input = {
       rootSeed: SEED,
       completedTick,
       activeRegions: [REGION],
       expectedResidents: polarActiveResidentClaims(prior),
       durableResidents: [],
-    });
+    } as const;
+    const fast = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      root,
+      input,
+    );
+    const replay = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      root,
+      input,
+    );
     const oracleRoot = advanceRegionalPolarShoreEcologyRoot(root, completedTick);
     const oracleResidents = regionalPolarShoreEcologyResidentsForActiveRegions(
       oracleRoot,
@@ -447,10 +459,23 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
     );
 
     expect(fast).not.toBeNull();
+    expect(replay).not.toBeNull();
     expect(oracleResidents).not.toBeNull();
     expect(serializeRegionalPolarShoreEcologyRoot(fast?.root))
       .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
+    expect(serializeRegionalPolarShoreEcologyRoot(replay?.root))
+      .toBe(serializeRegionalPolarShoreEcologyRoot(fast?.root));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+    expect(stableStringify(replay?.residents)).toBe(stableStringify(fast?.residents));
+    expect(fast?.residents.every(({ patch }) => (
+      Object.isFrozen(patch) &&
+      canonicalCoreEcologyPolarShoreResidentPatch(patch, {
+        seed: SEED,
+        region: patch.originRegion,
+        completedTick,
+      }) === patch
+    ))).toBe(true);
+    expect(serializeRegionalPolarShoreEcologyRoot(root)).toBe(sourceBytes);
   });
 
   it("keeps consecutive durable receipt commits byte-identical through an idle tick, tidal jump, and pristine removal", () => {
@@ -688,6 +713,7 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
       activeRegions,
       expectedResidents: polarActiveResidentClaims(currentResidents),
     } as const;
+    const sourceBytes = serializeRegionalPolarShoreEcologyRoot(existingRoot);
     const forward = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
       existingRoot,
       { ...baseInput, durableResidents },
@@ -695,6 +721,10 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
     const reversed = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
       existingRoot,
       { ...baseInput, durableResidents: [...durableResidents].reverse() },
+    );
+    const clonedInput = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      existingRoot,
+      { ...baseInput, durableResidents: structuredClone(durableResidents) },
     );
 
     let oracleRoot = advanceRegionalPolarShoreEcologyRoot(existingRoot, 360);
@@ -711,7 +741,12 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
       SEED,
       activeRegions,
     );
-    if (forward === null || reversed === null || oracleResidents === null) {
+    if (
+      forward === null ||
+      reversed === null ||
+      clonedInput === null ||
+      oracleResidents === null
+    ) {
       throw new Error("Polar durable batch failed its scalar oracle");
     }
 
@@ -719,8 +754,12 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
       .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
     expect(serializeRegionalPolarShoreEcologyRoot(reversed.root))
       .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
+    expect(serializeRegionalPolarShoreEcologyRoot(clonedInput.root))
+      .toBe(serializeRegionalPolarShoreEcologyRoot(oracleRoot));
     expect(stableStringify(forward.residents)).toBe(stableStringify(oracleResidents));
     expect(stableStringify(reversed.residents)).toBe(stableStringify(oracleResidents));
+    expect(stableStringify(clonedInput.residents))
+      .toBe(stableStringify(oracleResidents));
     expect(forward.root.revision).toBe(existingRoot.revision + 3);
     expect(forward.root.lastEventOrdinal).toBe(existingRoot.lastEventOrdinal + 3);
     expect(forward.root.regions.find(({ residentPatch }) => (
@@ -744,6 +783,7 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
       revision,
       eventOrdinal,
     })));
+    expect(serializeRegionalPolarShoreEcologyRoot(existingRoot)).toBe(sourceBytes);
   });
 
   it("fails receipt custody closed and leaves changed-window entry and departure to full derivation", () => {
@@ -829,6 +869,52 @@ describe(`${ALPHA34_POLAR_SHORE_ROOT_SHARED_INVARIANTS_OWNER_INTENT} sparse root
         ? { ...claim, lineageHash: hashCanonical("forged polar lineage") }
         : claim),
     })).toBeNull();
+
+    const prepared = advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      root,
+      input,
+    );
+    expect(prepared).not.toBeNull();
+    const preparedClaims = polarActiveResidentClaims(prepared!.residents);
+    const preparedInput = {
+      ...input,
+      completedTick: input.completedTick + 1,
+      expectedResidents: preparedClaims,
+    } as const;
+    expect(advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      structuredClone(prepared!.root),
+      preparedInput,
+    )).toBeNull();
+    const restoredPrepared = deserializeRegionalPolarShoreEcologyRoot(
+      serializeRegionalPolarShoreEcologyRoot(prepared!.root),
+    );
+    expect(restoredPrepared).not.toBeNull();
+    expect(advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      restoredPrepared,
+      preparedInput,
+    )).toBeNull();
+    expect(advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
+      prepared!.root,
+      { ...preparedInput, completedTick: input.completedTick - 1 },
+    )).toBeNull();
+    const publicPreparedFallback = advanceRegionalPolarShoreEcologyRoot(
+      restoredPrepared,
+      preparedInput.completedTick,
+    );
+    const publicPreparedResidents =
+      regionalPolarShoreEcologyResidentsForActiveRegions(
+        publicPreparedFallback,
+        SEED,
+        oldWindow,
+      );
+    expect(publicPreparedResidents).not.toBeNull();
+    expect(canonicalRegionalPolarShoreEcologyRootForWorld(
+      publicPreparedFallback,
+      {
+        rootSeed: SEED,
+        completedTick: preparedInput.completedTick,
+      },
+    )).toBe(publicPreparedFallback);
 
     const replacementReceipt = regionalPolarShoreEcologyResidentsForActiveRegions(
       root,

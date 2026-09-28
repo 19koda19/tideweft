@@ -127,6 +127,21 @@ interface RegionalPolarShoreEcologyActiveReceiptResident {
   readonly pristinePatch: CoreEcologyAggregatePatchState | null;
 }
 
+/**
+ * Same-stack proof that one exact immutable polar patch passed the complete
+ * world-bound admission check. This proof never enters the root receipt or a
+ * save; it only prevents receipt seeding from immediately repeating the same
+ * canonical validation and lineage calculation for the identical object.
+ */
+interface PreparedPolarShoreResidentAdmission {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly sourceKey: string;
+  readonly regionKey: string;
+  readonly habitatHash: string;
+  readonly atTick: number;
+  readonly lineageHash: string;
+}
+
 interface RegionalPolarShoreEcologyActiveReceipt {
   readonly rootSeed: RootSeed;
   readonly atTick: number;
@@ -747,6 +762,10 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
       string,
       RegionalPolarShoreEcologyActiveResidentInput
     >();
+    const preparedAdmissionByPatch = new WeakMap<
+      CoreEcologyAggregatePatchState,
+      PreparedPolarShoreResidentAdmission
+    >();
     const admit = (
       patch: CoreEcologyAggregatePatchState,
       prior: RegionalPolarShoreEcologyActiveReceiptResident,
@@ -757,15 +776,17 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
         !activeKeys.has(prior.regionKey) ||
         !isPolarDerivation(patch) ||
         patch.derivation.habitat.derivationHash !== prior.habitatHash ||
-        polarResidentLineageHash(patch) !== prior.lineageHash ||
-        canonicalCoreEcologyPolarShoreResidentPatch(patch, {
-          seed: input.rootSeed,
-          region: patch.originRegion,
-          completedTick: input.completedTick,
-        }) === null ||
         bySource.has(patch.patchKey)
       )
         return false;
+      const canonicalPatch = canonicalCoreEcologyPolarShoreResidentPatch(patch, {
+        seed: input.rootSeed,
+        region: patch.originRegion,
+        completedTick: input.completedTick,
+      });
+      if (canonicalPatch === null) return false;
+      const lineageHash = polarResidentLineageHash(patch);
+      if (lineageHash !== prior.lineageHash) return false;
       bySource.set(
         patch.patchKey,
         Object.freeze({
@@ -774,6 +795,19 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
           patch,
         }),
       );
+      if (canonicalPatch === patch && Object.isFrozen(patch)) {
+        preparedAdmissionByPatch.set(
+          patch,
+          Object.freeze({
+            patch,
+            sourceKey: patch.patchKey,
+            regionKey: regionKey(patch.originRegion),
+            habitatHash: patch.derivation.habitat.derivationHash,
+            atTick: input.completedTick,
+            lineageHash,
+          }),
+        );
+      }
       return true;
     };
 
@@ -814,6 +848,7 @@ export function advanceRegionalPolarShoreEcologyActiveResidentsFromReceipt(
       activeRegions,
       residents,
       batch.pristineBySource,
+      preparedAdmissionByPatch,
     );
     return Object.freeze({ root: nextRoot, residents });
   } catch {
@@ -1040,6 +1075,10 @@ function seedActiveResidentReceipt(
     string,
     CoreEcologyAggregatePatchState
   > = new Map(),
+  preparedAdmissionByPatch: WeakMap<
+    CoreEcologyAggregatePatchState,
+    PreparedPolarShoreResidentAdmission
+  > | undefined = undefined,
 ): void {
   if (residents.length > activeRegions.length + root.regions.length) return;
   const activeKeys = new Set(activeRegions.map(regionKey));
@@ -1054,14 +1093,26 @@ function seedActiveResidentReceipt(
       patch.updatedAtTick !== root.updatedAtTick ||
       seen.has(resident.sourceKey) ||
       !activeKeys.has(regionKey(patch.originRegion)) ||
-      !isPolarDerivation(patch) ||
-      canonicalCoreEcologyPolarShoreResidentPatch(patch, {
-        seed: rootSeed,
-        region: patch.originRegion,
-        completedTick: root.updatedAtTick,
-      }) === null
+      !isPolarDerivation(patch)
     )
       return;
+    const preparedAdmission = preparedAdmissionByPatch?.get(patch);
+    let lineageHash = preparedPolarShoreAdmissionLineageOrNull(
+      preparedAdmission,
+      resident,
+      root.updatedAtTick,
+    );
+    if (lineageHash === null) {
+      if (
+        canonicalCoreEcologyPolarShoreResidentPatch(patch, {
+          seed: rootSeed,
+          region: patch.originRegion,
+          completedTick: root.updatedAtTick,
+        }) === null
+      )
+        return;
+      lineageHash = polarResidentLineageHash(patch);
+    }
     seen.add(resident.sourceKey);
     const hasDeviation = deviationKeys.has(regionKey(patch.originRegion));
     const preparedPristine = preparedPristineBySource.get(resident.sourceKey);
@@ -1074,7 +1125,7 @@ function seedActiveResidentReceipt(
         regionKey: regionKey(patch.originRegion),
         habitatHash: patch.derivation.habitat.derivationHash,
         patchHash: hashCanonical(patch),
-        lineageHash: polarResidentLineageHash(patch),
+        lineageHash,
         patch,
         pristinePatch,
       }),
@@ -1097,6 +1148,32 @@ function seedActiveResidentReceipt(
       residents: Object.freeze(receiptResidents),
     }),
   );
+}
+
+/**
+ * Consume only the proof calculated for this exact patch in the immediately
+ * enclosing admission transaction. Any identity or binding miss keeps the
+ * complete world-bound validator and lineage fallback in receipt seeding.
+ */
+function preparedPolarShoreAdmissionLineageOrNull(
+  prepared: PreparedPolarShoreResidentAdmission | undefined,
+  resident: RegionalPolarShoreEcologyActiveResidentInput,
+  receiptTick: number,
+): string | null {
+  const patch = resident.patch;
+  return prepared !== undefined &&
+    prepared.patch === patch &&
+    Object.isFrozen(prepared) &&
+    Object.isFrozen(prepared.patch) &&
+    prepared.sourceKey === resident.sourceKey &&
+    prepared.regionKey === regionKey(patch.originRegion) &&
+    isPolarDerivation(patch) &&
+    prepared.habitatHash === patch.derivation.habitat.derivationHash &&
+    prepared.atTick === receiptTick &&
+    patch.updatedAtTick === receiptTick &&
+    validHash(prepared.lineageHash)
+    ? prepared.lineageHash
+    : null;
 }
 
 /**
