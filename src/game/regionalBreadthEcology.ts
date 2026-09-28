@@ -201,6 +201,22 @@ interface RegionalBreadthEcologyActiveReceiptResident {
   readonly pristinePatch: CoreEcologyAggregatePatchState | null;
 }
 
+/**
+ * Same-stack lineage proof produced while the active transaction admits one
+ * exact immutable patch. This is neither saved nor retained by the root
+ * receipt: it only prevents `seedActiveResidentReceipt` from rebuilding the
+ * same lineage immediately afterward.
+ */
+interface PreparedBreadthResidentLineage {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly sourceKey: string;
+  readonly cohortId: CoreEcologyBreadthCohortId;
+  readonly cohortEpoch: number;
+  readonly regionKey: string;
+  readonly atTick: number;
+  readonly lineageHash: string;
+}
+
 interface RegionalBreadthEcologyActiveReceipt {
   readonly rootSeed: RootSeed;
   readonly atTick: number;
@@ -965,6 +981,10 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
     const nextRoot = batch.root;
     const activeKeys = new Set(activeRegions.map(regionKey));
     const bySource = new Map<string, RegionalBreadthEcologyActiveResidentInput>();
+    const preparedLineageByPatch = new WeakMap<
+      CoreEcologyAggregatePatchState,
+      PreparedBreadthResidentLineage
+    >();
     const receiptSourceKeys = new Set(
       receipt.residents.map(({ sourceKey }) => sourceKey),
     );
@@ -983,14 +1003,18 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
         || patch.nextMortalityOrdinal !== 0
         || patch.mortalityTransactions.length !== 0
         || patch.carcasses.length !== 0
-        || canonicalCoreEcologyBreadthResidentPatch(patch, {
-          seed: input.rootSeed,
-          region: patch.originRegion,
-          completedTick: input.completedTick,
-        }) === null
-        || (expectedLineageHash !== undefined
-          && breadthResidentLineageHash(patch) !== expectedLineageHash)
         || bySource.has(patch.patchKey)
+      ) return false;
+      const canonicalPatch = canonicalCoreEcologyBreadthResidentPatch(patch, {
+        seed: input.rootSeed,
+        region: patch.originRegion,
+        completedTick: input.completedTick,
+      });
+      if (canonicalPatch === null) return false;
+      const lineageHash = breadthResidentLineageHash(patch);
+      if (
+        expectedLineageHash !== undefined
+        && lineageHash !== expectedLineageHash
       ) return false;
       bySource.set(patch.patchKey, Object.freeze({
         kind: CORE_ECOLOGY_BREADTH_DERIVATION_KIND,
@@ -999,6 +1023,17 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
         sourceKey: patch.patchKey,
         patch,
       }));
+      if (canonicalPatch === patch) {
+        preparedLineageByPatch.set(patch, Object.freeze({
+          patch,
+          sourceKey: patch.patchKey,
+          cohortId: habitat.cohortId,
+          cohortEpoch: habitat.cohortEpoch,
+          regionKey: regionKey(patch.originRegion),
+          atTick: input.completedTick,
+          lineageHash,
+        }));
+      }
       return true;
     };
 
@@ -1053,6 +1088,7 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       residents,
       batch.pristineBySource,
       batch.sealedRootSerializedBytes,
+      preparedLineageByPatch,
     );
     if (activeReceipt === null) return null;
     const result = Object.freeze({ root: nextRoot, residents });
@@ -1532,6 +1568,10 @@ function seedActiveResidentReceipt(
     CoreEcologyAggregatePatchState
   > = new Map(),
   sealedRootSerializedBytes: number | null = null,
+  preparedLineageByPatch: WeakMap<
+    CoreEcologyAggregatePatchState,
+    PreparedBreadthResidentLineage
+  > = new WeakMap(),
 ): RegionalBreadthEcologyActiveReceipt | null {
   const maximumResidents = activeRegions.length * root.activations.length
     + root.regions.length;
@@ -1568,13 +1608,19 @@ function seedActiveResidentReceipt(
     const pristinePatch = hasDeviation
       ? receiptPristinePatchOrNull(preparedPristine, resident, root.updatedAtTick)
       : resident.patch;
+    const preparedLineage = preparedLineageByPatch.get(resident.patch);
+    const lineageHash = preparedLineageHashOrNull(
+      preparedLineage,
+      resident,
+      root.updatedAtTick,
+    ) ?? breadthResidentLineageHash(resident.patch);
     receiptResidents.push(Object.freeze({
       sourceKey: resident.sourceKey,
       cohortId: resident.cohortId,
       cohortEpoch: resident.cohortEpoch,
       regionKey: regionKey(resident.patch.originRegion),
       patchHash: hashCanonical(resident.patch),
-      lineageHash: breadthResidentLineageHash(resident.patch),
+      lineageHash,
       patch: resident.patch,
       pristinePatch,
     }));
@@ -1595,6 +1641,31 @@ function seedActiveResidentReceipt(
   });
   ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
   return receipt;
+}
+
+/**
+ * Consume only the lineage calculated for this exact patch in the immediately
+ * enclosing active transaction. Any identity or binding miss keeps the
+ * ordinary full lineage computation in `seedActiveResidentReceipt`.
+ */
+function preparedLineageHashOrNull(
+  prepared: PreparedBreadthResidentLineage | undefined,
+  resident: RegionalBreadthEcologyActiveResidentInput,
+  receiptTick: number,
+): string | null {
+  return prepared !== undefined
+    && prepared.patch === resident.patch
+    && Object.isFrozen(prepared)
+    && Object.isFrozen(prepared.patch)
+    && prepared.sourceKey === resident.sourceKey
+    && prepared.cohortId === resident.cohortId
+    && prepared.cohortEpoch === resident.cohortEpoch
+    && prepared.regionKey === regionKey(resident.patch.originRegion)
+    && prepared.atTick === receiptTick
+    && resident.patch.updatedAtTick === receiptTick
+    && validHash(prepared.lineageHash)
+      ? prepared.lineageHash
+      : null;
 }
 
 /**

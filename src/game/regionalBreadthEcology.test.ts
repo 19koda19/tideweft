@@ -509,6 +509,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       [TIDAL_FLOCK_REGION],
     );
     if (prior === null) throw new Error("Breadth receipt fixture did not derive");
+    const sourceBytes = serializeRegionalBreadthEcologyRoot(root);
 
     const completedTick = 128;
     const fast = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
@@ -540,6 +541,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     expect(serializeRegionalBreadthEcologyRoot(replay!.root))
       .toBe(serializeRegionalBreadthEcologyRoot(fast!.root));
     expect(stableStringify(replay!.residents)).toBe(stableStringify(fast!.residents));
+    expect(serializeRegionalBreadthEcologyRoot(root)).toBe(sourceBytes);
   });
 
   it("issues one exact frozen V6 bridge receipt and rejects every substituted boundary", () => {
@@ -584,6 +586,9 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       metadata.resident === exact.residents[index]
       && metadata.patch === exact.residents[index]?.patch
       && metadata.patchHash === hashCanonical(metadata.patch)
+      && metadata.lineageHash === activeResidentClaims([
+        metadata.resident,
+      ])[0]?.lineageHash
     ))).toBe(true);
     expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(exact, input)).toBeNull();
 
