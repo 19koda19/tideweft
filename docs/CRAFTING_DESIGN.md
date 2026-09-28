@@ -284,6 +284,12 @@ Dismantling is the recovery valve for an unwanted adaptation, not a duplication 
 
 Catalog validation expands both construction and salvage through the component DAG and requires pristine salvage to be positive, componentwise no greater, and strictly smaller somewhere than construction cost. Dismantling is atomic and can be blocked when the recovered parts are bulkier than the folded item and the pack lacks room.
 
+This live salvage verb means dismantling a physically carried crafted item. It
+is not yet ruin, work-site, carcass, or abandoned-world-object salvage. Future
+site salvage must consume one real source, preserve its provenance through the
+Deep Time and Work of Hands owners, and never create an abstract renewable loot
+node beside the physical remnant.
+
 ## Wayknots, ladders, and anti-redeploy rules
 
 ### Wayknot v2 identity
@@ -320,6 +326,11 @@ Repairs use the proportional MEND rules and the full-repair vectors above. Newly
 These rules close the current reclaim/redeploy loophole: moving an aid costs condition, delays full effect, and preserves rather than resets its history.
 
 ### Ladder lifecycle
+
+**RESERVED / STAGED:** the following is the authoritative integration contract,
+not current playable behavior. The shared player traversal kernel accepts
+optional rock/ladder inputs in focused tests, but the production runtime does
+not yet generate, pass, save, deploy, project, or render them.
 
 A crafted ladder is one stable adaptation instance; it is never replaced by a generic count. Its existing derived rock placement validation remains authoritative: one cardinal span of 2–4 edges, supported safe endpoints, one rock formation, no occupied crossing, and no overlap with another ladder.
 

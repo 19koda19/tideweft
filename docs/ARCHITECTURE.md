@@ -1753,19 +1753,157 @@ The pure `src/sim/cargoEnvironment.ts` evaluator preserves the five existing car
 
 Loose cargo is owned by exactly one persistent regional cargo world under one conserved custody manifest. When motion crosses an internal storage boundary, transfer removes the source and installs the same persistent parcel in the destination as one atomic operation; identity, payload, condition, momentum, event history, and Promise custody do not change. Tombstones and invariant checks reject replay, duplication, deletion, stale ownership, or mismatched Promise quantity. Ordinary presentation culling does not despawn an off-frame parcel, and an active lost Promise remains recovery-focused. Coarse unloaded-world drift and delivery compensation for recovered condition remain later work.
 
+Current physical-item provenance is technical and causal: stable ID, source
+lots/material condition, origin region/ordinal, owner/custody, Promise link,
+and bounded append-only event history. It is not yet Deep Time's semantic
+maker/site/ownership-chain history. A generic validated `RegionManifest`
+sidecar reserves generated hashes, sparse modifications, and tombstones, but
+its general collect/commit vocabulary has no production caller; current live
+sparse owners are narrower field-resource depletion, Wayknots, and regional
+physical cargo. Future historical field gear must extend one of those canonical
+owners or wire the manifest explicitly, never infer live ruins from reserved
+enum vocabulary or add parallel persistence.
+
 Inactive parcel regions live in an immutable, authenticated AVL index whose updates path-copy only the affected branches; fixed-step simulation, rendering, UI, and recovery query only the storage regions intersecting the bounded presentation frame. Each node caches its subtree size, integrity, and exact wire-size contribution, so local motion does not scan or clone the courier's lifetime cargo history. Persistence retains the existing version-2 flat regional array: save snapshots flatten it canonically, while load performs the deliberate full conservation audit and rebuilds a balanced runtime index.
 
 ## Derived rock/ladder foundation
 
 `src/sim/rockTraversal.ts` is another pure, deterministic calculation contract. It derives bounded coherent outcrops and stable connected formation IDs from the root seed plus existing terrain, then classifies obstacle severity, walking blockage, fall-risk signal, and travel-cost signal. Its finite reusable ladder kit validates supported cardinal spans, formation continuity, occupancy, overlap, condition, placement, reclaim, and future damage without mutating caller state.
 
-Nothing in the runtime, player/session state, pointer router, Chart/Relief projection, UI, or save envelope consumes this kernel yet. Therefore the candidate has no visible solid rock obstacles, no carried or deployed ladder, and no new fall outcome. Integrating the kernel will require one shared authoritative crossing query for manual and pointer travel plus explicit presentation and save migration; its existence alone is not a playable feature.
+The shared player traversal kernel now accepts optional derived rock and ladder
+inputs, and focused tests exercise crossing semantics. The live runtime still
+does not generate, pass, persist, project, deploy, or render either input.
+Therefore the candidate has no visible solid rock obstacles, no carried or
+deployed ladder, and no new fall outcome. Production integration still
+requires one shared authoritative crossing query for manual and pointer travel
+plus explicit presentation and save migration; tested optional input alone is
+not a playable feature.
 
 ## Current recovery and discovery-safe cues
 
 The player host treats water depth of **120,000** fixed-point units or greater as deep/current water for involuntary recovery. If stamina or the live physical stability percentage reaches zero there, the result enters the same controllable ADRIFT state. Dry-ground stamina exhaustion still camps, and water below the threshold does not trigger the sweep rule. ADRIFT retains clinic interception and ferry, Storm-kite, and Tide-anchor modifiers; cargo quantity is conserved and any carried cargo is weathered once rather than repeatedly on each recovery step.
 
 One pure fixed-point hydrology function derives local strength and turbulence from authoritative water depth, bed roughness, tide, and weather without random state. Player footing and both renderers consume that same profile. The visible projection treats calm/rough surface character as directly observable information: discovered wet tiles receive bounded streamlines, foam, ambience, and sparse OHM/WHISSH voice within the exact-detail field. It never projects an exact unsounded depth or effort value. SOUND / SCAN alone adds analytical arrowheads and records bathymetry. Reduced motion freezes decorative phase while retaining the same physical heading and coarse surface character.
+
+## Reserved expedition movement, cartography, and field-history architecture
+
+This section allocates future responsibility; it is not a claim about the
+current released gait, destination display, contours, or abandoned equipment.
+Implementation remains gated by the active directive order.
+
+The movement path is:
+
+```text
+raw device input
+  -> input intent
+  -> gait request
+  -> fixed-step authoritative movement
+  -> terrain/load/stamina/stability/cargo consequence
+  -> Chart and Relief presentation
+```
+
+Keyboard double-tap recognition belongs only to input interpretation. It uses
+real same-key down/up/down edges inside one centralized configurable window;
+repeat events, UI typing, stale focus, pause, and modal transitions cannot
+activate it. The second press remains the ordinary held direction. The
+resulting `fast gait requested` state is independent of the triggering key,
+continues across changing nonzero direction chords, and ends when movement
+intent becomes zero. Touch and controller adapters submit the same request
+without imitating keyboard gestures.
+
+The player movement owner, not either renderer, resolves attainable pace,
+normalized direction, bounded acceleration/deceleration, heading/velocity
+separation, full reversals, footing, grade, water drag/current, load, injury,
+stamina, stability, brace, and fall consequence on fixed steps. Easy flat
+walking has negligible base locomotion drain; environmental and physical
+modifiers remain additive causes. Easy-ground sprint starts near the former
+ordinary-walk exertion experience, while difficult-ground walking remains
+costly and difficult-ground sprint compounds exertion and causal balance risk.
+
+Incident-separated cargo extends the existing conserved loose-cargo record
+with saved fixed-step recovery eligibility, preferably an incident provenance
+plus `selfPickupLockedUntilStep` or an equivalent canonical deadline. The lock
+is a player self-recovery rule, not a new item or ownership state. Identity,
+position, velocity, condition, wetness, Promise linkage, custody, and other
+actors' lawful claim behavior remain with physical cargo authority. A pickup
+quote must reject the originating player while either the deterministic lock
+or their physical recovery state remains active; the parcel continues normal
+motion throughout. Save/load and regional handoff preserve the same deadline
+without wall time or replay.
+
+There is one terrain truth:
+
+```text
+world seed + persistent terrain deviations
+  -> authoritative elevation
+  -> physical slope and normals
+  -> movement / Hard Country / hydrology
+  -> Relief height mesh and grounding
+  -> knowledge-gated Chart contours
+```
+
+Relief work begins with an audit of elevation range, interpolation, vertical
+scale, normals, directional lighting, camera pitch, LOD, floating origin, and
+surface grounding; it does not introduce another terrain generator. Chart
+contours use deterministic marching squares or an equivalent seam-owned
+extractor over that same elevation field. Configurable contour and index
+intervals simplify by zoom. Cross-region samples and ownership rules make a
+line continuous at partitions. Extract levels from true authoritative
+elevation, then knowledge-mask segment presence/opacity; never contour an
+elevation multiplied by discovery confidence, which would fabricate moving
+terrain levels. Unknown samples cannot leak through contour
+geometry, labels, actor placement, hit testing, or Relief height.
+
+Relief entities, rings, labels, camera targets, and hit surfaces sample the
+same knowledge-disclosed physical surface that the terrain mesh actually
+draws. A currently perceived but not yet durably charted tile cannot draw one
+height while grounding its actor against another. Actor visuals may orient a
+body to visible grade later; presentation still cannot alter the slope.
+
+Existing regional cartography is the substrate for the expedition map. It
+already saves sparse discovery and soundings by signed region without keeping
+rendered pixels. Its future version adds bounded, explicit place knowledge and
+target-knowledge records containing source, confidence, approximate geometry,
+timestamp, and discovery state. Generated terrain remains derived; saves keep
+knowledge marks and promoted location facts. An undiscovered Promise target
+projects an irregular area, sector, or corridor whose geometry does not encode
+the exact target at its center. A legitimate arrival/discovery transaction
+replaces that approximation with one exact stable place reference; later
+Promises reuse it. Chart markers never imply a field-view objective arrow.
+
+The future Chart surface must also query and render learned signed-world chunks
+at appropriate multi-scale detail outside the active 120 x 120 simulation and
+presentation frame. It virtualizes labels and geometry and samples generated
+terrain only through saved knowledge; it does not keep every visited region
+materialized merely because the player pans the map.
+
+Delivery-scale work must instrument representative seeds before changing
+generation. Record straight-line and route-aware mean, median, quartiles,
+short-route frequency, and long tail for the ordinary Promise population.
+Then adjust settlement-network geography, eligible destination selection, and
+route/logistics policy together until the ordinary mean is at least roughly
+three times the recorded baseline. Keep clusters, remote sites, empty reaches,
+and an explicit onboarding exception; do not obtain the mean from a uniform
+grid, one constant alone, or extreme outliers. Distance never becomes an enemy
+level ring.
+
+Sparse abandoned traversal gear extends world history plus normal physical
+items; it is not a loot spawner. Candidate facts derive from root seed,
+signed location, causal context, opportunity saturation, and generator
+version. Technical partitions do not grant another roll. A candidate may stay
+derived/coarse until materialization or interaction promotes it to stable
+physical identity. Thereafter ordinary custody, condition, repair, movement,
+theft, loss, save, and regional transfer own that exact object, and a consumed
+candidate/tombstone prevents regeneration. Density statistics must demonstrate
+rarity, plausible condition breadth, and no correlation that guarantees an
+obstacle's solution. Loose gear stays off the permanent map unless legitimately
+marked; installed infrastructure retains its separate deployment/reclaim law.
+
+These owners inherit bounded work: contour caches have explicit authority and
+invalidation, map saves remain sparse, distribution sampling is offline or
+development-only, and distant historical candidates do not require full item
+simulation. Reduce frequency and detail where safe; never reduce terrain,
+knowledge, identity, or conservation truth.
 
 ## Derived Wayknot topology
 
@@ -2083,7 +2221,16 @@ Relief cord roots and bell/label placement sample the discovery-masked surface r
 
 The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, retains the shared terrain-only impression across a quick view handoff, and falls back to Chart 2D if WebGL setup fails or its context is lost. A frame shift rebases the active Chart or Relief camera, held pointer target, and queued route in one render command rather than canceling input or snapping to a new center. The explicit view preference and terrain impression are local presentation state and are deliberately outside the authoritative save/checksum.
 
-The shared world-tap router distinguishes fine from coarse pointers. Fine-pointer harbor input retains selection/inspection. Coarse-pointer harbor input emits an exact-center movement target in both Chart and Relief, so a touch player arrives on the interaction tile before the contextual action can open the inspector. Ordinary terrain taps keep their existing route behavior.
+The shared world-tap router distinguishes fine from coarse pointers. In the
+current compatibility network, whose seven harbors are treated as known,
+fine-pointer harbor input retains selection/inspection and coarse-pointer
+harbor input emits an exact-center movement target in both Chart and Relief,
+so a touch player arrives on the interaction tile before the contextual action
+can open the inspector. Ordinary terrain taps keep their existing route
+behavior. The reserved expedition-map owner must gate this together with
+marker, route-memory, name, distance, bearing, camera-focus, Relief ring/label,
+and hit-target channels: approximate knowledge can never route or focus an
+exact undiscovered point.
 
 At widths at or below 44rem—or at short landscape sizes no wider than 64rem—CSS removes the duplicate desktop HUD and folds the detailed objective, Promises, and inspector surfaces when the UI shell's disclosure flag is false. The shell starts compact and exposes a native 44-pixel `PROMISES + / PROMISES −` button whose `aria-expanded` state controls only the identified Promises surface. The compact strip is a translucent four-column projection of Stamina, Stability, Loom, and Cargo, with values and native progress semantics, followed by route and immediate safety/terrain cause. It deliberately hides keyboard-instruction copy; the large touch action dock remains reachable. The disclosure opens the existing scrollable Promises DOM as one full safe-area sheet, while settlement interaction opens the inspector as a mutually exclusive sheet. Neither disclosure nor sheet mode enters game saves.
 

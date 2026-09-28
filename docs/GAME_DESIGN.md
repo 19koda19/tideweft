@@ -1153,7 +1153,7 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 ## Expedition play
 
 - WASD/arrows and pointer-directed routes share the same continuous travel rules in Chart 2D and Relief 3D.
-- On coarse pointers, tapping a harbor charts to its exact center; after arrival, the contextual touch action performs pickup, delivery, report handoff, or inspection. The tap itself does not open a sheet while the courier is still passing through the interaction tile.
+- In the current compatibility harbor network, every Promise harbor is already treated as known, so tapping it with a coarse pointer charts to its exact center; after arrival, the contextual touch action performs pickup, delivery, report handoff, or inspection. The tap itself does not open a sheet while the courier is still passing through the interaction tile. The reserved expedition-map contract supersedes this for an undiscovered destination: an approximate target cannot be focused, routed to, ranged, or hit-tested as an exact hidden point.
 - Relief 3D rotates held movement with the orbit camera so travel remains screen-relative; Chart 2D retains world-up controls.
 - Rest, Steady, and Swift describe the current traversal state; players do not select them. Stillness/recovery yields Rest, ordinary movement stays Steady, and downhill or current-assisted travel becomes Swift automatically.
 - Holding Shift while moving actively braces: travel continues more slowly, stability rises, and fragile loads avoid handling shock.
@@ -1171,11 +1171,71 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.
 - The ferrier moves on foot, wades, or uses the skiff according to live depth. Deeper water consumes monotonically more stamina and adds handling stress; the Tide sail reduces both burdens.
-- The objective always identifies the active pickup, material destination, or report destination.
+- The current compatibility objective identifies the active pickup, material destination, or report destination exactly because those seven harbors begin as known. Under the reserved expedition-map contract, an unknown destination is identified only to the precision of the player's sourced target knowledge until legitimate discovery.
 - KIT can drop an exact stack quantity or a whole Promise/gear lot. A loose active Promise blocks delivery and renegotiation, becomes a RECOVER objective, and preserves exact quantity/condition across drift, tumble, impact, save, reload, and pickup. Currents and terrain can carry the same parcel continuously beyond the old map extent without changing its identity, condition, momentum, history, or Promise custody. Touch taps can chart to a visible parcel; desktop E recovers only within authoritative reach.
 - The local field readout names the derived biome. Chart and Relief share restrained color plus motif cues, while undiscovered cells expose no biome presentation.
 
 The activity must remain pleasant before progression numbers: readable motion, surface response, luminous traces, weather, terrain sound, and immediate stability feedback form the lowest loop.
+
+## Reconciled expedition movement and navigation contract
+
+This is a **reserved future contract**, allocated to the existing Hard Country,
+Unbroken World, and Phase 06 movement/QoL owners. It does not describe current
+released controls or claim that the following behavior is already playable.
+
+- Easy, dry, reasonably flat walking is the sustainable default. Its locomotion
+  cost should be negligible; load, injury, heat, slope, water, roughness, and
+  obstruction can still make any journey exhausting.
+- The fastest ordinary land gait costs stamina. Keyboard players request it by
+  a real same-key down/up/down double tap on W, A, S, or D, followed by a held
+  second press. OS key repeat is never a tap. Once requested, sprint belongs to
+  the continuous movement chord: adding or releasing direction keys changes
+  desired direction without cancelling it while any valid direction remains.
+  Releasing all movement ends the request. Controller and touch use an
+  ergonomic deliberate equivalent that reaches the same input-device-neutral
+  gait authority.
+- A sprint is a physical gait, not a speed multiplier. Fixed-step acceleration,
+  braking, turn inertia, slope, footing, water drag, load, injury, stamina,
+  stability, and cargo shift determine what the body can actually do. Diagonal
+  intent is normalized. A full reversal decelerates, turns, redirects, and
+  accelerates rather than instantly flipping velocity.
+- The starting tuning target moves roughly the current ordinary-walk exertion
+  experience to an easy-ground sprint. Walking through water, scree, steep or
+  unstable ground remains costly; moving fast there costs more and increases
+  causal stability risk. There is no random sprint-trip roll.
+- Cargo actually separated by a fall, severe stumble, knockdown, hard landing, or ADRIFT
+  incident receives a short fixed-step self-pickup lock. The parcel continues
+  to tumble, slide, drift, snag, weather, and retain its exact identity during
+  that interval. When both actor recovery and the lock have ended, ordinary
+  reach and custody rules decide whether it can still be recovered. Mashing
+  pickup cannot erase the incident.
+- Meaningful deliveries should feel like journeys. Phase 06 must first measure
+  the current ordinary straight-line and route-aware distribution, then make
+  the new ordinary average at least approximately three times that baseline
+  without a spacing grid, distance-based enemy levels, or one absurd outlier.
+  A deliberately short onboarding Promise may remain an explicit exception.
+- Chart becomes a persistent expedition record of legitimately traversed or
+  learned terrain and discovered places. An unknown delivery destination is an
+  approximate, provenance-bearing search area—not an exact pin disguised by a
+  circle. Legitimate discovery replaces it with one precise permanent known
+  location for later journeys. Mapping terrain never reveals every actor or
+  loose object inside it.
+- Chart topographic contours and Relief terrain shape come from the same
+  authoritative elevation field used by movement and Hard Country. Close
+  contours mean steep grade; wider contours mean gentle grade. Contours obey
+  map knowledge, simplify by zoom, and cross streaming seams without exposing
+  unknown terrain. Relief uses physically honest mesh height, normals, light,
+  camera, LOD, and grounding rather than a second decorative height source.
+- The world may sparsely contain weathered physical traversal gear left by
+  couriers, workers, travelers, salvagers, or failed expeditions. Such finds
+  derive deterministically from causal history and world-space opportunity
+  budgets, use existing item kinds where possible, and become ordinary
+  conserved objects when relevant. They never reroll at a boundary and are
+  never guaranteed beside the obstacle they would solve.
+
+Together these rules make distance, accumulated map knowledge, terrain shape,
+movement economy, cargo consequence, and occasional evidence of earlier
+travelers parts of one expedition loop rather than separate minigames.
 
 ## Setback and recovery
 
