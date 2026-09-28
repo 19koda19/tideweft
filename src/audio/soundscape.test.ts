@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES,
+  SITUATED_VOCALIZATIONS,
   ambienceParameters,
   ecologyVoicePattern,
   incidentSoundPattern,
+  situatedVocalizationCue,
+  situatedVocalizationPattern,
   smallWildlifePattern,
   spatialPanForBearing,
   titleCrescendoPattern,
   wildlifeAlarmPattern,
+  type SoundCue,
 } from "./soundscape";
 
 describe("title crescendo", () => {
@@ -58,6 +62,68 @@ describe("wildlife alarm cue", () => {
       .toBeLessThan(pattern[0]?.frequency ?? 0);
     expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.25);
+  });
+});
+
+describe("situated vocalization cues", () => {
+  it("maps semantic contours to distinct live cues without inspecting prose", () => {
+    const cues: readonly SoundCue[] = SITUATED_VOCALIZATIONS.map(
+      situatedVocalizationCue,
+    );
+    expect(cues).toEqual([
+      "vocalization-steady",
+      "vocalization-strained",
+      "vocalization-alarm",
+      "vocalization-relief",
+    ]);
+    expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
+  });
+
+  it("keeps all four Atari-like contours deterministic, distinct, and bounded", () => {
+    const patterns = SITUATED_VOCALIZATIONS.map((vocalization) => (
+      situatedVocalizationPattern(vocalization, 0x51a7)
+    ));
+    expect(new Set(patterns.map((pattern) => JSON.stringify(pattern))).size)
+      .toBe(SITUATED_VOCALIZATIONS.length);
+    for (const [index, vocalization] of SITUATED_VOCALIZATIONS.entries()) {
+      const pattern = patterns[index]!;
+      expect(pattern).toEqual(situatedVocalizationPattern(vocalization, 0x51a7));
+      expect(pattern.length).toBeGreaterThan(0);
+      expect(pattern.length).toBeLessThanOrEqual(3);
+      expect(pattern.every(({ delay, duration, frequency }) => (
+        Number.isFinite(delay)
+        && delay >= 0
+        && Number.isFinite(duration)
+        && duration > 0
+        && Number.isFinite(frequency)
+        && frequency >= 40
+      ))).toBe(true);
+      expect(Math.max(...pattern.map(({ delay, duration }) => delay + duration)))
+        .toBeLessThanOrEqual(0.3);
+    }
+  });
+
+  it("gives the semantic contours legible pitch motion", () => {
+    const steady = situatedVocalizationPattern("steady", 7);
+    const strained = situatedVocalizationPattern("strained", 7);
+    const alarm = situatedVocalizationPattern("alarm", 7);
+    const relief = situatedVocalizationPattern("relief", 7);
+    expect(steady[0]?.frequency).toBe(steady[1]?.frequency);
+    expect(strained[1]?.frequency ?? 0).toBeLessThan(strained[0]?.frequency ?? 0);
+    expect(strained[2]?.frequency ?? 0).toBeGreaterThan(strained[1]?.frequency ?? 0);
+    expect(alarm[0]?.frequency ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan(alarm[1]?.frequency ?? 0);
+    expect(alarm[1]?.frequency ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan(alarm[2]?.frequency ?? 0);
+    expect(relief[0]?.frequency ?? 0).toBeGreaterThan(relief[1]?.frequency ?? 0);
+    expect(relief[1]?.frequency ?? 0).toBeGreaterThan(relief[2]?.frequency ?? 0);
+  });
+
+  it("uses malformed variation conservatively while preserving seeded variety", () => {
+    expect(situatedVocalizationPattern("strained", Number.NaN))
+      .toEqual(situatedVocalizationPattern("strained", 0));
+    expect(situatedVocalizationPattern("strained", 9))
+      .not.toEqual(situatedVocalizationPattern("strained", 10));
   });
 });
 

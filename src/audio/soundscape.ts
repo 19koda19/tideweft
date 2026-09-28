@@ -1,5 +1,16 @@
 import type { WaterFlowVoice } from "../game/waterFlow";
 
+/** Semantic voice contours; deliberately independent of localized prose. */
+export const SITUATED_VOCALIZATIONS = Object.freeze([
+  "steady",
+  "strained",
+  "alarm",
+  "relief",
+] as const);
+
+export type SituatedVocalization = (typeof SITUATED_VOCALIZATIONS)[number];
+export type SituatedVocalizationCue = `vocalization-${SituatedVocalization}`;
+
 /** Cues accepted by the live Web Audio playback boundary. */
 export type SoundCue =
   | "step"
@@ -24,7 +35,8 @@ export type SoundCue =
   | "paddle"
   | "recover"
   | "title"
-  | "ui";
+  | "ui"
+  | SituatedVocalizationCue;
 
 export interface SoundToneStep {
   readonly frequency: number;
@@ -250,6 +262,10 @@ export class TideweftSoundscape {
       recover: incidentSoundPattern("recover", variantSeed),
       title: titleCrescendoPattern(),
       ui: [toneStep(520, 0, "sine", 0.055)],
+      "vocalization-steady": situatedVocalizationPattern("steady", variantSeed),
+      "vocalization-strained": situatedVocalizationPattern("strained", variantSeed),
+      "vocalization-alarm": situatedVocalizationPattern("alarm", variantSeed),
+      "vocalization-relief": situatedVocalizationPattern("relief", variantSeed),
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
@@ -425,6 +441,51 @@ export function wildlifeAlarmPattern(): readonly SoundToneStep[] {
     toneStep(1_174.66, 0.052, "square", 0.045),
     toneStep(587.33, 0.12, "triangle", 0.09),
   ];
+}
+
+/** Map a semantic contour to its live playback cue without consulting prose. */
+export function situatedVocalizationCue(
+  vocalization: SituatedVocalization,
+): SituatedVocalizationCue {
+  return `vocalization-${vocalization}`;
+}
+
+/**
+ * Brief deterministic voice contours for situated expression events. They are
+ * deliberately synthetic rather than speech: meaning comes from the event's
+ * semantic contour, while the seed supplies only restrained timbral variety.
+ */
+export function situatedVocalizationPattern(
+  vocalization: SituatedVocalization,
+  variantSeed: number,
+): readonly SoundToneStep[] {
+  const seed = Number.isSafeInteger(variantSeed) ? variantSeed >>> 0 : 0;
+  const shift = ((seed % 11) - 5) * 3;
+  switch (vocalization) {
+    case "steady":
+      return [
+        toneStep(246.94 + shift, 0, "square", 0.055),
+        toneStep(246.94 + shift, 0.07, "triangle", 0.09),
+      ];
+    case "strained":
+      return [
+        toneStep(220 + shift, 0, "sawtooth", 0.065),
+        toneStep(196 + shift, 0.048, "square", 0.075),
+        toneStep(233.08 + shift, 0.11, "sawtooth", 0.095),
+      ];
+    case "alarm":
+      return [
+        toneStep(349.23 + shift, 0, "square", 0.045),
+        toneStep(523.25 + shift * 2, 0.045, "square", 0.055),
+        toneStep(783.99 + shift * 2, 0.1, "sawtooth", 0.08),
+      ];
+    case "relief":
+      return [
+        toneStep(523.25 + shift, 0, "square", 0.055),
+        toneStep(392 + shift, 0.065, "triangle", 0.09),
+        toneStep(293.66 + Math.trunc(shift / 2), 0.14, "sine", 0.14),
+      ];
+  }
 }
 
 /**
