@@ -74,7 +74,7 @@ preserve what matters later.**
 
 ### Alpha 60 Breathing Room boundary
 
-The current Alpha 60 source candidate completes the early-performance
+The current **LIVE_VERIFIED** Alpha 60 release completes the early-performance
 architecture without creating a second simulation owner. Exact bounded
 same-stack receipts may reuse already-authenticated regional-ecology lineage,
 canonical encodings, immutable projections, and stable presentation work only
@@ -88,16 +88,24 @@ avoid repeated unchanged work while retaining the same deterministic outcomes,
 physical custody, biodiversity, knowledge, difficulty, and save bytes. Every
 packaged scenario binds exact trusted-input, viewport, zoom, and lifecycle
 guards. Separate browser, resource, and cold-persistence witnesses bind their
-own exact candidate and workload evidence. Those diagnostics remain
+own exact executable and workload evidence. Those diagnostics remain
 developer-only and never enter simulation or saves.
 
 Representative dense Relief and browser measurements on the primary
 development machine occupy the preferred 45–60 FPS band instead of the former
 sustained 4–8 FPS failure state. This is host- and scene-specific evidence, not
 universal 60 FPS or low-power certification. A once-per-world-update hitch is
-still visible in worst-frame gaps and remains an explicit limitation. Alpha 60
-becomes release-verified only after the exact cumulative, packaged, soak,
-remote-CI, Pages, and cache-bypassed deployed-build gates succeed.
+still visible in worst-frame gaps and remains an explicit limitation. Exact
+source, executable, and pushed commit
+`c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed the local 312-file / 3,009-
+test cumulative gate and packaged closure evidence. CI run `36442886220` and
+Pages run `36442886243` succeeded, and the cache-bypassed comparison matched all
+5/5 deployed production files in the exact 4,377,380-byte tested web artifact.
+The runtime-only packaged ASAR contains 10 entries totalling 4,599,453 bytes.
+Outer save v32, simulation v4, `RegionalEcologyStateV6`, wildlife actor v1, and
+gameplay contract 51 remain unchanged; Field Manual 70 records this release
+boundary. Directive 04_1B **The Breathing Room** is closed, and 04_2 **The
+Living Voice** is next.
 
 ### Repository asset and storage law
 
@@ -615,18 +623,24 @@ working dog remains the honest continuity witness and is not a bonded player
 companion. The independent dog, physical houses/interiors, and seasons remain
 broader work outside this release.
 
-The current released boundaries are outer save v32, simulation v4, Regional
+At the Alpha53 release boundary, outer save v32, simulation v4, Regional
 Ecology V6, wildlife actor v1, gameplay contract 51, and tutorial/Field Manual
-version 63. Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3`
+version 63 were current. Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3`
 is preserved beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 final executable descendant `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI run `35375612294`
 passed 290 test files / 2,791 tests, and Pages run `35375612200` succeeded. The
 first cache-bypassed exact-live comparison matched all 5/5 production files,
 totalling 4,251,968 bytes; the packaged runtime-only ASAR contains 10 entries
 totalling 4,472,022 bytes. Directive 04_1A **The Turning Day** is closed and
-**LIVE_VERIFIED**. Alpha 60 is the current Directive 04_1B **Breathing Room**
-release candidate; 04_2 **The Living Voice** remains gated on its exact release
-closure.
+**LIVE_VERIFIED**. Current **LIVE_VERIFIED** Alpha 60 retains the same save,
+simulation, ecology, wildlife-actor, and gameplay-contract versions while
+advancing the Field Manual to 70. Exact source, executable, and pushed commit
+`c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed 312 test files / 3,009
+tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
+cache-bypassed production files matched the exact 4,377,380-byte tested web
+artifact; and its runtime-only ASAR contains 10 entries / 4,599,453 bytes.
+Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
+is next.
 
 ## Authoritative tick
 
@@ -690,8 +704,9 @@ The playable slice uses:
   catalog at the released 45 core-wildlife-profile boundary, not worldwide
   species breadth, ecological migration behavior, or a complete bestiary.
   Alpha39 remains the historical **LIVE_VERIFIED** Directive 04_1 biodiversity
-  closure; Alpha53 is the current **LIVE_VERIFIED** release and does not change
-  this catalog. Alpha34–38 were never standalone releases; their exact
+  closure; current **LIVE_VERIFIED** Alpha60 does not change this catalog, and
+  Alpha53 remains the historical daily-continuity release. Alpha34–38 were
+  never standalone releases; their exact
   append-only lineage is incorporated into Alpha39. Alpha40–52 likewise remain
   internal cumulative milestones first shipped in Alpha53 rather than
   standalone releases. The
@@ -1313,9 +1328,8 @@ files / 2,633 checks for `c67f30b`, Pages published five files totalling
 production files byte-for-byte. Directive 04_1 is closed. At that released
 checkpoint, the next authorized directive was 04_1A **The Turning Day**.
 Alpha53 has now shipped that bounded architecture as **LIVE_VERIFIED** and
-closes 04_1A. Alpha 60 is the current Directive 04_1B **Breathing Room**
-release candidate, followed by 04_2 **The Living Voice** only after exact
-closure.
+closes 04_1A. Current **LIVE_VERIFIED** Alpha 60 closes Directive 04_1B **The
+Breathing Room**, and 04_2 **The Living Voice** is next.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -1927,12 +1941,12 @@ child while allowing the additive optional wildlife circadian receipt; Alpha43
 through Alpha46 retained that envelope. Internal Alpha47 advanced the outer
 session to version 32 by inserting a required nullable player time-action into
 an authenticated version-31 session, with `null` proving that migration cannot
-invent recovery or elapsed time. Alpha48 through Alpha53 keep outer version 32,
+invent recovery or elapsed time. Alpha48 through Alpha60 keep outer version 32,
 simulation format 4, `RegionalEcologyStateV6`, and wildlife actor schema/version
 1 unchanged. Alpha51's optional resident receipts and Alpha52's byte-identical
 reciprocal settlement-rest digest add no new root or migration. Alpha40–52 are
 internal cumulative milestones first shipped in Alpha53, not standalone
-releases. Outer version 32 is the current **LIVE_VERIFIED** Alpha53 save
+releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
@@ -2150,8 +2164,10 @@ witnesses, and packaged desktop Chart/Relief plus mobile Relief recovery
 coverage. It retains outer save v32 and closes Directive 04_1A without claiming
 the independent dog as a routine or bonded companion, physical interiors,
 seasons, a packaged mobile Chart matrix, or universal low-end-device
-certification. These are the current **LIVE_VERIFIED** manual, gameplay, and
-save boundaries.
+certification. Released Alpha60 advances the Field Manual/tutorial to version
+70 while retaining gameplay contract 51, outer save v32, simulation v4,
+`RegionalEcologyStateV6`, and wildlife actor v1. These are the current
+**LIVE_VERIFIED** manual, gameplay, and save boundaries.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
@@ -2400,12 +2416,25 @@ descendant
 `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
 test files / 2,791 tests; Pages `35375612200` succeeded; all 5/5 exact live
 production files matched the 4,251,968-byte build; and the packaged runtime-only
-ASAR contains 10 entries / 4,472,022 bytes. At that current released boundary,
-outer save v32, gameplay contract 51, and tutorial/Field Manual version 63 are
-current. Directive 04_1A is closed
-and **LIVE_VERIFIED**; Alpha 60 is the current Directive 04_1B **Breathing
-Room** release candidate, and 04_2 **The Living Voice** follows only after its
-exact closure gate.
+ASAR contains 10 entries / 4,472,022 bytes. At that historical released
+boundary, outer save v32, gameplay contract 51, and tutorial/Field Manual
+version 63 were current. Directive 04_1A is closed
+and **LIVE_VERIFIED**.
+
+Released Alpha60 **The Breathing Room** is the current **LIVE_VERIFIED**
+release. It adds no parallel simulation owner and preserves deterministic
+ecology, physical custody, knowledge, difficulty, and save bytes while bounded
+exact-match receipts, retained presentation geometry, and stable projections
+avoid repeated unchanged work. The exact source, executable, and pushed commit
+is `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0`; the local cumulative gate passed
+312 test files / 3,009 tests; CI `36442886220` and Pages `36442886243`
+succeeded; and all 5/5 cache-bypassed deployed production files matched the
+4,377,380-byte tested web artifact. The runtime-only ASAR contains 10 entries /
+4,599,453 bytes. Outer save v32, simulation v4, `RegionalEcologyStateV6`,
+wildlife actor v1, and gameplay contract 51 remain unchanged; Field Manual 70
+is current. Host-specific cadence is not universal 60 FPS or low-power
+certification, and the periodic world-update hitch remains visible in
+worst-frame gaps. Directive 04_1B is closed; 04_2 **The Living Voice** is next.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

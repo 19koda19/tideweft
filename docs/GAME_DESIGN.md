@@ -126,9 +126,9 @@ Each seed creates:
   closure at exactly 45 core-wildlife profiles / 47 total Living Weft catalog
   records, preserving the exact 27-record Alpha33 prefix, outer save v30,
   `RegionalEcologyStateV6`, gameplay contract 37, and Field Manual 49. The
-  current LIVE_VERIFIED Alpha53 release retains that catalog and ecology
-  authority while advancing the outer save to v32, gameplay contract to 51,
-  and Field Manual to 63. This is not worldwide species breadth, ecological
+  current **LIVE_VERIFIED** Alpha60 release retains that catalog and ecology
+  authority, outer save v32, and gameplay contract 51 while advancing the Field
+  Manual to 70. This is not worldwide species breadth, ecological
   migration behavior, or a complete bestiary.
 - Recipes that produce and consume conserved resources.
 - Real settlement stress based on resident needs and low stocks.
@@ -1073,8 +1073,15 @@ beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 test files / 2,791 tests and the production build; Pages `35375612200` deployed
 that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
 production files in the exact 4,251,968-byte web artifact. Directive 04_1A is
-complete. Alpha 60 is the current Directive 04_1B **Breathing Room** release
-candidate; 04_2 **The Living Voice** remains gated on exact release closure.
+complete. Current **LIVE_VERIFIED** Alpha 60 preserves outer save v32,
+simulation v4, Regional Ecology V6, wildlife actor v1, and gameplay contract 51
+while advancing the Field Manual to 70. Exact source, executable, and pushed
+commit `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed 312 test files / 3,009
+tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
+cache-bypassed deployed files matched the exact 4,377,380-byte tested web
+artifact; and the runtime-only ASAR contains 10 entries / 4,599,453 bytes.
+Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
+is next.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -1962,11 +1969,10 @@ relationship-bearing continuity witness rather than a bonded companion, and
 packaged timing is not universal low-end certification. The soak's materialized
 wildlife representative is one real activity-bound Alpine golden eagle, not
 every species at once.
-Directive 04_1A is complete; Alpha 60 is the current Directive 04_1B
-**Breathing Room** release candidate, followed by 04_2 **Living Voice** only
-after exact closure.
+Directive 04_1A is complete. Current **LIVE_VERIFIED** Alpha 60 closes Directive
+04_1B **The Breathing Room**, and 04_2 **Living Voice** is next.
 
-Live through Alpha 53:
+Live through Alpha 60:
 
 - the seven-settlement/42-resident deterministic world;
 - stable generated identity, weather-responsive condition, bounded memory, learned name/work/home, settlement and route presence, occluded sight, anonymous directional hearing, bounded attention/suspicion, saved last-known-area search and lawful reacquisition/give-up, direct-sight selection, and pane-free non-pausing ABOUT for the original harbor country's 42 humans;
@@ -1978,6 +1984,12 @@ Live through Alpha 53:
   weather, needs, watch/search, and lawful strong disturbance retain priority;
   the independent dog remains unbound and no bonded player companion, interior,
   or seasonal system is invented;
+- one released Breathing Room performance boundary: bounded exact-match reuse,
+  retained presentation work, guarded package/browser/resource evidence, and
+  complete canonical fallbacks preserve the same authority, custody,
+  biodiversity, knowledge, difficulty, and save truth; host-specific cadence is
+  not universal 60 FPS or low-power certification, and the periodic
+  world-update hitch remains visible in worst-frame gaps;
 - one deterministic bounded habitat-derived deer/gull/black-bear/marsh-rabbit/marsh-fox assemblage with honest species absence, aggregate capacity/population pressure/trend, capped persistent representatives, shared visual and anonymous alarm observations, role-and-size-aware trophic appraisal, bounded rabbit alarm/flee and nonlethal fox pursuit/disengagement, dog and large-predator pressure, species-shaped terrain locomotion, direct rabbit/fox movement signs, visible-event-only thumps/yips, standable shallow-water movement, conditional whole-parcel scavenging, knowledge-honest ABOUT, coarse physiology without invented perception or movement, persistent deer/gull group signals/cohesion/split/rejoin, nonlethal cargo-neutral player-absent group aftermath, and identity-preserving full/coarse/full return;
 - one bounded Settlement Shadows extension: an authoritative brown-rat population-area aggregate plus free-ranging domestic-cat individuals; shared cat/dog/human/gull visual pressure; physical loose-provision scent attraction; rain/terrain and aggregate-density pressure; at most one nonlethal, cargo-neutral, non-consuming aggregate-unit redistribution per eight ticks; directly visible gnaw/track/shelter signs; cat food competition, strong-rain retreat, and non-targetable wet pawprints; visible-event-only rat and cat audio; knowledge-honest Chart/Relief ABOUT and mouse/touch actions; and identity-preserving cat full/coarse/save return;
 - one bounded Rain Chorus / Shadow Overhead extension: persistent fish-crow representatives and their saved flock, one solitary northern harrier, one conserved southern-leopard-frog population area, authenticated perch/quarter/rest activity, direct crow alarm and mobbing pressure, finite nonlethal harrier pursuit, exact crow provision custody, rain-responsive directional chorus, knowledge-honest Chart/Relief/ABOUT presentation, and exact version-11-to-12 adoption;
@@ -2089,9 +2101,26 @@ Cumulatively released in Alpha53:
   SHA, and all
   5/5 live production files matched the exact 4,251,968-byte artifact.
 
-This closes Directive 04_1A. Alpha 60 is the current Directive 04_1B
-**Breathing Room** release candidate, and 04_2 **Living Voice** follows only
-after its exact closure gate.
+This closes Directive 04_1A.
+
+Released in Alpha60:
+
+- bounded exact-match reuse and stable presentation work that reduce repeated
+  ecology, projection, serialization, terrain-submission, traversal-query, and
+  HUD work without changing simulation authority;
+- the unchanged outer save v32, simulation v4, `RegionalEcologyStateV6`,
+  wildlife actor v1, and gameplay contract 51, with Field Manual 70;
+- exact source, executable, and pushed commit
+  `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0`, 312 test files / 3,009 tests
+  locally, CI `36442886220`, Pages `36442886243`, exact cache-bypassed equality
+  for all 5/5 deployed files in the 4,377,380-byte tested web artifact, and a
+  runtime-only 10-entry / 4,599,453-byte ASAR; and
+- the honest remaining limits: measurements are host- and scene-specific, do
+  not certify universal 60 FPS or low-power hardware, and still show the
+  periodic world-update hitch in worst-frame gaps.
+
+Alpha60 is the current **LIVE_VERIFIED** release. It closes Directive 04_1B
+**The Breathing Room**, and 04_2 **Living Voice** is next.
 
 Expansion runway, not current behavior:
 

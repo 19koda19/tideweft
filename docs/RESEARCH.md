@@ -758,13 +758,27 @@ beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
 test files / 2,791 tests and the production build; Pages `35375612200` deployed
 that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
-production files in the exact 4,251,968-byte web artifact. At that current
+production files in the exact 4,251,968-byte web artifact. At that historical
 released boundary, outer save v32, gameplay contract 51, and Field Manual 63
-are current; simulation v4,
+were current; simulation v4,
 `RegionalEcologyStateV6`, and wildlife actor v1 remain unchanged. Directive
-04_1A is complete. Alpha 60 is the current Directive 04_1B **Breathing Room**
-release candidate, and 04_2 **The Living Voice** follows only after exact
-closure.
+04_1A is complete.
+
+The **LIVE_VERIFIED** `0.3.3-alpha.60 — The Breathing Room` release closes
+Directive 04_1B. Bounded exact-match reuse removes repeated authenticated
+ecology, projection, serialization, terrain-submission, traversal-query, and
+stable-HUD work while complete canonical fallbacks preserve the same
+deterministic world truth. Exact executable, source, and pushed commit
+`c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed CI `36442886220`; Pages
+`36442886243` deployed it, and a cache-bypassed comparison matched all 5/5
+production files in the exact 4,377,380-byte web artifact.
+
+This evidence establishes restored headroom on the tested host and scenes, not
+universal 60 FPS or broad low-power certification. Periodic worst-frame gaps
+remain visible, and the measurements retain their documented host, platform,
+view, seed, and resource-observation limits. The bounded reuse preserves truth;
+it does not weaken simulation authority. Directive 04_1B is closed, and 04_2
+**The Living Voice** is next.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -795,8 +809,9 @@ living records, and Alpha38 is the preserved internal epoch-2 checkpoint at
 shipped that exact lineage as the historical LIVE_VERIFIED Directive 04_1
 biodiversity closure at 45 / 47 through epoch 3 without quota padding.
 Alpha40–52 are the internal cumulative daily-life milestones; none was an
-independent release. Alpha53 now cumulatively ships their lineage and is the
-current LIVE_VERIFIED release.
+independent release. Alpha53 cumulatively shipped their lineage as the
+historical LIVE_VERIFIED Turning Day closure. Alpha60 is the current
+LIVE_VERIFIED release.
 
 Those biodiversity checkpoints did not complete broader aquatic or settlement
 ecology, broad attacks or mortality, population recovery, decomposition, body
@@ -807,9 +822,9 @@ reproduction, ecological migration, independent-dog shelter/routine, bonded
 companionship, physical interiors, seasons, broader routines, wider settlement
 ecology, and wider sound/evidence tracking still require their own authoritative
 owners. Alpha39's shared performance and seamless-crossing evidence closed
-Directive 04_1; Alpha53's distributed production evidence closes Directive
-04_1A. Alpha 60 is the current Directive 04_1B Breathing Room release
-candidate, and Living Voice follows only after exact closure.
+Directive 04_1; Alpha53's distributed production evidence closed Directive
+04_1A; and Alpha60's bounded exact-reuse and exact-release evidence closes
+Directive 04_1B. 04_2 **The Living Voice** is next.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
