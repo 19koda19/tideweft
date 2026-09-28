@@ -17,6 +17,7 @@ const {
   RESOURCE_SHAKEDOWN_CYCLES,
   WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
+  assertGuardedBaselineMeasurements,
   assertNoResourceInputContamination,
   assertPackagedAutosaveStorage,
   assertPackagedPersistenceWitness,
@@ -1346,6 +1347,26 @@ function cleanInputEvidence() {
   delete malformedLifecycle.pageLifecycle.hiddenDurationMs;
   assert.throws(
     () => assertNoResourceInputContamination(malformedLifecycle),
+    /invalid input-contamination evidence/u,
+  );
+
+  const guardedMeasurements = [
+    { id: 'relief', viewportAndInput: cleanInputEvidence() },
+    { id: 'chart', viewportAndInput: cleanInputEvidence() },
+  ];
+  assert.equal(
+    assertGuardedBaselineMeasurements(guardedMeasurements, ['relief', 'chart']),
+    true,
+  );
+  assert.throws(
+    () => assertGuardedBaselineMeasurements(guardedMeasurements, ['chart', 'relief']),
+    /match the selected scenario order/u,
+  );
+  assert.throws(
+    () => assertGuardedBaselineMeasurements([
+      { id: 'relief', viewportAndInput: cleanInputEvidence() },
+      { id: 'chart' },
+    ], ['relief', 'chart']),
     /invalid input-contamination evidence/u,
   );
 }

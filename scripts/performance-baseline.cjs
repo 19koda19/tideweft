@@ -1915,6 +1915,27 @@ function assertNoResourceInputContamination(input, label = 'resource checkpoint'
   return true;
 }
 
+function assertGuardedBaselineMeasurements(measurements, expectedScenarioIds) {
+  if (!Array.isArray(measurements) || !Array.isArray(expectedScenarioIds)) {
+    throw new TypeError('Guarded baseline measurements and scenario IDs must be arrays');
+  }
+  if (
+    measurements.length !== expectedScenarioIds.length
+    || measurements.some((measurement, index) => measurement?.id !== expectedScenarioIds[index])
+  ) {
+    throw new Error(
+      'Guarded baseline measurements must match the selected scenario order exactly',
+    );
+  }
+  for (const measurement of measurements) {
+    assertNoResourceInputContamination(
+      measurement?.viewportAndInput,
+      `baseline scenario ${measurement?.id ?? 'unknown'}`,
+    );
+  }
+  return true;
+}
+
 function assertResourceShakedownCycle(cycle, route, expectedOrdinal) {
   const expectedRegions = ['0:0', '0:-1', '0:0'];
   const allowedModes = new Set(['foot', 'wading', 'skiff', 'camp']);
@@ -4524,9 +4545,10 @@ async function measureScenario(
   ) {
     throw new Error(`Scenario ${scenario.id} measured the wrong viewport: ${JSON.stringify(snapshot.viewport)}`);
   }
-  const viewportAndInput = traceHitches
-    ? await captureInputGuardEvidence(client, `hitch trace ${scenario.id}`)
-    : null;
+  const viewportAndInput = await captureInputGuardEvidence(
+    client,
+    `baseline scenario ${scenario.id}`,
+  );
 
   return {
     id: scenario.id,
@@ -4537,7 +4559,7 @@ async function measureScenario(
     frameSample,
     saveSample,
     snapshot,
-    ...(viewportAndInput === null ? {} : { viewportAndInput }),
+    viewportAndInput,
     browser: {
       cdpMetricUnits: CDP_METRIC_UNITS,
       metricWindowScope: {
@@ -5301,16 +5323,13 @@ async function runIsolatedScenario(
     client = new CdpClient(page.webSocketDebuggerUrl);
     activeLifecycle = { child, client };
     await client.open();
-    const strictInputGuard = resourceShakedown || resourceSoak || traceHitches;
-    if (strictInputGuard) {
-      // CDP discovery can observe the final app:// URL before its first
-      // renderer document has finished initializing. Wait for that stable
-      // gameplay document so the guard cannot be lost with the startup
-      // execution context before controlled viewport setup or bootstrap.
-      await waitForStablePackagedGameplayDocument(client);
-      await client.waitFor(`document.visibilityState === 'visible'`);
-      await installResourceInputGuard(client);
-    }
+    // CDP discovery can observe the final app:// URL before its first renderer
+    // document has finished initializing. Every performance scenario waits for
+    // that stable gameplay document so the guard cannot be lost with the
+    // startup execution context before controlled viewport setup or bootstrap.
+    await waitForStablePackagedGameplayDocument(client);
+    await client.waitFor(`document.visibilityState === 'visible'`);
+    await installResourceInputGuard(client);
     if (resourceShakedown || resourceSoak) {
       webAudioTracker = attachWebAudioLifecycleTracker(client);
       try {
@@ -5321,10 +5340,8 @@ async function runIsolatedScenario(
         );
       }
     }
-    if (strictInputGuard) {
-      await setViewport(client, scenario.viewport);
-      await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
-    }
+    await setViewport(client, scenario.viewport);
+    await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
     const bootstrap = await bootstrapWorld(client, scenario.seed);
     let measurement = resourceSoak
       ? await measureResourceSoak(
@@ -5346,7 +5363,7 @@ async function runIsolatedScenario(
           ? sampleMs
           : Math.max(sampleMs, scenario.minimumSampleMs),
         traceHitches,
-        traceHitches,
+        true,
       );
     assertNotInterrupted('after the resource diagnostic');
     if (packagedPersistenceWitness) {
@@ -5622,6 +5639,26 @@ async function main() {
     measurements.push(isolated.measurement);
   }
 
+  if (!options.resourceShakedown && !options.resourceSoak) {
+    assertGuardedBaselineMeasurements(
+      measurements,
+      selectedScenarios.map(({ id }) => id),
+    );
+  }
+
+  const guardedMeasurementInstrumentation = {
+    trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
+    pageLifecycleGuard: 'requires a visible document throughout guarded measurement; hidden transitions, pagehide, or freeze invalidate evidence, while focus/blur is retained as context rather than treated as contamination',
+    backgroundExecutionPolicy: {
+      launchSwitches: [
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding',
+        '--disable-backgrounding-occluded-windows',
+      ],
+      limitation: 'ordinary operating-system window overlap is not directly observable; launch switches mitigate background and occlusion scheduling, while page lifecycle evidence rejects hidden, pagehide, or frozen documents',
+    },
+  };
+
   const commonResult = {
     capturedAt: new Date().toISOString(),
     repositoryAtCapture: await repositoryAtCapture(),
@@ -5667,6 +5704,7 @@ async function main() {
       selectedScenarioIds: [resourceSoakScenario.id],
     },
     instrumentation: {
+      ...guardedMeasurementInstrumentation,
       minimumActiveTravelMs: RESOURCE_SOAK_MINIMUM_TRAVEL_MS,
       minimumMeasuredCycles: RESOURCE_SOAK_MINIMUM_CYCLES,
       maximumMeasuredCycles: RESOURCE_SOAK_MAXIMUM_CYCLES,
@@ -5675,7 +5713,6 @@ async function main() {
         ? 'enabled: the exact post-soak isolated profile is cold-relaunched through current v32, supported v31-to-v32 migration, and a second v32 idempotence boundary before cleanup'
         : 'disabled: pass --packaged-persistence-witness with the resource diagnostic to add cold-relaunch and v31-to-v32 migration evidence',
       processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
-      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
       runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
     },
     measurements,
@@ -5689,13 +5726,13 @@ async function main() {
       selectedScenarioIds: [resourceScenario.id],
     },
     instrumentation: {
+      ...guardedMeasurementInstrumentation,
       checkpoints: RESOURCE_CHECKPOINT_LABELS,
       cycles: RESOURCE_SHAKEDOWN_CYCLES,
       packagedPersistenceWitness: options.packagedPersistenceWitness
         ? 'enabled: the exact post-shakedown isolated profile is cold-relaunched through current v32, supported v31-to-v32 migration, and a second v32 idempotence boundary before cleanup'
         : 'disabled: pass --packaged-persistence-witness with --resource-shakedown to add cold-relaunch and v31-to-v32 migration evidence',
       processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
-      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
       runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
     },
     measurements,
@@ -5711,22 +5748,11 @@ async function main() {
       selectedScenarioIds: selectedScenarios.map(({ id }) => id),
     },
     requestedSampleWindowMs: options.sampleMs,
+    instrumentation: guardedMeasurementInstrumentation,
     measurements,
   };
   if (options.traceHitches) {
     result.hitchTraceEnabled = true;
-    result.instrumentation = {
-      trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
-      pageLifecycleGuard: 'requires a visible document throughout guarded measurement; hidden transitions, pagehide, or freeze invalidate evidence, while focus/blur is retained as context rather than treated as contamination',
-      backgroundExecutionPolicy: {
-        launchSwitches: [
-          '--disable-background-timer-throttling',
-          '--disable-renderer-backgrounding',
-          '--disable-backgrounding-occluded-windows',
-        ],
-        limitation: 'ordinary operating-system window overlap is not directly observable; launch switches mitigate background and occlusion scheduling, while page lifecycle evidence rejects hidden, pagehide, or frozen documents',
-      },
-    };
   }
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
@@ -5784,6 +5810,7 @@ module.exports = {
   RESOURCE_SHAKEDOWN_CYCLES,
   WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
+  assertGuardedBaselineMeasurements,
   assertNoResourceInputContamination,
   assertPackagedAutosaveStorage,
   assertPackagedPersistenceWitness,
