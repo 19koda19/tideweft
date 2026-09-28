@@ -18,6 +18,8 @@ const {
   WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
+  assertPackagedAutosaveStorage,
+  assertPackagedPersistenceWitness,
   assertWorldAdvancePhaseTelemetry,
   assertResourceCheckpointOrder,
   assertResourceSaveSample,
@@ -30,11 +32,15 @@ const {
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
+  createV31PackagedPersistenceRecord,
   forceRendererGarbageCollection,
   hitchSnapshotReasons,
   parseArguments,
   parsePosixProcessTable,
   parseWindowsProcessTable,
+  packagedPersistenceIntegrity,
+  packagedSaveRecordFingerprint,
+  packagedPersistenceSnapshot,
   resourceSoakCadenceSummary,
   resourceSoakCycleCheckpointLabel,
   resourceSoakRetentionSummary,
@@ -73,6 +79,197 @@ function worldAdvancePhaseTelemetryFixture() {
       ]),
     ),
   };
+}
+
+function packagedPersistenceRecordFixture({
+  version = 32,
+  updatedAt = 100,
+  timeAction = null,
+} = {}) {
+  const seed = 'packaged persistence witness fixture';
+  const world = JSON.stringify({
+    checksum: '0123456789abcdef',
+    format: 'tideweft-world',
+    world: { meta: { completedTick: 42, seedText: seed } },
+  });
+  const player = {
+    activeContractId: 7,
+    cargo: [{ contractId: 7, quantity: 1 }],
+    craftingInventory: { gear: [], stacks: [] },
+    ...(version === 32 ? { timeAction } : {}),
+  };
+  const envelope = {
+    bio0Ecology: 'bio0',
+    dogActorRoster: 'dogs',
+    fieldResources: { nodes: [] },
+    format: 'tideweft-session',
+    integrity: '',
+    livingActorPlayerChoice: { version: 1 },
+    perceptionCarry: { version: 1 },
+    physicalCargo: { carrier: 'fixture' },
+    player,
+    porterResponse: { version: 1 },
+    promiseJourney: { contractId: 7 },
+    regionalEcology: 'regional',
+    regionalTravel: 'travel',
+    session: {
+      seed,
+      pressureMode: 'wild',
+      posture: 'gale',
+      sessionShape: 'wander',
+      paused: true,
+      titleVisible: true,
+      quietHourVisible: true,
+      selectedSettlementId: 1,
+      inspectedContractId: 7,
+      trackedContractId: 7,
+      sessionStartedTick: 17,
+      sessionPlayMilliseconds: 8_000,
+      sessionDistanceUnits: 12,
+      sessionDeliveries: 2,
+      sessionReportsDelivered: 1,
+      sessionStrandsWoven: 3,
+      sessionChoirsAwakened: 4,
+      sessionDiscoveredAtStart: 9,
+      sessionBaseline: {
+        completedTick: 17,
+        activeRoutes: 1,
+        resilience: 2,
+        averageStress: 3,
+        averageTrust: 4,
+        projectProgress: 5,
+        fulfilledContracts: 6,
+        awakenedChoirs: 7,
+      },
+      closureOffered: true,
+      campaignCelebrated: true,
+      sessionChanges: ['Fixture session change'],
+      announcement: { id: 8, message: 'Fixture announcement', assertive: false },
+      nextAnnouncementId: 9,
+      tutorial: {
+        stage: 'witness',
+        scansUsed: 2,
+        acceptedPromises: 1,
+        witnessedChanges: 0,
+        dismissed: false,
+      },
+      hasSave: true,
+      continueSummary: 'Fixture continue summary',
+      futureDurableMarker: 'must remain covered',
+    },
+    settlementEcology: 'settlement',
+    settlementDomesticAnimalRecovery: 'recovery',
+    settlementWorkingAnimals: 'working',
+    traversalFeedback: { state: 'holding' },
+    version,
+    world,
+  };
+  envelope.integrity = packagedPersistenceIntegrity(envelope);
+  return {
+    slotId: 'autosave',
+    label: 'Fixture estuary',
+    seed,
+    saveGenerationEra: 2,
+    saveGeneration: 4,
+    payloadVersion: version,
+    updatedAt,
+    playTicks: 42,
+    settlementCount: 2,
+    connectedCount: 1,
+    worldJson: JSON.stringify(envelope),
+    screenshot: 'data:image/png;base64,fixture',
+  };
+}
+
+function currentRecordFromV31Fixture(v31, updatedAt) {
+  const envelope = JSON.parse(v31.worldJson);
+  envelope.version = 32;
+  envelope.player.timeAction = null;
+  envelope.session = {
+    ...envelope.session,
+    paused: false,
+    titleVisible: false,
+    quietHourVisible: false,
+    sessionStartedTick: 42,
+    sessionPlayMilliseconds: 0,
+    sessionDistanceUnits: 0,
+    sessionDeliveries: 0,
+    sessionReportsDelivered: 0,
+    sessionStrandsWoven: 0,
+    sessionChoirsAwakened: 0,
+    sessionDiscoveredAtStart: 11,
+    sessionBaseline: {
+      completedTick: 42,
+      activeRoutes: 2,
+      resilience: 3,
+      averageStress: 4,
+      averageTrust: 5,
+      projectProgress: 6,
+      fulfilledContracts: 7,
+      awakenedChoirs: 8,
+    },
+    closureOffered: false,
+    sessionChanges: [],
+    announcement: { id: 9, message: 'Welcome back to the estuary.', assertive: false },
+    nextAnnouncementId: 10,
+    continueSummary: 'Cold-load continue summary',
+  };
+  envelope.integrity = packagedPersistenceIntegrity(envelope);
+  return {
+    ...structuredClone(v31),
+    payloadVersion: 32,
+    updatedAt,
+    worldJson: JSON.stringify(envelope),
+  };
+}
+
+function packagedPersistenceProcessFixture(tick = 42) {
+  return {
+    process: {
+      cleanExit: true,
+      exitCode: 0,
+      signalCode: null,
+      runtimeExceptionCount: 0,
+      packageIdentityVerified: true,
+      exceptionObservationScope:
+        'registered before Runtime.enable through the pre-close phase assertions',
+    },
+    runtime: {
+      titleVisible: false,
+      hasSave: true,
+      saveWarningVisible: false,
+      renderTick: tick,
+    },
+  };
+}
+
+function packagedAutosaveStorageFixture(record) {
+  return {
+    record: structuredClone(record),
+    primaryRecordCount: 1,
+    fallbackRecordCount: 1,
+    fallbackAutosaveCount: 1,
+    fallbackPresent: true,
+    fallbackMatchesPrimary: true,
+    deletionRecordCount: 0,
+    deletionPresent: false,
+    fenceRecordCount: 1,
+    fenceAutosaveCount: 1,
+    fence: {
+      saveGenerationEra: record.saveGenerationEra ?? 0,
+      saveGeneration: record.saveGeneration ?? 0,
+      updatedAt: record.updatedAt,
+      playTicks: record.playTicks,
+      recordFingerprint: packagedSaveRecordFingerprint(record),
+    },
+  };
+}
+
+function packagedStorageEvidenceFixture(record, version) {
+  return assertPackagedAutosaveStorage(
+    packagedAutosaveStorageFixture(record),
+    version,
+  ).evidence;
 }
 
 {
@@ -271,6 +468,7 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   const normal = parseArguments([]);
   assert.equal(normal.resourceShakedown, false);
   assert.equal(normal.resourceSoak, false);
+  assert.equal(normal.packagedPersistenceWitness, false);
   assert.match(normal.output, /runtime-baseline-[^/]+\.json$/u);
   const resource = parseArguments(['--resource-shakedown']);
   assert.equal(resource.resourceShakedown, true);
@@ -293,6 +491,7 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   const soak = parseArguments(['--resource-soak']);
   assert.equal(soak.resourceShakedown, false);
   assert.equal(soak.resourceSoak, true);
+  assert.equal(soak.packagedPersistenceWitness, false);
   assert.equal(soak.scenarioId, '');
   assert.equal(soak.traceHitches, false);
   assert.match(soak.output, /resource-soak-[^/]+\.json$/u);
@@ -311,6 +510,309 @@ assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeE
   assert.throws(
     () => parseArguments(['--resource-soak', '--resource-shakedown']),
     /mutually exclusive/u,
+  );
+  const persistenceWitness = parseArguments([
+    '--resource-soak',
+    '--packaged-persistence-witness',
+  ]);
+  assert.equal(persistenceWitness.resourceSoak, true);
+  assert.equal(persistenceWitness.packagedPersistenceWitness, true);
+  assert.match(
+    persistenceWitness.output,
+    /resource-soak-persistence-witness-[^/]+\.json$/u,
+  );
+  const shakedownPersistenceWitness = parseArguments([
+    '--resource-shakedown',
+    '--packaged-persistence-witness',
+  ]);
+  assert.equal(shakedownPersistenceWitness.resourceShakedown, true);
+  assert.equal(shakedownPersistenceWitness.packagedPersistenceWitness, true);
+  assert.match(
+    shakedownPersistenceWitness.output,
+    /resource-shakedown-persistence-witness-[^/]+\.json$/u,
+  );
+  assert.throws(
+    () => parseArguments(['--packaged-persistence-witness']),
+    /requires --resource-shakedown or --resource-soak/u,
+  );
+  assert.throws(
+    () => parseArguments([
+      '--resource-shakedown',
+      '--packaged-persistence-witness',
+      '--scenario=x',
+    ]),
+    /cannot be combined with --scenario/u,
+  );
+  assert.throws(
+    () => parseArguments([
+      '--resource-soak',
+      '--packaged-persistence-witness',
+      '--trace-hitches',
+    ]),
+    /cannot be combined with --trace-hitches/u,
+  );
+}
+
+{
+  const sourceRecord = packagedPersistenceRecordFixture();
+  const source = packagedPersistenceSnapshot(sourceRecord, 32);
+  assert.equal(source.envelopeVersion, 32);
+  assert.equal(source.timeAction, 'null');
+  assert.equal(source.playTicks, 42);
+  assert.equal(source.serializedBytes, Buffer.byteLength(sourceRecord.worldJson, 'utf8'));
+
+  const v31Record = createV31PackagedPersistenceRecord(sourceRecord);
+  const fixture = packagedPersistenceSnapshot(v31Record, 31);
+  assert.equal(v31Record.payloadVersion, 31);
+  assert.equal(v31Record.updatedAt, sourceRecord.updatedAt + 1);
+  assert.equal(fixture.timeAction, 'absent');
+  assert.equal(fixture.authoritySha256, source.authoritySha256);
+  assert.equal(fixture.ecologySha256, source.ecologySha256);
+  assert.equal(fixture.custodySha256, source.custodySha256);
+  assert.equal(Object.hasOwn(JSON.parse(v31Record.worldJson).player, 'timeAction'), false);
+
+  const migratedRecord = currentRecordFromV31Fixture(v31Record, v31Record.updatedAt + 1);
+  const migrated = packagedPersistenceSnapshot(migratedRecord, 32);
+  assert.notEqual(migrated.envelopeSha256, source.envelopeSha256);
+  assert.equal(migrated.authoritySha256, source.authoritySha256);
+  assert.equal(
+    JSON.parse(migratedRecord.worldJson).session.futureDurableMarker,
+    'must remain covered',
+  );
+  const idempotentRecord = {
+    ...structuredClone(migratedRecord),
+    updatedAt: migratedRecord.updatedAt + 1,
+  };
+  const idempotent = packagedPersistenceSnapshot(idempotentRecord, 32);
+  const process = packagedPersistenceProcessFixture();
+  const sourceStorage = packagedStorageEvidenceFixture(sourceRecord, 32);
+  const fixtureStorage = packagedStorageEvidenceFixture(v31Record, 31);
+  const migratedStorage = packagedStorageEvidenceFixture(migratedRecord, 32);
+  const idempotentStorage = packagedStorageEvidenceFixture(idempotentRecord, 32);
+  assert.equal(
+    assertPackagedAutosaveStorage(packagedAutosaveStorageFixture(sourceRecord), 32)
+      .parsed.envelope.version,
+    32,
+  );
+  const missingFallback = packagedAutosaveStorageFixture(sourceRecord);
+  missingFallback.fallbackPresent = false;
+  assert.throws(
+    () => assertPackagedAutosaveStorage(missingFallback, 32),
+    /inconsistent v32 durable storage/u,
+  );
+  const wrongFallback = packagedAutosaveStorageFixture(sourceRecord);
+  wrongFallback.fallbackMatchesPrimary = false;
+  assert.throws(
+    () => assertPackagedAutosaveStorage(wrongFallback, 32),
+    /inconsistent v32 durable storage/u,
+  );
+  const duplicateFallback = packagedAutosaveStorageFixture(sourceRecord);
+  duplicateFallback.fallbackRecordCount = 2;
+  duplicateFallback.fallbackAutosaveCount = 2;
+  assert.throws(
+    () => assertPackagedAutosaveStorage(duplicateFallback, 32),
+    /inconsistent v32 durable storage/u,
+  );
+  const duplicateFence = packagedAutosaveStorageFixture(sourceRecord);
+  duplicateFence.fenceRecordCount = 2;
+  duplicateFence.fenceAutosaveCount = 2;
+  assert.throws(
+    () => assertPackagedAutosaveStorage(duplicateFence, 32),
+    /inconsistent v32 durable storage/u,
+  );
+  const wrongFenceFingerprint = packagedAutosaveStorageFixture(sourceRecord);
+  wrongFenceFingerprint.fence.recordFingerprint = 'wrong-fingerprint';
+  assert.throws(
+    () => assertPackagedAutosaveStorage(wrongFenceFingerprint, 32),
+    /inconsistent v32 durable storage/u,
+  );
+  const evidence = {
+    schema: 'tideweft-packaged-persistence-witness/v1',
+    source,
+    sourceStorage,
+    sourceRuntime: {
+      titleVisible: true,
+      hasSave: true,
+      saveWarningVisible: false,
+      renderTick: 42,
+    },
+    currentReload: { ...process, storage: sourceStorage, record: source },
+    migration: {
+      ...process,
+      fixture,
+      beforeStorage: fixtureStorage,
+      afterStorage: migratedStorage,
+      beforeSave: fixture,
+      afterSave: migrated,
+    },
+    idempotentReload: {
+      ...process,
+      beforeStorage: migratedStorage,
+      afterStorage: idempotentStorage,
+      beforeSave: migrated,
+      afterSave: idempotent,
+    },
+  };
+  assert.equal(assertPackagedPersistenceWitness(evidence), true);
+  const evidenceSnapshots = (candidate) => [
+    candidate.source,
+    candidate.currentReload.record,
+    candidate.migration.fixture,
+    candidate.migration.beforeSave,
+    candidate.migration.afterSave,
+    candidate.idempotentReload.beforeSave,
+    candidate.idempotentReload.afterSave,
+  ];
+  const missingAuthorityProof = structuredClone(evidence);
+  for (const snapshot of evidenceSnapshots(missingAuthorityProof)) {
+    delete snapshot.authoritySha256;
+  }
+  assert.throws(
+    () => assertPackagedPersistenceWitness(missingAuthorityProof),
+    /snapshot evidence is incomplete/u,
+  );
+  const constantRecordMetadataProof = structuredClone(evidence);
+  for (const snapshot of evidenceSnapshots(constantRecordMetadataProof)) {
+    snapshot.recordMetadataSha256 = 'same-unverified-value';
+  }
+  assert.throws(
+    () => assertPackagedPersistenceWitness(constantRecordMetadataProof),
+    /snapshot evidence is incomplete/u,
+  );
+  const missingExactRecordProof = structuredClone(evidence);
+  for (const snapshot of evidenceSnapshots(missingExactRecordProof)) {
+    delete snapshot.recordSha256;
+  }
+  assert.throws(
+    () => assertPackagedPersistenceWitness(missingExactRecordProof),
+    /snapshot evidence is incomplete/u,
+  );
+  const missingGenerationProof = structuredClone(evidence);
+  for (const snapshot of evidenceSnapshots(missingGenerationProof)) {
+    delete snapshot.saveGenerationEra;
+    delete snapshot.saveGeneration;
+  }
+  assert.throws(
+    () => assertPackagedPersistenceWitness(missingGenerationProof),
+    /snapshot evidence is incomplete/u,
+  );
+
+  const stableSessionDriftRecord = structuredClone(migratedRecord);
+  const stableSessionDriftEnvelope = JSON.parse(stableSessionDriftRecord.worldJson);
+  stableSessionDriftEnvelope.session.futureDurableMarker = 'changed after cold load';
+  stableSessionDriftEnvelope.integrity = packagedPersistenceIntegrity(stableSessionDriftEnvelope);
+  stableSessionDriftRecord.worldJson = JSON.stringify(stableSessionDriftEnvelope);
+  const stableSessionDrift = packagedPersistenceSnapshot(stableSessionDriftRecord, 32);
+  assert.notEqual(stableSessionDrift.authoritySha256, source.authoritySha256);
+  const stableSessionDriftIdempotentRecord = {
+    ...structuredClone(stableSessionDriftRecord),
+    updatedAt: idempotentRecord.updatedAt,
+  };
+  const stableSessionDriftEvidence = structuredClone(evidence);
+  stableSessionDriftEvidence.migration.afterSave = stableSessionDrift;
+  stableSessionDriftEvidence.migration.afterStorage = packagedStorageEvidenceFixture(
+    stableSessionDriftRecord,
+    32,
+  );
+  stableSessionDriftEvidence.idempotentReload.beforeSave = stableSessionDrift;
+  stableSessionDriftEvidence.idempotentReload.beforeStorage = packagedStorageEvidenceFixture(
+    stableSessionDriftRecord,
+    32,
+  );
+  stableSessionDriftEvidence.idempotentReload.afterSave = packagedPersistenceSnapshot(
+    stableSessionDriftIdempotentRecord,
+    32,
+  );
+  stableSessionDriftEvidence.idempotentReload.afterStorage = packagedStorageEvidenceFixture(
+    stableSessionDriftIdempotentRecord,
+    32,
+  );
+  assert.throws(
+    () => assertPackagedPersistenceWitness(stableSessionDriftEvidence),
+    /changed authoritySha256/u,
+  );
+  const crossSaveRecordMetadataDrift = structuredClone(evidence);
+  for (const snapshot of [
+    crossSaveRecordMetadataDrift.migration.afterSave,
+    crossSaveRecordMetadataDrift.idempotentReload.beforeSave,
+    crossSaveRecordMetadataDrift.idempotentReload.afterSave,
+  ]) snapshot.recordMetadataSha256 = '0'.repeat(64);
+  assert.throws(
+    () => assertPackagedPersistenceWitness(crossSaveRecordMetadataDrift),
+    /changed recordMetadataSha256/u,
+  );
+
+  const changedCustody = structuredClone(evidence);
+  changedCustody.migration.afterSave.custodySha256 = '0'.repeat(64);
+  assert.throws(
+    () => assertPackagedPersistenceWitness(changedCustody),
+    /changed custodySha256/u,
+  );
+  const warning = structuredClone(evidence);
+  warning.idempotentReload.runtime.saveWarningVisible = true;
+  assert.throws(
+    () => assertPackagedPersistenceWitness(warning),
+    /process evidence is incomplete/u,
+  );
+  const nonzeroExit = structuredClone(evidence);
+  nonzeroExit.currentReload.process.exitCode = 1;
+  assert.throws(
+    () => assertPackagedPersistenceWitness(nonzeroExit),
+    /process evidence is incomplete/u,
+  );
+  const signaledExit = structuredClone(evidence);
+  signaledExit.currentReload.process.signalCode = 'SIGTERM';
+  assert.throws(
+    () => assertPackagedPersistenceWitness(signaledExit),
+    /process evidence is incomplete/u,
+  );
+  const metadataDriftRecord = { ...structuredClone(sourceRecord), label: 'Changed label' };
+  const metadataDrift = structuredClone(evidence);
+  metadataDrift.currentReload.record = packagedPersistenceSnapshot(metadataDriftRecord, 32);
+  metadataDrift.currentReload.storage = packagedStorageEvidenceFixture(metadataDriftRecord, 32);
+  assert.throws(
+    () => assertPackagedPersistenceWitness(metadataDrift),
+    /changed the exact durable SaveRecord/u,
+  );
+  const generationDrift = structuredClone(evidence);
+  generationDrift.idempotentReload.afterSave.saveGeneration += 1;
+  assert.throws(
+    () => assertPackagedPersistenceWitness(generationDrift),
+    /changed ordinary save-generation authority/u,
+  );
+  const coldReloadTimestampDrift = structuredClone(evidence);
+  coldReloadTimestampDrift.currentReload.record.updatedAt += 1;
+  assert.throws(
+    () => assertPackagedPersistenceWitness(coldReloadTimestampDrift),
+    /unexplained durable timestamp transition/u,
+  );
+  const saveTimestampDidNotAdvance = structuredClone(evidence);
+  saveTimestampDidNotAdvance.migration.afterSave.updatedAt =
+    saveTimestampDidNotAdvance.migration.beforeSave.updatedAt;
+  assert.throws(
+    () => assertPackagedPersistenceWitness(saveTimestampDidNotAdvance),
+    /unexplained durable timestamp transition/u,
+  );
+  const unlinkedFenceEvidence = structuredClone(evidence);
+  unlinkedFenceEvidence.currentReload.storage.fenceFingerprintSha256 = '0'.repeat(64);
+  assert.throws(
+    () => assertPackagedPersistenceWitness(unlinkedFenceEvidence),
+    /storage evidence is incomplete/u,
+  );
+  const badIntegrity = structuredClone(sourceRecord);
+  const badEnvelope = JSON.parse(badIntegrity.worldJson);
+  badEnvelope.integrity = '0'.repeat(16);
+  badIntegrity.worldJson = JSON.stringify(badEnvelope);
+  assert.throws(
+    () => packagedPersistenceSnapshot(badIntegrity, 32),
+    /noncanonical v32 envelope/u,
+  );
+  const activeRecovery = packagedPersistenceRecordFixture({
+    timeAction: { kind: 'sleep' },
+  });
+  assert.throws(
+    () => createV31PackagedPersistenceRecord(activeRecovery),
+    /invalid v32 player recovery authority/u,
   );
 }
 

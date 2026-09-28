@@ -56,6 +56,55 @@ const RESOURCE_SOAK_ATTACHED_DOM_GROWTH_BUDGET = 64;
 const RESOURCE_SOAK_CDP_DOM_GROWTH_BUDGET = 512;
 const RESOURCE_SOAK_CLOSING_FPS_RATIO_FLOOR = 0.8;
 const RESOURCE_SOAK_CLOSING_P99_RATIO_CEILING = 1.25;
+const PACKAGED_PERSISTENCE_CURRENT_VERSION = 32;
+const PACKAGED_PERSISTENCE_MIGRATION_VERSION = 31;
+const PACKAGED_PERSISTENCE_MAX_WORLD_JSON_CHARACTERS = 20_000_000;
+const PACKAGED_PERSISTENCE_ENVELOPE_KEYS = Object.freeze([
+  'bio0Ecology',
+  'dogActorRoster',
+  'fieldResources',
+  'format',
+  'integrity',
+  'livingActorPlayerChoice',
+  'perceptionCarry',
+  'physicalCargo',
+  'player',
+  'porterResponse',
+  'promiseJourney',
+  'regionalEcology',
+  'regionalTravel',
+  'session',
+  'settlementEcology',
+  'settlementDomesticAnimalRecovery',
+  'settlementWorkingAnimals',
+  'traversalFeedback',
+  'version',
+  'world',
+]);
+const PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS = Object.freeze({
+  records: 'tideweft.saves.v1',
+  deletions: 'tideweft.save-deletions.v1',
+  fences: 'tideweft.save-version-fences.v1',
+});
+const PACKAGED_PERSISTENCE_VOLATILE_SESSION_FIELDS = Object.freeze([
+  'paused',
+  'titleVisible',
+  'quietHourVisible',
+  'sessionStartedTick',
+  'sessionPlayMilliseconds',
+  'sessionDistanceUnits',
+  'sessionDeliveries',
+  'sessionReportsDelivered',
+  'sessionStrandsWoven',
+  'sessionChoirsAwakened',
+  'sessionDiscoveredAtStart',
+  'sessionBaseline',
+  'closureOffered',
+  'sessionChanges',
+  'announcement',
+  'nextAnnouncementId',
+  'continueSummary',
+]);
 const RESOURCE_CHECKPOINT_LABELS = Object.freeze([
   'pre',
   'half',
@@ -351,6 +400,7 @@ function parseArguments(argv) {
   let traceHitches = false;
   let resourceShakedown = false;
   let resourceSoak = false;
+  let packagedPersistenceWitness = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -385,6 +435,8 @@ function parseArguments(argv) {
       resourceShakedown = true;
     } else if (argument === '--resource-soak') {
       resourceSoak = true;
+    } else if (argument === '--packaged-persistence-witness') {
+      packagedPersistenceWitness = true;
     } else {
       throw new Error(`Unknown performance-baseline argument: ${argument}`);
     }
@@ -404,13 +456,22 @@ function parseArguments(argv) {
   if (resourceDiagnostic && sampleMsSpecified) {
     throw new Error(`${resourceFlag} uses a fixed route and cannot be combined with --sample-ms`);
   }
+  if (packagedPersistenceWitness && !resourceDiagnostic) {
+    throw new Error(
+      '--packaged-persistence-witness requires --resource-shakedown or --resource-soak',
+    );
+  }
 
   return {
     executable: executable ? path.resolve(executable) : '',
     output: outputPath(
       output,
-      resourceSoak
-        ? 'resource-soak'
+      packagedPersistenceWitness
+        ? resourceSoak
+          ? 'resource-soak-persistence-witness'
+          : 'resource-shakedown-persistence-witness'
+        : resourceSoak
+          ? 'resource-soak'
         : resourceShakedown ? 'resource-shakedown' : 'runtime-baseline',
     ),
     sampleMs,
@@ -418,7 +479,443 @@ function parseArguments(argv) {
     traceHitches,
     resourceShakedown,
     resourceSoak,
+    packagedPersistenceWitness,
   };
+}
+
+function canonicalWitnessStringify(value) {
+  if (value === null) return 'null';
+  switch (typeof value) {
+    case 'boolean':
+      return value ? 'true' : 'false';
+    case 'number':
+      if (!Number.isFinite(value)) throw new TypeError('Cannot encode a non-finite witness number');
+      return Object.is(value, -0) ? '0' : JSON.stringify(value);
+    case 'string':
+      return JSON.stringify(value);
+    case 'object': {
+      if (Array.isArray(value)) {
+        return `[${value.map((entry) => canonicalWitnessStringify(entry)).join(',')}]`;
+      }
+      const entries = Object.keys(value).sort().map((key) => {
+        if (value[key] === undefined) {
+          throw new TypeError(`Cannot encode undefined witness field ${key}`);
+        }
+        return `${JSON.stringify(key)}:${canonicalWitnessStringify(value[key])}`;
+      });
+      return `{${entries.join(',')}}`;
+    }
+    default:
+      throw new TypeError(`Cannot canonically encode witness ${typeof value}`);
+  }
+}
+
+function packagedPersistenceIntegrity(value) {
+  const unsealed = { ...value };
+  delete unsealed.integrity;
+  const encoded = canonicalWitnessStringify(unsealed);
+  let high = 0x811c_9dc5;
+  let low = 0x9e37_79b9;
+  for (let index = 0; index < encoded.length; index += 1) {
+    const code = encoded.charCodeAt(index);
+    high = Math.imul(high ^ code, 0x0100_0193) >>> 0;
+    low = Math.imul(low ^ code, 0x85eb_ca6b) >>> 0;
+    low ^= high >>> 13;
+  }
+  return `${(high >>> 0).toString(16).padStart(8, '0')}`
+    + `${(low >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function sha256Witness(value) {
+  return createHash('sha256').update(
+    typeof value === 'string' ? value : canonicalWitnessStringify(value),
+  ).digest('hex');
+}
+
+function packagedSaveRecordFingerprint(record) {
+  const parts = [
+    record.slotId,
+    record.label,
+    record.seed,
+    String(record.saveGenerationEra ?? 0),
+    String(record.saveGeneration ?? 0),
+    String(record.payloadVersion ?? 0),
+    String(record.updatedAt),
+    String(record.playTicks),
+    String(record.settlementCount),
+    String(record.connectedCount),
+    record.worldJson,
+    record.screenshot ?? '',
+  ];
+  let first = 0x811c_9dc5;
+  let second = 0x9e37_79b9;
+  let length = 0;
+  let ordinal = 0;
+  for (const part of parts) {
+    for (const segment of [`${part.length}:`, part]) {
+      length += segment.length;
+      for (let index = 0; index < segment.length; index += 1) {
+        const code = segment.charCodeAt(index);
+        first = Math.imul(first ^ code, 0x0100_0193) >>> 0;
+        second = Math.imul(second ^ (code + ordinal), 0x85eb_ca6b) >>> 0;
+        ordinal += 1;
+      }
+    }
+  }
+  return `${length.toString(36)}-${first.toString(36).padStart(7, '0')}`
+    + `-${second.toString(36).padStart(7, '0')}`;
+}
+
+function isPlainWitnessRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function exactWitnessKeys(value, expected) {
+  if (!isPlainWitnessRecord(value)) return false;
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return actual.length === sortedExpected.length
+    && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+function validatePackagedPersistenceRecord(record, expectedVersion) {
+  if (!isPlainWitnessRecord(record) || record.slotId !== 'autosave') {
+    throw new Error('Packaged persistence witness did not find the authoritative autosave record');
+  }
+  if (
+    typeof record.label !== 'string'
+    || typeof record.seed !== 'string'
+    || !Number.isSafeInteger(record.saveGenerationEra ?? 0)
+    || (record.saveGenerationEra ?? 0) < 0
+    || !Number.isSafeInteger(record.saveGeneration ?? 0)
+    || (record.saveGeneration ?? 0) < 0
+    || !Number.isSafeInteger(record.payloadVersion)
+    || !Number.isSafeInteger(record.updatedAt)
+    || record.updatedAt < 0
+    || !Number.isSafeInteger(record.playTicks)
+    || record.playTicks < 0
+    || !Number.isSafeInteger(record.settlementCount)
+    || record.settlementCount < 0
+    || !Number.isSafeInteger(record.connectedCount)
+    || record.connectedCount < 0
+    || typeof record.worldJson !== 'string'
+    || record.worldJson.length === 0
+    || record.worldJson.length > PACKAGED_PERSISTENCE_MAX_WORLD_JSON_CHARACTERS
+  ) {
+    throw new Error('Packaged persistence witness found malformed autosave metadata');
+  }
+  if (
+    expectedVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    && expectedVersion !== PACKAGED_PERSISTENCE_MIGRATION_VERSION
+  ) {
+    throw new Error(`Unsupported packaged persistence witness version ${expectedVersion}`);
+  }
+  let envelope;
+  try {
+    envelope = JSON.parse(record.worldJson);
+  } catch {
+    throw new Error('Packaged persistence witness found non-JSON world authority');
+  }
+  if (
+    !exactWitnessKeys(envelope, PACKAGED_PERSISTENCE_ENVELOPE_KEYS)
+    || envelope.format !== 'tideweft-session'
+    || envelope.version !== expectedVersion
+    || record.payloadVersion !== expectedVersion
+    || typeof envelope.world !== 'string'
+    || !isPlainWitnessRecord(envelope.player)
+    || !isPlainWitnessRecord(envelope.session)
+    || typeof envelope.integrity !== 'string'
+    || packagedPersistenceIntegrity(envelope) !== envelope.integrity
+  ) {
+    throw new Error(`Packaged persistence witness found a noncanonical v${expectedVersion} envelope`);
+  }
+  const ownsTimeAction = Object.hasOwn(envelope.player, 'timeAction');
+  if (
+    (expectedVersion === PACKAGED_PERSISTENCE_CURRENT_VERSION
+      && (!ownsTimeAction || envelope.player.timeAction !== null))
+    || (expectedVersion === PACKAGED_PERSISTENCE_MIGRATION_VERSION && ownsTimeAction)
+  ) {
+    throw new Error(
+      `Packaged persistence witness found invalid v${expectedVersion} player recovery authority`,
+    );
+  }
+  let worldEnvelope;
+  try {
+    worldEnvelope = JSON.parse(envelope.world);
+  } catch {
+    throw new Error('Packaged persistence witness found non-JSON serialized world authority');
+  }
+  const completedTick = worldEnvelope?.world?.meta?.completedTick;
+  if (!Number.isSafeInteger(completedTick) || completedTick !== record.playTicks) {
+    throw new Error('Packaged persistence witness found a world/record tick mismatch');
+  }
+  if (worldEnvelope.world.meta.seedText !== record.seed) {
+    throw new Error('Packaged persistence witness found a world/record seed mismatch');
+  }
+  return { envelope, worldEnvelope };
+}
+
+function packagedPersistenceSnapshot(record, expectedVersion) {
+  const { envelope, worldEnvelope } = validatePackagedPersistenceRecord(record, expectedVersion);
+  const normalizedRecordMetadata = structuredClone(record);
+  // Migration/save may change only the record format fence, timestamp, and
+  // serialized envelope. Hash every other present or future SaveRecord field
+  // so label, screenshot, generation, and unknown metadata fail closed.
+  delete normalizedRecordMetadata.payloadVersion;
+  delete normalizedRecordMetadata.updatedAt;
+  delete normalizedRecordMetadata.worldJson;
+  const normalizedAuthority = structuredClone(envelope);
+  delete normalizedAuthority.integrity;
+  // Production starts a fresh play session on load. Only those documented
+  // per-launch fields are omitted; durable tutorial, selection, campaign, and
+  // authored-ruleset identity remain covered by the authority hash.
+  normalizedAuthority.session = structuredClone(envelope.session);
+  for (const field of PACKAGED_PERSISTENCE_VOLATILE_SESSION_FIELDS) {
+    delete normalizedAuthority.session[field];
+  }
+  normalizedAuthority.version = PACKAGED_PERSISTENCE_CURRENT_VERSION;
+  normalizedAuthority.player.timeAction = null;
+  const ecologyAuthority = {
+    bio0Ecology: envelope.bio0Ecology,
+    dogActorRoster: envelope.dogActorRoster,
+    regionalEcology: envelope.regionalEcology,
+    settlementDomesticAnimalRecovery: envelope.settlementDomesticAnimalRecovery,
+    settlementEcology: envelope.settlementEcology,
+    settlementWorkingAnimals: envelope.settlementWorkingAnimals,
+  };
+  const custodyAuthority = {
+    activeContractId: envelope.player.activeContractId ?? null,
+    cargo: envelope.player.cargo ?? null,
+    craftingInventory: envelope.player.craftingInventory ?? null,
+    physicalCargo: envelope.physicalCargo,
+    promiseJourney: envelope.promiseJourney,
+  };
+  return Object.freeze({
+    envelopeVersion: envelope.version,
+    payloadVersion: record.payloadVersion,
+    saveGenerationEra: record.saveGenerationEra ?? 0,
+    saveGeneration: record.saveGeneration ?? 0,
+    updatedAt: record.updatedAt,
+    playTicks: record.playTicks,
+    settlementCount: record.settlementCount,
+    connectedCount: record.connectedCount,
+    serializedCharacters: record.worldJson.length,
+    serializedBytes: Buffer.byteLength(record.worldJson, 'utf8'),
+    seedSha256: sha256Witness(record.seed),
+    worldChecksum: typeof worldEnvelope.checksum === 'string' ? worldEnvelope.checksum : null,
+    recordSha256: sha256Witness(record),
+    recordFingerprint: packagedSaveRecordFingerprint(record),
+    recordMetadataSha256: sha256Witness(normalizedRecordMetadata),
+    envelopeSha256: sha256Witness(record.worldJson),
+    authoritySha256: sha256Witness(normalizedAuthority),
+    ecologySha256: sha256Witness(ecologyAuthority),
+    custodySha256: sha256Witness(custodyAuthority),
+    timeAction: Object.hasOwn(envelope.player, 'timeAction') ? 'null' : 'absent',
+  });
+}
+
+function createV31PackagedPersistenceRecord(currentRecord) {
+  const { envelope } = validatePackagedPersistenceRecord(
+    currentRecord,
+    PACKAGED_PERSISTENCE_CURRENT_VERSION,
+  );
+  if (currentRecord.updatedAt >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('Packaged persistence witness cannot advance a saturated save timestamp');
+  }
+  const migrated = structuredClone(envelope);
+  migrated.version = PACKAGED_PERSISTENCE_MIGRATION_VERSION;
+  delete migrated.player.timeAction;
+  migrated.integrity = packagedPersistenceIntegrity(migrated);
+  return {
+    ...structuredClone(currentRecord),
+    payloadVersion: PACKAGED_PERSISTENCE_MIGRATION_VERSION,
+    updatedAt: currentRecord.updatedAt + 1,
+    worldJson: JSON.stringify(migrated),
+  };
+}
+
+function assertSamePackagedAuthority(reference, candidate, label) {
+  for (const field of [
+    'playTicks',
+    'settlementCount',
+    'connectedCount',
+    'seedSha256',
+    'worldChecksum',
+    'recordMetadataSha256',
+    'authoritySha256',
+    'ecologySha256',
+    'custodySha256',
+  ]) {
+    if (reference?.[field] !== candidate?.[field]) {
+      throw new Error(`Packaged persistence witness ${label} changed ${field}`);
+    }
+  }
+}
+
+function assertPackagedPersistenceWitness(evidence) {
+  if (evidence?.schema !== 'tideweft-packaged-persistence-witness/v1') {
+    throw new Error('Packaged persistence witness has an unknown evidence schema');
+  }
+  const { source, currentReload, migration, idempotentReload } = evidence;
+  const snapshots = [
+    source,
+    currentReload?.record,
+    migration?.fixture,
+    migration?.beforeSave,
+    migration?.afterSave,
+    idempotentReload?.beforeSave,
+    idempotentReload?.afterSave,
+  ];
+  const requiredSha256Fields = [
+    'seedSha256',
+    'recordSha256',
+    'recordMetadataSha256',
+    'envelopeSha256',
+    'authoritySha256',
+    'ecologySha256',
+    'custodySha256',
+  ];
+  const requiredNonnegativeIntegerFields = [
+    'envelopeVersion',
+    'payloadVersion',
+    'saveGenerationEra',
+    'saveGeneration',
+    'updatedAt',
+    'playTicks',
+    'settlementCount',
+    'connectedCount',
+    'serializedCharacters',
+    'serializedBytes',
+  ];
+  if (snapshots.some((snapshot) => (
+    !isPlainWitnessRecord(snapshot)
+    || requiredNonnegativeIntegerFields.some((field) => (
+      !Number.isSafeInteger(snapshot[field]) || snapshot[field] < 0
+    ))
+    || snapshot.serializedCharacters === 0
+    || snapshot.serializedBytes === 0
+    || typeof snapshot.worldChecksum !== 'string'
+    || !/^[0-9a-f]{16}$/u.test(snapshot.worldChecksum)
+    || requiredSha256Fields.some((field) => (
+      typeof snapshot[field] !== 'string'
+      || !/^[0-9a-f]{64}$/u.test(snapshot[field])
+    ))
+    || typeof snapshot.recordFingerprint !== 'string'
+    || !/^[a-z0-9-]{8,80}$/u.test(snapshot.recordFingerprint)
+  ))) {
+    throw new Error('Packaged persistence witness snapshot evidence is incomplete');
+  }
+  if (
+    evidence.sourceRuntime?.titleVisible !== true
+    || evidence.sourceRuntime.hasSave !== true
+    || evidence.sourceRuntime.saveWarningVisible !== false
+    || evidence.sourceRuntime.renderTick !== source?.playTicks
+    ||
+    source?.envelopeVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || source.payloadVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || source.timeAction !== 'null'
+    || currentReload?.record?.envelopeVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || migration?.fixture?.envelopeVersion !== PACKAGED_PERSISTENCE_MIGRATION_VERSION
+    || migration.fixture.timeAction !== 'absent'
+    || migration?.beforeSave?.envelopeVersion !== PACKAGED_PERSISTENCE_MIGRATION_VERSION
+    || migration.beforeSave.timeAction !== 'absent'
+    || migration?.afterSave?.envelopeVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || migration.afterSave.timeAction !== 'null'
+    || idempotentReload?.beforeSave?.envelopeVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || idempotentReload.beforeSave.timeAction !== 'null'
+    || idempotentReload?.afterSave?.envelopeVersion !== PACKAGED_PERSISTENCE_CURRENT_VERSION
+    || idempotentReload.afterSave.timeAction !== 'null'
+  ) {
+    throw new Error('Packaged persistence witness observed the wrong save-version transition');
+  }
+  for (const [label, left, right] of [
+    ['current-version cold reload', source, currentReload.record],
+    ['v31 cold reload', migration.fixture, migration.beforeSave],
+    ['migrated cold reload', migration.afterSave, idempotentReload.beforeSave],
+  ]) {
+    if (
+      left.recordSha256 !== right.recordSha256
+      || left.recordFingerprint !== right.recordFingerprint
+    ) {
+      throw new Error(`Packaged ${label} changed the exact durable SaveRecord`);
+    }
+  }
+  for (const [label, candidate] of [
+    ['current cold reload', currentReload.record],
+    ['v31 fixture', migration.fixture],
+    ['v31 pre-save load', migration.beforeSave],
+    ['v31-to-v32 migration', migration.afterSave],
+    ['migrated cold reload', idempotentReload.beforeSave],
+    ['second v32 save', idempotentReload.afterSave],
+  ]) assertSamePackagedAuthority(source, candidate, label);
+
+  if (snapshots.some((snapshot) => (
+    snapshot.saveGenerationEra !== source.saveGenerationEra
+    || snapshot.saveGeneration !== source.saveGeneration
+  ))) {
+    throw new Error('Packaged persistence witness changed ordinary save-generation authority');
+  }
+  if (
+    currentReload.record.updatedAt !== source.updatedAt
+    || migration.fixture.updatedAt !== source.updatedAt + 1
+    || migration.beforeSave.updatedAt !== migration.fixture.updatedAt
+    || !(migration.afterSave.updatedAt > migration.beforeSave.updatedAt)
+    || idempotentReload.beforeSave.updatedAt !== migration.afterSave.updatedAt
+    || !(idempotentReload.afterSave.updatedAt > idempotentReload.beforeSave.updatedAt)
+  ) {
+    throw new Error(
+      'Packaged persistence witness observed an unexplained durable timestamp transition',
+    );
+  }
+  for (const [label, storage, snapshot] of [
+    ['source', evidence.sourceStorage, source],
+    ['current reload', currentReload.storage, currentReload.record],
+    ['migration before save', migration.beforeStorage, migration.beforeSave],
+    ['migration after save', migration.afterStorage, migration.afterSave],
+    ['idempotent before save', idempotentReload.beforeStorage, idempotentReload.beforeSave],
+    ['idempotent after save', idempotentReload.afterStorage, idempotentReload.afterSave],
+  ]) {
+    if (
+      storage?.primaryRecordCount !== 1
+      || storage.fallbackRecordCount !== 1
+      || storage.fallbackAutosaveCount !== 1
+      || storage.fallbackPresent !== true
+      || storage.fallbackMatchesPrimary !== true
+      || storage.deletionRecordCount !== 0
+      || storage.deletionPresent !== false
+      || storage.fenceRecordCount !== 1
+      || storage.fenceAutosaveCount !== 1
+      || storage.fenceMatchesRecord !== true
+      || typeof storage.fenceFingerprintSha256 !== 'string'
+      || !/^[0-9a-f]{64}$/u.test(storage.fenceFingerprintSha256)
+      || typeof snapshot?.recordFingerprint !== 'string'
+      || storage.fenceFingerprintSha256 !== sha256Witness(snapshot.recordFingerprint)
+    ) {
+      throw new Error(`Packaged persistence witness ${label} storage evidence is incomplete`);
+    }
+  }
+  for (const [label, phase] of [
+    ['current reload', currentReload],
+    ['migration', migration],
+    ['idempotent reload', idempotentReload],
+  ]) {
+    if (
+      phase?.process?.cleanExit !== true
+      || phase.process.exitCode !== 0
+      || phase.process.signalCode !== null
+      || phase.process.runtimeExceptionCount !== 0
+      || phase.process.packageIdentityVerified !== true
+      || phase.process.exceptionObservationScope
+        !== 'registered before Runtime.enable through the pre-close phase assertions'
+      || phase.runtime?.titleVisible !== false
+      || phase.runtime.hasSave !== true
+      || phase.runtime.saveWarningVisible !== false
+      || phase.runtime.renderTick !== source.playTicks
+    ) {
+      throw new Error(`Packaged persistence witness ${label} process evidence is incomplete`);
+    }
+  }
+  return true;
 }
 
 async function directoriesAt(directory) {
@@ -616,7 +1113,16 @@ function childExited(child) {
   return child.exitCode !== null || child.signalCode !== null;
 }
 
-async function waitForPage(port, child, childState, timeoutMs = BOOT_TIMEOUT_MS) {
+async function waitForPage(
+  port,
+  child,
+  childState,
+  timeoutMs = BOOT_TIMEOUT_MS,
+  pollMs = 100,
+) {
+  if (!Number.isSafeInteger(pollMs) || pollMs < 1) {
+    throw new RangeError('CDP discovery poll interval must be a positive safe integer');
+  }
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
@@ -646,7 +1152,7 @@ async function waitForPage(port, child, childState, timeoutMs = BOOT_TIMEOUT_MS)
     } catch (error) {
       lastError = error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
   throw new Error(
     `Timed out waiting for packaged CDP page${lastError ? `: ${lastError.message}` : ''}`,
@@ -4219,6 +4725,503 @@ function appendBoundedOutput(current, chunk) {
   return (current + chunk).slice(-MAX_CHILD_OUTPUT_CHARACTERS);
 }
 
+async function readPackagedAutosaveStorage(client) {
+  const snapshot = await client.evaluate(`(async () => {
+    const openRequest = indexedDB.open('tideweft', 1);
+    const database = await new Promise((resolve, reject) => {
+      openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
+      openRequest.addEventListener('error', () => reject(new Error('autosave database open failed')), { once: true });
+    });
+    let primaryRecords;
+    try {
+      const transaction = database.transaction('saves', 'readonly');
+      const transactionComplete = new Promise((resolve, reject) => {
+        transaction.addEventListener('complete', resolve, { once: true });
+        transaction.addEventListener('abort', () => reject(new Error('autosave read aborted')), { once: true });
+        transaction.addEventListener('error', () => reject(new Error('autosave read transaction failed')), { once: true });
+      });
+      const request = transaction.objectStore('saves').getAll();
+      primaryRecords = await new Promise((resolve, reject) => {
+        request.addEventListener('success', () => resolve(request.result), { once: true });
+        request.addEventListener('error', () => reject(new Error('autosave read failed')), { once: true });
+      });
+      await transactionComplete;
+    } finally {
+      database.close();
+    }
+    const parseArray = (key) => {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return [];
+      const decoded = JSON.parse(raw);
+      if (!Array.isArray(decoded)) throw new Error('autosave local mirror is malformed');
+      return decoded;
+    };
+    const primary = primaryRecords.find((record) => record?.slotId === 'autosave') ?? null;
+    const fallbackRecords = parseArray(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.records)});
+    const fallbackAutosaves = fallbackRecords.filter((record) => record?.slotId === 'autosave');
+    const fallback = fallbackAutosaves[0] ?? null;
+    const deletions = parseArray(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.deletions)});
+    const fences = parseArray(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.fences)});
+    const fenceAutosaves = fences.filter((record) => record?.slotId === 'autosave');
+    const fence = fenceAutosaves[0] ?? null;
+    return {
+      record: primary,
+      primaryRecordCount: primaryRecords.length,
+      fallbackRecordCount: fallbackRecords.length,
+      fallbackAutosaveCount: fallbackAutosaves.length,
+      fallbackPresent: fallback !== null,
+      fallbackMatchesPrimary: fallback === null || JSON.stringify(fallback) === JSON.stringify(primary),
+      deletionRecordCount: deletions.length,
+      deletionPresent: deletions.some((record) => record?.slotId === 'autosave'),
+      fenceRecordCount: fences.length,
+      fenceAutosaveCount: fenceAutosaves.length,
+      fence: fence === null ? null : {
+        saveGenerationEra: fence.saveGenerationEra ?? 0,
+        saveGeneration: fence.saveGeneration ?? 0,
+        updatedAt: fence.updatedAt,
+        playTicks: fence.playTicks,
+        recordFingerprint: typeof fence.recordFingerprint === 'string'
+          ? fence.recordFingerprint
+          : null,
+      },
+    };
+  })()`);
+  if (!isPlainWitnessRecord(snapshot)) {
+    throw new Error('Packaged persistence witness could not inspect durable autosave storage');
+  }
+  return snapshot;
+}
+
+function assertPackagedAutosaveStorage(storage, expectedVersion) {
+  const parsed = validatePackagedPersistenceRecord(storage?.record, expectedVersion);
+  const record = storage.record;
+  const fence = storage.fence;
+  const expectedFingerprint = packagedSaveRecordFingerprint(record);
+  if (
+    storage.primaryRecordCount !== 1
+    || storage.fallbackRecordCount !== 1
+    || storage.fallbackAutosaveCount !== 1
+    || storage.fallbackPresent !== true
+    || storage.fallbackMatchesPrimary !== true
+    || storage.deletionRecordCount !== 0
+    || storage.deletionPresent !== false
+    || storage.fenceRecordCount !== 1
+    || storage.fenceAutosaveCount !== 1
+    || !isPlainWitnessRecord(fence)
+    || fence.saveGenerationEra !== (record.saveGenerationEra ?? 0)
+    || fence.saveGeneration !== (record.saveGeneration ?? 0)
+    || fence.updatedAt !== record.updatedAt
+    || fence.playTicks !== record.playTicks
+    || fence.recordFingerprint !== expectedFingerprint
+  ) {
+    throw new Error(
+      `Packaged persistence witness found inconsistent v${expectedVersion} durable storage`,
+    );
+  }
+  return {
+    parsed,
+    evidence: Object.freeze({
+      primaryRecordCount: storage.primaryRecordCount,
+      fallbackRecordCount: storage.fallbackRecordCount,
+      fallbackAutosaveCount: storage.fallbackAutosaveCount,
+      fallbackPresent: storage.fallbackPresent,
+      fallbackMatchesPrimary: storage.fallbackMatchesPrimary,
+      deletionRecordCount: storage.deletionRecordCount,
+      deletionPresent: storage.deletionPresent,
+      fenceRecordCount: storage.fenceRecordCount,
+      fenceAutosaveCount: storage.fenceAutosaveCount,
+      fenceMatchesRecord: fence.recordFingerprint === expectedFingerprint,
+      fenceFingerprintSha256: sha256Witness(fence.recordFingerprint),
+    }),
+  };
+}
+
+async function writePackagedAutosaveFixture(client, record) {
+  validatePackagedPersistenceRecord(record, PACKAGED_PERSISTENCE_MIGRATION_VERSION);
+  const encodedRecord = Buffer.from(JSON.stringify(record), 'utf8').toString('base64');
+  const result = await client.evaluate(`(async () => {
+    const bytes = Uint8Array.from(atob(${JSON.stringify(encodedRecord)}), (character) => (
+      character.charCodeAt(0)
+    ));
+    const record = JSON.parse(new TextDecoder().decode(bytes));
+    window.__TIDEWEFT__.runtime.stop();
+    window.__TIDEWEFT__.runtime.save = async () => {};
+    const openRequest = indexedDB.open('tideweft', 1);
+    const database = await new Promise((resolve, reject) => {
+      openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
+      openRequest.addEventListener('error', () => reject(new Error('fixture database open failed')), { once: true });
+    });
+    try {
+      const transaction = database.transaction('saves', 'readwrite', { durability: 'strict' });
+      transaction.objectStore('saves').put(record);
+      await new Promise((resolve, reject) => {
+        transaction.addEventListener('complete', resolve, { once: true });
+        transaction.addEventListener('abort', () => reject(new Error('fixture write aborted')), { once: true });
+        transaction.addEventListener('error', () => reject(new Error('fixture write failed')), { once: true });
+      });
+    } finally {
+      database.close();
+    }
+    const replaceSlot = (key, replacement) => {
+      let decoded = [];
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        const candidate = JSON.parse(raw);
+        if (!Array.isArray(candidate)) throw new Error('fixture local state is malformed');
+        decoded = candidate;
+      }
+      const retained = decoded.filter((entry) => entry?.slotId !== 'autosave');
+      if (replacement !== null) retained.push(replacement);
+      localStorage.setItem(key, JSON.stringify(retained));
+    };
+    let fallbackMirrored = true;
+    try {
+      replaceSlot(
+        ${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.records)},
+        record,
+      );
+    } catch {
+      localStorage.removeItem(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.records)});
+      try {
+        localStorage.setItem(
+          ${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.records)},
+          JSON.stringify([record]),
+        );
+      } catch {
+        fallbackMirrored = false;
+      }
+    }
+    replaceSlot(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.deletions)}, null);
+    replaceSlot(${JSON.stringify(PACKAGED_PERSISTENCE_LOCAL_STORAGE_KEYS.fences)}, null);
+    return { written: true, fallbackMirrored };
+  })()`, CDP_CALL_TIMEOUT_MS * 2);
+  if (result?.written !== true || result.fallbackMirrored !== true) {
+    throw new Error('Packaged persistence witness could not install its v31 fixture');
+  }
+  return result;
+}
+
+async function packagedPersistenceRuntimeState(client) {
+  const state = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    bridge.runtime.stop();
+    const ui = bridge.runtime.getUIView();
+    const view = bridge.runtime.getRenderView();
+    return {
+      titleVisible: ui.title.visible,
+      hasSave: ui.title.hasSave,
+      saveWarningVisible: ui.saveWarning !== undefined,
+      renderTick: view.tick,
+    };
+  })()`);
+  if (
+    state?.titleVisible !== false
+    || state.hasSave !== true
+    || state.saveWarningVisible !== false
+    || !Number.isSafeInteger(state.renderTick)
+    || state.renderTick < 0
+  ) {
+    throw new Error('Packaged persistence witness opened an unsafe or incomplete runtime state');
+  }
+  return state;
+}
+
+async function preparePackagedPersistenceSource(client) {
+  const runtime = await client.evaluate(`(async () => {
+    const bridge = window.__TIDEWEFT__;
+    bridge.runtime.stop();
+    bridge.runtime.dispatchUI({ type: 'open-title' });
+    await bridge.runtime.save();
+    bridge.runtime.stop();
+    const ui = bridge.runtime.getUIView();
+    const view = bridge.runtime.getRenderView();
+    bridge.runtime.save = async () => {};
+    return {
+      titleVisible: ui.title.visible,
+      hasSave: ui.title.hasSave,
+      saveWarningVisible: ui.saveWarning !== undefined,
+      renderTick: view.tick,
+    };
+  })()`, CDP_CALL_TIMEOUT_MS * 2);
+  const storage = await readPackagedAutosaveStorage(client);
+  const storageValidation = assertPackagedAutosaveStorage(
+    storage,
+    PACKAGED_PERSISTENCE_CURRENT_VERSION,
+  );
+  if (
+    runtime?.titleVisible !== true
+    || runtime.hasSave !== true
+    || runtime.saveWarningVisible !== false
+    || runtime.renderTick !== storage.record.playTicks
+  ) {
+    throw new Error('Resource diagnostic could not freeze an exact persistence-witness source');
+  }
+  return { runtime, record: storage.record, storage: storageValidation.evidence };
+}
+
+async function stopColdPackagedRuntimeAtBootstrap(client) {
+  const deadline = Date.now() + BOOT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const stopped = await client.evaluate(`(() => {
+      const runtime = window.__TIDEWEFT__?.runtime;
+      if (!runtime) return false;
+      runtime.stop();
+      return true;
+    })()`);
+    if (stopped === true) return;
+  }
+  throw new Error('Timed out acquiring the packaged runtime at its cold-start boundary');
+}
+
+async function runPackagedPersistenceProcess({
+  executable,
+  userDataDirectory,
+  expectedPackageIdentityJson,
+  setActiveLifecycle,
+  assertNotInterrupted,
+  phaseLabel,
+  run,
+}) {
+  assertNotInterrupted(`before ${phaseLabel}`);
+  const packageBefore = await executableIdentity(executable);
+  if (JSON.stringify(packageBefore) !== expectedPackageIdentityJson) {
+    throw new Error('Packaged build changed before a persistence-witness cold launch');
+  }
+  const port = await openPort();
+  assertNotInterrupted(`before spawning ${phaseLabel}`);
+  const childState = { spawnError: null };
+  const child = spawn(executable, [
+    `--remote-debugging-port=${port}`,
+    '--remote-debugging-address=127.0.0.1',
+    `--user-data-dir=${userDataDirectory}`,
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+  ], {
+    cwd: projectRoot,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let childOutput = '';
+  let client = null;
+  let cleanExit = false;
+  let runtimeExceptionCount = 0;
+  let removeExceptionListener = null;
+  child.once('error', (error) => {
+    childState.spawnError = error;
+  });
+  child.stdout?.setEncoding('utf8');
+  child.stderr?.setEncoding('utf8');
+  child.stdout?.on('data', (chunk) => {
+    childOutput = appendBoundedOutput(childOutput, chunk);
+  });
+  child.stderr?.on('data', (chunk) => {
+    childOutput = appendBoundedOutput(childOutput, chunk);
+  });
+  setActiveLifecycle({ child, client: null });
+  try {
+    const page = await waitForPage(port, child, childState, BOOT_TIMEOUT_MS, 5);
+    client = new CdpClient(page.webSocketDebuggerUrl);
+    setActiveLifecycle({ child, client });
+    await client.open();
+    removeExceptionListener = client.onNotification('Runtime.exceptionThrown', () => {
+      runtimeExceptionCount += 1;
+    });
+    await client.call('Runtime.enable');
+    let phaseResult;
+    // Acquire the runtime in the same bootstrap interval in which the public
+    // bridge appears. The exact-tick assertion below rejects evidence if an
+    // animation frame advanced before this tooling-only stop took effect.
+    await stopColdPackagedRuntimeAtBootstrap(client);
+    await waitForStablePackagedGameplayDocument(client);
+    await client.waitFor(`document.visibilityState === 'visible'`);
+    phaseResult = await run(client);
+    client.throwIfNotificationFailed();
+    assertNotInterrupted(`after ${phaseLabel} assertions`);
+    await client.call('Browser.close', {}, 2_000).catch(() => undefined);
+    cleanExit = await waitForChildExit(child, PROCESS_SHUTDOWN_TIMEOUT_MS * 2);
+    if (!cleanExit || child.exitCode !== 0 || child.signalCode !== null) {
+      throw new Error('Packaged persistence-witness process did not close at its cold boundary');
+    }
+    const packageAfter = await executableIdentity(executable);
+    if (JSON.stringify(packageAfter) !== expectedPackageIdentityJson) {
+      throw new Error('Packaged build changed during a persistence-witness cold launch');
+    }
+    assertNotInterrupted(`after ${phaseLabel}`);
+    return {
+      ...phaseResult,
+      process: {
+        cleanExit,
+        exitCode: child.exitCode,
+        signalCode: child.signalCode,
+        runtimeExceptionCount,
+        packageIdentityVerified: true,
+        exceptionObservationScope:
+          'registered before Runtime.enable through the pre-close phase assertions',
+      },
+    };
+  } catch (error) {
+    try {
+      assertNotInterrupted(`during ${phaseLabel}`);
+    } catch (interruption) {
+      throw interruption;
+    }
+    const failure = error instanceof Error ? error : new Error(String(error));
+    const detail = childOutput.trim();
+    if (detail) {
+      failure.message += `\nPackaged persistence process output (tail):\n${detail.slice(-4_000)}`;
+    }
+    throw failure;
+  } finally {
+    removeExceptionListener?.();
+    await client?.close().catch(() => undefined);
+    await terminateChild(child, childState.spawnError);
+    setActiveLifecycle(null);
+  }
+}
+
+async function measurePackagedPersistenceWitness({
+  executable,
+  userDataDirectory,
+  expectedPackageIdentity,
+  sourceRecord,
+  sourceRuntime,
+  sourceStorage,
+  setActiveLifecycle,
+  assertNotInterrupted,
+}) {
+  const expectedPackageIdentityJson = JSON.stringify(expectedPackageIdentity);
+  const source = packagedPersistenceSnapshot(
+    sourceRecord,
+    PACKAGED_PERSISTENCE_CURRENT_VERSION,
+  );
+  const v31Record = createV31PackagedPersistenceRecord(sourceRecord);
+  const fixture = packagedPersistenceSnapshot(
+    v31Record,
+    PACKAGED_PERSISTENCE_MIGRATION_VERSION,
+  );
+  const currentReload = await runPackagedPersistenceProcess({
+    executable,
+    userDataDirectory,
+    expectedPackageIdentityJson,
+    setActiveLifecycle,
+    assertNotInterrupted,
+    phaseLabel: 'current-v32 cold reload',
+    run: async (client) => {
+      const runtime = await packagedPersistenceRuntimeState(client);
+      const storage = await readPackagedAutosaveStorage(client);
+      const storageValidation = assertPackagedAutosaveStorage(
+        storage,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      const record = packagedPersistenceSnapshot(
+        storage.record,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      await writePackagedAutosaveFixture(client, v31Record);
+      return { runtime, storage: storageValidation.evidence, record };
+    },
+  });
+  assertNotInterrupted('after current-v32 cold reload');
+  const migration = await runPackagedPersistenceProcess({
+    executable,
+    userDataDirectory,
+    expectedPackageIdentityJson,
+    setActiveLifecycle,
+    assertNotInterrupted,
+    phaseLabel: 'v31-to-v32 migration cold reload',
+    run: async (client) => {
+      const runtime = await packagedPersistenceRuntimeState(client);
+      const beforeStorage = await readPackagedAutosaveStorage(client);
+      const beforeStorageValidation = assertPackagedAutosaveStorage(
+        beforeStorage,
+        PACKAGED_PERSISTENCE_MIGRATION_VERSION,
+      );
+      const beforeSave = packagedPersistenceSnapshot(
+        beforeStorage.record,
+        PACKAGED_PERSISTENCE_MIGRATION_VERSION,
+      );
+      await client.evaluate('window.__TIDEWEFT__.runtime.save()', CDP_CALL_TIMEOUT_MS * 2);
+      const afterStorage = await readPackagedAutosaveStorage(client);
+      const afterStorageValidation = assertPackagedAutosaveStorage(
+        afterStorage,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      const afterSave = packagedPersistenceSnapshot(
+        afterStorage.record,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      await client.evaluate(`(() => {
+        window.__TIDEWEFT__.runtime.stop();
+        window.__TIDEWEFT__.runtime.save = async () => {};
+      })()`);
+      return {
+        runtime,
+        beforeStorage: beforeStorageValidation.evidence,
+        afterStorage: afterStorageValidation.evidence,
+        beforeSave,
+        afterSave,
+      };
+    },
+  });
+  assertNotInterrupted('after v31-to-v32 migration cold reload');
+  const idempotentReload = await runPackagedPersistenceProcess({
+    executable,
+    userDataDirectory,
+    expectedPackageIdentityJson,
+    setActiveLifecycle,
+    assertNotInterrupted,
+    phaseLabel: 'idempotent-v32 cold reload',
+    run: async (client) => {
+      const runtime = await packagedPersistenceRuntimeState(client);
+      const beforeStorage = await readPackagedAutosaveStorage(client);
+      const beforeStorageValidation = assertPackagedAutosaveStorage(
+        beforeStorage,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      const beforeSave = packagedPersistenceSnapshot(
+        beforeStorage.record,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      await client.evaluate('window.__TIDEWEFT__.runtime.save()', CDP_CALL_TIMEOUT_MS * 2);
+      const afterStorage = await readPackagedAutosaveStorage(client);
+      const afterStorageValidation = assertPackagedAutosaveStorage(
+        afterStorage,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      const afterSave = packagedPersistenceSnapshot(
+        afterStorage.record,
+        PACKAGED_PERSISTENCE_CURRENT_VERSION,
+      );
+      await client.evaluate(`(() => {
+        window.__TIDEWEFT__.runtime.stop();
+        window.__TIDEWEFT__.runtime.save = async () => {};
+      })()`);
+      return {
+        runtime,
+        beforeStorage: beforeStorageValidation.evidence,
+        afterStorage: afterStorageValidation.evidence,
+        beforeSave,
+        afterSave,
+      };
+    },
+  });
+  assertNotInterrupted('after idempotent-v32 cold reload');
+  const evidence = {
+    schema: 'tideweft-packaged-persistence-witness/v1',
+    scope: 'the exact stopped post-resource-diagnostic autosave is cold-reloaded, converted into a supported v31 fixture, migrated through the packaged production loader/writer, cold-reloaded again, and saved idempotently before the isolated profile is removed',
+    source,
+    sourceStorage,
+    currentReload,
+    migration: { fixture, ...migration },
+    idempotentReload,
+    privacy: 'bounded metadata and hashes only; no save payload or user-data path is retained',
+    sourceRuntime,
+  };
+  assertPackagedPersistenceWitness(evidence);
+  return evidence;
+}
+
 async function runIsolatedScenario(
   executable,
   scenario,
@@ -4226,6 +5229,7 @@ async function runIsolatedScenario(
   traceHitches,
   resourceShakedown = false,
   resourceSoak = false,
+  packagedPersistenceWitness = false,
 ) {
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
@@ -4246,22 +5250,39 @@ async function runIsolatedScenario(
   let completed = false;
   let client = null;
   let webAudioTracker = null;
+  let activeLifecycle = { child, client: null };
   let signalCount = 0;
-  const interrupt = () => {
+  let interruptedBy = null;
+  const interrupt = (signal) => {
+    interruptedBy ??= signal;
     signalCount += 1;
-    if (signalCount === 1 && client !== null) {
-      void client.call('Browser.close', {}, 2_000).catch(() => client?.close());
+    const activeChild = activeLifecycle?.child ?? null;
+    const activeClient = activeLifecycle?.client ?? null;
+    if (signalCount === 1 && activeClient !== null) {
+      void activeClient.call('Browser.close', {}, 2_000).catch(() => activeClient.close());
       return;
     }
-    if (childExited(child) || child.pid === undefined) return;
+    if (activeChild === null || childExited(activeChild) || activeChild.pid === undefined) return;
     if (process.platform === 'win32') {
-      void execFileAsync('taskkill', ['/pid', String(child.pid), '/t', '/f']).catch(() => undefined);
+      void execFileAsync(
+        'taskkill',
+        ['/pid', String(activeChild.pid), '/t', '/f'],
+      ).catch(() => undefined);
     } else {
-      child.kill(signalCount > 1 ? 'SIGKILL' : 'SIGTERM');
+      activeChild.kill(signalCount > 1 ? 'SIGKILL' : 'SIGTERM');
     }
   };
-  process.on('SIGINT', interrupt);
-  process.on('SIGTERM', interrupt);
+  const interruptWithSigint = () => interrupt('SIGINT');
+  const interruptWithSigterm = () => interrupt('SIGTERM');
+  const assertNotInterrupted = (boundary) => {
+    if (interruptedBy !== null) {
+      throw new Error(
+        `Performance evidence interrupted by ${interruptedBy} ${boundary}; no result is valid`,
+      );
+    }
+  };
+  process.on('SIGINT', interruptWithSigint);
+  process.on('SIGTERM', interruptWithSigterm);
 
   child.once('error', (error) => {
     childState.spawnError = error;
@@ -4278,6 +5299,7 @@ async function runIsolatedScenario(
   try {
     const page = await waitForPage(port, child, childState);
     client = new CdpClient(page.webSocketDebuggerUrl);
+    activeLifecycle = { child, client };
     await client.open();
     const strictInputGuard = resourceShakedown || resourceSoak || traceHitches;
     if (strictInputGuard) {
@@ -4304,7 +5326,7 @@ async function runIsolatedScenario(
       await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
     }
     const bootstrap = await bootstrapWorld(client, scenario.seed);
-    const measurement = resourceSoak
+    let measurement = resourceSoak
       ? await measureResourceSoak(
         client,
         scenario,
@@ -4326,9 +5348,50 @@ async function runIsolatedScenario(
         traceHitches,
         traceHitches,
       );
+    assertNotInterrupted('after the resource diagnostic');
+    if (packagedPersistenceWitness) {
+      const source = await preparePackagedPersistenceSource(client);
+      const expectedPackageIdentity = await executableIdentity(executable);
+      await client.call('WebAudio.disable').catch(() => undefined);
+      webAudioTracker?.detach();
+      webAudioTracker = null;
+      await client.call('Browser.close', {}, 2_000).catch(() => undefined);
+      if (
+        !await waitForChildExit(child, PROCESS_SHUTDOWN_TIMEOUT_MS * 2)
+        || child.exitCode !== 0
+        || child.signalCode !== null
+      ) {
+        throw new Error(
+          'Post-resource-diagnostic packaged process did not close before cold-reload witness',
+        );
+      }
+      await client.close().catch(() => undefined);
+      client = null;
+      activeLifecycle = null;
+      assertNotInterrupted('before packaged persistence cold phases');
+      const persistenceWitness = await measurePackagedPersistenceWitness({
+        executable,
+        userDataDirectory,
+        expectedPackageIdentity,
+        sourceRecord: source.record,
+        sourceRuntime: source.runtime,
+        sourceStorage: source.storage,
+        setActiveLifecycle: (lifecycle) => {
+          activeLifecycle = lifecycle;
+        },
+        assertNotInterrupted,
+      });
+      measurement = { ...measurement, persistenceWitness };
+    }
+    assertNotInterrupted('before scenario completion');
     completed = true;
     return { bootstrap, measurement };
   } catch (error) {
+    if (interruptedBy !== null) {
+      throw new Error(
+        `Performance evidence interrupted by ${interruptedBy}; no result is valid`,
+      );
+    }
     const failure = error instanceof Error ? error : new Error(String(error));
     const detail = childOutput.trim();
     if (detail) {
@@ -4347,6 +5410,7 @@ async function runIsolatedScenario(
       }
       await client?.close().catch(() => undefined);
       await terminateChild(child, childState.spawnError);
+      activeLifecycle = null;
       await fs.rm(userDataDirectory, {
         recursive: true,
         force: true,
@@ -4357,8 +5421,12 @@ async function runIsolatedScenario(
         process.stderr.write(childOutput.slice(-4_000));
       }
     } finally {
-      process.removeListener('SIGINT', interrupt);
-      process.removeListener('SIGTERM', interrupt);
+      try {
+        assertNotInterrupted('during final profile cleanup');
+      } finally {
+        process.removeListener('SIGINT', interruptWithSigint);
+        process.removeListener('SIGTERM', interruptWithSigterm);
+      }
     }
   }
 }
@@ -4516,6 +5584,7 @@ async function main() {
       options.traceHitches,
       options.resourceShakedown,
       options.resourceSoak,
+      options.packagedPersistenceWitness,
     );
     const packagedAfterScenario = await executableIdentity(executable);
     if (JSON.stringify(packagedAfterScenario) !== packagedIdentityJson) {
@@ -4578,7 +5647,9 @@ async function main() {
     identity: canonicalBootstrap.identity,
     worlds: Object.fromEntries(worldGroups),
     worldIsolation: {
-      isolation: 'fresh packaged process and fresh user-data profile per scenario',
+      isolation: options.packagedPersistenceWitness
+        ? 'fresh user-data profile for the scenario; the opt-in persistence witness deliberately reuses that exact profile across three additional packaged cold processes before cleanup'
+        : 'fresh packaged process and fresh user-data profile per scenario',
       clockControl: {
         sequence: 'new-world submission and runtime stop complete in the same renderer task; the queued initial save is then explicitly flushed before measurement',
         validation: 'scenarios in the same world group must match seed, observed start tick, and initial projection SHA-256; every group must share the packaged build identity',
@@ -4600,6 +5671,9 @@ async function main() {
       minimumMeasuredCycles: RESOURCE_SOAK_MINIMUM_CYCLES,
       maximumMeasuredCycles: RESOURCE_SOAK_MAXIMUM_CYCLES,
       saveIntervalCycles: RESOURCE_SOAK_SAVE_INTERVAL_CYCLES,
+      packagedPersistenceWitness: options.packagedPersistenceWitness
+        ? 'enabled: the exact post-soak isolated profile is cold-relaunched through current v32, supported v31-to-v32 migration, and a second v32 idempotence boundary before cleanup'
+        : 'disabled: pass --packaged-persistence-witness with the resource diagnostic to add cold-relaunch and v31-to-v32 migration evidence',
       processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
       trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
       runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
@@ -4617,6 +5691,9 @@ async function main() {
     instrumentation: {
       checkpoints: RESOURCE_CHECKPOINT_LABELS,
       cycles: RESOURCE_SHAKEDOWN_CYCLES,
+      packagedPersistenceWitness: options.packagedPersistenceWitness
+        ? 'enabled: the exact post-shakedown isolated profile is cold-relaunched through current v32, supported v31-to-v32 migration, and a second v32 idempotence boundary before cleanup'
+        : 'disabled: pass --packaged-persistence-witness with --resource-shakedown to add cold-relaunch and v31-to-v32 migration evidence',
       processMemory: 'best-effort point-in-time launched-Electron-root descendant-tree summed RSS grouped by role; shared pages are double-counted and process churn can race capture',
       trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
       runtimeResources: 'selected exposed retained owners only; registered terrain counts exclude generators/jobs retained solely by external closures',
@@ -4658,13 +5735,15 @@ async function main() {
     process.stdout.write(
       `${measurements[0].id}: ${measurements[0].measuredCycles.length} measured corridor cycles; `
       + `${(measurements[0].measuredTravelDurationMs / 60_000).toFixed(2)} active travel minutes; `
-      + `${measurements[0].saveSamples.length} exact save samples\n`,
+      + `${measurements[0].saveSamples.length} exact save samples`
+      + `${options.packagedPersistenceWitness ? '; packaged persistence witness passed' : ''}\n`,
     );
   } else if (options.resourceShakedown) {
     process.stdout.write(`Resource shakedown written to ${options.output}\n`);
     process.stdout.write(
       `${measurements[0].id}: ${measurements[0].cycles.length} complete corridor cycles; `
-      + `${measurements[0].checkpoints.length} resource checkpoints\n`,
+      + `${measurements[0].checkpoints.length} resource checkpoints`
+      + `${options.packagedPersistenceWitness ? '; packaged persistence witness passed' : ''}\n`,
     );
   } else {
     process.stdout.write(
@@ -4706,6 +5785,8 @@ module.exports = {
   WORLD_ADVANCE_PHASE_KEYS,
   aggregateElectronProcessTree,
   assertNoResourceInputContamination,
+  assertPackagedAutosaveStorage,
+  assertPackagedPersistenceWitness,
   assertWorldAdvancePhaseTelemetry,
   assertResourceCheckpointOrder,
   assertResourceSaveSample,
@@ -4718,11 +5799,15 @@ module.exports = {
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
+  createV31PackagedPersistenceRecord,
   forceRendererGarbageCollection,
   hitchSnapshotReasons,
   parseArguments,
   parsePosixProcessTable,
   parseWindowsProcessTable,
+  packagedPersistenceIntegrity,
+  packagedSaveRecordFingerprint,
+  packagedPersistenceSnapshot,
   resourceSoakCadenceSummary,
   resourceSoakCycleCheckpointLabel,
   resourceSoakRetentionSummary,
