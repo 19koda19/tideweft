@@ -70,7 +70,11 @@ import {
   withLivingActorInteractions,
 } from "../ui/livingActorAbout";
 import { projectLivingActorInteractionChoices } from "../ui/livingActorInteractionProjection";
-import { TideweftSoundscape, type WaterAmbienceState } from "../audio/soundscape";
+import {
+  TideweftSoundscape,
+  type SituatedVocalizationCue,
+  type WaterAmbienceState,
+} from "../audio/soundscape";
 import {
   ConflictingSaveCopiesError,
   createSaveRepository,
@@ -129,8 +133,25 @@ import {
   acknowledgeIncidentCue,
   canonicalizeTraversalFeedback,
   createTraversalFeedbackState,
+  type TraversalIncident,
   type TraversalFeedbackState,
 } from "./traversalFeedback";
+import type { FallRiskEvaluation } from "./fallRisk";
+import {
+  acknowledgeSituatedExpression,
+  advanceSituatedExpression,
+  canonicalizeSituatedExpressionState,
+  createSituatedExpressionState,
+  reduceSituatedExpression,
+  type SituatedExpressionEvent,
+  type SituatedExpressionIntent,
+  type SituatedExpressionState,
+} from "./situatedExpression";
+import {
+  playerFallCargoRecoveryExpressionIntent,
+  playerTraversalExpressionIntent,
+  type PlayerTraversalCargoExpressionContext,
+} from "./playerTraversalExpression";
 import {
   CRAFTING_CONDITION_MAX,
   CRAFTING_RECIPES,
@@ -193,6 +214,8 @@ import {
   createLooseCargoCarrier,
   dropLooseCargo,
   LOOSE_CARGO_MAX_PICKUP_REACH,
+  looseCargoEntityReleaseCause,
+  looseCargoEventId,
   pickupLooseCargo,
   removeLooseCargoGear,
   removeLooseCargoPromise,
@@ -287,13 +310,17 @@ import {
 } from "./regionalWorldView";
 import {
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
+  HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
   collectExistingHumanObservations,
   createPlayerSenseSample,
+  createSupplementalSoundSample,
   type PlayerSenseSample,
+  type SupplementalSoundSample,
 } from "./humanPerception";
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
   projectCompatibilityFieldResources,
   regionalFieldResourceAtViewTile,
@@ -707,6 +734,7 @@ import {
   translateWorldPosition,
   worldPositionDelta,
   worldPositionToSpatialFrame,
+  type WorldPosition,
 } from "./worldPosition";
 import {
   projectDogPresentation,
@@ -771,6 +799,12 @@ import {
 
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
+/**
+ * A command-originated expression can occur immediately before the next
+ * physical step sample. One tile safely encloses that single lawful step while
+ * still rejecting a voice injected elsewhere in the loaded world.
+ */
+const PLAYER_VOCALIZATION_PATH_TOLERANCE_UNITS = WORLD_POSITION_UNITS_PER_TILE;
 const MAX_STEPS_PER_FRAME = 6;
 /** One world minute per presented frame keeps long recovery bounded and cancellable. */
 const PLAYER_TIME_ACTION_MAX_STEPS_PER_FRAME = PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE;
@@ -784,7 +818,8 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 32;
+const GAME_SAVE_VERSION = 33;
+const PLAYER_RECOVERY_GAME_SAVE_VERSION = 32;
 const TURNING_DAY_GAME_SAVE_VERSION = 31;
 const REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION = 30;
 const REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION = 29;
@@ -814,7 +849,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 2 as const;
+const LEGACY_PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
 /** Begin preparing the next storage neighborhood well before its invisible seam. */
 const TERRAIN_PREFETCH_MARGIN_TILES = 24;
 /** Roughly 5 ms on the reference desktop; work is spread across fixed ticks. */
@@ -877,7 +913,15 @@ interface PlayerPerceptionCarry {
   readonly version: typeof PLAYER_PERCEPTION_CARRY_VERSION;
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
+  readonly playerVocalizationSamples: readonly SupplementalSoundSample[];
+  readonly situatedExpression: SituatedExpressionState;
   readonly nextPlayerSenseSampleOrdinal: number;
+}
+
+interface CommittedTraversalExpressionContext {
+  readonly incident: TraversalIncident;
+  readonly evaluation: FallRiskEvaluation;
+  readonly cargo: PlayerTraversalCargoExpressionContext;
 }
 
 export interface TideweftRuntime {
@@ -9255,6 +9299,11 @@ export async function createTideweftRuntime(
     ?? createFieldResourceEcologyState(world.meta.completedTick);
   let traversalFeedback = resumed?.traversalFeedback
     ?? createTraversalFeedbackState();
+  // Active presentation and bounded semantic cooldowns share the pending
+  // perception carry so save/load cannot reroll expression admission or erase
+  // a vocalization before nearby humans receive the next world-tick frame.
+  let situatedExpression: SituatedExpressionState = resumed?.perceptionCarry.situatedExpression
+    ?? createSituatedExpressionState();
   const firstPromise = economyView.contracts.find((contract) => contract.status === "offered");
   let player = resumed?.player
     ?? createPlayer(economyView, firstPromise?.originSettlementId);
@@ -9336,6 +9385,7 @@ export async function createTideweftRuntime(
       ...projectGameView(worldView, player, {
         paused: true,
         traversalFeedback,
+        situatedExpression: situatedExpression.active,
         looseCargoWorld: physicalCargo.looseWorld,
         looseCargoWorlds: initialCargoPartitions,
         perception,
@@ -9355,6 +9405,7 @@ export async function createTideweftRuntime(
     looseCargoWorld: physicalCargo.looseWorld,
     inactiveLooseCargoWorlds: inactiveCargoPartitions(physicalCargo, initialCargoPartitions),
     traversalFeedback,
+    situatedExpression: situatedExpression.active,
     perception,
     suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
@@ -9396,6 +9447,12 @@ export async function createTideweftRuntime(
   let playerStepsSinceWorldTick = 0;
   let playerSenseSamples: PlayerSenseSample[] = [];
   let nextPlayerSenseSampleOrdinal = 0;
+  // Voice is a second acoustic fact beside impact/footsteps. It remains a
+  // separate bounded channel, but persists with the unfinished perception
+  // interval so interruption cannot change authoritative human hearing.
+  let playerVocalizationSamples: SupplementalSoundSample[] = [
+    ...(resumed?.perceptionCarry.playerVocalizationSamples ?? []),
+  ];
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
   // WAIT is intentionally session-local: save/page interruption preserves every
@@ -9828,6 +9885,7 @@ export async function createTideweftRuntime(
           fieldResourceCatalog: fieldResourceProjection.catalog,
           fieldResourceEcology,
           traversalFeedback,
+          situatedExpression: situatedExpression.active,
           looseCargoWorld: physicalCargo.looseWorld,
           looseCargoWorlds: visibleCargoPartitions,
           bracing: manualControl.brace,
@@ -9995,6 +10053,7 @@ export async function createTideweftRuntime(
         bracing: manualControl.brace,
         adriftControl: lastAdriftControl,
         traversalFeedback,
+        situatedExpression: situatedExpression.active,
         perception,
         suppressDetailPerception: playerIsSleeping(),
         ...(settlementStoreKeeper === null
@@ -10680,6 +10739,63 @@ export async function createTideweftRuntime(
     playerSenseSamples.push(sample);
   }
 
+  function capturePlayerVocalizationSample(event: SituatedExpressionEvent): void {
+    if (
+      playerVocalizationSamples.length
+      >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+    ) return;
+    const loudness = event.volume === "shout"
+      ? 950_000
+      : event.volume === "spoken"
+        ? 620_000
+        : 360_000;
+    const rangeTiles = event.volume === "shout" ? 36 : event.volume === "spoken" ? 18 : 8;
+    const sample = createSupplementalSoundSample({
+      id: `pv-${world.meta.completedTick}-${playerVocalizationSamples.length}`,
+      position: event.position,
+      soundLoudness: loudness,
+      soundRangeUnits: rangeTiles * WORLD_POSITION_UNITS_PER_TILE,
+      soundClass: "human-vocalization",
+      soundInterrupt: event.tone === "alarmed" || event.volume === "shout"
+        ? "strong"
+        : "none",
+    });
+    if (sample === null) throw new Error("Player vocalization sample failed validation");
+    playerVocalizationSamples.push(sample);
+  }
+
+  function acceptPlayerExpression(intent: SituatedExpressionIntent | null): void {
+    if (intent === null) return;
+    const reduction = reduceSituatedExpression(situatedExpression, intent);
+    if (reduction.state === null) {
+      throw new Error("Situated expression state failed validation");
+    }
+    situatedExpression = reduction.state;
+    if (reduction.accepted && reduction.event !== null) {
+      capturePlayerVocalizationSample(reduction.event);
+    }
+  }
+
+  function playPendingPlayerExpression(): void {
+    const acknowledged = acknowledgeSituatedExpression(situatedExpression);
+    if (acknowledged.state === null) {
+      throw new Error("Situated expression acknowledgement failed validation");
+    }
+    situatedExpression = acknowledged.state;
+    if (acknowledged.event === null) return;
+    const intensity = acknowledged.event.volume === "shout"
+      ? 0.92
+      : acknowledged.event.volume === "spoken"
+        ? 0.68
+        : 0.42;
+    const cue: SituatedVocalizationCue = `vocalization-${acknowledged.event.vocalization}`;
+    soundscape.play(
+      cue,
+      intensity,
+      acknowledged.event.variantSeed,
+    );
+  }
+
   function residentPerceptionFrame(
     targetTick: number,
     porterVisual: RuntimePorterVisualFrame | null = null,
@@ -10689,6 +10805,7 @@ export async function createTideweftRuntime(
       window: regionalTravel.window,
       targetTick,
       playerSamples: playerSenseSamples,
+      supplementalSoundSamples: playerVocalizationSamples,
     });
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
@@ -10738,6 +10855,7 @@ export async function createTideweftRuntime(
   function clearPlayerSenseSamples(): void {
     playerSenseSamples = [];
     nextPlayerSenseSampleOrdinal = 0;
+    playerVocalizationSamples = [];
   }
 
   function mirrorPhysicalCargoToPlayer(): void {
@@ -10749,9 +10867,10 @@ export async function createTideweftRuntime(
   function applyPlayerStepToPhysicalCargo(
     result: ReturnType<typeof stepPlayer>,
     incidentPosition?: ReturnType<typeof looseCargoPositionAtRegionalPlayer>,
-  ): void {
+  ): CommittedTraversalExpressionContext | null {
     let carrier = physicalCargo.carrier;
     let changed = false;
+    let expressionContext: CommittedTraversalExpressionContext | null = null;
     for (const pressure of result.cargoConditionPressures ?? []) {
       for (const lot of carrier.lots.filter((candidate) =>
         candidate.payload.kind === "promise"
@@ -10812,11 +10931,24 @@ export async function createTideweftRuntime(
         y: position.y,
       });
       if (!fall.ok) throw new Error(`Physical fall transaction failed: ${fall.reason}`);
+      const selectedPayload = fall.selectedLotId === null
+        ? null
+        : physicalCargo.carrier.lots.find(({ id }) => id === fall.selectedLotId)?.payload ?? null;
       physicalCargo = commitPhysicalCargoState(
         physicalCargo,
         { looseWorld: fall.world, carrier: fall.carrier },
         { kind: "conserved" },
       );
+      expressionContext = {
+        incident,
+        evaluation,
+        cargo: {
+          outcome: fall.outcome,
+          selectedPayload,
+          separatedEntityIds: fall.separatedEntityIds,
+          cargoShock: fall.cargoShock,
+        },
+      };
       if (fall.outcome === "separated") {
         session.sessionChanges.push(
           `${incident.label}; ${fall.separatedEntityIds.length} physical parcel${fall.separatedEntityIds.length === 1 ? "" : "s"} broke loose and remained recoverable.`,
@@ -10834,6 +10966,7 @@ export async function createTideweftRuntime(
       physicalCargo = stepped.state;
     }
     mirrorPhysicalCargoToPlayer();
+    return expressionContext;
   }
 
   function scheduleTerrainPrefetch(moveX: number, moveY: number): void {
@@ -10911,6 +11044,11 @@ export async function createTideweftRuntime(
 
   function tick(present = true): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
+    const advancedExpression = advanceSituatedExpression(situatedExpression);
+    if (advancedExpression === null) {
+      throw new Error("Situated expression step failed validation");
+    }
+    situatedExpression = advancedExpression;
     const announcementIdBeforePlayerTimeStep = pendingPlayerWait === null
       && player.timeAction === null
       ? null
@@ -10948,6 +11086,12 @@ export async function createTideweftRuntime(
         )
       : undefined;
     const priorRegionalWindow = regionalTravel.window;
+    const incidentWorldPosition = result.traversalIncident
+      ? playerWorldPositionInRegionalWindow(priorRegionalWindow, player)
+      : null;
+    if (result.traversalIncident && incidentWorldPosition === null) {
+      throw new Error("Traversal incident has no canonical expression position");
+    }
     const regionalTransition = recenterRegionalPlayer(
       world.meta.rootSeed,
       regionalTravel,
@@ -10987,7 +11131,16 @@ export async function createTideweftRuntime(
       adriftTapControl = null;
       adriftTapTicksRemaining = 0;
     }
-    applyPlayerStepToPhysicalCargo(result, incidentPosition);
+    const traversalExpressionContext = applyPlayerStepToPhysicalCargo(result, incidentPosition);
+    if (traversalExpressionContext !== null && incidentWorldPosition !== null) {
+      acceptPlayerExpression(playerTraversalExpressionIntent({
+        sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+        position: incidentWorldPosition,
+        incident: traversalExpressionContext.incident,
+        evaluation: traversalExpressionContext.evaluation,
+        cargo: traversalExpressionContext.cargo,
+      }));
+    }
     capturePlayerSenseSample(result.traversalIncident !== null || result.becameSwept);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
@@ -12370,14 +12523,12 @@ export async function createTideweftRuntime(
         ? " A connected ferry crew is helping without removing the current."
         : " Float to recover stamina; paddle toward visible shallow water.";
       session.sessionChanges.push(collapse.change);
-      if (result.traversalIncident?.kind !== "sweep") {
-        announce(
-          session,
-          `${collapse.warning} ADRIFT — use movement keys or tap toward shallow water. The current remains stronger than you; cargo stays physical, and anything separated stays recoverable.${support}`,
-          true,
-        );
-        soundscape.play("warning", 0.82);
-      }
+      announce(
+        session,
+        `${collapse.warning} ADRIFT — use movement keys or tap toward shallow water. The current remains stronger than you; cargo stays physical, and anything separated stays recoverable.${support}`,
+        true,
+      );
+      soundscape.play("warning", 0.82);
     } else if (result.exhausted || (result.rescued && !result.washedAshore)) {
       if (result.rescued) {
         session.sessionChanges.push("A completed clinic and established strand turned a field collapse into mutual aid.");
@@ -12424,15 +12575,22 @@ export async function createTideweftRuntime(
     traversalFeedback = audibleIncident.state;
     if (audibleIncident.incident) {
       const incident = audibleIncident.incident;
-      announce(session, `${incident.label} — ${incident.detail}`, incident.kind !== "stumble");
       soundscape.play(incident.cue, incident.kind === "stumble" ? 0.58 : 0.9, incident.variantSeed);
       if (incident.kind !== "stumble") {
+        if (incident.kind === "fall") {
+          const separator = incident.label.indexOf(" · ");
+          const observedCause = separator < 0
+            ? "You fell"
+            : titleCaseWord(incident.label.slice(separator + 3));
+          announce(session, `${observedCause} — ${incident.detail}`, true);
+        }
         session.sessionChanges.push(
           `${incident.label}; every cargo identity persisted, and any separated parcel remains physically recoverable.`,
         );
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
       }
     }
+    playPendingPlayerExpression();
     if (worldAdvanced) {
       reconcileResidentInteractions();
       reconcileContract();
@@ -13966,6 +14124,7 @@ export async function createTideweftRuntime(
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
+    situatedExpression = createSituatedExpressionState();
     const promise = economyView.contracts.find((contract) => contract.status === "offered");
     player = createPlayer(economyView, promise?.originSettlementId);
     physicalCargo = createPhysicalCargoStateFromPlayer(
@@ -14211,6 +14370,19 @@ export async function createTideweftRuntime(
       if (announceFailure) announce(session, "That exact parcel is no longer within this traveled scene.", true);
       return false;
     }
+    // New parcels retain immutable release provenance through movement and
+    // history compaction. The indexed origin-world lookup is a bounded legacy
+    // fallback for parcels created before that intrinsic marker existed.
+    const originWorld = physicalCargoWorldAt(physicalCargo, located.entity.origin.region);
+    const intrinsicReleaseCause = looseCargoEntityReleaseCause(located.entity);
+    const recoveredFromFallSeparation = intrinsicReleaseCause === "fall-separation"
+      || (
+        intrinsicReleaseCause === null
+        && originWorld?.history.some((record) => (
+          record.entityIds.includes(parcelId)
+          && record.causes.includes("fall-separation")
+        )) === true
+      );
     const recovered = pickupLooseCargo(
       located.world,
       physicalCargo.carrier,
@@ -14241,6 +14413,23 @@ export async function createTideweftRuntime(
     }
     announce(session, `${recovered.message} Its exact condition and history stayed with it.`, true);
     soundscape.play("strand", 0.58);
+    if (recoveredFromFallSeparation) {
+      const expressionPosition = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+      if (expressionPosition === null) {
+        throw new Error("Recovered fall cargo has no canonical expression position");
+      }
+      acceptPlayerExpression(playerFallCargoRecoveryExpressionIntent({
+        sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+        recoveryEventId: looseCargoEventId(
+          recovered.world.region,
+          recovered.world.lastEventOrdinal,
+        ),
+        position: expressionPosition,
+        variantSeed: recovered.world.lastEventOrdinal >>> 0,
+        recoveredFrom: "fall-separation",
+      }));
+      playPendingPlayerExpression();
+    }
     return true;
   }
 
@@ -15423,8 +15612,11 @@ export async function createTideweftRuntime(
         version: PLAYER_PERCEPTION_CARRY_VERSION,
         playerStepsSinceWorldTick,
         playerSenseSamples,
+        playerVocalizationSamples,
+        situatedExpression,
         nextPlayerSenseSampleOrdinal,
-      }, worldSnapshot.meta.completedTick) ?? invalidPlayerPerceptionCarry(),
+      }, worldSnapshot.meta.completedTick, PLAYER_PERCEPTION_CARRY_VERSION)
+        ?? invalidPlayerPerceptionCarry(),
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
       regionalEcology: serializeRegionalEcologyStateV6(regionalEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
@@ -15556,9 +15748,11 @@ export async function createTideweftRuntime(
       session: structuredClone(session),
       fieldResourceEcology: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
+      situatedExpression,
       commandQueue: structuredClone(commandQueue),
       playerStepsSinceWorldTick,
       playerSenseSamples: [...playerSenseSamples],
+      playerVocalizationSamples: [...playerVocalizationSamples],
       nextPlayerSenseSampleOrdinal,
       commandSequence,
       pendingGatherNodeId,
@@ -15613,9 +15807,11 @@ export async function createTideweftRuntime(
       session = prior.session;
       fieldResourceEcology = prior.fieldResourceEcology;
       traversalFeedback = prior.traversalFeedback;
+      situatedExpression = prior.situatedExpression;
       commandQueue = prior.commandQueue;
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       playerSenseSamples = prior.playerSenseSamples;
+      playerVocalizationSamples = prior.playerVocalizationSamples;
       nextPlayerSenseSampleOrdinal = prior.nextPlayerSenseSampleOrdinal;
       commandSequence = prior.commandSequence;
       pendingGatherNodeId = prior.pendingGatherNodeId;
@@ -15989,6 +16185,8 @@ function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
     version: PLAYER_PERCEPTION_CARRY_VERSION,
     playerStepsSinceWorldTick: 0,
     playerSenseSamples: Object.freeze([]),
+    playerVocalizationSamples: Object.freeze([]),
+    situatedExpression: createSituatedExpressionState(),
     nextPlayerSenseSampleOrdinal: 0,
   });
 }
@@ -16001,24 +16199,37 @@ function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
 function canonicalPlayerPerceptionCarry(
   value: unknown,
   completedWorldTick: number,
+  expectedVersion:
+    | typeof LEGACY_PLAYER_PERCEPTION_CARRY_VERSION
+    | typeof PLAYER_PERCEPTION_CARRY_VERSION,
 ): PlayerPerceptionCarry | null {
   if (
     value === null
     || typeof value !== "object"
     || Array.isArray(value)
-    || !hasExactObjectKeys(value, [
-      "nextPlayerSenseSampleOrdinal",
-      "playerSenseSamples",
-      "playerStepsSinceWorldTick",
-      "version",
-    ])
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
+  const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    ? [
+        "nextPlayerSenseSampleOrdinal",
+        "playerSenseSamples",
+        "playerStepsSinceWorldTick",
+        "playerVocalizationSamples",
+        "situatedExpression",
+        "version",
+      ]
+    : [
+        "nextPlayerSenseSampleOrdinal",
+        "playerSenseSamples",
+        "playerStepsSinceWorldTick",
+        "version",
+      ];
+  if (!hasExactObjectKeys(record, expectedKeys)) return null;
   const phase = record.playerStepsSinceWorldTick;
   const nextOrdinal = record.nextPlayerSenseSampleOrdinal;
   const rawSamples = record.playerSenseSamples;
   if (
-    record.version !== PLAYER_PERCEPTION_CARRY_VERSION
+    record.version !== expectedVersion
     || !Number.isSafeInteger(completedWorldTick)
     || completedWorldTick < 0
     || !Number.isSafeInteger(phase)
@@ -16071,10 +16282,51 @@ function canonicalPlayerPerceptionCarry(
     if (sample === null || stableStringify(sample) !== stableStringify(candidate)) return null;
     samples.push(sample);
   }
+
+  const vocalizationSamples: SupplementalSoundSample[] = [];
+  let situatedExpression = createSituatedExpressionState();
+  if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
+    const rawVocalizations = record.playerVocalizationSamples;
+    const canonicalExpression = canonicalizeSituatedExpressionState(
+      record.situatedExpression,
+    );
+    if (
+      !Array.isArray(rawVocalizations)
+      || rawVocalizations.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+      || canonicalExpression === null
+    ) return null;
+    for (let ordinal = 0; ordinal < rawVocalizations.length; ordinal += 1) {
+      const raw = rawVocalizations[ordinal];
+      if (
+        raw === null
+        || typeof raw !== "object"
+        || Array.isArray(raw)
+        || !hasExactObjectKeys(raw, [
+          "id",
+          "position",
+          "soundClass",
+          "soundInterrupt",
+          "soundLoudness",
+          "soundRangeUnits",
+        ])
+      ) return null;
+      const candidate = raw as unknown as SupplementalSoundSample;
+      if (
+        candidate.id !== `pv-${completedWorldTick}-${ordinal}`
+        || candidate.soundClass !== "human-vocalization"
+      ) return null;
+      const sample = createSupplementalSoundSample(candidate);
+      if (sample === null || stableStringify(sample) !== stableStringify(candidate)) return null;
+      vocalizationSamples.push(sample);
+    }
+    situatedExpression = canonicalExpression;
+  }
   return Object.freeze({
     version: PLAYER_PERCEPTION_CARRY_VERSION,
     playerStepsSinceWorldTick: phase as number,
     playerSenseSamples: Object.freeze(samples),
+    playerVocalizationSamples: Object.freeze(vocalizationSamples),
+    situatedExpression,
     nextPlayerSenseSampleOrdinal: nextOrdinal as number,
   });
 }
@@ -16088,14 +16340,46 @@ function playerPerceptionCarryMatchesPosition(
   regionalTravel: RegionalPlayerTravelState,
   player: PlayerState,
 ): boolean {
-  const latest = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
-  if (latest === undefined) return carry.playerStepsSinceWorldTick === 0;
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
-  return position !== null
-    && position.region.x === latest.position.region.x
-    && position.region.y === latest.position.region.y
-    && position.localX === latest.position.localX
-    && position.localY === latest.position.localY;
+  if (position === null) return false;
+  const latestPhysical = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
+  const latest = latestPhysical
+    ?? carry.playerVocalizationSamples[carry.playerVocalizationSamples.length - 1];
+  if (latest === undefined) return carry.playerStepsSinceWorldTick === 0;
+  if (latestPhysical === undefined && carry.playerStepsSinceWorldTick !== 0) return false;
+  if (
+    position.region.x !== latest.position.region.x
+    || position.region.y !== latest.position.region.y
+    || position.localX !== latest.position.localX
+    || position.localY !== latest.position.localY
+  ) return false;
+
+  const pathAnchors = [
+    position,
+    ...carry.playerSenseSamples.map(({ position: samplePosition }) => samplePosition),
+  ];
+  return carry.playerVocalizationSamples.every(({ position: vocalizationPosition }) => (
+    pathAnchors.some((anchor) => worldPositionsWithinDistance(
+      anchor,
+      vocalizationPosition,
+      PLAYER_VOCALIZATION_PATH_TOLERANCE_UNITS,
+    ))
+  ));
+}
+
+function worldPositionsWithinDistance(
+  left: WorldPosition,
+  right: WorldPosition,
+  maximumDistance: number,
+): boolean {
+  try {
+    const delta = worldPositionDelta(left, right);
+    return Math.abs(delta.x) <= maximumDistance
+      && Math.abs(delta.y) <= maximumDistance
+      && Math.hypot(delta.x, delta.y) <= maximumDistance;
+  } catch {
+    return false;
+  }
 }
 
 function nextSaveGeneration(version: AutosaveVersion): {
@@ -16198,6 +16482,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
         && decoded.version !== REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         && decoded.version !== TURNING_DAY_GAME_SAVE_VERSION
+        && decoded.version !== PLAYER_RECOVERY_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -16219,6 +16504,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
@@ -16540,6 +16826,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
       || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
       || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
     )
@@ -16561,6 +16848,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
       )
@@ -17116,15 +17404,25 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (livingActorPlayerChoice === null) {
       throw new Error("Current save contains invalid living-actor player choice state");
     }
-    const perceptionCarry = decoded.version >= PLAYER_PERCEPTION_GAME_SAVE_VERSION
-      ? canonicalPlayerPerceptionCarry(decoded.perceptionCarry, world.meta.completedTick)
-      : emptyPlayerPerceptionCarry();
+    const perceptionCarry = decoded.version >= GAME_SAVE_VERSION
+      ? canonicalPlayerPerceptionCarry(
+          decoded.perceptionCarry,
+          world.meta.completedTick,
+          PLAYER_PERCEPTION_CARRY_VERSION,
+        )
+      : decoded.version >= PLAYER_PERCEPTION_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            LEGACY_PLAYER_PERCEPTION_CARRY_VERSION,
+          )
+        : emptyPlayerPerceptionCarry();
     if (perceptionCarry === null) {
       throw new Error("Current save contains an invalid pending perception interval");
     }
     const rawSession = structuredClone(decoded.session);
     const rawPlayer = structuredClone(decoded.player);
-    if (decoded.version < GAME_SAVE_VERSION) {
+    if (decoded.version < PLAYER_RECOVERY_GAME_SAVE_VERSION) {
       if (Object.hasOwn(decoded.player, "timeAction")) {
         throw new Error("Older save version contains future player recovery authority");
       }

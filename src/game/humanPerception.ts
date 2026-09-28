@@ -41,6 +41,7 @@ import {
   worldPositionDelta,
   worldPositionToSpatialFrame,
   type SpatialFrame,
+  type SpatialFramePoint,
   type WorldPosition,
 } from "./worldPosition";
 
@@ -48,8 +49,10 @@ export const PLAYER_SENSE_SAMPLE_VERSION = 1 as const;
 export const LOCAL_PLAYER_SUBJECT_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 export const HUMAN_PERCEPTION_MAX_RESIDENTS = 64 as const;
 export const HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES = 16 as const;
+export const HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES = 8 as const;
 export const HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT =
-  HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES * 2;
+  HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES * 2
+  + HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES;
 export const HUMAN_HEARING_MAX_RANGE_UNITS = 64 * WORLD_POSITION_UNITS_PER_TILE;
 
 const HEARING_AREA_MAX_RADIUS_UNITS = 10_000_000;
@@ -57,18 +60,15 @@ const LOCAL_WATER_MASK_RADIUS_TILES = 2;
 const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const SOUND_CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
+const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
 
-/** One bounded, explicit player-originated stimulus at a canonical world point. */
-export interface PlayerSenseSample {
-  readonly version: typeof PLAYER_SENSE_SAMPLE_VERSION;
+/**
+ * One bounded acoustic fact. Source position informs sound propagation only;
+ * this shape deliberately carries no fields from which vision can be derived.
+ */
+export interface SupplementalSoundSample {
   readonly id: string;
-  /** Monotonic position inside the bounded player-step window. */
-  readonly sampleOrdinal: number;
   readonly position: WorldPosition;
-  /** Fixed-point 0..1 movement visibility. */
-  readonly movementSalience: number;
-  /** Fixed-point 0..1 light falling on the player. */
-  readonly lightVisibility: number;
   /** Fixed-point 0..1 source loudness; zero means no sound. */
   readonly soundLoudness: number;
   readonly soundRangeUnits: number;
@@ -76,6 +76,18 @@ export interface PlayerSenseSample {
   readonly soundInterrupt: ObservationInterrupt;
 }
 
+/** One bounded, explicit physical player stimulus at a canonical world point. */
+export interface PlayerSenseSample extends SupplementalSoundSample {
+  readonly version: typeof PLAYER_SENSE_SAMPLE_VERSION;
+  /** Monotonic position inside the bounded player-step window. */
+  readonly sampleOrdinal: number;
+  /** Fixed-point 0..1 movement visibility. */
+  readonly movementSalience: number;
+  /** Fixed-point 0..1 light falling on the player. */
+  readonly lightVisibility: number;
+}
+
+export type SupplementalSoundSampleInput = SupplementalSoundSample;
 export interface PlayerSenseSampleInput extends Omit<PlayerSenseSample, "version"> {}
 
 export interface HumanPerceptionInput {
@@ -84,6 +96,8 @@ export interface HumanPerceptionInput {
   readonly window: RegionalTerrainWindow;
   readonly targetTick: number;
   readonly playerSamples: readonly PlayerSenseSample[];
+  /** Bounded hearing-only facts carried beside, never merged into, physical step samples. */
+  readonly supplementalSoundSamples?: readonly SupplementalSoundSample[];
 }
 
 export interface HumanObservationBatch {
@@ -91,6 +105,33 @@ export interface HumanObservationBatch {
   readonly observerId: string;
   readonly priorState: ActorPerceptionState;
   readonly observations: readonly ActorObservation[];
+}
+
+/** Creates one validated immutable hearing-only stimulus, or null without repair. */
+export function createSupplementalSoundSample(
+  input: SupplementalSoundSampleInput,
+): SupplementalSoundSample | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "id",
+    "position",
+    "soundClass",
+    "soundInterrupt",
+    "soundLoudness",
+    "soundRangeUnits",
+  ]) || !validSoundFields(value)) return null;
+  return Object.freeze({
+    id: value.id,
+    position: createWorldPosition(
+      value.position.region,
+      value.position.localX,
+      value.position.localY,
+    ),
+    soundLoudness: value.soundLoudness,
+    soundRangeUnits: value.soundRangeUnits,
+    soundClass: value.soundClass,
+    soundInterrupt: value.soundInterrupt,
+  });
 }
 
 /** Creates one fully validated immutable stimulus, or null without repair. */
@@ -106,25 +147,13 @@ export function createPlayerSenseSample(input: PlayerSenseSampleInput): PlayerSe
     "soundInterrupt",
     "soundLoudness",
     "soundRangeUnits",
-  ])) return null;
-  const soundRangeUnits = value.soundRangeUnits;
+  ]) || !validSoundFields(value)) return null;
   if (
-    typeof value.id !== "string"
-    || !SAMPLE_ID_PATTERN.test(value.id)
-    || !Number.isSafeInteger(value.sampleOrdinal)
+    !Number.isSafeInteger(value.sampleOrdinal)
     || (value.sampleOrdinal as number) < 0
     || (value.sampleOrdinal as number) >= HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
-    || !isWorldPosition(value.position)
     || !fixedUnit(value.movementSalience)
     || !fixedUnit(value.lightVisibility)
-    || !fixedUnit(value.soundLoudness)
-    || typeof soundRangeUnits !== "number"
-    || !Number.isSafeInteger(soundRangeUnits)
-    || soundRangeUnits < 0
-    || soundRangeUnits > HUMAN_HEARING_MAX_RANGE_UNITS
-    || typeof value.soundClass !== "string"
-    || !SOUND_CLASS_PATTERN.test(value.soundClass)
-    || !(value.soundInterrupt === "none" || value.soundInterrupt === "strong")
   ) return null;
   return Object.freeze({
     version: PLAYER_SENSE_SAMPLE_VERSION,
@@ -138,7 +167,7 @@ export function createPlayerSenseSample(input: PlayerSenseSampleInput): PlayerSe
     movementSalience: value.movementSalience,
     lightVisibility: value.lightVisibility,
     soundLoudness: value.soundLoudness,
-    soundRangeUnits,
+    soundRangeUnits: value.soundRangeUnits,
     soundClass: value.soundClass,
     soundInterrupt: value.soundInterrupt,
   });
@@ -153,19 +182,26 @@ export function collectExistingHumanObservations(
   input: HumanPerceptionInput,
 ): readonly HumanObservationBatch[] {
   const value: unknown = input;
-  if (!plainRecord(value) || !exactKeys(value, [
-    "playerSamples",
-    "targetTick",
-    "window",
-    "world",
-  ])) return EMPTY_BATCHES;
+  if (!plainRecord(value)) return EMPTY_BATCHES;
+  const hasSupplementalSounds = Object.hasOwn(value, "supplementalSoundSamples");
+  if (!exactKeys(value, hasSupplementalSounds
+    ? ["playerSamples", "supplementalSoundSamples", "targetTick", "window", "world"]
+    : ["playerSamples", "targetTick", "window", "world"])) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
+  if (
+    hasSupplementalSounds
+    && !Array.isArray(input.supplementalSoundSamples)
+  ) return EMPTY_BATCHES;
+  const rawSupplementalSounds = input.supplementalSoundSamples
+    ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
   if (
     regionalWindowForWorld(world) !== window
     || !Number.isSafeInteger(targetTick)
     || targetTick < 0
     || !Array.isArray(input.playerSamples)
     || input.playerSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
+    || !Array.isArray(rawSupplementalSounds)
+    || rawSupplementalSounds.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
     || !validRegionalWorld(world, window)
     || !validWeather(world)
   ) return EMPTY_BATCHES;
@@ -175,6 +211,11 @@ export function collectExistingHumanObservations(
   if (frame === null) return EMPTY_BATCHES;
   const samples = canonicalSamples(input.playerSamples);
   if (samples === null) return EMPTY_BATCHES;
+  const supplementalSounds = canonicalSupplementalSoundSamples(rawSupplementalSounds);
+  if (
+    supplementalSounds === null
+    || !disjointSampleIds(samples, supplementalSounds)
+  ) return EMPTY_BATCHES;
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
 
@@ -209,18 +250,48 @@ export function collectExistingHumanObservations(
       readonly sampleOrdinal: number;
       readonly observation: ActorObservation;
     } | null = null;
+    const appendHearingObservation = (
+      sample: SupplementalSoundSample,
+      targetPoint: SpatialFramePoint,
+    ): boolean => {
+      if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) return true;
+      const heard = evaluateAudibleContact({
+        listener: projectedResident.position,
+        source: targetPoint,
+        baseRange: sample.soundRangeUnits,
+        ambientNoise,
+        sourceLoudness: sample.soundLoudness / FIXED_POINT,
+        wind: {
+          x: world.weather.windX / FIXED_POINT,
+          y: world.weather.windY / FIXED_POINT,
+        },
+      });
+      if (heard === null) return true;
+      const area = inferredHearingArea(placement.position, sample.position, heard);
+      if (area === null) return false;
+      const observation = createActorObservation({
+        id: observationId("h", targetTick, resident.id, sample.id),
+        observerId: priorState.actorId,
+        observedAtTick: targetTick,
+        channel: "hearing",
+        perceivedClass: sample.soundClass,
+        subjectId: null,
+        area,
+        confidence: scaleContact(heard.certainty),
+        salience: hearingSalience(heard.certainty, sample.soundLoudness),
+        identification: "anonymous",
+        interrupt: sample.soundInterrupt,
+      });
+      if (observation === null) return false;
+      observations.push(observation);
+      return true;
+    };
 
     for (const sample of samples) {
-      const targetPoint = worldPositionToSpatialFrame(frame, sample.position);
+      const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
       const targetX = Math.floor(targetPoint.x / WORLD_POSITION_UNITS_PER_TILE);
       const targetY = Math.floor(targetPoint.y / WORLD_POSITION_UNITS_PER_TILE);
-      if (
-        targetX < 0
-        || targetY < 0
-        || targetX >= world.terrain.width
-        || targetY >= world.terrain.height
-      ) continue;
       const targetTileIndex = targetY * world.terrain.width + targetX;
       const sight = evaluateVisualContact({
         columns: world.terrain.width,
@@ -264,39 +335,12 @@ export function collectExistingHumanObservations(
           };
         }
       }
-
-      if (sample.soundLoudness > 0 && sample.soundRangeUnits > 0) {
-        const heard = evaluateAudibleContact({
-          listener: projectedResident.position,
-          source: targetPoint,
-          baseRange: sample.soundRangeUnits,
-          ambientNoise,
-          sourceLoudness: sample.soundLoudness / FIXED_POINT,
-          wind: {
-            x: world.weather.windX / FIXED_POINT,
-            y: world.weather.windY / FIXED_POINT,
-          },
-        });
-        if (heard !== null) {
-          const area = inferredHearingArea(placement.position, sample.position, heard);
-          if (area === null) return EMPTY_BATCHES;
-          const observation = createActorObservation({
-            id: observationId("h", targetTick, resident.id, sample.id),
-            observerId: priorState.actorId,
-            observedAtTick: targetTick,
-            channel: "hearing",
-            perceivedClass: sample.soundClass,
-            subjectId: null,
-            area,
-            confidence: scaleContact(heard.certainty),
-            salience: hearingSalience(heard.certainty, sample.soundLoudness),
-            identification: "anonymous",
-            interrupt: sample.soundInterrupt,
-          });
-          if (observation === null) return EMPTY_BATCHES;
-          observations.push(observation);
-        }
-      }
+      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+    }
+    for (const sample of supplementalSounds) {
+      const targetPoint = projectedSamplePoint(frame, world, sample.position);
+      if (targetPoint === null) continue;
+      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
     }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
@@ -353,6 +397,46 @@ function canonicalSamples(value: readonly PlayerSenseSample[]): readonly PlayerS
     left.sampleOrdinal - right.sampleOrdinal || compareText(left.id, right.id)
   ));
   return Object.freeze(samples);
+}
+
+function canonicalSupplementalSoundSamples(
+  value: readonly SupplementalSoundSample[],
+): readonly SupplementalSoundSample[] | null {
+  const samples: SupplementalSoundSample[] = [];
+  const ids = new Set<string>();
+  for (const raw of value) {
+    const sample = createSupplementalSoundSample(raw);
+    if (sample === null || ids.has(sample.id)) return null;
+    ids.add(sample.id);
+    samples.push(sample);
+  }
+  samples.sort((left, right) => compareText(left.id, right.id));
+  return Object.freeze(samples);
+}
+
+function disjointSampleIds(
+  playerSamples: readonly PlayerSenseSample[],
+  supplementalSounds: readonly SupplementalSoundSample[],
+): boolean {
+  const playerIds = new Set(playerSamples.map(({ id }) => id));
+  return supplementalSounds.every(({ id }) => !playerIds.has(id));
+}
+
+function projectedSamplePoint(
+  frame: SpatialFrame,
+  world: WorldView,
+  position: WorldPosition,
+): SpatialFramePoint | null {
+  const point = worldPositionToSpatialFrame(frame, position);
+  if (point === null) return null;
+  const targetX = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+  const targetY = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
+  return targetX < 0
+    || targetY < 0
+    || targetX >= world.terrain.width
+    || targetY >= world.terrain.height
+    ? null
+    : point;
 }
 
 function lawfulResidentFacing(
@@ -558,6 +642,23 @@ function scaleContact(value: number): number {
 
 function weatherVisibility(world: WorldView): number {
   return Math.max(0, Math.min(1, 1 - world.weather.intensity / FIXED_POINT * 0.52));
+}
+
+function validSoundFields(
+  value: Readonly<Record<string, unknown>>,
+): value is Readonly<Record<string, unknown>> & SupplementalSoundSample {
+  const soundRangeUnits = value.soundRangeUnits;
+  return typeof value.id === "string"
+    && SAMPLE_ID_PATTERN.test(value.id)
+    && isWorldPosition(value.position)
+    && fixedUnit(value.soundLoudness)
+    && typeof soundRangeUnits === "number"
+    && Number.isSafeInteger(soundRangeUnits)
+    && soundRangeUnits >= 0
+    && soundRangeUnits <= HUMAN_HEARING_MAX_RANGE_UNITS
+    && typeof value.soundClass === "string"
+    && SOUND_CLASS_PATTERN.test(value.soundClass)
+    && (value.soundInterrupt === "none" || value.soundInterrupt === "strong");
 }
 
 function fixedUnit(value: unknown): value is number {

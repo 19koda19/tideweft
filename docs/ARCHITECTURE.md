@@ -107,6 +107,50 @@ gameplay contract 51 remain unchanged; Field Manual 70 records this release
 boundary. Directive 04_1B **The Breathing Room** is closed, and 04_2 **The
 Living Voice** is next.
 
+### Living Voice: situated-expression foundation
+
+The current unpublished Directive 04_2 source begins with one event-driven
+situated-expression owner and a player traversal adapter. A committed stumble,
+near-fall, important-cargo impact, physical parcel separation, or causally
+proven recovery may submit a semantic intent. The kernel applies bounded
+salience, priority, interruption, family cooldown, and recent-trigger rules;
+silence is an explicit valid result. Authored wording is selected
+deterministically from actor ID, causal event ID, presentation seed, and catalog
+version. Rendering frequency, wall time, and global RNG cannot select or expire
+a line.
+
+Only committed physical facts cross the traversal adapter. A fall cannot call
+itself a near-fall, an attempted pickup cannot claim recovery, and cargo speech
+cannot reveal contents that the speaker did not just handle or observe. Chart
+and Relief project the same short actor-situated callout from a segmented world
+position while the accessible DOM projects the same speaker, wording, tone,
+and assertiveness. Physical incident cause and consequence remain separate in
+the observed EVENTS chronicle instead of being disguised as speech above the
+actor. Completed falls and sweeps still publish concise direct system guidance
+through the ordinary announcement/live-region path, so separating actor voice
+from system text does not make physical danger audio-only.
+
+Each accepted expression emits at most one brief synthetic vocal contour.
+Nearby humans receive it through a separately bounded hearing-only sound
+sidecar: it has source position, range, loudness, and interruption strength but
+no visual salience or sighting ordinal, so speech cannot manufacture or replace
+a visual observation. The existing fixed-step player-sense carry remains one
+base sample per completed player step.
+
+Because a pending vocalization can become authoritative human knowledge, the
+unpublished candidate advances the outer save to v33 and the bounded perception
+carry to v2. That carry preserves pending vocal samples plus the active
+expression, audio acknowledgement, and semantic cooldown memory; reload
+therefore cannot erase hearing, admit suppressed chatter, replay acknowledged
+audio, or reroll a line. Exact v5-v32 perception carries migrate to an empty
+voice channel without changing their prior player-recovery authority. Routine
+records still expire under fixed caps rather than growing with play time. Every
+pending voice source must remain on the courier's saved local movement path;
+a resealed remote vocalization is rejected before it can become NPC knowledge.
+Physical incidents, cargo custody, and recovery history remain their own durable
+owners. This first slice does not claim general NPC conversation, animal calls,
+language/relationship realization, or complete Living Voice.
+
 ### Repository asset and storage law
 
 The tracked repository stays below 1 GB, targets roughly 600 MB, and requires

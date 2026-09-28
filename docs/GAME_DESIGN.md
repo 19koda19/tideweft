@@ -51,6 +51,26 @@ The published `29ea8dc` checkpoint gives each discovered place one stable derive
 - A connected, non-collinear triangle of one Reed mat, one Tide anchor, and one Wind knot can become a Tide Harp. Standing inside/on one gives a single capped +900 Loom recharge each player tick. Space still sounds radius 8 from the ferrier and also sounds radius 6 from each of the three knots: four origins, one existing charge cost, and no hidden depth shortcut.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
 
+The current unpublished first Living Voice slice makes the courier's mishap
+reaction belong to the courier rather than to the system log. Mild stumbles,
+severe near-falls, danger to important carried cargo, an actual parcel breaking
+loose, and successful recovery can produce one restrained contextual line with
+matching caption and original synthetic voice contour. Salience, semantic
+cooldowns, priority, and causal event identity prevent chatter spam; the same
+accepted event always chooses the same authored wording. Ordinary routine
+speech expires rather than bloating the save, while any still-pending sound and
+its bounded anti-repetition state survive interruption because nearby actors
+may lawfully hear it.
+
+Actor expression and observed fact remain different presentations. The short
+line is situated at the speaker in Chart and Relief and repeated in the
+accessible caption. The physical footing/cargo cause remains in EVENTS, where
+the player directly experienced it, instead of becoming a second omniscient
+voice above the character. Nearby humans may hear the localized vocalization
+through ordinary weather- and distance-aware perception, but sound alone does
+not reveal cargo contents, intent, identity, or a visual position. This slice
+does not yet add general NPC conversation or audible animal expression.
+
 Tide Harps are spatial understanding, not crafting inventory. The pure selector chooses an exact maximum knot-disjoint set; equally numerous arrangements prefer shorter total strings, then canonical fixed-piece IDs. Their eight deterministic names—Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime—give stable personality without random loot. Because the formation is derived from Wayknots already in the save, it introduces no currency, resource sink, timer, PlayerState field, or migration.
 
 ### One journey

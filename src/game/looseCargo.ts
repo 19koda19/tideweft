@@ -67,6 +67,12 @@ export const LOOSE_CARGO_MAX_CARRIERS = 4_096;
 export const LOOSE_CARGO_MAX_ATOMIC_REGIONS = 81;
 export const LOOSE_CARGO_MAX_ATOMIC_ENTITIES =
   LOOSE_CARGO_MAX_ATOMIC_REGIONS * LOOSE_CARGO_MAX_ENTITIES;
+export const LOOSE_CARGO_RELEASE_CAUSES = Object.freeze([
+  "manual-release",
+  "fall-separation",
+  "forced-release",
+] as const);
+export type LooseCargoReleaseCause = (typeof LOOSE_CARGO_RELEASE_CAUSES)[number];
 
 const MAX_WORLD_DIMENSION = 4_096;
 const MAX_CARRIER_LOTS = 4_096;
@@ -80,6 +86,7 @@ const VELOCITY_RETENTION = 860_000;
 const CURRENT_ACCELERATION = 92_000;
 const SLOPE_ACCELERATION = 68_000;
 const REST_VELOCITY = 250;
+const RELEASE_CAUSE_MARKER = "|release:";
 const TRUSTED_WORLD_STATES = new WeakSet<object>();
 
 const STACK_ID_SET: ReadonlySet<string> = new Set<string>(CRAFTING_STACK_IDS);
@@ -127,6 +134,7 @@ const CAUSE_CODE_SET: ReadonlySet<string> = new Set<LooseCargoCauseCode>([
   "storage-handoff",
   "animal-consumption",
 ]);
+const RELEASE_CAUSE_SET: ReadonlySet<string> = new Set<string>(LOOSE_CARGO_RELEASE_CAUSES);
 
 export type LooseCargoOwner =
   | { readonly kind: "unclaimed" }
@@ -1687,6 +1695,17 @@ export function looseCargoEventId(
   return `lc:${address.x}:${address.y}:event:${ordinal}`;
 }
 
+/**
+ * Reads immutable parcel-release provenance without consulting the bounded
+ * history tail. The exact legacy one-token signatures remain readable until
+ * their first successor step writes the explicit suffix.
+ */
+export function looseCargoEntityReleaseCause(
+  entity: Pick<LooseCargoEntity, "causalSignature">,
+): LooseCargoReleaseCause | null {
+  return releaseCauseFromCausalSignature(entity.causalSignature);
+}
+
 /** Exact child identity for a provision fragment created as one world parcel. */
 export function provisionFragmentLotId(entityId: LooseCargoEntityId): string {
   if (!validEntityId(entityId)) {
@@ -2182,7 +2201,7 @@ export function dropLooseCargo(
     velocityY: 0,
     motion: "resting",
     snaggedBy: null,
-    causalSignature: "manual-release",
+    causalSignature: causalSignatureFor(["manual-release"], 0, "manual-release"),
     lastEventOrdinal: eventOrdinal,
   };
   const lots = removeFromLot(canonicalCarrier.lots, lot, payload);
@@ -2359,7 +2378,7 @@ export function scatterLooseCargo(
       velocityY: part.velocityY,
       motion: part.velocityX === 0 && part.velocityY === 0 ? "resting" : "tumbling",
       snaggedBy: null,
-      causalSignature: request.cause,
+      causalSignature: causalSignatureFor([request.cause], 0, request.cause),
       lastEventOrdinal: eventOrdinal,
     };
     entities.push(entity);
@@ -2769,7 +2788,11 @@ export function stepLooseCargo(
       ...(entity.velocityX !== 0 || entity.velocityY !== 0 ? ["parcel-momentum" as const] : []),
       ...(boundaryCollision ? ["region-boundary-rest" as const] : []),
     ]);
-    const causalSignature = causalSignatureFor(causalCodes, impactApplied);
+    const causalSignature = causalSignatureFor(
+      causalCodes,
+      impactApplied,
+      looseCargoEntityReleaseCause(entity),
+    );
     const crossedTile = tileIndexAt(entity.x, entity.y, canonicalWorld.width)
       !== tileIndexAt(x, y, canonicalWorld.width);
     const recordable = crossedTile
@@ -3241,7 +3264,11 @@ function advanceLooseCargoAcrossRegion(
     ...(sample.brambleSnag > 0 ? ["bramble-snag" as const] : []),
     ...(entity.velocityX !== 0 || entity.velocityY !== 0 ? ["parcel-momentum" as const] : []),
   ]);
-  const causalSignature = causalSignatureFor(causalCodes, impactApplied);
+  const causalSignature = causalSignatureFor(
+    causalCodes,
+    impactApplied,
+    looseCargoEntityReleaseCause(entity),
+  );
   const crossedRegion = !sameRegion(sourceWorld.region, normalized.region);
   const crossedTile = crossedRegion
     || tileIndexAt(entity.x, entity.y, sourceWorld.width)
@@ -3548,6 +3575,10 @@ function canonicalEntity(
     || (value.snaggedBy !== null && value.snaggedBy !== "mangrove" && value.snaggedBy !== "bramble")
     || typeof value.causalSignature !== "string"
     || value.causalSignature.length > 512
+    || (
+      value.causalSignature.includes(RELEASE_CAUSE_MARKER)
+      && releaseCauseFromCausalSignature(value.causalSignature) === null
+    )
     || !validPositiveOrdinal(value.lastEventOrdinal)
     || value.lastEventOrdinal > worldLastEventOrdinal
   ) return null;
@@ -4163,9 +4194,33 @@ function canonicalCauseCodes(causes: readonly LooseCargoCauseCode[]): readonly L
   return [...new Set(causes)].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
 }
 
-function causalSignatureFor(causes: readonly LooseCargoCauseCode[], impact: number): string {
+function causalSignatureFor(
+  causes: readonly LooseCargoCauseCode[],
+  impact: number,
+  releaseCause: LooseCargoReleaseCause | null = null,
+): string {
   const impactBand = impact === 0 ? 0 : Math.min(4, Math.ceil(impact / 250_000));
-  return `${causes.join(",")}|impact:${impactBand}`;
+  const active = `${causes.join(",")}|impact:${impactBand}`;
+  return releaseCause === null
+    ? active
+    : `${active}${RELEASE_CAUSE_MARKER}${releaseCause}`;
+}
+
+function releaseCauseFromCausalSignature(
+  signature: string,
+): LooseCargoReleaseCause | null {
+  const markerIndex = signature.indexOf(RELEASE_CAUSE_MARKER);
+  if (markerIndex < 0) {
+    // Compatibility for live parcels serialized before the suffix existed.
+    return RELEASE_CAUSE_SET.has(signature)
+      ? signature as LooseCargoReleaseCause
+      : null;
+  }
+  if (markerIndex !== signature.lastIndexOf(RELEASE_CAUSE_MARKER)) return null;
+  const releaseCause = signature.slice(markerIndex + RELEASE_CAUSE_MARKER.length);
+  return RELEASE_CAUSE_SET.has(releaseCause)
+    ? releaseCause as LooseCargoReleaseCause
+    : null;
 }
 
 function materialThresholdBand(state: CargoEnvironmentState): string {

@@ -107,6 +107,10 @@ import {
   type AdriftProjectionControl,
 } from "./projection";
 import type { TraversalFeedbackState } from "./traversalFeedback";
+import {
+  projectSituatedExpression,
+  type SituatedExpressionEvent,
+} from "./situatedExpression";
 import { eventSettlementLocusIds } from "./eventObservation";
 
 export interface UIProjectionOptions {
@@ -140,6 +144,8 @@ export interface UIProjectionOptions {
   readonly suppressDetailPerception?: boolean;
   /** Direct physical feedback becomes an observed system entry, not overhead prose. */
   readonly traversalFeedback?: TraversalFeedbackState;
+  /** Current actor expression, projected separately from system announcements. */
+  readonly situatedExpression?: SituatedExpressionEvent | null;
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
   readonly settlementFoodStoreAction?: Readonly<{
     readonly id: string;
@@ -381,6 +387,10 @@ export function projectUIView(
         looseQuantity: projectedActiveCustody.looseQuantity,
       }
     : projectedActiveCustody;
+  const situatedExpression = options.situatedExpression === null
+    || options.situatedExpression === undefined
+    ? null
+    : projectSituatedExpression(options.situatedExpression);
 
   return {
     revision: [
@@ -410,6 +420,8 @@ export function projectUIView(
       options.looseCargoWorld?.revision ?? "no-loose-world",
       options.activePromiseCustody?.carriedQuantity ?? "no-carried-promise",
       options.activePromiseCustody?.looseQuantity ?? "no-loose-promise",
+      options.situatedExpression?.eventId ?? "no-situated-expression",
+      options.situatedExpression?.remainingSteps ?? 0,
       suppressDetail
         ? "sleep-store-action-hidden"
         : options.settlementFoodStoreAction?.id ?? "no-store-action",
@@ -527,6 +539,18 @@ export function projectUIView(
             id: String(session.announcement.id),
             message: session.announcement.message,
             assertive: session.announcement.assertive,
+          },
+        }
+      : {}),
+    ...(situatedExpression && options.situatedExpression
+      ? {
+          expressionCaption: {
+            id: options.situatedExpression.eventId,
+            speakerLabel: "You",
+            text: situatedExpression.text,
+            tone: options.situatedExpression.tone,
+            assertive: options.situatedExpression.tone === "alarmed"
+              || options.situatedExpression.volume === "shout",
           },
         }
       : {}),

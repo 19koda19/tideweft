@@ -20,11 +20,14 @@ import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
 import {
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
+  HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   collectExistingHumanObservations,
   createPlayerSenseSample,
+  createSupplementalSoundSample,
   type HumanObservationBatch,
   type PlayerSenseSample,
+  type SupplementalSoundSample,
 } from "./humanPerception";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
@@ -247,6 +250,42 @@ describe("existing-human sensory bridge", () => {
     expect(reverse).toEqual(forward);
   });
 
+  it("hears a supplemental voice without creating or overriding a visual sighting", () => {
+    const current = fixture("voice remains an acoustic fact", { facing: "east" });
+    const early = visualSample("physical-early", OBSERVER_X + 2, OBSERVER_Y, {
+      sampleOrdinal: 0,
+    });
+    const late = visualSample("physical-late", OBSERVER_X + 4, OBSERVER_Y, {
+      sampleOrdinal: 1,
+    });
+    const voice = supplementalSoundSample(
+      "voice-between-steps",
+      OBSERVER_X + 6,
+      OBSERVER_Y,
+    );
+
+    const observations = observationsFor(current, [early, late], 1, [voice]);
+    expect(observations).toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      perceivedClass: "human-vocalization",
+      identification: "anonymous",
+      subjectId: null,
+    }));
+    const identifiedVisuals = observations.filter(({ channel, subjectId }) => (
+      channel === "vision" && subjectId === LOCAL_PLAYER_SUBJECT_ID
+    ));
+    expect(identifiedVisuals).toHaveLength(1);
+    expect(identifiedVisuals[0]?.area).toEqual({ center: late.position, radiusUnits: 0 });
+    expect(observations.some(({ id }) => id.includes(voice.id) && id.includes("-v-")))
+      .toBe(false);
+
+    const voiceOnly = observationsFor(current, [], 2, [
+      supplementalSoundSample("voice-only", OBSERVER_X + 3, OBSERVER_Y),
+    ]);
+    expect(voiceOnly.some(({ channel }) => channel === "hearing")).toBe(true);
+    expect(voiceOnly.some(({ channel }) => channel === "vision")).toBe(false);
+  });
+
   it("preserves canonical observations across negative moving-frame origins", () => {
     const base = fixture("the sensory frame may rebase", { facing: "east" });
     expect(base.window.origin.x).toBeLessThan(0);
@@ -365,6 +404,11 @@ describe("existing-human sensory bridge", () => {
       soundClass: "movement-sound",
       soundInterrupt: "none",
     })).toBeNull();
+    const voice = supplementalSoundSample("valid-voice", OBSERVER_X + 2, OBSERVER_Y);
+    expect(createSupplementalSoundSample({
+      ...voice,
+      movementSalience: FIXED_POINT,
+    } as unknown as SupplementalSoundSample)).toBeNull();
     expect(collectExistingHumanObservations({
       world: current.world,
       window: current.window,
@@ -393,6 +437,27 @@ describe("existing-human sensory bridge", () => {
           sampleOrdinal: index % HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
         }),
       ),
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [valid],
+      supplementalSoundSamples: Array.from(
+        { length: HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES + 1 },
+        (_, index) => supplementalSoundSample(
+          `voice-${index}`,
+          OBSERVER_X + 2,
+          OBSERVER_Y,
+        ),
+      ),
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [valid],
+      supplementalSoundSamples: [{ ...voice, id: valid.id }],
     })).toEqual([]);
     const unrelated = fixture("another registered window", { facing: "east" });
     expect(collectExistingHumanObservations({
@@ -548,12 +613,14 @@ function observationsFor(
   current: Fixture,
   samples: readonly PlayerSenseSample[],
   targetTick: number,
+  supplementalSoundSamples: readonly SupplementalSoundSample[] = [],
 ) {
   return batchFor(collectExistingHumanObservations({
     world: current.world,
     window: current.window,
     targetTick: fixtureTick(current, targetTick),
     playerSamples: samples,
+    supplementalSoundSamples,
   }), current.resident.id)?.observations ?? [];
 }
 
@@ -602,6 +669,23 @@ function soundSample(
     soundLoudness: overrides.soundLoudness ?? FIXED_POINT,
     soundRangeUnits: overrides.soundRangeUnits ?? 12_000,
   });
+}
+
+function supplementalSoundSample(
+  id: string,
+  tileX: number,
+  tileY: number,
+): SupplementalSoundSample {
+  const sample = createSupplementalSoundSample({
+    id,
+    position: worldPoint(tileX, tileY),
+    soundLoudness: FIXED_POINT,
+    soundRangeUnits: 12_000,
+    soundClass: "human-vocalization",
+    soundInterrupt: "none",
+  });
+  if (!sample) throw new Error("test supplemental sound must be valid");
+  return sample;
 }
 
 function residentStimulus(current: Fixture, id: string): PlayerSenseSample {

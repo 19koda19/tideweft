@@ -266,6 +266,108 @@ export function situatedExpressionCaptionCopy(
   return `${caption.speakerLabel}: ${caption.text}`;
 }
 
+interface LiveRegionAnnouncement {
+  readonly message: string;
+  readonly assertive: boolean;
+}
+
+export interface LiveRegionAnnouncementQueueOptions {
+  readonly announcer: Pick<HTMLElement, "setAttribute" | "textContent">;
+  readonly schedule: (callback: () => void, delayMs: number) => number;
+  readonly cancel: (timer: number) => void;
+}
+
+export interface LiveRegionAnnouncementQueue {
+  readonly announce: (message: string, assertive?: boolean) => void;
+  readonly pendingCount: () => number;
+  readonly destroy: () => void;
+}
+
+const LIVE_REGION_CLEAR_DELAY_MS = 20;
+const LIVE_REGION_MESSAGE_HOLD_MS = 180;
+const MAX_PENDING_LIVE_REGION_ANNOUNCEMENTS = 16;
+
+/**
+ * Serializes gameplay and actor-expression announcements through one live
+ * region. A single clear/publish timer prevents two updates in one UI render
+ * from erasing each other before assistive technology can observe either one.
+ */
+export function createLiveRegionAnnouncementQueue(
+  options: LiveRegionAnnouncementQueueOptions,
+): LiveRegionAnnouncementQueue {
+  const pending: LiveRegionAnnouncement[] = [];
+  let timer: number | null = null;
+  let phase: "idle" | "clearing" | "holding" = "idle";
+  let destroyed = false;
+
+  const compactOldestPending = (): void => {
+    const first = pending.shift();
+    const second = pending.shift();
+    if (!first || !second) {
+      if (first) pending.unshift(first);
+      return;
+    }
+    pending.unshift({
+      message: `${first.message} ${second.message}`,
+      assertive: first.assertive || second.assertive,
+    });
+  };
+
+  const beginNext = (): void => {
+    if (destroyed || timer !== null || phase !== "idle" || pending.length === 0) return;
+    const next = pending[0];
+    if (!next) return;
+    phase = "clearing";
+    options.announcer.setAttribute("aria-live", next.assertive ? "assertive" : "polite");
+    options.announcer.textContent = "";
+    timer = options.schedule(() => {
+      timer = null;
+      if (destroyed) return;
+      const delivered = pending.splice(0, pending.length);
+      if (delivered.length === 0) {
+        phase = "idle";
+        return;
+      }
+      const assertive = delivered.some((entry) => entry.assertive);
+      options.announcer.setAttribute(
+        "aria-live",
+        assertive ? "assertive" : "polite",
+      );
+      options.announcer.textContent = delivered.map((entry) => entry.message).join(" ");
+      phase = "holding";
+      timer = options.schedule(() => {
+        timer = null;
+        if (destroyed) return;
+        phase = "idle";
+        beginNext();
+      }, LIVE_REGION_MESSAGE_HOLD_MS);
+    }, LIVE_REGION_CLEAR_DELAY_MS);
+  };
+
+  return {
+    announce: (message, assertive = false) => {
+      if (destroyed || message.length === 0) return;
+      if (pending.length >= MAX_PENDING_LIVE_REGION_ANNOUNCEMENTS) {
+        // Preserve every queued utterance in order while bounding queue records.
+        // This path is overload protection; ordinary UI updates enqueue at most
+        // an expression and one system announcement together.
+        compactOldestPending();
+      }
+      pending.push({ message, assertive });
+      beginNext();
+    },
+    pendingCount: () => pending.length,
+    destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
+      pending.splice(0, pending.length);
+      if (timer !== null) options.cancel(timer);
+      timer = null;
+      phase = "idle";
+    },
+  };
+}
+
 export interface UnderfootTerrainSample {
   readonly terrainLabel: string;
   readonly isWater: boolean;
@@ -2320,6 +2422,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     announcer.setAttribute("aria-live", "polite");
     options.root.append(announcer);
   }
+  const liveRegionAnnouncements = createLiveRegionAnnouncementQueue({
+    announcer,
+    schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    cancel: (timer) => window.clearTimeout(timer),
+  });
 
   let latestView: TideweftUIView | null = null;
   let lastRevision = "";
@@ -2366,11 +2473,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const announce = (message: string, assertive = false): void => {
-    announcer.setAttribute("aria-live", assertive ? "assertive" : "polite");
-    announcer.textContent = "";
-    window.setTimeout(() => {
-      announcer.textContent = message;
-    }, 20);
+    liveRegionAnnouncements.announce(message, assertive);
   };
 
   const renderExpressionCaption = (
@@ -3454,6 +3557,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
+      liveRegionAnnouncements.destroy();
       restoreResidentAboutFocus();
       mobileBrace.destroy();
       restartFlow.destroy();

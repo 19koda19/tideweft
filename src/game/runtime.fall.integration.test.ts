@@ -11,6 +11,7 @@ import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, type WorldState } from "../sim/types";
 import type { FieldResourceEcologyState } from "../sim/fieldResources";
 import type { TideweftView } from "../render/types";
+import * as humanPerception from "./humanPerception";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
   gameSaveEnvelopeIntegrity,
@@ -56,6 +57,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
+import type { SituatedExpressionState } from "./situatedExpression";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -69,7 +71,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 32;
+  readonly version: 33;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -78,7 +80,14 @@ interface CurrentGameSaveEnvelope {
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
-  readonly perceptionCarry: unknown;
+  readonly perceptionCarry: {
+    readonly version: 2;
+    readonly playerStepsSinceWorldTick: number;
+    readonly playerSenseSamples: readonly humanPerception.PlayerSenseSample[];
+    readonly playerVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
+    readonly situatedExpression: SituatedExpressionState;
+    readonly nextPlayerSenseSampleOrdinal: number;
+  };
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
   readonly settlementEcology: string;
@@ -165,10 +174,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 32
-    || record.payloadVersion !== 32
+    || envelope.version !== 33
+    || record.payloadVersion !== 33
   ) {
-    throw new Error("fixture did not produce a current v32 regional session save");
+    throw new Error("fixture did not produce a current v33 regional session save");
   }
   return envelope;
 }
@@ -189,7 +198,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 32,
+    payloadVersion: 33,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -553,6 +562,28 @@ function incidentCueCalls(cue: string): number {
   return soundscapePlay.mock.calls.filter(([kind]) => kind === cue).length;
 }
 
+function playerExpression(runtime: TideweftRuntime, tone: "alarmed" | "relieved") {
+  const expressions = runtime.getRenderView().expressions ?? [];
+  expect(expressions).toHaveLength(1);
+  const expression = expressions[0];
+  if (!expression) throw new Error(`runtime omitted its ${tone} player expression`);
+  expect(expression).toMatchObject({
+    sourceActorId: "player:local",
+    sourceKind: "player",
+    speakerLabel: "You",
+    tone,
+  });
+  expect(expression.position).toEqual(runtime.getRenderView().player.position);
+  expect(runtime.getUIView().expressionCaption).toEqual({
+    id: expression.id,
+    speakerLabel: expression.speakerLabel,
+    text: expression.text,
+    tone: expression.tone,
+    assertive: tone === "alarmed",
+  });
+  return expression;
+}
+
 function renderedTileIndex(view: TideweftView): number {
   const tileX = Math.floor(view.player.position.x / view.terrain.tileSize);
   const tileY = Math.floor(view.player.position.y / view.terrain.tileSize);
@@ -596,6 +627,10 @@ describe("production terrain fall and physical cargo", () => {
       || fixture.sourceCondition === null
     ) throw new Error("Promise fixture lost its source identity");
 
+    const humanPerceptionSpy = vi.spyOn(
+      humanPerception,
+      "collectExistingHumanObservations",
+    );
     soundscapePlay.mockClear();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
@@ -620,11 +655,24 @@ describe("production terrain fall and physical cargo", () => {
       id: `recover-${fixture.contractId}`,
       eyebrow: "Recover loose Promise cargo",
     });
+    const cargoLossExpression = playerExpression(runtime, "alarmed");
+    expect(cargoLossExpression.text.length).toBeGreaterThan(0);
+    expect(incidentCueCalls("vocalization-alarm")).toBe(1);
+    expect(runtime.getUIView().chronicle).toContainEqual(expect.objectContaining({
+      id: "incident-player:0:traversal:0",
+      new: true,
+    }));
+    expect(runtime.getUIView().announcement?.message.startsWith(
+      fallenView.player.incident?.label ?? "missing-incident",
+    )).not.toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Cargo can separate; regain your feet before moving.",
+    );
 
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 32,
+      version: 33,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -634,6 +682,31 @@ describe("production terrain fall and physical cargo", () => {
         activeRegion: { x: 0, y: 0 },
       },
     });
+    expect(Object.keys(fallenSave.perceptionCarry).sort()).toEqual([
+      "nextPlayerSenseSampleOrdinal",
+      "playerSenseSamples",
+      "playerStepsSinceWorldTick",
+      "playerVocalizationSamples",
+      "situatedExpression",
+      "version",
+    ]);
+    expect(fallenSave.perceptionCarry).toMatchObject({
+      version: 2,
+      playerStepsSinceWorldTick: 1,
+      nextPlayerSenseSampleOrdinal: 1,
+      situatedExpression: {
+        active: { eventId: cargoLossExpression.id, audioAcknowledged: true },
+      },
+    });
+    expect(fallenSave.perceptionCarry.playerSenseSamples.map(({ sampleOrdinal }) => sampleOrdinal))
+      .toEqual([0]);
+    expect(fallenSave.perceptionCarry.playerVocalizationSamples).toEqual([
+      expect.objectContaining({
+        id: `pv-${deserializeWorld(fallenSave.world).meta.completedTick}-0`,
+        soundClass: "human-vocalization",
+        soundInterrupt: "strong",
+      }),
+    ]);
     expect(restorePlayerRegionalTravel(
       deserializeWorld(fallenSave.world).meta.rootSeed,
       fallenSave.player,
@@ -671,31 +744,161 @@ describe("production terrain fall and physical cargo", () => {
       && record.causes.includes("fall-separation"))).toBe(true);
     const parcelIds = parcels.map(({ id }) => id);
     expect(parcelIds[0]).toBe(`lc:0:0:parcel:${fixture.nextParcelOrdinal}`);
-    const materialAndHistory = {
-      entities: fallenSave.physicalCargo.looseWorld.entities,
-      history: fallenSave.physicalCargo.looseWorld.history,
-      historyBaseOrdinal: fallenSave.physicalCargo.looseWorld.historyBaseOrdinal,
-      historyArchiveHash: fallenSave.physicalCargo.looseWorld.historyArchiveHash,
-      retiredLotIds: fallenSave.physicalCargo.carrier.retiredLotIds,
-    };
     const sourceOccurrences = fallenSave.physicalCargo.carrier.lots.filter(({ id }) =>
       id === fixture.sourceLotId).length;
     expect(sourceOccurrences).toBeLessThanOrEqual(1);
     if (sourceOccurrences === 0) {
       expect(fallenSave.physicalCargo.carrier.retiredLotIds).toContain(fixture.sourceLotId);
     }
+    // Repeating input while the committed incident still owns control neither
+    // accepts another expression nor replays the same human vocalization.
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    expect(playerExpression(runtime, "alarmed").id).toBe(cargoLossExpression.id);
+    expect(incidentCueCalls("vocalization-alarm")).toBe(1);
+
+    // The remaining thirteen fixed steps expire the fourteen-step expression.
+    // At the intervening world tick, human perception must receive distinct
+    // physical-impact and vocalization samples rather than one replacing the
+    // other. The bounded unfinished voice carry clears only after the world
+    // consumes that exact perception interval.
+    advancePlayerSteps(runtime, 12);
+    expect(playerExpression(runtime, "alarmed").id).toBe(cargoLossExpression.id);
+    advancePlayerSteps(runtime, 1);
+    expect(runtime.getRenderView().expressions).toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toBeUndefined();
+    expect((runtime.getRenderView().looseCargo ?? []).some((parcel) =>
+      parcelIds.includes(parcel.id) && parcel.recovery === "reachable")).toBe(true);
+    const perceptionInput = humanPerceptionSpy.mock.calls
+      .map(([input]) => input)
+      .find(({ supplementalSoundSamples }) => supplementalSoundSamples?.some(
+        ({ soundClass }) => soundClass === "human-vocalization",
+      ));
+    if (!perceptionInput) {
+      throw new Error("fall vocalization never reached the human perception bridge");
+    }
+    const impactSamples = perceptionInput.playerSamples.filter(({ soundClass }) =>
+      soundClass === "impact");
+    const vocalizationSamples = (perceptionInput.supplementalSoundSamples ?? []).filter(({
+      soundClass,
+    }) =>
+      soundClass === "human-vocalization");
+    expect(impactSamples).toHaveLength(1);
+    expect(vocalizationSamples).toHaveLength(1);
+    expect(vocalizationSamples[0]).toMatchObject({
+      soundInterrupt: "strong",
+    });
+    expect(vocalizationSamples[0]?.id).not.toBe(impactSamples[0]?.id);
+    expect(vocalizationSamples[0]?.position).toEqual(impactSamples[0]?.position);
+    const recoverableParcel = (runtime.getRenderView().looseCargo ?? [])
+      .find((parcel) => parcelIds.includes(parcel.id) && parcel.recovery === "reachable");
+    if (!recoverableParcel) {
+      throw new Error("fall fixture lost every exact reachable Promise parcel");
+    }
+    await runtime.save();
+    const beforeRecovery = decodeCurrent(repository.snapshot());
+    const recoveredEntity = beforeRecovery.physicalCargo.looseWorld.entities
+      .find(({ id }) => id === recoverableParcel.id);
+    if (!recoveredEntity || recoveredEntity.payload.kind !== "promise") {
+      throw new Error("selected recovery target is not the saved fall-separated Promise parcel");
+    }
+    const carriedBeforeRecovery = beforeRecovery.physicalCargo.carrier.lots
+      .reduce((quantity, lot) => quantity + (
+        lot.payload.kind === "promise" && lot.payload.contractId === fixture.contractId
+          ? lot.payload.quantity
+          : 0
+      ), 0);
+    const reliefCueCount = incidentCueCalls("vocalization-relief");
+    runtime.dispatchRenderer({
+      type: "parcel-target",
+      parcelId: recoverableParcel.id,
+      recoverOnArrival: true,
+    });
+
+    const recoveryExpression = playerExpression(runtime, "relieved");
+    const reliefCueCountAfterRecovery = incidentCueCalls("vocalization-relief");
+    expect(recoveryExpression.id).not.toBe(cargoLossExpression.id);
+    expect(reliefCueCountAfterRecovery).toBe(reliefCueCount + 1);
+    expect((runtime.getRenderView().looseCargo ?? []).map(({ id }) => id))
+      .not.toContain(recoverableParcel.id);
+
+    await runtime.save();
+    const recoveredSave = decodeCurrent(repository.snapshot());
+    expect(recoveredSave.physicalCargo.looseWorld.entities.map(({ id }) => id))
+      .not.toContain(recoverableParcel.id);
+    const carriedAfterRecovery = recoveredSave.physicalCargo.carrier.lots
+      .reduce((quantity, lot) => quantity + (
+        lot.payload.kind === "promise" && lot.payload.contractId === fixture.contractId
+          ? lot.payload.quantity
+          : 0
+      ), 0);
+    expect(carriedAfterRecovery).toBe(
+      carriedBeforeRecovery + recoveredEntity.payload.quantity,
+    );
+    expect(promiseQuantity(recoveredSave.physicalCargo, fixture.contractId))
+      .toBe(fixture.promiseQuantity);
+    expect(recoveredSave.physicalCargo.looseWorld.history.some((record) =>
+      (record.kind === "pickup" || record.kind === "merge")
+      && record.entityIds.includes(recoverableParcel.id)
+      && record.causes.includes("recovery"))).toBe(true);
+    const remainingParcelIds = recoveredSave.physicalCargo.looseWorld.entities
+      .filter(({ payload }) =>
+        payload.kind === "promise" && payload.contractId === fixture.contractId)
+      .map(({ id }) => id);
+    expect(remainingParcelIds).toEqual(parcelIds.filter((id) => id !== recoverableParcel.id));
     const visibleParcelIds = (runtime.getRenderView().looseCargo ?? []).map(({ id }) => id);
+    const recoveredRecord = repository.snapshot();
+
+    // Let the original runtime finish the pending perception interval. This is
+    // the reference for the interrupted branch below.
+    advancePlayerSteps(runtime, 5);
+    await runtime.save();
+    const uninterruptedSave = decodeCurrent(repository.snapshot());
+    expect(uninterruptedSave.perceptionCarry.playerVocalizationSamples).toEqual([]);
+    const uninterruptedResidentPerception = deserializeWorld(uninterruptedSave.world)
+      .residents.map(({ id, perception }) => ({ id, perception }));
+    const materialAndHistory = {
+      entities: uninterruptedSave.physicalCargo.looseWorld.entities,
+      history: uninterruptedSave.physicalCargo.looseWorld.history,
+      historyBaseOrdinal: uninterruptedSave.physicalCargo.looseWorld.historyBaseOrdinal,
+      historyArchiveHash: uninterruptedSave.physicalCargo.looseWorld.historyArchiveHash,
+      retiredLotIds: uninterruptedSave.physicalCargo.carrier.retiredLotIds,
+    };
     runtime.destroy();
 
     const cueCountBeforeReload = incidentCueCalls(incident.cue);
-    const resumed = await createTideweftRuntime(repository);
+    const resumedRepository = new MemoryRepository(recoveredRecord);
+    humanPerceptionSpy.mockClear();
+    const resumed = await createTideweftRuntime(resumedRepository);
     expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
-    // Reload recomputes the same direct perception at the same physical locus:
-    // visible parcels stay visible, while anything beyond sight remains absent.
+    // Reload preserves the still-active expression and its semantic cooldown,
+    // but its acknowledged audio is not replayed.
+    expect(playerExpression(resumed, "relieved").id).toBe(recoveryExpression.id);
+    expect(resumed.getUIView().expressionCaption?.id)
+      .toBe(recoveryExpression.id);
+    expect(incidentCueCalls("vocalization-relief")).toBe(reliefCueCountAfterRecovery);
     expect((resumed.getRenderView().looseCargo ?? []).map(({ id }) => id)).toEqual(visibleParcelIds);
-    expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
+    if (remainingParcelIds.length > 0) {
+      expect(resumed.getUIView().objective?.id).toBe(`recover-${fixture.contractId}`);
+    } else {
+      expect(resumed.getUIView().objective?.title).toContain("DELIVER");
+    }
+    advancePlayerSteps(resumed, 5);
+    const resumedPerceptionInput = humanPerceptionSpy.mock.calls
+      .map(([input]) => input)
+      .find(({ supplementalSoundSamples }) => supplementalSoundSamples?.some(
+        ({ id }) => id === recoveredSave.perceptionCarry.playerVocalizationSamples[0]?.id,
+      ));
+    expect(resumedPerceptionInput?.supplementalSoundSamples).toContainEqual(
+      recoveredSave.perceptionCarry.playerVocalizationSamples[0],
+    );
     await resumed.save();
-    const roundTripped = decodeCurrent(repository.snapshot());
+    const roundTripped = decodeCurrent(resumedRepository.snapshot());
+    expect(roundTripped.perceptionCarry.playerVocalizationSamples).toEqual([]);
+    expect(deserializeWorld(roundTripped.world).residents
+      .map(({ id, perception }) => ({ id, perception })))
+      .toEqual(uninterruptedResidentPerception);
     expect({
       entities: roundTripped.physicalCargo.looseWorld.entities,
       history: roundTripped.physicalCargo.looseWorld.history,
@@ -703,29 +906,11 @@ describe("production terrain fall and physical cargo", () => {
       historyArchiveHash: roundTripped.physicalCargo.looseWorld.historyArchiveHash,
       retiredLotIds: roundTripped.physicalCargo.carrier.retiredLotIds,
     }).toEqual(materialAndHistory);
-    expect(roundTripped.traversalFeedback).toEqual(fallenSave.traversalFeedback);
-
-    // Repeating the same diagonal input during physical recovery cannot assign
-    // another ordinal, replay the cue, duplicate a parcel, or resurrect a lot.
-    resumed.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
-    advancePlayerSteps(resumed, 1);
-    resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
-    await resumed.save();
-    const afterRepeatedInput = decodeCurrent(repository.snapshot());
-    expect(afterRepeatedInput.traversalFeedback.nextTraversalOrdinal).toBe(1);
-    expect(incidentCueCalls(incident.cue)).toBe(cueCountBeforeReload);
-    expect(afterRepeatedInput.physicalCargo.looseWorld.entities
-      .filter(({ payload }) =>
-        payload.kind === "promise" && payload.contractId === fixture.contractId)
-      .map(({ id }) => id)
-      .sort())
-      .toEqual([...parcelIds].sort());
-    expect(promiseQuantity(afterRepeatedInput.physicalCargo, fixture.contractId))
+    expect(roundTripped.traversalFeedback).toEqual(uninterruptedSave.traversalFeedback);
+    expect(promiseQuantity(roundTripped.physicalCargo, fixture.contractId))
       .toBe(fixture.promiseQuantity);
-    expect(afterRepeatedInput.physicalCargo.carrier.lots.filter(({ id }) =>
-      id === fixture.sourceLotId)).toHaveLength(sourceOccurrences);
     resumed.destroy();
-  }, 15_000);
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("applies one terrain fall to an empty porter without inventing player cargo", async () => {
     const repository = new MemoryRepository();

@@ -17,6 +17,7 @@ import {
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState } from "./sessionTypes";
+import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
@@ -68,6 +69,8 @@ interface TestGameSaveEnvelope {
     readonly version: number;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly { readonly sampleOrdinal: number }[];
+    readonly playerVocalizationSamples?: readonly unknown[];
+    readonly situatedExpression?: unknown;
     readonly nextPlayerSenseSampleOrdinal: number;
   };
 }
@@ -194,9 +197,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 32,
+      version: 33,
       perceptionCarry: {
-        version: 1,
+        version: 2,
         playerStepsSinceWorldTick: 9,
         nextPlayerSenseSampleOrdinal: 9,
       },
@@ -226,6 +229,60 @@ describe("runtime existing-human perception path", () => {
     });
     resumed.destroy();
   }, 90_000);
+
+  it("migrates the exact sealed v32 perception carry without erasing v32 player recovery authority", async () => {
+    const fixture = perceptionFixture("runtime perception v32 voice migration");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const currentCarry = currentPerceptionCarry(decoded);
+    const {
+      playerVocalizationSamples: _futureVocalizations,
+      situatedExpression: _futureExpression,
+      ...v1Carry
+    } = currentCarry;
+    const { integrity: _currentIntegrity, ...currentBase } = decoded;
+    const v32Base = {
+      ...currentBase,
+      version: 32,
+      perceptionCarry: { ...v1Carry, version: 1 },
+    };
+    repository.replace({
+      ...current,
+      payloadVersion: 32,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v32Base,
+        integrity: gameSaveEnvelopeIntegrity(v32Base),
+      }),
+    });
+
+    scheduledFrame = undefined;
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    expect(savedEnvelope(repository)).toMatchObject({
+      version: 33,
+      player: { timeAction: null },
+      perceptionCarry: {
+        version: 2,
+        playerStepsSinceWorldTick: 3,
+        nextPlayerSenseSampleOrdinal: 3,
+        playerVocalizationSamples: [],
+        situatedExpression: {
+          version: 1,
+          active: null,
+          recent: [],
+        },
+      },
+    });
+    migrated.destroy();
+  }, 60_000);
 
   it("migrates a sealed v4 regional save to an empty current perception interval", async () => {
     const fixture = perceptionFixture("runtime perception v4 migration");
@@ -268,11 +325,17 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 32,
+      version: 33,
       perceptionCarry: {
-        version: 1,
+        version: 2,
         playerStepsSinceWorldTick: 0,
         playerSenseSamples: [],
+        playerVocalizationSamples: [],
+        situatedExpression: {
+          version: 1,
+          active: null,
+          recent: [],
+        },
         nextPlayerSenseSampleOrdinal: 0,
       },
     });
@@ -311,6 +374,46 @@ describe("runtime existing-human perception path", () => {
           throw new Error("fixture sample omitted local X");
         }
         mutablePosition.localX += 1;
+      },
+    },
+    {
+      label: "a vocalization detached from the carried player path",
+      tamper(envelope: Record<string, unknown>) {
+        const carry = currentPerceptionCarry(envelope);
+        const samples = carry.playerSenseSamples;
+        if (!Array.isArray(samples)) throw new Error("fixture carry omitted its samples");
+        const first = samples[0];
+        if (!first || typeof first !== "object" || Array.isArray(first)) {
+          throw new Error("fixture carry omitted its first sample");
+        }
+        const position = (first as Record<string, unknown>).position;
+        if (!position || typeof position !== "object" || Array.isArray(position)) {
+          throw new Error("fixture sample omitted its position");
+        }
+        const samplePosition = position as Record<string, unknown>;
+        if (
+          typeof samplePosition.localX !== "number"
+          || typeof samplePosition.localY !== "number"
+          || !samplePosition.region
+        ) throw new Error("fixture sample omitted its canonical position");
+        const remoteLocalX = samplePosition.localX >= 5 * WORLD_POSITION_UNITS_PER_TILE
+          ? samplePosition.localX - 5 * WORLD_POSITION_UNITS_PER_TILE
+          : samplePosition.localX + 5 * WORLD_POSITION_UNITS_PER_TILE;
+        const worldText = envelope.world;
+        if (typeof worldText !== "string") throw new Error("fixture omitted its world");
+        const completedTick = deserializeWorld(worldText).meta.completedTick;
+        carry.playerVocalizationSamples = [{
+          id: `pv-${completedTick}-0`,
+          position: {
+            region: structuredClone(samplePosition.region),
+            localX: remoteLocalX,
+            localY: samplePosition.localY,
+          },
+          soundLoudness: 620_000,
+          soundRangeUnits: 18 * WORLD_POSITION_UNITS_PER_TILE,
+          soundClass: "human-vocalization",
+          soundInterrupt: "none",
+        }];
       },
     },
   ])("rejects a resealed current save with $label", async ({ tamper }) => {

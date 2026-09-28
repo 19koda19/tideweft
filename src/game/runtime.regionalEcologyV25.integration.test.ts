@@ -116,10 +116,11 @@ vi.mock("../audio/soundscape", () => ({
 
 interface V28Envelope {
   readonly format: "tideweft-session";
-  readonly version: 32;
+  readonly version: 33;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
+  readonly perceptionCarry: unknown;
   readonly regionalTravel: string;
   readonly regionalEcology: string;
   readonly integrity: string;
@@ -131,6 +132,7 @@ interface V24Envelope {
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
+  readonly perceptionCarry: unknown;
   readonly coreEcology: string;
   readonly integrity: string;
 }
@@ -804,14 +806,14 @@ function requireV28(record: SaveRecord): V28Envelope {
   const value = JSON.parse(record.worldJson) as V28Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 32
-    || record.payloadVersion !== 32
+    || value.version !== 33
+    || record.payloadVersion !== 33
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("fixture did not produce the current v32 regional ecology envelope");
+  ) throw new Error("fixture did not produce the current v33 regional ecology envelope");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed as Readonly<Record<string, unknown>>)) {
-    throw new Error("v32 outer envelope failed its integrity seal");
+    throw new Error("v33 outer envelope failed its integrity seal");
   }
   return value;
 }
@@ -1031,6 +1033,7 @@ function downgradeToV24(
     version: 24,
     world: envelope.world,
     player: legacyPlayerWithoutTimeAction(envelope.player),
+    perceptionCarry: legacyPlayerPerceptionCarry(envelope.perceptionCarry),
     physicalCargo: createV24PhysicalCargo(envelope.player, sourcePatch),
     coreEcology: serializeCoreEcologyAggregatePatch(sourcePatch),
   };
@@ -1051,6 +1054,18 @@ function downgradeToV24(
 function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
   const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   return legacyPlayer as PlayerState;
+}
+
+function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("current fixture omitted its player perception carry");
+  }
+  const {
+    playerVocalizationSamples: _futureVocalizations,
+    situatedExpression: _futureExpression,
+    ...legacy
+  } = structuredClone(value) as Record<string, unknown>;
+  return Object.freeze({ ...legacy, version: 1 });
 }
 
 function createV24PhysicalCargo(

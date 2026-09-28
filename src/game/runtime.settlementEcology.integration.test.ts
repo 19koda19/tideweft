@@ -683,13 +683,25 @@ function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
   return legacyPlayer as PlayerState;
 }
 
+function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("current fixture omitted its player perception carry");
+  }
+  const {
+    playerVocalizationSamples: _futureVocalizations,
+    situatedExpression: _futureExpression,
+    ...legacy
+  } = structuredClone(value) as Record<string, unknown>;
+  return Object.freeze({ ...legacy, version: 1 });
+}
+
 function withCurrentEnvelopeFields(
   record: SaveRecord,
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 32 || current.version !== 32) {
-    throw new Error("runtime fixture is not a current v32 save");
+  if (record.payloadVersion !== 33 || current.version !== 33) {
+    throw new Error("runtime fixture is not a current v33 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1357,11 +1369,11 @@ function downgradeSettlementEcologyToV2(encoded: unknown): string {
 
 /**
  * Historical envelope tests need the exact whole-patch v24 owner that existed
- * before regional storage split it. Fresh v32 saves retain the frozen v11
+ * before regional storage split it. Fresh v33 saves retain the frozen v11
  * habitat on the settlement-home owner, so rebuild that source through the
  * same public construction and initialization kernels used by v24.
  */
-function createExactV24CoreFromFreshV31(
+function createExactV24CoreFromFreshV33(
   envelope: Readonly<Record<string, unknown>>,
 ): CoreEcologyAggregatePatchState {
   if (typeof envelope.world !== "string") {
@@ -1691,8 +1703,8 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 32) throw new Error("fixture is not a current save");
-  const historicalCore = createExactV24CoreFromFreshV31(current);
+  if (current.version !== 33) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV33(current);
   const {
     integrity: _integrity,
     regionalEcology: _regionalEcology,
@@ -1704,6 +1716,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     player: legacyPlayerWithoutTimeAction(current.player as PlayerState),
+    perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
     version: 16,
     coreEcology: downgradeCoreEcologyToTidalWeb(historicalCore),
     settlementEcology: downgradeSettlementEcologyToV1(current.settlementEcology),
@@ -1720,8 +1733,8 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 32) throw new Error("fixture is not a current save");
-  const historicalCore = createExactV24CoreFromFreshV31(current);
+  if (current.version !== 33) throw new Error("fixture is not a current save");
+  const historicalCore = createExactV24CoreFromFreshV33(current);
   const {
     integrity: _integrity,
     regionalEcology: _regionalEcology,
@@ -1733,6 +1746,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     player: legacyPlayerWithoutTimeAction(current.player as PlayerState),
+    perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
     version: 17,
     coreEcology: downgradeCoreEcologyToDomesticYard(historicalCore),
     settlementEcology: downgradeSettlementEcologyToV2(current.settlementEcology),
@@ -1749,10 +1763,10 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 32 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 33 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
-  const historicalCore = createExactV24CoreFromFreshV31(current);
+  const historicalCore = createExactV24CoreFromFreshV33(current);
   const currentSettlement = JSON.parse(current.settlementEcology) as Record<string, unknown>;
   if (
     currentSettlement.version !== 4
@@ -1785,6 +1799,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     player: legacyPlayerWithoutTimeAction(current.player as PlayerState),
+    perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
     version: 18,
     coreEcology: downgradeCoreEcologyToDomesticPen(historicalCore),
     settlementEcology: JSON.stringify(priorSettlement),
@@ -1802,10 +1817,10 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 32
+    current.version !== 33
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
-  const historicalCore = createExactV24CoreFromFreshV31(current);
+  const historicalCore = createExactV24CoreFromFreshV33(current);
   const currentWork = JSON.parse(current.settlementWorkingAnimals) as Record<string, unknown>;
   if (!Array.isArray(currentWork.assignments)) {
     throw new Error("current fixture omitted working-animal assignments");
@@ -1842,6 +1857,7 @@ function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const priorBase = {
     ...currentFields,
     player: legacyPlayerWithoutTimeAction(current.player as PlayerState),
+    perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
     version: 19,
     coreEcology: downgradeCoreEcologyToDomesticPen(historicalCore),
     settlementWorkingAnimals: stableStringify(priorWork),
@@ -2662,8 +2678,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(32);
-    expect(envelope.version).toBe(32);
+    expect(record.payloadVersion).toBe(33);
+    expect(envelope.version).toBe(33);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2766,8 +2782,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2818,7 +2834,9 @@ describe("runtime settlement ecology integration", () => {
     await source.save();
     source.destroy();
 
-    const v16Record = asStorehouseV16Record(sourceRepository.snapshot());
+    const currentRecord = sourceRepository.snapshot();
+    const currentEnvelope = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
+    const v16Record = asStorehouseV16Record(currentRecord);
     const v16Envelope = JSON.parse(v16Record.worldJson) as Record<string, unknown>;
     if (typeof v16Envelope.settlementEcology !== "string") {
       throw new Error("v16 fixture omitted its storehouse state");
@@ -2852,8 +2870,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -2931,13 +2949,13 @@ describe("runtime settlement ecology integration", () => {
       "physicalCargo",
       "regionalTravel",
       "promiseJourney",
-      "perceptionCarry",
       "bio0Ecology",
       "porterResponse",
       "livingActorPlayerChoice",
     ]) {
       expect(migratedEnvelope[field], field).toEqual(v16Envelope[field]);
     }
+    expect(migratedEnvelope.perceptionCarry).toEqual(currentEnvelope.perceptionCarry);
 
     const committedRegional = migratedEnvelope.regionalEcology;
     const committedStore = migratedEnvelope.settlementEcology;
@@ -3020,8 +3038,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3176,8 +3194,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3231,13 +3249,13 @@ describe("runtime settlement ecology integration", () => {
       "physicalCargo",
       "regionalTravel",
       "promiseJourney",
-      "perceptionCarry",
       "bio0Ecology",
       "porterResponse",
       "livingActorPlayerChoice",
     ]) {
       expect(migratedEnvelope[field], field).toEqual(v18Envelope[field]);
     }
+    expect(migratedEnvelope.perceptionCarry).toEqual(currentEnvelope.perceptionCarry);
 
     const committedRoster = migratedEnvelope.dogActorRoster;
     const committedWork = migratedEnvelope.settlementWorkingAnimals;
@@ -3292,8 +3310,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -3335,6 +3353,7 @@ describe("runtime settlement ecology integration", () => {
     const disguised = {
       ...currentFields,
       player: legacyPlayerWithoutTimeAction(current.player as PlayerState),
+      perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
       version: 19,
     };
     const repository = new MemoryRepository({

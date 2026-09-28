@@ -109,7 +109,7 @@ const UTF8_ENCODER = new TextEncoder();
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 32;
+  readonly version: 33;
   readonly world: string;
   readonly regionalEcology: string;
   readonly integrity: string;
@@ -166,7 +166,7 @@ describe("Turning Day bounded multi-day closure budget", () => {
     const currentRecord = await createCurrentProductionRecord();
     const envelope = decodeCurrentEnvelope(currentRecord);
     const productionV6 = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
-    if (productionV6 === null) throw new Error("Current V32 save lost its V6 ecology root");
+    if (productionV6 === null) throw new Error("Current V33 save lost its V6 ecology root");
     expect(serializeRegionalEcologyStateV6(productionV6)).toBe(envelope.regionalEcology);
     expect(productionV6.updatedAtTick).toBe(PRODUCTION_FIXTURE_TICK);
     const productionWorld = deserializeWorld(envelope.world);
@@ -307,8 +307,8 @@ describe("Turning Day bounded multi-day closure budget", () => {
     const elapsedCpuMs = (elapsedCpu.user + elapsedCpu.system) / 1_000;
 
     assertWorldInvariants(world);
-    expect(currentRecord.payloadVersion).toBe(32);
-    expect(envelope.version).toBe(32);
+    expect(currentRecord.payloadVersion).toBe(33);
+    expect(envelope.version).toBe(33);
     expect(currentRecord.worldJson.length).toBeLessThan(SAVE_WORLD_JSON_MAX_CHARACTERS);
     expect(serializedBytes(envelope.regionalEcology))
       .toBeLessThan(REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES);
@@ -359,7 +359,7 @@ describe("Turning Day bounded multi-day closure budget", () => {
       ownerId: TURNING_DAY_MULTI_DAY_BUDGET_OWNER_INTENT,
       days: SOAK_DAYS,
       ticks: SOAK_TICKS,
-      v32EnvelopeBytes: serializedBytes(currentRecord.worldJson),
+      v33EnvelopeBytes: serializedBytes(currentRecord.worldJson),
       v6EcologyBytes: serializedBytes(envelope.regionalEcology),
       v6SourceKey: productionRoutine.sourceKey,
       v6SourceKind: productionRoutine.sourceKind,
@@ -431,7 +431,7 @@ function legacyRecordAtProductionTick(): SaveRecord {
 function decodeCurrentEnvelope(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(32);
+  expect(envelope.version).toBe(33);
   expect(typeof envelope.world).toBe("string");
   expect(typeof envelope.regionalEcology).toBe("string");
   const { integrity, ...unsealed } = envelope;

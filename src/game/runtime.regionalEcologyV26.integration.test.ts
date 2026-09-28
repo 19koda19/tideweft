@@ -42,9 +42,10 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 32;
+  readonly version: 33;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
+  readonly perceptionCarry: unknown;
   readonly regionalTravel: string;
   readonly regionalEcology: string;
   readonly integrity: string;
@@ -157,6 +158,7 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
     const v25Base = {
       ...shared,
       player: legacyPlayer,
+      perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
       version: 25,
       regionalEcology: serializeRegionalEcologyState(currentState.base),
     };
@@ -273,15 +275,27 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 32
-    || record.payloadVersion !== 32
+    || value.version !== 33
+    || record.payloadVersion !== 33
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a current v32 envelope");
+  ) throw new Error("runtime fixture did not produce a current v33 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
-    throw new Error("v32 envelope integrity did not authenticate");
+    throw new Error("v33 envelope integrity did not authenticate");
   }
   return value;
+}
+
+function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("current fixture omitted its player perception carry");
+  }
+  const {
+    playerVocalizationSamples: _futureVocalizations,
+    situatedExpression: _futureExpression,
+    ...legacy
+  } = structuredClone(value) as Record<string, unknown>;
+  return Object.freeze({ ...legacy, version: 1 });
 }
 
 function requireWrapper(envelope: CurrentEnvelope): RegionalEcologyStateV4 {

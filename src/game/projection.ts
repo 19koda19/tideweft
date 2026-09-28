@@ -1,6 +1,7 @@
 import type {
   AdriftView,
   PorterView,
+  SituatedExpressionView,
   TerrainClimateView,
   TideHarpView,
   TideweftView,
@@ -31,7 +32,7 @@ import {
   type FieldResourceCatalog,
   type FieldResourceEcologyState,
 } from "../sim/fieldResources";
-import { regionKey, regionLocalToGlobalTile } from "../sim/regions";
+import { globalTileToRegion, regionKey, regionLocalToGlobalTile } from "../sim/regions";
 import {
   FIXED_POINT,
   STRAND_AUTOMATION_THRESHOLD,
@@ -78,6 +79,10 @@ import {
   projectTraversalIncident,
   type TraversalFeedbackState,
 } from "./traversalFeedback";
+import {
+  projectSituatedExpression,
+  type SituatedExpressionEvent,
+} from "./situatedExpression";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import {
   LOOSE_CARGO_MAX_ENTITIES,
@@ -107,7 +112,13 @@ import {
   resolveResidentWorldPlacement,
   type ResidentWorldPlacement,
 } from "./residentSpatial";
-import { worldPositionDelta } from "./worldPosition";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createSpatialFrame,
+  createWorldPosition,
+  worldPositionDelta,
+  worldPositionToSpatialFrame,
+} from "./worldPosition";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
@@ -206,6 +217,8 @@ export interface ProjectionOptions {
   fieldResourceEcology?: FieldResourceEcologyState;
   /** Persistent footing incident shared by Chart and Relief presentation. */
   traversalFeedback?: TraversalFeedbackState;
+  /** One transient, semantic actor expression; routine chatter is not save authority. */
+  situatedExpression?: SituatedExpressionEvent | null;
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
   /**
@@ -230,6 +243,48 @@ export interface AdriftProjectionControl {
 }
 
 export const RESIDENT_CONVERSATION_RANGE_TILES = 3;
+
+function projectSituatedExpressionView(
+  world: WorldView,
+  event: SituatedExpressionEvent | null,
+  tileSize: number,
+): readonly SituatedExpressionView[] {
+  if (event === null) return Object.freeze([]);
+  const realization = projectSituatedExpression(event);
+  const window = regionalWindowForWorld(world);
+  if (realization === null || window === null) return Object.freeze([]);
+  try {
+    const origin = globalTileToRegion(window.origin.x, window.origin.y);
+    const frame = createSpatialFrame(
+      createWorldPosition(
+        origin.region,
+        origin.localX * WORLD_POSITION_UNITS_PER_TILE,
+        origin.localY * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      world.terrain.width * WORLD_POSITION_UNITS_PER_TILE,
+      world.terrain.height * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    const point = worldPositionToSpatialFrame(frame, event.position);
+    if (point === null) return Object.freeze([]);
+    return Object.freeze([Object.freeze({
+      id: event.eventId,
+      sourceActorId: event.sourceActorId,
+      sourceKind: "player" as const,
+      speakerLabel: "You",
+      text: realization.text,
+      position: Object.freeze({
+        x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
+        y: point.y / WORLD_POSITION_UNITS_PER_TILE * tileSize,
+      }),
+      progress: 1 - event.remainingSteps / Math.max(1, event.durationSteps),
+      priority: event.priority,
+      tone: event.tone,
+      variantSeed: event.variantSeed,
+    })]);
+  } catch {
+    return Object.freeze([]);
+  }
+}
 
 export interface ResidentRouteProjection {
   readonly tileIndex: number;
@@ -623,6 +678,11 @@ export function projectGameView(
     })
     .slice(0, LOOSE_CARGO_MAX_ENTITIES);
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
+  const expressions = projectSituatedExpressionView(
+    world,
+    options.situatedExpression ?? null,
+    tileSize,
+  );
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)
       .influences
@@ -951,6 +1011,7 @@ export function projectGameView(
           }
         : {}),
     },
+    expressions,
     wayknots: player.wayknots.wayknots.flatMap((wayknot) => {
       if (wayknot.region === null || wayknot.tileIndex === null) return [];
       const viewTileIndex = regionalWayknotViewTileIndex(world, wayknot.region, wayknot.tileIndex);

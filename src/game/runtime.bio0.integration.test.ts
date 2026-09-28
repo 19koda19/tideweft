@@ -217,8 +217,8 @@ describe("runtime BIO0 ecology persistence", () => {
     await second.save();
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(32);
-    expect(firstRepository.snapshot().payloadVersion).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
+    expect(firstRepository.snapshot().payloadVersion).toBe(33);
     expect(secondEnvelope.bio0Ecology).toBe(firstEnvelope.bio0Ecology);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
 
@@ -349,6 +349,7 @@ describe("runtime BIO0 ecology persistence", () => {
       player: legacyPlayerWithoutTimeAction(
         current.player as ReturnType<typeof createPlayer>,
       ),
+      perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
       version: 5,
     };
     repository.replace({
@@ -366,7 +367,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const migratedEnvelope = currentEnvelope(repository);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(7);
     expect(migratedEnvelope.bio0Ecology).toBe(expectedBio0);
     expect(migratedEnvelope.porterResponse).toEqual(expectedPorterResponse);
@@ -402,6 +403,7 @@ describe("runtime BIO0 ecology persistence", () => {
       player: legacyPlayerWithoutTimeAction(
         current.player as ReturnType<typeof createPlayer>,
       ),
+      perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
       version: 6,
     };
     repository.replace({
@@ -419,7 +421,7 @@ describe("runtime BIO0 ecology persistence", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     const envelope = currentEnvelope(repository);
-    expect(envelope.version).toBe(32);
+    expect(envelope.version).toBe(33);
     expect(envelope.bio0Ecology).toBe(expectedBio0);
     expect(envelope.porterResponse).toEqual(expectedPorterResponse);
     expect(envelope.livingActorPlayerChoice).toEqual(expectedPlayerChoice);
@@ -450,6 +452,7 @@ describe("runtime BIO0 ecology persistence", () => {
       player: legacyPlayerWithoutTimeAction(
         current.player as ReturnType<typeof createPlayer>,
       ),
+      perceptionCarry: legacyPlayerPerceptionCarry(current.perceptionCarry),
       version: 7,
     };
     const v7Record: SaveRecord = {
@@ -474,8 +477,8 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const firstEnvelope = currentEnvelope(firstRepository);
     const secondEnvelope = currentEnvelope(secondRepository);
-    expect(firstEnvelope.version).toBe(32);
-    expect(firstRepository.snapshot().payloadVersion).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
+    expect(firstRepository.snapshot().payloadVersion).toBe(33);
     expect(secondEnvelope.regionalEcology).toBe(firstEnvelope.regionalEcology);
     const ecology = requiredRegionalEcology(firstEnvelope);
     const home = ecology.settlementHome.patch;
@@ -547,8 +550,8 @@ describe("runtime BIO0 ecology persistence", () => {
     if (adoption === null || cohort === null) {
       throw new Error("v9 migration omitted its one-way regional adoption receipt");
     }
-    expect(firstEnvelope.version).toBe(32);
-    expect(firstRepository.snapshot().payloadVersion).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
+    expect(firstRepository.snapshot().payloadVersion).toBe(33);
     expect(firstEnvelope.regionalEcology).toBe(secondEnvelope.regionalEcology);
     expect(firstEnvelope.physicalCargo).toEqual(physicalCargo);
     expect(firstEnvelope.promiseJourney).toEqual(promiseJourney);
@@ -637,7 +640,7 @@ describe("runtime BIO0 ecology persistence", () => {
     if (cohort === null || migrated.root.adoption === null) {
       throw new Error("legacy-fixed v9 migration omitted regional adoption authority");
     }
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstEnvelope.world).toBe(v9Envelope.world);
     expect(firstEnvelope.player).toEqual({ ...v9Envelope.player, timeAction: null });
     expect(firstEnvelope.physicalCargo).toEqual(v9Envelope.physicalCargo);
@@ -1127,7 +1130,7 @@ describe("runtime BIO0 ecology persistence", () => {
         };
       },
     },
-  ])("rejects a resealed current v32 envelope with $label", async ({ tamper }) => {
+  ])("rejects a resealed current v33 envelope with $label", async ({ tamper }) => {
     const repository = new MemoryRepository(legacyRecord("bio0 exact envelope keys"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1140,7 +1143,7 @@ describe("runtime BIO0 ecology persistence", () => {
     rejected.destroy();
   });
 
-  it("rejects a resealed current v32 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
+  it("rejects a resealed current v33 home ecology whose rat identity is self-consistent but belongs to another seed", async () => {
     const repository = new MemoryRepository(legacyRecord("rat aggregate seed authentication"));
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -1676,6 +1679,7 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
   const v9Base = {
     ...currentBase,
     player: legacyPlayerWithoutTimeAction(envelope.player),
+    perceptionCarry: legacyPlayerPerceptionCarry(envelope.perceptionCarry),
     version: 9,
     coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
@@ -1751,6 +1755,7 @@ function waveAV9Record(current: SaveRecord): SaveRecord {
   const v9Base = {
     ...currentBase,
     player: legacyPlayerWithoutTimeAction(envelope.player),
+    perceptionCarry: legacyPlayerPerceptionCarry(envelope.perceptionCarry),
     version: 9,
     coreEcology: serializeLegacyCoreEcologyPatchV2(waveA),
   };
@@ -1770,6 +1775,18 @@ function legacyPlayerWithoutTimeAction(
 ): ReturnType<typeof createPlayer> {
   const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   return legacyPlayer as ReturnType<typeof createPlayer>;
+}
+
+function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("current fixture omitted its player perception carry");
+  }
+  const {
+    playerVocalizationSamples: _futureVocalizations,
+    situatedExpression: _futureExpression,
+    ...legacy
+  } = structuredClone(value) as Record<string, unknown>;
+  return Object.freeze({ ...legacy, version: 1 });
 }
 
 function currentEnvelope(repository: MemoryRepository): CurrentEnvelope {

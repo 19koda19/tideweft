@@ -42,4 +42,8 @@ describe("situated expression caption", () => {
     expect(uiSource).toContain("announce(copy, caption.assertive === true)");
     expect(uiSource).not.toContain('caption.tone === "alarmed"');
   });
+
+  it("tears down the shared live-region queue with the rest of the UI", () => {
+    expect(uiSource).toContain("liveRegionAnnouncements.destroy()");
+  });
 });

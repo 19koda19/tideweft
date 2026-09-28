@@ -24,6 +24,7 @@ import {
   dropLooseCargo,
   inspectLooseCargoMultiWorldConservation,
   looseCargoCarrierLoadMilli,
+  looseCargoEntityReleaseCause,
   looseCargoPayloadLoadMilli,
   looseCargoPayloadProperty,
   looseCargoEntityId,
@@ -252,7 +253,7 @@ describe("atomic drop and recovery transactions", () => {
       velocityY: 0,
       motion: "resting",
       snaggedBy: null,
-      causalSignature: "manual-release",
+      causalSignature: "manual-release|impact:0|release:manual-release",
       lastEventOrdinal: 1,
     });
     expect(result.world).toMatchObject({ revision: 1, lastEntityOrdinal: 1, lastEventOrdinal: 1 });
@@ -671,6 +672,59 @@ describe("whole loose-provision animal consumption", () => {
     expect(deserializeLooseCargoWorld(serializeLooseCargoWorld(consumed.world)))
       .toEqual(consumed.world);
   });
+
+  it("retains fall-release provenance after its history record compacts", () => {
+    let world = createLooseCargoWorld(4, 4);
+    let pack = createLooseCargoCarrier(
+      PLAYER,
+      createCraftingInventory(100_000, { cordreed: 2 }),
+    );
+    const separated = scatterLooseCargo(world, pack, {
+      lotId: "crafting-stack:cordreed",
+      x: 500_000,
+      y: 500_000,
+      cause: "fall-separation",
+      parts: [{ quantity: 1, velocityX: 0, velocityY: 0 }],
+    });
+    expect(separated.ok).toBe(true);
+    const separatedEntity = separated.entities[0];
+    if (separatedEntity === undefined) throw new Error("Fall separation omitted its parcel");
+    world = separated.world;
+    pack = separated.carrier;
+
+    for (let index = 0; index < LOOSE_CARGO_RETAINED_HISTORY / 2; index += 1) {
+      const carriedStack = pack.lots.find(({ payload }) => (
+        payload.kind === "stack" && payload.item === "cordreed"
+      ));
+      if (carriedStack === undefined) throw new Error("Compaction fixture lost its carried stack");
+      const loose = drop(world, pack, {
+        lotId: carriedStack.id,
+        quantity: 1,
+        x: 700_000,
+        y: 700_000,
+      });
+      const recovered = pickupLooseCargo(loose.world, loose.carrier, {
+        entityId: loose.entity!.id,
+        x: 700_000,
+        y: 700_000,
+        reach: 0,
+      });
+      expect(recovered.ok).toBe(true);
+      world = recovered.world;
+      pack = recovered.carrier;
+    }
+
+    expect(world.historyBaseOrdinal).toBeGreaterThan(0);
+    expect(world.history.some(({ entityIds, causes }) => (
+      entityIds.includes(separatedEntity.id)
+      && causes.includes("fall-separation")
+    ))).toBe(false);
+    const retained = world.entities.find(({ id }) => id === separatedEntity.id);
+    if (retained === undefined) throw new Error("Compaction removed live fall cargo");
+    expect(looseCargoEntityReleaseCause(retained)).toBe("fall-separation");
+    const restored = deserializeLooseCargoWorld(serializeLooseCargoWorld(world));
+    expect(looseCargoEntityReleaseCause(restored.entities[0]!)).toBe("fall-separation");
+  });
 });
 
 describe("bounded fixed-step current, slope, impact, and living-cover hooks", () => {
@@ -890,6 +944,14 @@ describe("canonical loose-cargo save validation", () => {
         ? { ...entity, materialState: { ...entity.materialState, condition: Number.NaN } }
         : entity),
     }).reason).toBe("invalid-entity");
+    expect(validateLooseCargoWorld({
+      ...world,
+      entities: world.entities.map((entity, index) => index === 0
+        ? { ...entity, causalSignature: "manual-release|impact:0|release:not-real" }
+        : entity),
+    }).reason).toBe("invalid-entity");
+    expect(looseCargoEntityReleaseCause({ causalSignature: "fall-separation" }))
+      .toBe("fall-separation");
   });
 
   it("validates carrier ordering, load, lot IDs, and durable identities independently", () => {
@@ -1521,6 +1583,7 @@ describe("seamless regional parcel ownership", () => {
       motion: "tumbling",
     });
     expect(moved?.velocityX).toBeGreaterThan(0);
+    expect(looseCargoEntityReleaseCause(moved!)).toBe("fall-separation");
     expect(moved?.x).toBeGreaterThanOrEqual(0);
     expect(moved?.x).toBeLessThan(LOOSE_CARGO_TILE_UNITS);
     expect(nextSource?.history.at(-1)).toMatchObject({

@@ -1,6 +1,7 @@
 import { evaluateCargoEnvironment } from "../sim/cargoEnvironment";
 import { keyedChance, keyedRandomInt, type RootSeed } from "../sim/rng";
 import { FIXED_POINT } from "../sim/types";
+import { compareText } from "../sim/util";
 import type { FallRiskEvaluation } from "./fallRisk";
 import {
   LOOSE_CARGO_MAX_ENTITIES,
@@ -124,7 +125,7 @@ export function resolveFallCargo(input: FallCargoResolutionInput): FallCargoReso
   if (traversalOrdinal !== input.nextTraversalOrdinal) {
     return unchanged(false, "rejected", "traversal-already-processed");
   }
-  const orderedLots = [...input.carrier.lots].sort((left, right) => left.id.localeCompare(right.id));
+  const orderedLots = [...input.carrier.lots].sort((left, right) => compareText(left.id, right.id));
   if (orderedLots.length === 0 || quote.cargoShock <= 0) {
     return unchanged(true, "unchanged", "no-physical-cargo");
   }

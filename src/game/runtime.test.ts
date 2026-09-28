@@ -400,6 +400,27 @@ function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
   return legacyPlayer as PlayerState;
 }
 
+/** Current v33 carry has voice state that v5-v32 never owned. */
+function legacyPlayerPerceptionCarry(value: unknown): unknown {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("current fixture omitted its perception carry");
+  }
+  const current = value as Readonly<Record<string, unknown>>;
+  if (current.version === 1) return structuredClone(current);
+  if (
+    current.version !== 2
+    || !Number.isSafeInteger(current.playerStepsSinceWorldTick)
+    || !Array.isArray(current.playerSenseSamples)
+    || !Number.isSafeInteger(current.nextPlayerSenseSampleOrdinal)
+  ) throw new Error("current fixture has an invalid perception carry");
+  return {
+    version: 1,
+    playerStepsSinceWorldTick: current.playerStepsSinceWorldTick,
+    playerSenseSamples: structuredClone(current.playerSenseSamples),
+    nextPlayerSenseSampleOrdinal: current.nextPlayerSenseSampleOrdinal,
+  };
+}
+
 function deserializeCurrentRegionalEcologyV5(serialized: string | undefined) {
   return deserializeRegionalEcologyStateV6(serialized)?.base ?? null;
 }
@@ -429,7 +450,7 @@ function exactV24CoreFromV29(
     regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
   )
     throw new Error(
-      "fixture requires a canonical current v32 regional ecology save",
+      "fixture requires a canonical current v33 regional ecology save",
     );
   const world = deserializeWorld(envelope.world);
   const habitat = regional.settlementHome.patch.derivation.habitat;
@@ -696,7 +717,7 @@ function rebaseFixtureRegionalEcology(
   );
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v32 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v33 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -704,8 +725,8 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = exactV24CoreFromV29(envelope);
   if (
-    envelope.version !== 32 ||
-    record.payloadVersion !== 32 ||
+    envelope.version !== 33 ||
+    record.payloadVersion !== 33 ||
     (current.derivation.kind !== "habitat-v11" &&
       current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11")
   )
@@ -799,6 +820,7 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
 
   envelope.version = 16;
   envelope.player = legacyPlayerWithoutTimeAction(envelope.player);
+  envelope.perceptionCarry = legacyPlayerPerceptionCarry(envelope.perceptionCarry);
   envelope.coreEcology = serializePublishedAggregateV4(ecology);
   delete envelope.regionalEcology;
   envelope.settlementEcology = stableStringify({
@@ -1298,8 +1320,8 @@ describe("perpetual new worlds", () => {
 
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    expect(currentRecord.payloadVersion).toBe(32);
-    expect(currentEnvelope.version).toBe(32);
+    expect(currentRecord.payloadVersion).toBe(33);
+    expect(currentEnvelope.version).toBe(33);
     const currentRegional = deserializeRegionalEcologyStateV6(
       currentEnvelope.regionalEcology,
     );
@@ -1327,6 +1349,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 30,
       regionalEcology: exactV30Child,
     };
@@ -1350,8 +1373,8 @@ describe("perpetual new worlds", () => {
     }
     const migratedActors = migratedRegional.base.base.base.base.base.settlementHome.patch
       .populations.flatMap(({ members }) => members.map(({ actor }) => actor));
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedEnvelope.regionalEcology).toBe(exactV30Child);
     expect(
       migratedActors.every((actor) => !Object.hasOwn(actor, "circadian")),
@@ -1371,8 +1394,8 @@ describe("perpetual new worlds", () => {
     await reloaded.save();
     const reloadedRecord = repository.snapshot();
     const reloadedEnvelope = decodeGameSave(reloadedRecord);
-    expect(reloadedRecord.payloadVersion).toBe(32);
-    expect(reloadedEnvelope.version).toBe(32);
+    expect(reloadedRecord.payloadVersion).toBe(33);
+    expect(reloadedEnvelope.version).toBe(33);
     expect(reloadedEnvelope.regionalEcology).toBe(exactV30Child);
     reloaded.destroy();
   }, 30_000);
@@ -1394,8 +1417,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(32);
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstRecord.payloadVersion).toBe(33);
+    expect(firstEnvelope.version).toBe(33);
     expect(deserializeWorld(firstEnvelope.world).meta.completedTick).toBe(
       WORLD_NEW_GAME_START_TICK + 1,
     );
@@ -1446,8 +1469,8 @@ describe("perpetual new worlds", () => {
     const reloadedRegionalV5 = deserializeCurrentRegionalEcologyV5(
       reloadedEnvelope.regionalEcology,
     );
-    expect(reloadedRecord.payloadVersion).toBe(32);
-    expect(reloadedEnvelope.version).toBe(32);
+    expect(reloadedRecord.payloadVersion).toBe(33);
+    expect(reloadedEnvelope.version).toBe(33);
     expect(reloadedEnvelope.regionalEcology).toBe(firstRegionalText);
     expect(
       reloadedRegionalV5?.base.base.polarShoreActiveResidents
@@ -1476,7 +1499,7 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegional).not.toBeNull();
     expect(firstRegional?.polarConsumerActiveResidents).toHaveLength(1);
     const firstPatch = firstRegional!.polarConsumerActiveResidents[0]!.patch;
@@ -1508,7 +1531,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it(`${ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT} advances declarative breadth residents and preserves their exact v32 save`, async () => {
+  it(`${ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT} advances declarative breadth residents and preserves their exact v33 save`, async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({
@@ -1526,8 +1549,8 @@ describe("perpetual new worlds", () => {
       firstEnvelope.regionalEcology,
     );
     const firstWorld = deserializeWorld(firstEnvelope.world);
-    expect(firstRecord.payloadVersion).toBe(32);
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstRecord.payloadVersion).toBe(33);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegional).not.toBeNull();
     expect(firstWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK + 1);
     expect(firstRegional?.updatedAtTick).toBe(firstWorld.meta.completedTick);
@@ -1567,7 +1590,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v32 breadth root once without a save-version bump`, async () => {
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v33 breadth root once without another save-version bump`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBeGreaterThan(1);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1583,7 +1606,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v32 breadth fixture is invalid");
+    if (current === null) throw new Error("current v33 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const activeRegions = current.base.base.base.base.base.activeRegions;
     const oldRoot = createPristineRegionalBreadthEcologyRoot({
@@ -1620,8 +1643,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(32);
-    expect(adoptedEnvelope.version).toBe(32);
+    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedEnvelope.version).toBe(33);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(
       CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     );
@@ -1638,7 +1661,7 @@ describe("perpetual new worlds", () => {
     replayRuntime.destroy();
   }, 30_000);
 
-  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v32 breadth root once`, async () => {
+  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v33 breadth root once`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(3);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1654,7 +1677,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v32 breadth fixture is invalid");
+    if (current === null) throw new Error("current v33 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const binding = {
       rootSeed: world.meta.rootSeed,
@@ -1704,8 +1727,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(32);
-    expect(adoptedEnvelope.version).toBe(32);
+    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedEnvelope.version).toBe(33);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(3);
     expect(stableStringify(adopted?.breadthRoot.activations.slice(0, 2))).toBe(
       exactActivationPrefix,
@@ -2212,7 +2235,7 @@ describe("perpetual new worlds", () => {
       "resealed invalid polar-consumer ecology root",
       (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
         if (!envelope.regionalEcology)
-          throw new Error("v32 fixture lost regional ecology");
+          throw new Error("v33 fixture lost regional ecology");
         const regional = JSON.parse(envelope.regionalEcology) as Record<
           string,
           unknown
@@ -2220,7 +2243,7 @@ describe("perpetual new worlds", () => {
         const v5 = regional.base as Record<string, unknown> | undefined;
         const polarConsumerRoot = v5?.polarConsumerRoot;
         if (typeof polarConsumerRoot !== "object" || polarConsumerRoot === null) {
-          throw new Error("v32 fixture lost its polar-consumer ecology root");
+          throw new Error("v33 fixture lost its polar-consumer ecology root");
         }
         regional.base = {
           ...v5,
@@ -2714,7 +2737,7 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
-  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v32 breadth wrapper`, async () => {
+  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v33 breadth wrapper`, async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -2732,6 +2755,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 28,
       regionalEcology: exactV28Child,
     };
@@ -2754,8 +2778,8 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(32);
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstRecord.payloadVersion).toBe(33);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV4(firstRegional?.base)).toBe(
       exactV28Child,
@@ -2778,7 +2802,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it(`${ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT} adopts one exact outer-v29 ecology child beneath v32 exactly once`, async () => {
+  it(`${ALPHA37_ESTUARY_BREADTH_RUNTIME_V30_OWNER_INTENT} adopts one exact outer-v29 ecology child beneath v33 exactly once`, async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -2796,6 +2820,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 29,
       regionalEcology: exactV29Child,
     };
@@ -2816,8 +2841,8 @@ describe("perpetual new worlds", () => {
     const migratedRegional = deserializeRegionalEcologyStateV6(
       migratedEnvelope.regionalEcology,
     );
-    expect(migratedRecord.payloadVersion).toBe(32);
-    expect(migratedEnvelope.version).toBe(32);
+    expect(migratedRecord.payloadVersion).toBe(33);
+    expect(migratedEnvelope.version).toBe(33);
     expect(migratedRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV5(migratedRegional?.base)).toBe(exactV29Child);
     expect(migratedRegional?.adoption).toMatchObject({
@@ -2837,7 +2862,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it("adopts an exact outer-v27 ecology child beneath the v28, v29, v30, v31, and v32 wrappers", async () => {
+  it("adopts an exact outer-v27 ecology child beneath the v28 through v33 wrappers", async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -2856,6 +2881,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 27,
       regionalEcology: exactV27Child,
     };
@@ -2878,8 +2904,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(32);
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstRecord.payloadVersion).toBe(33);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV3(firstRegionalV5?.base.base)).toBe(
       exactV27Child,
@@ -2920,6 +2946,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 26,
       regionalEcology: exactV26Child,
     };
@@ -2940,7 +2967,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV2(firstRegionalV5?.base.base.base)).toBe(
       exactV26Child,
@@ -2983,6 +3010,7 @@ describe("perpetual new worlds", () => {
     const predecessorEnvelope: TestGameSaveEnvelope = {
       ...currentEnvelope,
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 25,
       regionalEcology: exactV25Child,
     };
@@ -3003,7 +3031,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(32);
+    expect(firstEnvelope.version).toBe(33);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyState(firstRegionalV5?.base.base.base.base)).toBe(
       exactV25Child,
@@ -3039,8 +3067,8 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const currentEcology = exactV24CoreFromV29(currentEnvelope);
-    expect(currentEnvelope.version).toBe(32);
-    expect(currentRecord.payloadVersion).toBe(32);
+    expect(currentEnvelope.version).toBe(33);
+    expect(currentRecord.payloadVersion).toBe(33);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -3118,8 +3146,8 @@ describe("perpetual new worlds", () => {
     );
     const migratedEcology =
       migratedRegionalEcology?.base.base.base.base.root.legacyCohort?.sourcePatch ?? null;
-    expect(migratedEnvelope.version).toBe(32);
-    expect(migratedRecord.payloadVersion).toBe(32);
+    expect(migratedEnvelope.version).toBe(33);
+    expect(migratedRecord.payloadVersion).toBe(33);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
       throw new Error(
@@ -3522,7 +3550,7 @@ describe("runtime clarity guards", () => {
     process.env.CI === "true" ? 90_000 : 30_000,
   );
 
-  it("announces stability loss, rather than stamina loss, when deep water takes control", async () => {
+  it("records stability loss, rather than stamina loss, when deep water takes control", async () => {
     const world = createWorld("runtime stability sweep", "calm");
     const occupied = new Set(
       world.settlements.map(({ tileIndex }) => tileIndex),
@@ -3564,13 +3592,30 @@ describe("runtime clarity guards", () => {
     runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
     advancePlayerSteps(runtime, 1);
 
-    expect(runtime.getRenderView().player.mode).toBe("swept");
-    expect(runtime.getRenderView().player.incident?.kind).toBe("sweep");
-    expect(runtime.getUIView().announcement?.message).toContain("WHHSH!");
-    expect(runtime.getUIView().announcement?.message).toContain("lost balance");
-    expect(runtime.getUIView().announcement?.message).not.toContain(
-      "STAMINA EMPTY",
-    );
+    const renderPlayer = runtime.getRenderView().player;
+    const ui = runtime.getUIView();
+    expect(renderPlayer.mode).toBe("swept");
+    expect(renderPlayer.incident).toMatchObject({
+      kind: "sweep",
+      label: "WHHSH!",
+    });
+    expect(ui.player.stability).toBeLessThan(1);
+    expect(ui.player.stamina).toBeGreaterThan(0);
+    expect(ui.chronicle).toContainEqual(expect.objectContaining({
+      id: `incident-${renderPlayer.incident?.id}`,
+      title: expect.stringMatching(/Lost Balance$/u),
+      detail: "Cargo can separate; regain your feet before moving.",
+      kind: "weather",
+      new: true,
+    }));
+    // An actual sweep without cargo has no near-fall line. The short physical
+    // cue stays actor-situated while the cause belongs to observed EVENTS.
+    expect(ui.expressionCaption).toBeUndefined();
+    expect(ui.announcement?.message).toContain("CURRENT FOOTING FAILED IN DEEP WATER");
+    expect(ui.announcement?.message).toContain("ADRIFT");
+    expect(ui.announcement?.message).not.toContain("WHHSH!");
+    expect(ui.announcement?.message).not.toContain("lost balance");
+    expect(ui.announcement?.message).not.toContain("STAMINA EMPTY");
     runtime.destroy();
   });
 
@@ -3599,7 +3644,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(32);
+    expect(prepared.version).toBe(33);
     expect(
       prepared.physicalCargo?.expectedManifest.entries.length,
     ).toBeGreaterThan(0);
@@ -3724,6 +3769,7 @@ describe("runtime clarity guards", () => {
     const v5Envelope: TestGameSaveEnvelope = {
       ...v5Base,
       player: legacyPlayerWithoutTimeAction(prepared.player),
+      perceptionCarry: legacyPlayerPerceptionCarry(prepared.perceptionCarry),
       version: 5,
     };
     resealGameSave(v5Envelope);
@@ -3838,8 +3884,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(32);
-    expect(durableRecord.payloadVersion).toBe(32);
+    expect(durable.version).toBe(33);
+    expect(durableRecord.payloadVersion).toBe(33);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
