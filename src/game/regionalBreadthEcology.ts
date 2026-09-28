@@ -11,6 +11,7 @@ import {
   canonicalIntegrityMetrics,
   compareText,
   hashCanonical,
+  hashCanonicalEncoding,
   stableStringify,
 } from "../sim/util";
 import {
@@ -170,6 +171,7 @@ export interface RegionalBreadthEcologyAdvancedResidentReceipt {
   readonly region: RegionCoord;
   readonly patchHash: string;
   readonly lineageHash: string;
+  readonly canonicalPatchEncoding: string;
 }
 
 export interface ConsumeRegionalBreadthEcologyAdvanceReceiptInput {
@@ -215,6 +217,26 @@ interface PreparedBreadthResidentLineage {
   readonly regionKey: string;
   readonly atTick: number;
   readonly lineageHash: string;
+}
+
+interface PreparedBreadthResidentCanonicalEncoding {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly sourceKey: string;
+  readonly cohortId: CoreEcologyBreadthCohortId;
+  readonly cohortEpoch: number;
+  readonly regionKey: string;
+  readonly atTick: number;
+  readonly patchHash: string;
+  readonly canonicalPatchEncoding: string;
+}
+
+interface PreparedBreadthResidentEncodingCollector {
+  readonly byPatch: Map<
+    CoreEcologyAggregatePatchState,
+    PreparedBreadthResidentCanonicalEncoding
+  >;
+  totalCodeUnits: number;
+  accepting: boolean;
 }
 
 interface RegionalBreadthEcologyActiveReceipt {
@@ -985,6 +1007,11 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       CoreEcologyAggregatePatchState,
       PreparedBreadthResidentLineage
     >();
+    const preparedEncodingCollector: PreparedBreadthResidentEncodingCollector = {
+      byPatch: new Map(),
+      totalCodeUnits: 0,
+      accepting: true,
+    };
     const receiptSourceKeys = new Set(
       receipt.residents.map(({ sourceKey }) => sourceKey),
     );
@@ -1089,6 +1116,7 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       batch.pristineBySource,
       batch.sealedRootSerializedBytes,
       preparedLineageByPatch,
+      preparedEncodingCollector,
     );
     if (activeReceipt === null) return null;
     const result = Object.freeze({ root: nextRoot, residents });
@@ -1099,6 +1127,7 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       input.completedTick,
       input.activeRegions,
       activeReceipt,
+      preparedEncodingCollector,
     );
     return result;
   } catch {
@@ -1155,15 +1184,21 @@ export function consumeRegionalBreadthEcologyAdvanceResultReceipt(
   for (let index = 0; index < receipt.residents.length; index += 1) {
     const metadata = receipt.residents[index]!;
     const resident = receipt.resultResidents[index]!;
+    const activeMetadata = receipt.activeReceipt.residents[index]!;
     if (
       metadata.resident !== resident
       || metadata.patch !== resident.patch
+      || metadata.patch !== activeMetadata.patch
       || !Object.isFrozen(resident)
       || !Object.isFrozen(resident.patch)
       || resident.sourceKey !== metadata.sourceKey
       || resident.cohortId !== metadata.cohortId
       || resident.cohortEpoch !== metadata.cohortEpoch
       || regionKey(resident.patch.originRegion) !== regionKey(metadata.region)
+      || metadata.patchHash !== activeMetadata.patchHash
+      || metadata.lineageHash !== activeMetadata.lineageHash
+      || typeof metadata.canonicalPatchEncoding !== "string"
+      || metadata.canonicalPatchEncoding.length === 0
     ) return null;
   }
   return receipt.residents;
@@ -1572,6 +1607,7 @@ function seedActiveResidentReceipt(
     CoreEcologyAggregatePatchState,
     PreparedBreadthResidentLineage
   > = new WeakMap(),
+  preparedEncodingCollector?: PreparedBreadthResidentEncodingCollector,
 ): RegionalBreadthEcologyActiveReceipt | null {
   const maximumResidents = activeRegions.length * root.activations.length
     + root.regions.length;
@@ -1614,12 +1650,21 @@ function seedActiveResidentReceipt(
       resident,
       root.updatedAtTick,
     ) ?? breadthResidentLineageHash(resident.patch);
+    const canonicalPatchEncoding = stableStringify(resident.patch);
+    const patchHash = hashCanonicalEncoding(canonicalPatchEncoding);
+    collectPreparedBreadthResidentEncoding(
+      preparedEncodingCollector,
+      resident,
+      root.updatedAtTick,
+      patchHash,
+      canonicalPatchEncoding,
+    );
     receiptResidents.push(Object.freeze({
       sourceKey: resident.sourceKey,
       cohortId: resident.cohortId,
       cohortEpoch: resident.cohortEpoch,
       regionKey: regionKey(resident.patch.originRegion),
-      patchHash: hashCanonical(resident.patch),
+      patchHash,
       lineageHash,
       patch: resident.patch,
       pristinePatch,
@@ -1641,6 +1686,58 @@ function seedActiveResidentReceipt(
   });
   ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
   return receipt;
+}
+
+/**
+ * Retain canonical child text only for the immediate one-shot V6 bridge. The
+ * total is capped at 16 Mi UTF-16 code units (using the breadth budget's
+ * numeric ceiling only); this is a transient-retention guard, not an
+ * authoritative serialized-byte check. Exceeding it revokes the complete
+ * optimization proof and leaves the public encoder as the only path. No
+ * encoding enters the long-lived root receipt.
+ */
+function collectPreparedBreadthResidentEncoding(
+  collector: PreparedBreadthResidentEncodingCollector | undefined,
+  resident: RegionalBreadthEcologyActiveResidentInput,
+  receiptTick: number,
+  patchHash: string,
+  canonicalPatchEncoding: string,
+): void {
+  if (collector === undefined || !collector.accepting) return;
+  const totalCodeUnits = collector.totalCodeUnits + canonicalPatchEncoding.length;
+  if (
+    !Number.isSafeInteger(totalCodeUnits)
+    || totalCodeUnits > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES
+  ) {
+    collector.byPatch.clear();
+    collector.totalCodeUnits = 0;
+    collector.accepting = false;
+    return;
+  }
+  const patch = resident.patch;
+  const habitat = habitatFromPatch(patch);
+  if (
+    habitat === null
+    || !Object.isFrozen(patch)
+    || !validHash(patchHash)
+    || collector.byPatch.has(patch)
+  ) {
+    collector.byPatch.clear();
+    collector.totalCodeUnits = 0;
+    collector.accepting = false;
+    return;
+  }
+  collector.totalCodeUnits = totalCodeUnits;
+  collector.byPatch.set(patch, Object.freeze({
+    patch,
+    sourceKey: resident.sourceKey,
+    cohortId: resident.cohortId,
+    cohortEpoch: resident.cohortEpoch,
+    regionKey: regionKey(patch.originRegion),
+    atTick: receiptTick,
+    patchHash,
+    canonicalPatchEncoding,
+  }));
 }
 
 /**
@@ -1702,6 +1799,7 @@ function seedAdvanceResultReceipt(
   completedTick: number,
   activeRegionsIdentity: readonly RegionCoord[],
   activeReceipt: RegionalBreadthEcologyActiveReceipt,
+  preparedEncodingCollector: PreparedBreadthResidentEncodingCollector,
 ): boolean {
   // This bridge is reachable only from the completed advance above. Every
   // admitted result patch is either the exact all-coarse output of
@@ -1711,59 +1809,79 @@ function seedAdvanceResultReceipt(
   // exact patch identities and computes the patch/lineage metadata. That
   // private provenance is the storage-normal proof consumed by V6; structural
   // callers, mutable windows, and reconstructed patches never receive it.
-  if (
-    !Object.isFrozen(result)
-    || !Object.isFrozen(result.root)
-    || !Object.isFrozen(result.residents)
-    || !Object.isFrozen(activeRegionsIdentity)
-    || activeRegionsIdentity.some((region) => !Object.isFrozen(region))
-    || result.root.updatedAtTick !== completedTick
-    || activeReceipt.atTick !== completedTick
-    || activeReceipt.residents.length !== result.residents.length
-  ) return false;
-  const residents: RegionalBreadthEcologyAdvancedResidentReceipt[] = [];
-  for (let index = 0; index < result.residents.length; index += 1) {
-    const resident = result.residents[index]!;
-    const metadata = activeReceipt.residents[index]!;
+  try {
     if (
-      !Object.isFrozen(resident)
-      || !Object.isFrozen(resident.patch)
-      || resident.patch !== metadata.patch
-      || resident.sourceKey !== metadata.sourceKey
-      || resident.cohortId !== metadata.cohortId
-      || resident.cohortEpoch !== metadata.cohortEpoch
-      || regionKey(resident.patch.originRegion) !== metadata.regionKey
+      !preparedEncodingCollector.accepting
+      || preparedEncodingCollector.byPatch.size !== result.residents.length
+      || !Object.isFrozen(result)
+      || !Object.isFrozen(result.root)
+      || !Object.isFrozen(result.residents)
+      || !Object.isFrozen(activeRegionsIdentity)
+      || activeRegionsIdentity.some((region) => !Object.isFrozen(region))
+      || result.root.updatedAtTick !== completedTick
+      || activeReceipt.atTick !== completedTick
+      || activeReceipt.residents.length !== result.residents.length
     ) return false;
-    residents.push(Object.freeze({
-      resident,
-      patch: resident.patch,
-      sourceKey: metadata.sourceKey,
-      cohortId: metadata.cohortId,
-      cohortEpoch: metadata.cohortEpoch,
-      region: resident.patch.originRegion,
-      patchHash: metadata.patchHash,
-      lineageHash: metadata.lineageHash,
-    }));
+    const residents: RegionalBreadthEcologyAdvancedResidentReceipt[] = [];
+    for (let index = 0; index < result.residents.length; index += 1) {
+      const resident = result.residents[index]!;
+      const metadata = activeReceipt.residents[index]!;
+      const preparedEncoding = preparedEncodingCollector.byPatch.get(resident.patch);
+      if (
+        preparedEncoding === undefined
+        || !Object.isFrozen(preparedEncoding)
+        || preparedEncoding.patch !== resident.patch
+        || preparedEncoding.sourceKey !== resident.sourceKey
+        || preparedEncoding.cohortId !== resident.cohortId
+        || preparedEncoding.cohortEpoch !== resident.cohortEpoch
+        || preparedEncoding.regionKey !== regionKey(resident.patch.originRegion)
+        || preparedEncoding.atTick !== completedTick
+        || preparedEncoding.patchHash !== metadata.patchHash
+        || preparedEncoding.canonicalPatchEncoding.length === 0
+        || !Object.isFrozen(resident)
+        || !Object.isFrozen(resident.patch)
+        || resident.patch !== metadata.patch
+        || resident.sourceKey !== metadata.sourceKey
+        || resident.cohortId !== metadata.cohortId
+        || resident.cohortEpoch !== metadata.cohortEpoch
+        || regionKey(resident.patch.originRegion) !== metadata.regionKey
+      ) return false;
+      residents.push(Object.freeze({
+        resident,
+        patch: resident.patch,
+        sourceKey: metadata.sourceKey,
+        cohortId: metadata.cohortId,
+        cohortEpoch: metadata.cohortEpoch,
+        region: resident.patch.originRegion,
+        patchHash: metadata.patchHash,
+        lineageHash: metadata.lineageHash,
+        canonicalPatchEncoding: preparedEncoding.canonicalPatchEncoding,
+      }));
+    }
+    const receipt = Object.freeze({
+      sourceRoot,
+      resultRoot: result.root,
+      resultResidents: result.residents,
+      rootSeedIdentity: rootSeed,
+      rootSeed: Object.freeze([
+        rootSeed[0],
+        rootSeed[1],
+        rootSeed[2],
+        rootSeed[3],
+      ] as [number, number, number, number]),
+      completedTick,
+      activeRegionsIdentity,
+      activeRegionKeys: activeReceipt.activeRegionKeys,
+      activeReceipt,
+      residents: Object.freeze(residents),
+    });
+    ADVANCE_RESULT_RECEIPTS.set(result, receipt);
+    return true;
+  } finally {
+    preparedEncodingCollector.byPatch.clear();
+    preparedEncodingCollector.totalCodeUnits = 0;
+    preparedEncodingCollector.accepting = false;
   }
-  const receipt = Object.freeze({
-    sourceRoot,
-    resultRoot: result.root,
-    resultResidents: result.residents,
-    rootSeedIdentity: rootSeed,
-    rootSeed: Object.freeze([
-      rootSeed[0],
-      rootSeed[1],
-      rootSeed[2],
-      rootSeed[3],
-    ] as [number, number, number, number]),
-    completedTick,
-    activeRegionsIdentity,
-    activeRegionKeys: activeReceipt.activeRegionKeys,
-    activeReceipt,
-    residents: Object.freeze(residents),
-  });
-  ADVANCE_RESULT_RECEIPTS.set(result, receipt);
-  return true;
 }
 
 function canonicalActiveReceiptClaimsOrNull(

@@ -871,6 +871,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
 
   it("matches a durable receipt-backed snapshot byte-for-byte after full fallback", () => {
     const receiptState = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const reversedState = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
     const fallbackState = deserializeRegionalEcologyStateV6(
       serializeRegionalEcologyStateV6(receiptState),
     );
@@ -878,7 +879,11 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       throw new Error("Durable receipt fallback fixture did not survive serialization");
     }
     const receiptProjection = projectionOf(receiptState);
+    const reversedProjection = projectionOf(reversedState);
     const fallbackProjection = projectionOf(fallbackState);
+    const receiptSourceText = serializeRegionalEcologyStateV6(receiptState);
+    const reversedSourceText = serializeRegionalEcologyStateV6(reversedState);
+    const fallbackSourceText = serializeRegionalEcologyStateV6(fallbackState);
     const source = receiptProjection.breadthResidents.find(({ patch }) => (
       patch.populations.some(({ members }) => members.some(
         ({ materialization }) => materialization === "materialized",
@@ -926,28 +931,47 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
       fallbackProjection,
       movedInput(fallbackState, fallbackProjection),
     );
-    if (receiptCommit === null || fallbackCommit === null) {
-      throw new Error("Durable receipt or fallback commit failed");
+    const reversedInput = movedInput(reversedState, reversedProjection);
+    expect(reversedInput.breadthResidents.length).toBeGreaterThan(1);
+    const reversedCommit = commitRegionalEcologyStateV6ActiveProjection(
+      reversedState,
+      reversedProjection,
+      {
+        ...reversedInput,
+        breadthResidents: [...reversedInput.breadthResidents].reverse(),
+      },
+    );
+    if (
+      receiptCommit === null
+      || fallbackCommit === null
+      || reversedCommit === null
+    ) {
+      throw new Error("Durable receipt, reordered receipt, or fallback commit failed");
     }
     const receiptText = serializeRegionalEcologyStateV6(receiptCommit);
     const fallbackText = serializeRegionalEcologyStateV6(fallbackCommit);
-    expect(receiptCommit.breadthActiveResidents.map(({
-      sourceKey,
-      patchHash,
-      lineageHash,
-      integrity,
-    }) => ({ sourceKey, patchHash, lineageHash, integrity }))).toEqual(
-      fallbackCommit.breadthActiveResidents.map(({
+    const reversedText = serializeRegionalEcologyStateV6(reversedCommit);
+    const snapshotClaims = (state: RegionalEcologyStateV6) => (
+      state.breadthActiveResidents.map(({
         sourceKey,
         patchHash,
         lineageHash,
         integrity,
-      }) => ({ sourceKey, patchHash, lineageHash, integrity })),
+      }) => ({ sourceKey, patchHash, lineageHash, integrity }))
     );
+    expect(snapshotClaims(receiptCommit)).toEqual(snapshotClaims(fallbackCommit));
+    expect(snapshotClaims(reversedCommit)).toEqual(snapshotClaims(fallbackCommit));
     expect(receiptCommit.integrity).toBe(fallbackCommit.integrity);
+    expect(reversedCommit.integrity).toBe(fallbackCommit.integrity);
     expect(receiptText).toBe(fallbackText);
+    expect(reversedText).toBe(fallbackText);
     expect(new TextEncoder().encode(receiptText).byteLength)
       .toBe(new TextEncoder().encode(fallbackText).byteLength);
+    expect(new TextEncoder().encode(reversedText).byteLength)
+      .toBe(new TextEncoder().encode(fallbackText).byteLength);
+    expect(serializeRegionalEcologyStateV6(receiptState)).toBe(receiptSourceText);
+    expect(serializeRegionalEcologyStateV6(reversedState)).toBe(reversedSourceText);
+    expect(serializeRegionalEcologyStateV6(fallbackState)).toBe(fallbackSourceText);
   });
 
   it("rederives signed/extreme windows and reports collision-free source ownership", () => {

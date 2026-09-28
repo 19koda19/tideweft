@@ -92,6 +92,30 @@ export function hashCanonicalEncoding(encoded: string): string {
   return `${highHex}${lowHex}`;
 }
 
+/**
+ * @internal Hash one canonical encoding supplied as exact contiguous pieces.
+ * This preserves the released UTF-16 code-unit hash law while allowing a
+ * caller with one already-proven child encoding to avoid rebuilding the same
+ * large string merely to embed it in an immediate parent envelope.
+ */
+export function hashCanonicalEncodingSegments(
+  segments: readonly string[],
+): string {
+  let high = 0x811c_9dc5;
+  let low = 0x9e37_79b9;
+  for (const segment of segments) {
+    for (let index = 0; index < segment.length; index += 1) {
+      const code = segment.charCodeAt(index);
+      high = Math.imul(high ^ code, 0x0100_0193) >>> 0;
+      low = Math.imul(low ^ code, 0x85eb_ca6b) >>> 0;
+      low ^= high >>> 13;
+    }
+  }
+  const highHex = (high >>> 0).toString(16).padStart(8, "0");
+  const lowHex = (low >>> 0).toString(16).padStart(8, "0");
+  return `${highHex}${lowHex}`;
+}
+
 /** Two independent 32-bit FNV-style lanes, returned as a fixed 64-bit hex label. */
 export function hashCanonical(value: unknown): string {
   return hashCanonicalEncoding(stableStringify(value));

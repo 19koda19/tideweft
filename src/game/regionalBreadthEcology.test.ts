@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { seedFromText } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
-import { compareText, hashCanonical, stableStringify } from "../sim/util";
+import {
+  compareText,
+  hashCanonical,
+  hashCanonicalEncoding,
+  stableStringify,
+} from "../sim/util";
 import { WORLD_NEW_GAME_START_TICK } from "../sim/worldTime";
 import { replaceCoreEcologyAggregatePatchActor } from "./coreEcology";
 import {
@@ -556,6 +561,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       activeRegions,
     );
     if (prior === null) throw new Error("V6 bridge receipt fixture did not derive");
+    const sourceBytes = serializeRegionalBreadthEcologyRoot(sourceRoot);
     const completedTick = 128;
     const advance = () => {
       const result = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
@@ -581,10 +587,14 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     const exact = advance();
     const receipt = consumeRegionalBreadthEcologyAdvanceResultReceipt(exact, input);
     expect(receipt).not.toBeNull();
+    expect(Object.isFrozen(receipt)).toBe(true);
     expect(receipt).toHaveLength(exact.residents.length);
     expect(receipt?.every((metadata, index) => (
       metadata.resident === exact.residents[index]
       && metadata.patch === exact.residents[index]?.patch
+      && Object.isFrozen(metadata)
+      && metadata.canonicalPatchEncoding === stableStringify(metadata.patch)
+      && hashCanonicalEncoding(metadata.canonicalPatchEncoding) === metadata.patchHash
       && metadata.patchHash === hashCanonical(metadata.patch)
       && metadata.lineageHash === activeResidentClaims([
         metadata.resident,
@@ -605,6 +615,10 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       structuredClone(cloned),
       input,
     )).toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(cloned, input))
+      .not.toBeNull();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(cloned, input))
+      .toBeNull();
 
     const reordered = advance();
     expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(Object.freeze({
@@ -687,6 +701,11 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       .toBeNull();
     expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(superseded, input))
       .toBeNull();
+
+    const fresh = advance();
+    expect(consumeRegionalBreadthEcologyAdvanceResultReceipt(fresh, input))
+      .not.toBeNull();
+    expect(serializeRegionalBreadthEcologyRoot(sourceRoot)).toBe(sourceBytes);
   });
 
   it("rejects a removal batch when scalar clock advance alone crosses the save budget", () => {

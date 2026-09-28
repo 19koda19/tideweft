@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalIntegrityMetrics,
   hashCanonical,
+  hashCanonicalEncoding,
+  hashCanonicalEncodingSegments,
   stableStringify,
 } from "./util";
 
@@ -29,6 +31,26 @@ describe("canonical integrity metrics", () => {
       z: "🌊\u0000é",
       a: [-0, true, null, { 雪: "風" }],
     })).toBe("c75106719a1fa1b8");
+  });
+
+  it("hashes exact canonical segments as one uninterrupted encoding", () => {
+    const encoded = stableStringify({
+      z: "🌊\u0000é",
+      a: [-0, true, null, { 雪: "風" }],
+    });
+    const splitInsideSurrogate = encoded.indexOf("🌊") + 1;
+    const segments = Object.freeze([
+      "",
+      encoded.slice(0, 7),
+      encoded.slice(7, splitInsideSurrogate),
+      encoded.slice(splitInsideSurrogate),
+      "",
+    ]);
+
+    expect(segments.join("")).toBe(encoded);
+    expect(hashCanonicalEncodingSegments(segments))
+      .toBe(hashCanonicalEncoding(encoded));
+    expect(hashCanonicalEncodingSegments([])).toBe(hashCanonicalEncoding(""));
   });
 
   it("derives exact sealed bytes from one canonical base encoding", () => {

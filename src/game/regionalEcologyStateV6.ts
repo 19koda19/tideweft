@@ -4,6 +4,7 @@ import {
   canonicalIntegrityMetrics,
   compareText,
   hashCanonical,
+  hashCanonicalEncodingSegments,
   stableStringify,
 } from "../sim/util";
 import {
@@ -1106,6 +1107,9 @@ function createBreadthSnapshotFromAdvanceReceipt(
     || regionKey(patch.originRegion) !== regionKey(prepared.region)
     || !validHash(prepared.patchHash)
     || !validHash(prepared.lineageHash)
+    || typeof prepared.canonicalPatchEncoding !== "string"
+    || !prepared.canonicalPatchEncoding.startsWith("{")
+    || !prepared.canonicalPatchEncoding.endsWith("}")
     || !coreEcologyBreadthResidentPatchIsAllCoarse(patch)
     || patch.populations.length + patch.aggregatePopulations.length < 1
     || patch.nextMortalityOrdinal !== 0
@@ -1123,7 +1127,40 @@ function createBreadthSnapshotFromAdvanceReceipt(
     lineageHash: prepared.lineageHash,
     patch,
   };
-  return deepFreeze({ ...snapshotBase, integrity: hashCanonical(snapshotBase) });
+  return deepFreeze({
+    ...snapshotBase,
+    integrity: hashBreadthSnapshotWithPreparedPatchEncoding(
+      snapshotBase,
+      prepared.canonicalPatchEncoding,
+    ),
+  });
+}
+
+/**
+ * Preserve the released canonical snapshot hash while substituting only the
+ * exact child encoding carried by the one-shot breadth receipt. The complete
+ * hash sweep still runs over prefix + child + suffix; only the duplicate deep
+ * traversal/string construction of the same immutable patch is omitted.
+ */
+function hashBreadthSnapshotWithPreparedPatchEncoding(
+  snapshotBase: Omit<RegionalEcologyStateV6BreadthSnapshotV1, "integrity">,
+  canonicalPatchEncoding: string,
+): string {
+  const template = stableStringify({ ...snapshotBase, patch: null });
+  const marker = `${JSON.stringify("patch")}:null`;
+  const markerIndex = template.indexOf(marker);
+  if (
+    markerIndex < 0
+    || template.indexOf(marker, markerIndex + marker.length) >= 0
+  ) {
+    throw new RangeError("Prepared breadth snapshot lost its patch encoding slot");
+  }
+  const valueIndex = markerIndex + marker.length - "null".length;
+  return hashCanonicalEncodingSegments([
+    template.slice(0, valueIndex),
+    canonicalPatchEncoding,
+    template.slice(valueIndex + "null".length),
+  ]);
 }
 
 function createBreadthSnapshot(
