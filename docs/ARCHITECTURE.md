@@ -30,6 +30,57 @@ local-first IndexedDB (sticky localStorage fallback)
 - `src/platform`: browser save repositories plus export/import validation.
 - `electron`: hardened local protocol, desktop lifecycle, Forge packaging, and production smoke mode. There is no preload or renderer Node API.
 
+## Cross-system inheritance and bounded work
+
+[`SYSTEM_INHERITANCE.md`](SYSTEM_INHERITANCE.md) is the canonical
+applicability index for durable cross-system contracts. A substantial new
+actor, species, role, item, vehicle, material, place, interaction, or mechanic
+must join every applicable existing owner rather than creating a parallel
+feature-specific ruleset. The registry identifies the contract and routes to
+durable public owner summaries; repository guidance still requires every
+applicable canonical domain owner. It does not replace that owner's detail or
+implementation evidence. Its directive family list is a current roadmap
+snapshot, not a claim that the roadmap ends there.
+
+Two performance responsibilities remain distinct and cumulative:
+
+- **Early performance / scalability — The Breathing Room** establishes safe
+  implementation habits and restores development headroom: fixed-step
+  authority independent of rendering, bounded spatial candidates, elimination
+  of full-world and hidden N-squared hot paths, deterministic cadence classes,
+  explicit cache invalidation, bounded materialization, offscreen UI/render
+  cleanup, sparse persistence, and release of unloaded-region resources.
+- **Whole-game performance / scale — The Lean World** deepens profiling,
+  full/near/coarse/archive fidelity, rendering LOD, streaming, camera and zoom
+  discipline, save and memory growth, mobile budgets, and long-session
+  stability as the mature world expands. This is a responsibility boundary,
+  not an assertion that no later directive may exist.
+
+Future systems inherit both contracts where applicable. Expensive reasoning
+should be event-driven or deterministically cadence-bounded when that preserves
+the same authority. Candidate work must be spatially bounded; static geometry
+and unchanged UI must not be rebuilt every frame; pathfinding and immutable
+derived facts may be reused only behind explicit invalidation; distant actors
+may retain coarse truth without full local materialization; saves persist
+deviations and promoted identity rather than the generated universe. Profiling
+evidence should select meaningful optimization work.
+
+Optimization may reduce frequency, presentation detail, animation detail,
+particle detail, or distant fidelity. It may not silently alter deterministic
+outcomes, knowledge, ownership, ecology, relationships, difficulty, physical
+conservation, or save truth. Camera visibility is not simulation activation.
+The governing rule is: **reduce work, not truth; simulate what matters now and
+preserve what matters later.**
+
+### Repository asset and storage law
+
+The tracked repository stays below 1 GB, targets roughly 600 MB, and requires
+intervention by 850 MB. Installed dependencies and generated packages are
+measured separately. Prefer code-native or procedural geometry, reusable
+original assets, deterministic variation, and shared presentation systems over
+large near-duplicate binary families. The objective is more meaningful world
+per byte, not lower fidelity by default.
+
 ## Determinism contract
 
 The same rules version, pressure mode, seed, initial scenario, and canonically ordered commands produce the same completed state hash and events. Rendering frame rate, a save/load boundary, or batched headless stepping cannot change simulation results.
@@ -624,6 +675,17 @@ The playable slice uses:
 - A complete set of potential inter-settlement corridors. Only routes above the strand-strength and condition threshold participate in autonomous service.
 
 Presented prose is derived from structured facts. UI copy may explain a cause, but it cannot invent stock, a person, a project contribution, or a route event that the simulation did not record.
+
+### Settlement-generation responsibility boundary
+
+The current world contains the verified bounded settlement network described
+above; general infinite settlement generation is not current gameplay. When
+that responsibility becomes active, settlements must derive from geography and
+world history, keep stable identity and lawful absence, persist sparse
+deviations rather than serializing an infinite census, and preserve population,
+knowledge, economy, route, history, and coarse-simulation truth through world
+streaming. Adding distant settlements must extend this owner rather than place
+isolated service menus or unconditional markers into generated regions.
 
 ## Original-estuary human identity, perception, and ABOUT boundary
 
@@ -2083,6 +2145,16 @@ The app enables Chromium’s process sandbox, denies permissions and devices, de
 Vite uses `base: './'`, a single HTML entry, relative build assets, and no history-router deep links. `public/manifest.webmanifest` and the code-native SVG icon are copied into `dist/` and referenced relatively, so the build works beneath an arbitrary GitHub project subpath and under `app://bundle/`.
 
 The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and the web build before uploading only `dist/`. Static Pages has local saves only; cloud continuity or genuine cross-player asynchronous strands would require an explicit backend and abuse/privacy design.
+
+## Platform and distribution responsibility
+
+Web deployment and the hardened packaged Electron runtime are live, while
+signed/notarized Mac, Linux, and Windows distribution is not yet a complete
+cross-platform release contract. Later packaging must carry the same tested
+simulation, save/migration, input, accessibility, security, and local-first
+rules; a platform build may not fork gameplay truth. Release claims bind to the
+exact tested artifact, and installers, updates, lifecycle handling, and signing
+must fail honestly when their platform-specific evidence is absent.
 
 ## Verification layers
 
