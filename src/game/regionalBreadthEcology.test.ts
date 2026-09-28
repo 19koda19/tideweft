@@ -187,6 +187,46 @@ function withSimulatedClockBudgetEdge(
   }
 }
 
+function withSimulatedPreparedRootSealedBytes<T>(
+  ownerId: string,
+  completedTick: number,
+  sealedBytes: number,
+  run: () => T,
+): T {
+  const originalEncode = TextEncoder.prototype.encode;
+  const integrityMemberBytes = originalEncode.call(
+    new TextEncoder(),
+    `,"integrity":"${"0".repeat(16)}"`,
+  ).byteLength;
+  TextEncoder.prototype.encode = function encode(value = "") {
+    if (value.includes(`"ownerId":"${ownerId}"`)) {
+      const root = JSON.parse(value) as Readonly<{
+        integrity?: unknown;
+        ownerId?: unknown;
+        regions?: unknown;
+        updatedAtTick?: unknown;
+      }>;
+      if (
+        !Object.hasOwn(root, "integrity")
+        && root.ownerId === ownerId
+        && Array.isArray(root.regions)
+        && root.regions.length > 0
+        && root.updatedAtTick === completedTick
+      ) {
+        return {
+          byteLength: sealedBytes - integrityMemberBytes,
+        } as unknown as Uint8Array<ArrayBuffer>;
+      }
+    }
+    return originalEncode.call(this, value);
+  };
+  try {
+    return run();
+  } finally {
+    TextEncoder.prototype.encode = originalEncode;
+  }
+}
+
 describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA38_MARSH_CHANNEL_WEB_ROOT_SHARED_INVARIANTS_OWNER_INTENT} append-only sparse root`, () => {
   it("activates an append-only cohort epoch and round-trips one bounded world authority", () => {
     const empty = createPristineRegionalBreadthEcologyRoot({
@@ -478,6 +518,13 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       expectedResidents: activeResidentClaims(prior),
       durableResidents: [],
     });
+    const replay = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick,
+      activeRegions: [TIDAL_FLOCK_REGION],
+      expectedResidents: activeResidentClaims(prior),
+      durableResidents: [],
+    });
     const oracleRoot = advanceRegionalBreadthEcologyRoot(root, completedTick);
     const oracleResidents = regionalBreadthEcologyResidentsForActiveRegions(
       oracleRoot,
@@ -486,9 +533,13 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     );
 
     expect(fast).not.toBeNull();
+    expect(replay).not.toBeNull();
     expect(oracleResidents).not.toBeNull();
     expect(stableStringify(fast?.root)).toBe(stableStringify(oracleRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+    expect(serializeRegionalBreadthEcologyRoot(replay!.root))
+      .toBe(serializeRegionalBreadthEcologyRoot(fast!.root));
+    expect(stableStringify(replay!.residents)).toBe(stableStringify(fast!.residents));
   });
 
   it("issues one exact frozen V6 bridge receipt and rejects every substituted boundary", () => {
@@ -681,6 +732,115 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     );
   });
 
+  it("enforces the prepared root seal byte cap from a consecutive cached-byte receipt", () => {
+    const sourceTick = 10;
+    const preparedTick = 11;
+    const targetTick = 12;
+    const root = putRegionalBreadthEcologyResidentDeviation(
+      createPristineRegionalBreadthEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }, CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID),
+      { rootSeed: SEED, patch: rotateFirstActor(heronPatch(sourceTick), 303) },
+    );
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [HERON_REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Prepared breadth byte-cap fixture did not derive");
+    }
+    const prepared = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick: preparedTick,
+      activeRegions: [HERON_REGION],
+      expectedResidents: activeResidentClaims(prior),
+      durableResidents: [],
+    });
+    if (prepared === null) {
+      throw new Error("Prepared breadth byte-cap fixture did not publish cached bytes");
+    }
+    const preparedBytes = serializeRegionalBreadthEcologyRoot(prepared.root);
+
+    withSimulatedClockBudgetEdge(
+      REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
+      REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
+      preparedTick,
+      targetTick,
+      () => {
+        expect(() => advanceRegionalBreadthEcologyRoot(prepared.root, targetTick))
+          .toThrow();
+        expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(prepared.root, {
+          rootSeed: SEED,
+          completedTick: targetTick,
+          activeRegions: [HERON_REGION],
+          expectedResidents: activeResidentClaims(prepared.residents),
+          durableResidents: [],
+        })).toBeNull();
+      },
+    );
+    expect(serializeRegionalBreadthEcologyRoot(prepared.root)).toBe(preparedBytes);
+  });
+
+  it("rejects cached prepared clock growth before a removal could shrink the root", () => {
+    const sourceTick = 8;
+    const preparedTick = 9;
+    const targetTick = 10;
+    const root = putRegionalBreadthEcologyResidentDeviation(
+      createPristineRegionalBreadthEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }, CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
+      REGIONAL_BREADTH_ECOLOGY_LEGACY_BASELINE_POLICY_ID),
+      { rootSeed: SEED, patch: rotateFirstActor(heronPatch(sourceTick), 404) },
+    );
+    const prior = regionalBreadthEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [HERON_REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Prepared clock-budget fixture did not derive");
+    }
+
+    const prepared = withSimulatedPreparedRootSealedBytes(
+      REGIONAL_BREADTH_ECOLOGY_OWNER_ID,
+      preparedTick,
+      REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES,
+      () => advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, {
+        rootSeed: SEED,
+        completedTick: preparedTick,
+        activeRegions: [HERON_REGION],
+        expectedResidents: activeResidentClaims(prior),
+        durableResidents: [],
+      }),
+    );
+    if (prepared === null) {
+      throw new Error("Prepared clock-budget fixture did not publish cached bytes");
+    }
+    const preparedBytes = serializeRegionalBreadthEcologyRoot(prepared.root);
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(prepared.root, {
+      rootSeed: SEED,
+      completedTick: targetTick,
+      activeRegions: [HERON_REGION],
+      expectedResidents: activeResidentClaims(prepared.residents),
+      durableResidents: [{
+        sourceKey: prepared.residents[0]!.sourceKey,
+        patch: heronPatch(targetTick),
+      }],
+    })).toBeNull();
+
+    const shrinkFirst = putRegionalBreadthEcologyResidentDeviation(prepared.root, {
+      rootSeed: SEED,
+      patch: heronPatch(preparedTick),
+    });
+    expect(advanceRegionalBreadthEcologyRoot(shrinkFirst, targetTick).regions)
+      .toEqual([]);
+    expect(serializeRegionalBreadthEcologyRoot(prepared.root)).toBe(preparedBytes);
+  });
+
   it("batches source-ordered add, update, removal, and no-op byte-identically to scalar puts", () => {
     const activeRegions = [
       TIDAL_FLOCK_REGION,
@@ -789,9 +949,14 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
     }
 
     const forwardText = serializeRegionalBreadthEcologyRoot(forward.root);
-    expect(forwardText).toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+    const oracleText = serializeRegionalBreadthEcologyRoot(oracleRoot);
+    expect(forwardText).toBe(oracleText);
     expect(serializeRegionalBreadthEcologyRoot(reversed.root))
-      .toBe(serializeRegionalBreadthEcologyRoot(oracleRoot));
+      .toBe(oracleText);
+    expect(forward.root.integrity).toBe(oracleRoot.integrity);
+    expect(reversed.root.integrity).toBe(oracleRoot.integrity);
+    expect(new TextEncoder().encode(forwardText).byteLength)
+      .toBe(new TextEncoder().encode(oracleText).byteLength);
     const restoredForward = deserializeRegionalBreadthEcologyRoot(forwardText);
     expect(restoredForward).not.toBeNull();
     expect(serializeRegionalBreadthEcologyRoot(restoredForward)).toBe(forwardText);
@@ -1004,6 +1169,38 @@ describe(`${ALPHA37_ESTUARY_BREADTH_ROOT_SHARED_INVARIANTS_OWNER_INTENT} ${ALPHA
       SEED,
       input.activeRegions,
     )).not.toBeNull();
+
+    const prepared = advanceRegionalBreadthEcologyActiveResidentsFromReceipt(root, input);
+    if (prepared === null) throw new Error("Prepared root authority fixture did not advance");
+    const preparedBytes = serializeRegionalBreadthEcologyRoot(prepared.root);
+    const nextInput = {
+      ...input,
+      completedTick: input.completedTick + 1,
+      expectedResidents: activeResidentClaims(prepared.residents),
+    };
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      structuredClone(prepared.root),
+      nextInput,
+    )).toBeNull();
+    const reloadedPrepared = deserializeRegionalBreadthEcologyRoot(preparedBytes);
+    expect(reloadedPrepared).not.toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
+      reloadedPrepared,
+      nextInput,
+    )).toBeNull();
+    expect(advanceRegionalBreadthEcologyActiveResidentsFromReceipt(prepared.root, {
+      ...nextInput,
+      completedTick: prepared.root.updatedAtTick - 1,
+    })).toBeNull();
+    expect(serializeRegionalBreadthEcologyRoot(prepared.root)).toBe(preparedBytes);
+    const publicFallback = advanceRegionalBreadthEcologyRoot(
+      reloadedPrepared!,
+      nextInput.completedTick,
+    );
+    expect(canonicalRegionalBreadthEcologyRootForWorld(publicFallback, {
+      rootSeed: SEED,
+      completedTick: nextInput.completedTick,
+    })).toBe(publicFallback);
   });
 
   it("preserves an off-origin resident at a signed extreme through the active receipt", () => {

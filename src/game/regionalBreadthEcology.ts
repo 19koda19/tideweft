@@ -7,7 +7,12 @@ import {
   stableRegionObjectId,
   type RegionCoord,
 } from "../sim/regions";
-import { compareText, hashCanonical, stableStringify } from "../sim/util";
+import {
+  canonicalIntegrityMetrics,
+  compareText,
+  hashCanonical,
+  stableStringify,
+} from "../sim/util";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   setCoreEcologyAggregatePatchMaterializedActors,
@@ -202,6 +207,12 @@ interface RegionalBreadthEcologyActiveReceipt {
   readonly activations: RegionalBreadthEcologyRootV1["activations"];
   readonly activeRegionKeys: readonly string[];
   readonly residents: readonly RegionalBreadthEcologyActiveReceiptResident[];
+  /**
+   * Exact sealed size published by this module's private prepared-root
+   * transaction. Roots derived by any other path deliberately carry no byte
+   * receipt and retain the ordinary canonical serialization fallback.
+   */
+  readonly sealedRootSerializedBytes: number | null;
 }
 
 /** One bounded hot-window receipt per exact immutable root identity. */
@@ -1041,6 +1052,7 @@ export function advanceRegionalBreadthEcologyActiveResidentsFromReceipt(
       activeRegions,
       residents,
       batch.pristineBySource,
+      batch.sealedRootSerializedBytes,
     );
     if (activeReceipt === null) return null;
     const result = Object.freeze({ root: nextRoot, residents });
@@ -1123,6 +1135,7 @@ export function consumeRegionalBreadthEcologyAdvanceResultReceipt(
 
 interface RegionalBreadthEcologyActiveDeviationBatch {
   readonly root: RegionalBreadthEcologyRootV1;
+  readonly sealedRootSerializedBytes: number;
   readonly durableBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
   readonly pristineBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
 }
@@ -1143,7 +1156,9 @@ function applyActiveResidentDeviationBatch(
     completedTick < root.updatedAtTick
     || values.length > receipt.residents.length
   ) return null;
-  const rootSerializedBytes = serializedBytes(root);
+  const rootSerializedBytes = receipt.sealedRootSerializedBytes
+    ?? serializedBytes(root);
+  if (!nonnegativeSafeInteger(rootSerializedBytes)) return null;
   // The scalar transaction advances the root clock before applying any put.
   // That operation changes only this nonnegative safe-integer token; the
   // replacement integrity digest is fixed-width ASCII. This digit delta is
@@ -1210,6 +1225,7 @@ function applyActiveResidentDeviationBatch(
   let revision = root.revision;
   let eventOrdinal = root.lastEventOrdinal;
   let changed = false;
+  const preparedDeltas = new Set<RegionalBreadthEcologyRegionDeltaV1>();
   for (const [, normalized] of ordered) {
     const habitat = habitatFromPatch(normalized);
     if (habitat === null) return null;
@@ -1275,26 +1291,48 @@ function applyActiveResidentDeviationBatch(
       if (serializedUpperBound > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES) {
         return null;
       }
+      preparedDeltas.add(delta);
       regionsByKey.set(key, delta);
     }
     if (regionsByKey.size > REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS) return null;
   }
 
   let nextRoot = root;
+  let sealedRootSerializedBytes = rootSerializedBytes;
   if (completedTick !== root.updatedAtTick || changed) {
     const regions = Object.freeze([...regionsByKey.values()].sort(
       (left, right) => compareText(left.key, right.key),
     ));
     const { integrity: _integrity, ...base } = root;
-    nextRoot = sealAndBindRoot({
+    const candidate = {
       ...base,
       updatedAtTick: completedTick,
       revision,
       lastEventOrdinal: eventOrdinal,
       regions,
-    });
+    } as const;
+    const prepared = sealPreparedAndBindRoot(
+      candidate,
+      root,
+      receipt,
+      preparedDeltas,
+    );
+    if (prepared === null) {
+      // Provenance uncertainty must retain the complete public validator. This
+      // branch is deliberately ordinary authority, not another fast path.
+      nextRoot = sealAndBindRoot(candidate);
+      sealedRootSerializedBytes = serializedBytes(nextRoot);
+    } else {
+      nextRoot = prepared.root;
+      sealedRootSerializedBytes = prepared.sealedSerializedBytes;
+    }
   }
-  return Object.freeze({ root: nextRoot, durableBySource, pristineBySource });
+  return Object.freeze({
+    root: nextRoot,
+    sealedRootSerializedBytes,
+    durableBySource,
+    pristineBySource,
+  });
 }
 
 export function serializeRegionalBreadthEcologyRoot(value: unknown): string {
@@ -1493,10 +1531,17 @@ function seedActiveResidentReceipt(
     string,
     CoreEcologyAggregatePatchState
   > = new Map(),
+  sealedRootSerializedBytes: number | null = null,
 ): RegionalBreadthEcologyActiveReceipt | null {
   const maximumResidents = activeRegions.length * root.activations.length
     + root.regions.length;
-  if (residents.length > maximumResidents) return null;
+  if (
+    residents.length > maximumResidents
+    || (sealedRootSerializedBytes !== null && (
+      !nonnegativeSafeInteger(sealedRootSerializedBytes)
+      || sealedRootSerializedBytes > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES
+    ))
+  ) return null;
   const receiptResidents: RegionalBreadthEcologyActiveReceiptResident[] = [];
   const seen = new Set<string>();
   const deviationKeys = new Set(root.regions.map(({ key }) => key));
@@ -1546,6 +1591,7 @@ function seedActiveResidentReceipt(
     activations: root.activations,
     activeRegionKeys: Object.freeze(activeRegions.map(regionKey)),
     residents: Object.freeze(receiptResidents),
+    sealedRootSerializedBytes,
   });
   ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
   return receipt;
@@ -1761,6 +1807,85 @@ function breadthResidentLineageHash(
       habitatCapacity,
       anchorOrdinals: anchors.map(({ anchorOrdinal }) => anchorOrdinal),
     })),
+  });
+}
+
+interface PreparedRegionalBreadthEcologyRootSeal {
+  readonly root: RegionalBreadthEcologyRootV1;
+  readonly sealedSerializedBytes: number;
+}
+
+/**
+ * Seal the exact root assembled by `applyActiveResidentDeviationBatch` without
+ * asking the public canonicalizer to re-prove every child it just received
+ * from that transaction. This is intentionally private and provenance based:
+ * every retained delta must be the exact frozen object from the trusted source
+ * root, and every replacement must be the exact result of the private prepared
+ * delta sealer in the same stack frame. Any uncertainty returns null so the
+ * caller uses the complete public `sealRoot` authority unchanged.
+ */
+function sealPreparedAndBindRoot(
+  value: Omit<RegionalBreadthEcologyRootV1, "integrity">,
+  sourceRoot: RegionalBreadthEcologyRootV1,
+  sourceReceipt: RegionalBreadthEcologyActiveReceipt,
+  preparedDeltas: ReadonlySet<RegionalBreadthEcologyRegionDeltaV1>,
+): PreparedRegionalBreadthEcologyRootSeal | null {
+  if (
+    !TRUSTED_ROOTS.has(sourceRoot)
+    || WORLD_BOUND_ROOTS.get(sourceRoot) !== sourceRoot.seedFingerprint
+    || ACTIVE_RESIDENT_RECEIPTS.get(sourceRoot) !== sourceReceipt
+    || !Object.isFrozen(sourceRoot)
+    || value.version !== sourceRoot.version
+    || value.ownerId !== sourceRoot.ownerId
+    || value.generationVersion !== sourceRoot.generationVersion
+    || value.baselinePolicyId !== sourceRoot.baselinePolicyId
+    || value.seedFingerprint !== sourceRoot.seedFingerprint
+    || value.activeThroughEpoch !== sourceRoot.activeThroughEpoch
+    || value.activations !== sourceRoot.activations
+    || !nonnegativeSafeInteger(value.updatedAtTick)
+    || !nonnegativeSafeInteger(value.revision)
+    || !nonnegativeSafeInteger(value.lastEventOrdinal)
+    || value.updatedAtTick < sourceRoot.updatedAtTick
+    || value.revision < sourceRoot.revision
+    || value.lastEventOrdinal < sourceRoot.lastEventOrdinal
+    || (value.revision === 0) !== (value.lastEventOrdinal === 0)
+    || !Object.isFrozen(value.regions)
+    || value.regions.length > REGIONAL_BREADTH_ECOLOGY_MAX_REGIONS
+  ) return null;
+
+  const inheritedDeltas = new Set(sourceRoot.regions);
+  const retainedDeltas = new Set(value.regions);
+  if (retainedDeltas.size !== value.regions.length) return null;
+  for (const delta of preparedDeltas) {
+    if (!retainedDeltas.has(delta)) return null;
+  }
+  const activeCohorts = new Set(value.activations.map(({ cohortId }) => cohortId));
+  for (let index = 0; index < value.regions.length; index += 1) {
+    const delta = value.regions[index]!;
+    if (
+      !Object.isFrozen(delta)
+      || (!inheritedDeltas.has(delta) && !preparedDeltas.has(delta))
+      || !activeCohorts.has(delta.cohortId)
+      || delta.revision > value.revision
+      || delta.eventOrdinal > value.lastEventOrdinal
+      || delta.residentPatch.updatedAtTick > value.updatedAtTick
+      || (index > 0 && compareText(value.regions[index - 1]!.key, delta.key) >= 0)
+    ) return null;
+  }
+
+  const metrics = canonicalIntegrityMetrics(value);
+  if (metrics.sealedSerializedBytes > REGIONAL_BREADTH_ECOLOGY_MAX_SERIALIZED_BYTES) {
+    throw new RangeError("Regional breadth ecology root exceeds its save budget");
+  }
+  const root: RegionalBreadthEcologyRootV1 = deepFreeze({
+    ...value,
+    integrity: metrics.integrity,
+  });
+  TRUSTED_ROOTS.add(root);
+  WORLD_BOUND_ROOTS.set(root, root.seedFingerprint);
+  return Object.freeze({
+    root,
+    sealedSerializedBytes: metrics.sealedSerializedBytes,
   });
 }
 
