@@ -3979,12 +3979,15 @@ async function measureScenario(
   sampleMs,
   traceHitches,
   viewportAlreadyPrepared = false,
+  { captureCdpMetrics = true } = {},
 ) {
   await requirePerformanceInstrumentation(client, scenario);
   const warmupFrames = await warmTargetRenderer(client, scenario, viewportAlreadyPrepared);
   await preparePerformanceInstrumentation(client, scenario);
-  const browserBefore = await browserPointInTime(client);
-  const performanceBefore = metricsRecord(await client.call('Performance.getMetrics'));
+  const browserBefore = captureCdpMetrics ? await browserPointInTime(client) : null;
+  const performanceBefore = captureCdpMetrics
+    ? metricsRecord(await client.call('Performance.getMetrics'))
+    : null;
   const frameSample = await client.evaluate(`new Promise((resolve) => {
     const bridge = window.__TIDEWEFT__;
     const requestedMode = ${JSON.stringify(scenario.mode)};
@@ -4482,9 +4485,13 @@ async function measureScenario(
   })`, sampleMs + CDP_CALL_TIMEOUT_MS);
   assertMeasurementTelemetry(scenario, frameSample, traceHitches);
 
-  const performanceAfterSample = metricsRecord(await client.call('Performance.getMetrics'));
-  const browserAfterSample = await browserPointInTime(client);
-  const performanceBeforeSave = metricsRecord(await client.call('Performance.getMetrics'));
+  const performanceAfterSample = captureCdpMetrics
+    ? metricsRecord(await client.call('Performance.getMetrics'))
+    : null;
+  const browserAfterSample = captureCdpMetrics ? await browserPointInTime(client) : null;
+  const performanceBeforeSave = captureCdpMetrics
+    ? metricsRecord(await client.call('Performance.getMetrics'))
+    : null;
   const saveSample = await client.evaluate(`(async () => {
     const bridge = window.__TIDEWEFT__;
     const startedAt = performance.now();
@@ -4507,8 +4514,10 @@ async function measureScenario(
   ) {
     throw new Error(`Scenario ${scenario.id} did not produce a valid save sample: ${JSON.stringify(saveSample)}`);
   }
-  const performanceAfterSave = metricsRecord(await client.call('Performance.getMetrics'));
-  const browserAfterSave = await browserPointInTime(client);
+  const performanceAfterSave = captureCdpMetrics
+    ? metricsRecord(await client.call('Performance.getMetrics'))
+    : null;
+  const browserAfterSave = captureCdpMetrics ? await browserPointInTime(client) : null;
   const snapshot = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getRenderView();
@@ -4560,22 +4569,26 @@ async function measureScenario(
     saveSample,
     snapshot,
     viewportAndInput,
-    browser: {
-      cdpMetricUnits: CDP_METRIC_UNITS,
-      metricWindowScope: {
-        sample: 'from the CDP boundary immediately before the in-page measured sample through the first CDP boundary after presentation is stopped',
-        save: 'from the immediate pre-save CDP boundary through the immediate post-save CDP boundary while runtime and presentation remain stopped',
-      },
-      sampleMetricDelta: metricsDelta(performanceBefore, performanceAfterSample),
-      saveMetricDelta: metricsDelta(performanceBeforeSave, performanceAfterSave),
-      performanceBefore,
-      performanceAfterSample,
-      performanceBeforeSave,
-      performanceAfterSave,
-      pointInTimeBefore: browserBefore,
-      pointInTimeAfterSample: browserAfterSample,
-      pointInTimeAfterSave: browserAfterSave,
-    },
+    ...(captureCdpMetrics
+      ? {
+        browser: {
+          cdpMetricUnits: CDP_METRIC_UNITS,
+          metricWindowScope: {
+            sample: 'from the CDP boundary immediately before the in-page measured sample through the first CDP boundary after presentation is stopped',
+            save: 'from the immediate pre-save CDP boundary through the immediate post-save CDP boundary while runtime and presentation remain stopped',
+          },
+          sampleMetricDelta: metricsDelta(performanceBefore, performanceAfterSample),
+          saveMetricDelta: metricsDelta(performanceBeforeSave, performanceAfterSave),
+          performanceBefore,
+          performanceAfterSample,
+          performanceBeforeSave,
+          performanceAfterSave,
+          pointInTimeBefore: browserBefore,
+          pointInTimeAfterSample: browserAfterSample,
+          pointInTimeAfterSave: browserAfterSave,
+        },
+      }
+      : {}),
   };
 }
 
@@ -4603,9 +4616,7 @@ async function worldFingerprint(client) {
   return createHash('sha256').update(source).digest('hex');
 }
 
-async function bootstrapWorld(client, seed) {
-  await client.call('Runtime.enable');
-  await client.call('Performance.enable');
+async function bootstrapWorldDocument(client, seed) {
   await client.waitFor(`Boolean(
     window.__TIDEWEFT__?.runtime
     && window.__TIDEWEFT__?.renderer
@@ -4696,6 +4707,12 @@ async function bootstrapWorld(client, seed) {
     worldName: began.worldName,
     startTick: began.tick,
   };
+}
+
+async function bootstrapWorld(client, seed) {
+  await client.call('Runtime.enable');
+  await client.call('Performance.enable');
+  return bootstrapWorldDocument(client, seed);
 }
 
 async function waitForStablePackagedGameplayDocument(client) {
@@ -5823,6 +5840,7 @@ module.exports = {
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  bootstrapWorldDocument,
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
@@ -5832,6 +5850,8 @@ module.exports = {
   parseArguments,
   parsePosixProcessTable,
   parseWindowsProcessTable,
+  installResourceInputGuard,
+  measureScenario,
   packagedPersistenceIntegrity,
   packagedSaveRecordFingerprint,
   packagedPersistenceSnapshot,
@@ -5839,6 +5859,8 @@ module.exports = {
   resourceSoakCycleCheckpointLabel,
   resourceSoakRetentionSummary,
   resourceSoakSaveGrowthSummary,
+  rebaseResourceInputGuardAfterViewport,
+  repositoryAtCapture,
   retainBoundedHitchGap,
   retainBoundedHitchSnapshot,
   sanitizeRuntimeResourceCounts,
