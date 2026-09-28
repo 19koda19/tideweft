@@ -26,7 +26,7 @@ const SMOKE_PROJECTED_COMPATIBILITY_OFFSET_Y = 24;
 const SMOKE_WORLD_TILE_COUNT = SMOKE_REGIONAL_COLUMNS * SMOKE_REGIONAL_ROWS;
 const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
-const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.59';
+const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.60';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 51;
 const SMOKE_EXPECTED_SAVE_VERSION = 32;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
@@ -79,6 +79,11 @@ const SMOKE_PAUSED_TICK_HOLD_MS = 1_250;
 const SMOKE_REQUESTED =
   process.env.TIDEWEFT_SMOKE === '1' ||
   process.argv.includes('--tideweft-smoke');
+// The packaged performance harness must keep presenting frames even when macOS
+// briefly treats its isolated overlay as occluded. This policy is profiler-only;
+// ordinary launches retain Electron's normal visibility and scheduling behavior.
+const PERFORMANCE_CAPTURE_WINDOW = process.argv.includes('--tideweft-performance-window');
+const PERFORMANCE_CAPTURE_WORKSPACE_SETTLE_MS = 2_500;
 const SMOKE_USER_DATA = process.env.TIDEWEFT_SMOKE_USER_DATA?.trim() || '';
 
 const SMOKE_TEST = Object.freeze({
@@ -302,7 +307,9 @@ function createWindow(options = {}) {
     height: 900,
     minWidth: SMOKE_TEST.enabled ? 320 : 960,
     minHeight: SMOKE_TEST.enabled ? 320 : 640,
+    alwaysOnTop: PERFORMANCE_CAPTURE_WINDOW,
     backgroundColor: '#07141a',
+    focusable: !PERFORMANCE_CAPTURE_WINDOW,
     show: false,
     webPreferences: {
       sandbox: true,
@@ -320,27 +327,49 @@ function createWindow(options = {}) {
       safeDialogs: true,
       spellcheck: false,
       devTools: !app.isPackaged,
-      backgroundThrottling: !SMOKE_TEST.enabled,
+      backgroundThrottling: !(SMOKE_TEST.enabled || PERFORMANCE_CAPTURE_WINDOW),
       // Keep the packaged intent explicit: Relief 3D is optional at runtime,
       // but Electron should offer WebGL whenever Chromium can initialize it.
       webgl: true,
     },
   });
 
+  if (PERFORMANCE_CAPTURE_WINDOW) {
+    window.setAlwaysOnTop(true, 'screen-saver');
+    window.setIgnoreMouseEvents(true);
+    if (process.platform === 'darwin') {
+      window.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+        skipTransformProcessType: true,
+      });
+    }
+    window.showInactive();
+  }
+
   windows.add(window);
   window.on('closed', () => windows.delete(window));
-  if (!SMOKE_TEST.enabled) window.once('ready-to-show', () => window.show());
+  if (!SMOKE_TEST.enabled) {
+    window.once('ready-to-show', () => {
+      if (PERFORMANCE_CAPTURE_WINDOW) window.showInactive();
+      else window.show();
+    });
+  }
   window.setMenuBarVisibility(false);
 
   lockDownWebContents(window.webContents);
 
   const entryUrl = app.isPackaged ? PRODUCTION_ENTRY_URL : DEV_ENTRY_URL;
   if (!deferLoad) {
-    void window.loadURL(entryUrl).catch(() => {
+    const loadEntry = () => void window.loadURL(entryUrl).catch(() => {
       if (!window.isDestroyed()) {
         window.destroy();
       }
     });
+    if (PERFORMANCE_CAPTURE_WINDOW && process.platform === 'darwin') {
+      setTimeout(loadEntry, PERFORMANCE_CAPTURE_WORKSPACE_SETTLE_MS);
+    } else {
+      loadEntry();
+    }
   }
 
   return window;
@@ -5072,6 +5101,9 @@ async function runProductionSmoke(window) {
 }
 
 app.whenReady().then(() => {
+  if (PERFORMANCE_CAPTURE_WINDOW && process.platform === 'darwin') {
+    app.setActivationPolicy('accessory');
+  }
   protocol.handle(APP_SCHEME, handleBundleRequest);
   configureSessionSecurity(session.defaultSession);
   if (SMOKE_TEST.enabled) {

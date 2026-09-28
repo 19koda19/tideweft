@@ -4,6 +4,46 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.60 — 2026-09-28
+
+Build: `0.3.3-alpha.60` · Gameplay contract: 51 · Tutorial: 70
+
+The Breathing Room Alpha 60 release candidate removes repeated deterministic ecology work, hardens exact performance and persistence evidence, and restores representative dense play from the former 4–8 FPS failure state without reducing world truth.
+
+### Gameplay
+
+- The complete Alpha 59 world remains authoritative: habitat, population, identity, mortality, circadian state, perception, movement, custody, weather, Promise state, and saves retain the same deterministic outcomes.
+- Performance work reduces duplicated computation rather than biodiversity, actor truth, materialization law, ecology, persistence, knowledge honesty, difficulty, or the seamless infinite world.
+
+### Fixes
+
+- Exact bounded same-stack receipts now reuse only already-authenticated regional-ecology lineage, canonical encodings, and immutable projection work; every clone, reload, stale, foreign, partial, oversized, or failed path returns to the complete canonical validation and serialization fallback.
+- Relief terrain submissions, passive resource halos, actor and ecology projection, regional habitat preparation, traversal queries, and stable HUD work now avoid repeated unchanged work while preserving the same visible and authoritative results.
+- Every packaged baseline carries fail-closed trusted-input, viewport, zoom, and page-lifecycle evidence. Separate browser evidence exercises the exact nested Pages build, while resource diagnostics can prove prolonged travel plus current-save reload, supported migration, and idempotent resave across fresh packaged processes.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only ruleset. No species, groups, actors, hazards, weather, current, terrain, resources, cargo, mortality, density, materialization, or save truth was removed or weakened to obtain the performance improvement.
+- The existing 24-addressable-actor global ecology cap, aggregate conservation, deterministic update cadence, and physical custody rules remain unchanged.
+
+### Interface
+
+- Field Manual version 70 records the complete Breathing Room candidate, its evidence boundaries, and the still-visible periodic hitch without presenting developer telemetry on the ordinary player HUD.
+- No player-facing control, desktop/mobile rule, accessibility behavior, Chart/Relief knowledge boundary, or ordinary visual style changes in this release candidate.
+
+### Save changes
+
+- Outer save version 32, simulation format 4, RegionalEcologyStateV6, habitat derivation hashes, and wildlife actor schema/version 1 remain unchanged; transient receipts, caches, measurements, and profiler state never enter the save envelope.
+- The closure witness uses production loading and saving to check exact current-v32 cold reload, supported v31-to-v32 migration, and a second idempotent v32 reload/save without changing the player's world or manufacturing recovery state.
+
+### Known limitations
+
+- Representative dense Relief and browser measurements on the primary development machine now occupy the directive's preferred 45–60 FPS band instead of the former sustained 4–8 FPS failure state, but the once-per-world-update hitch remains visible in worst-frame gaps and is not described as fixed.
+- These measurements are host- and scene-specific development evidence, not universal 60 FPS, perfect frame pacing, or broad low-power hardware certification. Whole-game fidelity tiers and mature-world scale remain the responsibility of the later Lean World work.
+- Selected resource-owner counts, renderer heap, DOM counters, and descendant-tree summed RSS are bounded diagnostics rather than exhaustive process-retention or unique-memory proof; shared pages may be double-counted and process churn can race a sample.
+- Source or build metadata alone never proves publication. A release becomes LIVE\_VERIFIED only after the exact cumulative, package, soak, remote CI, GitHub Pages, and cache-bypassed deployed-build gates pass.
+- Directive 04\_1B remains active while Alpha 60 is a release candidate; Living Voice remains gated until that exact release closure succeeds.
+
 ## 0.3.3-alpha.59 — 2026-09-23
 
 Build: `0.3.3-alpha.59` · Gameplay contract: 51 · Tutorial: 69

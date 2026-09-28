@@ -30,6 +30,7 @@ const {
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  buildPackagedLaunchArguments,
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
@@ -464,6 +465,27 @@ assert.throws(
 );
 assert.throws(() => buildHitchDelta({}, {}), TypeError);
 assert.throws(() => hitchSnapshotReasons(Number.POSITIVE_INFINITY, 0, {}), TypeError);
+
+{
+  const userDataDirectory = '/tmp/tideweft performance profile';
+  const first = buildPackagedLaunchArguments(9_229, userDataDirectory);
+  const second = buildPackagedLaunchArguments(9_229, userDataDirectory);
+  assert.deepEqual(first, [
+    '--remote-debugging-port=9229',
+    '--remote-debugging-address=127.0.0.1',
+    `--user-data-dir=${userDataDirectory}`,
+    '--tideweft-performance-window',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
+  ]);
+  assert.notEqual(first, second);
+  first.push('--mutated-test-copy');
+  assert.equal(second.includes('--mutated-test-copy'), false);
+  assert.equal(second.filter((argument) => argument === '--tideweft-performance-window').length, 1);
+  assert.throws(() => buildPackagedLaunchArguments(0, userDataDirectory), RangeError);
+  assert.throws(() => buildPackagedLaunchArguments(9_229, ''), TypeError);
+}
 
 {
   const normal = parseArguments([]);

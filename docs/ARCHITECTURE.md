@@ -72,6 +72,33 @@ conservation, or save truth. Camera visibility is not simulation activation.
 The governing rule is: **reduce work, not truth; simulate what matters now and
 preserve what matters later.**
 
+### Alpha 60 Breathing Room boundary
+
+The current Alpha 60 source candidate completes the early-performance
+architecture without creating a second simulation owner. Exact bounded
+same-stack receipts may reuse already-authenticated regional-ecology lineage,
+canonical encodings, immutable projections, and stable presentation work only
+when identity, order, authority, and size all match. Clone, reload, stale,
+foreign, partial, oversized, or failed inputs take the complete canonical
+validation and serialization path.
+
+Relief terrain submission, passive resource halos, actor/ecology projection,
+regional habitat preparation, traversal queries, and stable HUD presentation
+avoid repeated unchanged work while retaining the same deterministic outcomes,
+physical custody, biodiversity, knowledge, difficulty, and save bytes. Every
+packaged scenario binds exact trusted-input, viewport, zoom, and lifecycle
+guards. Separate browser, resource, and cold-persistence witnesses bind their
+own exact candidate and workload evidence. Those diagnostics remain
+developer-only and never enter simulation or saves.
+
+Representative dense Relief and browser measurements on the primary
+development machine occupy the preferred 45–60 FPS band instead of the former
+sustained 4–8 FPS failure state. This is host- and scene-specific evidence, not
+universal 60 FPS or low-power certification. A once-per-world-update hitch is
+still visible in worst-frame gaps and remains an explicit limitation. Alpha 60
+becomes release-verified only after the exact cumulative, packaged, soak,
+remote-CI, Pages, and cache-bypassed deployed-build gates succeed.
+
 ### Repository asset and storage law
 
 The tracked repository stays below 1 GB, targets roughly 600 MB, and requires
@@ -597,8 +624,9 @@ passed 290 test files / 2,791 tests, and Pages run `35375612200` succeeded. The
 first cache-bypassed exact-live comparison matched all 5/5 production files,
 totalling 4,251,968 bytes; the packaged runtime-only ASAR contains 10 entries
 totalling 4,472,022 bytes. Directive 04_1A **The Turning Day** is closed and
-**LIVE_VERIFIED**. Directive 04_1B **Breathing Room** is active; 04_2 **The
-Living Voice** follows it.
+**LIVE_VERIFIED**. Alpha 60 is the current Directive 04_1B **Breathing Room**
+release candidate; 04_2 **The Living Voice** remains gated on its exact release
+closure.
 
 ## Authoritative tick
 
@@ -1285,8 +1313,9 @@ files / 2,633 checks for `c67f30b`, Pages published five files totalling
 production files byte-for-byte. Directive 04_1 is closed. At that released
 checkpoint, the next authorized directive was 04_1A **The Turning Day**.
 Alpha53 has now shipped that bounded architecture as **LIVE_VERIFIED** and
-closes 04_1A. Directive 04_1B **Breathing Room** is active, followed by 04_2
-**The Living Voice**.
+closes 04_1A. Alpha 60 is the current Directive 04_1B **Breathing Room**
+release candidate, followed by 04_2 **The Living Voice** only after exact
+closure.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -2371,10 +2400,12 @@ descendant
 `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
 test files / 2,791 tests; Pages `35375612200` succeeded; all 5/5 exact live
 production files matched the 4,251,968-byte build; and the packaged runtime-only
-ASAR contains 10 entries / 4,472,022 bytes. Outer save v32, gameplay contract
-51, and tutorial/Field Manual version 63 are current. Directive 04_1A is closed
-and **LIVE_VERIFIED**; Directive 04_1B **Breathing Room** is active, and 04_2
-**The Living Voice** follows it.
+ASAR contains 10 entries / 4,472,022 bytes. At that current released boundary,
+outer save v32, gameplay contract 51, and tutorial/Field Manual version 63 are
+current. Directive 04_1A is closed
+and **LIVE_VERIFIED**; Alpha 60 is the current Directive 04_1B **Breathing
+Room** release candidate, and 04_2 **The Living Voice** follows only after its
+exact closure gate.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

@@ -19,6 +19,12 @@ const CDP_CALL_TIMEOUT_MS = 15_000;
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 3_000;
 const TARGET_RENDERER_WARMUP_FRAMES = 30;
 const LONG_TRAVEL_MINIMUM_SAMPLE_MS = 210_000;
+const PACKAGED_PERFORMANCE_LAUNCH_SWITCHES = Object.freeze([
+  '--tideweft-performance-window',
+  '--disable-background-timer-throttling',
+  '--disable-renderer-backgrounding',
+  '--disable-backgrounding-occluded-windows',
+]);
 const HITCH_TRACE_THRESHOLD_MS = 80;
 const HITCH_TRACE_RECORD_CAPACITY = 32;
 const HITCH_TRACE_SNAPSHOT_CAPACITY = 16;
@@ -368,6 +374,21 @@ function parseSampleMs(rawValue) {
     throw new Error('--sample-ms must be a whole number from 1000 through 60000');
   }
   return sampleMs;
+}
+
+function buildPackagedLaunchArguments(port, userDataDirectory) {
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new RangeError('Packaged performance launch port must be a valid TCP port');
+  }
+  if (typeof userDataDirectory !== 'string' || userDataDirectory.length === 0) {
+    throw new TypeError('Packaged performance launch requires an isolated user-data directory');
+  }
+  return [
+    `--remote-debugging-port=${port}`,
+    '--remote-debugging-address=127.0.0.1',
+    `--user-data-dir=${userDataDirectory}`,
+    ...PACKAGED_PERFORMANCE_LAUNCH_SWITCHES,
+  ];
 }
 
 function outputPath(rawOutput, defaultStem = 'runtime-baseline') {
@@ -1520,7 +1541,13 @@ function assertWebAudioLifecycleEvidence(
     || snapshot?.malformedLifecycleEvents !== 0
   ) {
     throw new Error(
-      `${label} did not retain a complete, internally consistent CDP WebAudio lifecycle witness`,
+      `${label} did not retain a complete, internally consistent CDP WebAudio lifecycle witness: `
+      + JSON.stringify({
+        live: snapshot?.live ?? null,
+        eventTotals: snapshot?.eventTotals ?? null,
+        unmatchedDestroyEvents: snapshot?.unmatchedDestroyEvents ?? null,
+        malformedLifecycleEvents: snapshot?.malformedLifecycleEvents ?? null,
+      }),
     );
   }
   return true;
@@ -1551,6 +1578,47 @@ function attachWebAudioLifecycleTracker(client) {
     snapshot: () => tracker.snapshot(),
     detach: () => unsubscribe.forEach((remove) => remove()),
   });
+}
+
+async function primePackagedAudioContext(client) {
+  const primed = await client.evaluate(`(async () => {
+    const playTitleCrescendo = window.__TIDEWEFT__?.runtime?.playTitleCrescendo;
+    if (typeof playTitleCrescendo !== 'function') return false;
+    await playTitleCrescendo(0);
+    // playTitleCrescendo resolves after scheduling its tones. Let every
+    // pre-observation transient finish so CDP cannot later report destruction
+    // events for nodes that predate WebAudio.enable.
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    return true;
+  })()`);
+  if (primed !== true) {
+    throw new Error('Packaged resource diagnostic could not prime its pre-observation audio graph');
+  }
+  // Finished one-shot AudioNodes remain eligible for renderer GC after their
+  // sound has ended. Collect them before WebAudio.enable so their eventual
+  // destruction cannot appear as an unmatched event in the observed scope.
+  try {
+    await client.call('HeapProfiler.enable');
+    await client.call('HeapProfiler.collectGarbage');
+    await client.call('HeapProfiler.disable');
+  } catch {
+    throw new Error(
+      'Packaged resource diagnostic could not collect its pre-observation audio primer',
+    );
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+async function startObservedPackagedAudioWitness(client) {
+  const started = await client.evaluate(`(async () => {
+    const playTitleCrescendo = window.__TIDEWEFT__?.runtime?.playTitleCrescendo;
+    if (typeof playTitleCrescendo !== 'function') return false;
+    await playTitleCrescendo(1);
+    return true;
+  })()`);
+  if (started !== true) {
+    throw new Error('Packaged resource diagnostic could not start its observed audio witness');
+  }
 }
 
 function parsePosixProcessTable(source) {
@@ -5029,14 +5097,7 @@ async function runPackagedPersistenceProcess({
   const port = await openPort();
   assertNotInterrupted(`before spawning ${phaseLabel}`);
   const childState = { spawnError: null };
-  const child = spawn(executable, [
-    `--remote-debugging-port=${port}`,
-    '--remote-debugging-address=127.0.0.1',
-    `--user-data-dir=${userDataDirectory}`,
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
-  ], {
+  const child = spawn(executable, buildPackagedLaunchArguments(port, userDataDirectory), {
     cwd: projectRoot,
     env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -5273,14 +5334,7 @@ async function runIsolatedScenario(
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
   const childState = { spawnError: null };
-  const child = spawn(executable, [
-    `--remote-debugging-port=${port}`,
-    '--remote-debugging-address=127.0.0.1',
-    `--user-data-dir=${userDataDirectory}`,
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    '--disable-backgrounding-occluded-windows',
-  ], {
+  const child = spawn(executable, buildPackagedLaunchArguments(port, userDataDirectory), {
     cwd: projectRoot,
     env: { ...process.env },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -5347,7 +5401,22 @@ async function runIsolatedScenario(
     await waitForStablePackagedGameplayDocument(client);
     await client.waitFor(`document.visibilityState === 'visible'`);
     await installResourceInputGuard(client);
+    await setViewport(client, scenario.viewport);
+    // Chromium updates the emulated viewport values before it dispatches the
+    // corresponding window/visualViewport resize events. Drain those
+    // controlled setup events before rebasing the guard so any later resize is
+    // still treated as contamination.
+    await client.evaluate(`new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    })`);
+    await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
+    const bootstrap = await bootstrapWorld(client, scenario.seed);
     if (resourceShakedown || resourceSoak) {
+      // Bootstrap replaces the title runtime. Prime the final world runtime
+      // before observation so its persistent mixer graph is outside the
+      // transient-node scope, then create one observed cue to prove that CDP
+      // lifecycle accounting is live and balanced.
+      await primePackagedAudioContext(client);
       webAudioTracker = attachWebAudioLifecycleTracker(client);
       try {
         await client.call('WebAudio.enable');
@@ -5356,10 +5425,8 @@ async function runIsolatedScenario(
           'CDP WebAudio lifecycle instrumentation was unavailable; resource diagnostic cannot continue',
         );
       }
+      await startObservedPackagedAudioWitness(client);
     }
-    await setViewport(client, scenario.viewport);
-    await rebaseResourceInputGuardAfterViewport(client, scenario.viewport);
-    const bootstrap = await bootstrapWorld(client, scenario.seed);
     let measurement = resourceSoak
       ? await measureResourceSoak(
         client,
@@ -5665,14 +5732,10 @@ async function main() {
 
   const guardedMeasurementInstrumentation = {
     trustedInputGuard: 'installed once the final packaged gameplay document is ready and before controlled viewport setup or world bootstrap; passive pointer movement is counted as hover evidence, while trusted presses/clicks, wheel, keys, touch, or subsequent viewport/DPR/visualViewport-scale drift fail the run',
-    pageLifecycleGuard: 'requires a visible document throughout guarded measurement; hidden transitions, pagehide, or freeze invalidate evidence, while focus/blur is retained as context rather than treated as contamination',
+    pageLifecycleGuard: 'requires the profiler-configured active document to remain visible throughout guarded measurement; hidden transitions, pagehide, or freeze invalidate evidence, while focus/blur is retained as context rather than treated as contamination',
     backgroundExecutionPolicy: {
-      launchSwitches: [
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding',
-        '--disable-backgrounding-occluded-windows',
-      ],
-      limitation: 'ordinary operating-system window overlap is not directly observable; launch switches mitigate background and occlusion scheduling, while page lifecycle evidence rejects hidden, pagehide, or frozen documents',
+      launchSwitches: [...PACKAGED_PERFORMANCE_LAUNCH_SWITCHES],
+      limitation: 'the profiler-only packaged window uses Electron backgroundThrottling=false, an unfocusable mouse-transparent system overlay across desktop/full-screen workspaces, and explicit scheduling switches so host occlusion cannot silently reduce presentation work; ordinary player launches are unchanged, while lifecycle evidence still rejects any hidden, pagehide, or frozen document that occurs under this policy',
     },
   };
 
@@ -5840,6 +5903,7 @@ module.exports = {
   assertSettledResourcePendingDrained,
   assertWebAudioLifecycleEvidence,
   buildHitchDelta,
+  buildPackagedLaunchArguments,
   bootstrapWorldDocument,
   captureInputGuardEvidence,
   classifyElectronProcessRole,

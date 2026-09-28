@@ -1064,8 +1064,8 @@ is a representative regression/liveness floor, not low-end certification or a
 full-catalog journey. The settlement working dog is not a bonded player
 companion; the independent dog's shelter/routine, physical interiors, seasons,
 and broader routines remain later work. Outer save v32, simulation v4,
-Regional Ecology V6, and wildlife actor v1 remain current, with gameplay
-contract 51 and Field Manual 63.
+Regional Ecology V6, and wildlife actor v1 remain current, with released
+gameplay contract 51 and released Field Manual 63 at that Alpha53 boundary.
 
 Exact feature commit `a419f774260292331e8c93ebc65ee3fd5125f7c3` is preserved
 beneath validation-only descendants `f6a8816`, `e3fe15d`, and
@@ -1073,8 +1073,8 @@ beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 test files / 2,791 tests and the production build; Pages `35375612200` deployed
 that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
 production files in the exact 4,251,968-byte web artifact. Directive 04_1A is
-complete. Active Directive 04_1B is **Breathing Room**; 04_2 **The Living
-Voice** follows it.
+complete. Alpha 60 is the current Directive 04_1B **Breathing Room** release
+candidate; 04_2 **The Living Voice** remains gated on exact release closure.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -1962,8 +1962,9 @@ relationship-bearing continuity witness rather than a bonded companion, and
 packaged timing is not universal low-end certification. The soak's materialized
 wildlife representative is one real activity-bound Alpine golden eagle, not
 every species at once.
-Directive 04_1A is complete; active Directive 04_1B **Breathing Room** comes
-next, followed by 04_2 **Living Voice**.
+Directive 04_1A is complete; Alpha 60 is the current Directive 04_1B
+**Breathing Room** release candidate, followed by 04_2 **Living Voice** only
+after exact closure.
 
 Live through Alpha 53:
 
@@ -2088,8 +2089,9 @@ Cumulatively released in Alpha53:
   SHA, and all
   5/5 live production files matched the exact 4,251,968-byte artifact.
 
-This closes Directive 04_1A. Directive 04_1B **Breathing Room** is active, and
-04_2 **Living Voice** follows it.
+This closes Directive 04_1A. Alpha 60 is the current Directive 04_1B
+**Breathing Room** release candidate, and 04_2 **Living Voice** follows only
+after its exact closure gate.
 
 Expansion runway, not current behavior:
 

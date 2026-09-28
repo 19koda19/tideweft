@@ -758,11 +758,13 @@ beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 `da4a75f2eae7c14b2d05f5c89178788d0005aba4`. CI `35375612294` passed 290
 test files / 2,791 tests and the production build; Pages `35375612200` deployed
 that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
-production files in the exact 4,251,968-byte web artifact. Outer save v32,
-gameplay contract 51, and Field Manual 63 are current; simulation v4,
+production files in the exact 4,251,968-byte web artifact. At that current
+released boundary, outer save v32, gameplay contract 51, and Field Manual 63
+are current; simulation v4,
 `RegionalEcologyStateV6`, and wildlife actor v1 remain unchanged. Directive
-04_1A is complete, Directive 04_1B **Breathing Room** is active, and 04_2 **The
-Living Voice** follows it.
+04_1A is complete. Alpha 60 is the current Directive 04_1B **Breathing Room**
+release candidate, and 04_2 **The Living Voice** follows only after exact
+closure.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -806,7 +808,8 @@ companionship, physical interiors, seasons, broader routines, wider settlement
 ecology, and wider sound/evidence tracking still require their own authoritative
 owners. Alpha39's shared performance and seamless-crossing evidence closed
 Directive 04_1; Alpha53's distributed production evidence closes Directive
-04_1A. Directive 04_1B Breathing Room is active, and Living Voice follows.
+04_1A. Alpha 60 is the current Directive 04_1B Breathing Room release
+candidate, and Living Voice follows only after exact closure.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)
