@@ -73,12 +73,18 @@ import {
 } from "./regionalEcologyRuntime";
 import {
   prepareRegionalEcologyCanonicalParentFromReceipt,
+  prepareRegionalEcologyCanonicalTerminalV6FromReceipt,
   publishRegionalEcologyCanonicalReceipt,
   revokeRegionalEcologyCanonicalReceipt,
+  type RegionalEcologyCanonicalV6BreadthEncoding,
 } from "./regionalEcologyCanonicalSeal";
 import {
   hashRegionalEcologyActiveProjectionIntegrity,
 } from "./regionalEcologyActiveProjectionIntegrity";
+import {
+  createRegionalEcologyV6SiblingEncodingCollector,
+  type RegionalEcologyV6SiblingEncodingCollector,
+} from "./regionalEcologyStateV6SiblingEncodingCollector";
 
 export const REGIONAL_ECOLOGY_STATE_V6_VERSION = 6 as const;
 export const REGIONAL_ECOLOGY_STATE_V6_OWNER_ID =
@@ -100,12 +106,34 @@ export const REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES =
 const HASH_PATTERN = /^[0-9a-f]{16}$/u;
 const TRANSACTION_PATTERN = /^regional-ecology-v29-wrapper:[0-9a-f]{16}$/u;
 const UTF8_ENCODER = new TextEncoder();
+/** Combined retained patch + completed-snapshot text ceiling for one call. */
+const REGIONAL_ECOLOGY_V6_SIBLING_ENCODING_MAX_CODE_UNITS = 16 * 1_024 * 1_024;
 const TRUSTED_STATES = new WeakSet<object>();
 const TRUSTED_PROJECTIONS = new WeakSet<object>();
 const TRUSTED_ACTIVE_COMMITS = new WeakMap<
   RegionalEcologyStateV6,
   RegionalEcologyStateV6
 >();
+
+interface RegionalEcologyStateV6SiblingEncodingReceipt {
+  readonly value: Omit<RegionalEcologyStateV6, "integrity">;
+  readonly version: typeof REGIONAL_ECOLOGY_STATE_V6_VERSION;
+  readonly ownerId: typeof REGIONAL_ECOLOGY_STATE_V6_OWNER_ID;
+  readonly base: RegionalEcologyStateV5;
+  readonly baseIntegrity: string;
+  readonly breadthRoot: RegionalBreadthEcologyRootV1;
+  readonly breadthRootIntegrity: string;
+  readonly breadthRootSeedFingerprint: string;
+  readonly breadthActiveResidents: readonly RegionalEcologyStateV6BreadthSnapshotV1[];
+  readonly adoption: RegionalEcologyStateV6AdoptionReceiptV1 | null;
+  readonly updatedAtTick: number;
+  readonly orderedSourceKeys: readonly string[];
+  readonly combinedSiblingEncodingCodeUnits: number;
+  readonly preparedBreadth: RegionalEcologyCanonicalV6BreadthEncoding;
+}
+
+/** Exact same-stack receipts only; never save/state/root-retained. */
+const TRUSTED_V6_SIBLING_ENCODING_RECEIPTS = new WeakSet<object>();
 
 export interface RegionalEcologyStateV6AdoptionReceiptV1 {
   readonly version: typeof REGIONAL_ECOLOGY_STATE_V6_ADOPTION_VERSION;
@@ -1056,6 +1084,15 @@ function createRegionalEcologyStateV6FromAdvanceReceipt(
   ) {
     throw new RangeError("Regional ecology v6 prepared children are not canonical");
   }
+  const siblingEncodingCollector =
+    createRegionalEcologyV6SiblingEncodingCollector<RegionalEcologyStateV6BreadthSnapshotV1>(
+      REGIONAL_ECOLOGY_V6_SIBLING_ENCODING_MAX_CODE_UNITS,
+      input.prepared.map(({ canonicalPatchEncoding }) => (
+        typeof canonicalPatchEncoding === "string"
+          ? canonicalPatchEncoding.length
+          : Number.NaN
+      )),
+    );
   const breadthActiveResidents: RegionalEcologyStateV6BreadthSnapshotV1[] = [];
   for (let index = 0; index < input.prepared.length; index += 1) {
     const prepared = input.prepared[index]!;
@@ -1065,33 +1102,42 @@ function createRegionalEcologyStateV6FromAdvanceReceipt(
     breadthActiveResidents.push(createBreadthSnapshotFromAdvanceReceipt(
       prepared,
       base.updatedAtTick,
+      siblingEncodingCollector,
     ));
   }
   breadthActiveResidents.sort(compareSnapshot);
+  const frozenBreadthActiveResidents = Object.freeze(breadthActiveResidents);
   const adoption = canonicalAdoption(input.adoption, base, breadthRoot);
   if (input.adoption !== null && adoption === null) {
     throw new RangeError("Regional ecology v6 adoption receipt is malformed");
   }
-  if (!validBreadthSources(base, breadthRoot, breadthActiveResidents)) {
+  if (!validBreadthSources(base, breadthRoot, frozenBreadthActiveResidents)) {
     throw new RangeError("Regional ecology v6 breadth sources escape the hot window");
   }
-  if (!validCrossLayerOwnership(base, breadthRoot, breadthActiveResidents)) {
+  if (!validCrossLayerOwnership(base, breadthRoot, frozenBreadthActiveResidents)) {
     throw new RangeError("Regional ecology v6 child ownership overlaps");
   }
-  return sealState({
+  const value = Object.freeze({
     version: REGIONAL_ECOLOGY_STATE_V6_VERSION,
     ownerId: REGIONAL_ECOLOGY_STATE_V6_OWNER_ID,
     updatedAtTick: base.updatedAtTick,
     base,
     breadthRoot,
-    breadthActiveResidents: Object.freeze(breadthActiveResidents),
+    breadthActiveResidents: frozenBreadthActiveResidents,
     adoption,
   });
+  return sealState(
+    value,
+    createV6SiblingEncodingReceipt(value, siblingEncodingCollector),
+  );
 }
 
 function createBreadthSnapshotFromAdvanceReceipt(
   prepared: RegionalBreadthEcologyAdvancedResidentReceipt,
   tick: number,
+  siblingEncodingCollector: RegionalEcologyV6SiblingEncodingCollector<
+    RegionalEcologyStateV6BreadthSnapshotV1
+  >,
 ): RegionalEcologyStateV6BreadthSnapshotV1 {
   const patch = prepared.patch;
   if (
@@ -1127,13 +1173,19 @@ function createBreadthSnapshotFromAdvanceReceipt(
     lineageHash: prepared.lineageHash,
     patch,
   };
-  return deepFreeze({
+  const encoded = encodeBreadthSnapshotWithPreparedPatchEncoding(
+    snapshotBase,
+    prepared.canonicalPatchEncoding,
+    siblingEncodingCollector.accepting,
+  );
+  const snapshot = deepFreeze({
     ...snapshotBase,
-    integrity: hashBreadthSnapshotWithPreparedPatchEncoding(
-      snapshotBase,
-      prepared.canonicalPatchEncoding,
-    ),
+    integrity: encoded.integrity,
   });
+  if (encoded.canonicalEncodingSegments !== null) {
+    siblingEncodingCollector.collect(snapshot, encoded.canonicalEncodingSegments);
+  }
+  return snapshot;
 }
 
 /**
@@ -1142,10 +1194,14 @@ function createBreadthSnapshotFromAdvanceReceipt(
  * hash sweep still runs over prefix + child + suffix; only the duplicate deep
  * traversal/string construction of the same immutable patch is omitted.
  */
-function hashBreadthSnapshotWithPreparedPatchEncoding(
+function encodeBreadthSnapshotWithPreparedPatchEncoding(
   snapshotBase: Omit<RegionalEcologyStateV6BreadthSnapshotV1, "integrity">,
   canonicalPatchEncoding: string,
-): string {
+  retainCanonicalEncoding: boolean,
+): Readonly<{
+  readonly integrity: string;
+  readonly canonicalEncodingSegments: readonly string[] | null;
+}> {
   const template = stableStringify({ ...snapshotBase, patch: null });
   const marker = `${JSON.stringify("patch")}:null`;
   const markerIndex = template.indexOf(marker);
@@ -1156,11 +1212,35 @@ function hashBreadthSnapshotWithPreparedPatchEncoding(
     throw new RangeError("Prepared breadth snapshot lost its patch encoding slot");
   }
   const valueIndex = markerIndex + marker.length - "null".length;
-  return hashCanonicalEncodingSegments([
+  const unsealedSegments = [
     template.slice(0, valueIndex),
     canonicalPatchEncoding,
     template.slice(valueIndex + "null".length),
-  ]);
+  ] as const;
+  const integrity = hashCanonicalEncodingSegments(unsealedSegments);
+  if (!retainCanonicalEncoding) {
+    return Object.freeze({ integrity, canonicalEncodingSegments: null });
+  }
+  const nextKeyMarker = `,${JSON.stringify("kind")}:`;
+  const nextKeyIndex = template.indexOf(nextKeyMarker);
+  if (
+    nextKeyIndex < 0
+    || nextKeyIndex >= valueIndex
+    || template.indexOf(nextKeyMarker, nextKeyIndex + nextKeyMarker.length) >= 0
+  ) {
+    throw new RangeError("Prepared breadth snapshot lost integrity ordering");
+  }
+  const insertionIndex = nextKeyIndex + 1;
+  return Object.freeze({
+    integrity,
+    canonicalEncodingSegments: Object.freeze([
+      template.slice(0, insertionIndex),
+      `${JSON.stringify("integrity")}:${JSON.stringify(integrity)},`,
+      template.slice(insertionIndex, valueIndex),
+      canonicalPatchEncoding,
+      template.slice(valueIndex + "null".length),
+    ]),
+  });
 }
 
 function createBreadthSnapshot(
@@ -1922,10 +2002,124 @@ function patchMaterializationIsGroupAtomic(
   return true;
 }
 
+/**
+ * Bind the complete source-ordered resident-array encoding to the exact V6
+ * envelope assembled in this call. Patch text came from the consumed breadth
+ * result receipt; snapshot text was completed while those snapshots were
+ * sealed. The proof is bounded, process-local, and consumed synchronously.
+ */
+function createV6SiblingEncodingReceipt(
+  value: Omit<RegionalEcologyStateV6, "integrity">,
+  collector: RegionalEcologyV6SiblingEncodingCollector<
+    RegionalEcologyStateV6BreadthSnapshotV1
+  >,
+): RegionalEcologyStateV6SiblingEncodingReceipt | null {
+  if (
+    !Object.isFrozen(value)
+    || !Object.isFrozen(value.base)
+    || !Object.isFrozen(value.breadthRoot)
+    || !Object.isFrozen(value.breadthActiveResidents)
+    || (value.adoption !== null && !Object.isFrozen(value.adoption))
+    || value.updatedAtTick !== value.base.updatedAtTick
+    || value.updatedAtTick !== value.breadthRoot.updatedAtTick
+  ) {
+    collector.revoke();
+    return null;
+  }
+  const seen = new Set<RegionalEcologyStateV6BreadthSnapshotV1>();
+  for (let index = 0; index < value.breadthActiveResidents.length; index += 1) {
+    const snapshot = value.breadthActiveResidents[index]!;
+    if (
+      seen.has(snapshot)
+      || !Object.isFrozen(snapshot)
+      || !Object.isFrozen(snapshot.patch)
+      || snapshot.patch.updatedAtTick !== value.updatedAtTick
+      || (index > 0 && compareSnapshot(
+        value.breadthActiveResidents[index - 1]!,
+        snapshot,
+      ) >= 0)
+    ) {
+      collector.revoke();
+      return null;
+    }
+    seen.add(snapshot);
+  }
+  const completed = collector.finish(value.breadthActiveResidents);
+  if (
+    completed === null
+    || !Object.isFrozen(completed)
+    || completed.values !== value.breadthActiveResidents
+    || !Object.isFrozen(completed.segments)
+    || !nonnegativeSafeInteger(completed.combinedCodeUnits)
+    || completed.combinedCodeUnits
+      > REGIONAL_ECOLOGY_V6_SIBLING_ENCODING_MAX_CODE_UNITS
+  ) return null;
+  const preparedBreadth = Object.freeze({
+    value: value.breadthActiveResidents,
+    segments: completed.segments,
+  });
+  const receipt = Object.freeze({
+    value,
+    version: value.version,
+    ownerId: value.ownerId,
+    base: value.base,
+    baseIntegrity: value.base.integrity,
+    breadthRoot: value.breadthRoot,
+    breadthRootIntegrity: value.breadthRoot.integrity,
+    breadthRootSeedFingerprint: value.breadthRoot.seedFingerprint,
+    breadthActiveResidents: value.breadthActiveResidents,
+    adoption: value.adoption,
+    updatedAtTick: value.updatedAtTick,
+    orderedSourceKeys: Object.freeze(value.breadthActiveResidents.map(({
+      sourceKey,
+    }) => sourceKey)),
+    combinedSiblingEncodingCodeUnits: completed.combinedCodeUnits,
+    preparedBreadth,
+  });
+  TRUSTED_V6_SIBLING_ENCODING_RECEIPTS.add(receipt);
+  return receipt;
+}
+
+function consumeV6SiblingEncodingReceipt(
+  value: Omit<RegionalEcologyStateV6, "integrity">,
+  receipt: RegionalEcologyStateV6SiblingEncodingReceipt | null,
+): RegionalEcologyCanonicalV6BreadthEncoding | null {
+  if (
+    receipt === null
+    || !TRUSTED_V6_SIBLING_ENCODING_RECEIPTS.delete(receipt)
+    || receipt.value !== value
+    || receipt.version !== value.version
+    || receipt.version !== REGIONAL_ECOLOGY_STATE_V6_VERSION
+    || receipt.ownerId !== value.ownerId
+    || receipt.ownerId !== REGIONAL_ECOLOGY_STATE_V6_OWNER_ID
+    || receipt.base !== value.base
+    || receipt.baseIntegrity !== value.base.integrity
+    || receipt.breadthRoot !== value.breadthRoot
+    || receipt.breadthRootIntegrity !== value.breadthRoot.integrity
+    || receipt.breadthRootSeedFingerprint !== value.breadthRoot.seedFingerprint
+    || receipt.breadthActiveResidents !== value.breadthActiveResidents
+    || receipt.adoption !== value.adoption
+    || receipt.updatedAtTick !== value.updatedAtTick
+    || receipt.preparedBreadth.value !== value.breadthActiveResidents
+    || !nonnegativeSafeInteger(receipt.combinedSiblingEncodingCodeUnits)
+    || receipt.combinedSiblingEncodingCodeUnits
+      > REGIONAL_ECOLOGY_V6_SIBLING_ENCODING_MAX_CODE_UNITS
+    || receipt.orderedSourceKeys.length !== value.breadthActiveResidents.length
+    || receipt.orderedSourceKeys.some((sourceKey, index) => (
+      sourceKey !== value.breadthActiveResidents[index]?.sourceKey
+    ))
+  ) return null;
+  return receipt.preparedBreadth;
+}
+
 function sealState(
   value: Omit<RegionalEcologyStateV6, "integrity">,
+  siblingReceipt: RegionalEcologyStateV6SiblingEncodingReceipt | null = null,
 ): RegionalEcologyStateV6 {
-  const preparation = prepareRegionalEcologyCanonicalParentFromReceipt(value);
+  const preparedBreadth = consumeV6SiblingEncodingReceipt(value, siblingReceipt);
+  const preparation = preparedBreadth === null
+    ? prepareRegionalEcologyCanonicalParentFromReceipt(value)
+    : prepareRegionalEcologyCanonicalTerminalV6FromReceipt(value, preparedBreadth);
   if (preparation === null) {
     const metrics = canonicalIntegrityMetrics(value);
     const state = deepFreeze({ ...value, integrity: metrics.integrity });

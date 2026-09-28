@@ -7,6 +7,7 @@ import {
 import {
   prepareRegionalEcologyCanonicalParentFromReceipt,
   prepareRegionalEcologyCanonicalReceiptSeed,
+  prepareRegionalEcologyCanonicalTerminalV6FromReceipt,
   publishRegionalEcologyCanonicalReceipt,
   revokeRegionalEcologyCanonicalReceipt,
 } from "./regionalEcologyCanonicalSeal";
@@ -216,5 +217,88 @@ describe("regional ecology canonical seal receipts", () => {
       version: 7,
       base: terminal,
     })).toBeNull();
+  });
+
+  it("streams one exact frozen V6 breadth sibling with Unicode byte parity", () => {
+    const childValue = { payload: Object.freeze({ count: 34 }) };
+    const childPreparation = prepareRegionalEcologyCanonicalReceiptSeed(childValue);
+    const child = freezeState(childValue, childPreparation.integrity);
+    expect(publishRegionalEcologyCanonicalReceipt(childPreparation, child, true)).toBe(true);
+
+    const residents = Object.freeze([
+      Object.freeze({ sourceKey: "a", note: "tide🌊", lone: "\ud800" }),
+      Object.freeze({ sourceKey: "β", note: "e\u0301" }),
+    ]);
+    const value = Object.freeze({
+      version: 6,
+      base: child,
+      breadthActiveResidents: residents,
+      breadthRoot: Object.freeze({ revision: 2 }),
+    });
+    const preparation = prepareRegionalEcologyCanonicalTerminalV6FromReceipt(value, Object.freeze({
+      value: residents,
+      segments: Object.freeze([
+        "[",
+        stableStringify(residents[0]),
+        ",",
+        stableStringify(residents[1]),
+        "]",
+      ]),
+    }));
+    expect(preparation).toEqual(canonicalIntegrityMetrics(value));
+    const state = freezeState(value, preparation!.integrity);
+    expect(preparation?.sealedSerializedBytes).toBe(
+      UTF8_ENCODER.encode(stableStringify(state)).byteLength,
+    );
+    expect(publishRegionalEcologyCanonicalReceipt(preparation!, state, false)).toBe(true);
+    expect(prepareRegionalEcologyCanonicalParentFromReceipt({
+      version: 7,
+      base: state,
+    })).toBeNull();
+  });
+
+  it("falls back exactly and burns the base receipt for a substituted V6 sibling", () => {
+    const childValue = { payload: Object.freeze({ count: 55 }) };
+    const childPreparation = prepareRegionalEcologyCanonicalReceiptSeed(childValue);
+    const child = freezeState(childValue, childPreparation.integrity);
+    expect(publishRegionalEcologyCanonicalReceipt(childPreparation, child, true)).toBe(true);
+
+    const residents = Object.freeze([Object.freeze({ sourceKey: "exact" })]);
+    const clone = Object.freeze([Object.freeze({ sourceKey: "exact" })]);
+    const value = Object.freeze({ version: 6, base: child, breadthActiveResidents: residents });
+    const preparation = prepareRegionalEcologyCanonicalTerminalV6FromReceipt(value, Object.freeze({
+      value: clone,
+      segments: Object.freeze(["[", stableStringify(clone[0]), "]"]),
+    }));
+    expect(preparation).toEqual(canonicalIntegrityMetrics(value));
+    const state = freezeState(value, preparation!.integrity);
+    expect(publishRegionalEcologyCanonicalReceipt(preparation!, state, false)).toBe(true);
+    expect(prepareRegionalEcologyCanonicalTerminalV6FromReceipt(value, Object.freeze({
+      value: residents,
+      segments: Object.freeze(["[", stableStringify(residents[0]), "]"]),
+    }))).toBeNull();
+  });
+
+  it("falls back when prepared UTF-8 segments split one surrogate pair", () => {
+    const childValue = { payload: Object.freeze({ count: 89 }) };
+    const childPreparation = prepareRegionalEcologyCanonicalReceiptSeed(childValue);
+    const child = freezeState(childValue, childPreparation.integrity);
+    expect(publishRegionalEcologyCanonicalReceipt(childPreparation, child, true)).toBe(true);
+
+    const residents = Object.freeze(["🌊"]);
+    const value = Object.freeze({ version: 6, base: child, breadthActiveResidents: residents });
+    const preparation = prepareRegionalEcologyCanonicalTerminalV6FromReceipt(
+      value,
+      Object.freeze({
+        value: residents,
+        segments: Object.freeze(["[", "\"\ud83c", "\udf0a\"", "]"]),
+      }),
+    );
+    expect(preparation).toEqual(canonicalIntegrityMetrics(value));
+    const state = freezeState(value, preparation!.integrity);
+    expect(preparation?.sealedSerializedBytes).toBe(
+      UTF8_ENCODER.encode(stableStringify(state)).byteLength,
+    );
+    expect(publishRegionalEcologyCanonicalReceipt(preparation!, state, false)).toBe(true);
   });
 });

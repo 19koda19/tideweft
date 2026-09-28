@@ -1,6 +1,7 @@
 import {
   compareText,
   hashCanonicalEncoding,
+  hashCanonicalEncodingSegments,
 } from "../sim/util";
 
 const UTF8_ENCODER = new TextEncoder();
@@ -16,7 +17,7 @@ interface PendingCanonicalPreparation {
   readonly keys: readonly string[];
   readonly values: readonly unknown[];
   readonly integrity: string;
-  readonly encoding: string;
+  readonly encoding: string | null;
   readonly receiptEligible: boolean;
 }
 
@@ -24,6 +25,18 @@ export interface RegionalEcologyCanonicalPreparation {
   readonly integrity: string;
   readonly sealedSerializedBytes: number;
 }
+
+/**
+ * @internal Exact V6-local sibling text authenticated by the V6 owner before
+ * it crosses this terminal sealing boundary. The segments must describe the
+ * same frozen `breadthActiveResidents` array identity in canonical order.
+ */
+export interface RegionalEcologyCanonicalV6BreadthEncoding {
+  readonly value: readonly unknown[];
+  readonly segments: readonly string[];
+}
+
+const MAX_V6_BREADTH_ENCODING_CODE_UNITS = 16 * 1_024 * 1_024;
 
 let pendingReceipt: PendingCanonicalReceipt | null = null;
 let pendingPreparation: PendingCanonicalPreparation | null = null;
@@ -115,6 +128,113 @@ function prepareExact(
   return preparation;
 }
 
+function validV6BreadthEncoding(
+  value: Readonly<Record<string, unknown>>,
+  prepared: RegionalEcologyCanonicalV6BreadthEncoding,
+): boolean {
+  if (
+    !Object.isFrozen(prepared)
+    || value.breadthActiveResidents !== prepared.value
+    || !Array.isArray(prepared.value)
+    || !Object.isFrozen(prepared.value)
+    || !Array.isArray(prepared.segments)
+    || !Object.isFrozen(prepared.segments)
+    || prepared.segments.length < 2
+    || prepared.segments[0] !== "["
+    || prepared.segments[prepared.segments.length - 1] !== "]"
+  ) return false;
+  let codeUnits = 0;
+  let priorSegmentEndsWithHighSurrogate = false;
+  for (const segment of prepared.segments) {
+    if (typeof segment !== "string") return false;
+    if (segment.length > 0) {
+      const first = segment.charCodeAt(0);
+      if (
+        priorSegmentEndsWithHighSurrogate
+        && first >= 0xdc00
+        && first <= 0xdfff
+      ) return false;
+      const last = segment.charCodeAt(segment.length - 1);
+      priorSegmentEndsWithHighSurrogate = last >= 0xd800 && last <= 0xdbff;
+    }
+    codeUnits += segment.length;
+    if (codeUnits > MAX_V6_BREADTH_ENCODING_CODE_UNITS) return false;
+  }
+  return true;
+}
+
+/**
+ * Terminal V6 preparation that preserves the complete released hash and
+ * UTF-8 byte sweeps while avoiding a second deep traversal of one exact,
+ * same-stack breadth-resident array. A malformed hint is ignored and the
+ * ordinary parent preparation remains authoritative.
+ */
+export function prepareRegionalEcologyCanonicalTerminalV6FromReceipt(
+  value: unknown,
+  preparedBreadth: RegionalEcologyCanonicalV6BreadthEncoding,
+): RegionalEcologyCanonicalPreparation | null {
+  const receipt = pendingReceipt;
+  pendingReceipt = null;
+  pendingPreparation = null;
+  if (!isUnsealedPlainObject(value) || !Object.hasOwn(value, "base")) return null;
+  const base = value.base;
+  if (typeof base !== "object" || base === null || !Object.isFrozen(base)) return null;
+  if (receipt === null || receipt.state !== base) return null;
+  if ((base as Readonly<Record<string, unknown>>).integrity !== receipt.integrity) return null;
+  if (!validV6BreadthEncoding(value, preparedBreadth)) {
+    return prepareExact(value, receipt.encoding);
+  }
+
+  const keys = Object.keys(value).sort(compareText);
+  const values = keys.map((key) => value[key]);
+  const freezeProof: NestedFreezeProof = { allObjectsFrozen: true };
+  const encodedValues = keys.map((key, index): readonly string[] => {
+    const nested = values[index];
+    if (nested === undefined) throw new TypeError(`Cannot encode undefined at key ${key}`);
+    if (key === "base") return Object.freeze([receipt.encoding]);
+    if (key === "breadthActiveResidents") return preparedBreadth.segments;
+    return Object.freeze([encodeNested(nested, freezeProof)]);
+  });
+  const unsealedSegments: string[] = ["{"];
+  for (let index = 0; index < keys.length; index += 1) {
+    if (index > 0) unsealedSegments.push(",");
+    unsealedSegments.push(`${JSON.stringify(keys[index])}:`);
+    unsealedSegments.push(...encodedValues[index]!);
+  }
+  unsealedSegments.push("}");
+  const integrity = hashCanonicalEncodingSegments(unsealedSegments);
+
+  const sealedKeys = [...keys, "integrity"].sort(compareText);
+  let sealedSerializedBytes = 0;
+  const addBytes = (segment: string): void => {
+    sealedSerializedBytes += UTF8_ENCODER.encode(segment).byteLength;
+  };
+  addBytes("{");
+  for (let index = 0; index < sealedKeys.length; index += 1) {
+    if (index > 0) addBytes(",");
+    const key = sealedKeys[index]!;
+    addBytes(`${JSON.stringify(key)}:`);
+    if (key === "integrity") {
+      addBytes(JSON.stringify(integrity));
+      continue;
+    }
+    const sourceIndex = keys.indexOf(key);
+    for (const segment of encodedValues[sourceIndex]!) addBytes(segment);
+  }
+  addBytes("}");
+
+  const preparation = Object.freeze({ integrity, sealedSerializedBytes });
+  pendingPreparation = Object.freeze({
+    preparation,
+    keys: Object.freeze([...keys]),
+    values: Object.freeze(values),
+    integrity,
+    encoding: null,
+    receiptEligible: false,
+  });
+  return preparation;
+}
+
 /** Seed the private V1 -> V6 exact-identity sealing chain. */
 export function prepareRegionalEcologyCanonicalReceiptSeed(
   value: unknown,
@@ -171,7 +291,7 @@ export function publishRegionalEcologyCanonicalReceipt(
     || stateKeys.some((key, index) => key !== expectedStateKeys[index])
     || pending.keys.some((key, index) => !Object.is(record[key], pending.values[index]))
   ) return false;
-  if (emitReceipt && pending.receiptEligible) {
+  if (emitReceipt && pending.receiptEligible && pending.encoding !== null) {
     pendingReceipt = Object.freeze({
       state,
       integrity: pending.integrity,
