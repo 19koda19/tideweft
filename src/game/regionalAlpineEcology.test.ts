@@ -200,6 +200,46 @@ function withSimulatedClockBudgetEdge(
   }
 }
 
+function withSimulatedPreparedRootSealedBytes<T>(
+  ownerId: string,
+  completedTick: number,
+  sealedBytes: number,
+  run: () => T,
+): T {
+  const originalEncode = TextEncoder.prototype.encode;
+  const integrityMemberBytes = originalEncode.call(
+    new TextEncoder(),
+    `,"integrity":"${"0".repeat(16)}"`,
+  ).byteLength;
+  TextEncoder.prototype.encode = function encode(value = "") {
+    if (value.includes(`"ownerId":"${ownerId}"`)) {
+      const root = JSON.parse(value) as Readonly<{
+        integrity?: unknown;
+        ownerId?: unknown;
+        regions?: unknown;
+        updatedAtTick?: unknown;
+      }>;
+      if (
+        !Object.hasOwn(root, "integrity")
+        && root.ownerId === ownerId
+        && Array.isArray(root.regions)
+        && root.regions.length > 0
+        && root.updatedAtTick === completedTick
+      ) {
+        return {
+          byteLength: sealedBytes - integrityMemberBytes,
+        } as unknown as Uint8Array<ArrayBuffer>;
+      }
+    }
+    return originalEncode.call(this, value);
+  };
+  try {
+    return run();
+  } finally {
+    TextEncoder.prototype.encode = originalEncode;
+  }
+}
+
 describe("Wave-F sparse Regional Alpine ecology lineage", () => {
   it("keeps pristine and merely visited regions rederivable instead of storing them", () => {
     const root = createPristineRegionalAlpineEcologyRoot({ rootSeed: SEED, completedTick: 0 });
@@ -315,6 +355,13 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
       expectedResidents: alpineActiveResidentClaims(prior),
       durableResidents: [],
     });
+    const replay = advanceRegionalAlpineEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick,
+      activeRegions: [BATCH_UPDATE_REGION],
+      expectedResidents: alpineActiveResidentClaims(prior),
+      durableResidents: [],
+    });
     const oracleRoot = advanceRegionalAlpineEcologyRoot(root, completedTick);
     const oracleResidents = regionalAlpineEcologyResidentsForActiveRegions(
       oracleRoot,
@@ -323,10 +370,14 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
     );
 
     expect(fast).not.toBeNull();
+    expect(replay).not.toBeNull();
     expect(oracleResidents).not.toBeNull();
     expect(serializeRegionalAlpineEcologyRoot(fast?.root))
       .toBe(serializeRegionalAlpineEcologyRoot(oracleRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(oracleResidents));
+    expect(serializeRegionalAlpineEcologyRoot(replay!.root))
+      .toBe(serializeRegionalAlpineEcologyRoot(fast!.root));
+    expect(stableStringify(replay!.residents)).toBe(stableStringify(fast!.residents));
     expect(stableStringify(fast?.residents[0]?.patch))
       .toBe(stableStringify(alpinePatch(BATCH_UPDATE_REGION, completedTick)));
     expect(canonicalRegionalAlpineEcologyRootForWorld(fast?.root, {
@@ -379,6 +430,119 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
         })).toBeNull();
       },
     );
+  });
+
+  it("enforces the prepared root seal byte cap from a consecutive cached-byte receipt", () => {
+    const sourceTick = 10;
+    const preparedTick = 11;
+    const targetTick = 12;
+    const root = putRegionalAlpineEcologyResidentDeviation(
+      createPristineRegionalAlpineEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }),
+      {
+        rootSeed: SEED,
+        patch: setAlpineActivity(alpinePatch(BATCH_UPDATE_REGION, sourceTick), 123_456),
+      },
+    );
+    const prior = regionalAlpineEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [BATCH_UPDATE_REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Prepared Alpine byte-cap fixture did not derive");
+    }
+    const prepared = advanceRegionalAlpineEcologyActiveResidentsFromReceipt(root, {
+      rootSeed: SEED,
+      completedTick: preparedTick,
+      activeRegions: [BATCH_UPDATE_REGION],
+      expectedResidents: alpineActiveResidentClaims(prior),
+      durableResidents: [],
+    });
+    if (prepared === null) {
+      throw new Error("Prepared Alpine byte-cap fixture did not publish cached bytes");
+    }
+    const preparedBytes = serializeRegionalAlpineEcologyRoot(prepared.root);
+
+    withSimulatedClockBudgetEdge(
+      REGIONAL_ALPINE_ECOLOGY_OWNER_ID,
+      REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES,
+      preparedTick,
+      targetTick,
+      () => {
+        expect(() => advanceRegionalAlpineEcologyRoot(prepared.root, targetTick))
+          .toThrow();
+        expect(advanceRegionalAlpineEcologyActiveResidentsFromReceipt(prepared.root, {
+          rootSeed: SEED,
+          completedTick: targetTick,
+          activeRegions: [BATCH_UPDATE_REGION],
+          expectedResidents: alpineActiveResidentClaims(prepared.residents),
+          durableResidents: [],
+        })).toBeNull();
+      },
+    );
+    expect(serializeRegionalAlpineEcologyRoot(prepared.root)).toBe(preparedBytes);
+  });
+
+  it("rejects cached prepared clock growth before a removal could shrink the root", () => {
+    const sourceTick = 8;
+    const preparedTick = 9;
+    const targetTick = 10;
+    const root = putRegionalAlpineEcologyResidentDeviation(
+      createPristineRegionalAlpineEcologyRoot({
+        rootSeed: SEED,
+        completedTick: sourceTick,
+      }),
+      {
+        rootSeed: SEED,
+        patch: setAlpineActivity(alpinePatch(BATCH_UPDATE_REGION, sourceTick), 234_567),
+      },
+    );
+    const prior = regionalAlpineEcologyResidentsForActiveRegions(
+      root,
+      SEED,
+      [BATCH_UPDATE_REGION],
+    );
+    if (prior === null || prior.length !== 1) {
+      throw new Error("Prepared Alpine clock-budget fixture did not derive");
+    }
+
+    const prepared = withSimulatedPreparedRootSealedBytes(
+      REGIONAL_ALPINE_ECOLOGY_OWNER_ID,
+      preparedTick,
+      REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES,
+      () => advanceRegionalAlpineEcologyActiveResidentsFromReceipt(root, {
+        rootSeed: SEED,
+        completedTick: preparedTick,
+        activeRegions: [BATCH_UPDATE_REGION],
+        expectedResidents: alpineActiveResidentClaims(prior),
+        durableResidents: [],
+      }),
+    );
+    if (prepared === null) {
+      throw new Error("Prepared Alpine clock-budget fixture did not publish cached bytes");
+    }
+    const preparedBytes = serializeRegionalAlpineEcologyRoot(prepared.root);
+    expect(advanceRegionalAlpineEcologyActiveResidentsFromReceipt(prepared.root, {
+      rootSeed: SEED,
+      completedTick: targetTick,
+      activeRegions: [BATCH_UPDATE_REGION],
+      expectedResidents: alpineActiveResidentClaims(prepared.residents),
+      durableResidents: [{
+        sourceKey: prepared.residents[0]!.sourceKey,
+        patch: alpinePatch(BATCH_UPDATE_REGION, targetTick),
+      }],
+    })).toBeNull();
+
+    const shrinkFirst = putRegionalAlpineEcologyResidentDeviation(prepared.root, {
+      rootSeed: SEED,
+      patch: alpinePatch(BATCH_UPDATE_REGION, preparedTick),
+    });
+    expect(advanceRegionalAlpineEcologyRoot(shrinkFirst, targetTick).regions)
+      .toEqual([]);
+    expect(serializeRegionalAlpineEcologyRoot(prepared.root)).toBe(preparedBytes);
   });
 
   it("batches source-ordered add, update, removal, and no-op exactly like scalar puts", () => {
@@ -463,6 +627,7 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
       activeRegions,
       expectedResidents: alpineActiveResidentClaims(currentResidents),
     } as const;
+    const sourceBytes = serializeRegionalAlpineEcologyRoot(existingRoot);
     const forward = advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
       existingRoot,
       { ...baseInput, durableResidents },
@@ -490,10 +655,16 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
       throw new Error("Alpine durable batch failed its scalar oracle");
     }
 
-    expect(serializeRegionalAlpineEcologyRoot(forward.root))
-      .toBe(serializeRegionalAlpineEcologyRoot(oracleRoot));
+    const forwardText = serializeRegionalAlpineEcologyRoot(forward.root);
+    const oracleText = serializeRegionalAlpineEcologyRoot(oracleRoot);
+    expect(forwardText).toBe(oracleText);
     expect(serializeRegionalAlpineEcologyRoot(reversed.root))
-      .toBe(serializeRegionalAlpineEcologyRoot(oracleRoot));
+      .toBe(oracleText);
+    expect(forward.root.integrity).toBe(oracleRoot.integrity);
+    expect(reversed.root.integrity).toBe(oracleRoot.integrity);
+    expect(new TextEncoder().encode(forwardText).byteLength)
+      .toBe(new TextEncoder().encode(oracleText).byteLength);
+    expect(serializeRegionalAlpineEcologyRoot(existingRoot)).toBe(sourceBytes);
     expect(stableStringify(forward.residents)).toBe(stableStringify(oracleResidents));
     expect(stableStringify(reversed.residents)).toBe(stableStringify(oracleResidents));
     expect(forward.root.revision).toBe(existingRoot.revision + 3);
@@ -646,6 +817,37 @@ describe("Wave-F sparse Regional Alpine ecology lineage", () => {
     expect(serializeRegionalAlpineEcologyRoot(fast?.root))
       .toBe(serializeRegionalAlpineEcologyRoot(fallbackRoot));
     expect(stableStringify(fast?.residents)).toBe(stableStringify(fallbackResidents));
+
+    if (fast === null) throw new Error("Prepared Alpine authority fixture did not advance");
+    const preparedBytes = serializeRegionalAlpineEcologyRoot(fast.root);
+    const nextInput = {
+      ...input,
+      completedTick: input.completedTick + 1,
+      expectedResidents: alpineActiveResidentClaims(fast.residents),
+    };
+    expect(advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
+      structuredClone(fast.root),
+      nextInput,
+    )).toBeNull();
+    const reloadedPrepared = deserializeRegionalAlpineEcologyRoot(preparedBytes);
+    expect(reloadedPrepared).not.toBeNull();
+    expect(advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
+      reloadedPrepared,
+      nextInput,
+    )).toBeNull();
+    expect(advanceRegionalAlpineEcologyActiveResidentsFromReceipt(fast.root, {
+      ...nextInput,
+      completedTick: fast.root.updatedAtTick - 1,
+    })).toBeNull();
+    expect(serializeRegionalAlpineEcologyRoot(fast.root)).toBe(preparedBytes);
+    const publicPreparedFallback = advanceRegionalAlpineEcologyRoot(
+      reloadedPrepared!,
+      nextInput.completedTick,
+    );
+    expect(canonicalRegionalAlpineEcologyRootForWorld(publicPreparedFallback, {
+      rootSeed: SEED,
+      completedTick: nextInput.completedTick,
+    })).toBe(publicPreparedFallback);
   });
 
   it("keeps an off-window physical occupant and drops it once it leaves the active window", () => {

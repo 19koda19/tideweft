@@ -7,7 +7,12 @@ import {
   stableRegionObjectId,
   type RegionCoord,
 } from "../sim/regions";
-import { compareText, hashCanonical, stableStringify } from "../sim/util";
+import {
+  canonicalIntegrityMetrics,
+  compareText,
+  hashCanonical,
+  stableStringify,
+} from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_STEP_TICKS,
   advanceCoreEcologyDormantAggregatePatch,
@@ -133,6 +138,12 @@ interface RegionalAlpineEcologyActiveReceipt {
   readonly atTick: number;
   readonly activeRegionKeys: readonly string[];
   readonly residents: readonly RegionalAlpineEcologyActiveReceiptResident[];
+  /**
+   * Exact sealed size published by this module's private prepared-root
+   * transaction. Roots derived by any other path deliberately carry no byte
+   * receipt and retain the ordinary canonical serialization fallback.
+   */
+  readonly sealedRootSerializedBytes: number | null;
 }
 
 /** One bounded hot-window receipt per exact immutable root identity. */
@@ -200,6 +211,32 @@ export function createRegionalAlpineEcologyRegionDelta(input: Readonly<{
   if (stableStringify(pristine) === stableStringify(patch)) {
     throw new RangeError("Regional Alpine ecology does not persist pristine baselines");
   }
+  return sealPreparedRegionalAlpineEcologyRegionDelta({
+    rootSeed: input.rootSeed,
+    region: input.region,
+    baselineHash: input.baselineHash,
+    revision: input.revision,
+    eventOrdinal: input.eventOrdinal,
+    residentPatch: patch,
+  });
+}
+
+/**
+ * Seal one delta after its caller has already proved the canonical bound
+ * patch, Alpine habitat, all-coarse state, and non-pristine baseline. This
+ * stays private so clones, loads, and unvalidated runtime patches cannot use
+ * it to bypass the public constructor's complete authority checks.
+ */
+function sealPreparedRegionalAlpineEcologyRegionDelta(
+  input: Readonly<{
+    readonly rootSeed: RootSeed;
+    readonly region: RegionCoord;
+    readonly baselineHash: string;
+    readonly revision: number;
+    readonly eventOrdinal: number;
+    readonly residentPatch: CoreEcologyAggregatePatchState;
+  }>,
+): RegionalAlpineEcologyRegionDeltaV1 {
   const base = {
     version: REGIONAL_ALPINE_ECOLOGY_DELTA_VERSION,
     stableId: stableRegionObjectId(input.rootSeed, input.region, "alpine-deviation", "v1"),
@@ -209,8 +246,8 @@ export function createRegionalAlpineEcologyRegionDelta(input: Readonly<{
     baselineHash: input.baselineHash,
     revision: input.revision,
     eventOrdinal: input.eventOrdinal,
-    residentPatch: patch,
-    residentPatchHash: hashCanonical(patch),
+    residentPatch: input.residentPatch,
+    residentPatchHash: hashCanonical(input.residentPatch),
   } as const;
   return deepFreeze({ ...base, integrity: hashCanonical(base) });
 }
@@ -758,7 +795,13 @@ export function advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
     if (residents.length > activeRegions.length + nextRoot.regions.length) {
       return null;
     }
-    seedActiveResidentReceipt(nextRoot, input.rootSeed, activeRegions, residents);
+    if (seedActiveResidentReceipt(
+      nextRoot,
+      input.rootSeed,
+      activeRegions,
+      residents,
+      batch.sealedRootSerializedBytes,
+    ) === null) return null;
     return Object.freeze({ root: nextRoot, residents });
   } catch {
     return null;
@@ -767,6 +810,7 @@ export function advanceRegionalAlpineEcologyActiveResidentsFromReceipt(
 
 interface RegionalAlpineEcologyActiveDeviationBatch {
   readonly root: RegionalAlpineEcologyRootV1;
+  readonly sealedRootSerializedBytes: number;
   readonly durableBySource: ReadonlyMap<string, CoreEcologyAggregatePatchState>;
 }
 
@@ -782,7 +826,9 @@ function applyActiveResidentDeviationBatch(
     completedTick < root.updatedAtTick
     || values.length > receipt.residents.length
   ) return null;
-  const rootSerializedBytes = serializedBytes(root);
+  const rootSerializedBytes = receipt.sealedRootSerializedBytes
+    ?? serializedBytes(root);
+  if (!nonnegativeSafeInteger(rootSerializedBytes)) return null;
   // The scalar transaction advances the root clock before applying any put.
   // That operation changes only this nonnegative safe-integer token; the
   // replacement integrity digest is fixed-width ASCII. This digit delta is
@@ -840,6 +886,7 @@ function applyActiveResidentDeviationBatch(
   let revision = root.revision;
   let eventOrdinal = root.lastEventOrdinal;
   let changed = false;
+  const preparedDeltas = new Set<RegionalAlpineEcologyRegionDeltaV1>();
   for (const [, normalized] of ordered) {
     const habitat = deriveCoreEcologyAlpineHabitat({
       seed: rootSeed,
@@ -866,7 +913,7 @@ function applyActiveResidentDeviationBatch(
     changed = true;
     regionsByKey.delete(key);
     if (!pristineState) {
-      const delta = createRegionalAlpineEcologyRegionDelta({
+      const delta = sealPreparedRegionalAlpineEcologyRegionDelta({
         rootSeed,
         region: normalized.originRegion,
         baselineHash: habitat.derivationHash,
@@ -878,27 +925,48 @@ function applyActiveResidentDeviationBatch(
       if (serializedUpperBound > REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES) {
         return null;
       }
+      preparedDeltas.add(delta);
       regionsByKey.set(key, delta);
     }
     if (regionsByKey.size > REGIONAL_ALPINE_ECOLOGY_MAX_REGIONS) return null;
   }
 
   let nextRoot = root;
+  let sealedRootSerializedBytes = rootSerializedBytes;
   if (completedTick !== root.updatedAtTick || changed) {
     const regions = Object.freeze([...regionsByKey.values()].sort(
       (left, right) => compareText(left.key, right.key),
     ));
     const { integrity: _integrity, ...base } = root;
-    nextRoot = sealRoot({
+    const candidate = {
       ...base,
       updatedAtTick: completedTick,
       revision,
       lastEventOrdinal: eventOrdinal,
       regions,
-    });
-    WORLD_BOUND_ROOTS.set(nextRoot, nextRoot.seedFingerprint);
+    } as const;
+    const prepared = sealPreparedAndBindRoot(
+      candidate,
+      root,
+      receipt,
+      preparedDeltas,
+    );
+    if (prepared === null) {
+      // Provenance uncertainty retains the complete public validator. This is
+      // ordinary authority, not a second fast path.
+      nextRoot = sealRoot(candidate);
+      WORLD_BOUND_ROOTS.set(nextRoot, nextRoot.seedFingerprint);
+      sealedRootSerializedBytes = serializedBytes(nextRoot);
+    } else {
+      nextRoot = prepared.root;
+      sealedRootSerializedBytes = prepared.sealedSerializedBytes;
+    }
   }
-  return Object.freeze({ root: nextRoot, durableBySource });
+  return Object.freeze({
+    root: nextRoot,
+    sealedRootSerializedBytes,
+    durableBySource,
+  });
 }
 
 export function serializeRegionalAlpineEcologyRoot(value: unknown): string {
@@ -933,8 +1001,15 @@ function seedActiveResidentReceipt(
   rootSeed: RootSeed,
   activeRegions: readonly RegionCoord[],
   residents: readonly RegionalAlpineEcologyActiveResidentInput[],
-): void {
-  if (residents.length > activeRegions.length + root.regions.length) return;
+  sealedRootSerializedBytes: number | null = null,
+): RegionalAlpineEcologyActiveReceipt | null {
+  if (
+    residents.length > activeRegions.length + root.regions.length
+    || (sealedRootSerializedBytes !== null && (
+      !nonnegativeSafeInteger(sealedRootSerializedBytes)
+      || sealedRootSerializedBytes > REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES
+    ))
+  ) return null;
   const activeKeys = new Set(activeRegions.map(regionKey));
   const receiptResidents: RegionalAlpineEcologyActiveReceiptResident[] = [];
   const seen = new Set<string>();
@@ -963,7 +1038,7 @@ function seedActiveResidentReceipt(
         region: patch.originRegion,
         completedTick: root.updatedAtTick,
       }) === null
-    ) return;
+    ) return null;
     seen.add(resident.sourceKey);
     receiptResidents.push(Object.freeze({
       sourceKey: resident.sourceKey,
@@ -975,7 +1050,7 @@ function seedActiveResidentReceipt(
     }));
   }
   receiptResidents.sort((left, right) => compareText(left.sourceKey, right.sourceKey));
-  ACTIVE_RESIDENT_RECEIPTS.set(root, Object.freeze({
+  const receipt = Object.freeze({
     rootSeed: Object.freeze([
       rootSeed[0],
       rootSeed[1],
@@ -985,7 +1060,10 @@ function seedActiveResidentReceipt(
     atTick: root.updatedAtTick,
     activeRegionKeys: Object.freeze(activeRegions.map(regionKey)),
     residents: Object.freeze(receiptResidents),
-  }));
+    sealedRootSerializedBytes,
+  });
+  ACTIVE_RESIDENT_RECEIPTS.set(root, receipt);
+  return receipt;
 }
 
 function canonicalActiveReceiptClaimsOrNull(
@@ -1088,6 +1166,80 @@ function alpineResidentLineageHash(
       populationKey: population.populationKey,
       habitatCapacity: population.habitatCapacity,
     })),
+  });
+}
+
+interface PreparedRegionalAlpineEcologyRootSeal {
+  readonly root: RegionalAlpineEcologyRootV1;
+  readonly sealedSerializedBytes: number;
+}
+
+/**
+ * Seal the exact root assembled by `applyActiveResidentDeviationBatch` without
+ * asking the public canonicalizer to re-prove children already established by
+ * that transaction. Every retained delta must be the exact frozen object from
+ * the trusted source root, and every replacement must be the exact result of
+ * the private prepared delta sealer in this stack frame. Any uncertainty
+ * returns null so the caller keeps the complete public `sealRoot` authority.
+ */
+function sealPreparedAndBindRoot(
+  value: Omit<RegionalAlpineEcologyRootV1, "integrity">,
+  sourceRoot: RegionalAlpineEcologyRootV1,
+  sourceReceipt: RegionalAlpineEcologyActiveReceipt,
+  preparedDeltas: ReadonlySet<RegionalAlpineEcologyRegionDeltaV1>,
+): PreparedRegionalAlpineEcologyRootSeal | null {
+  if (
+    !TRUSTED_ROOTS.has(sourceRoot)
+    || WORLD_BOUND_ROOTS.get(sourceRoot) !== sourceRoot.seedFingerprint
+    || ACTIVE_RESIDENT_RECEIPTS.get(sourceRoot) !== sourceReceipt
+    || !Object.isFrozen(sourceRoot)
+    || value.version !== sourceRoot.version
+    || value.ownerId !== sourceRoot.ownerId
+    || value.generationVersion !== sourceRoot.generationVersion
+    || value.baselinePolicyId !== sourceRoot.baselinePolicyId
+    || value.seedFingerprint !== sourceRoot.seedFingerprint
+    || !nonnegativeSafeInteger(value.updatedAtTick)
+    || !nonnegativeSafeInteger(value.revision)
+    || !nonnegativeSafeInteger(value.lastEventOrdinal)
+    || value.updatedAtTick < sourceRoot.updatedAtTick
+    || value.revision < sourceRoot.revision
+    || value.lastEventOrdinal < sourceRoot.lastEventOrdinal
+    || (value.revision === 0) !== (value.lastEventOrdinal === 0)
+    || !Object.isFrozen(value.regions)
+    || value.regions.length > REGIONAL_ALPINE_ECOLOGY_MAX_REGIONS
+  ) return null;
+
+  const inheritedDeltas = new Set(sourceRoot.regions);
+  const retainedDeltas = new Set(value.regions);
+  if (retainedDeltas.size !== value.regions.length) return null;
+  for (const delta of preparedDeltas) {
+    if (!retainedDeltas.has(delta)) return null;
+  }
+  for (let index = 0; index < value.regions.length; index += 1) {
+    const delta = value.regions[index]!;
+    if (
+      !Object.isFrozen(delta)
+      || (!inheritedDeltas.has(delta) && !preparedDeltas.has(delta))
+      || delta.revision > value.revision
+      || delta.eventOrdinal > value.lastEventOrdinal
+      || delta.residentPatch.updatedAtTick > value.updatedAtTick
+      || (index > 0 && compareText(value.regions[index - 1]!.key, delta.key) >= 0)
+    ) return null;
+  }
+
+  const metrics = canonicalIntegrityMetrics(value);
+  if (metrics.sealedSerializedBytes > REGIONAL_ALPINE_ECOLOGY_MAX_SERIALIZED_BYTES) {
+    throw new RangeError("Regional Alpine ecology root exceeds its save budget");
+  }
+  const root: RegionalAlpineEcologyRootV1 = deepFreeze({
+    ...value,
+    integrity: metrics.integrity,
+  });
+  TRUSTED_ROOTS.add(root);
+  WORLD_BOUND_ROOTS.set(root, root.seedFingerprint);
+  return Object.freeze({
+    root,
+    sealedSerializedBytes: metrics.sealedSerializedBytes,
   });
 }
 
