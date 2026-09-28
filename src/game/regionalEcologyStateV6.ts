@@ -75,6 +75,9 @@ import {
   publishRegionalEcologyCanonicalReceipt,
   revokeRegionalEcologyCanonicalReceipt,
 } from "./regionalEcologyCanonicalSeal";
+import {
+  hashRegionalEcologyActiveProjectionIntegrity,
+} from "./regionalEcologyActiveProjectionIntegrity";
 
 export const REGIONAL_ECOLOGY_STATE_V6_VERSION = 6 as const;
 export const REGIONAL_ECOLOGY_STATE_V6_OWNER_ID =
@@ -690,7 +693,14 @@ function bindRegionalEcologyStateV6ActiveProjectionInternal(
   };
   const projection = deepFreeze({
     ...projectionBase,
-    integrity: hashCanonical(projectionBase),
+    integrity: hashRegionalEcologyActiveProjectionIntegrity({
+      version: projectionBase.version,
+      ownerId: projectionBase.ownerId,
+      stateIntegrity: projectionBase.stateIntegrity,
+      atTick: projectionBase.atTick,
+      childIntegrity: projectionBase.base.integrity,
+      residents: projectionBase.breadthResidents,
+    }),
   });
   TRUSTED_PROJECTIONS.add(projection);
   return projection;
@@ -1372,7 +1382,14 @@ function canonicalProjection(
     base,
     breadthResidents: breadth,
   };
-  if (hashCanonical(projectionBase) !== value.integrity) return null;
+  if (hashRegionalEcologyActiveProjectionIntegrity({
+    version: projectionBase.version,
+    ownerId: projectionBase.ownerId,
+    stateIntegrity: projectionBase.stateIntegrity,
+    atTick: projectionBase.atTick,
+    childIntegrity: projectionBase.base.integrity,
+    residents: projectionBase.breadthResidents,
+  }) !== value.integrity) return null;
   const projection = deepFreeze({ ...projectionBase, integrity: value.integrity });
   TRUSTED_PROJECTIONS.add(projection);
   return projection;

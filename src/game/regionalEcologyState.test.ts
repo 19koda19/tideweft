@@ -770,7 +770,7 @@ describe("regional ecology v25 owner substrate", () => {
       .map(({ sourceKey }) => sourceKey)).toEqual([movedHome.patchKey]);
   });
 
-  it("binds an external global materialization split without changing V1 projection bytes", () => {
+  it("binds an external global split into the compact metadata-authenticated projection", () => {
     const state = stateFixture();
     const serializedState = serializeRegionalEcologyState(state);
     const sources = regionalEcologyActiveSourceSnapshots(state);
@@ -809,7 +809,18 @@ describe("regional ecology v25 owner substrate", () => {
       atTick: state.updatedAtTick,
       residents: priorResidents,
     };
-    const priorProjection = { ...priorBase, integrity: hashCanonical(priorBase) };
+    const priorProjection = {
+      ...priorBase,
+      integrity: hashCanonical({
+        scheme: "game:regional-ecology-active-projection-integrity:v1",
+        version: priorBase.version,
+        ownerId: priorBase.ownerId,
+        stateIntegrity: priorBase.stateIntegrity,
+        atTick: priorBase.atTick,
+        childIntegrity: null,
+        residents: priorBase.residents.map(({ patch: _patch, ...metadata }) => metadata),
+      }),
+    };
     const direct = projectRegionalEcologyActiveState(state, windowAt());
     const rebound = bindRegionalEcologyActiveProjection(state, materialized);
     expect(stableStringify(direct)).toBe(stableStringify(priorProjection));

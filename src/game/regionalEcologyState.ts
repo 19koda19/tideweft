@@ -51,6 +51,9 @@ import {
   publishRegionalEcologyCanonicalReceipt,
   revokeRegionalEcologyCanonicalReceipt,
 } from "./regionalEcologyCanonicalSeal";
+import {
+  hashRegionalEcologyActiveProjectionIntegrity,
+} from "./regionalEcologyActiveProjectionIntegrity";
 
 export const REGIONAL_ECOLOGY_STATE_VERSION = 1 as const;
 export const REGIONAL_ECOLOGY_STATE_OWNER_ID = "game:regional-ecology-state:v1" as const;
@@ -801,7 +804,17 @@ function bindRegionalEcologyActiveProjectionInternal(
     atTick: state.updatedAtTick,
     residents: Object.freeze(residents),
   };
-  const projection = deepFreeze({ ...base, integrity: hashCanonical(base) });
+  const projection = deepFreeze({
+    ...base,
+    integrity: hashRegionalEcologyActiveProjectionIntegrity({
+      version: base.version,
+      ownerId: base.ownerId,
+      stateIntegrity: base.stateIntegrity,
+      atTick: base.atTick,
+      childIntegrity: null,
+      residents: base.residents,
+    }),
+  });
   TRUSTED_PROJECTIONS.add(projection);
   return projection;
 }
@@ -1581,7 +1594,14 @@ function canonicalProjection(
     atTick: state.updatedAtTick,
     residents: Object.freeze(residents),
   };
-  if (hashCanonical(base) !== value.integrity) return null;
+  if (hashRegionalEcologyActiveProjectionIntegrity({
+    version: base.version,
+    ownerId: base.ownerId,
+    stateIntegrity: base.stateIntegrity,
+    atTick: base.atTick,
+    childIntegrity: null,
+    residents: base.residents,
+  }) !== value.integrity) return null;
   const projection = deepFreeze({ ...base, integrity: value.integrity });
   TRUSTED_PROJECTIONS.add(projection);
   return projection;

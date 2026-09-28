@@ -939,7 +939,18 @@ describe(`${ALPHA33_ALPINE_SHARED_INVARIANTS_OWNER_INTENT} Wave-F regional ecolo
     const { integrity: _projectionIntegrity, ...unsignedProjection } = forgedProjectionBase;
     const resealedProjection = {
       ...unsignedProjection,
-      integrity: hashCanonical(unsignedProjection),
+      integrity: hashCanonical({
+        scheme: "game:regional-ecology-active-projection-integrity:v1",
+        version: unsignedProjection.version,
+        ownerId: unsignedProjection.ownerId,
+        stateIntegrity: unsignedProjection.stateIntegrity,
+        atTick: unsignedProjection.atTick,
+        childIntegrity: unsignedProjection.base.integrity,
+        residents: unsignedProjection.alpineResidents.map(({
+          patch: _patch,
+          ...metadata
+        }) => metadata),
+      }),
     };
     expect(commitRegionalEcologyStateV2ActiveProjection(state, resealedProjection, {
       base: {

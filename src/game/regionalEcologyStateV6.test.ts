@@ -822,7 +822,7 @@ describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} re
     const projection = projectionOf(reloaded);
     const committed = commitRegionalEcologyStateV6ActiveProjection(
       reloaded,
-      projection,
+      structuredClone(projection),
       unchangedCommitInput(reloaded, projection),
     );
 
