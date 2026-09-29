@@ -87,6 +87,11 @@ import {
   situatedExpressionReceptionMatchesActiveEvent,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
+import {
+  dogActorRosterActor,
+  type DogActorRosterState,
+} from "./dogActorRoster";
+import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import {
   LOOSE_CARGO_MAX_ENTITIES,
@@ -122,12 +127,20 @@ import {
   createWorldPosition,
   worldPositionDelta,
   worldPositionToSpatialFrame,
+  type WorldPosition,
 } from "./worldPosition";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
 const TERRAIN_IDENTITY_FIELDS = 6;
+
+function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
+  return left.region.x === right.region.x
+    && left.region.y === right.region.y
+    && left.localX === right.localX
+    && left.localY === right.localY;
+}
 
 interface CachedBiomeTile {
   readonly id: BiomeId;
@@ -226,6 +239,8 @@ export interface ProjectionOptions {
   situatedExpression?: SituatedExpressionEvent | null;
   /** Event-time evidence that the player lawfully received the exact expression. */
   situatedExpressionReception?: SituatedExpressionReception | null;
+  /** Exact dog bodies used only to authenticate a directly visible animal caller. */
+  dogActorRoster?: DogActorRosterState;
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
   /**
@@ -252,7 +267,7 @@ export interface AdriftProjectionControl {
 export const RESIDENT_CONVERSATION_RANGE_TILES = 3;
 
 export interface SituatedExpressionSourcePresentation {
-  readonly sourceKind: "player" | "human";
+  readonly sourceKind: "player" | "human" | "animal";
   readonly speakerLabel: string;
 }
 
@@ -264,11 +279,34 @@ export interface SituatedExpressionSourcePresentation {
  */
 export function projectSituatedExpressionSource(
   spatialWorld: WorldView,
-  event: Pick<SituatedExpressionEvent, "sourceActorId">,
+  event: Pick<SituatedExpressionEvent, "meaning" | "position" | "sourceActorId">,
   economyWorld: WorldView = regionalCompatibilityWorldForWorld(spatialWorld) ?? spatialWorld,
+  dogActorRoster?: DogActorRosterState,
+  reception?: SituatedExpressionReception | null,
 ): SituatedExpressionSourcePresentation | null {
   if (event.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
     return Object.freeze({ sourceKind: "player", speakerLabel: "You" });
+  }
+
+  if (event.meaning === "guardian-dog-warning") {
+    if (reception?.kind === "heard-unseen") {
+      return Object.freeze({ sourceKind: "animal", speakerLabel: "A dog" });
+    }
+    if (reception?.kind !== "heard-visible" || dogActorRoster === undefined) return null;
+    const dog = dogActorRosterActor(dogActorRoster, event.sourceActorId);
+    const window = regionalWindowForWorld(spatialWorld);
+    if (
+      dog === null
+      || window === null
+      || livingActorAddressInRegionalWindow(dog.address, window) === null
+      || !sameWorldPosition(dog.address.position, event.position)
+    ) return null;
+    return Object.freeze({
+      sourceKind: "animal",
+      speakerLabel: dog.playerKnowledge.facts.some(
+        ({ fact }) => fact === "recognizable-individual",
+      ) ? "Familiar dog" : "Unknown dog",
+    });
   }
 
   const matches = economyWorld.residents.filter(
@@ -292,12 +330,21 @@ function projectSituatedExpressionView(
   event: SituatedExpressionEvent | null,
   reception: SituatedExpressionReception | null,
   tileSize: number,
+  dogActorRoster?: DogActorRosterState,
 ): readonly SituatedExpressionView[] {
   if (event === null || !situatedExpressionReceptionMatchesActiveEvent(reception, event)) {
     return Object.freeze([]);
   }
+  // Anonymous hearing never becomes an exact world-space callout.
+  if (reception?.kind === "heard-unseen") return Object.freeze([]);
   const realization = projectSituatedExpression(event);
-  const source = projectSituatedExpressionSource(world, event);
+  const source = projectSituatedExpressionSource(
+    world,
+    event,
+    undefined,
+    dogActorRoster,
+    reception,
+  );
   const window = regionalWindowForWorld(world);
   if (realization === null || source === null || window === null) return Object.freeze([]);
   try {
@@ -730,6 +777,7 @@ export function projectGameView(
     options.situatedExpression ?? null,
     options.situatedExpressionReception ?? null,
     tileSize,
+    options.dogActorRoster,
   );
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)

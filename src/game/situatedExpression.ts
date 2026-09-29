@@ -19,6 +19,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "alarm-at-cargo-loss",
   "relief-after-cargo-recovery",
   "porter-heavy-load",
+  "guardian-dog-warning",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -26,6 +27,7 @@ export const SITUATED_EXPRESSION_FAMILIES = Object.freeze([
   "footing",
   "cargo",
   "work",
+  "animal-signal",
 ] as const);
 export type SituatedExpressionFamily = (typeof SITUATED_EXPRESSION_FAMILIES)[number];
 
@@ -51,12 +53,18 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-observed-cargo-loss",
   "self-recovered-cargo",
   "self-handled-heavy-cargo",
+  "self-heard-anonymous-alarm",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
 
 /** Renderer/audio-neutral contour; no consumer needs to inspect English prose. */
-export type SituatedExpressionVocalization = "steady" | "strained" | "alarm" | "relief";
+export type SituatedExpressionVocalization =
+  | "steady"
+  | "strained"
+  | "alarm"
+  | "relief"
+  | "dog-warning-bark";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -164,6 +172,7 @@ export interface SituatedExpressionAcknowledgement {
 export interface SituatedExpressionProjection {
   readonly text: string;
   readonly realizationKey: string;
+  /** Species-specific contour override; ordinary human lines follow tone. */
   readonly vocalization: SituatedExpressionVocalization;
 }
 
@@ -172,6 +181,7 @@ interface SemanticLaw {
   readonly knowledgeBasis: SituatedExpressionKnowledgeBasis;
   readonly tones: ReadonlySet<SituatedExpressionTone>;
   readonly volumes: ReadonlySet<SituatedExpressionVolume>;
+  readonly vocalization?: SituatedExpressionVocalization;
   readonly meaningCooldownSteps: number;
   readonly familyCooldownSteps: number;
 }
@@ -229,6 +239,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
     meaningCooldownSteps: 30,
     familyCooldownSteps: 10,
+  }),
+  "guardian-dog-warning": Object.freeze({
+    family: "animal-signal",
+    knowledgeBasis: "self-heard-anonymous-alarm",
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["shout"]),
+    vocalization: "dog-warning-bark",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
   }),
 });
 
@@ -291,6 +310,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.0", text: "Heavy one." }),
     Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.1", text: "Got it." }),
     Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.2", text: "Easy." }),
+  ]),
+  "guardian-dog-warning": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.guardian-dog-warning.0",
+      text: "BARK!",
+    }),
   ]),
 });
 
@@ -475,7 +500,7 @@ function eventFor(intent: SituatedExpressionIntent): SituatedExpressionEvent {
     tone: intent.tone,
     volume: intent.volume,
     knowledgeBasis: intent.knowledgeBasis,
-    vocalization: vocalizationFor(intent.tone),
+    vocalization: vocalizationFor(intent),
     priority: intent.priority,
     salience: intent.salience,
     variantSeed: intent.variantSeed,
@@ -511,21 +536,25 @@ function eventIdFor(sourceActorId: string, triggerEventId: string): string {
   })}`;
 }
 
-function vocalizationFor(tone: SituatedExpressionTone): SituatedExpressionVocalization {
-  switch (tone) {
-    case "restrained": return "steady";
-    case "strained": return "strained";
-    case "alarmed": return "alarm";
-    case "relieved": return "relief";
-  }
-}
-
 function canInterrupt(
   active: SituatedExpressionEvent,
   candidate: SituatedExpressionIntent,
 ): boolean {
   return candidate.priority > active.priority
     || (candidate.priority === active.priority && candidate.salience > active.salience);
+}
+
+function vocalizationFor(
+  value: Pick<SituatedExpressionIntent, "meaning" | "tone">,
+): SituatedExpressionVocalization {
+  const override = SEMANTIC_LAWS[value.meaning].vocalization;
+  if (override !== undefined) return override;
+  switch (value.tone) {
+    case "restrained": return "steady";
+    case "strained": return "strained";
+    case "alarmed": return "alarm";
+    case "relieved": return "relief";
+  }
 }
 
 /** A committed recovery resolves the alarm; it is not repetitive cargo chatter. */
@@ -726,7 +755,10 @@ function canonicalEvent(value: unknown): SituatedExpressionEvent | null {
     || value.knowledgeBasis !== law.knowledgeBasis
     || !law.tones.has(value.tone)
     || !law.volumes.has(value.volume)
-    || value.vocalization !== vocalizationFor(value.tone)
+    || value.vocalization !== vocalizationFor({
+      meaning: value.meaning,
+      tone: value.tone,
+    })
     || value.eventId !== eventIdFor(value.sourceActorId, value.triggerEventId)
     || value.realizationKey !== expectedRealization.key
   ) return null;
@@ -845,7 +877,11 @@ function isKnowledgeBasis(value: unknown): value is SituatedExpressionKnowledgeB
 }
 
 function isVocalization(value: unknown): value is SituatedExpressionVocalization {
-  return value === "steady" || value === "strained" || value === "alarm" || value === "relief";
+  return value === "steady"
+    || value === "strained"
+    || value === "alarm"
+    || value === "relief"
+    || value === "dog-warning-bark";
 }
 
 function validId(value: unknown): value is string {

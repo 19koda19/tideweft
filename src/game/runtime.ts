@@ -173,6 +173,7 @@ import {
 } from "./playerExpressionAuthority";
 import {
   appendSituatedExpressionAdmissionRecord,
+  createGuardianDogWarningExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
@@ -189,13 +190,26 @@ import {
   situatedExpressionAdmissionMatchesCausalAuthority,
   type SituatedExpressionCausalAuthorityLedger,
 } from "./situatedExpressionCausalAuthority";
-import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
+import {
+  situatedExpressionAcoustics,
+  situatedExpressionSoundClass,
+} from "./situatedExpressionAcoustics";
 import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
 import { migrateLegacyV33PlayerVocalizations } from "./legacyPlayerVocalizationMigration";
 import {
+  createHeardUnseenSituatedExpressionReception,
   createHeardVisibleSituatedExpressionReception,
   createSelfSituatedExpressionReception,
+  situatedExpressionReceptionAudibleContact,
+  type SituatedExpressionReception,
 } from "./situatedExpressionReception";
+import {
+  guardianDogWarningExpressionEventForTrigger,
+  guardianDogWarningExpressionEventMatchesWorld,
+  guardianDogWarningExpressionIntent,
+  guardianDogWarningExpressionMemoryMatchesWorld,
+} from "./dogSignalExpression";
+import { audibleContactPan } from "./audibleContactPresentation";
 import {
   CRAFTING_CONDITION_MAX,
   CRAFTING_RECIPES,
@@ -234,6 +248,7 @@ import {
   evaluateAudibleContact,
   evaluateVisualContact,
   suppressPerceptionDetail,
+  type AudibleContact,
 } from "./perception";
 import {
   buildOutdoorIlluminationField,
@@ -384,6 +399,7 @@ import {
 } from "./regionalFieldResources";
 import {
   createRegionCoord,
+  globalTileToRegion,
   regionKey,
   regionLocalToGlobalTile,
   type RegionCoord,
@@ -886,6 +902,7 @@ function vocalizationSampleMatchesActiveEvent(
     && stableStringify(sample.position) === stableStringify(event.position)
     && sample.soundLoudness === acoustics.loudness
     && sample.soundRangeUnits === acoustics.rangeUnits
+    && sample.soundClass === situatedExpressionSoundClass(event)
     && sample.soundInterrupt === situatedExpressionSoundInterrupt(event);
 }
 
@@ -901,6 +918,7 @@ function vocalizationSampleMatchesRecentMemory(
     const acoustics = situatedExpressionAcoustics(volume);
     return sample.soundLoudness === acoustics.loudness
       && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundClass === situatedExpressionSoundClass(memory.meaning)
       && sample.soundInterrupt === interrupt;
   });
 }
@@ -924,6 +942,7 @@ function recentMeaningAcousticTuples(
         { volume: "shout", interrupt: "strong" },
       ];
     case "alarm-at-cargo-loss":
+    case "guardian-dog-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
 }
@@ -934,7 +953,9 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 34;
+const GAME_SAVE_VERSION = 35;
+/** First save with multi-actor situated expression channels and working people. */
+const WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION = 34;
 /** First save with the player-facing situated-expression carry (player voices only). */
 const PLAYER_EXPRESSION_GAME_SAVE_VERSION = 33;
 const PLAYER_RECOVERY_GAME_SAVE_VERSION = 32;
@@ -967,7 +988,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 3 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 4 as const;
+const WORKING_PEOPLE_PERCEPTION_CARRY_VERSION = 3 as const;
 const PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION = 2 as const;
 const LEGACY_PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
 /** Begin preparing the next storage neighborhood well before its invisible seam. */
@@ -8725,6 +8747,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
 }>): Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
+  readonly warningIntent: SituatedExpressionIntent | null;
 }> | null {
   const assignment = input.workingAnimals.assignments[0];
   if (assignment === undefined || input.workingAnimals.assignments.length !== 1) return null;
@@ -9200,7 +9223,13 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     circadian: circadianStep.projection.receipt,
   });
   const roster = replaceDogActorInRoster(input.roster, dog);
-  return roster === null ? null : Object.freeze({ roster, workingAnimals });
+  if (roster === null) return null;
+  const warningIntent = guardianDogWarningExpressionIntent({
+    dog,
+    workingAnimals,
+    completedTick: tick,
+  });
+  return Object.freeze({ roster, workingAnimals, warningIntent });
 }
 
 function physicalCargoPartitionsForView(
@@ -9526,6 +9555,7 @@ export async function createTideweftRuntime(
         traversalFeedback,
         situatedExpression: initialSituatedExpression?.event ?? null,
         situatedExpressionReception: initialSituatedExpression?.reception ?? null,
+        dogActorRoster,
         looseCargoWorld: physicalCargo.looseWorld,
         looseCargoWorlds: initialCargoPartitions,
         perception,
@@ -9547,6 +9577,7 @@ export async function createTideweftRuntime(
     traversalFeedback,
     situatedExpression: initialSituatedExpression?.event ?? null,
     situatedExpressionReception: initialSituatedExpression?.reception ?? null,
+    dogActorRoster,
     perception,
     suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
@@ -10038,6 +10069,7 @@ export async function createTideweftRuntime(
           traversalFeedback,
           situatedExpression: activeExpression?.event ?? null,
           situatedExpressionReception: activeExpression?.reception ?? null,
+          dogActorRoster,
           looseCargoWorld: physicalCargo.looseWorld,
           looseCargoWorlds: visibleCargoPartitions,
           bracing: manualControl.brace,
@@ -10207,6 +10239,7 @@ export async function createTideweftRuntime(
         traversalFeedback,
         situatedExpression: activeExpression?.event ?? null,
         situatedExpressionReception: activeExpression?.reception ?? null,
+        dogActorRoster,
         perception,
         suppressDetailPerception: playerIsSleeping(),
         ...(settlementStoreKeeper === null
@@ -10898,12 +10931,19 @@ export async function createTideweftRuntime(
   }
 
   function playerExpressionAudibility(
-    expression: Pick<SituatedExpressionIntent, "position" | "sourceActorId" | "volume">,
-  ): { readonly certainty: number; readonly pan: number } | null {
+    expression: Pick<
+      SituatedExpressionIntent,
+      "meaning" | "position" | "sourceActorId" | "volume"
+    >,
+  ): {
+    readonly certainty: number;
+    readonly pan: number;
+    readonly contact: AudibleContact | null;
+  } | null {
     if (expression.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
-      return Object.freeze({ certainty: 1, pan: 0 });
+      return Object.freeze({ certainty: FIXED_POINT, pan: 0, contact: null });
     }
-    if (playerIsSleeping()) return null;
+    if (playerIsSleeping() && expression.meaning !== "guardian-dog-warning") return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
       regionalTravel.window,
       player,
@@ -10933,13 +10973,31 @@ export async function createTideweftRuntime(
       ? null
       : Object.freeze({
           certainty: Math.max(1, Math.round(heard.certainty * FIXED_POINT)),
-          pan: spatialPanForBearing(heard.bearing.centerRadians),
+          pan: audibleContactPan(heard),
+          contact: heard,
         });
   }
 
   function playerDirectlyObservesExpressionSource(
-    expression: Pick<SituatedExpressionIntent, "position" | "sourceActorId">,
+    expression: Pick<SituatedExpressionIntent, "meaning" | "position" | "sourceActorId">,
   ): boolean {
+    if (expression.meaning === "guardian-dog-warning") {
+      const dog = dogActorRosterActor(dogActorRoster, expression.sourceActorId);
+      if (
+        dog === null
+        || stableStringify(dog.address.position) !== stableStringify(expression.position)
+      ) return false;
+      const placement = livingActorAddressInRegionalWindow(
+        dog.address,
+        regionalTravel.window,
+      );
+      const wakingPerception = playerIsSleeping()
+        ? projectPerception(worldView, { ...player, timeAction: null })
+        : projectPlayerPerception();
+      return placement !== null
+        && wakingPerception.detailVisibilityGrades[placement.tileIndex]
+          === VISIBILITY_DIRECT;
+    }
     if (playerIsSleeping()) return false;
     const matches = economyView.residents.filter(
       ({ identity }) => identity.stableId === expression.sourceActorId,
@@ -10975,7 +11033,7 @@ export async function createTideweftRuntime(
       position: event.position,
       soundLoudness: acoustics.loudness,
       soundRangeUnits: acoustics.rangeUnits,
-      soundClass: "human-vocalization",
+      soundClass: situatedExpressionSoundClass(event),
       soundInterrupt: situatedExpressionSoundInterrupt(event),
       sourceActorId: event.sourceActorId,
     });
@@ -11000,15 +11058,20 @@ export async function createTideweftRuntime(
     reception: Readonly<{
       readonly kind: "self";
     }> | Readonly<{
+      readonly kind: "none";
+    }> | Readonly<{
       readonly kind: "heard-visible";
       readonly certainty: number;
+    }> | Readonly<{
+      readonly kind: "heard-unseen";
+      readonly contact: AudibleContact;
     }>,
     admissionFor: (
       event: SituatedExpressionEvent,
       sampleOrdinal: number,
     ) => SituatedExpressionAdmissionRecord | null,
-  ): void {
-    if (intent === null) return;
+  ): boolean {
+    if (intent === null) return false;
     // Sound, memory, causal receipt, and presentation are one atomic admission.
     // At the bounded sound budget the ninth candidate remains silent instead
     // of creating a channel that nearby humans could never receive.
@@ -11016,22 +11079,31 @@ export async function createTideweftRuntime(
       actorVocalizationSamples.length >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
       || situatedExpressionAdmissions.records.length
         >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
-    ) return;
-    const reduction = reduceSituatedExpressionChannelBank(
-      situatedExpressionChannels,
-      intent,
-      (event: SituatedExpressionEvent) => reception.kind === "self"
+    ) return false;
+    const receptionInput = reception.kind === "none"
+      ? null
+      : (event: SituatedExpressionEvent) => reception.kind === "self"
         ? event.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
           ? createSelfSituatedExpressionReception(event, world.meta.completedTick)
           : null
         : event.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
-          ? createHeardVisibleSituatedExpressionReception(
-              event,
-              world.meta.completedTick,
-              reception.certainty,
-              true,
-            )
-          : null,
+          ? reception.kind === "heard-visible"
+            ? createHeardVisibleSituatedExpressionReception(
+                event,
+                world.meta.completedTick,
+                reception.certainty,
+                true,
+              )
+            : createHeardUnseenSituatedExpressionReception(
+                event,
+                world.meta.completedTick,
+                reception.contact,
+              )
+          : null;
+    const reduction = reduceSituatedExpressionChannelBank(
+      situatedExpressionChannels,
+      intent,
+      receptionInput,
     );
     if (reduction.bank === null || reduction.reason === "invalid-reception") {
       throw new Error("Situated expression channel reduction failed validation");
@@ -11074,7 +11146,9 @@ export async function createTideweftRuntime(
       situatedExpressionAdmissions = nextAdmissions;
       situatedExpressionCausalAuthority = nextCausalAuthority;
       actorVocalizationSamples.push(sample);
+      return true;
     }
+    return false;
   }
 
   function playPendingSituatedExpression(): void {
@@ -11100,6 +11174,12 @@ export async function createTideweftRuntime(
             pan = 0;
           }
         }
+      } else if (reception.kind === "heard-unseen") {
+        const contact = situatedExpressionReceptionAudibleContact(reception);
+        if (contact === null) {
+          throw new Error("Directional expression receipt failed validation");
+        }
+        pan = audibleContactPan(contact);
       }
       const baseIntensity = event.volume === "shout"
         ? 0.92
@@ -11897,6 +11977,7 @@ export async function createTideweftRuntime(
       }
       dogActorRoster = workingDogStep.roster;
       settlementWorkingAnimals = workingDogStep.workingAnimals;
+      const guardianDogWarningIntent = workingDogStep.warningIntent;
       const searchLinkedRecovery = advanceRuntimeDomesticRecoveryFromWorkingSearch({
         state: settlementDomesticAnimalRecovery,
         settlement: settlementEcology,
@@ -12499,6 +12580,50 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      if (guardianDogWarningIntent !== null) {
+        const assignment = settlementWorkingAnimals.assignments.find(({ workerActorId }) => (
+          workerActorId === guardianDogWarningIntent.sourceActorId
+        ));
+        const activity = assignment?.currentActivity;
+        if (
+          assignment === undefined
+          || activity === undefined
+          || activity.transactionId !== guardianDogWarningIntent.triggerEventId
+          || activity.cause.kind !== "perception"
+        ) {
+          throw new Error("Guardian warning lost its committed work authority");
+        }
+        const audible = playerExpressionAudibility(guardianDogWarningIntent);
+        const reception = audible === null || audible.contact === null
+          ? { kind: "none" as const }
+          : playerDirectlyObservesExpressionSource(guardianDogWarningIntent)
+            ? { kind: "heard-visible" as const, certainty: audible.certainty }
+            : { kind: "heard-unseen" as const, contact: audible.contact };
+        const wasRecovering = player.timeAction !== null;
+        const admitted = acceptSituatedExpression(
+          guardianDogWarningIntent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            createGuardianDogWarningExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              assignmentId: assignment.assignmentId,
+              activityTransactionId: activity.transactionId,
+              sourceObservationId: activity.cause.referenceId,
+              acceptedAtTick: activity.acceptedAtTick,
+            })
+          ),
+        );
+        if (admitted && audible !== null && audible.contact !== null) {
+          // A strong, lawfully admitted guardian warning interrupts WAIT and
+          // interrupts REST/SLEEP. Rejected/capacity-bounded candidates
+          // remain silent and therefore cannot disturb either action.
+          playerWaitDisturbedThisStep = true;
+          if (wasRecovering) playerRecoveryDisturbedThisStep = true;
+        }
+      }
       for (const event of [...economyView.events]
         .filter(({ sequence }) => sequence >= firstNewWorldEventSequence)
         .sort((left, right) => left.sequence - right.sequence)) {
@@ -15979,18 +16104,6 @@ export async function createTideweftRuntime(
       nextPlayerSenseSampleOrdinal,
     }, worldSnapshot.meta.completedTick, PLAYER_PERCEPTION_CARRY_VERSION)
       ?? invalidPlayerPerceptionCarry();
-    if (!playerPerceptionCarryMatchesPosition(
-      perceptionCarrySnapshot,
-      regionalTravelSnapshot,
-      playerSnapshot,
-      createWorldView(worldSnapshot),
-      {
-        traversalFeedback,
-        physicalCargo: snapshotPhysicalValidation.state,
-      },
-    )) {
-      throw new Error("Refusing to save inconsistent expression/perception authority");
-    }
     const bio0EcologySnapshot = canonicalRuntimeBio0Ecology(bio0Ecology, worldSnapshot);
     if (bio0EcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent BIO0 ecology state");
@@ -16035,6 +16148,20 @@ export async function createTideweftRuntime(
     );
     if (settlementWorkingAnimalsSnapshot === null) {
       throw new Error("Refusing to save inconsistent settlement working-animal state");
+    }
+    if (!playerPerceptionCarryMatchesPosition(
+      perceptionCarrySnapshot,
+      regionalTravelSnapshot,
+      playerSnapshot,
+      createWorldView(worldSnapshot),
+      {
+        traversalFeedback,
+        physicalCargo: snapshotPhysicalValidation.state,
+      },
+      dogActorRosterSnapshot,
+      settlementWorkingAnimalsSnapshot,
+    )) {
+      throw new Error("Refusing to save inconsistent expression/perception authority");
     }
     const settlementDomesticAnimalRecoverySnapshot =
       canonicalRuntimeSettlementDomesticAnimalRecovery(
@@ -16671,6 +16798,7 @@ function canonicalPlayerPerceptionCarry(
   expectedVersion:
     | typeof LEGACY_PLAYER_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION
+    | typeof WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
 ): PlayerPerceptionCarry | null {
   if (
@@ -16679,6 +16807,8 @@ function canonicalPlayerPerceptionCarry(
     || Array.isArray(value)
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
+  const hasCurrentShape = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION;
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
     ? [
         "actorVocalizationSamples",
@@ -16692,6 +16822,19 @@ function canonicalPlayerPerceptionCarry(
         "situatedExpressionChannels",
         "version",
       ]
+    : expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
+      ? [
+          "actorVocalizationSamples",
+          "intervalStartFacingMilliRadians",
+          "intervalStartPosition",
+          "nextPlayerSenseSampleOrdinal",
+          "playerSenseSamples",
+          "playerStepsSinceWorldTick",
+          "situatedExpressionAdmissions",
+          "situatedExpressionCausalAuthority",
+          "situatedExpressionChannels",
+          "version",
+        ]
     : expectedVersion === PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION
       ? [
           "nextPlayerSenseSampleOrdinal",
@@ -16725,13 +16868,14 @@ function canonicalPlayerPerceptionCarry(
     || !Array.isArray(rawSamples)
     || rawSamples.length !== phase
     || rawSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
-    || (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || (hasCurrentShape
       && (!isWorldPosition(currentIntervalStartPosition)
         || typeof currentIntervalStartFacing !== "number"
         || !Number.isSafeInteger(currentIntervalStartFacing)
         || Object.is(currentIntervalStartFacing, -0)
         || Math.abs(currentIntervalStartFacing as number)
-          > PLAYER_FACING_MILLI_RADIANS_LIMIT))
+          > PLAYER_FACING_MILLI_RADIANS_LIMIT
+        ))
   ) return null;
 
   const samples: PlayerSenseSample[] = [];
@@ -16779,7 +16923,7 @@ function canonicalPlayerPerceptionCarry(
   let situatedExpressionChannels = createSituatedExpressionChannelBank();
   let situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
   let situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
-  if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
+  if (hasCurrentShape) {
     const rawVocalizations = record.actorVocalizationSamples;
     const canonicalChannels = canonicalizeSituatedExpressionChannelBank(
       record.situatedExpressionChannels,
@@ -16794,7 +16938,8 @@ function canonicalPlayerPerceptionCarry(
           channel.reception.receivedAtTick !== completedWorldTick
           || (channel.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
             ? channel.reception.kind !== "self"
-            : channel.reception.kind !== "heard-visible")
+            : channel.reception.kind !== "heard-visible"
+              && channel.reception.kind !== "heard-unseen")
         )
       ))
     ) return null;
@@ -16819,7 +16964,6 @@ function canonicalPlayerPerceptionCarry(
       const candidate = raw as unknown as SupplementalSoundSample;
       if (
         candidate.id !== `av-${completedWorldTick}-${ordinal}`
-        || candidate.soundClass !== "human-vocalization"
         || expressionEventIds.has(candidate.expressionEventId)
       ) return null;
       const sample = createSupplementalSoundSample(candidate);
@@ -16843,6 +16987,12 @@ function canonicalPlayerPerceptionCarry(
     if (
       trajectory === null
       || causalAuthority === null
+      || (expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
+        && !perceptionCarryUsesOnlyWorkingPeopleSemantics(
+          canonicalChannels,
+          trajectory.admissionLedger,
+          vocalizationSamples,
+        ))
       || causalAuthority.records.some(({ committedWorldTick }) => (
         committedWorldTick !== completedWorldTick
       ))
@@ -16878,14 +17028,14 @@ function canonicalPlayerPerceptionCarry(
     situatedExpressionChannels = trajectory.bank;
     situatedExpressionAdmissions = trajectory.admissionLedger;
   }
-  const intervalStartPosition = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+  const intervalStartPosition = hasCurrentShape
     ? createWorldPosition(
         (currentIntervalStartPosition as WorldPosition).region,
         (currentIntervalStartPosition as WorldPosition).localX,
         (currentIntervalStartPosition as WorldPosition).localY,
       )
     : samples[0]?.position ?? EMPTY_PERCEPTION_INTERVAL_POSITION;
-  const intervalStartFacingMilliRadians = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+  const intervalStartFacingMilliRadians = hasCurrentShape
     ? currentIntervalStartFacing as number
     : 0;
   return Object.freeze({
@@ -16918,6 +17068,34 @@ function vocalizationSampleMatchesChannel(
   ));
   return recentMatches.length === 1
     && vocalizationSampleMatchesRecentMemory(sample, recentMatches[0]!);
+}
+
+/**
+ * Exact semantic fence for v34/carry-v3. Nested expression schemas intentionally
+ * retain version 1, so their later enum members must not be accepted as if an
+ * older envelope could already have authored animal calls or uncertain hearing.
+ */
+function perceptionCarryUsesOnlyWorkingPeopleSemantics(
+  bank: SituatedExpressionChannelBank,
+  admissions: SituatedExpressionAdmissionLedger,
+  samples: readonly SupplementalSoundSample[],
+): boolean {
+  return admissions.records.every(({ kind }) => kind !== "guardian-dog-warning")
+    && samples.every(({ soundClass }) => soundClass === "human-vocalization")
+    && bank.channels.every((channel) => {
+      const active = channel.state.active;
+      return channel.state.recent.every(({ meaning, family }) => (
+        meaning !== "guardian-dog-warning" && family !== "animal-signal"
+      ))
+        && (active === null || (
+          active.meaning !== "guardian-dog-warning"
+          && active.family !== "animal-signal"
+          && active.knowledgeBasis !== "self-heard-anonymous-alarm"
+          && active.vocalization !== "dog-warning-bark"
+          && channel.reception !== null
+          && channel.reception.kind !== "heard-unseen"
+        ));
+    });
 }
 
 function invalidPlayerPerceptionCarry(): never {
@@ -17026,6 +17204,8 @@ function playerPerceptionCarryMatchesPosition(
   player: PlayerState,
   economy: WorldView,
   playerExpressionAuthority: PlayerExpressionAuthority,
+  dogRoster: DogActorRosterState,
+  workingAnimals: SettlementWorkingAnimalState,
 ): boolean {
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
   if (position === null) return false;
@@ -17093,6 +17273,8 @@ function playerPerceptionCarryMatchesPosition(
     regionalTravel,
     player,
     playerExpressionAuthority,
+    dogRoster,
+    workingAnimals,
   );
   const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
     (admission) => admission.kind === "player-traversal"
@@ -17149,6 +17331,45 @@ function playerPerceptionCarryMatchesPosition(
         && sample.soundRangeUnits === acoustics.rangeUnits
         && sample.soundInterrupt === policy.interrupt;
     }
+    if (admission.kind === "guardian-dog-warning") {
+      const dog = dogActorRosterActor(dogRoster, sample.sourceActorId);
+      if (dog === null) return false;
+      const authority = {
+        dog,
+        workingAnimals,
+        completedTick: economy.completedTick,
+      } as const;
+      const event = guardianDogWarningExpressionEventForTrigger(
+        authority,
+        admission.triggerEventId,
+      );
+      if (
+        event === null
+        || !guardianDogWarningAdmissionMatchesWorld(
+          admission,
+          dog,
+          workingAnimals,
+          economy.completedTick,
+        )
+        || stableStringify(dog.address.position) !== stableStringify(sample.position)
+        || !vocalizationSampleMatchesActiveEvent(sample, event)
+      ) return false;
+      const eventTimeReception = guardianDogWarningReceptionAtEventTime({
+        carry,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        dog,
+        event,
+        admission,
+      });
+      return eventTimeReception !== null
+        && !(
+          eventTimeReception.audible
+          && player.timeAction !== null
+          && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
+        );
+    }
     if (admission.kind !== "porter-heavy-departure") return false;
     const event = workingPeopleExpressionEventForTrigger(
       economy,
@@ -17182,6 +17403,8 @@ function situatedExpressionChannelsMatchWorld(
   regionalTravel: RegionalPlayerTravelState,
   player: PlayerState,
   playerExpressionAuthority: PlayerExpressionAuthority,
+  dogRoster: DogActorRosterState,
+  workingAnimals: SettlementWorkingAnimalState,
 ): boolean {
   return bank.channels.every((channel) => {
     const active = channel.state.active;
@@ -17213,6 +17436,40 @@ function situatedExpressionChannelsMatchWorld(
           playerExpressionAuthority,
         );
       });
+    }
+    const dog = dogActorRosterActor(dogRoster, channel.sourceActorId);
+    if (dog !== null) {
+      const authority = {
+        dog,
+        workingAnimals,
+        completedTick: economy.completedTick,
+      } as const;
+      if (!channel.state.recent.every((memory) => (
+        guardianDogWarningExpressionMemoryMatchesWorld(authority, memory)
+      ))) return false;
+      if (active !== null && (
+        stableStringify(dog.address.position) !== stableStringify(active.position)
+        || !guardianDogWarningExpressionEventMatchesWorld(authority, active)
+      )) return false;
+      return admissions.every((admission) => (
+        admission.kind === "guardian-dog-warning"
+        && guardianDogWarningAdmissionMatchesWorld(
+          admission,
+          dog,
+          workingAnimals,
+          economy.completedTick,
+        )
+        && (active?.eventId !== admission.eventId || guardianDogWarningReceptionMatchesEventTime({
+          carry,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          dog,
+          event: active,
+          admission,
+          reception: channel.reception,
+        }))
+      ));
     }
     const matches = economy.residents.filter(
       ({ identity }) => identity.stableId === channel.sourceActorId,
@@ -17278,6 +17535,173 @@ function residentSourcePositionMatches(
   const placement = resolveResidentWorldPlacement(economy, resident);
   return placement !== null
     && stableStringify(placement.position) === stableStringify(position);
+}
+
+function guardianDogWarningAdmissionMatchesWorld(
+  admission: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "guardian-dog-warning" }
+  >,
+  dog: DogActorState,
+  workingAnimals: SettlementWorkingAnimalState,
+  completedTick: number,
+): boolean {
+  const assignment = workingAnimals.assignments.find(({ assignmentId, workerActorId }) => (
+    assignmentId === admission.assignmentId
+    && workerActorId === dog.identity.stableId
+  ));
+  const activity = assignment?.currentActivity;
+  return assignment !== undefined
+    && activity !== undefined
+    && admission.sourceActorId === dog.identity.stableId
+    && admission.activityTransactionId === admission.triggerEventId
+    && admission.activityTransactionId === activity.transactionId
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && admission.acceptedAtTick === activity.acceptedAtTick
+    && activity.cause.kind === "perception"
+    && admission.sourceObservationId === activity.cause.referenceId;
+}
+
+interface GuardianDogWarningReceptionAuthorityInput {
+  readonly carry: PlayerPerceptionCarry;
+  readonly spatialWorld: WorldView;
+  readonly window: RegionalPlayerTravelState["window"];
+  readonly playerTemplate: PlayerState;
+  readonly dog: DogActorState;
+  readonly event: SituatedExpressionEvent;
+  readonly admission: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "guardian-dog-warning" }
+  >;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+interface GuardianDogWarningEventTimeReception {
+  readonly audible: boolean;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+/** Replays the phase-zero player reception without exposing the dog's true point. */
+function guardianDogWarningReceptionMatchesEventTime(
+  input: GuardianDogWarningReceptionAuthorityInput,
+): boolean {
+  const expected = guardianDogWarningReceptionAtEventTime(input);
+  return expected !== null
+    && stableStringify(expected.reception) === stableStringify(input.reception);
+}
+
+/**
+ * Reconstructs whether the warning physically reached the player and the only
+ * lawful receipt for that contact. This authority deliberately ignores the
+ * saved receipt so recovery cancellation and receipt validation cannot attest
+ * one another circularly.
+ */
+function guardianDogWarningReceptionAtEventTime(
+  input: Omit<GuardianDogWarningReceptionAuthorityInput, "reception">,
+): GuardianDogWarningEventTimeReception | null {
+  const {
+    carry,
+    spatialWorld,
+    window,
+    playerTemplate,
+    dog,
+    event,
+    admission,
+  } = input;
+  if (
+    spatialWorld.completedTick !== admission.acceptedAtTick
+    || event.eventId !== admission.eventId
+    || event.sourceActorId !== dog.identity.stableId
+    || stableStringify(event.position) !== stableStringify(dog.address.position)
+  ) return null;
+  const listenerPoint = perceptionIntervalPointInWindow(window, carry.intervalStartPosition);
+  if (listenerPoint === null) return null;
+  const eventTimePlayer: PlayerState = {
+    ...playerTemplate,
+    worldWidth: window.terrain.width,
+    worldHeight: window.terrain.height,
+    x: listenerPoint.x,
+    y: listenerPoint.y,
+    previousX: listenerPoint.x,
+    previousY: listenerPoint.y,
+    velocityX: 0,
+    velocityY: 0,
+    facingMilliRadians: carry.intervalStartFacingMilliRadians,
+  };
+  const reconstructed = playerWorldPositionInRegionalWindow(window, eventTimePlayer);
+  if (
+    reconstructed === null
+    || stableStringify(reconstructed) !== stableStringify(carry.intervalStartPosition)
+  ) return null;
+  let delta: ReturnType<typeof worldPositionDelta>;
+  try {
+    delta = worldPositionDelta(carry.intervalStartPosition, event.position);
+  } catch {
+    return null;
+  }
+  const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
+  if (masking === null) return null;
+  const acoustics = situatedExpressionAcoustics(event.volume);
+  const contact = evaluateAudibleContact({
+    listener: { x: 0, y: 0 },
+    source: { x: delta.x, y: delta.y },
+    baseRange: acoustics.rangeUnits,
+    ambientNoise: masking,
+    sourceLoudness: acoustics.loudness / FIXED_POINT,
+    wind: {
+      x: spatialWorld.weather.windX / FIXED_POINT,
+      y: spatialWorld.weather.windY / FIXED_POINT,
+    },
+  });
+  if (contact === null) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  // A heard strong guardian warning wakes the courier before the source is
+  // classified. Physical line of sight, not a later mutable sleep flag, owns
+  // visible versus uncertain reception.
+  const dogPlacement = livingActorAddressInRegionalWindow(dog.address, window);
+  const directlyVisible = dogPlacement !== null
+    && projectPerception(spatialWorld, {
+      ...eventTimePlayer,
+      timeAction: null,
+    }).detailVisibilityGrades[dogPlacement.tileIndex] === VISIBILITY_DIRECT;
+  const expected = directlyVisible
+    ? createHeardVisibleSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        Math.max(1, Math.round(contact.certainty * FIXED_POINT)),
+        true,
+      )
+    : createHeardUnseenSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        contact,
+      );
+  return expected === null
+    ? null
+    : Object.freeze({ audible: true, reception: expected });
+}
+
+function perceptionIntervalPointInWindow(
+  window: RegionalPlayerTravelState["window"],
+  position: WorldPosition,
+): Readonly<{ x: number; y: number }> | null {
+  try {
+    const origin = globalTileToRegion(window.origin.x, window.origin.y);
+    const frame = createSpatialFrame(
+      createWorldPosition(
+        origin.region,
+        origin.localX * WORLD_POSITION_UNITS_PER_TILE,
+        origin.localY * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      window.terrain.width * WORLD_POSITION_UNITS_PER_TILE,
+      window.terrain.height * WORLD_POSITION_UNITS_PER_TILE,
+    );
+    return worldPositionToSpatialFrame(frame, position);
+  } catch {
+    return null;
+  }
 }
 
 function nextSaveGeneration(version: AutosaveVersion): {
@@ -17382,6 +17806,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== TURNING_DAY_GAME_SAVE_VERSION
         && decoded.version !== PLAYER_RECOVERY_GAME_SAVE_VERSION
         && decoded.version !== PLAYER_EXPRESSION_GAME_SAVE_VERSION
+        && decoded.version !== WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -17403,6 +17828,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
@@ -17726,6 +18152,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
       || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
@@ -17749,6 +18176,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
@@ -18312,6 +18740,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
         )
+      : decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            WORKING_PEOPLE_PERCEPTION_CARRY_VERSION,
+          )
       : decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
@@ -18490,7 +18924,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
       { immutable: true },
     );
-    if (decoded.version < GAME_SAVE_VERSION) {
+    if (decoded.version < WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION) {
       const migratedPose = migrateLegacyPlayerPerceptionIntervalPose(
         perceptionCarry,
         regionalTravel,
@@ -18653,6 +19087,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         decoded.player,
         compatibilityView,
         { traversalFeedback, physicalCargo: loadedPhysicalCargo },
+        dogActorRoster,
+        settlementWorkingAnimals,
       )
     ) {
       throw new Error("Current save perception interval does not match its saved physical authority");

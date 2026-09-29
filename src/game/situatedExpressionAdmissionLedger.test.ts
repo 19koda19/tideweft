@@ -9,6 +9,7 @@ import {
   appendSituatedExpressionAdmissionRecord,
   canonicalizeSituatedExpressionAdmissionLedger,
   canonicalizeSituatedExpressionAdmissionRecord,
+  createGuardianDogWarningExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
@@ -22,6 +23,7 @@ import { createWorldPosition } from "./worldPosition";
 
 const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-porter-admission";
+const GUARDIAN_DOG_ID = "D-guardian-admission";
 const POSITION = createWorldPosition(createRegionCoord(-4, 11), 17_000, 29_000);
 
 function traversalInput(
@@ -101,20 +103,32 @@ describe("situated-expression admission ledger", () => {
       listenerFacingMilliRadians: -1_571,
       hearingCertainty: 780_000,
     });
+    const guardianDog = createGuardianDogWarningExpressionAdmissionRecord({
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId: "working-animal:activity:guardian-warning:1",
+      sampleOrdinal: 3,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId: "working-animal:activity:guardian-warning:1",
+      sourceObservationId: "observation:anonymous-alarm:1",
+      acceptedAtTick: 912,
+    });
     const legacy = createLegacyV33PlayerExpressionAdmissionRecord({
       sourceActorId: PLAYER_ID,
       triggerEventId: "legacy:event:1",
-      sampleOrdinal: 3,
+      sampleOrdinal: 4,
       admittedAtPlayerStepPhase: 9,
     });
 
-    expect([traversal, recovery, porter, legacy].map((record) => record?.kind)).toEqual([
+    expect([traversal, recovery, porter, guardianDog, legacy].map((record) => record?.kind))
+      .toEqual([
       "player-traversal",
       "player-fall-recovery",
       "porter-heavy-departure",
+      "guardian-dog-warning",
       "legacy-v33-player",
     ]);
-    for (const record of [traversal, recovery, porter, legacy]) {
+    for (const record of [traversal, recovery, porter, guardianDog, legacy]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
         record?.sourceActorId,
         record?.triggerEventId,
@@ -123,6 +137,63 @@ describe("situated-expression admission ledger", () => {
     }
     expect(Object.isFrozen(porter?.listenerPosition)).toBe(true);
     expect(Object.isFrozen(porter?.listenerPosition.region)).toBe(true);
+  });
+
+  it("binds guardian warnings to one non-player phase-zero activity transaction", () => {
+    const input = {
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId: "working-animal:activity:guardian-warning:2",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId: "working-animal:activity:guardian-warning:2",
+      sourceObservationId: "observation:anonymous-alarm:2",
+      acceptedAtTick: 913,
+    } as const;
+    const canonical = createGuardianDogWarningExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        GUARDIAN_DOG_ID,
+        input.triggerEventId,
+      ),
+      kind: "guardian-dog-warning",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+
+    expect(createGuardianDogWarningExpressionAdmissionRecord({
+      ...input,
+      sourceActorId: PLAYER_ID,
+    })).toBeNull();
+    expect(createGuardianDogWarningExpressionAdmissionRecord({
+      ...input,
+      activityTransactionId: "working-animal:activity:different",
+    })).toBeNull();
+    expect(createGuardianDogWarningExpressionAdmissionRecord({
+      ...input,
+      admittedAtPlayerStepPhase: 1,
+    })).toBeNull();
+    expect(createGuardianDogWarningExpressionAdmissionRecord({
+      ...input,
+      acceptedAtTick: -0,
+    })).toBeNull();
+    expect(createGuardianDogWarningExpressionAdmissionRecord({
+      ...input,
+      sourceObservationId: " padded ",
+    })).toBeNull();
+
+    const missing = { ...canonical } as Record<string, unknown>;
+    delete missing.assignmentId;
+    expect(canonicalizeSituatedExpressionAdmissionRecord(missing)).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      unexpected: true,
+    })).toBeNull();
   });
 
   it("appends only at the exact positional ordinal and deeply freezes the ledger", () => {

@@ -6,6 +6,7 @@ export const SITUATED_VOCALIZATIONS = Object.freeze([
   "strained",
   "alarm",
   "relief",
+  "dog-warning-bark",
 ] as const);
 
 export type SituatedVocalization = (typeof SITUATED_VOCALIZATIONS)[number];
@@ -266,6 +267,10 @@ export class TideweftSoundscape {
       "vocalization-strained": situatedVocalizationPattern("strained", variantSeed),
       "vocalization-alarm": situatedVocalizationPattern("alarm", variantSeed),
       "vocalization-relief": situatedVocalizationPattern("relief", variantSeed),
+      "vocalization-dog-warning-bark": situatedVocalizationPattern(
+        "dog-warning-bark",
+        variantSeed,
+      ),
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
@@ -478,6 +483,13 @@ export function situatedVocalizationPattern(
         toneStep(349.23 + shift, 0, "square", 0.045),
         toneStep(523.25 + shift * 2, 0.045, "square", 0.055),
         toneStep(783.99 + shift * 2, 0.1, "sawtooth", 0.08),
+      ];
+    case "dog-warning-bark":
+      return [
+        toneStep(164.81 + shift, 0, "sawtooth", 0.04),
+        toneStep(110 + shift, 0.025, "square", 0.07),
+        toneStep(146.83 + shift, 0.105, "sawtooth", 0.045),
+        toneStep(98 + shift, 0.13, "square", 0.075),
       ];
     case "relief":
       return [

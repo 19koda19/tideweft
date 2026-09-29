@@ -1,10 +1,12 @@
 import type { SituatedExpressionEvent } from "./situatedExpression";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import type { AudibleContact } from "./perception";
 
 /** Versioned evidence that the player lawfully received one active expression. */
 export const SITUATED_EXPRESSION_RECEPTION_VERSION = 1 as const;
 /** Integer fixed-point scale used by `certainty`. */
 export const SITUATED_EXPRESSION_RECEPTION_CERTAINTY_SCALE = 1_000_000 as const;
+export const SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE = 1_000_000 as const;
 
 const MAX_EXPRESSION_ID_LENGTH = 180;
 
@@ -34,9 +36,25 @@ export interface HeardVisibleSituatedExpressionReception
   readonly directVisualReceipt: true;
 }
 
+/**
+ * The player heard a source they could not directly see. Only the anonymous
+ * uncertainty bands returned by ordinary acoustics cross this boundary; exact
+ * source position, distance, and identity remain world authority.
+ */
+export interface HeardUnseenSituatedExpressionReception
+  extends SituatedExpressionReceptionBase {
+  readonly kind: "heard-unseen";
+  readonly directVisualReceipt: false;
+  readonly bearingCenterMicroradians: number;
+  readonly bearingUncertaintyMicroradians: number;
+  readonly distanceMinimumMicrounits: number;
+  readonly distanceMaximumMicrounits: number;
+}
+
 export type SituatedExpressionReception =
   | SelfSituatedExpressionReception
-  | HeardVisibleSituatedExpressionReception;
+  | HeardVisibleSituatedExpressionReception
+  | HeardUnseenSituatedExpressionReception;
 
 type ExpressionIdentity = Pick<SituatedExpressionEvent, "eventId" | "sourceActorId">;
 
@@ -75,6 +93,38 @@ export function createHeardVisibleSituatedExpressionReception(
     certainty,
     directVisualReceipt,
   }) as HeardVisibleSituatedExpressionReception | null;
+}
+
+/** Creates anonymous directional hearing evidence without an exact source fix. */
+export function createHeardUnseenSituatedExpressionReception(
+  event: ExpressionIdentity,
+  receivedAtTick: number,
+  contact: AudibleContact,
+): HeardUnseenSituatedExpressionReception | null {
+  return canonicalizeSituatedExpressionReception({
+    version: SITUATED_EXPRESSION_RECEPTION_VERSION,
+    eventId: event?.eventId,
+    sourceActorId: event?.sourceActorId,
+    receivedAtTick,
+    kind: "heard-unseen",
+    certainty: Math.max(
+      1,
+      Math.round(contact?.certainty * SITUATED_EXPRESSION_RECEPTION_CERTAINTY_SCALE),
+    ),
+    directVisualReceipt: false,
+    bearingCenterMicroradians: Math.round(
+      contact?.bearing.centerRadians * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    ),
+    bearingUncertaintyMicroradians: Math.round(
+      contact?.bearing.uncertaintyRadians * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    ),
+    distanceMinimumMicrounits: Math.round(
+      contact?.distanceBand.minimum * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    ),
+    distanceMaximumMicrounits: Math.round(
+      contact?.distanceBand.maximum * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    ),
+  }) as HeardUnseenSituatedExpressionReception | null;
 }
 
 /**
@@ -129,6 +179,51 @@ export function canonicalizeSituatedExpressionReception(
       directVisualReceipt: true,
     });
   }
+  if (value.kind === "heard-unseen") {
+    if (!exactKeys(value, [
+      "bearingCenterMicroradians",
+      "bearingUncertaintyMicroradians",
+      "certainty",
+      "directVisualReceipt",
+      "distanceMaximumMicrounits",
+      "distanceMinimumMicrounits",
+      "eventId",
+      "kind",
+      "receivedAtTick",
+      "sourceActorId",
+      "version",
+    ])) return null;
+    const maximumBearing = Math.round(
+      Math.PI * 2 * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    );
+    const maximumUncertainty = Math.round(
+      Math.PI * SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    );
+    if (
+      !validCommonFields(value)
+      || value.directVisualReceipt !== false
+      || !nonnegativeSafeInteger(value.bearingCenterMicroradians)
+      || value.bearingCenterMicroradians >= maximumBearing
+      || !positiveSafeInteger(value.bearingUncertaintyMicroradians)
+      || value.bearingUncertaintyMicroradians > maximumUncertainty
+      || !nonnegativeSafeInteger(value.distanceMinimumMicrounits)
+      || !nonnegativeSafeInteger(value.distanceMaximumMicrounits)
+      || value.distanceMaximumMicrounits < value.distanceMinimumMicrounits
+    ) return null;
+    return Object.freeze({
+      version: SITUATED_EXPRESSION_RECEPTION_VERSION,
+      eventId: value.eventId,
+      sourceActorId: value.sourceActorId,
+      receivedAtTick: value.receivedAtTick,
+      kind: "heard-unseen",
+      certainty: value.certainty,
+      directVisualReceipt: false,
+      bearingCenterMicroradians: value.bearingCenterMicroradians,
+      bearingUncertaintyMicroradians: value.bearingUncertaintyMicroradians,
+      distanceMinimumMicrounits: value.distanceMinimumMicrounits,
+      distanceMaximumMicrounits: value.distanceMaximumMicrounits,
+    });
+  }
   return null;
 }
 
@@ -147,7 +242,33 @@ export function situatedExpressionReceptionMatchesActiveEvent(
     && canonical.sourceActorId === activeEvent.sourceActorId
     && (activeEvent.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
       ? canonical.kind === "self"
-      : canonical.kind === "heard-visible" && canonical.directVisualReceipt === true);
+      : canonical.kind === "heard-visible"
+        ? canonical.directVisualReceipt === true
+        : canonical.kind === "heard-unseen"
+          && canonical.directVisualReceipt === false);
+}
+
+/** Reconstructs only the anonymous acoustic bands intentionally stored by a receipt. */
+export function situatedExpressionReceptionAudibleContact(
+  value: unknown,
+): AudibleContact | null {
+  const receipt = canonicalizeSituatedExpressionReception(value);
+  if (receipt === null || receipt.kind !== "heard-unseen") return null;
+  return Object.freeze({
+    bearing: Object.freeze({
+      centerRadians:
+        receipt.bearingCenterMicroradians / SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+      uncertaintyRadians:
+        receipt.bearingUncertaintyMicroradians / SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    }),
+    distanceBand: Object.freeze({
+      minimum: receipt.distanceMinimumMicrounits
+        / SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+      maximum: receipt.distanceMaximumMicrounits
+        / SITUATED_EXPRESSION_RECEPTION_CONTACT_SCALE,
+    }),
+    certainty: receipt.certainty / SITUATED_EXPRESSION_RECEPTION_CERTAINTY_SCALE,
+  });
 }
 
 function validCommonFields(
@@ -185,6 +306,10 @@ function nonnegativeSafeInteger(value: unknown): value is number {
     && Number.isSafeInteger(value)
     && value >= 0
     && !Object.is(value, -0);
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return nonnegativeSafeInteger(value) && value > 0;
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {

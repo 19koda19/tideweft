@@ -253,6 +253,7 @@ function policy(
       durationSteps: 9,
     };
     case "porter-heavy-load": throw new Error("Porter speech is not player authority");
+    case "guardian-dog-warning": throw new Error("Dog calls are not player authority");
   }
 }
 

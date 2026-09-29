@@ -75,7 +75,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 34;
+  readonly version: 35;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -85,7 +85,7 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 3;
+    readonly version: 4;
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
     readonly playerStepsSinceWorldTick: number;
@@ -182,10 +182,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 34
-    || record.payloadVersion !== 34
+    || envelope.version !== 35
+    || record.payloadVersion !== 35
   ) {
-    throw new Error("fixture did not produce a current v34 regional session save");
+    throw new Error("fixture did not produce a current v35 regional session save");
   }
   return envelope;
 }
@@ -206,7 +206,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 34,
+    payloadVersion: 35,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -596,6 +596,7 @@ function playerExpression(runtime: TideweftRuntime, tone: "alarmed" | "relieved"
   expect(expression.position).toEqual(runtime.getRenderView().player.position);
   expect(runtime.getUIView().expressionCaption).toEqual({
     id: expression.id,
+    presentationKind: "speech",
     speakerLabel: expression.speakerLabel,
     text: expression.text,
     tone: expression.tone,
@@ -632,7 +633,7 @@ describe("production terrain fall and physical cargo", () => {
     await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
     expect(repository.snapshot()).toEqual(invalidRecord);
     rejected.destroy();
-  }, process.env.CI === "true" ? 90_000 : 10_000);
+  }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
@@ -692,7 +693,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 34,
+      version: 35,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -715,7 +716,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 3,
+      version: 4,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,

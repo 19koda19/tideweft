@@ -75,11 +75,12 @@ describe("situated vocalization cues", () => {
       "vocalization-strained",
       "vocalization-alarm",
       "vocalization-relief",
+      "vocalization-dog-warning-bark",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
 
-  it("keeps all four Atari-like contours deterministic, distinct, and bounded", () => {
+  it("keeps every Atari-like contour deterministic, distinct, and bounded", () => {
     const patterns = SITUATED_VOCALIZATIONS.map((vocalization) => (
       situatedVocalizationPattern(vocalization, 0x51a7)
     ));
@@ -89,7 +90,9 @@ describe("situated vocalization cues", () => {
       const pattern = patterns[index]!;
       expect(pattern).toEqual(situatedVocalizationPattern(vocalization, 0x51a7));
       expect(pattern.length).toBeGreaterThan(0);
-      expect(pattern.length).toBeLessThanOrEqual(3);
+      expect(pattern.length).toBeLessThanOrEqual(
+        vocalization === "dog-warning-bark" ? 4 : 3,
+      );
       expect(pattern.every(({ delay, duration, frequency }) => (
         Number.isFinite(delay)
         && delay >= 0
@@ -124,6 +127,17 @@ describe("situated vocalization cues", () => {
       .toEqual(situatedVocalizationPattern("strained", 0));
     expect(situatedVocalizationPattern("strained", 9))
       .not.toEqual(situatedVocalizationPattern("strained", 10));
+  });
+
+  it("gives the guardian warning bark its own deterministic two-pulse voice", () => {
+    const bark = situatedVocalizationPattern("dog-warning-bark", 31);
+    expect(bark).toEqual(situatedVocalizationPattern("dog-warning-bark", 31));
+    expect(bark).not.toEqual(situatedVocalizationPattern("alarm", 31));
+    expect(bark).toHaveLength(4);
+    expect(bark[0]?.delay).toBe(0);
+    expect(bark[2]?.delay ?? 0).toBeGreaterThan(bark[1]?.delay ?? 0);
+    expect(Math.max(...bark.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.25);
   });
 });
 

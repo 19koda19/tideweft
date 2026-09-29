@@ -141,8 +141,13 @@ authority does not create an overhead-text wall. Every projected exact line
 also requires a canonical reception receipt, persisted with pending carry:
 `self` for the courier, or
 `heard-visible` for a non-player source that passed the shared event-time
-hearing model and direct visual disclosure. A receipt does not contain hidden
-identity, prose, or a second position.
+hearing model and direct visual disclosure. An unseen non-player call may use
+`heard-unseen`, which retains only quantized acoustic bearing, uncertainty,
+distance bands, and certainty; it carries no exact source position or disclosed
+identity. A non-player world expression may also have no player receipt at all.
+That absence suppresses only player presentation, never the authoritative
+world sound or lawful NPC hearing. A receipt does not contain hidden identity,
+prose, or a second position.
 
 Only committed physical facts cross the traversal adapter. A fall cannot call
 itself a near-fall, an attempted pickup cannot claim recovery, and cargo speech
@@ -165,9 +170,21 @@ Speech therefore cannot manufacture or replace a visual observation. The
 existing fixed-step player-sense carry remains one base sample per completed
 player step.
 
+The first animal-signal adapter is deliberately narrow. The existing persistent
+settlement guardian dog emits one warning bark only when it newly commits a
+guardian `investigate` activity caused by its own lawful, anonymous heard-alarm
+belief and matching retained task. The committed activity transaction is the
+expression trigger. Handler reports, identified or visual subjects, non-alarm
+threats, stale tasks, and continued investigation ticks remain silent. The bark
+is an `animal-alarm` acoustic fact at the dog's conserved position, not human
+speech and not a player-gated effect; nearby humans may hear its anonymous F0
+signal even when the player is distant. Visible presentation resolves only the
+authenticated roster dog and its current position. Hidden presentation uses
+the uncertain acoustic receipt, and an unheard call has no player callout.
+
 Because a pending vocalization can become authoritative human knowledge, the
-unpublished porter-work candidate advances the outer save to v34 and the
-bounded perception carry to v3. That carry preserves source-bound pending vocal
+guardian-warning candidate advances the outer save to v35 and the bounded
+perception carry to v4. That carry preserves source-bound pending vocal
 samples plus every retained per-source channel, reception receipt, audio
 acknowledgement, semantic cooldown memory, and a bounded causal-admission
 ledger. The ledger binds each exact sound ordinal to the committed event class,
@@ -180,7 +197,16 @@ owner's exact displacement ceiling, movement salience, facing changes, final
 velocity, and final player pose. Player traversal/recovery speech must also
 match a separately retained current-interval causal-authority receipt created
 by the physical transaction. Porter departure receipts exist only at phase
-zero and must reproduce that exact anchored listener pose.
+zero and must reproduce that exact anchored listener pose. A lawfully heard,
+strong guardian warning interrupts WAIT or REST/SLEEP before
+source visibility is classified. Dog reception therefore replays from physical
+acoustics and line of sight without trusting a mutable historical sleep bit.
+A dog outside the current presentation window remains a lawful world source:
+inaudibility replays without requiring a local placement, while an audible
+off-window call can disclose only the bounded heard-unseen receipt.
+An active recovery receipt that began before a re-derived audible warning is
+noncanonical even after the short caption expires; a recovery begun after the
+phase-zero warning remains lawful, and an unheard warning interrupts nothing.
 Reload therefore cannot erase hearing, admit suppressed chatter, replay
 acknowledged audio, reset cooldowns, change why a line was selected, or reroll
 its wording.
@@ -189,7 +215,10 @@ active or already-expired `pv-*` samples into one authenticated player channel
 and source-bound `av-*` samples; the missing historical phase-zero pose is
 reconstructed once from the retained path and saved player state, unrelated
 cooldown memory is discarded, and
-v34-only meanings are rejected. Exact v5-v32 perception carries still migrate
+v34-only meanings are rejected. Exact v34/carry-v3 saves preserve their
+working-people channels under a strict semantic fence: animal-call meanings,
+animal sound classes, uncertain-hearing receipts, and dog admissions are not
+valid historical v34 data. Exact v5-v32 perception carries still migrate
 through carry v1 to an empty voice bank without changing prior player-recovery
 authority. Routine records expire under fixed caps rather than growing with
 play time. Every current pending player sound remains bound to the exact saved
@@ -198,7 +227,10 @@ traversal/cargo cause. Resident sources must resolve uniquely to the same
 persistent human at the saved authoritative world position; their event-time
 listener position, facing, hearing certainty, direct visibility, active/recent
 expression, committed contract departure, cargo custody, and route state must
-all reauthenticate. Admission and sound capacity are atomic, so a ninth
+all reauthenticate. Guardian sources must resolve to the same roster dog,
+assignment, perception-caused activity, task observation, saved position, and
+event-time player receipt or lawful absence of one. Admission and sound
+capacity are atomic, so a ninth
 candidate stays silent instead of creating unconserved knowledge. Resealed
 remote, acoustically altered, temporally reset, or causally forged
 vocalizations fail before becoming NPC knowledge.
@@ -211,7 +243,8 @@ new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
 This slice does not yet claim other work expression where no authoritative
 completed-work event exists; it also does not claim general NPC conversation,
-animal calls, language/relationship realization, or complete Living Voice.
+the broader bark/whine/growl/distress/play repertoire, general animal-call
+networks, language/relationship realization, or complete Living Voice.
 
 ### Repository asset and storage law
 

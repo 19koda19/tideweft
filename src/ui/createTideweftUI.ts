@@ -263,6 +263,19 @@ export function mobileClockCopy(clock: TideweftUIView["clock"]): string {
 export function situatedExpressionCaptionCopy(
   caption: NonNullable<TideweftUIView["expressionCaption"]>,
 ): string {
+  if (caption.presentationKind === "animal-call") {
+    const subject = caption.speakerLabel === "Familiar dog"
+      ? "The familiar dog"
+      : "A dog";
+    if (caption.directionLabel === undefined) return `[${subject} barks sharply.]`;
+    if (caption.directionLabel === "all around") {
+      return `[${subject} barks; the sound seems all around.]`;
+    }
+    if (caption.directionLabel === "direction unclear") {
+      return `[${subject} barks; direction unclear.]`;
+    }
+    return `[${subject} barks somewhere ${caption.directionLabel}.]`;
+  }
   return `${caption.speakerLabel}: ${caption.text}`;
 }
 
@@ -2484,8 +2497,11 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       return;
     }
     const copy = situatedExpressionCaptionCopy(caption);
-    refs.expressionCaptionSpeaker.textContent = `${caption.speakerLabel}:`;
-    refs.expressionCaptionText.textContent = caption.text;
+    const animalCall = caption.presentationKind === "animal-call";
+    refs.expressionCaptionSpeaker.textContent = animalCall ? "" : `${caption.speakerLabel}:`;
+    refs.expressionCaptionText.textContent = animalCall && caption.directionLabel !== undefined
+      ? `${caption.text} · ${caption.directionLabel}`
+      : caption.text;
     refs.expressionCaption.dataset.tone = caption.tone;
     refs.expressionCaption.dataset.expressionId = caption.id;
     refs.expressionCaption.setAttribute("aria-label", copy);

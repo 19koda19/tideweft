@@ -77,10 +77,28 @@ the phase-zero saved listener position, facing,
 hearing result, and direct sight must reproduce through the shared perception
 model. Consuming the interval retires its old channel state.
 
+The first animal extension belongs to the existing settlement guardian dog.
+When that dog newly commits a real investigation from its own anonymous heard
+alarm, it gives one sharp warning bark. The bark is a physical, source-bound
+`animal-alarm` signal: nearby humans can hear it whether or not the player is
+present. A lawfully heard warning interrupts WAIT or REST/SLEEP;
+a visible dog can receive an actor-anchored callout, an unseen but audible dog
+yields only a vague direction, and an unheard dog yields no player caption.
+Save/reload re-derives that interruption from the physical call: an older
+recovery cannot survive a heard warning, while a later recovery or an unheard
+call remains valid. Leaving the dog's local presentation window does not erase
+the call or reveal it: event-time acoustics still decide unheard versus a vague
+heard-unseen receipt.
+Handler reports, identified or merely visual targets, stale work, and
+continued investigation do not fabricate repeated barking. This is one causal
+warning call, not a complete dog-vocal repertoire.
+
 Actor expression and observed fact remain different presentations. The short
 line is situated at the authenticated speaker in Chart and Relief and repeated
-in the accessible caption only when an exact self or heard-and-visible receipt
-exists. A bounded per-actor channel bank prevents one speaker's cooldown from
+in the accessible caption when an exact self or heard-and-visible receipt
+exists. An unseen animal call may instead use only an uncertainty-bounded
+directional caption and never gains an actor-anchored world callout. A bounded
+per-actor channel bank prevents one speaker's cooldown from
 silencing another actor while the presentation budget still shows at most one
 local callout at a time. The physical footing/cargo cause remains in EVENTS,
 where the player directly experienced or observed it, instead of becoming a
@@ -89,7 +107,7 @@ weather- and distance-aware hearing; the speaker does not hear their own voice
 as an anonymous event, and other humans do not gain cargo contents, intent,
 identity, or a visual position from sound alone. Other work lines remain silent
 until their real completed-work facts have an authoritative owner. This slice
-does not yet add general NPC conversation or audible animal expression.
+does not yet add general NPC conversation or a broad animal-expression system.
 
 Tide Harps are spatial understanding, not crafting inventory. The pure selector chooses an exact maximum knot-disjoint set; equally numerous arrangements prefer shorter total strings, then canonical fixed-piece IDs. Their eight deterministic names—Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime—give stable personality without random loot. Because the formation is derived from Wayknots already in the save, it introduces no currency, resource sink, timer, PlayerState field, or migration.
 

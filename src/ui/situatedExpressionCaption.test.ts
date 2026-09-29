@@ -22,6 +22,49 @@ describe("situated expression caption", () => {
       .toBe("Nearby courier: Keep off the flooded boards.");
   });
 
+  it("renders animal calls as sounds rather than quoted human speech", () => {
+    const unknownDog: SituatedExpressionCaptionUIView = {
+      id: "expression:dog:warning",
+      speakerLabel: "Unknown dog",
+      text: "BARK!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      assertive: true,
+    };
+    const familiarDog: SituatedExpressionCaptionUIView = {
+      ...unknownDog,
+      speakerLabel: "Familiar dog",
+    };
+
+    expect(situatedExpressionCaptionCopy(unknownDog)).toBe("[A dog barks sharply.]");
+    expect(situatedExpressionCaptionCopy(familiarDog))
+      .toBe("[The familiar dog barks sharply.]");
+    expect(situatedExpressionCaptionCopy(unknownDog)).not.toContain(":");
+    expect(situatedExpressionCaptionCopy(unknownDog)).not.toContain('"');
+  });
+
+  it("describes only the coarse direction justified by unseen hearing", () => {
+    const unseen: SituatedExpressionCaptionUIView = {
+      id: "expression:dog:hidden-warning",
+      speakerLabel: "A dog",
+      text: "BARK!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      directionLabel: "east",
+      assertive: true,
+    };
+
+    expect(situatedExpressionCaptionCopy(unseen)).toBe("[A dog barks somewhere east.]");
+    expect(situatedExpressionCaptionCopy({
+      ...unseen,
+      directionLabel: "direction unclear",
+    })).toBe("[A dog barks; direction unclear.]");
+    expect(situatedExpressionCaptionCopy({
+      ...unseen,
+      directionLabel: "all around",
+    })).toBe("[A dog barks; the sound seems all around.]");
+  });
+
   it("keeps one pointer-transparent visible caption above the compact controls", () => {
     expect(uiSource).toContain('createElement("p", "situated-expression-caption")');
     expect(uiSource).toContain("expressionCaption.hidden = true");

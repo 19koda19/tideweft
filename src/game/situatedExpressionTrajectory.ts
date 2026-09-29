@@ -17,6 +17,7 @@ import {
   canonicalizeSituatedExpressionChannelBank,
   type SituatedExpressionChannelBank,
 } from "./situatedExpressionChannelBank";
+import { situatedExpressionSoundClass } from "./situatedExpressionAcoustics";
 
 /** One reauthenticated pending expression interval, safe for a save owner to retain. */
 export interface SituatedExpressionTrajectory {
@@ -65,6 +66,9 @@ export function canonicalizeSituatedExpressionTrajectory(
       || record.sampleOrdinal !== index
       || sample.expressionEventId !== record.eventId
       || sample.sourceActorId !== record.sourceActorId
+      || sample.soundClass !== situatedExpressionSoundClass(
+        admissionMeaning(record),
+      )
     ) return null;
     samples.push(sample);
   }
@@ -144,6 +148,14 @@ export function canonicalizeSituatedExpressionTrajectory(
           || channel.reception.certainty !== latest.hearingCertainty
         )
       ) return null;
+      if (
+        latest.kind === "guardian-dog-warning"
+        && channel.reception !== null
+        && (
+          channel.reception.kind === "self"
+          || channel.reception.receivedAtTick !== latest.acceptedAtTick
+        )
+      ) return null;
     }
   }
 
@@ -198,6 +210,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "relief-after-cargo-recovery";
     case "porter-heavy-departure":
       return meaning === "porter-heavy-load";
+    case "guardian-dog-warning":
+      return meaning === "guardian-dog-warning";
     case "legacy-v33-player":
       return true;
   }
@@ -217,6 +231,7 @@ function admissionDurationSteps(
       }
     case "player-fall-recovery": return 9;
     case "porter-heavy-departure": return 8;
+    case "guardian-dog-warning": return 6;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -229,6 +244,19 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "alarm-at-cargo-loss": return 14;
     case "relief-after-cargo-recovery": return 9;
     case "porter-heavy-load": return 8;
+    case "guardian-dog-warning": return 6;
+  }
+}
+
+function admissionMeaning(
+  record: SituatedExpressionAdmissionRecord,
+): SituatedExpressionMemory["meaning"] {
+  switch (record.kind) {
+    case "player-traversal": return traversalMeaning(record.causalClass);
+    case "player-fall-recovery": return "relief-after-cargo-recovery";
+    case "porter-heavy-departure": return "porter-heavy-load";
+    case "guardian-dog-warning": return "guardian-dog-warning";
+    case "legacy-v33-player": return "steady-after-stumble";
   }
 }
 

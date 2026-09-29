@@ -5,8 +5,10 @@ import {
   SITUATED_EXPRESSION_RECEPTION_CERTAINTY_SCALE,
   SITUATED_EXPRESSION_RECEPTION_VERSION,
   canonicalizeSituatedExpressionReception,
+  createHeardUnseenSituatedExpressionReception,
   createHeardVisibleSituatedExpressionReception,
   createSelfSituatedExpressionReception,
+  situatedExpressionReceptionAudibleContact,
   situatedExpressionReceptionMatchesActiveEvent,
 } from "./situatedExpressionReception";
 import type { SituatedExpressionEvent } from "./situatedExpression";
@@ -55,6 +57,43 @@ describe("situated-expression player reception", () => {
     });
     expect(Object.isFrozen(heard)).toBe(true);
     expect(createHeardVisibleSituatedExpressionReception(EVENT, 48, 725_000, false)).toBeNull();
+  });
+
+  it("stores only bounded anonymous acoustic bands for an unseen source", () => {
+    const contact = {
+      bearing: {
+        centerRadians: Math.PI / 2,
+        uncertaintyRadians: Math.PI / 36,
+      },
+      distanceBand: { minimum: 3_250, maximum: 9_500 },
+      certainty: 0.73,
+    };
+    const heard = createHeardUnseenSituatedExpressionReception(EVENT, 48, contact);
+
+    expect(heard).toEqual({
+      version: SITUATED_EXPRESSION_RECEPTION_VERSION,
+      eventId: EVENT.eventId,
+      sourceActorId: EVENT.sourceActorId,
+      receivedAtTick: 48,
+      kind: "heard-unseen",
+      certainty: 730_000,
+      directVisualReceipt: false,
+      bearingCenterMicroradians: 1_570_796,
+      bearingUncertaintyMicroradians: 87_266,
+      distanceMinimumMicrounits: 3_250_000_000,
+      distanceMaximumMicrounits: 9_500_000_000,
+    });
+    expect(Object.isFrozen(heard)).toBe(true);
+    expect(heard).not.toHaveProperty("position");
+    expect(heard).not.toHaveProperty("sourcePosition");
+    expect(heard).not.toHaveProperty("text");
+
+    const restored = situatedExpressionReceptionAudibleContact(heard);
+    expect(restored?.bearing.centerRadians).toBeCloseTo(contact.bearing.centerRadians, 5);
+    expect(restored?.bearing.uncertaintyRadians)
+      .toBeCloseTo(contact.bearing.uncertaintyRadians, 5);
+    expect(restored?.distanceBand).toEqual(contact.distanceBand);
+    expect(restored?.certainty).toBe(contact.certainty);
   });
 
   it("canonicalizes only exact-key, bounded schema variants", () => {
@@ -118,7 +157,7 @@ describe("situated-expression player reception", () => {
     }, EVENT)).toBe(false);
   });
 
-  it("requires self mode for the player and heard-visible mode for every other source", () => {
+  it("requires self mode for the player and lawful hearing modes for every other source", () => {
     const residentSelf = createSelfSituatedExpressionReception(EVENT, 52);
     const playerSelf = createSelfSituatedExpressionReception(PLAYER_EVENT, 52);
     const residentHeard = createHeardVisibleSituatedExpressionReception(
@@ -133,10 +172,48 @@ describe("situated-expression player reception", () => {
       800_000,
       true,
     );
+    const residentUnseen = createHeardUnseenSituatedExpressionReception(EVENT, 52, {
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 1_000, maximum: 4_000 },
+      certainty: 0.8,
+    });
+    const playerUnseen = createHeardUnseenSituatedExpressionReception(PLAYER_EVENT, 52, {
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 1_000, maximum: 4_000 },
+      certainty: 0.8,
+    });
 
     expect(situatedExpressionReceptionMatchesActiveEvent(playerSelf, PLAYER_EVENT)).toBe(true);
     expect(situatedExpressionReceptionMatchesActiveEvent(playerHeard, PLAYER_EVENT)).toBe(false);
+    expect(situatedExpressionReceptionMatchesActiveEvent(playerUnseen, PLAYER_EVENT)).toBe(false);
     expect(situatedExpressionReceptionMatchesActiveEvent(residentHeard, EVENT)).toBe(true);
+    expect(situatedExpressionReceptionMatchesActiveEvent(residentUnseen, EVENT)).toBe(true);
     expect(situatedExpressionReceptionMatchesActiveEvent(residentSelf, EVENT)).toBe(false);
+  });
+
+  it("fails closed when unseen evidence gains an exact position or malformed bands", () => {
+    const valid = createHeardUnseenSituatedExpressionReception(EVENT, 53, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 40 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.65,
+    });
+    if (valid === null) throw new Error("Unseen reception fixture was rejected");
+
+    expect(canonicalizeSituatedExpressionReception({
+      ...valid,
+      position: { x: 1, y: 2 },
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionReception({
+      ...valid,
+      directVisualReceipt: true,
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionReception({
+      ...valid,
+      bearingUncertaintyMicroradians: 0,
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionReception({
+      ...valid,
+      distanceMinimumMicrounits: valid.distanceMaximumMicrounits + 1,
+    })).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import {
   situatedExpressionReceptionMatchesActiveEvent,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 
 /** Versioned, bounded owner for simultaneous per-source expression channels. */
 export const SITUATED_EXPRESSION_CHANNEL_BANK_VERSION = 1 as const;
@@ -24,7 +25,7 @@ export const SITUATED_EXPRESSION_CHANNEL_BANK_INTERVAL_SNAPSHOT_VERSION = 1 as c
 export interface SituatedExpressionChannel {
   readonly sourceActorId: string;
   readonly state: SituatedExpressionState;
-  /** Present exactly while this channel has an active, exactly received event. */
+  /** Present only when the player lawfully received this active world event. */
   readonly reception: SituatedExpressionReception | null;
 }
 
@@ -87,7 +88,8 @@ export function createSituatedExpressionChannelBank(): SituatedExpressionChannel
 
 /**
  * Reauthenticates the exact bank schema and every nested kernel state/receipt.
- * Cross-source state, duplicate source/event identity, idle retained channels,
+ * A non-player world event may be active without a player receipt. Player
+ * expressions, cross-source state, duplicate identity, idle retained channels,
  * and receipts that do not name the active event all fail closed.
  */
 export function canonicalizeSituatedExpressionChannelBank(
@@ -279,9 +281,10 @@ export function dismissSituatedExpressionChannelBankEvents(
 }
 
 /**
- * Reduces one intent only against its source's channel. A reception value or
- * factory is consulted only if the kernel accepts a new active event. Failed
- * reception authentication rolls the whole candidate reduction back.
+ * Reduces one intent only against its source's channel. A directly supplied
+ * `null` explicitly admits a non-player world event that the player did not
+ * receive. A factory returning null remains an authentication failure, so a
+ * malformed receipt cannot silently degrade into an unreceived event.
  */
 export function reduceSituatedExpressionChannelBank(
   bankValue: unknown,
@@ -316,8 +319,14 @@ export function reduceSituatedExpressionChannelBank(
     return reductionResult(false, "channel-capacity-reached", bank, null);
   }
 
-  const reception = receptionFor(receptionInput, reduction.event);
-  if (reception === null) {
+  const explicitlyUnreceived = receptionInput === null;
+  const reception = explicitlyUnreceived
+    ? null
+    : receptionFor(receptionInput, reduction.event);
+  if (
+    (!explicitlyUnreceived && reception === null)
+    || (explicitlyUnreceived && sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID)
+  ) {
     return reductionResult(false, "invalid-reception", bank, null);
   }
   const nextChannel = freezeChannel({
@@ -393,11 +402,16 @@ function canonicalizeChannel(value: unknown): SituatedExpressionChannel | null {
     if (value.reception !== null || !hasAnyCooldown(state)) return null;
     return freezeChannel({ sourceActorId: value.sourceActorId, state, reception: null });
   }
+  if (value.reception === null) {
+    return value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+      ? null
+      : freezeChannel({ sourceActorId: value.sourceActorId, state, reception: null });
+  }
   const reception = canonicalizeSituatedExpressionReception(value.reception);
-  if (
-    reception === null
-    || !situatedExpressionReceptionMatchesActiveEvent(reception, state.active)
-  ) return null;
+  if (reception === null || !situatedExpressionReceptionMatchesActiveEvent(
+    reception,
+    state.active,
+  )) return null;
   return freezeChannel({ sourceActorId: value.sourceActorId, state, reception });
 }
 

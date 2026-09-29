@@ -1,4 +1,8 @@
-import type { SituatedExpressionEvent, SituatedExpressionIntent } from "./situatedExpression";
+import type {
+  SituatedExpressionEvent,
+  SituatedExpressionIntent,
+  SituatedExpressionMeaning,
+} from "./situatedExpression";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 
 export interface SituatedExpressionAcoustics {
@@ -6,8 +10,18 @@ export interface SituatedExpressionAcoustics {
   readonly rangeUnits: number;
 }
 
+export type SituatedExpressionSoundClass = "human-vocalization" | "animal-alarm";
+
+/** Shared F0 sound class; species voice is semantic, not inferred from tone. */
+export function situatedExpressionSoundClass(
+  value: Pick<SituatedExpressionEvent, "meaning"> | SituatedExpressionMeaning,
+): SituatedExpressionSoundClass {
+  const meaning = typeof value === "string" ? value : value.meaning;
+  return meaning === "guardian-dog-warning" ? "animal-alarm" : "human-vocalization";
+}
+
 /**
- * Simulation acoustics for situated human expression. This small shared owner
+ * Simulation acoustics for situated expression. This small shared owner
  * lets persistence validation use the same fixed values as live admission.
  */
 export function situatedExpressionAcoustics(

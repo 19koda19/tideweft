@@ -6,6 +6,13 @@ import { TILE_UNITS, createPlayer } from "./player";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import { projectGameView, projectResidentWorldPosition } from "./projection";
 import {
+  appendDogActorMemory,
+  createDogActorState,
+  learnDogPlayerKnowledge,
+  type DogActorState,
+} from "./dogActor";
+import { createDogActorRoster } from "./dogActorRoster";
+import {
   createRegionalCartography,
   projectRegionalCartographyWindow,
 } from "./regionalCartography";
@@ -21,11 +28,15 @@ import {
   type SituatedExpressionIntent,
 } from "./situatedExpression";
 import {
+  createHeardUnseenSituatedExpressionReception,
   createHeardVisibleSituatedExpressionReception,
   createSelfSituatedExpressionReception,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
-import { createWorldPosition } from "./worldPosition";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  createWorldPosition,
+} from "./worldPosition";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
@@ -91,6 +102,74 @@ function canonicalExpression(
     throw new Error("Expression fixture expired before projection");
   }
   return advanced.active;
+}
+
+function canonicalDogWarning(
+  dog: DogActorState,
+  triggerEventId: string,
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: dog.identity.stableId,
+    triggerEventId,
+    position: dog.address.position,
+    meaning: "guardian-dog-warning",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-heard-anonymous-alarm",
+    priority: 760_000,
+    salience: 820_000,
+    variantSeed: 0xd06,
+    durationSteps: 8,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Dog warning expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
+function dogInWindow(
+  window: ReturnType<typeof createRegionalTerrainWindow>,
+  tileX = 18,
+  tileY = 22,
+): DogActorState {
+  const address = window.addresses[tileY * window.terrain.width + tileX];
+  if (address === undefined) throw new Error("Dog projection fixture left the regional window");
+  return createDogActorState({
+    seed: [101, 202, 303, 404],
+    originRegion: address.region,
+    originNamespace: "regional",
+    habitatClass: "settlement-edge",
+    habitatKey: "living-voice-projection",
+    populationKey: "living-voice-guardian-dogs",
+    populationOrdinal: 0,
+    position: createWorldPosition(
+      address.region,
+      address.localX * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
+      address.localY * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
+    ),
+  });
+}
+
+function recognizableDog(dog: DogActorState): DogActorState {
+  const evidenceId = "event:living-voice-recognized-dog";
+  const remembered = appendDogActorMemory(dog, {
+    eventId: evidenceId,
+    kind: "identity-learning",
+    subjectId: null,
+    atTick: 1,
+    salience: 800_000,
+    location: dog.address.position,
+  });
+  return learnDogPlayerKnowledge(remembered, {
+    fact: "recognizable-individual",
+    source: "direct-observation",
+    evidenceId,
+    learnedAtTick: 1,
+    confidence: 900_000,
+  });
 }
 
 function selfReception(event: SituatedExpressionEvent): SituatedExpressionReception {
@@ -286,5 +365,114 @@ describe("situated expression game projection", () => {
       situatedExpression: fabricated,
       situatedExpressionReception: heardVisibleReception(fabricated),
     }).expressionCaption).toBeUndefined();
+  });
+
+  it("anchors a heard-visible guardian bark to its authenticated dog without inventing a name", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const dogActorRoster = createDogActorRoster([dog]);
+    const expression = canonicalDogWarning(dog, "dog-signal:visible-warning");
+    const reception = heardVisibleReception(expression);
+
+    const game = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    });
+    const ui = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    });
+
+    expect(game.expressions).toEqual([expect.objectContaining({
+      sourceActorId: dog.identity.stableId,
+      sourceKind: "animal",
+      speakerLabel: "Unknown dog",
+      text: "BARK!",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "alarmed",
+    })]);
+    expect(ui.expressionCaption).toMatchObject({
+      speakerLabel: "Unknown dog",
+      text: "BARK!",
+      presentationKind: "animal-call",
+    });
+    expect(ui.expressionCaption).not.toHaveProperty("name");
+  });
+
+  it("uses learned recognition for a visible dog label and rejects a mismatched body position", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = recognizableDog(dogInWindow(window));
+    const dogActorRoster = createDogActorRoster([dog]);
+    const expression = canonicalDogWarning(dog, "dog-signal:familiar-warning");
+    const reception = heardVisibleReception(expression);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressions?.[0]?.speakerLabel).toBe("Familiar dog");
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressionCaption?.speakerLabel).toBe("Familiar dog");
+
+    const mismatched = {
+      ...expression,
+      position: createWorldPosition(
+        dog.address.position.region,
+        dog.address.position.localX + 1,
+        dog.address.position.localY,
+      ),
+    } as SituatedExpressionEvent;
+    expect(projectGameView(world, player, {
+      situatedExpression: mismatched,
+      situatedExpressionReception: heardVisibleReception(mismatched),
+      dogActorRoster,
+    }).expressions).toEqual([]);
+  });
+
+  it("keeps an unseen heard bark directional but never exact-position anchored", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const expression = canonicalDogWarning(dog, "dog-signal:hidden-warning");
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.72,
+    });
+    if (reception === null) throw new Error("Hidden dog reception fixture was rejected");
+
+    const game = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    });
+    const ui = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    });
+
+    expect(game.expressions).toEqual([]);
+    expect(ui.expressionCaption).toMatchObject({
+      speakerLabel: "A dog",
+      text: "BARK!",
+      presentationKind: "animal-call",
+      directionLabel: "east",
+    });
+    expect(ui.expressionCaption).not.toHaveProperty("position");
+    expect(JSON.stringify(ui.expressionCaption)).not.toContain(dog.identity.stableId);
+    expect(JSON.stringify(ui.expressionCaption)).not.toContain(
+      String(dog.address.position.localX),
+    );
   });
 });

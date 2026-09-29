@@ -28,7 +28,7 @@ const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
 const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.60';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 51;
-const SMOKE_EXPECTED_SAVE_VERSION = 34;
+const SMOKE_EXPECTED_SAVE_VERSION = 35;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);

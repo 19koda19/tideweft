@@ -184,6 +184,7 @@ export function playerExpressionEventMatchesAdmission(
     || admission.eventId !== event.eventId
     || admission.triggerEventId !== event.triggerEventId
     || admission.kind === "porter-heavy-departure"
+    || admission.kind === "guardian-dog-warning"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     // The v33 migrator already admitted only a uniquely reconstructed
@@ -227,6 +228,7 @@ export function playerExpressionMemoryMatchesAdmission(
     || admission.sourceActorId !== memory.sourceActorId
     || admission.triggerEventId !== memory.triggerEventId
     || admission.kind === "porter-heavy-departure"
+    || admission.kind === "guardian-dog-warning"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     return canonicalizeSituatedExpressionState({
@@ -253,6 +255,7 @@ export function playerExpressionAdmissionSoundPolicy(
     admission === null
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
     || admission.kind === "porter-heavy-departure"
+    || admission.kind === "guardian-dog-warning"
     || admission.kind === "legacy-v33-player"
   ) return null;
   const policy = policyForAdmission(admission, authority, 0);
@@ -268,7 +271,10 @@ export function playerExpressionAdmissionSoundPolicy(
 
 function policyForAdmission(
   admission: Exclude<SituatedExpressionAdmissionRecord, {
-    readonly kind: "porter-heavy-departure" | "legacy-v33-player";
+    readonly kind:
+      | "porter-heavy-departure"
+      | "guardian-dog-warning"
+      | "legacy-v33-player";
   }>,
   authority: PlayerExpressionAuthority,
   candidateVariantSeed: number,
@@ -491,6 +497,7 @@ function policyFor(
           })
         : null;
     case "porter-heavy-load":
+    case "guardian-dog-warning":
       return null;
   }
 }

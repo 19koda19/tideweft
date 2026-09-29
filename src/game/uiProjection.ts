@@ -114,8 +114,11 @@ import {
 } from "./situatedExpression";
 import {
   situatedExpressionReceptionMatchesActiveEvent,
+  situatedExpressionReceptionAudibleContact,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
+import type { DogActorRosterState } from "./dogActorRoster";
+import { audibleContactDirection } from "./audibleContactPresentation";
 import { eventSettlementLocusIds } from "./eventObservation";
 
 export interface UIProjectionOptions {
@@ -153,6 +156,8 @@ export interface UIProjectionOptions {
   readonly situatedExpression?: SituatedExpressionEvent | null;
   /** Event-time evidence that the player lawfully received the exact expression. */
   readonly situatedExpressionReception?: SituatedExpressionReception | null;
+  /** Exact dog bodies used only for a directly visible animal-call label. */
+  readonly dogActorRoster?: DogActorRosterState;
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
   readonly settlementFoodStoreAction?: Readonly<{
     readonly id: string;
@@ -405,7 +410,16 @@ export function projectUIView(
     : projectSituatedExpression(situatedExpressionEvent);
   const situatedExpressionSource = !receivedSituatedExpression
     ? null
-    : projectSituatedExpressionSource(world, situatedExpressionEvent, economy);
+    : projectSituatedExpressionSource(
+        world,
+        situatedExpressionEvent,
+        economy,
+        options.dogActorRoster,
+        options.situatedExpressionReception ?? null,
+      );
+  const situatedExpressionContact = situatedExpressionReceptionAudibleContact(
+    options.situatedExpressionReception ?? null,
+  );
 
   return {
     revision: [
@@ -438,6 +452,10 @@ export function projectUIView(
       options.situatedExpression?.eventId ?? "no-situated-expression",
       options.situatedExpression?.remainingSteps ?? 0,
       options.situatedExpressionReception?.eventId ?? "no-expression-reception",
+      options.situatedExpressionReception?.kind ?? "no-expression-reception-kind",
+      situatedExpressionContact === null
+        ? "no-expression-direction"
+        : audibleContactDirection(situatedExpressionContact),
       situatedExpressionSource?.speakerLabel ?? "no-expression-source",
       suppressDetail
         ? "sleep-store-action-hidden"
@@ -566,6 +584,12 @@ export function projectUIView(
             speakerLabel: situatedExpressionSource.speakerLabel,
             text: situatedExpression.text,
             tone: options.situatedExpression.tone,
+            presentationKind: options.situatedExpression.meaning === "guardian-dog-warning"
+              ? "animal-call"
+              : "speech",
+            ...(situatedExpressionContact === null
+              ? {}
+              : { directionLabel: audibleContactDirection(situatedExpressionContact) }),
             assertive: options.situatedExpression.tone === "alarmed"
               || options.situatedExpression.volume === "shout",
           },

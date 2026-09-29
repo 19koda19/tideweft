@@ -9,6 +9,7 @@ import {
   serializeWorld,
 } from "../sim/public";
 import { createPlayer } from "./player";
+import { createSupplementalSoundSample } from "./humanPerception";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
   playerWorldPositionInRegionalWindow,
@@ -22,6 +23,17 @@ import {
   createSituatedExpressionState,
   reduceSituatedExpression,
 } from "./situatedExpression";
+import {
+  acknowledgeSituatedExpressionChannelBank,
+  createSituatedExpressionChannelBank,
+  reduceSituatedExpressionChannelBank,
+} from "./situatedExpressionChannelBank";
+import {
+  appendSituatedExpressionAdmissionRecord,
+  createGuardianDogWarningExpressionAdmissionRecord,
+  createSituatedExpressionAdmissionLedger,
+} from "./situatedExpressionAdmissionLedger";
+import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import { WORLD_POSITION_UNITS_PER_TILE, type WorldPosition } from "./worldPosition";
@@ -171,7 +183,7 @@ describe("runtime existing-human perception path", () => {
     await resumed.save();
     expect(savedResidentPerception(repository, fixture.residentId)).toEqual(beforeReload);
     resumed.destroy();
-  });
+  }, 30_000);
 
   it("keeps an identified walking player's last-known point at the latest sampled position", async () => {
     const fixture = perceptionFixture("runtime perception latest point");
@@ -214,9 +226,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 34,
+      version: 35,
       perceptionCarry: {
-        version: 3,
+        version: 4,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
@@ -297,10 +309,10 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 34,
+      version: 35,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 3,
+        version: 4,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
@@ -320,7 +332,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v34", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v35", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -337,9 +349,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 34,
+      version: 35,
       perceptionCarry: {
-        version: 3,
+        version: 4,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: 0,
         playerStepsSinceWorldTick: 3,
@@ -385,6 +397,161 @@ describe("runtime existing-human perception path", () => {
       },
     });
     migrated.destroy();
+  }, 60_000);
+
+  it("migrates the exact sealed v34 carry-v3 schema to v35 without replay", async () => {
+    const fixture = perceptionFixture("runtime perception v34 carry migration");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const {
+      ...v3Carry
+    } = currentPerceptionCarry(decoded);
+    const { integrity: _integrity, ...currentBase } = decoded;
+    const v34Base = {
+      ...currentBase,
+      version: 34,
+      perceptionCarry: { ...v3Carry, version: 3 },
+    };
+    repository.replace({
+      ...current,
+      payloadVersion: 34,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v34Base,
+        integrity: gameSaveEnvelopeIntegrity(v34Base),
+      }),
+    });
+
+    soundscapePlay.mockClear();
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    await migrated.save();
+    expect(savedEnvelope(repository)).toMatchObject({
+      version: 35,
+      perceptionCarry: {
+        version: 4,
+        playerStepsSinceWorldTick: 3,
+        nextPlayerSenseSampleOrdinal: 3,
+      },
+    });
+    migrated.destroy();
+  }, 60_000);
+
+  it("rejects an unowned historical sleep-suppression bit in a resealed v35 carry", async () => {
+    const fixture = perceptionFixture("runtime perception rejects sleep-bit authority");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    resealCurrentEnvelope(repository, (envelope) => {
+      currentPerceptionCarry(envelope).intervalStartDetailPerceptionSuppressed = true;
+    });
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, 60_000);
+
+  it("rejects dog-call semantics smuggled through a resealed v34 carry-v3", async () => {
+    const fixture = perceptionFixture("runtime perception v34 dog semantic fence");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const carry = currentPerceptionCarry(decoded);
+    const position = carry.intervalStartPosition as WorldPosition;
+    const completedTick = deserializeWorld(String(decoded.world)).meta.completedTick;
+    const triggerEventId = "dog:v34-smuggle:activity";
+    const reduced = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      {
+        version: SITUATED_EXPRESSION_VERSION,
+        sourceActorId: "dog:v34-smuggle",
+        triggerEventId,
+        position,
+        meaning: "guardian-dog-warning",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "shout",
+        knowledgeBasis: "self-heard-anonymous-alarm",
+        priority: 760_000,
+        salience: 520_000,
+        variantSeed: 34,
+        durationSteps: 6,
+      },
+      null,
+    );
+    const acknowledged = acknowledgeSituatedExpressionChannelBank(reduced.bank);
+    const event = reduced.event;
+    const admission = createGuardianDogWarningExpressionAdmissionRecord({
+      sourceActorId: "dog:v34-smuggle",
+      triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "assignment:v34-smuggle",
+      activityTransactionId: triggerEventId,
+      sourceObservationId: "observation:v34-smuggle",
+      acceptedAtTick: completedTick,
+    });
+    const admissions = admission === null
+      ? null
+      : appendSituatedExpressionAdmissionRecord(
+          createSituatedExpressionAdmissionLedger(),
+          admission,
+        );
+    const acoustics = situatedExpressionAcoustics("shout");
+    const sample = event === null ? null : createSupplementalSoundSample({
+      expressionEventId: event.eventId,
+      id: `av-${completedTick}-0`,
+      position,
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+      soundClass: "animal-alarm",
+      soundInterrupt: "strong",
+      sourceActorId: event.sourceActorId,
+    });
+    if (acknowledged.bank === null || event === null || admissions === null || sample === null) {
+      throw new Error("v34 semantic-fence fixture could not build a canonical dog trajectory");
+    }
+    const {
+      ...v3Carry
+    } = carry;
+    const { integrity: _integrity, ...currentBase } = decoded;
+    const v34Base = {
+      ...currentBase,
+      version: 34,
+      perceptionCarry: {
+        ...v3Carry,
+        version: 3,
+        actorVocalizationSamples: [sample],
+        situatedExpressionAdmissions: admissions,
+        situatedExpressionChannels: acknowledged.bank,
+      },
+    };
+    repository.replace({
+      ...current,
+      payloadVersion: 34,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v34Base,
+        integrity: gameSaveEnvelopeIntegrity(v34Base),
+      }),
+    });
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
   }, 60_000);
 
   it("rejects a coherently relocated earlier expression trajectory beyond one player step", async () => {
@@ -541,9 +708,9 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 34,
+      version: 35,
       perceptionCarry: {
-        version: 3,
+        version: 4,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,

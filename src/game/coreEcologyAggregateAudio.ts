@@ -23,6 +23,11 @@ import {
   createWorldPosition,
   worldPositionToSpatialFrame,
 } from "./worldPosition";
+import {
+  audibleContactDirection,
+  audibleContactPan,
+  type AudibleContactDirection,
+} from "./audibleContactPresentation";
 
 export const CORE_ECOLOGY_CHORUS_CADENCE_TICKS = 24 as const;
 export const CORE_ECOLOGY_CHORUS_MIN_ACTIVITY = 180_000 as const;
@@ -190,27 +195,7 @@ function variantSeed(aggregateId: string, anchorOrdinal: number, tick: number): 
     >>> 0;
 }
 
-type CardinalDirection =
-  | "east"
-  | "south-east"
-  | "south"
-  | "south-west"
-  | "west"
-  | "north-west"
-  | "north"
-  | "north-east";
-type ChorusDirection = CardinalDirection | "all around" | "direction unclear";
-
-const CARDINAL_DIRECTIONS: readonly CardinalDirection[] = Object.freeze([
-  "east",
-  "south-east",
-  "south",
-  "south-west",
-  "west",
-  "north-west",
-  "north",
-  "north-east",
-]);
+type ChorusDirection = AudibleContactDirection;
 
 function chorusCaption(
   contact: AudibleContact,
@@ -229,44 +214,15 @@ function chorusCaption(
 export function coreEcologyChorusDirection(
   contact: AudibleContact,
 ): ChorusDirection {
-  const uncertainty = contact.bearing.uncertaintyRadians;
-  if (uncertainty >= Math.PI - 1e-6) return "all around";
-  const octant = Math.round(normalizeRadians(contact.bearing.centerRadians) / (Math.PI / 4)) % 8;
-  const center = octant * (Math.PI / 4);
-  const offsetFromOctantCenter = angularDistance(
-    normalizeRadians(contact.bearing.centerRadians),
-    center,
-  );
-  if (uncertainty + offsetFromOctantCenter >= Math.PI / 8) {
-    return "direction unclear";
-  }
-  return CARDINAL_DIRECTIONS[octant] ?? "direction unclear";
-}
-
-function normalizeRadians(value: number): number {
-  const fullTurn = Math.PI * 2;
-  return ((value % fullTurn) + fullTurn) % fullTurn;
-}
-
-function angularDistance(left: number, right: number): number {
-  const difference = Math.abs(normalizeRadians(left) - normalizeRadians(right));
-  return Math.min(difference, Math.PI * 2 - difference);
+  return audibleContactDirection(contact);
 }
 
 function panFromContact(contact: AudibleContact): number {
-  const maximumDirectionalUncertainty = (3 * Math.PI) / 4;
-  const directionWeight = clampUnit(
-    1 - contact.bearing.uncertaintyRadians / maximumDirectionalUncertainty,
-  );
-  return clampPan(Math.cos(contact.bearing.centerRadians) * directionWeight);
+  return audibleContactPan(contact);
 }
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
-}
-
-function clampPan(value: number): number {
-  return Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
 }
 
 function nonnegativeSafeInteger(value: unknown): value is number {

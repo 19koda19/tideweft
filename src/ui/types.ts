@@ -473,6 +473,18 @@ export interface SituatedExpressionCaptionUIView {
   readonly speakerLabel: string;
   readonly text: string;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
+  readonly presentationKind?: "speech" | "animal-call";
+  readonly directionLabel?:
+    | "east"
+    | "south-east"
+    | "south"
+    | "south-west"
+    | "west"
+    | "north-west"
+    | "north"
+    | "north-east"
+    | "all around"
+    | "direction unclear";
   /** Urgency is explicit and is never inferred from visual tone. */
   readonly assertive?: boolean;
 }

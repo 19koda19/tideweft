@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRegionCoord } from "../sim/regions";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
+  canonicalizeSituatedExpressionState,
   SITUATED_EXPRESSION_VERSION,
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
@@ -29,6 +30,7 @@ import { createWorldPosition } from "./worldPosition";
 
 const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-porter-channel-bank";
+const GUARDIAN_DOG_ID = "D-guardian-channel-bank";
 const POSITION = createWorldPosition(createRegionCoord(4, -9), 31_000, 27_000);
 
 function expressionIntent(
@@ -74,6 +76,24 @@ function alarmIntent(
   };
 }
 
+function guardianDogIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: GUARDIAN_DOG_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "guardian-dog-warning",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-heard-anonymous-alarm",
+    priority: 760_000,
+    salience: 840_000,
+    variantSeed: 103,
+    durationSteps: 6,
+  };
+}
+
 function receive(event: SituatedExpressionEvent) {
   return event.sourceActorId === PLAYER_ID
     ? createSelfSituatedExpressionReception(event, 90)
@@ -92,6 +112,71 @@ function accept(
 }
 
 describe("situated-expression per-source channel bank", () => {
+  it("admits an unreceived non-player world event without weakening player receipts", () => {
+    const worldOnly = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      guardianDogIntent("working-animal:activity:warning:world-only"),
+      null,
+    );
+
+    expect(worldOnly).toMatchObject({ accepted: true, reason: "accepted" });
+    expect(worldOnly.bank?.channels).toHaveLength(1);
+    expect(worldOnly.bank?.channels[0]).toMatchObject({
+      sourceActorId: GUARDIAN_DOG_ID,
+      reception: null,
+      state: {
+        active: {
+          sourceActorId: GUARDIAN_DOG_ID,
+          meaning: "guardian-dog-warning",
+          audioAcknowledged: false,
+        },
+      },
+    });
+    expect(canonicalizeSituatedExpressionState(
+      JSON.parse(JSON.stringify(worldOnly.bank?.channels[0]?.state)),
+    )).toEqual(worldOnly.bank?.channels[0]?.state);
+    expect(canonicalizeSituatedExpressionChannelBank(
+      JSON.parse(JSON.stringify(worldOnly.bank)),
+    )).toEqual(worldOnly.bank);
+    expect(listActiveSituatedExpressionChannelPairs(worldOnly.bank)).toEqual([]);
+
+    const acknowledged = acknowledgeSituatedExpressionChannelBank(worldOnly.bank);
+    expect(acknowledged.acknowledgements).toEqual([]);
+    expect(acknowledged.bank?.channels[0]?.state.active?.audioAcknowledged).toBe(true);
+    expect(acknowledgeSituatedExpressionChannelBank(acknowledged.bank).bank)
+      .toEqual(acknowledged.bank);
+
+    const unreceivedPlayer = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      expressionIntent(PLAYER_ID, "stumble:player:unreceived"),
+      null,
+    );
+    expect(unreceivedPlayer).toEqual({
+      accepted: false,
+      reason: "invalid-reception",
+      bank: createSituatedExpressionChannelBank(),
+      event: null,
+    });
+    const factoryFailure = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      guardianDogIntent("working-animal:activity:warning:factory-null"),
+      () => null,
+    );
+    expect(factoryFailure).toMatchObject({
+      accepted: false,
+      reason: "invalid-reception",
+    });
+
+    const receivedPlayer = accept(
+      createSituatedExpressionChannelBank(),
+      expressionIntent(PLAYER_ID, "stumble:player:receipt-required"),
+    );
+    expect(canonicalizeSituatedExpressionChannelBank({
+      ...receivedPlayer,
+      channels: [{ ...receivedPlayer.channels[0], reception: null }],
+    })).toBeNull();
+  });
+
   it("accepts simultaneous player and porter expressions without cross-source suppression", () => {
     const player = accept(
       createSituatedExpressionChannelBank(),

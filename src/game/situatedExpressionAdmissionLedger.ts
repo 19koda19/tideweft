@@ -19,6 +19,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "player-traversal",
   "player-fall-recovery",
   "porter-heavy-departure",
+  "guardian-dog-warning",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -99,6 +100,15 @@ export interface PorterHeavyDepartureExpressionAdmissionRecord
   readonly hearingCertainty: number;
 }
 
+export interface GuardianDogWarningExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "guardian-dog-warning";
+  readonly assignmentId: string;
+  readonly activityTransactionId: string;
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -108,6 +118,7 @@ export type SituatedExpressionAdmissionRecord =
   | PlayerTraversalExpressionAdmissionRecord
   | PlayerFallRecoveryExpressionAdmissionRecord
   | PorterHeavyDepartureExpressionAdmissionRecord
+  | GuardianDogWarningExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -141,6 +152,14 @@ export interface PorterHeavyDepartureExpressionAdmissionInput
   readonly listenerPosition: WorldPosition;
   readonly listenerFacingMilliRadians: number;
   readonly hearingCertainty: number;
+}
+
+export interface GuardianDogWarningExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly assignmentId: string;
+  readonly activityTransactionId: string;
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
 }
 
 export type LegacyV33PlayerExpressionAdmissionInput = SituatedExpressionAdmissionInputBase;
@@ -252,6 +271,37 @@ export function createPorterHeavyDepartureExpressionAdmissionRecord(
   }) as PorterHeavyDepartureExpressionAdmissionRecord | null;
 }
 
+/** Creates one world-authoritative guardian warning admission. */
+export function createGuardianDogWarningExpressionAdmissionRecord(
+  input: GuardianDogWarningExpressionAdmissionInput,
+): GuardianDogWarningExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "activityTransactionId",
+    "admittedAtPlayerStepPhase",
+    "assignmentId",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "guardian-dog-warning",
+    assignmentId: value.assignmentId,
+    activityTransactionId: value.activityTransactionId,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  }) as GuardianDogWarningExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -287,6 +337,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "player-traversal": return canonicalTraversalRecord(value);
     case "player-fall-recovery": return canonicalRecoveryRecord(value);
     case "porter-heavy-departure": return canonicalPorterRecord(value);
+    case "guardian-dog-warning": return canonicalGuardianDogRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -490,6 +541,45 @@ function canonicalPorterRecord(
     ),
     listenerFacingMilliRadians: value.listenerFacingMilliRadians,
     hearingCertainty: value.hearingCertainty,
+  });
+}
+
+function canonicalGuardianDogRecord(
+  value: Readonly<Record<string, unknown>>,
+): GuardianDogWarningExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "activityTransactionId",
+    "admittedAtPlayerStepPhase",
+    "assignmentId",
+    "eventId",
+    "kind",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.admittedAtPlayerStepPhase !== 0
+    || !validId(value.assignmentId)
+    || !validId(value.activityTransactionId)
+    || value.activityTransactionId !== value.triggerEventId
+    || !validId(value.sourceObservationId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
+    kind: "guardian-dog-warning",
+    assignmentId: value.assignmentId,
+    activityTransactionId: value.activityTransactionId,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
   });
 }
 

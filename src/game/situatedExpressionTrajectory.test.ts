@@ -18,17 +18,24 @@ import {
 } from "./situatedExpression";
 import {
   canonicalizeSituatedExpressionAdmissionLedger,
+  createGuardianDogWarningExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
+import {
+  situatedExpressionAcoustics,
+  situatedExpressionSoundClass,
+} from "./situatedExpressionAcoustics";
 import {
   canonicalizeSituatedExpressionChannelBank,
   type SituatedExpressionChannelBank,
 } from "./situatedExpressionChannelBank";
 import {
   createHeardVisibleSituatedExpressionReception,
+  createHeardUnseenSituatedExpressionReception,
   createSelfSituatedExpressionReception,
+  type SituatedExpressionReception,
 } from "./situatedExpressionReception";
 import {
   canonicalizeSituatedExpressionTrajectory,
@@ -38,6 +45,7 @@ import { createWorldPosition } from "./worldPosition";
 
 const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-expression-trajectory-porter";
+const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
 
 interface Fixture {
@@ -105,6 +113,24 @@ function porterIntent(triggerEventId: string): SituatedExpressionIntent {
     salience: 420_000,
     variantSeed: 71,
     durationSteps: 8,
+  };
+}
+
+function guardianDogIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: GUARDIAN_DOG_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "guardian-dog-warning",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-heard-anonymous-alarm",
+    priority: 760_000,
+    salience: 840_000,
+    variantSeed: 109,
+    durationSteps: 6,
   };
 }
 
@@ -188,6 +214,25 @@ function sample(event: SituatedExpressionEvent, ordinal: number): SupplementalSo
   return result;
 }
 
+function guardianDogSample(
+  event: SituatedExpressionEvent,
+  ordinal: number,
+): SupplementalSoundSample {
+  const acoustics = situatedExpressionAcoustics(event.volume);
+  const result = createSupplementalSoundSample({
+    id: `av-40-${ordinal}`,
+    expressionEventId: event.eventId,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: situatedExpressionSoundClass(event),
+    soundInterrupt: "strong",
+    sourceActorId: event.sourceActorId,
+  });
+  if (result === null) throw new Error("fixture dog sound was not canonical");
+  return result;
+}
+
 function bank(state: SituatedExpressionState): SituatedExpressionChannelBank {
   const reception = state.active === null
     ? null
@@ -240,6 +285,66 @@ function porterFixture(): Fixture {
     ledger: ledger([record]),
     phase,
     samples: [sample(admitted.event, 0)],
+  };
+}
+
+function guardianDogFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "working-animal:activity:guardian-warning:trajectory";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    guardianDogIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture dog expression expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          760_000,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 3, maximum: 7 },
+            certainty: 0.76,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture dog reception was not canonical");
+  }
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: GUARDIAN_DOG_ID, state: current, reception }],
+  });
+  const record = createGuardianDogWarningExpressionAdmissionRecord({
+    sourceActorId: GUARDIAN_DOG_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    assignmentId: "working-animal:assignment:guardian:trajectory",
+    activityTransactionId: triggerEventId,
+    sourceObservationId: "observation:anonymous-alarm:trajectory",
+    acceptedAtTick,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture dog trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [guardianDogSample(admitted.event, 0)],
   };
 }
 
@@ -374,6 +479,62 @@ describe("situated-expression admission trajectory", () => {
     )).toBe(false);
     expect(situatedExpressionTrajectoryIsCanonical(
       changedCertainty, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+  });
+
+  it("accepts world-only and lawfully received guardian calls with animal acoustics", () => {
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = guardianDogFixture(receptionKind);
+      expect(accepts(fixture), receptionKind).toBe(true);
+      expect(fixture.samples[0]).toMatchObject({
+        sourceActorId: GUARDIAN_DOG_ID,
+        soundClass: "animal-alarm",
+        soundInterrupt: "strong",
+      });
+      expect(fixture.bank.channels[0]?.reception?.kind ?? "none").toBe(receptionKind);
+    }
+  });
+
+  it("rejects a guardian call with a human sound class or mistimed player receipt", () => {
+    const worldOnly = guardianDogFixture("none");
+    const humanClass = mutable(worldOnly.samples);
+    humanClass[0]!.soundClass = "human-vocalization";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      worldOnly.bank,
+      worldOnly.ledger,
+      worldOnly.phase,
+      humanClass,
+    )).toBe(false);
+
+    const received = guardianDogFixture("heard-visible");
+    const mistimed = mutable(received.bank);
+    if (mistimed.channels[0]!.reception?.kind !== "heard-visible") {
+      throw new Error("fixture lost guardian reception");
+    }
+    mistimed.channels[0]!.reception.receivedAtTick += 1;
+    expect(situatedExpressionTrajectoryIsCanonical(
+      mistimed,
+      received.ledger,
+      received.phase,
+      received.samples,
+    )).toBe(false);
+
+    const selfReceipt = mutable(worldOnly.bank);
+    const event = selfReceipt.channels[0]!.state.active;
+    if (event === null) throw new Error("fixture lost guardian event");
+    selfReceipt.channels[0]!.reception = {
+      version: 1,
+      eventId: event.eventId,
+      sourceActorId: event.sourceActorId,
+      receivedAtTick: 40,
+      kind: "self",
+      certainty: 1_000_000,
+    };
+    expect(situatedExpressionTrajectoryIsCanonical(
+      selfReceipt,
+      worldOnly.ledger,
+      worldOnly.phase,
+      worldOnly.samples,
     )).toBe(false);
   });
 

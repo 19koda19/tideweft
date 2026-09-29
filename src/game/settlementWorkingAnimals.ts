@@ -315,6 +315,73 @@ export interface SettlementWorkingAnimalState {
   readonly assignments: readonly SettlementWorkingAnimalAssignment[];
 }
 
+/** Exact causal evidence for one freshly accepted anonymous guardian alarm. */
+export interface SettlementGuardianAlarmInvestigation {
+  readonly assignment: SettlementWorkingAnimalAssignment;
+  readonly activity: SettlementWorkingAnimalActivityTransaction;
+  readonly task: SettlementWorkingAnimalTask;
+  readonly belief: AgedActorBelief;
+}
+
+/**
+ * Reauthenticates the narrow work transition that may produce a guardian
+ * warning call. Handler reports, identified targets, visual threats, stale
+ * activities, and merely continuing investigations are deliberately excluded.
+ */
+export function settlementGuardianAlarmInvestigation(
+  stateValue: unknown,
+  perceptionValue: unknown,
+  workerActorId: unknown,
+  activityTransactionId: unknown,
+  acceptedAtTick: unknown,
+): SettlementGuardianAlarmInvestigation | null {
+  const state = canonicalizeSettlementWorkingAnimalState(stateValue);
+  const perception = canonicalizeActorPerceptionState(perceptionValue);
+  if (
+    state === null
+    || perception === null
+    || !validId(workerActorId)
+    || !validId(activityTransactionId)
+    || !nonnegativeSafeInteger(acceptedAtTick)
+    || perception.actorId !== workerActorId
+    || perception.tick !== acceptedAtTick
+  ) return null;
+  const matches = state.assignments.filter((assignment) => (
+    assignment.workerActorId === workerActorId
+    && assignment.currentActivity.transactionId === activityTransactionId
+  ));
+  if (matches.length !== 1) return null;
+  const assignment = matches[0];
+  if (assignment === undefined) return null;
+  const activity = assignment.currentActivity;
+  const task = assignment.currentTask;
+  if (
+    assignment.role !== "guardian"
+    || assignment.workerSpecies !== "domestic-dog"
+    || activity.activity !== "investigate"
+    || activity.acceptedAtTick !== acceptedAtTick
+    || activity.cause.kind !== "perception"
+    || activity.perceivedArea === null
+    || task === null
+    || task.phase !== "investigating"
+    || task.sourceActivityTransactionId !== activity.transactionId
+    || task.sourceObservationId !== activity.cause.referenceId
+    || task.openedAtTick !== acceptedAtTick
+    || stableStringify(task.perceivedArea) !== stableStringify(activity.perceivedArea)
+  ) return null;
+  const belief = strongestRelevantWorkSignal(assignment, perception);
+  if (
+    belief === null
+    || belief.sourceObservationId !== activity.cause.referenceId
+    || !GUARDIAN_ALARM_CLASSES.has(belief.perceivedClass)
+    || belief.channel !== "hearing"
+    || belief.subjectId !== null
+    || belief.identification !== "anonymous"
+    || stableStringify(belief.area) !== stableStringify(activity.perceivedArea)
+  ) return null;
+  return deepFreeze({ assignment, activity, task, belief });
+}
+
 export interface CreateSettlementWorkingAnimalAssignmentInput {
   readonly assignmentOrdinal: number;
   readonly workerActorId: string;
