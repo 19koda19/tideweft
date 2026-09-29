@@ -109,6 +109,26 @@ cause nor hidden source position, and does not interrupt WAIT, REST, or SLEEP.
 These are three narrow causal guardian signals, not a complete dog-vocal
 repertoire.
 
+The first core-wildlife extension consumes the fish crow's existing committed
+alarm rather than adding a second bird behavior. One currently materialized
+fish crow gives `KRAA! KRAA!` only when its regional owner, stable actor,
+post-commit final position, same-tick alarm event, identified direct-vision
+aerial-predator belief, alarm intent, and retained causal memory agree. Predator
+identity never enters the call or its deterministic variation. The call reuses
+the existing crow double-call sound and core-alarm hearing profile: core ecology
+continues to carry the alarm to wildlife and dogs, while one source-bound Living
+Voice sample owns human hearing and player presentation so the event is not
+learned or played twice.
+
+A lawfully heard fish-crow alarm strongly interrupts WAIT, REST, or SLEEP.
+Direct sight plus exact bounded source authentication permits an actor-anchored
+`KRAA! KRAA!` and the accessible caption `[A fish crow calls sharply.]`.
+Heard-unseen reception has no actor callout, fish-crow identity, predator fact,
+or exact source position and instead uses the ordinary directional caption, for
+example `[A bird calls somewhere north-east.]`. An unheard call has no player
+presentation; that absence does not erase the world event or lawful non-player
+hearing.
+
 Actor expression and observed fact remain different presentations. The short
 line is situated at the authenticated speaker in Chart and Relief and repeated
 in the accessible caption when an exact self or heard-and-visible receipt
@@ -821,12 +841,17 @@ exact local squared distance with stable actor ID as the tie break; the nearest
 coarse state. This selection is deterministic, camera-independent, and does
 not increase the existing materialization ceiling or population totals.
 
-Player-facing rat rustles, domestic-cat calls, rabbit thumps, fox yips, and
-fish-crow double calls occur only for activity visible at event time. The frog
-chorus instead passes through shared directional hearing from its actual
-aggregate anchor. Its anonymous bottom-right caption and attenuated stereo pan
-derive from the same heard-bearing uncertainty; it names a cardinal direction
-only when that contact supports one. The northern harrier, snowy egret,
+At the released Alpha 17 boundary, player-facing rat rustles, domestic-cat
+calls, rabbit thumps, fox yips, and fish-crow double calls occurred only for
+activity visible at event time. The current unpublished Living Voice candidate
+leaves the first four cue boundaries unchanged but supersedes witnessed-only
+fish-crow alarm playback with source-bound audible reception: direct sight may
+anchor the exact call, while heard-unseen reception remains bird-generic and
+directional. The frog chorus instead passes through shared directional hearing
+from its actual aggregate anchor. Its anonymous bottom-right caption and
+attenuated stereo pan derive from the same heard-bearing uncertainty; it names
+a cardinal direction only when that contact supports one. The northern harrier,
+snowy egret,
 American black duck, North American river otter, wild boar, elk, gray wolf,
 cougar, and brown bear have no fabricated calls. Wild boar, elk, and gray wolf
 have inaudible foundation voice profiles; cougar and brown-bear voice behavior

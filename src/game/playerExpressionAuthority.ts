@@ -183,17 +183,17 @@ export function playerExpressionEventMatchesAdmission(
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
     || admission.eventId !== event.eventId
     || admission.triggerEventId !== event.triggerEventId
-    || admission.kind === "porter-heavy-departure"
-    || admission.kind === "guardian-dog-warning"
-    || admission.kind === "guardian-dog-defensive-growl"
-    || admission.kind === "guardian-dog-shelter-whine"
+    || (admission.kind !== "player-traversal"
+      && admission.kind !== "player-fall-recovery"
+      && admission.kind !== "legacy-v33-player")
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     // The v33 migrator already admitted only a uniquely reconstructed
     // event/memory/sample chain. Its original incident may have been superseded
     // later in the same unfinished interval, so current traversal state is not
     // valid authority for rejecting that older published event.
-    return projectSituatedExpression(event) !== null;
+    return isLegacyV33PlayerMeaning(event.meaning)
+      && projectSituatedExpression(event) !== null;
   }
   const policy = policyForAdmission(admission, authority, event.variantSeed);
   if (policy === null || event.variantSeed !== policy.variantSeed) return false;
@@ -229,18 +229,18 @@ export function playerExpressionMemoryMatchesAdmission(
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
     || admission.sourceActorId !== memory.sourceActorId
     || admission.triggerEventId !== memory.triggerEventId
-    || admission.kind === "porter-heavy-departure"
-    || admission.kind === "guardian-dog-warning"
-    || admission.kind === "guardian-dog-defensive-growl"
-    || admission.kind === "guardian-dog-shelter-whine"
+    || (admission.kind !== "player-traversal"
+      && admission.kind !== "player-fall-recovery"
+      && admission.kind !== "legacy-v33-player")
   ) return false;
   if (admission.kind === "legacy-v33-player") {
-    return canonicalizeSituatedExpressionState({
+    return isLegacyV33PlayerMeaning(memory.meaning)
+      && canonicalizeSituatedExpressionState({
       version: SITUATED_EXPRESSION_VERSION,
       completedSteps: 0,
       active: null,
       recent: [memory],
-    }) !== null;
+      }) !== null;
   }
   const policy = policyForAdmission(admission, authority, 0);
   return policy !== null
@@ -258,11 +258,8 @@ export function playerExpressionAdmissionSoundPolicy(
   if (
     admission === null
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
-    || admission.kind === "porter-heavy-departure"
-    || admission.kind === "guardian-dog-warning"
-    || admission.kind === "guardian-dog-defensive-growl"
-    || admission.kind === "guardian-dog-shelter-whine"
-    || admission.kind === "legacy-v33-player"
+    || (admission.kind !== "player-traversal"
+      && admission.kind !== "player-fall-recovery")
   ) return null;
   const policy = policyForAdmission(admission, authority, 0);
   return policy === null
@@ -276,13 +273,8 @@ export function playerExpressionAdmissionSoundPolicy(
 }
 
 function policyForAdmission(
-  admission: Exclude<SituatedExpressionAdmissionRecord, {
-    readonly kind:
-      | "porter-heavy-departure"
-      | "guardian-dog-warning"
-      | "guardian-dog-defensive-growl"
-      | "guardian-dog-shelter-whine"
-      | "legacy-v33-player";
+  admission: Extract<SituatedExpressionAdmissionRecord, {
+    readonly kind: "player-traversal" | "player-fall-recovery";
   }>,
   authority: PlayerExpressionAuthority,
   candidateVariantSeed: number,
@@ -508,8 +500,17 @@ function policyFor(
     case "guardian-dog-warning":
     case "guardian-dog-defensive-growl":
     case "guardian-dog-shelter-whine":
+    case "fish-crow-alarm-call":
       return null;
   }
+}
+
+function isLegacyV33PlayerMeaning(meaning: SituatedExpressionMeaning): boolean {
+  return meaning === "steady-after-stumble"
+    || meaning === "relief-after-near-fall"
+    || meaning === "protect-important-cargo"
+    || meaning === "alarm-at-cargo-loss"
+    || meaning === "relief-after-cargo-recovery";
 }
 
 function traversalPolicy(

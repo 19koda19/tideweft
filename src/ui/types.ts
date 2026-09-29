@@ -474,8 +474,13 @@ export interface SituatedExpressionCaptionUIView {
   readonly text: string;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
   readonly presentationKind?: "speech" | "animal-call";
-  /** Explicit semantic call kind; never inferred from localized display text. */
-  readonly animalCallKind?: "bark" | "growl" | "whine";
+  /** Explicit knowledge-safe presentation kind; never inferred from localized text. */
+  readonly animalCallKind?:
+    | "bark"
+    | "growl"
+    | "whine"
+    | "bird-call"
+    | "fish-crow-call";
   readonly directionLabel?:
     | "east"
     | "south-east"

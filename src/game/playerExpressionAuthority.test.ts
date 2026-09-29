@@ -34,7 +34,9 @@ import {
   type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
+  createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
+  createLegacyV33PlayerExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionCausalClass,
@@ -258,6 +260,7 @@ function policy(
     case "guardian-dog-warning": throw new Error("Dog calls are not player authority");
     case "guardian-dog-defensive-growl": throw new Error("Dog calls are not player authority");
     case "guardian-dog-shelter-whine": throw new Error("Dog calls are not player authority");
+    case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
   }
 }
 
@@ -300,6 +303,28 @@ function memoryFor(event: SituatedExpressionEvent, elapsedSteps = 0): SituatedEx
   const memory = advanced?.recent[0];
   if (memory === undefined) throw new Error("Expression fixture omitted cooldown memory");
   return memory;
+}
+
+function fishCrowEvent(sourceActorId: string): SituatedExpressionEvent {
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId: "core-wildlife:fish-crow-alarm:authority",
+    position: POSITION,
+    meaning: "fish-crow-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 840_000,
+    variantSeed: 113,
+    durationSteps: 6,
+  });
+  if (!reduction.accepted || reduction.event === null) {
+    throw new Error(`Fish-crow fixture was rejected: ${reduction.reason}`);
+  }
+  return reduction.event;
 }
 
 function authority(
@@ -651,5 +676,51 @@ describe("player situated-expression authority", () => {
       evidence,
     )).toBe(false);
     expect(playerExpressionAdmissionSoundPolicy(admission, evidence)).toBeNull();
+  });
+
+  it("rejects fish-crow semantics and admissions from player-only authority", () => {
+    const evidence = authority(noIncidentFeedback(), emptyPhysicalCargo());
+    const forgedPlayerEvent = fishCrowEvent("player:local");
+    const forgedPlayerMemory = memoryFor(forgedPlayerEvent, 2);
+    const legacyAdmission = createLegacyV33PlayerExpressionAdmissionRecord({
+      sourceActorId: forgedPlayerEvent.sourceActorId,
+      triggerEventId: forgedPlayerEvent.triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+    });
+    if (legacyAdmission === null) throw new Error("Expected legacy admission fixture");
+
+    expect(playerExpressionEventMatchesAuthority(forgedPlayerEvent, evidence)).toBe(false);
+    expect(playerExpressionMemoryMatchesAuthority(forgedPlayerMemory, evidence)).toBe(false);
+    expect(playerExpressionEventMatchesAdmission(
+      forgedPlayerEvent,
+      legacyAdmission,
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionMemoryMatchesAdmission(
+      forgedPlayerMemory,
+      legacyAdmission,
+      evidence,
+    )).toBe(false);
+
+    const crowEvent = fishCrowEvent("C-player-authority-fish-crow");
+    const crowAdmission = createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      sourceActorId: crowEvent.sourceActorId,
+      triggerEventId: crowEvent.triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-ecology:player-authority-test",
+      sourceObservationId: "observation:aerial-predator:player-authority-test",
+      acceptedAtTick: 72,
+    });
+    if (crowAdmission === null) throw new Error("Expected fish-crow admission fixture");
+
+    expect(playerExpressionEventMatchesAdmission(crowEvent, crowAdmission, evidence)).toBe(false);
+    expect(playerExpressionMemoryMatchesAdmission(
+      memoryFor(crowEvent, 2),
+      crowAdmission,
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionAdmissionSoundPolicy(crowAdmission, evidence)).toBeNull();
   });
 });

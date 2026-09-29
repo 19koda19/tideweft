@@ -134,8 +134,8 @@ version. Rendering frequency, wall time, and global RNG cannot select or expire
 a line.
 
 Expression ownership is now isolated by source actor in a deterministically
-ordered bank capped at sixteen retained channels. One person's active line or
-cooldown cannot suppress another person's line. Presentation still selects at
+ordered bank capped at sixteen retained channels. One source actor's active line
+or cooldown cannot suppress another's. Presentation still selects at
 most one highest-priority local callout/caption at a time, so adding actor
 authority does not create an overhead-text wall. Every projected exact line
 also requires a canonical reception receipt, persisted with pending carry:
@@ -206,6 +206,28 @@ neutral `animal-call` acoustic class, discloses neither the exact exposure cause
 nor a hidden source position, and has no WAIT or REST/SLEEP interruption
 authority.
 
+A fourth narrow signal consumes the existing core-wildlife fish-crow alarm
+rather than adding a bird-specific timer or second ecology event. Eligibility
+requires one materialized fish crow in the bounded active regional projections
+whose owning source, stable identity, post-commit final position, current tick,
+new alarm intent, exact event, identified direct-vision aerial-predator belief,
+and retained causal memory agree. The presentation sidecar derives from those
+same active roots, is sorted and duplicate-checked, and cannot exceed the global
+24-materialized-actor cap. Predator identity never leaves ecology authority;
+the source observation ID remains only bounded causal admission evidence and
+never enters realization or player copy.
+
+The event realizes as `KRAA! KRAA!` with `animal-alarm` semantics, a six-step
+duration, and strong interruption. Human range and loudness derive from the
+existing fish-crow alarm profile, while `vocalization-fish-crow-alarm` delegates
+to the existing `crow-nasal-double-call` synthesis instead of cloning it. Core
+alarm propagation remains authoritative for wildlife and dogs. Once the
+source-bound Living Voice sample is admitted, it alone owns human hearing and
+player playback for that event, and the legacy direct crow cue is suppressed.
+Exact visible-source authentication permits an actor-anchored call; heard-unseen
+projection has no world callout and exposes only an uncertainty-bounded generic
+bird direction.
+
 Because a pending vocalization can become authoritative human knowledge, the
 guardian-warning candidate advances the outer save to v35 and the bounded
 perception carry to v4. That carry preserves source-bound pending vocal
@@ -226,6 +248,15 @@ bounded perception carry to v6. Its admission retains the same event-time sleep
 gate, while exact v36/carry-v5 migration accepts authenticated bark/growl state
 and rejects whine meaning, knowledge, vocalization, or admission as impossible
 historical v36 data.
+The fish-crow candidate advances the unpublished outer save to v38 and bounded
+perception carry to v7. Its admission binds the regional ecology owner, source
+actor, same-tick alarm event, direct source observation, and accepted tick.
+Reload re-resolves that owner, the materialized actor at its post-commit final
+position, retained event and memory, specialized acoustic tuple, phase-zero
+listener pose, waking-before-visibility reception, and strong interruption.
+Exact v37/carry-v6 migration accepts authenticated bark/growl/whine state but
+rejects fish-crow meaning, vocalization, or admission as impossible historical
+v37 data; the earlier semantic fences reject those later crow semantics too.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -233,16 +264,16 @@ velocity, and final player pose. Player traversal/recovery speech must also
 match a separately retained current-interval causal-authority receipt created
 by the physical transaction. Porter departure receipts exist only at phase
 zero and must reproduce that exact anchored listener pose. A lawfully heard,
-strong guardian warning interrupts WAIT or REST/SLEEP before
+strong guardian warning or fish-crow alarm interrupts WAIT or REST/SLEEP before
 source visibility is classified. Dog reception replays from physical acoustics
 and line of sight; the growl's admission-owned event-time sleep gate prevents a
 later recovery transition from rewriting whether the player heard it.
 A dog outside the current presentation window remains a lawful world source:
 inaudibility replays without requiring a local placement, while an audible
 off-window call can disclose only the bounded heard-unseen receipt.
-An active recovery receipt that began before a re-derived audible warning is
+An active recovery receipt that began before a re-derived audible strong call is
 noncanonical even after the short caption expires; a recovery begun after the
-phase-zero warning remains lawful, and an unheard warning interrupts nothing.
+phase-zero call remains lawful, and an unheard call interrupts nothing.
 Reload therefore cannot erase hearing, admit suppressed chatter, replay
 acknowledged audio, reset cooldowns, change why a line was selected, or reroll
 its wording.
@@ -272,7 +303,12 @@ one. Warning barks reauthenticate
 the perception-caused investigation and retained task observation; defensive
 growls reauthenticate the freshly entered perception-caused retreat, matching
 `defer-to-actor` transaction, exact current threat belief, and event-time sleep
-hearing gate. Admission and sound capacity are atomic, so a ninth
+hearing gate. Fish-crow sources must resolve uniquely through the retained
+regional owner to the same materialized actor, final position, same-tick alarm
+event, identified direct-vision aerial-predator belief, and retained alarm
+memory; reception replays from the event-time listener pose, existing alarm
+acoustics, waking perception, and exact visible-source authority. Admission and
+sound capacity are atomic, so a ninth
 candidate stays silent instead of creating unconserved knowledge. Resealed
 remote, acoustically altered, temporally reset, or causally forged
 vocalizations fail before becoming NPC knowledge.
@@ -1819,7 +1855,7 @@ When the habitat assemblage contains a bear, the runtime seeds one exact loose d
 
 Chart and Relief project the same direct-detail individual wildlife set and use species plus stable ID for selection. Current addressable wildlife receives distinct color-independent low-cost forms and the ordinary wildlife choices: **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Flocks retain presentation under the same direct-detail gate; each visible representative renders and hit-tests once, and a bounded visible-flock summary never manufactures decorative copies or extra targets. Alpha38 adds shared structural forms and current activity poses for greater yellowlegs, belted kingfisher, and double-crested cormorant in both views. Alpha39 adds the same shared presentation contract for the group-atomic seaside-sparrow flock and solitary diamondback terrapin, plus anonymous mosquito and periwinkle evidence. An aerial, diving, perching, or amphibious-margin pose is presentation of bounded authoritative activity state, not a continuously simulated 3D flight body or feeding outcome. At uncertain clarity, ABOUT remains generic and never exposes a private target, exact trait, aggregate count, or stable ID. Aggregate surface, schooling, burrow, and feeding evidence remains non-addressable; cat/rabbit/fox/wolf tracks remain non-targetable, and the current later additions produce no persistent track evidence. Mouse/touch and Chart/Relief share the same projection, reduced motion preserves the same facts, and loss of sight clears the ephemeral target.
 
-`src/audio/soundscape.ts` adds an original fish-crow nasal double call and southern-leopard-frog chorus beside the earlier ecology cues. A crow call plays only for a causative new alarm transition witnessed at event time. The frog chorus is different: current rain raises the activity of an extant frog area, but that same rain contributes ambient masking when the shared hearing evaluator decides whether the player can hear it. At most the strongest lawful source produces one stereo cue and a species-anonymous caption such as `[chorus nearby — east]`. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. Aggregate identity, exact coordinates, and hidden population remain undisclosed. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in this release. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
+`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The frog chorus is different: current rain raises the activity of an extant frog area, but that same rain contributes ambient masking when the shared hearing evaluator decides whether the player can hear it. At most the strongest lawful source produces one stereo cue and a species-anonymous caption such as `[chorus nearby — east]`. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. Aggregate identity, exact coordinates, and hidden population remain undisclosed. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in either the Alpha 17 release or the current unpublished Living Voice candidate. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
 
 ## First settlement-store ecology composition
 

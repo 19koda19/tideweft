@@ -264,15 +264,21 @@ export function situatedExpressionCaptionCopy(
   caption: NonNullable<TideweftUIView["expressionCaption"]>,
 ): string {
   if (caption.presentationKind === "animal-call") {
-    const subject = caption.speakerLabel === "Familiar dog"
-      ? "The familiar dog"
-      : "A dog";
+    const subject = caption.animalCallKind === "fish-crow-call"
+      ? "A fish crow"
+      : caption.animalCallKind === "bird-call"
+        ? "A bird"
+        : caption.speakerLabel === "Familiar dog"
+          ? "The familiar dog"
+          : "A dog";
     const call = caption.animalCallKind === "whine"
       ? { visible: "whines softly", directional: "whines" }
       : caption.animalCallKind === "growl"
       ? { visible: "growls softly", directional: "growls" }
       : caption.animalCallKind === "bark"
         ? { visible: "barks sharply", directional: "barks" }
+        : caption.animalCallKind === "fish-crow-call"
+          ? { visible: "calls sharply", directional: "calls" }
         : { visible: "calls", directional: "calls" };
     if (caption.directionLabel === undefined) return `[${subject} ${call.visible}.]`;
     if (caption.directionLabel === "all around") {

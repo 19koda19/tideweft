@@ -116,6 +116,35 @@ describe("situated expression caption", () => {
     expect(situatedExpressionCaptionCopy(unseen)).not.toContain("storm");
   });
 
+  it("presents a fish-crow call as sound and keeps unseen hearing anonymous", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:fish-crow:alarm",
+      speakerLabel: "Fish crow",
+      text: "KRAA! KRAA!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      animalCallKind: "fish-crow-call",
+      assertive: true,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[A fish crow calls sharply.]");
+
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "expression:bird:hidden-call",
+      speakerLabel: "A bird",
+      text: "CALL! CALL!",
+      animalCallKind: "bird-call",
+      directionLabel: "north-east",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[A bird calls somewhere north-east.]");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("alarm");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("crow");
+    expect(JSON.stringify(unseen)).not.toContain("fish-crow");
+    expect(JSON.stringify(unseen)).not.toContain("KRAA");
+  });
+
   it("does not infer an animal call kind from authored prose", () => {
     const unclassified: SituatedExpressionCaptionUIView = {
       id: "expression:animal:unclassified",

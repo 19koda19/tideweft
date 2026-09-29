@@ -9,6 +9,7 @@ export const SITUATED_VOCALIZATIONS = Object.freeze([
   "dog-warning-bark",
   "dog-defensive-growl",
   "dog-shelter-whine",
+  "fish-crow-alarm",
 ] as const);
 
 export type SituatedVocalization = (typeof SITUATED_VOCALIZATIONS)[number];
@@ -281,6 +282,10 @@ export class TideweftSoundscape {
         "dog-shelter-whine",
         variantSeed,
       ),
+      "vocalization-fish-crow-alarm": situatedVocalizationPattern(
+        "fish-crow-alarm",
+        variantSeed,
+      ),
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
@@ -303,7 +308,10 @@ export class TideweftSoundscape {
       this.noiseBurst(now, 0.085, 185, 0.011 * strength, output);
     } else if (cue === "fox-yip") {
       this.noiseBurst(now + 0.025, 0.1, 1_220, 0.004 * strength, output);
-    } else if (cue === "crow-nasal-double-call") {
+    } else if (
+      cue === "crow-nasal-double-call"
+      || cue === "vocalization-fish-crow-alarm"
+    ) {
       this.noiseBurst(now, 0.18, 690, 0.0065 * strength, output);
     } else if (cue === "frog-chorus") {
       this.noiseBurst(now, 0.32, 430, 0.005 * strength, output);
@@ -513,6 +521,8 @@ export function situatedVocalizationPattern(
         toneStep(369.99 + shift, 0.065, "sine", 0.14),
         toneStep(329.63 + Math.trunc(shift / 2), 0.15, "triangle", 0.12),
       ];
+    case "fish-crow-alarm":
+      return ecologyVoicePattern("crow-nasal-double-call", variantSeed);
     case "relief":
       return [
         toneStep(523.25 + shift, 0, "square", 0.055),

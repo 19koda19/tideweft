@@ -5,6 +5,7 @@ import {
 import {
   situatedExpressionCooldownSteps,
   situatedExpressionEventIdForTrigger,
+  type SituatedExpressionEvent,
   type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
@@ -17,7 +18,10 @@ import {
   canonicalizeSituatedExpressionChannelBank,
   type SituatedExpressionChannelBank,
 } from "./situatedExpressionChannelBank";
-import { situatedExpressionSoundClass } from "./situatedExpressionAcoustics";
+import {
+  situatedExpressionAcoustics,
+  situatedExpressionSoundClass,
+} from "./situatedExpressionAcoustics";
 
 /** One reauthenticated pending expression interval, safe for a save owner to retain. */
 export interface SituatedExpressionTrajectory {
@@ -66,9 +70,8 @@ export function canonicalizeSituatedExpressionTrajectory(
       || record.sampleOrdinal !== index
       || sample.expressionEventId !== record.eventId
       || sample.sourceActorId !== record.sourceActorId
-      || sample.soundClass !== situatedExpressionSoundClass(
-        admissionMeaning(record),
-      )
+      || sample.soundClass !== situatedExpressionSoundClass(admissionMeaning(record))
+      || !sampleAcousticsMatchAdmission(sample, record)
     ) return null;
     samples.push(sample);
   }
@@ -134,7 +137,7 @@ export function canonicalizeSituatedExpressionTrajectory(
         active.eventId !== latest.eventId
         || active.sourceActorId !== latest.sourceActorId
         || active.triggerEventId !== latest.triggerEventId
-        || !eventMeaningMatchesAdmission(active.meaning, latest)
+        || !eventMatchesAdmission(active, latest)
         || active.durationSteps !== expectedLatestDuration
         || active.audioAcknowledged !== true
         || latestAge >= active.durationSteps
@@ -151,7 +154,8 @@ export function canonicalizeSituatedExpressionTrajectory(
       if (
         (latest.kind === "guardian-dog-warning"
           || latest.kind === "guardian-dog-defensive-growl"
-          || latest.kind === "guardian-dog-shelter-whine")
+          || latest.kind === "guardian-dog-shelter-whine"
+          || latest.kind === "core-wildlife-fish-crow-alarm")
         && channel.reception !== null
         && (
           channel.reception.kind === "self"
@@ -192,6 +196,8 @@ function memoryMatchesAdmission(
     memory.sourceActorId !== record.sourceActorId
     || memory.triggerEventId !== record.triggerEventId
     || !eventMeaningMatchesAdmission(memory.meaning, record)
+    || (record.kind === "core-wildlife-fish-crow-alarm"
+      && memory.priority !== 760_000)
   ) return false;
   const age = currentPhase - record.admittedAtPlayerStepPhase;
   if (!nonnegativeSafeInteger(age)) return false;
@@ -218,9 +224,38 @@ function eventMeaningMatchesAdmission(
       return meaning === "guardian-dog-defensive-growl";
     case "guardian-dog-shelter-whine":
       return meaning === "guardian-dog-shelter-whine";
+    case "core-wildlife-fish-crow-alarm":
+      return meaning === "fish-crow-alarm-call";
     case "legacy-v33-player":
-      return true;
+      return isLegacyV33PlayerMeaning(meaning);
   }
+}
+
+function eventMatchesAdmission(
+  event: SituatedExpressionEvent,
+  record: SituatedExpressionAdmissionRecord,
+): boolean {
+  if (!eventMeaningMatchesAdmission(event.meaning, record)) return false;
+  return record.kind !== "core-wildlife-fish-crow-alarm"
+    || (
+      event.priority === 760_000
+      && event.tone === "alarmed"
+      && event.volume === "shout"
+    );
+}
+
+function sampleAcousticsMatchAdmission(
+  sample: SupplementalSoundSample,
+  record: SituatedExpressionAdmissionRecord,
+): boolean {
+  if (record.kind !== "core-wildlife-fish-crow-alarm") return true;
+  const acoustics = situatedExpressionAcoustics({
+    meaning: "fish-crow-alarm-call",
+    volume: "shout",
+  });
+  return sample.soundLoudness === acoustics.loudness
+    && sample.soundRangeUnits === acoustics.rangeUnits
+    && sample.soundInterrupt === "strong";
 }
 
 function admissionDurationSteps(
@@ -240,6 +275,7 @@ function admissionDurationSteps(
     case "guardian-dog-warning": return 6;
     case "guardian-dog-defensive-growl": return 8;
     case "guardian-dog-shelter-whine": return 8;
+    case "core-wildlife-fish-crow-alarm": return 6;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -255,6 +291,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "guardian-dog-warning": return 6;
     case "guardian-dog-defensive-growl": return 8;
     case "guardian-dog-shelter-whine": return 8;
+    case "fish-crow-alarm-call": return 6;
   }
 }
 
@@ -268,8 +305,19 @@ function admissionMeaning(
     case "guardian-dog-warning": return "guardian-dog-warning";
     case "guardian-dog-defensive-growl": return "guardian-dog-defensive-growl";
     case "guardian-dog-shelter-whine": return "guardian-dog-shelter-whine";
+    case "core-wildlife-fish-crow-alarm": return "fish-crow-alarm-call";
     case "legacy-v33-player": return "steady-after-stumble";
   }
+}
+
+function isLegacyV33PlayerMeaning(
+  meaning: SituatedExpressionMemory["meaning"],
+): boolean {
+  return meaning === "steady-after-stumble"
+    || meaning === "relief-after-near-fall"
+    || meaning === "protect-important-cargo"
+    || meaning === "alarm-at-cargo-loss"
+    || meaning === "relief-after-cargo-recovery";
 }
 
 function traversalMeaning(

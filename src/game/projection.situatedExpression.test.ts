@@ -4,7 +4,11 @@ import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { TILE_UNITS, createPlayer } from "./player";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
-import { projectGameView, projectResidentWorldPosition } from "./projection";
+import {
+  projectGameView,
+  projectResidentWorldPosition,
+  type CoreWildlifeExpressionSource,
+} from "./projection";
 import {
   appendDogActorMemory,
   createDogActorState,
@@ -180,6 +184,57 @@ function canonicalDogShelterWhine(
     throw new Error(`Dog whine expression fixture was rejected: ${reduced.reason}`);
   }
   return reduced.state.active;
+}
+
+function canonicalFishCrowAlarm(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "CROW-living-voice-projection",
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "fish-crow-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 820_000,
+    variantSeed: 0xc4a,
+    durationSteps: 6,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Fish-crow expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
+function wildlifePositionInWindow(
+  window: ReturnType<typeof createRegionalTerrainWindow>,
+  tileX = 18,
+  tileY = 22,
+): ReturnType<typeof createWorldPosition> {
+  const address = window.addresses[tileY * window.terrain.width + tileX];
+  if (address === undefined) throw new Error("Wildlife projection fixture left the window");
+  return createWorldPosition(
+    address.region,
+    address.localX * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
+    address.localY * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
+  );
+}
+
+function fishCrowSource(
+  event: SituatedExpressionEvent,
+): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "fish-crow",
+    position: event.position,
+  });
 }
 
 function dogInWindow(
@@ -672,5 +727,111 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toContain("weather");
     expect(JSON.stringify(caption)).not.toContain("shelter");
     expect(JSON.stringify(caption)).not.toContain("storm");
+  });
+
+  it("anchors a visible fish-crow call to the exact bounded wildlife source", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalFishCrowAlarm(
+      wildlifePositionInWindow(window),
+      "fish-crow-signal:visible-alarm",
+    );
+    const reception = heardVisibleReception(expression);
+    const coreWildlifeExpressionSources = [fishCrowSource(expression)];
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources,
+    }).expressions).toEqual([expect.objectContaining({
+      sourceActorId: expression.sourceActorId,
+      sourceKind: "animal",
+      speakerLabel: "Fish crow",
+      text: "KRAA! KRAA!",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "alarmed",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Fish crow",
+      text: "KRAA! KRAA!",
+      presentationKind: "animal-call",
+      animalCallKind: "fish-crow-call",
+      assertive: true,
+    });
+  });
+
+  it("rejects a visible fish-crow anchor with the wrong species, position, or identity count", () => {
+    const { player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const expression = canonicalFishCrowAlarm(
+      wildlifePositionInWindow(window),
+      "fish-crow-signal:forged-visible-source",
+    );
+    const reception = heardVisibleReception(expression);
+    const source = fishCrowSource(expression);
+    const forgedSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
+      [],
+      [{ ...source, species: "gull" }],
+      [{
+        ...source,
+        position: createWorldPosition(
+          source.position.region,
+          source.position.localX + 1,
+          source.position.localY,
+        ),
+      }],
+      [source, { ...source }],
+    ];
+
+    for (const coreWildlifeExpressionSources of forgedSources) {
+      expect(projectGameView(world, player, {
+        situatedExpression: expression,
+        situatedExpressionReception: reception,
+        coreWildlifeExpressionSources,
+      }).expressions).toEqual([]);
+    }
+  });
+
+  it("keeps a heard-unseen fish-crow call directional without identity or exact position", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalFishCrowAlarm(
+      wildlifePositionInWindow(window),
+      "fish-crow-signal:hidden-alarm",
+    );
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI * 1.75, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 5_000, maximum: 14_000 },
+      certainty: 0.69,
+    });
+    if (reception === null) throw new Error("Hidden fish-crow reception fixture was rejected");
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources: [fishCrowSource(expression)],
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A bird",
+      text: "CALL! CALL!",
+      presentationKind: "animal-call",
+      animalCallKind: "bird-call",
+      directionLabel: "north-east",
+      assertive: true,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
+    expect(JSON.stringify(caption)).not.toContain(String(expression.position.localX));
+    expect(JSON.stringify(caption)).not.toContain("fish-crow");
+    expect(JSON.stringify(caption)).not.toContain("KRAA");
   });
 });

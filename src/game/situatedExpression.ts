@@ -22,6 +22,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
+  "fish-crow-alarm-call",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -70,7 +71,8 @@ export type SituatedExpressionVocalization =
   | "relief"
   | "dog-warning-bark"
   | "dog-defensive-growl"
-  | "dog-shelter-whine";
+  | "dog-shelter-whine"
+  | "fish-crow-alarm";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -273,6 +275,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "fish-crow-alarm-call": Object.freeze({
+    family: "animal-signal",
+    knowledgeBasis: "self-perceived-threat",
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["shout"]),
+    vocalization: "fish-crow-alarm",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -351,6 +362,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.guardian-dog-shelter-whine.0",
       text: "WHINE...",
+    }),
+  ]),
+  "fish-crow-alarm-call": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.fish-crow-alarm-call.0",
+      text: "KRAA! KRAA!",
     }),
   ]),
 });
@@ -919,7 +936,8 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "relief"
     || value === "dog-warning-bark"
     || value === "dog-defensive-growl"
-    || value === "dog-shelter-whine";
+    || value === "dog-shelter-whine"
+    || value === "fish-crow-alarm";
 }
 
 function validId(value: unknown): value is string {

@@ -18,6 +18,7 @@ import {
 } from "./situatedExpression";
 import {
   canonicalizeSituatedExpressionAdmissionLedger,
+  createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
@@ -46,6 +47,7 @@ import { createWorldPosition } from "./worldPosition";
 const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
+const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
 
 interface Fixture {
@@ -134,6 +136,24 @@ function guardianDogIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function fishCrowIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: FISH_CROW_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "fish-crow-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 840_000,
+    variantSeed: 127,
+    durationSteps: 6,
+  };
+}
+
 function accept(
   state: SituatedExpressionState,
   candidate: SituatedExpressionIntent,
@@ -214,11 +234,14 @@ function sample(event: SituatedExpressionEvent, ordinal: number): SupplementalSo
   return result;
 }
 
-function guardianDogSample(
+function animalSample(
   event: SituatedExpressionEvent,
   ordinal: number,
 ): SupplementalSoundSample {
-  const acoustics = situatedExpressionAcoustics(event.volume);
+  const acoustics = situatedExpressionAcoustics({
+    meaning: event.meaning,
+    volume: event.volume,
+  });
   const result = createSupplementalSoundSample({
     id: `av-40-${ordinal}`,
     expressionEventId: event.eventId,
@@ -344,7 +367,66 @@ function guardianDogFixture(
     bank: canonicalBank,
     ledger: ledger([record]),
     phase,
-    samples: [guardianDogSample(admitted.event, 0)],
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function fishCrowFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "core-wildlife:alarm:fish-crow:trajectory";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    fishCrowIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture fish-crow expression expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          760_000,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 3, maximum: 7 },
+            certainty: 0.76,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture fish-crow reception was not canonical");
+  }
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: FISH_CROW_ID, state: current, reception }],
+  });
+  const record = createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+    sourceActorId: FISH_CROW_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceOwnerKey: "regional-ecology:trajectory-test",
+    sourceObservationId: "observation:aerial-predator:trajectory-test",
+    acceptedAtTick,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture fish-crow trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
   };
 }
 
@@ -538,6 +620,56 @@ describe("situated-expression admission trajectory", () => {
     )).toBe(false);
   });
 
+  it("binds fish-crow alarm policy and specialized acoustics to its admission", () => {
+    const expectedAcoustics = situatedExpressionAcoustics({
+      meaning: "fish-crow-alarm-call",
+      volume: "shout",
+    });
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = fishCrowFixture(receptionKind);
+      expect(accepts(fixture), receptionKind).toBe(true);
+      expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+        meaning: "fish-crow-alarm-call",
+        priority: 760_000,
+        tone: "alarmed",
+        volume: "shout",
+        durationSteps: 6,
+        remainingSteps: 3,
+      });
+      expect(fixture.samples[0]).toMatchObject({
+        soundLoudness: expectedAcoustics.loudness,
+        soundRangeUnits: expectedAcoustics.rangeUnits,
+        soundClass: "animal-alarm",
+        soundInterrupt: "strong",
+      });
+    }
+
+    const exact = fishCrowFixture("none");
+    const genericShout = mutable(exact.samples);
+    const genericAcoustics = situatedExpressionAcoustics("shout");
+    genericShout[0]!.soundLoudness = genericAcoustics.loudness;
+    genericShout[0]!.soundRangeUnits = genericAcoustics.rangeUnits;
+    expect(situatedExpressionTrajectoryIsCanonical(
+      exact.bank, exact.ledger, exact.phase, genericShout,
+    )).toBe(false);
+
+    const rewrittenPriority = mutable(exact.bank);
+    rewrittenPriority.channels[0]!.state.active!.priority -= 1;
+    rewrittenPriority.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(rewrittenPriority)).not.toBeNull();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      rewrittenPriority, exact.ledger, exact.phase, exact.samples,
+    )).toBe(false);
+
+    const resetDuration = mutable(exact.bank);
+    resetDuration.channels[0]!.state.active!.durationSteps += 1;
+    resetDuration.channels[0]!.state.active!.remainingSteps += 1;
+    expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      resetDuration, exact.ledger, exact.phase, exact.samples,
+    )).toBe(false);
+  });
+
   it("derives legacy-v33 lifetime from bound memory and rejects later erasure or reset", () => {
     const fixture = legacyActiveFixture();
     expect(accepts(fixture)).toBe(true);
@@ -576,6 +708,22 @@ describe("situated-expression admission trajectory", () => {
     };
 
     expect(accepts(fixture)).toBe(true);
+  });
+
+  it("rejects fish-crow semantics smuggled through a legacy-v33 admission", () => {
+    const admitted = accept(createSituatedExpressionState(), {
+      ...fishCrowIntent("legacy:trajectory:fish-crow"),
+      sourceActorId: PLAYER_ID,
+    });
+    const fixture: Fixture = {
+      bank: bank(admitted.state),
+      ledger: ledger([legacyRecord(admitted.event, 0, 0)]),
+      phase: 0,
+      // A forged human tuple must not let the post-v33 meaning cross the legacy boundary.
+      samples: [sample(admitted.event, 0)],
+    };
+
+    expect(accepts(fixture)).toBe(false);
   });
 
   it("rejects a deleted, extra, reordered, or rebound pending sound", () => {

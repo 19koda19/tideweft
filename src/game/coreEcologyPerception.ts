@@ -23,6 +23,8 @@ import {
 import { coreEcologySpeciesHasRuntimeCapability } from "./coreEcologySpeciesRuntimePolicy";
 import {
   canonicalizeCoreWildlifeActorState,
+  coreWildlifeCausalEventHasFreshActorReceipt,
+  coreWildlifeAlarmEventLocus,
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
@@ -65,6 +67,7 @@ import {
   createSpatialFrame,
   createWorldPosition,
   isWorldPosition,
+  worldPositionDelta,
   worldPositionToSpatialFrame,
   type SpatialFrame,
   type SpatialFramePoint,
@@ -440,16 +443,18 @@ function exactWorldDistanceSquared(left: WorldPosition, right: WorldPosition): b
 /**
  * Propagates one explicitly supplied alarm event through bounded hearing.
  * Calling the visual bridge alone never creates an alarm or shares cognition.
+ * A same-tick event additionally requires the exact post-cognition,
+ * pre-locomotion actor returned by the wildlife step. Older retained events
+ * authenticate against the actor memory already present in the frame.
  */
 export function propagateCoreEcologyAlarmObservationBatches(
   eventValue: unknown,
   frameValue: unknown,
+  freshEmitterValue?: unknown,
 ): readonly CoreEcologyObservationBatch[] | null {
   const frame = canonicalPerceptionFrame(frameValue);
-  const event = canonicalAlarmEvent(eventValue, frame);
+  const event = canonicalAlarmEvent(eventValue, frame, freshEmitterValue);
   if (frame === null || event === null) return null;
-  const emitterPlacement = frame.placements.get(event.actorId);
-  if (emitterPlacement === undefined) return null;
   const raining = frame.world.weather.kind === "rain" || frame.world.weather.kind === "storm";
   const ambientNoise = calculateAmbientNoise({
     rainIntensity: raining ? frame.world.weather.intensity / FIXED_POINT : 0,
@@ -467,9 +472,19 @@ export function propagateCoreEcologyAlarmObservationBatches(
       const listenerPlacement = frame.placements.get(observer.actorId);
       if (listenerPlacement === undefined) return null;
       const hearing = livingActorSenseProfile(observer.species).hearingSensitivity;
+      let sourceDelta: Readonly<{ readonly x: number; readonly y: number }>;
+      try {
+        sourceDelta = worldPositionDelta(observer.position, event.position);
+      } catch {
+        // An event outside the exact representable acoustic delta cannot be
+        // heard by this bounded observer; it must not make the whole world
+        // step fail merely because the active regional frame moved.
+        batches.push(Object.freeze({ observerId: observer.actorId, observations }));
+        continue;
+      }
       const heard = evaluateAudibleContact({
-        listener: listenerPlacement.point,
-        source: emitterPlacement.point,
+        listener: { x: 0, y: 0 },
+        source: sourceDelta,
         baseRange: Math.floor(
           CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS * hearing / ACTOR_PERCEPTION_SCALE,
         ),
@@ -777,6 +792,7 @@ function canonicalRootAggregateActivityPerceptionInput(
 function canonicalAlarmEvent(
   value: unknown,
   frame: CanonicalPerceptionFrame | null,
+  freshEmitterValue?: unknown,
 ): CoreWildlifeCausalEvent | null {
   if (frame === null || !plainRecord(value)) return null;
   const actorId = value.actorId;
@@ -788,13 +804,12 @@ function canonicalAlarmEvent(
     || !isWorldPosition(position)
   ) return null;
   const emitter = frame.actors.find(({ identity }) => identity.stableId === actorId);
-  if (
-    emitter === undefined
-    || emitter.identity.species !== species
-    || !sameWorldPosition(emitter.address.position, position)
-  ) return null;
+  const retainedLocus = emitter === undefined || typeof value.eventId !== "string"
+    ? null
+    : coreWildlifeAlarmEventLocus(emitter, value.eventId);
   const candidate = value as unknown as CoreWildlifeCausalEvent;
-  // Reuse the authoritative event bridge as the strict event-shape validator.
+  // Reuse the authoritative event bridge as the strict event-shape validator
+  // before inspecting any typed fields below.
   const proof = createCoreEcologyAlarmObservation(candidate, {
     observerId: actorId,
     observedAtTick: frame.tick,
@@ -802,7 +817,56 @@ function canonicalAlarmEvent(
     confidence: ACTOR_PERCEPTION_SCALE,
     salience: ACTOR_PERCEPTION_SCALE,
   });
-  return proof === null ? null : candidate;
+  if (proof === null || emitter === undefined) return null;
+  const exactEventId = `${emitter.identity.stableId}:e:${candidate.atTick.toString(36)}:alarm`;
+  const retainedActorAuthority = actorOwnsAlarmEvent(emitter, candidate);
+  const freshEmitter = freshEmitterValue === undefined
+    ? null
+    : canonicalizeCoreWildlifeActorState(freshEmitterValue);
+  const freshActorAuthority = freshEmitter !== null
+    && candidate.atTick === frame.tick
+    && coreWildlifeCausalEventHasFreshActorReceipt(value, emitter, freshEmitter)
+    && stableStringify(freshEmitter.identity) === stableStringify(emitter.identity)
+    && coreWildlifeAlarmEventLocus(freshEmitter, candidate.eventId) === null
+    && sameWorldPosition(freshEmitter.address.position, candidate.position)
+    && actorOwnsAlarmEvent(freshEmitter, candidate);
+  if (
+    emitter.identity.species !== species
+    || candidate.eventId !== exactEventId
+    || !(
+      freshActorAuthority
+      || (
+        retainedActorAuthority
+        && candidate.atTick < frame.tick
+        && (
+          sameWorldPosition(emitter.address.position, position)
+          || (retainedLocus !== null && sameWorldPosition(retainedLocus, position))
+        )
+      )
+    )
+  ) return null;
+  return candidate;
+}
+
+function actorOwnsAlarmEvent(
+  actor: CoreWildlifeActorState,
+  event: CoreWildlifeCausalEvent,
+): boolean {
+  const matchingMemories = actor.memories.filter(({ eventId }) => (
+    eventId === event.eventId
+  ));
+  const memory = matchingMemories[0];
+  return matchingMemories.length === 1
+    && memory !== undefined
+    && memory.kind === "alarm"
+    && memory.atTick === event.atTick
+    && memory.observationId === event.observationId
+    && actor.updatedAtTick === event.atTick
+    && actor.intent.kind === "alarm"
+    && actor.intent.enteredAtTick === event.atTick
+    && actor.intent.cause.referenceId === event.causeReferenceId
+    && actor.intent.focusObservationId === event.observationId
+    && actor.intent.resourceReference === null;
 }
 
 function canonicalOptionalAddress(

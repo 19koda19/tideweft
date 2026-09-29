@@ -12,7 +12,23 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("guardian-dog-shelter-whine"))
       .toBe("animal-call");
+    expect(situatedExpressionSoundClass("fish-crow-alarm-call"))
+      .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("porter-heavy-load")).toBe("human-vocalization");
+  });
+
+  it("keeps a fish-crow call on the existing core-alarm human acoustic envelope", () => {
+    expect(situatedExpressionAcoustics({
+      meaning: "fish-crow-alarm-call",
+      volume: "shout",
+    })).toEqual({
+      loudness: 1_000_000,
+      rangeUnits: 9_100,
+    });
+    expect(situatedExpressionAcoustics({
+      meaning: "fish-crow-alarm-call",
+      volume: "shout",
+    }).rangeUnits).toBeLessThan(situatedExpressionAcoustics("shout").rangeUnits);
   });
 
   it("makes the spoken defensive growl quieter and shorter-ranged than a warning shout", () => {

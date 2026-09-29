@@ -20,7 +20,10 @@ import {
   CORE_WILDLIFE_MEMORY_CAP,
   CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS,
   advanceCoreWildlifeActorCoarse,
+  adoptLegacyCoreWildlifeAlarmEventLocus,
   canonicalizeCoreWildlifeActorState,
+  commitCoreWildlifeAlarmEventLocus,
+  coreWildlifeAlarmEventLocus,
   coreWildlifeEnvironmentalEvidenceStrengthAtTick,
   createCoreWildlifeActorState,
   deserializeCoreWildlifeActorState,
@@ -1554,6 +1557,213 @@ describe("core Wave-A wildlife actor", () => {
     const reacted = step(rabbit, 1, [sharedAlarm]);
     expect(reacted.decision.intent).toBe("flee");
     expect(reacted.decision.focusObservationId).toBe(sharedAlarm.id);
+  });
+
+  it("commits one post-locomotion alarm locus and rejects later rebinding", () => {
+    const crow = actor("fish-crow");
+    const harrierSeen = observation(crow, 1, {
+      id: "obs:crow-alarm-locus-harrier",
+      perceivedClass: "aerial-predator",
+      subjectId: "HARRIER-crow-alarm-locus",
+    });
+    const alarmed = step(crow, 1, [harrierSeen]);
+    const rawPosition = alarmed.event.position;
+    const finalPosition = translateWorldPosition(rawPosition, -760, 240);
+    const moved = repositionCoreWildlifeActor(alarmed.actor, {
+      atTick: alarmed.actor.updatedAtTick,
+      position: finalPosition,
+      heading: 625_000,
+    });
+
+    expect(alarmed.event).toMatchObject({
+      actorId: crow.identity.stableId,
+      atTick: 1,
+      kind: "alarm",
+      observationId: harrierSeen.id,
+      position: rawPosition,
+    });
+    expect(moved.address.position).toEqual(finalPosition);
+    expect(coreWildlifeAlarmEventLocus(moved, alarmed.event.eventId)).toBeNull();
+
+    const divergentCognition = repositionCoreWildlifeActor(
+      replaceCoreWildlifeActorPhysiology(alarmed.actor, {
+        atTick: alarmed.actor.updatedAtTick,
+        needs: { ...alarmed.actor.needs, hunger: alarmed.actor.needs.hunger + 1 },
+        condition: alarmed.actor.condition,
+      }),
+      {
+        atTick: alarmed.actor.updatedAtTick,
+        position: finalPosition,
+        heading: 625_000,
+      },
+    );
+    expect(() => commitCoreWildlifeAlarmEventLocus(
+      divergentCognition,
+      alarmed.event,
+    )).toThrow(/exact committed event/u);
+
+    const contacted = repositionCoreWildlifeActor(
+      replaceCoreWildlifeActorPhysiology(alarmed.actor, {
+        atTick: alarmed.actor.updatedAtTick,
+        needs: alarmed.actor.needs,
+        condition: {
+          ...alarmed.actor.condition,
+          health: alarmed.actor.condition.health - 1,
+        },
+      }),
+      {
+        atTick: alarmed.actor.updatedAtTick,
+        position: finalPosition,
+        heading: 625_000,
+      },
+    );
+    expect(coreWildlifeAlarmEventLocus(
+      commitCoreWildlifeAlarmEventLocus(contacted, alarmed.event),
+      alarmed.event.eventId,
+    )).toEqual(finalPosition);
+
+    const committed = commitCoreWildlifeAlarmEventLocus(moved, alarmed.event);
+    expect(coreWildlifeAlarmEventLocus(committed, alarmed.event.eventId))
+      .toEqual(finalPosition);
+    expect(committed.memories).toContainEqual(expect.objectContaining({
+      eventId: alarmed.event.eventId,
+      kind: "alarm",
+      observationId: harrierSeen.id,
+      atTick: 1,
+      eventPosition: finalPosition,
+    }));
+    expect(commitCoreWildlifeAlarmEventLocus(committed, alarmed.event)).toEqual(committed);
+
+    const laterPosition = translateWorldPosition(finalPosition, 120, 0);
+    const movedAgain = repositionCoreWildlifeActor(committed, {
+      atTick: committed.updatedAtTick,
+      position: laterPosition,
+      heading: 0,
+    });
+    expect(movedAgain.address.position).toEqual(laterPosition);
+    expect(coreWildlifeAlarmEventLocus(movedAgain, alarmed.event.eventId))
+      .toEqual(finalPosition);
+
+    const cloned = canonicalizeCoreWildlifeActorState(structuredClone(movedAgain));
+    if (cloned === null) throw new Error("Alarm-locus clone was not canonical");
+    expect(coreWildlifeAlarmEventLocus(cloned, alarmed.event.eventId)).toEqual(finalPosition);
+    const roundtripped = deserializeCoreWildlifeActorState(
+      serializeCoreWildlifeActorState(cloned),
+    );
+    expect(roundtripped).toEqual(cloned);
+    expect(coreWildlifeAlarmEventLocus(roundtripped, alarmed.event.eventId))
+      .toEqual(finalPosition);
+
+    expect(() => commitCoreWildlifeAlarmEventLocus(moved, {
+      ...alarmed.event,
+      actorId: `${alarmed.event.actorId}:wrong`,
+    })).toThrow(/exact committed event/u);
+    expect(() => commitCoreWildlifeAlarmEventLocus(moved, {
+      ...alarmed.event,
+      eventId: `${alarmed.event.actorId}:e:1:flee`,
+    })).toThrow(/exact committed event/u);
+    expect(() => commitCoreWildlifeAlarmEventLocus(moved, {
+      ...alarmed.event,
+      atTick: 2,
+      eventId: `${alarmed.event.actorId}:e:2:alarm`,
+    })).toThrow(/exact committed event/u);
+    expect(() => commitCoreWildlifeAlarmEventLocus(moved, {
+      ...alarmed.event,
+      observationId: "obs:crow-alarm-locus-forged",
+    })).toThrow(/exact committed event/u);
+    expect(() => commitCoreWildlifeAlarmEventLocus(movedAgain, alarmed.event))
+      .toThrow(/cannot own this event locus/u);
+  });
+
+  it("adopts only an exact legacy same-tick alarm at its durable stored locus", () => {
+    const crow = actor("fish-crow");
+    const harrierSeen = observation(crow, 1, {
+      id: "obs:legacy-crow-alarm-locus-harrier",
+      perceivedClass: "aerial-predator",
+      subjectId: "HARRIER-legacy-crow-alarm-locus",
+    });
+    const alarmed = step(crow, 1, [harrierSeen]);
+    const storedPosition = translateWorldPosition(alarmed.event.position, -760, 240);
+    const projectedPosition = translateWorldPosition(storedPosition, 120, 0);
+    const stored = repositionCoreWildlifeActor(alarmed.actor, {
+      atTick: alarmed.actor.updatedAtTick,
+      position: storedPosition,
+      heading: 625_000,
+    });
+    const projected = repositionCoreWildlifeActor(stored, {
+      atTick: stored.updatedAtTick,
+      position: projectedPosition,
+      heading: 0,
+    });
+
+    expect(coreWildlifeAlarmEventLocus(stored, alarmed.event.eventId)).toBeNull();
+    const adopted = adoptLegacyCoreWildlifeAlarmEventLocus(projected, stored);
+    expect(adopted).not.toBeNull();
+    expect(adopted?.address.position).toEqual(projectedPosition);
+    expect(coreWildlifeAlarmEventLocus(adopted, alarmed.event.eventId))
+      .toEqual(storedPosition);
+
+    const wrongNeeds = replaceCoreWildlifeActorPhysiology(projected, {
+      atTick: projected.updatedAtTick,
+      needs: { ...projected.needs, hunger: projected.needs.hunger + 1 },
+      condition: projected.condition,
+    });
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(wrongNeeds, stored)).toBeNull();
+
+    const wrongPerception = canonicalizeCoreWildlifeActorState({
+      ...projected,
+      perception: {
+        ...projected.perception,
+        suspicionPressure: projected.perception.suspicionPressure - 1,
+      },
+    });
+    if (wrongPerception === null) {
+      throw new Error("Legacy alarm adoption fixture could not vary perception canonically");
+    }
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(wrongPerception, stored)).toBeNull();
+
+    const withWrongObservation = (state: CoreWildlifeActorState) => (
+      canonicalizeCoreWildlifeActorState({
+        ...state,
+        memories: state.memories.map((memory) => memory.eventId === alarmed.event.eventId
+          ? { ...memory, observationId: "obs:legacy-crow-alarm-locus-forged" }
+          : memory),
+      })
+    );
+    const wrongStoredObservation = withWrongObservation(stored);
+    const wrongProjectedObservation = withWrongObservation(projected);
+    if (wrongStoredObservation === null || wrongProjectedObservation === null) {
+      throw new Error("Legacy alarm adoption fixture could not vary observation canonically");
+    }
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(
+      wrongProjectedObservation,
+      wrongStoredObservation,
+    )).toBeNull();
+
+    const preboundStored = commitCoreWildlifeAlarmEventLocus(stored, alarmed.event);
+    const preboundProjected = repositionCoreWildlifeActor(preboundStored, {
+      atTick: preboundStored.updatedAtTick,
+      position: projectedPosition,
+      heading: 0,
+    });
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(projected, preboundStored)).toBeNull();
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(preboundProjected, stored)).toBeNull();
+
+    const historicalStored = advanceCoreWildlifeActorCoarse(stored, { atTick: 2 });
+    const historicalProjected = repositionCoreWildlifeActor(historicalStored, {
+      atTick: historicalStored.updatedAtTick,
+      position: projectedPosition,
+      heading: 0,
+    });
+    expect(historicalStored.intent).toMatchObject({ kind: "observe", enteredAtTick: 2 });
+    expect(historicalStored.memories).toContainEqual(expect.objectContaining({
+      eventId: alarmed.event.eventId,
+      kind: "alarm",
+      atTick: 1,
+    }));
+    expect(adoptLegacyCoreWildlifeAlarmEventLocus(historicalProjected, historicalStored))
+      .toEqual(historicalProjected);
+    expect(coreWildlifeAlarmEventLocus(historicalProjected, alarmed.event.eventId)).toBeNull();
   });
 
   it("does not fabricate ground evidence for crow or harrier flight", () => {

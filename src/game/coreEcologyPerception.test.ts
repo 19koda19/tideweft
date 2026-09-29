@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACTOR_PERCEPTION_SCALE,
   MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
+  createActorObservation,
   type ActorObservation,
 } from "../sim/actorPerception";
 import { createWorld, createWorldView } from "../sim/public";
@@ -20,8 +22,9 @@ import {
 } from "./coreEcologyPerception";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
-  CORE_WILDLIFE_EVENT_VERSION,
+  commitCoreWildlifeAlarmEventLocus,
   createCoreWildlifeActorState,
+  repositionCoreWildlifeActor,
   stepCoreWildlifeActor,
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
@@ -35,7 +38,7 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
-import { createWorldPosition } from "./worldPosition";
+import { createWorldPosition, translateWorldPosition } from "./worldPosition";
 
 const REGION = createRegionCoord(0, 0);
 const OBSERVER_X = 38;
@@ -546,14 +549,15 @@ describe("core ecology cross-species perception bridge", () => {
     const current = fixture("gull alarm reaches deer");
     const deer = wildlife(current, "deer", OBSERVER_X, OBSERVER_Y, 0, 0);
     const gull = wildlife(current, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmedGull = alarmEvent(gull, "large-predator");
     const distantDeer = wildlife(current, "deer", OBSERVER_X + 24, OBSERVER_Y, 500_000, 1);
     const porter = actorAddress("H-alarm-listener", "human", OBSERVER_X + 6, OBSERVER_Y, 500_000);
     const player = actorAddress("H-alarm-player", "human", OBSERVER_X + 7, OBSERVER_Y, 500_000);
-    const input = frame(current, [gull, deer, distantDeer], {
+    const input = { ...frame(current, [alarmedGull.actor, deer, distantDeer], {
       playerAddress: player,
       porterAddress: porter,
-    });
-    const event = alarmEvent(gull);
+    }), tick: 2 };
+    const event = alarmedGull.event;
 
     expect(collectCoreEcologyVisualObservationBatches(input)?.flatMap(({ observations }) =>
       observations.filter(({ channel }) => channel === "hearing")
@@ -593,6 +597,7 @@ describe("core ecology cross-species perception bridge", () => {
   it("keeps a small-prey foot alarm audible nearby without treating it as a full alarm-call interrupt", () => {
     const current = fixture("rabbit foot alarm has bounded reach");
     const rabbit = wildlife(current, "marsh-rabbit", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const alarmedRabbit = alarmEvent(rabbit, "aerial-predator");
     const nearbyPorter = actorAddress(
       "H-rabbit-alarm-nearby",
       "human",
@@ -607,13 +612,13 @@ describe("core ecology cross-species perception bridge", () => {
       OBSERVER_Y,
       500_000,
     );
-    const input = frame(current, [rabbit], {
+    const input = { ...frame(current, [alarmedRabbit.actor], {
       porterAddress: nearbyPorter,
       playerAddress: distantPlayer,
-    });
+    }), tick: 2 };
 
     const batches = propagateCoreEcologyAlarmObservationBatches(
-      alarmEvent(rabbit),
+      alarmedRabbit.event,
       input,
     );
     expect(observationsFor(batches, nearbyPorter.actorId)).toEqual([
@@ -626,6 +631,47 @@ describe("core ecology cross-species perception bridge", () => {
       }),
     ]);
     expect(observationsFor(batches, distantPlayer.actorId)).toEqual([]);
+  });
+
+  it("keeps a delayed alarm at its committed locus after the caller moves", () => {
+    const current = fixture("retained alarm locus survives caller movement");
+    const deer = wildlife(current, "deer", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const gull = wildlife(current, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const callLocus = translateWorldPosition(
+      alarmed.actor.address.position,
+      250,
+      0,
+    );
+    const committed = commitCoreWildlifeAlarmEventLocus(
+      repositionCoreWildlifeActor(alarmed.actor, {
+        atTick: alarmed.actor.updatedAtTick,
+        position: callLocus,
+        heading: alarmed.actor.address.heading,
+      }),
+      alarmed.event,
+    );
+    const laterBody = repositionCoreWildlifeActor(committed, {
+      atTick: committed.updatedAtTick,
+      position: translateWorldPosition(callLocus, 3_000, 0),
+      heading: committed.address.heading,
+    });
+    const retainedEvent = Object.freeze({
+      ...alarmed.event,
+      position: callLocus,
+    });
+    const batches = propagateCoreEcologyAlarmObservationBatches(
+      retainedEvent,
+      { ...frame(current, [laterBody, deer]), tick: 2 },
+    );
+    expect(observationsFor(batches, deer.identity.stableId)).toEqual([
+      expect.objectContaining({
+        channel: "hearing",
+        perceivedClass: "animal-alarm",
+        area: { center: callLocus, radiusUnits: expect.any(Number) },
+      }),
+    ]);
+    expect(laterBody.address.position).not.toEqual(callLocus);
   });
 
   it("fails closed on stale/aliased frames and forged alarms", () => {
@@ -660,14 +706,29 @@ describe("core ecology cross-species perception bridge", () => {
         0,
       ),
     })).toBeNull();
+    const alarmedGull = alarmEvent(gull, "large-predator");
     expect(propagateCoreEcologyAlarmObservationBatches({
-      ...alarmEvent(gull),
+      ...alarmedGull.event,
       actorId: deer.identity.stableId,
     }, valid)).toBeNull();
     expect(propagateCoreEcologyAlarmObservationBatches({
-      ...alarmEvent(gull),
+      ...alarmedGull.event,
       hiddenTarget: deer.identity.stableId,
     }, valid)).toBeNull();
+    expect(propagateCoreEcologyAlarmObservationBatches(
+      alarmedGull.event,
+      valid,
+    )).toBeNull();
+    expect(propagateCoreEcologyAlarmObservationBatches(
+      alarmedGull.event,
+      valid,
+      alarmedGull.actor,
+    )).not.toBeNull();
+    expect(propagateCoreEcologyAlarmObservationBatches(
+      structuredClone(alarmedGull.event),
+      valid,
+      alarmedGull.actor,
+    )).toBeNull();
   });
 });
 
@@ -793,19 +854,36 @@ function frame(
   };
 }
 
-function alarmEvent(actor: CoreWildlifeActorState): CoreWildlifeCausalEvent {
-  return Object.freeze({
-    version: CORE_WILDLIFE_EVENT_VERSION,
-    eventId: `${actor.identity.stableId}:event:alarm`,
-    atTick: 0,
-    actorId: actor.identity.stableId,
-    species: actor.identity.species,
-    kind: "alarm",
-    causeReferenceId: "observation:predator-silhouette",
-    observationId: null,
-    resourceReference: null,
-    position: actor.address.position,
+function alarmEvent(
+  actor: CoreWildlifeActorState,
+  perceivedClass: "large-predator" | "aerial-predator",
+): Readonly<{
+  actor: CoreWildlifeActorState;
+  event: CoreWildlifeCausalEvent;
+}> {
+  const observation = createActorObservation({
+    id: `obs:${actor.identity.stableId}:alarm-source`,
+    observerId: actor.identity.stableId,
+    observedAtTick: 1,
+    channel: "vision",
+    perceivedClass,
+    subjectId: `THREAT-${actor.identity.stableId}`,
+    area: { center: actor.address.position, radiusUnits: 0 },
+    confidence: ACTOR_PERCEPTION_SCALE,
+    salience: ACTOR_PERCEPTION_SCALE,
+    identification: "identified",
   });
+  if (observation === null) throw new Error("Alarm perception fixture was rejected");
+  const stepped = stepCoreWildlifeActor(actor, {
+    tick: 1,
+    observations: [observation],
+    foodOpportunities: [],
+    accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+  });
+  if (stepped === null || stepped.event.kind !== "alarm") {
+    throw new Error(`Alarm fixture did not alarm for ${actor.identity.species}`);
+  }
+  return Object.freeze({ actor: stepped.actor, event: stepped.event });
 }
 
 function observationsFor(

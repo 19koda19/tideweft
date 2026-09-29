@@ -10,6 +10,7 @@ import {
   appendSituatedExpressionAdmissionRecord,
   canonicalizeSituatedExpressionAdmissionLedger,
   canonicalizeSituatedExpressionAdmissionRecord,
+  createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
@@ -146,10 +147,19 @@ describe("situated-expression admission ledger", () => {
       shelterIntentScore: guardianWhineScore,
       listenerWasSleepingAtAdmission: false,
     });
+    const crowAlarm = createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      sourceActorId: "B-fish-crow-admission",
+      triggerEventId: "B-fish-crow-admission:e:pc:alarm",
+      sampleOrdinal: 6,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:aerial-predator:1",
+      acceptedAtTick: 912,
+    });
     const legacy = createLegacyV33PlayerExpressionAdmissionRecord({
       sourceActorId: PLAYER_ID,
       triggerEventId: "legacy:event:1",
-      sampleOrdinal: 6,
+      sampleOrdinal: 7,
       admittedAtPlayerStepPhase: 9,
     });
 
@@ -160,6 +170,7 @@ describe("situated-expression admission ledger", () => {
       guardianDog,
       guardianGrowl,
       guardianWhine,
+      crowAlarm,
       legacy,
     ].map((record) => record?.kind))
       .toEqual([
@@ -169,6 +180,7 @@ describe("situated-expression admission ledger", () => {
       "guardian-dog-warning",
       "guardian-dog-defensive-growl",
       "guardian-dog-shelter-whine",
+      "core-wildlife-fish-crow-alarm",
       "legacy-v33-player",
     ]);
     for (const record of [
@@ -178,6 +190,7 @@ describe("situated-expression admission ledger", () => {
       guardianDog,
       guardianGrowl,
       guardianWhine,
+      crowAlarm,
       legacy,
     ]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
@@ -188,6 +201,56 @@ describe("situated-expression admission ledger", () => {
     }
     expect(Object.isFrozen(porter?.listenerPosition)).toBe(true);
     expect(Object.isFrozen(porter?.listenerPosition.region)).toBe(true);
+  });
+
+  it("binds a fish-crow alarm to one regional owner and direct observation", () => {
+    const input = {
+      sourceActorId: "B-fish-crow-admission",
+      triggerEventId: "B-fish-crow-admission:e:pc:alarm",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:aerial-predator:1",
+      acceptedAtTick: 912,
+    } as const;
+    const canonical = createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "core-wildlife-fish-crow-alarm",
+      ...input,
+    });
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    expect(createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      ...input,
+      sourceActorId: PLAYER_ID,
+    })).toBeNull();
+    expect(createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      ...input,
+      admittedAtPlayerStepPhase: 1,
+    })).toBeNull();
+    expect(createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      ...input,
+      sourceOwnerKey: " padded ",
+    })).toBeNull();
+    expect(createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      ...input,
+      sourceObservationId: "",
+    })).toBeNull();
+    expect(createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+      ...input,
+      acceptedAtTick: -0,
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenPredatorId: "HARRIER-secret",
+    })).toBeNull();
   });
 
   it("binds shelter whines to one non-player phase-zero assignment transaction", () => {

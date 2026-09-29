@@ -173,6 +173,7 @@ import {
 } from "./playerExpressionAuthority";
 import {
   appendSituatedExpressionAdmissionRecord,
+  createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
@@ -221,6 +222,13 @@ import {
   guardianDogWarningExpressionMemoryMatchesWorld,
   type GuardianDogShelterWhineExpressionInput,
 } from "./dogSignalExpression";
+import {
+  fishCrowAlarmExpressionEventForTrigger,
+  fishCrowAlarmExpressionEventMatchesWorld,
+  fishCrowAlarmExpressionIntent,
+  fishCrowAlarmExpressionMemoryMatchesWorld,
+  type FishCrowAlarmExpressionInput,
+} from "./coreWildlifeSignalExpression";
 import { audibleContactPan } from "./audibleContactPresentation";
 import {
   CRAFTING_CONDITION_MAX,
@@ -254,6 +262,7 @@ import {
   projectGameView,
   projectPerception,
   RESIDENT_CONVERSATION_RANGE_TILES,
+  type CoreWildlifeExpressionSource,
 } from "./projection";
 import {
   VISIBILITY_DIRECT,
@@ -446,6 +455,7 @@ import {
   type Bio0EcologyState,
 } from "./bio0Ecology";
 import {
+  CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   applyCoreEcologyCrossOwnerWildlifeMortality,
   canonicalizeCoreEcologyAggregatePatch,
   canonicalizeCoreEcologyPatch,
@@ -550,6 +560,7 @@ import {
 import {
   canonicalRegionalEcologyStateV2ForWorld,
   createFreshRegionalEcologyStateV2,
+  createRegionalEcologyStateV2,
   deserializeRegionalEcologyStateV2,
   migrateRegionalEcologyStateV1ToV2,
   serializeRegionalEcologyStateV2,
@@ -559,6 +570,7 @@ import {
 import {
   canonicalRegionalEcologyStateV3ForWorld,
   createFreshRegionalEcologyStateV3,
+  createRegionalEcologyStateV3,
   deserializeRegionalEcologyStateV3,
   migrateRegionalEcologyStateV2ToV3,
   serializeRegionalEcologyStateV3,
@@ -568,6 +580,7 @@ import {
 import {
   canonicalRegionalEcologyStateV4ForWorld,
   createFreshRegionalEcologyStateV4,
+  createRegionalEcologyStateV4,
   deserializeRegionalEcologyStateV4,
   migrateRegionalEcologyStateV3ToV4,
   serializeRegionalEcologyStateV4,
@@ -576,6 +589,7 @@ import {
 import {
   canonicalRegionalEcologyStateV5ForWorld,
   createFreshRegionalEcologyStateV5,
+  createRegionalEcologyStateV5,
   deserializeRegionalEcologyStateV5,
   migrateRegionalEcologyStateV4ToV5,
   serializeRegionalEcologyStateV5,
@@ -588,6 +602,7 @@ import {
   commitRegionalEcologyStateV6ActiveProjection,
   createFreshRegionalEcologyStateV6,
   createLegacyBaselineRegionalEcologyStateV6,
+  createRegionalEcologyStateV6,
   deserializeRegionalEcologyStateV6,
   isTrustedRegionalEcologyStateV6ActiveCommitTransition,
   migrateRegionalEcologyStateV5ToV6,
@@ -720,6 +735,9 @@ import {
   CORE_WILDLIFE_EVENT_VERSION,
   CORE_WILDLIFE_INTENTS,
   CORE_WILDLIFE_MAX_FOOD_OPPORTUNITIES,
+  adoptLegacyCoreWildlifeAlarmEventLocus,
+  commitCoreWildlifeAlarmEventLocus,
+  coreWildlifeAlarmEventLocus,
   coreWildlifePerceivedClassCanWake,
   repositionCoreWildlifeActor,
   repositionCoreWildlifeActorWithMovementEvidence,
@@ -825,6 +843,7 @@ import {
   type DogWorkActivityContext,
 } from "./dogPresentation";
 import {
+  isWildlifeWorldPositionDirectlyObserved,
   isWildlifeWorldPositionDirectlyObservedInFrame,
   projectWildlifePresentation,
 } from "./wildlifePresentation";
@@ -908,7 +927,7 @@ function vocalizationSampleMatchesActiveEvent(
   sample: SupplementalSoundSample,
   event: SituatedExpressionEvent,
 ): boolean {
-  const acoustics = situatedExpressionAcoustics(event.volume);
+  const acoustics = situatedExpressionAcoustics(event);
   return sample.expressionEventId === event.eventId
     && sample.sourceActorId === event.sourceActorId
     && stableStringify(sample.position) === stableStringify(event.position)
@@ -927,7 +946,7 @@ function vocalizationSampleMatchesRecentMemory(
     || sample.sourceActorId !== memory.sourceActorId
   ) return false;
   return recentMeaningAcousticTuples(memory.meaning).some(({ volume, interrupt }) => {
-    const acoustics = situatedExpressionAcoustics(volume);
+    const acoustics = situatedExpressionAcoustics({ meaning: memory.meaning, volume });
     return sample.soundLoudness === acoustics.loudness
       && sample.soundRangeUnits === acoustics.rangeUnits
       && sample.soundClass === situatedExpressionSoundClass(memory.meaning)
@@ -957,6 +976,7 @@ function recentMeaningAcousticTuples(
       ];
     case "alarm-at-cargo-loss":
     case "guardian-dog-warning":
+    case "fish-crow-alarm-call":
       return [{ volume: "shout", interrupt: "strong" }];
   }
 }
@@ -967,8 +987,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
+/** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
+const GAME_SAVE_VERSION = 38;
 /** First save with a weather-backed guardian shelter whine. */
-const GAME_SAVE_VERSION = 37;
+const GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION = 37;
 /** First save with a threat-backed guardian defensive growl. */
 const GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION = 36;
 /** First save with a world-authoritative guardian warning bark. */
@@ -1007,7 +1029,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 6 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 7 as const;
+const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
 const GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION = 5 as const;
 const GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION = 4 as const;
 const WORKING_PEOPLE_PERCEPTION_CARRY_VERSION = 3 as const;
@@ -1981,6 +2004,40 @@ function runtimeRegionalEcologyProjectedSources(
   ]);
 }
 
+/**
+ * Bounded presentation sidecar for directly visible fish-crow calls. It is a
+ * projection of the already admitted materialized set, never a second wildlife
+ * materializer or a source of simulation authority.
+ */
+function runtimeCoreWildlifeExpressionSources(
+  projection: RegionalEcologyStateV6ActiveProjection,
+): readonly CoreWildlifeExpressionSource[] {
+  const seenActorIds = new Set<string>();
+  const sources: CoreWildlifeExpressionSource[] = [];
+  for (const { patch } of runtimeRegionalEcologyProjectedSources(projection)) {
+    for (const population of patch.populations) {
+      if (population.species !== "fish-crow") continue;
+      for (const { actor, materialization } of population.members) {
+        if (materialization !== "materialized") continue;
+        if (seenActorIds.has(actor.identity.stableId)) {
+          throw new Error("Fish-crow expression projection found duplicate actor custody");
+        }
+        seenActorIds.add(actor.identity.stableId);
+        sources.push(Object.freeze({
+          actorId: actor.identity.stableId,
+          species: "fish-crow",
+          position: actor.address.position,
+        }));
+      }
+    }
+  }
+  sources.sort((left, right) => compareText(left.actorId, right.actorId));
+  if (sources.length > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) {
+    throw new Error("Fish-crow expression projection exceeded materialization authority");
+  }
+  return Object.freeze(sources);
+}
+
 function runtimeMaterializedCoreActorIds(
   patch: CoreEcologyAggregatePatchState,
 ): readonly string[] {
@@ -2022,17 +2079,265 @@ function canonicalRuntimeRegionalEcologyState(
   world: WorldState,
   bio0: Bio0EcologyState,
   economy: WorldView = createWorldView(world),
+  requireFreshAlarmLoci = true,
 ): RegionalEcologyStateV6 | null {
   const settlementHomeHabitat = deriveRuntimeCoreEcologyHabitat(
     world,
     bio0,
     economy,
   );
-  return runtimeRegionalEcologyWorldBindingMemo.canonicalize(value, {
+  const state = runtimeRegionalEcologyWorldBindingMemo.canonicalize(value, {
     rootSeed: world.meta.rootSeed,
     completedTick: world.meta.completedTick,
     settlementHomeHabitat,
   });
+  return state !== null && runtimeCommittedAlarmLociMatchStoredActors(
+    state,
+    requireFreshAlarmLoci,
+  )
+    ? state
+    : null;
+}
+
+/**
+ * Authenticates only durable, unprojected ecology custody. Active projection
+ * may lawfully rematerialize a body at the same tick while the earlier call
+ * remains at its committed locus; that transient view must not be subjected
+ * to this stored-state invariant.
+ */
+function runtimeCommittedAlarmLociMatchStoredActors(
+  state: RegionalEcologyStateV6,
+  requireFreshLocus = true,
+): boolean {
+  const sources = regionalEcologyStateV6ActiveSourcePatches(state);
+  if (sources === null) return false;
+  for (const { patch } of sources) {
+    if (!runtimePatchCommittedAlarmLociMatchStoredActors(patch, requireFreshLocus)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Validates one durable patch before any active projection can lawfully move a
+ * body away from its same-tick call. Older retained events intentionally keep
+ * their historical locus and therefore are never compared with a later body.
+ */
+function runtimePatchCommittedAlarmLociMatchStoredActors(
+  patch: CoreEcologyAggregatePatchState,
+  requireFreshLocus: boolean,
+): boolean {
+  for (const population of patch.populations) {
+    for (const { actor } of population.members) {
+      if (
+        actor.updatedAtTick !== patch.updatedAtTick
+        || actor.intent.kind !== "alarm"
+        || actor.intent.enteredAtTick !== actor.updatedAtTick
+      ) continue;
+      const eventId = `${actor.identity.stableId}:e:${actor.updatedAtTick.toString(36)}:alarm`;
+      const matching = actor.memories.filter((memory) => memory.eventId === eventId);
+      const memory = matching[0];
+      if (
+        matching.length !== 1
+        || memory === undefined
+        || memory.kind !== "alarm"
+        || memory.atTick !== actor.updatedAtTick
+        || memory.observationId !== actor.intent.focusObservationId
+      ) return false;
+      const locus = coreWildlifeAlarmEventLocus(actor, eventId);
+      if (locus === null) {
+        if (requireFreshLocus) return false;
+        continue;
+      }
+      if (!sameRuntimeWorldPosition(locus, actor.address.position)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Every physical patch copy retained by the composite save, including dormant
+ * sparse-root deviations. Active snapshots may duplicate root custody; both
+ * byte copies are validated because either can later become authoritative.
+ */
+function runtimeRegionalEcologyAllStoredPatches(
+  state: RegionalEcologyStateV6,
+): readonly CoreEcologyAggregatePatchState[] {
+  const v5 = state.base;
+  const v4 = v5.base;
+  const v3 = v4.base;
+  const v2 = v3.base;
+  const v1 = v2.base;
+  return Object.freeze([
+    v1.settlementHome.patch,
+    ...v1.activeResidents.map(({ patch }) => patch),
+    ...v1.root.regions.flatMap(({ residentPatch }) => (
+      residentPatch === null ? [] : [residentPatch]
+    )),
+    ...(v1.root.legacyCohort === null ? [] : [v1.root.legacyCohort.sourcePatch]),
+    ...v2.alpineActiveResidents.map(({ patch }) => patch),
+    ...v2.alpineRoot.regions.map(({ residentPatch }) => residentPatch),
+    ...v3.polarShoreActiveResidents.map(({ patch }) => patch),
+    ...v3.polarShoreRoot.regions.map(({ residentPatch }) => residentPatch),
+    ...v4.coldShoreActiveResidents.map(({ patch }) => patch),
+    ...v4.coldShoreRoot.regions.map(({ residentPatch }) => residentPatch),
+    ...v5.polarConsumerActiveResidents.map(({ patch }) => patch),
+    ...v5.polarConsumerRoot.regions.map(({ residentPatch }) => residentPatch),
+    ...state.breadthActiveResidents.map(({ patch }) => patch),
+    ...state.breadthRoot.regions.map(({ residentPatch }) => residentPatch),
+  ]);
+}
+
+/** Full sparse-custody validation belongs only at load/save boundaries. */
+function runtimeAllStoredAlarmLociMatchActors(
+  state: RegionalEcologyStateV6,
+): boolean {
+  return runtimeRegionalEcologyAllStoredPatches(state).every((patch) => (
+    runtimePatchCommittedAlarmLociMatchStoredActors(patch, false)
+  ));
+}
+
+/**
+ * Adopts only the released pre-v38 representation: a current same-tick alarm
+ * had no retained locus, and delayed code used its durable post-locomotion body
+ * address. The active composite owner performs the one-time rewrite before any
+ * projection is consumed; the stored body, never a rematerialized address,
+ * supplies the historical locus.
+ */
+function adoptLegacyRegionalAlarmEventLoci(
+  state: RegionalEcologyStateV6,
+): RegionalEcologyStateV6 | null {
+  const storedSources = regionalEcologyStateV6ActiveSourcePatches(state);
+  if (storedSources === null) return null;
+  const storedBySource = new Map(storedSources.map(({ sourceKey, patch }) => (
+    [sourceKey, patch] as const
+  )));
+  if (storedBySource.size !== storedSources.length) return null;
+  const needsAdoption = storedSources.some(({ patch }) => patch.populations.some(
+    ({ members }) => members.some(({ actor }) => {
+      if (
+        actor.updatedAtTick !== patch.updatedAtTick
+        || actor.intent.kind !== "alarm"
+        || actor.intent.enteredAtTick !== actor.updatedAtTick
+      ) return false;
+      const eventId = `${actor.identity.stableId}:e:${actor.updatedAtTick.toString(36)}:alarm`;
+      return coreWildlifeAlarmEventLocus(actor, eventId) === null;
+    }),
+  ));
+  if (!needsAdoption) return state;
+  const adoptedBySource = new Map<string, CoreEcologyAggregatePatchState>();
+  let changed = false;
+  for (const { sourceKey, patch } of storedSources) {
+    let adopted = patch;
+    for (const population of patch.populations) {
+      for (const { actor: storedActor } of population.members) {
+        const adoptedActor = adoptLegacyCoreWildlifeAlarmEventLocus(
+          storedActor,
+          storedActor,
+        );
+        if (adoptedActor === null) return null;
+        if (stableStringify(adoptedActor) !== stableStringify(storedActor)) {
+          adopted = replaceCoreEcologyAggregatePatchActor(adopted, adoptedActor);
+          changed = true;
+        }
+      }
+    }
+    adoptedBySource.set(sourceKey, adopted);
+  }
+  if (!changed || adoptedBySource.size !== storedSources.length) {
+    return changed ? null : state;
+  }
+
+  const consumed = new Set<string>();
+  const adoptedPatch = (
+    sourceKey: string,
+    fallback: CoreEcologyAggregatePatchState,
+  ): CoreEcologyAggregatePatchState => {
+    const adopted = adoptedBySource.get(sourceKey);
+    if (adopted === undefined) return fallback;
+    consumed.add(sourceKey);
+    return adopted;
+  };
+  try {
+    const v5 = state.base;
+    const v4 = v5.base;
+    const v3 = v4.base;
+    const v2 = v3.base;
+    const v1 = v2.base;
+    const adoptedV1 = createRegionalEcologyState({
+      root: v1.root,
+      settlementHome: {
+        sourceKey: v1.settlementHome.sourceKey,
+        patch: adoptedPatch(
+          v1.settlementHome.sourceKey,
+          v1.settlementHome.patch,
+        ),
+      },
+      activeRegions: v1.activeRegions,
+      activeResidents: v1.activeResidents.map(({ kind, sourceKey, patch }) => {
+        if (kind === "settlement-home") {
+          throw new RangeError("Regional ecology home cannot occupy the active-resident list");
+        }
+        return {
+          kind,
+          sourceKey,
+          patch: adoptedPatch(sourceKey, patch),
+        };
+      }),
+    });
+    const adoptedV2 = createRegionalEcologyStateV2({
+      base: adoptedV1,
+      alpineRoot: v2.alpineRoot,
+      alpineActiveResidents: v2.alpineActiveResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch: adoptedPatch(sourceKey, patch),
+      })),
+      adoption: v2.adoption,
+    });
+    const adoptedV3 = createRegionalEcologyStateV3({
+      base: adoptedV2,
+      polarShoreRoot: v3.polarShoreRoot,
+      polarShoreActiveResidents: v3.polarShoreActiveResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch: adoptedPatch(sourceKey, patch),
+      })),
+      adoption: v3.adoption,
+    });
+    const adoptedV4 = createRegionalEcologyStateV4({
+      base: adoptedV3,
+      coldShoreRoot: v4.coldShoreRoot,
+      coldShoreActiveResidents: v4.coldShoreActiveResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch: adoptedPatch(sourceKey, patch),
+      })),
+      adoption: v4.adoption,
+    });
+    const adoptedV5 = createRegionalEcologyStateV5({
+      base: adoptedV4,
+      polarConsumerRoot: v5.polarConsumerRoot,
+      polarConsumerActiveResidents: v5.polarConsumerActiveResidents.map(({
+        sourceKey,
+        patch,
+      }) => ({
+        sourceKey,
+        patch: adoptedPatch(sourceKey, patch),
+      })),
+      adoption: v5.adoption,
+    });
+    const adoptedV6 = createRegionalEcologyStateV6({
+      base: adoptedV5,
+      breadthRoot: state.breadthRoot,
+      breadthActiveResidents: state.breadthActiveResidents.map(({ sourceKey, patch }) => ({
+        sourceKey,
+        patch: adoptedPatch(sourceKey, patch),
+      })),
+      adoption: state.adoption,
+    });
+    return consumed.size === adoptedBySource.size ? adoptedV6 : null;
+  } catch {
+    return null;
+  }
 }
 
 const runtimeRegionalEcologyWorldBindingMemo =
@@ -2053,7 +2358,7 @@ function canonicalRuntimeRegionalEcologyCommittedTransition(
   bio0: Bio0EcologyState,
   economy: WorldView,
 ): RegionalEcologyStateV6 | null {
-  return runtimeRegionalEcologyWorldBindingMemo.canonicalizeCommittedTransition(
+  const state = runtimeRegionalEcologyWorldBindingMemo.canonicalizeCommittedTransition(
     previous,
     value,
     {
@@ -2062,6 +2367,9 @@ function canonicalRuntimeRegionalEcologyCommittedTransition(
       settlementHomeHabitat: deriveRuntimeCoreEcologyHabitat(world, bio0, economy),
     },
   );
+  return state !== null && runtimeCommittedAlarmLociMatchStoredActors(state)
+    ? state
+    : null;
 }
 
 /**
@@ -2164,7 +2472,13 @@ function rebaseRuntimeRegionalEcologyState(
       },
     },
   });
-  const canonical = canonicalRuntimeRegionalEcologyState(next, world, bio0, economy);
+  // A dormant deviation migrated from an older save may first enter active
+  // custody here. Bind its historically missing same-tick locus from the
+  // durable stored body before any rematerialized address can be consumed.
+  const adopted = adoptLegacyRegionalAlarmEventLoci(next);
+  const canonical = adopted === null
+    ? null
+    : canonicalRuntimeRegionalEcologyState(adopted, world, bio0, economy);
   if (canonical === null) {
     throw new Error("Regional ecology window exchange failed its world binding");
   }
@@ -6000,26 +6314,105 @@ function runtimeCoreAlarmEvents(
   return Object.freeze(state.populations.flatMap(({ members }) => members.flatMap((member) => {
     if (member.materialization !== "materialized") return [];
     const actor = member.actor;
-    if (
-      actor.intent.kind !== "alarm"
-      || actor.intent.enteredAtTick !== state.updatedAtTick
-      || actor.intent.resourceReference !== null
-    ) return [];
-    return [Object.freeze({
-      version: CORE_WILDLIFE_EVENT_VERSION,
-      eventId: `${actor.identity.stableId}:e:${actor.intent.enteredAtTick.toString(36)}:alarm`,
-      atTick: actor.intent.enteredAtTick,
-      actorId: actor.identity.stableId,
-      species: actor.identity.species,
-      kind: "alarm" as const,
-      causeReferenceId: actor.intent.cause.referenceId,
-      observationId: actor.intent.focusObservationId,
-      resourceReference: null,
-      position: actor.address.position,
-    })];
+    const currentAddressEvent = runtimeCoreAlarmEventAt(actor, actor.address.position);
+    if (currentAddressEvent === null) return [];
+    const retainedLocus = coreWildlifeAlarmEventLocus(
+      actor,
+      currentAddressEvent.eventId,
+    );
+    const event = retainedLocus === null
+      ? currentAddressEvent
+      : runtimeCoreAlarmEventAt(actor, retainedLocus);
+    return event === null || event.atTick !== state.updatedAtTick ? [] : [event];
   })).sort((left, right) => (
     left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0
   )));
+}
+
+function runtimeCoreAlarmEventAt(
+  actor: CoreWildlifeActorState,
+  position: WorldPosition,
+): CoreWildlifeCausalEvent | null {
+  if (
+    actor.intent.kind !== "alarm"
+    || actor.intent.resourceReference !== null
+  ) return null;
+  const eventId = `${actor.identity.stableId}:e:${actor.intent.enteredAtTick.toString(36)}:alarm`;
+  const matchingMemories = actor.memories.filter((memory) => (
+    memory.eventId === eventId
+    && memory.kind === "alarm"
+    && memory.atTick === actor.intent.enteredAtTick
+    && memory.observationId === actor.intent.focusObservationId
+  ));
+  if (matchingMemories.length !== 1) return null;
+  return Object.freeze({
+    version: CORE_WILDLIFE_EVENT_VERSION,
+    eventId,
+    atTick: actor.intent.enteredAtTick,
+    actorId: actor.identity.stableId,
+    species: actor.identity.species,
+    kind: "alarm" as const,
+    causeReferenceId: actor.intent.cause.referenceId,
+    observationId: actor.intent.focusObservationId,
+    resourceReference: null,
+    position,
+  });
+}
+
+/**
+ * Reprojects one freshly retained alarm at its committed event locus. The raw
+ * cognition event is used separately as the live freshness gate; the actor's
+ * bounded alarm memory keeps that locus stable across save/load and any later
+ * body relocation.
+ */
+function runtimeFishCrowAlarmExpressionAuthority(
+  patch: CoreEcologyAggregatePatchState,
+  input: Readonly<{
+    actorId: string;
+    triggerEventId: string;
+    sourceObservationId: string;
+    acceptedAtTick: number;
+  }>,
+): FishCrowAlarmExpressionInput | null {
+  const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
+  if (
+    actor === null
+    || actor.identity.species !== "fish-crow"
+    || actor.updatedAtTick !== input.acceptedAtTick
+  ) return null;
+  const retainedLocus = coreWildlifeAlarmEventLocus(actor, input.triggerEventId);
+  const event = retainedLocus === null
+    ? null
+    : runtimeCoreAlarmEventAt(actor, retainedLocus);
+  if (
+    event === null
+    || event.eventId !== input.triggerEventId
+    || event.atTick !== input.acceptedAtTick
+    || event.observationId !== input.sourceObservationId
+    || event.causeReferenceId !== input.sourceObservationId
+  ) return null;
+  return Object.freeze({ actor, event, world: patch });
+}
+
+function runtimeRegionalFishCrowAlarmExpressionAuthority(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "core-wildlife-fish-crow-alarm" }
+  >,
+): FishCrowAlarmExpressionInput | null {
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  const source = sources[0];
+  return sources.length !== 1 || source === undefined
+    ? null
+    : runtimeFishCrowAlarmExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        acceptedAtTick: admission.acceptedAtTick,
+      });
 }
 
 function mergeRuntimeCoreObservationBatches(
@@ -7222,8 +7615,24 @@ function finishRuntimeCoreEcologyStep(
   if (locomotion === null || locomotion.blocked.some(({ intent }) => intent !== "disengage")) {
     return null;
   }
+  let locusBoundPatch = locomotion.patch;
+  for (const event of prepared.events) {
+    if (event.kind !== "alarm") continue;
+    const actor = coreEcologyAggregatePatchActor(locusBoundPatch, event.actorId);
+    // Mortality may have removed the caller before the post-locomotion commit;
+    // a missing body cannot own a delayed alarm event.
+    if (actor === null) continue;
+    try {
+      locusBoundPatch = replaceCoreEcologyAggregatePatchActor(
+        locusBoundPatch,
+        commitCoreWildlifeAlarmEventLocus(actor, event),
+      );
+    } catch {
+      return null;
+    }
+  }
   const reconciledGroups = reconcileRuntimeCoreMaterializedGroups(
-    locomotion.patch,
+    locusBoundPatch,
     prepared.events,
     tick,
   );
@@ -9678,6 +10087,9 @@ export async function createTideweftRuntime(
       return presentation === null ? [] : [presentation];
     });
   const initialSituatedExpression = activeSituatedExpressionPair();
+  const initialCoreWildlifeExpressionSources = runtimeCoreWildlifeExpressionSources(
+    projectActiveRegionalEcology(),
+  );
   let renderView = projectRuntimeSettlementFoodStore(
     {
       ...projectGameView(worldView, player, {
@@ -9686,6 +10098,7 @@ export async function createTideweftRuntime(
         situatedExpression: initialSituatedExpression?.event ?? null,
         situatedExpressionReception: initialSituatedExpression?.reception ?? null,
         dogActorRoster,
+        coreWildlifeExpressionSources: initialCoreWildlifeExpressionSources,
         looseCargoWorld: physicalCargo.looseWorld,
         looseCargoWorlds: initialCargoPartitions,
         perception,
@@ -9708,6 +10121,7 @@ export async function createTideweftRuntime(
     situatedExpression: initialSituatedExpression?.event ?? null,
     situatedExpressionReception: initialSituatedExpression?.reception ?? null,
     dogActorRoster,
+    coreWildlifeExpressionSources: initialCoreWildlifeExpressionSources,
     perception,
     suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
@@ -10074,6 +10488,9 @@ export async function createTideweftRuntime(
     };
     const ecologyProjection = projectActiveRegionalEcology(actorWindow);
     const projectedEcologySources = runtimeRegionalEcologyProjectedSources(ecologyProjection);
+    const coreWildlifeExpressionSources = runtimeCoreWildlifeExpressionSources(
+      ecologyProjection,
+    );
     const activeCoreEcologyPatches = projectedEcologySources.map(({ patch }) => patch);
     const activityAuthoritiesBySource = projectCoreEcologyActivityAuthorityBundle(
       ecologyProjection,
@@ -10200,6 +10617,7 @@ export async function createTideweftRuntime(
           situatedExpression: activeExpression?.event ?? null,
           situatedExpressionReception: activeExpression?.reception ?? null,
           dogActorRoster,
+          coreWildlifeExpressionSources,
           looseCargoWorld: physicalCargo.looseWorld,
           looseCargoWorlds: visibleCargoPartitions,
           bracing: manualControl.brace,
@@ -10370,6 +10788,7 @@ export async function createTideweftRuntime(
         situatedExpression: activeExpression?.event ?? null,
         situatedExpressionReception: activeExpression?.reception ?? null,
         dogActorRoster,
+        coreWildlifeExpressionSources,
         perception,
         suppressDetailPerception: playerIsSleeping(),
         ...(settlementStoreKeeper === null
@@ -11055,9 +11474,10 @@ export async function createTideweftRuntime(
   }
 
   function expressionAcoustics(
-    volume: SituatedExpressionEvent["volume"] | SituatedExpressionIntent["volume"],
+    expression: Pick<SituatedExpressionEvent, "meaning" | "volume">
+      | Pick<SituatedExpressionIntent, "meaning" | "volume">,
   ): { readonly loudness: number; readonly rangeUnits: number } {
-    return situatedExpressionAcoustics(volume);
+    return situatedExpressionAcoustics(expression);
   }
 
   function playerExpressionAudibility(
@@ -11073,7 +11493,11 @@ export async function createTideweftRuntime(
     if (expression.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
       return Object.freeze({ certainty: FIXED_POINT, pan: 0, contact: null });
     }
-    if (playerIsSleeping() && expression.meaning !== "guardian-dog-warning") return null;
+    if (
+      playerIsSleeping()
+      && expression.meaning !== "guardian-dog-warning"
+      && expression.meaning !== "fish-crow-alarm-call"
+    ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
       regionalTravel.window,
       player,
@@ -11087,7 +11511,7 @@ export async function createTideweftRuntime(
     }
     const masking = ambientNoiseAt(worldView, playerTileIndex(player));
     if (masking === null) return null;
-    const acoustics = expressionAcoustics(expression.volume);
+    const acoustics = expressionAcoustics(expression);
     const heard = evaluateAudibleContact({
       listener: { x: 0, y: 0 },
       source: { x: delta.x, y: delta.y },
@@ -11111,6 +11535,34 @@ export async function createTideweftRuntime(
   function playerDirectlyObservesExpressionSource(
     expression: Pick<SituatedExpressionIntent, "meaning" | "position" | "sourceActorId">,
   ): boolean {
+    if (expression.meaning === "fish-crow-alarm-call") {
+      const matchingActors = runtimeRegionalEcologyProjectedSources(
+        projectActiveRegionalEcology(),
+      ).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
+        .filter(({ actor, materialization }) => (
+          materialization === "materialized"
+          && actor.identity.species === "fish-crow"
+          && actor.identity.stableId === expression.sourceActorId
+          && stableStringify(actor.address.position) === stableStringify(expression.position)
+        ));
+      return matchingActors.length === 1
+        && isWildlifeWorldPositionDirectlyObserved(expression.position, {
+          window: {
+            origin: regionalTravel.window.origin,
+            terrain: {
+              width: worldView.terrain.width,
+              height: worldView.terrain.height,
+            },
+          },
+          // Like the existing strong guardian warning, a heard crow alarm
+          // wakes before source classification. Replaying awake perception is
+          // derivable from world state and avoids persisting an unattestable
+          // pre-interruption sleep bit.
+          perception: playerIsSleeping()
+            ? projectPerception(worldView, { ...player, timeAction: null })
+            : projectPlayerPerception(),
+        });
+    }
     if (
       expression.meaning === "guardian-dog-warning"
       || expression.meaning === "guardian-dog-defensive-growl"
@@ -11160,7 +11612,7 @@ export async function createTideweftRuntime(
     event: SituatedExpressionEvent,
     sampleOrdinal: number,
   ): SupplementalSoundSample {
-    const acoustics = expressionAcoustics(event.volume);
+    const acoustics = expressionAcoustics(event);
     const sample = createSupplementalSoundSample({
       expressionEventId: event.eventId,
       id: `av-${world.meta.completedTick}-${sampleOrdinal}`,
@@ -11855,13 +12307,48 @@ export async function createTideweftRuntime(
         runtimeCoreAlarmEvents(patch)
       )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
       for (const alarm of coreAlarms) {
-        const propagated = propagateCoreEcologyAlarmObservationBatches(
+        const matchingAdmissions = situatedExpressionAdmissions.records.filter(
+          (admission) => admission.kind === "core-wildlife-fish-crow-alarm"
+            && admission.triggerEventId === alarm.eventId
+            && admission.sourceActorId === alarm.actorId,
+        );
+        const fishCrowAdmission = matchingAdmissions[0];
+        const fishCrowAuthority = matchingAdmissions.length === 1
+          && fishCrowAdmission?.kind === "core-wildlife-fish-crow-alarm"
+          ? runtimeRegionalFishCrowAlarmExpressionAuthority(
+              regionalEcologyProjectionForStep,
+              fishCrowAdmission,
+            )
+          : null;
+        const rawPropagated = propagateCoreEcologyAlarmObservationBatches(
           alarm,
           corePerceptionFrame,
         );
-        if (propagated === null) {
+        if (rawPropagated === null) {
           throw new Error("Core ecology alarm perception could not be resolved");
         }
+        const retainedSample = fishCrowAdmission === undefined
+          ? undefined
+          : actorVocalizationSamples[fishCrowAdmission.sampleOrdinal];
+        const humanHearingOwnedByExpression = fishCrowAdmission !== undefined
+          && fishCrowAuthority !== null
+          && fishCrowAuthority.event.eventId === alarm.eventId
+          && sameRuntimeWorldPosition(fishCrowAuthority.event.position, alarm.position)
+          && retainedSample?.expressionEventId === fishCrowAdmission.eventId
+          && retainedSample.sourceActorId === fishCrowAdmission.sourceActorId
+          && fishCrowAlarmExpressionEventForTrigger(
+            fishCrowAuthority,
+            fishCrowAdmission.triggerEventId,
+          ) !== null;
+        // The core path remains authoritative for wildlife and dogs. Once the
+        // same event has an admitted Living Voice sample, that sample owns the
+        // human hearing leg so porter/player cognition cannot receive it twice.
+        const propagated = humanHearingOwnedByExpression
+          ? rawPropagated.filter(({ observerId }) => (
+              observerId !== priorPorter.address.actorId
+              && observerId !== playerAddress.actorId
+            ))
+          : rawPropagated;
         coreAlarmObservationBatches.push(propagated);
       }
       const coreObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [
@@ -12299,6 +12786,7 @@ export async function createTideweftRuntime(
         kind: (typeof ecologySourcesForStep)[number]["kind"];
         sourceKey: string;
         beforePatch: CoreEcologyAggregatePatchState;
+        eventAuthorityPatch: CoreEcologyAggregatePatchState;
         validateAcceptedPatch: (
           patch: CoreEcologyAggregatePatchState,
         ) => CoreEcologyAggregatePatchState | null;
@@ -12324,6 +12812,7 @@ export async function createTideweftRuntime(
           kind: preparedSource.kind,
           sourceKey: preparedSource.sourceKey,
           beforePatch: preparedSource.beforePatch,
+          eventAuthorityPatch: preparedSource.prepared.patch,
           validateAcceptedPatch: preparedSource.validateAcceptedPatch,
           result: finished,
         });
@@ -12344,24 +12833,46 @@ export async function createTideweftRuntime(
         throw new Error("Domestic-animal recovery topology transition was rejected");
       }
       settlementDomesticAnimalRecovery = topologyAdvancedRecovery;
-      const playerEventTimeAlarmObservations: ActorObservation[] = [];
-      for (const event of coreSteps.flatMap(({ result }) => result.events)) {
-        if (
-          event.kind !== "alarm"
-          || !localMaterializedCoreActorIdSet.has(event.actorId)
-        ) continue;
-        const propagated = propagateCoreEcologyAlarmObservationBatches(
-          event,
-          corePerceptionFrame,
-        );
-        const heardByPlayer = propagated === null
-          ? null
-          : mergeRuntimeCoreObservationBatches(playerAddress.actorId, [propagated]);
-        if (heardByPlayer === null) {
-          throw new Error("Core ecology event-time player hearing could not be resolved");
+      const playerEventTimeAlarmObservationsByEvent: Array<Readonly<{
+        readonly eventId: string;
+        readonly observations: readonly ActorObservation[];
+      }>> = [];
+      for (const { result, eventAuthorityPatch } of coreSteps) {
+        for (const event of result.events) {
+          if (
+            event.kind !== "alarm"
+            || !localMaterializedCoreActorIdSet.has(event.actorId)
+            // Fish-crow raw events authenticate cognition freshness only. Its
+            // final committed position and immediate player hearing are owned
+            // by the post-commit Living Voice adapter below; the shared core
+            // propagation resumes from that retained event on the next tick.
+            || event.species === "fish-crow"
+          ) continue;
+          const eventActorAuthority = coreEcologyAggregatePatchActor(
+            eventAuthorityPatch,
+            event.actorId,
+          );
+          const propagated = eventActorAuthority === null
+            ? null
+            : propagateCoreEcologyAlarmObservationBatches(
+                event,
+                corePerceptionFrame,
+                eventActorAuthority,
+              );
+          const heardByPlayer = propagated === null
+            ? null
+            : mergeRuntimeCoreObservationBatches(playerAddress.actorId, [propagated]);
+          if (heardByPlayer === null) {
+            throw new Error("Core ecology event-time player hearing could not be resolved");
+          }
+          playerEventTimeAlarmObservationsByEvent.push(Object.freeze({
+            eventId: event.eventId,
+            observations: heardByPlayer,
+          }));
         }
-        playerEventTimeAlarmObservations.push(...heardByPlayer);
       }
+      const playerEventTimeAlarmObservations = playerEventTimeAlarmObservationsByEvent
+        .flatMap(({ observations }) => observations);
       const canonicalPlayerEventTimeAlarms = canonicalizeActorObservations(
         playerEventTimeAlarmObservations,
       );
@@ -12889,6 +13400,60 @@ export async function createTideweftRuntime(
         throw new Error("Core ecology event observation frame could not be authenticated");
       }
       const allCoreStepEvents = coreSteps.flatMap(({ result }) => result.events);
+      let unadmittedFishCrowAlarmAudibleToPlayer = false;
+      const fishCrowAlarmCandidates = coreSteps.flatMap(({ sourceKey, result }) => (
+        result.events
+          .filter((event) => event.species === "fish-crow" && event.kind === "alarm")
+          .map((event) => ({ event, sourceKey }))
+      )).sort((left, right) => (
+        compareText(left.event.eventId, right.event.eventId)
+        || compareText(left.sourceKey, right.sourceKey)
+      ));
+      for (const candidate of fishCrowAlarmCandidates) {
+        const patch = finalRegionalPatches.get(candidate.sourceKey);
+        if (patch === undefined || candidate.event.observationId === null) continue;
+        const authority = runtimeFishCrowAlarmExpressionAuthority(patch, {
+          actorId: candidate.event.actorId,
+          triggerEventId: candidate.event.eventId,
+          sourceObservationId: candidate.event.observationId,
+          acceptedAtTick: candidate.event.atTick,
+        });
+        if (
+          authority === null
+          || authority.event.causeReferenceId !== candidate.event.causeReferenceId
+          || authority.event.observationId !== candidate.event.observationId
+          || authority.event.atTick !== candidate.event.atTick
+        ) continue;
+        const intent = fishCrowAlarmExpressionIntent(authority);
+        if (intent === null) continue;
+        const audible = playerExpressionAudibility(intent);
+        const lawfullyAudible = audible !== null && audible.contact !== null;
+        const reception = !lawfullyAudible || audible === null || audible.contact === null
+          ? { kind: "none" as const }
+          : playerDirectlyObservesExpressionSource(intent)
+            ? { kind: "heard-visible" as const, certainty: audible.certainty }
+            : { kind: "heard-unseen" as const, contact: audible.contact };
+        const admitted = acceptSituatedExpression(
+          intent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              sourceOwnerKey: candidate.sourceKey,
+              sourceObservationId: candidate.event.observationId!,
+              acceptedAtTick: candidate.event.atTick,
+            })
+          ),
+        );
+        if (lawfullyAudible) {
+          playerWaitDisturbedThisStep = true;
+          playerRecoveryDisturbedThisStep = true;
+          if (!admitted) unadmittedFishCrowAlarmAudibleToPlayer = true;
+        }
+      }
       const {
         directlyWitnessedCarcassIds,
         directlyWitnessedCoreEventIds,
@@ -12976,15 +13541,17 @@ export async function createTideweftRuntime(
       const witnessedCoreBeforeById = new Map(witnessedCoreBeforeMortality.map((animal) => (
         [animal.actorId, animal] as const
       )));
-      const lawfullyHeardAlarm = canonicalPlayerEventTimeAlarms.some((observation) => (
-        observation.channel === "hearing"
-        && observation.perceivedClass === "animal-alarm"
-      ));
-      const lawfullyHeardStrongAlarm = canonicalPlayerEventTimeAlarms.some((observation) => (
-        observation.channel === "hearing"
-        && observation.perceivedClass === "animal-alarm"
-        && observation.interrupt === "strong"
-      ));
+      const lawfullyHeardAlarm = unadmittedFishCrowAlarmAudibleToPlayer
+        || canonicalPlayerEventTimeAlarms.some((observation) => (
+          observation.channel === "hearing"
+          && observation.perceivedClass === "animal-alarm"
+        ));
+      const lawfullyHeardStrongAlarm = canonicalPlayerEventTimeAlarms
+        .some((observation) => (
+          observation.channel === "hearing"
+          && observation.perceivedClass === "animal-alarm"
+          && observation.interrupt === "strong"
+        ));
       if (lawfullyHeardStrongAlarm) {
         playerWaitDisturbedThisStep = true;
         playerRecoveryDisturbedThisStep = true;
@@ -13122,19 +13689,9 @@ export async function createTideweftRuntime(
             && before !== null
             && before.intent.kind !== event.kind;
         });
-      const witnessedCrowDoubleCall = allCoreStepEvents
-        .filter((event) => event.species === "fish-crow" && event.kind === "alarm")
-        .slice()
-        .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
-        .find((event) => {
-          const before = coreActorBeforeStep(event.actorId);
-          return directlyWitnessedCoreEventIds.has(event.eventId)
-            && before !== null
-            && before.intent.kind !== event.kind;
-        });
       const ecologyCues: Array<Readonly<{
         cue: "rat-rustle" | "cat-call" | "rabbit-thump" | "fox-yip"
-          | "crow-nasal-double-call" | "frog-chorus" | "wildlife-alarm";
+          | "frog-chorus" | "wildlife-alarm";
         volume: number;
         variantSeed: number;
         caption: string;
@@ -13172,18 +13729,9 @@ export async function createTideweftRuntime(
           caption: "[brief yip nearby]",
         }));
       }
-      if (witnessedCrowDoubleCall !== undefined) {
-        ecologyCues.push(Object.freeze({
-          cue: "crow-nasal-double-call",
-          volume: 0.36,
-          variantSeed: witnessedCrowDoubleCall.atTick,
-          caption: "[nasal double call nearby]",
-        }));
-      }
       if (
         lawfullyHeardAlarm
         && witnessedRabbitThump === undefined
-        && witnessedCrowDoubleCall === undefined
       ) {
         ecologyCues.push(Object.freeze({
           cue: "wildlife-alarm",
@@ -16322,6 +16870,7 @@ export async function createTideweftRuntime(
     );
     if (
       regionalEcologySnapshot === null
+      || !runtimeAllStoredAlarmLociMatchActors(regionalEcologySnapshot)
       || stableStringify(regionalEcologySnapshot.base.base.base.base.base.settlementHome.patch)
         !== stableStringify(coreEcology)
     ) {
@@ -16368,6 +16917,7 @@ export async function createTideweftRuntime(
       dogActorRosterSnapshot,
       settlementEcologySnapshot,
       settlementWorkingAnimalsSnapshot,
+      regionalEcologySnapshot,
     )) {
       throw new Error("Refusing to save inconsistent expression/perception authority");
     }
@@ -17009,6 +17559,7 @@ function canonicalPlayerPerceptionCarry(
     | typeof WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
+    | typeof GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
 ): PlayerPerceptionCarry | null {
   if (
@@ -17018,6 +17569,7 @@ function canonicalPlayerPerceptionCarry(
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
   const hasCurrentShape = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION;
@@ -17034,7 +17586,8 @@ function canonicalPlayerPerceptionCarry(
         "situatedExpressionChannels",
         "version",
       ]
-    : expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
+    : expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
+        || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
         || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
         || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
       ? [
@@ -17217,6 +17770,11 @@ function canonicalPlayerPerceptionCarry(
           canonicalChannels,
           trajectory.admissionLedger,
         ))
+      || (expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
+        && !perceptionCarryUsesOnlyGuardianShelterWhineSemantics(
+          canonicalChannels,
+          trajectory.admissionLedger,
+        ))
       || causalAuthority.records.some(({ committedWorldTick }) => (
         committedWorldTick !== completedWorldTick
       ))
@@ -17308,6 +17866,7 @@ function perceptionCarryUsesOnlyWorkingPeopleSemantics(
     kind !== "guardian-dog-warning"
     && kind !== "guardian-dog-defensive-growl"
     && kind !== "guardian-dog-shelter-whine"
+    && kind !== "core-wildlife-fish-crow-alarm"
   ))
     && samples.every(({ soundClass }) => soundClass === "human-vocalization")
     && bank.channels.every((channel) => {
@@ -17316,12 +17875,14 @@ function perceptionCarryUsesOnlyWorkingPeopleSemantics(
         meaning !== "guardian-dog-warning"
         && meaning !== "guardian-dog-defensive-growl"
         && meaning !== "guardian-dog-shelter-whine"
+        && meaning !== "fish-crow-alarm-call"
         && family !== "animal-signal"
       ))
         && (active === null || (
           active.meaning !== "guardian-dog-warning"
           && active.meaning !== "guardian-dog-defensive-growl"
           && active.meaning !== "guardian-dog-shelter-whine"
+          && active.meaning !== "fish-crow-alarm-call"
           && active.family !== "animal-signal"
           && active.knowledgeBasis !== "self-heard-anonymous-alarm"
           && active.knowledgeBasis !== "self-perceived-threat"
@@ -17329,6 +17890,7 @@ function perceptionCarryUsesOnlyWorkingPeopleSemantics(
           && active.vocalization !== "dog-warning-bark"
           && active.vocalization !== "dog-defensive-growl"
           && active.vocalization !== "dog-shelter-whine"
+          && active.vocalization !== "fish-crow-alarm"
           && channel.reception !== null
           && channel.reception.kind !== "heard-unseen"
         ));
@@ -17343,18 +17905,22 @@ function perceptionCarryUsesOnlyGuardianWarningSemantics(
   return admissions.records.every(({ kind }) => (
     kind !== "guardian-dog-defensive-growl"
     && kind !== "guardian-dog-shelter-whine"
+    && kind !== "core-wildlife-fish-crow-alarm"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning }) => (
       meaning !== "guardian-dog-defensive-growl"
       && meaning !== "guardian-dog-shelter-whine"
+      && meaning !== "fish-crow-alarm-call"
     )) && (active === null || (
       active.meaning !== "guardian-dog-defensive-growl"
       && active.meaning !== "guardian-dog-shelter-whine"
+      && active.meaning !== "fish-crow-alarm-call"
       && active.knowledgeBasis !== "self-perceived-threat"
       && active.knowledgeBasis !== "self-weather-distress"
       && active.vocalization !== "dog-defensive-growl"
       && active.vocalization !== "dog-shelter-whine"
+      && active.vocalization !== "fish-crow-alarm"
     ));
   });
 }
@@ -17366,14 +17932,36 @@ function perceptionCarryUsesOnlyGuardianGrowlSemantics(
 ): boolean {
   return admissions.records.every(({ kind }) => (
     kind !== "guardian-dog-shelter-whine"
+    && kind !== "core-wildlife-fish-crow-alarm"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning }) => (
       meaning !== "guardian-dog-shelter-whine"
+      && meaning !== "fish-crow-alarm-call"
     )) && (active === null || (
       active.meaning !== "guardian-dog-shelter-whine"
+      && active.meaning !== "fish-crow-alarm-call"
       && active.knowledgeBasis !== "self-weather-distress"
       && active.vocalization !== "dog-shelter-whine"
+      && active.vocalization !== "fish-crow-alarm"
+    ));
+  });
+}
+
+/** Exact semantic fence for v37/carry-v6 before fish-crow Living Voice. */
+function perceptionCarryUsesOnlyGuardianShelterWhineSemantics(
+  bank: SituatedExpressionChannelBank,
+  admissions: SituatedExpressionAdmissionLedger,
+): boolean {
+  return admissions.records.every(({ kind }) => (
+    kind !== "core-wildlife-fish-crow-alarm"
+  )) && bank.channels.every((channel) => {
+    const active = channel.state.active;
+    return channel.state.recent.every(({ meaning }) => (
+      meaning !== "fish-crow-alarm-call"
+    )) && (active === null || (
+      active.meaning !== "fish-crow-alarm-call"
+      && active.vocalization !== "fish-crow-alarm"
     ));
   });
 }
@@ -17487,6 +18075,7 @@ function playerPerceptionCarryMatchesPosition(
   dogRoster: DogActorRosterState,
   settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
+  regionalEcology: RegionalEcologyStateV6,
 ): boolean {
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
   if (position === null) return false;
@@ -17546,6 +18135,14 @@ function playerPerceptionCarryMatchesPosition(
     { discovered: player.discovered, depthSoundings: player.depthSoundings },
     { immutable: true },
   );
+  const regionalProjection = projectRegionalEcologyStateV6ActiveState(
+    regionalEcology,
+    {
+      origin: regionalTravel.window.origin,
+      terrain: regionalTravel.window.terrain,
+    },
+  );
+  if (regionalProjection === null) return false;
   const channelsMatch = situatedExpressionChannelsMatchWorld(
     carry,
     carry.situatedExpressionChannels,
@@ -17557,6 +18154,7 @@ function playerPerceptionCarryMatchesPosition(
     dogRoster,
     settlement,
     workingAnimals,
+    regionalProjection,
   );
   const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
     (admission) => admission.kind === "player-traversal"
@@ -17691,6 +18289,46 @@ function playerPerceptionCarryMatchesPosition(
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
     }
+    if (admission.kind === "core-wildlife-fish-crow-alarm") {
+      const authority = runtimeRegionalFishCrowAlarmExpressionAuthority(
+        regionalProjection,
+        admission,
+      );
+      const event = authority === null
+        ? null
+        : fishCrowAlarmExpressionEventForTrigger(
+            authority,
+            admission.triggerEventId,
+          );
+      const admissionMatches = authority !== null
+        && coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
+          admission,
+          authority,
+          economy.completedTick,
+        );
+      const sampleMatches = event !== null
+        && vocalizationSampleMatchesActiveEvent(sample, event);
+      if (
+        authority === null
+        || event === null
+        || !admissionMatches
+        || !sampleMatches
+      ) return false;
+      const eventTimeReception = fishCrowAlarmReceptionAtEventTime({
+        carry,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        event,
+        admission,
+      });
+      return eventTimeReception !== null
+        && !(
+          eventTimeReception.audible
+          && player.timeAction !== null
+          && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
+        );
+    }
     if (admission.kind !== "porter-heavy-departure") return false;
     const event = workingPeopleExpressionEventForTrigger(
       economy,
@@ -17727,6 +18365,7 @@ function situatedExpressionChannelsMatchWorld(
   dogRoster: DogActorRosterState,
   settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
+  regionalProjection: RegionalEcologyStateV6ActiveProjection,
 ): boolean {
   return bank.channels.every((channel) => {
     const active = channel.state.active;
@@ -17757,6 +18396,60 @@ function situatedExpressionChannelsMatchWorld(
           admission,
           playerExpressionAuthority,
         );
+      });
+    }
+    const fishCrowAdmissions = admissions.filter((candidate) => (
+      candidate.kind === "core-wildlife-fish-crow-alarm"
+    ));
+    if (fishCrowAdmissions.length > 0) {
+      if (fishCrowAdmissions.length !== admissions.length) return false;
+      const authorityFor = (
+        triggerEventId: string,
+      ): FishCrowAlarmExpressionInput | null => {
+        const matching = fishCrowAdmissions.filter((candidate) => (
+          candidate.triggerEventId === triggerEventId
+        ));
+        const admission = matching[0];
+        return matching.length !== 1 || admission === undefined
+          ? null
+          : runtimeRegionalFishCrowAlarmExpressionAuthority(
+              regionalProjection,
+              admission,
+            );
+      };
+      if (!channel.state.recent.every((memory) => {
+        if (memory.meaning !== "fish-crow-alarm-call") return false;
+        const authority = authorityFor(memory.triggerEventId);
+        return authority !== null
+          && fishCrowAlarmExpressionMemoryMatchesWorld(authority, memory);
+      })) return false;
+      if (active !== null) {
+        const authority = authorityFor(active.triggerEventId);
+        if (
+          authority === null
+          || !fishCrowAlarmExpressionEventMatchesWorld(authority, active)
+        ) return false;
+      }
+      return fishCrowAdmissions.every((admission) => {
+        const authority = authorityFor(admission.triggerEventId);
+        return authority !== null
+          && coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
+            admission,
+            authority,
+            economy.completedTick,
+          )
+          && (active?.eventId !== admission.eventId || (
+            active !== null
+            && fishCrowAlarmReceptionMatchesEventTime({
+              carry,
+              spatialWorld,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              event: active,
+              admission,
+              reception: channel.reception,
+            })
+          ));
       });
     }
     const dog = dogActorRosterActor(dogRoster, channel.sourceActorId);
@@ -18040,6 +18733,152 @@ function guardianDogShelterWhineAdmissionMatchesWorld(
     && activity.perceivedArea === null;
 }
 
+type CoreWildlifeFishCrowAlarmAdmission = Extract<
+  SituatedExpressionAdmissionRecord,
+  { readonly kind: "core-wildlife-fish-crow-alarm" }
+>;
+
+function coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
+  admission: CoreWildlifeFishCrowAlarmAdmission,
+  authority: FishCrowAlarmExpressionInput,
+  completedTick: number,
+): boolean {
+  const event = fishCrowAlarmExpressionEventForTrigger(
+    authority,
+    admission.triggerEventId,
+  );
+  return event !== null
+    && admission.sourceActorId === authority.actor.identity.stableId
+    && admission.sourceActorId === authority.event.actorId
+    && admission.triggerEventId === authority.event.eventId
+    && admission.sourceObservationId === authority.event.observationId
+    && admission.sourceObservationId === authority.event.causeReferenceId
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && admission.acceptedAtTick === authority.event.atTick
+    && authority.world.updatedAtTick === completedTick
+    && stableStringify(event.position)
+      === stableStringify(coreWildlifeAlarmEventLocus(
+        authority.actor,
+        authority.event.eventId,
+      ));
+}
+
+interface FishCrowAlarmReceptionAuthorityInput {
+  readonly carry: PlayerPerceptionCarry;
+  readonly spatialWorld: WorldView;
+  readonly window: RegionalPlayerTravelState["window"];
+  readonly playerTemplate: PlayerState;
+  readonly event: SituatedExpressionEvent;
+  readonly admission: CoreWildlifeFishCrowAlarmAdmission;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+function fishCrowAlarmReceptionMatchesEventTime(
+  input: FishCrowAlarmReceptionAuthorityInput,
+): boolean {
+  const expected = fishCrowAlarmReceptionAtEventTime(input);
+  return expected !== null
+    && stableStringify(expected.reception) === stableStringify(input.reception);
+}
+
+/** Replays the post-commit crow call through the same bounded human acoustics. */
+function fishCrowAlarmReceptionAtEventTime(
+  input: Omit<FishCrowAlarmReceptionAuthorityInput, "reception">,
+): GuardianDogCallEventTimeReception | null {
+  const {
+    carry,
+    spatialWorld,
+    window,
+    playerTemplate,
+    event,
+    admission,
+  } = input;
+  if (
+    spatialWorld.completedTick !== admission.acceptedAtTick
+    || event.eventId !== admission.eventId
+    || event.sourceActorId !== admission.sourceActorId
+    || event.triggerEventId !== admission.triggerEventId
+    || event.meaning !== "fish-crow-alarm-call"
+  ) return null;
+  const listenerPoint = perceptionIntervalPointInWindow(
+    window,
+    carry.intervalStartPosition,
+  );
+  if (listenerPoint === null) return null;
+  const eventTimePlayer: PlayerState = {
+    ...playerTemplate,
+    worldWidth: window.terrain.width,
+    worldHeight: window.terrain.height,
+    x: listenerPoint.x,
+    y: listenerPoint.y,
+    previousX: listenerPoint.x,
+    previousY: listenerPoint.y,
+    velocityX: 0,
+    velocityY: 0,
+    facingMilliRadians: carry.intervalStartFacingMilliRadians,
+  };
+  const reconstructed = playerWorldPositionInRegionalWindow(window, eventTimePlayer);
+  if (
+    reconstructed === null
+    || stableStringify(reconstructed) !== stableStringify(carry.intervalStartPosition)
+  ) return null;
+  let delta: ReturnType<typeof worldPositionDelta>;
+  try {
+    delta = worldPositionDelta(carry.intervalStartPosition, event.position);
+  } catch {
+    return null;
+  }
+  const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
+  if (masking === null) return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const contact = evaluateAudibleContact({
+    listener: { x: 0, y: 0 },
+    source: { x: delta.x, y: delta.y },
+    baseRange: acoustics.rangeUnits,
+    ambientNoise: masking,
+    sourceLoudness: acoustics.loudness / FIXED_POINT,
+    wind: {
+      x: spatialWorld.weather.windX / FIXED_POINT,
+      y: spatialWorld.weather.windY / FIXED_POINT,
+    },
+  });
+  if (contact === null) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  // A physically heard strong crow alarm wakes before source classification,
+  // matching the established warning-bark contract. This is reproducible from
+  // the saved event-time pose without trusting mutable receipt metadata.
+  const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
+    window: {
+      origin: window.origin,
+      terrain: {
+        width: window.terrain.width,
+        height: window.terrain.height,
+      },
+    },
+    perception: projectPerception(spatialWorld, {
+      ...eventTimePlayer,
+      timeAction: null,
+    }),
+  });
+  const expected = directlyVisible
+    ? createHeardVisibleSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        Math.max(1, Math.round(contact.certainty * FIXED_POINT)),
+        true,
+      )
+    : createHeardUnseenSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        contact,
+      );
+  return expected === null
+    ? null
+    : Object.freeze({ audible: true, reception: expected });
+}
+
 type GuardianDogCallAdmission = Extract<
   SituatedExpressionAdmissionRecord,
   {
@@ -18154,7 +18993,7 @@ function guardianDogCallReceptionAtEventTime(
   }
   const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
   if (masking === null) return null;
-  const acoustics = situatedExpressionAcoustics(event.volume);
+  const acoustics = situatedExpressionAcoustics(event);
   const contact = evaluateAudibleContact({
     listener: { x: 0, y: 0 },
     source: { x: delta.x, y: delta.y },
@@ -18321,6 +19160,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         && decoded.version !== GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         && decoded.version !== GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
+        && decoded.version !== GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -18335,6 +19175,18 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Save record format fence does not match its embedded envelope");
     }
+    // The retained alarm-event locus first exists in v38. Older wrappers may
+    // carry the same nested wildlife schema, so reject a resealed historical
+    // envelope that tries to smuggle future event-position authority through
+    // either its regional owner or the pre-v25 compatibility core.
+    if (
+      decoded.version < GAME_SAVE_VERSION
+      && [decoded.regionalEcology, decoded.coreEcology].some((serialized) => (
+        typeof serialized === "string" && serialized.includes('"eventPosition":')
+      ))
+    ) {
+      throw new Error("Historical save contains future wildlife event-locus authority");
+    }
     if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
       if (
         typeof decoded.integrity !== "string"
@@ -18342,6 +19194,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
@@ -18668,6 +19521,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
       || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
@@ -18683,17 +19537,22 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             structural === null
             || serializeRegionalEcologyStateV6(structural) !== text
           ) return null;
-          return canonicalRuntimeRegionalEcologyState(
+          const runtimeState = canonicalRuntimeRegionalEcologyState(
             structural,
             world,
             bio0Ecology,
             compatibilityView,
+            decoded.version === GAME_SAVE_VERSION,
           );
+          return runtimeState !== null && runtimeAllStoredAlarmLociMatchActors(runtimeState)
+            ? runtimeState
+            : null;
         })()
       : null;
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
@@ -18936,6 +19795,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             compatibilityView,
+            false,
           ));
     if (
       decoded.version >= REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION
@@ -18943,7 +19803,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Current save could not bind its regional ecology authority");
     }
-    const persistedRegionalEcology = loadedRegionalEcology === null
+    let persistedRegionalEcology = loadedRegionalEcology === null
       ? null
       : activateRegionalEcologyStateV6BreadthThroughEpoch(
           loadedRegionalEcology,
@@ -19260,6 +20120,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
         )
+      : decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION,
+          )
       : decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
@@ -19456,6 +20322,38 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
       { immutable: true },
     );
+    if (
+      persistedRegionalEcology !== null
+      && decoded.version < GAME_SAVE_VERSION
+    ) {
+      const adoptedAlarmLoci = adoptLegacyRegionalAlarmEventLoci(
+        persistedRegionalEcology,
+      );
+      if (adoptedAlarmLoci === null) {
+        throw new Error("Historical save alarm-event loci could not be adopted");
+      }
+      const canonicalAdoption = adoptedAlarmLoci === persistedRegionalEcology
+        ? canonicalRuntimeRegionalEcologyState(
+            adoptedAlarmLoci,
+            world,
+            bio0Ecology,
+            compatibilityView,
+          )
+        : canonicalRuntimeRegionalEcologyCommittedTransition(
+            persistedRegionalEcology,
+            adoptedAlarmLoci,
+            world,
+            bio0Ecology,
+            compatibilityView,
+          );
+      if (
+        canonicalAdoption === null
+        || !runtimeAllStoredAlarmLociMatchActors(canonicalAdoption)
+      ) {
+        throw new Error("Historical save alarm-event loci failed adoption");
+      }
+      persistedRegionalEcology = canonicalAdoption;
+    }
     if (decoded.version < WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION) {
       const migratedPose = migrateLegacyPlayerPerceptionIntervalPose(
         perceptionCarry,
@@ -19575,6 +20473,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             compatibilityView,
+            false,
           );
           return accepted;
         })()
@@ -19622,6 +20521,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         dogActorRoster,
         settlementEcology,
         settlementWorkingAnimals,
+        regionalEcology,
       )
     ) {
       throw new Error("Current save perception interval does not match its saved physical authority");

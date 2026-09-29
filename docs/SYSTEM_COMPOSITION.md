@@ -68,7 +68,7 @@ row.
 | --- | --- | --- |
 | Terrain, water, movement, Relief | `src/sim/regionTerrain.ts` → `src/game/player.ts` → `src/render/terrainMesh.ts` | `ARCHITECTURE.md`, `GAME_DESIGN.md`; footing/player/Relief tests |
 | Seamless streaming and map knowledge | `src/game/regionStreaming.ts`, `src/game/regionalCartography.ts`, `src/render/reliefTerrain.ts` | `ARCHITECTURE.md`; regional streaming/cartography tests |
-| Perception and Living Voice | `src/sim/actorPerception.ts`, `src/game/humanPerception.ts`, `src/game/situatedExpression.ts`, `src/game/workingPeopleExpression.ts`, `src/game/dogSignalExpression.ts` | `ARCHITECTURE.md`, `GAME_DESIGN.md`; perception/expression tests |
+| Perception and Living Voice | `src/sim/actorPerception.ts`, `src/game/humanPerception.ts`, `src/game/situatedExpression.ts`, `src/game/workingPeopleExpression.ts`, `src/game/dogSignalExpression.ts`, `src/game/coreWildlifeSignalExpression.ts`, `src/game/situatedExpressionAcoustics.ts` | `ARCHITECTURE.md`, `GAME_DESIGN.md`; perception/expression tests |
 | Ecology, mortality, bodies | `src/game/coreEcology.ts`, `src/game/coreWildlifeMortality.ts`, `src/game/coreWildlifeCarcass.ts` | `ARCHITECTURE.md`, `GAME_DESIGN.md`; ecology/mortality/carcass tests |
 | PACK / MAKE / MEND | `src/game/crafting.ts`, `src/game/gearEffects.ts` | `CRAFTING_DESIGN.md`; crafting/gear tests |
 | Settlements, routes, Promises | `src/sim/world.ts` → `src/sim/engine.ts` → `src/sim/network.ts` | `GAME_DESIGN.md`, `ARCHITECTURE.md`; `src/sim/systemComposition.integration.test.ts` |
@@ -176,9 +176,9 @@ recipes, or pair-specific scripts.
 | Habitat + species catalog | identity, habitat, roles, eligible shared policies | ecology, materialization, perception, presentation | PARTIAL | MODERATE | Forty-five core wildlife profiles share catalog contracts without pairwise brains; seventeen currently have addressable/routine-bound activity profiles. Catalog breadth is not universal full-detail life. |
 | Actor senses + world evidence | observation with uncertainty | attention, suspicion, search, intent, memory | LIVE | STRONG | Existing humans and representative animals react through bounded shared perception rather than omniscient state. |
 | Physical food + wind/rain/containment | classified scent opportunity | dog and selected wildlife appraisal | PARTIAL | MODERATE | One real food-scent path is live. There is no general scent field for blood, bodies, people, fire, or tracking. |
-| Alarm / danger observation | attention and behavioral pressure | other actors that lawfully perceive the event | LIVE | MODERATE | Representative cross-actor chains exist. General social information and audible alarm breadth remain incomplete. |
-| World/actor event | semantic expression intent | player, first working-porter expression, and three causal guardian signals | LIVE | STRONG | In the local unpublished candidate, expression is event-owned, deterministic, source-bound, reception-honest, and anti-spam. Wider work, remaining dog/animal repertoires, structured warnings, and conversation remain active work, not release claims. |
-| Audible expression | localized acoustic event | human hearing/attention and player captions | PARTIAL | STRONG | Player and porter vocalizations plus the guardian dog's authenticated warning bark, defensive growl, and shelter-request whine reuse shared hearing. Dog calls remain world-authoritative without a player receipt: bark/growl enter nearby human F0 as anonymous `animal-alarm`, while the weather-driven whine uses neutral `animal-call`. The bark alone has strong recovery-interruption authority. Broad structured fact transfer and animal-call networks are not yet complete. |
+| Alarm / danger observation | attention and behavioral pressure | other actors that lawfully perceive the event | LIVE | MODERATE | A direct aerial-predator perception can commit one fish-crow alarm, continue through core ecology to wildlife and dogs, and create source-bound human hearing without disclosing the predator. General social information and audible alarm breadth remain incomplete. |
+| World/actor event | semantic expression intent | player, first working-porter expression, three causal guardian signals, and one causal fish-crow alarm | LIVE | STRONG | In the local unpublished candidate, expression is event-owned, deterministic, source-bound, reception-honest, and anti-spam. Wider work, remaining dog/animal repertoires, structured warnings, and conversation remain active work, not release claims. |
+| Audible expression | localized acoustic event | human hearing/attention, player captions, and recovery interruption | PARTIAL | STRONG | Player and porter vocalizations plus three authenticated guardian calls reuse shared hearing. The fish-crow alarm reuses core signal acoustics and crow synthesis: core ecology owns the wildlife/dog leg, while one admitted Living Voice sample owns the human/player leg. The warning bark and crow alarm strongly interrupt WAIT/REST/SLEEP; visible crow receipt anchors `KRAA! KRAA!`, while heard-unseen receipt remains a generic directional bird call. Broad structured fact transfer and animal-call networks are not yet complete. |
 | Predator perception + exact contact | one rabbit death and finite body | population decrement, carcass, claims, scavengers | LIVE | STRONG | This narrow rabbit path conserves exact identity and finite units through lawful perception. Unsupported victims and attackers fail closed. |
 | Carcass + time/weather | decay state | scavenging, evidence, later material quality | SPECIFIED | NONE | A deterministic tested kernel exists, but no authoritative runtime caller advances it and no material-quality consumer is live. A foundation is not a composed loop. |
 | Carcass | physical parts / food | PACK, processing, repair, settlement stock, trade | SPECIFIED | NONE | Harvest/processing is deliberately absent. Future work must transform the same finite body, not spawn loot. |
@@ -187,7 +187,7 @@ recipes, or pair-specific scripts.
 | Physical settlement food lot | scent and finite quantity | rats, chickens, dogs, selected wildlife, keeper knowledge | LIVE | STRONG | Consumption changes the exact lot once. This lot is not reconciled with abstract settlement food stock. |
 | Animal extraction | reduced local abundance | predators, future yield, settlement supply and demand | PARTIAL | WEAK | Rabbit death removes one population unit; recovery/reproduction and economic feedback are absent. |
 | Resident relationship trust | belonging and selected actor appraisal | resident need/behavior state | LIVE | MODERATE | Resident relationship trust contributes to belonging. Wider willingness, access, teaching, and services remain specified consumers. |
-| Living Voice fact transfer | structured warning/report/rumor | actor knowledge and later behavior | SPECIFIED | NONE | Acoustic receipt is live in narrow form; general semantic knowledge transfer remains an active/future bridge. |
+| Living Voice fact transfer | structured warning/report/rumor | actor knowledge and later behavior | SPECIFIED | NONE | Anonymous alarm acoustics are live in narrow form, but the crow call transfers neither predator identity nor structured warning content. General semantic knowledge transfer remains an active/future bridge. |
 
 ### Materials, settlements, Promises, and economy
 
@@ -345,7 +345,7 @@ interaction suite.
 | Biodiversity | habitat/activity/evidence, animal perception, finite food lots, narrow mortality and scavenging | composed ecologically; human material/economy bridge absent |
 | Crafting/PACK | field harvesting, gear acquisition, four travel adaptations, wear, MEND, and dismantling | composed player loop; settlements/NPCs do not consume it |
 | Cartography | navigation, learned-terrain projection, soundings, recovery cues, and surveyed route reinforcement | narrow infrastructure consumer; no general paid information economy |
-| Living Voice candidate | authenticated player/porter sound plus causal guardian bark, growl, and shelter whine, hearing, captions, and memory | narrow active slice; remaining dog/animal repertoire and general social information absent |
+| Living Voice candidate | authenticated player/porter sound, three causal guardian calls, and one ecology-owned fish-crow alarm with de-duplicated hearing, captions, interruption, and memory | narrow active slice; further dog/animal repertoire and general social information absent |
 | Settlement stock/logistics core | shortages, Promises, residents, projects, routes, trust, and histories | strong finite loop; no HC/market and no infinite-world settlement bridge |
 | Deep Time / field gear / supernatural systems | almost no current gameplay | correctly marked future rather than falsely live |
 
@@ -371,7 +371,7 @@ interaction suite.
    surveyed route-reinforcement action, but has no general survey job or
    information-market consumer.
 10. **Living Voice facts** currently have narrow hearing consumers; general
-    warning, rumor, and work-state propagation remain unfinished.
+    semantic warning, rumor, and work-state propagation remain unfinished.
 
 ## Magic inputs and bypasses
 

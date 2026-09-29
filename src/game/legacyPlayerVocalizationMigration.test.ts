@@ -228,7 +228,7 @@ describe("legacy v33 player-vocalization migration", () => {
     expect(migrateLegacyV33PlayerVocalizations(reset, [sample], 97, 0)).toBeNull();
   });
 
-  it("rejects v34-only meaning and malformed legacy sample identity", () => {
+  it("rejects post-v33 meanings and malformed legacy sample identity", () => {
     const porter = accept(createSituatedExpressionState(), {
       ...baseIntent("legacy:future-porter"),
       meaning: "porter-heavy-load",
@@ -241,6 +241,19 @@ describe("legacy v33 player-vocalization migration", () => {
       durationSteps: 8,
     });
     expect(migrateLegacyV33PlayerVocalizations(porter.state, [], 108, 0)).toBeNull();
+
+    const fishCrow = accept(createSituatedExpressionState(), {
+      ...baseIntent("legacy:future-fish-crow"),
+      meaning: "fish-crow-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 840_000,
+      durationSteps: 6,
+    });
+    expect(migrateLegacyV33PlayerVocalizations(fishCrow.state, [], 108, 0)).toBeNull();
 
     const player = accept(createSituatedExpressionState(), stumble("legacy:bad-id"));
     expect(migrateLegacyV33PlayerVocalizations(

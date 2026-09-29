@@ -116,7 +116,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface V28Envelope {
   readonly format: "tideweft-session";
-  readonly version: 37;
+  readonly version: 38;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -806,11 +806,11 @@ function requireV28(record: SaveRecord): V28Envelope {
   const value = JSON.parse(record.worldJson) as V28Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 37
-    || record.payloadVersion !== 37
+    || value.version !== 38
+    || record.payloadVersion !== 38
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("fixture did not produce the current v37 regional ecology envelope");
+  ) throw new Error("fixture did not produce the current v38 regional ecology envelope");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed as Readonly<Record<string, unknown>>)) {
     throw new Error("v34 outer envelope failed its integrity seal");

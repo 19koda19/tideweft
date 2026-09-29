@@ -91,6 +91,8 @@ import {
   dogActorRosterActor,
   type DogActorRosterState,
 } from "./dogActorRoster";
+import { CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS } from "./coreEcology";
+import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import {
@@ -241,6 +243,8 @@ export interface ProjectionOptions {
   situatedExpressionReception?: SituatedExpressionReception | null;
   /** Exact dog bodies used only to authenticate a directly visible animal caller. */
   dogActorRoster?: DogActorRosterState;
+  /** Bounded materialized wildlife sources used only to authenticate a visible call. */
+  coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[];
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
   /**
@@ -271,7 +275,15 @@ export interface SituatedExpressionSourcePresentation {
   readonly speakerLabel: string;
 }
 
+/** Minimal presentation authority derived from the globally capped materialized actor set. */
+export interface CoreWildlifeExpressionSource {
+  readonly actorId: string;
+  readonly species: CoreWildlifeSpecies;
+  readonly position: WorldPosition;
+}
+
 export type GuardianDogCallKind = "bark" | "growl" | "whine";
+export type AnimalCallKind = GuardianDogCallKind | "fish-crow-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
 export function guardianDogCallKind(
@@ -281,6 +293,15 @@ export function guardianDogCallKind(
   if (meaning === "guardian-dog-defensive-growl") return "growl";
   if (meaning === "guardian-dog-shelter-whine") return "whine";
   return null;
+}
+
+/** Animal-call presentation is selected from semantic meaning, never authored text. */
+export function animalCallKind(
+  meaning: SituatedExpressionEvent["meaning"],
+): AnimalCallKind | null {
+  return meaning === "fish-crow-alarm-call"
+    ? "fish-crow-call"
+    : guardianDogCallKind(meaning);
 }
 
 /**
@@ -295,6 +316,7 @@ export function projectSituatedExpressionSource(
   economyWorld: WorldView = regionalCompatibilityWorldForWorld(spatialWorld) ?? spatialWorld,
   dogActorRoster?: DogActorRosterState,
   reception?: SituatedExpressionReception | null,
+  coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[],
 ): SituatedExpressionSourcePresentation | null {
   if (event.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
     return Object.freeze({ sourceKind: "player", speakerLabel: "You" });
@@ -321,6 +343,28 @@ export function projectSituatedExpressionSource(
     });
   }
 
+  if (event.meaning === "fish-crow-alarm-call") {
+    if (reception?.kind === "heard-unseen") {
+      return Object.freeze({ sourceKind: "animal", speakerLabel: "A bird" });
+    }
+    if (
+      reception?.kind !== "heard-visible"
+      || coreWildlifeExpressionSources === undefined
+      || coreWildlifeExpressionSources.length > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS
+    ) return null;
+    const matches = coreWildlifeExpressionSources.filter(({ actorId }) => (
+      actorId === event.sourceActorId
+    ));
+    const source = matches[0];
+    if (
+      matches.length !== 1
+      || source === undefined
+      || source.species !== "fish-crow"
+      || !sameWorldPosition(source.position, event.position)
+    ) return null;
+    return Object.freeze({ sourceKind: "animal", speakerLabel: "Fish crow" });
+  }
+
   const matches = economyWorld.residents.filter(
     ({ identity }) => identity.stableId === event.sourceActorId,
   );
@@ -343,6 +387,7 @@ function projectSituatedExpressionView(
   reception: SituatedExpressionReception | null,
   tileSize: number,
   dogActorRoster?: DogActorRosterState,
+  coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[],
 ): readonly SituatedExpressionView[] {
   if (event === null || !situatedExpressionReceptionMatchesActiveEvent(reception, event)) {
     return Object.freeze([]);
@@ -356,6 +401,7 @@ function projectSituatedExpressionView(
     undefined,
     dogActorRoster,
     reception,
+    coreWildlifeExpressionSources,
   );
   const window = regionalWindowForWorld(world);
   if (realization === null || source === null || window === null) return Object.freeze([]);
@@ -790,6 +836,7 @@ export function projectGameView(
     options.situatedExpressionReception ?? null,
     tileSize,
     options.dogActorRoster,
+    options.coreWildlifeExpressionSources,
   );
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)

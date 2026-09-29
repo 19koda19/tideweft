@@ -116,6 +116,28 @@ function heavyPorterIntent(
   };
 }
 
+function fishCrowAlarmIntent(
+  triggerEventId: string,
+  overrides: Partial<SituatedExpressionIntent> = {},
+): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "CROW-expression-test",
+    triggerEventId,
+    position: POSITION,
+    meaning: "fish-crow-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 920_000,
+    variantSeed: 610,
+    durationSteps: 6,
+    ...overrides,
+  };
+}
+
 function accepted(
   state: SituatedExpressionState,
   intent: SituatedExpressionIntent,
@@ -284,6 +306,47 @@ describe("generic situated-expression kernel", () => {
       }),
       heavyPorterIntent("work:porter:heavy:wrong-tone", { tone: "alarmed" }),
       heavyPorterIntent("work:porter:heavy:wrong-volume", { volume: "shout" }),
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged)).toMatchObject({
+        accepted: false,
+        reason: "invalid-intent",
+        event: null,
+      });
+    }
+  });
+
+  it("registers one species-specific fish-crow alarm without translating its cause", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      fishCrowAlarmIntent("CROW-expression-test:e:1:alarm"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      reason: "accepted",
+      event: {
+        meaning: "fish-crow-alarm-call",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "shout",
+        knowledgeBasis: "self-perceived-threat",
+        vocalization: "fish-crow-alarm",
+      },
+    });
+    if (reduction.event === null) throw new Error("Fish-crow alarm was not accepted");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "KRAA! KRAA!",
+      realizationKey: "situated-expression.en.v1.fish-crow-alarm-call.0",
+      vocalization: "fish-crow-alarm",
+    });
+    expect(Object.keys(reduction.event)).not.toContain("causeReferenceId");
+
+    for (const forged of [
+      fishCrowAlarmIntent("CROW-expression-test:e:2:alarm", { family: "footing" }),
+      fishCrowAlarmIntent("CROW-expression-test:e:3:alarm", { tone: "restrained" }),
+      fishCrowAlarmIntent("CROW-expression-test:e:4:alarm", { volume: "spoken" }),
+      fishCrowAlarmIntent("CROW-expression-test:e:5:alarm", {
+        knowledgeBasis: "self-heard-anonymous-alarm",
+      }),
     ]) {
       expect(reduceSituatedExpression(createSituatedExpressionState(), forged)).toMatchObject({
         accepted: false,

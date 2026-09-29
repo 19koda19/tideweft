@@ -78,6 +78,7 @@ describe("situated vocalization cues", () => {
       "vocalization-dog-warning-bark",
       "vocalization-dog-defensive-growl",
       "vocalization-dog-shelter-whine",
+      "vocalization-fish-crow-alarm",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -171,6 +172,12 @@ describe("situated vocalization cues", () => {
       .toBe(true);
     expect(Math.max(...whine.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.3);
+  });
+
+  it("reuses the existing nasal double-call synthesis for the fish-crow alarm", () => {
+    const variantSeed = 0xc4a;
+    expect(situatedVocalizationPattern("fish-crow-alarm", variantSeed))
+      .toEqual(ecologyVoicePattern("crow-nasal-double-call", variantSeed));
   });
 });
 

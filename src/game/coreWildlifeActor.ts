@@ -37,7 +37,7 @@ import {
   projectLivingCircadian,
   type LivingCircadianPersistentState,
 } from "./livingCircadian";
-import { isWorldPosition, type WorldPosition } from "./worldPosition";
+import { createWorldPosition, isWorldPosition, type WorldPosition } from "./worldPosition";
 
 export const CORE_WILDLIFE_ACTOR_VERSION = 1 as const;
 export const CORE_WILDLIFE_DECISION_VERSION = 1 as const;
@@ -55,6 +55,23 @@ export const CORE_WILDLIFE_ROUTINE_REST_REFERENCE_ID = "activity:rest-window" as
  */
 export const CORE_WILDLIFE_ENVIRONMENTAL_EVIDENCE_LIFETIME_TICKS = 180 as const;
 export const CORE_WILDLIFE_ACTOR_MAX_SERIALIZED_BYTES = 384 * 1_024;
+
+interface CoreWildlifeFreshEventActorReceipt {
+  readonly beforeActor: string;
+  readonly afterActor: string;
+  /**
+   * Exact causal spine that may receive a post-locomotion event locus. Address,
+   * routine posture, and condition have separate same-tick physical owners;
+   * cognition, needs, intent, perception, and retained memory do not.
+   */
+  readonly locusCommitActor: string;
+}
+
+/** Process-local proof that one raw event came from one exact cognition transition. */
+const coreWildlifeFreshEventActorReceipts = new WeakMap<
+  object,
+  CoreWildlifeFreshEventActorReceipt
+>();
 
 /** Safety-first tie order; policy rules still decide whether an intent is eligible. */
 export const CORE_WILDLIFE_INTENTS = Object.freeze([
@@ -136,6 +153,12 @@ export interface CoreWildlifeMemory {
   readonly referenceId: string;
   readonly observationId: string | null;
   readonly atTick: number;
+  /**
+   * Exact post-locomotion locus of a retained alarm event. The actor may move
+   * or be rematerialized before another observer consumes the event, so the
+   * event cannot be reconstructed from its later body address.
+   */
+  readonly eventPosition?: WorldPosition;
   /**
    * A physical trace owned by this bounded record's lifecycle. Projection may
    * disclose the trace itself, never the animal's private memory or cause.
@@ -618,6 +641,144 @@ export function repositionCoreWildlifeActor(
 }
 
 /**
+ * Seals one freshly produced alarm to the actor's post-locomotion address.
+ *
+ * Cognition creates an event before locomotion is resolved. This transition
+ * runs only after that movement commits, retaining the physical call locus so
+ * delayed consumers never move an earlier sound with the actor's later body.
+ */
+export function commitCoreWildlifeAlarmEventLocus(
+  value: unknown,
+  eventValue: CoreWildlifeCausalEvent,
+): CoreWildlifeActorState {
+  const state = requireActor(value);
+  const event: unknown = eventValue;
+  const receipt = typeof event === "object" && event !== null
+    ? coreWildlifeFreshEventActorReceipts.get(event)
+    : undefined;
+  if (
+    !plainRecord(event)
+    || !exactKeys(event, [
+      "actorId",
+      "atTick",
+      "causeReferenceId",
+      "eventId",
+      "kind",
+      "observationId",
+      "position",
+      "resourceReference",
+      "species",
+      "version",
+    ])
+    || event.version !== CORE_WILDLIFE_EVENT_VERSION
+    || event.kind !== "alarm"
+    || event.actorId !== state.identity.stableId
+    || event.species !== state.identity.species
+    || !nonnegativeSafeInteger(event.atTick)
+    || event.atTick !== state.updatedAtTick
+    || event.eventId !== `${state.identity.stableId}:e:${event.atTick.toString(36)}:alarm`
+    || event.causeReferenceId !== state.intent.cause.referenceId
+    || event.observationId !== state.intent.focusObservationId
+    || event.resourceReference !== null
+    || !isWorldPosition(event.position)
+    || state.intent.kind !== "alarm"
+    || state.intent.enteredAtTick !== event.atTick
+    || receipt === undefined
+    || receipt.locusCommitActor !== alarmLocusCommitActorEncoding(
+      state,
+      event.eventId,
+    )
+  ) throw new RangeError("Core wildlife alarm locus requires its exact committed event");
+
+  const matching = state.memories.filter(({ eventId }) => eventId === event.eventId);
+  const memory = matching[0];
+  if (
+    matching.length !== 1
+    || memory === undefined
+    || memory.kind !== "alarm"
+    || memory.atTick !== event.atTick
+    || memory.observationId !== event.observationId
+    || (memory.eventPosition !== undefined
+      && !sameWorldPosition(memory.eventPosition, state.address.position))
+  ) throw new RangeError("Core wildlife alarm memory cannot own this event locus");
+
+  if (memory.eventPosition !== undefined) return state;
+  return rebuildActor(state, {
+    memories: state.memories.map((candidate) => candidate.eventId === event.eventId
+      ? deepFreeze({ ...candidate, eventPosition: state.address.position })
+      : candidate),
+  });
+}
+
+/**
+ * One-time pre-v38 adoption of a same-tick alarm that was historically stored
+ * after locomotion but before alarm loci existed. `storedValue` is the durable
+ * pre-projection body; `value` may be its lawfully rematerialized active view.
+ * Callers must gate this transition on an authenticated historical outer save
+ * version. Current saves must never use adoption to repair missing authority.
+ */
+export function adoptLegacyCoreWildlifeAlarmEventLocus(
+  value: unknown,
+  storedValue: unknown = value,
+): CoreWildlifeActorState | null {
+  const actor = canonicalizeCoreWildlifeActorState(value);
+  const stored = canonicalizeCoreWildlifeActorState(storedValue);
+  if (actor === null || stored === null) return null;
+  if (
+    stored.intent.kind !== "alarm"
+    || stored.intent.enteredAtTick !== stored.updatedAtTick
+  ) return actor;
+  const eventId = `${stored.identity.stableId}:e:${stored.updatedAtTick.toString(36)}:alarm`;
+  const matching = stored.memories.filter((memory) => memory.eventId === eventId);
+  const memory = matching[0];
+  const actorMatching = actor.memories.filter((candidate) => candidate.eventId === eventId);
+  const actorMemory = actorMatching[0];
+  const focusBeliefs = stored.intent.focusObservationId === null
+    ? []
+    : stored.perception.beliefs.filter(({ sourceObservationId }) => (
+        sourceObservationId === stored.intent.focusObservationId
+      ));
+  const focus = focusBeliefs[0];
+  if (
+    matching.length !== 1
+    || memory === undefined
+    || actorMatching.length !== 1
+    || actorMemory === undefined
+    || memory.kind !== "alarm"
+    || memory.atTick !== stored.updatedAtTick
+    || memory.observationId !== stored.intent.focusObservationId
+    || memory.eventPosition !== undefined
+    || actorMemory.eventPosition !== undefined
+    || focusBeliefs.length !== 1
+    || focus === undefined
+    || memory.referenceId !== (focus.subjectId ?? stored.intent.cause.referenceId)
+    || alarmLocusCommitActorEncoding(actor, eventId)
+      !== alarmLocusCommitActorEncoding(stored, eventId)
+  ) return null;
+  return rebuildActor(actor, {
+    memories: actor.memories.map((candidate) => candidate.eventId === eventId
+      ? deepFreeze({ ...candidate, eventPosition: stored.address.position })
+      : candidate),
+  });
+}
+
+/** Returns one independently retained alarm locus, never the actor's current address. */
+export function coreWildlifeAlarmEventLocus(
+  value: unknown,
+  eventId: string,
+): WorldPosition | null {
+  const state = canonicalizeCoreWildlifeActorState(value);
+  if (state === null || !validId(eventId)) return null;
+  const matching = state.memories.filter((memory) => (
+    memory.eventId === eventId
+    && memory.kind === "alarm"
+    && memory.eventPosition !== undefined
+  ));
+  const position = matching[0]?.eventPosition;
+  return matching.length === 1 && position !== undefined ? position : null;
+}
+
+/**
  * Resolves relocation and a bounded physical sign as one transition. Habitat
  * code decides whether the ground can hold a trace; this boundary proves the
  * actor actually changed position and prevents stationary evidence minting.
@@ -972,7 +1133,68 @@ export function stepCoreWildlifeActor(
     memories,
   });
   const resourceClaims = createResourceClaims(event);
-  return deepFreeze({ actor, decision, event, resourceClaims });
+  const result = deepFreeze({ actor, decision, event, resourceClaims });
+  coreWildlifeFreshEventActorReceipts.set(event, Object.freeze({
+    beforeActor: stableStringify(state),
+    afterActor: stableStringify(actor),
+    locusCommitActor: alarmLocusCommitActorEncoding(actor, event.eventId),
+  }));
+  return result;
+}
+
+/**
+ * Binds a fresh event to the exact cognition branch that may later receive its
+ * physical locus. Runtime locomotion may lawfully change address and circadian
+ * posture, while same-tick contact may change condition; none of those owners
+ * may rewrite the event's cognition, physiology pressure, or retained cause.
+ * The locus itself is omitted so committing it remains idempotent.
+ */
+function alarmLocusCommitActorEncoding(
+  actor: CoreWildlifeActorState,
+  eventId: string,
+): string {
+  return stableStringify({
+    version: actor.version,
+    updatedAtTick: actor.updatedAtTick,
+    identity: actor.identity,
+    needs: actor.needs,
+    perception: actor.perception,
+    intent: actor.intent,
+    memories: actor.memories.map((memory) => memory.eventId !== eventId
+      ? memory
+      : {
+          eventId: memory.eventId,
+          kind: memory.kind,
+          referenceId: memory.referenceId,
+          observationId: memory.observationId,
+          atTick: memory.atTick,
+          ...(memory.environmentalEvidence === undefined
+            ? {}
+            : { environmentalEvidence: memory.environmentalEvidence }),
+        }),
+  });
+}
+
+/**
+ * Authenticates the exact in-process event object minted by cognition against
+ * its canonical post-cognition, pre-locomotion actor. Serialized or cloned
+ * lookalikes intentionally have no receipt; after persistence, retained actor
+ * memory is the authority instead.
+ */
+export function coreWildlifeCausalEventHasFreshActorReceipt(
+  eventValue: unknown,
+  beforeActorValue: unknown,
+  afterActorValue: unknown,
+): boolean {
+  if (typeof eventValue !== "object" || eventValue === null) return false;
+  const receipt = coreWildlifeFreshEventActorReceipts.get(eventValue);
+  if (receipt === undefined) return false;
+  const beforeActor = canonicalizeCoreWildlifeActorState(beforeActorValue);
+  const afterActor = canonicalizeCoreWildlifeActorState(afterActorValue);
+  return beforeActor !== null
+    && afterActor !== null
+    && stableStringify(beforeActor) === receipt.beforeActor
+    && stableStringify(afterActor) === receipt.afterActor;
 }
 
 function decide(
@@ -1759,9 +1981,11 @@ function canonicalMemories(
   const memories: CoreWildlifeMemory[] = [];
   for (const raw of value) {
     const hasEvidence = plainRecord(raw) && Object.hasOwn(raw, "environmentalEvidence");
+    const hasEventPosition = plainRecord(raw) && Object.hasOwn(raw, "eventPosition");
     if (!plainRecord(raw) || !exactKeys(raw, [
       "atTick",
       ...(hasEvidence ? ["environmentalEvidence"] : []),
+      ...(hasEventPosition ? ["eventPosition"] : []),
       "eventId",
       "kind",
       "observationId",
@@ -1774,6 +1998,10 @@ function canonicalMemories(
       || !(raw.observationId === null || validId(raw.observationId))
       || !nonnegativeSafeInteger(raw.atTick)
       || raw.atTick > maximumTick
+      || (hasEventPosition && (
+        raw.kind !== "alarm"
+        || !isWorldPosition(raw.eventPosition)
+      ))
     ) return null;
     const environmentalEvidence = hasEvidence
       ? canonicalEnvironmentalEvidence(raw.environmentalEvidence, raw.atTick, raw.eventId)
@@ -1793,6 +2021,15 @@ function canonicalMemories(
       referenceId: raw.referenceId,
       observationId: raw.observationId as string | null,
       atTick: raw.atTick,
+      ...(hasEventPosition
+        ? {
+            eventPosition: createWorldPosition(
+              (raw.eventPosition as WorldPosition).region,
+              (raw.eventPosition as WorldPosition).localX,
+              (raw.eventPosition as WorldPosition).localY,
+            ),
+          }
+        : {}),
       ...(environmentalEvidence === null ? {} : { environmentalEvidence }),
     }));
   }

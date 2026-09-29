@@ -104,9 +104,10 @@ import {
   projectResidentRoutePosition,
   projectResidentWorldPosition,
   projectSituatedExpressionSource,
-  guardianDogCallKind,
+  animalCallKind,
   RESIDENT_CONVERSATION_RANGE_TILES,
   type AdriftProjectionControl,
+  type CoreWildlifeExpressionSource,
 } from "./projection";
 import type { TraversalFeedbackState } from "./traversalFeedback";
 import {
@@ -159,6 +160,8 @@ export interface UIProjectionOptions {
   readonly situatedExpressionReception?: SituatedExpressionReception | null;
   /** Exact dog bodies used only for a directly visible animal-call label. */
   readonly dogActorRoster?: DogActorRosterState;
+  /** Same bounded materialized wildlife source set used by world-callout projection. */
+  readonly coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[];
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
   readonly settlementFoodStoreAction?: Readonly<{
     readonly id: string;
@@ -417,13 +420,21 @@ export function projectUIView(
         economy,
         options.dogActorRoster,
         options.situatedExpressionReception ?? null,
+        options.coreWildlifeExpressionSources,
       );
   const situatedExpressionContact = situatedExpressionReceptionAudibleContact(
     options.situatedExpressionReception ?? null,
   );
-  const dogCallKind = situatedExpressionEvent === null
+  const semanticAnimalCallKind = situatedExpressionEvent === null
     ? null
-    : guardianDogCallKind(situatedExpressionEvent.meaning);
+    : animalCallKind(situatedExpressionEvent.meaning);
+  const presentedAnimalCallKind = semanticAnimalCallKind === "fish-crow-call"
+    && options.situatedExpressionReception?.kind === "heard-unseen"
+    ? "bird-call" as const
+    : semanticAnimalCallKind;
+  const presentedExpressionText = presentedAnimalCallKind === "bird-call"
+    ? "CALL! CALL!"
+    : situatedExpression?.text;
 
   return {
     revision: [
@@ -586,10 +597,12 @@ export function projectUIView(
           expressionCaption: {
             id: options.situatedExpression.eventId,
             speakerLabel: situatedExpressionSource.speakerLabel,
-            text: situatedExpression.text,
+            text: presentedExpressionText ?? situatedExpression.text,
             tone: options.situatedExpression.tone,
-            presentationKind: dogCallKind === null ? "speech" : "animal-call",
-            ...(dogCallKind === null ? {} : { animalCallKind: dogCallKind }),
+            presentationKind: presentedAnimalCallKind === null ? "speech" : "animal-call",
+            ...(presentedAnimalCallKind === null
+              ? {}
+              : { animalCallKind: presentedAnimalCallKind }),
             ...(situatedExpressionContact === null
               ? {}
               : { directionLabel: audibleContactDirection(situatedExpressionContact) }),

@@ -23,6 +23,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
+  "core-wildlife-fish-crow-alarm",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -135,6 +136,16 @@ export interface GuardianDogShelterWhineExpressionAdmissionRecord
   readonly listenerWasSleepingAtAdmission: boolean;
 }
 
+export interface CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "core-wildlife-fish-crow-alarm";
+  /** Exact regional ecology owner of the committed physical actor. */
+  readonly sourceOwnerKey: string;
+  /** Direct aerial-predator observation retained by the crow, never exposed as dialogue. */
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -147,6 +158,7 @@ export type SituatedExpressionAdmissionRecord =
   | GuardianDogWarningExpressionAdmissionRecord
   | GuardianDogDefensiveGrowlExpressionAdmissionRecord
   | GuardianDogShelterWhineExpressionAdmissionRecord
+  | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -202,6 +214,13 @@ export interface GuardianDogShelterWhineExpressionAdmissionInput
   readonly acceptedAtTick: number;
   readonly shelterIntentScore: number;
   readonly listenerWasSleepingAtAdmission: boolean;
+}
+
+export interface CoreWildlifeFishCrowAlarmExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly sourceOwnerKey: string;
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
 }
 
 export type LegacyV33PlayerExpressionAdmissionInput = SituatedExpressionAdmissionInputBase;
@@ -410,6 +429,35 @@ export function createGuardianDogShelterWhineExpressionAdmissionRecord(
   }) as GuardianDogShelterWhineExpressionAdmissionRecord | null;
 }
 
+/** Creates one regional-ecology-owned, direct-threat fish-crow alarm admission. */
+export function createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord(
+  input: CoreWildlifeFishCrowAlarmExpressionAdmissionInput,
+): CoreWildlifeFishCrowAlarmExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "core-wildlife-fish-crow-alarm",
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  }) as CoreWildlifeFishCrowAlarmExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -448,6 +496,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "guardian-dog-warning": return canonicalGuardianDogRecord(value);
     case "guardian-dog-defensive-growl": return canonicalGuardianDogGrowlRecord(value);
     case "guardian-dog-shelter-whine": return canonicalGuardianDogShelterWhineRecord(value);
+    case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -759,6 +808,42 @@ function canonicalGuardianDogShelterWhineRecord(
     acceptedAtTick: value.acceptedAtTick,
     shelterIntentScore: value.shelterIntentScore,
     listenerWasSleepingAtAdmission: value.listenerWasSleepingAtAdmission,
+  });
+}
+
+function canonicalFishCrowAlarmRecord(
+  value: Readonly<Record<string, unknown>>,
+): CoreWildlifeFishCrowAlarmExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "eventId",
+    "kind",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.admittedAtPlayerStepPhase !== 0
+    || value.kind !== "core-wildlife-fish-crow-alarm"
+    || !validId(value.sourceOwnerKey)
+    || !validId(value.sourceObservationId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
+    kind: "core-wildlife-fish-crow-alarm",
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
   });
 }
 

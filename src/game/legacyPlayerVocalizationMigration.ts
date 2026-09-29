@@ -359,24 +359,16 @@ function legacyStateBelongsToPlayer(state: SituatedExpressionState): boolean {
 }
 
 function legacyStateUsesV33Meanings(state: SituatedExpressionState): boolean {
-  return state.active?.meaning !== "porter-heavy-load"
-    && state.active?.meaning !== "guardian-dog-warning"
-    && state.active?.meaning !== "guardian-dog-defensive-growl"
-    && state.active?.meaning !== "guardian-dog-shelter-whine"
-    && state.active?.family !== "work"
-    && state.active?.family !== "animal-signal"
-    && state.active?.knowledgeBasis !== "self-handled-heavy-cargo"
-    && state.active?.knowledgeBasis !== "self-heard-anonymous-alarm"
-    && state.active?.knowledgeBasis !== "self-perceived-threat"
-    && state.active?.knowledgeBasis !== "self-weather-distress"
-    && state.recent.every(({ meaning, family }) => (
-      meaning !== "porter-heavy-load"
-      && meaning !== "guardian-dog-warning"
-      && meaning !== "guardian-dog-defensive-growl"
-      && meaning !== "guardian-dog-shelter-whine"
-      && family !== "work"
-      && family !== "animal-signal"
-    ));
+  return (state.active === null || isLegacyV33PlayerMeaning(state.active.meaning))
+    && state.recent.every(({ meaning }) => isLegacyV33PlayerMeaning(meaning));
+}
+
+function isLegacyV33PlayerMeaning(meaning: SituatedExpressionMeaning): boolean {
+  return meaning === "steady-after-stumble"
+    || meaning === "relief-after-near-fall"
+    || meaning === "protect-important-cargo"
+    || meaning === "alarm-at-cargo-loss"
+    || meaning === "relief-after-cargo-recovery";
 }
 
 function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly AcousticTuple[] {
@@ -394,6 +386,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "guardian-dog-warning":
     case "guardian-dog-defensive-growl":
     case "guardian-dog-shelter-whine":
+    case "fish-crow-alarm-call":
       return [];
   }
 }
@@ -409,6 +402,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "guardian-dog-warning": return 6;
     case "guardian-dog-defensive-growl": return 8;
     case "guardian-dog-shelter-whine": return 8;
+    case "fish-crow-alarm-call": return 6;
   }
 }
 
