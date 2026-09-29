@@ -271,7 +271,7 @@ export interface SituatedExpressionSourcePresentation {
   readonly speakerLabel: string;
 }
 
-export type GuardianDogCallKind = "bark" | "growl";
+export type GuardianDogCallKind = "bark" | "growl" | "whine";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
 export function guardianDogCallKind(
@@ -279,6 +279,7 @@ export function guardianDogCallKind(
 ): GuardianDogCallKind | null {
   if (meaning === "guardian-dog-warning") return "bark";
   if (meaning === "guardian-dog-defensive-growl") return "growl";
+  if (meaning === "guardian-dog-shelter-whine") return "whine";
   return null;
 }
 

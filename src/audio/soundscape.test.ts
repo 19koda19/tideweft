@@ -77,6 +77,7 @@ describe("situated vocalization cues", () => {
       "vocalization-relief",
       "vocalization-dog-warning-bark",
       "vocalization-dog-defensive-growl",
+      "vocalization-dog-shelter-whine",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -151,6 +152,24 @@ describe("situated vocalization cues", () => {
     expect(Math.max(...growl.map(({ frequency }) => frequency)))
       .toBeLessThan(Math.min(...bark.map(({ frequency }) => frequency)));
     expect(Math.max(...growl.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.3);
+  });
+
+  it("gives the shelter whine a distinct soft rise-and-settle contour", () => {
+    const whine = situatedVocalizationPattern("dog-shelter-whine", 31);
+    const bark = situatedVocalizationPattern("dog-warning-bark", 31);
+    const growl = situatedVocalizationPattern("dog-defensive-growl", 31);
+    expect(whine).toEqual(situatedVocalizationPattern("dog-shelter-whine", 31));
+    expect(whine).not.toEqual(bark);
+    expect(whine).not.toEqual(growl);
+    expect(whine).toHaveLength(3);
+    expect(whine[0]?.delay).toBe(0);
+    expect(whine[1]?.frequency ?? 0).toBeGreaterThan(whine[0]?.frequency ?? 0);
+    expect(whine[2]?.frequency ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan(whine[1]?.frequency ?? 0);
+    expect(whine.every(({ type }) => type === "sine" || type === "triangle"))
+      .toBe(true);
+    expect(Math.max(...whine.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.3);
   });
 });

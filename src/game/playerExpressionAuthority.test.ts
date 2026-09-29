@@ -9,6 +9,7 @@ import {
   scatterLooseCargo,
 } from "./looseCargo";
 import { createPlayer } from "./player";
+import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
 import {
   commitPhysicalCargoState,
   createPhysicalCargoStateFromPlayer,
@@ -33,6 +34,7 @@ import {
   type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
+  createGuardianDogShelterWhineExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionCausalClass,
@@ -255,6 +257,7 @@ function policy(
     case "porter-heavy-load": throw new Error("Porter speech is not player authority");
     case "guardian-dog-warning": throw new Error("Dog calls are not player authority");
     case "guardian-dog-defensive-growl": throw new Error("Dog calls are not player authority");
+    case "guardian-dog-shelter-whine": throw new Error("Dog calls are not player authority");
   }
 }
 
@@ -602,5 +605,51 @@ describe("player situated-expression authority", () => {
       ordinaryAdmissionForSerious,
       evidence,
     )).toBe(false);
+  });
+
+  it("keeps shelter-whine admission outside player expression authority", () => {
+    const activityTransactionId = "working-animal:activity:guardian-shelter-whine:test";
+    const triggerEventId = guardianDogShelterWhineTriggerEventId(
+      activityTransactionId,
+      720_000,
+    );
+    if (triggerEventId === null) throw new Error("Expected whine trigger fixture");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+      version: SITUATED_EXPRESSION_VERSION,
+      sourceActorId: "D-guardian-whine-authority",
+      triggerEventId,
+      position: POSITION,
+      meaning: "guardian-dog-shelter-whine",
+      family: "animal-signal",
+      tone: "restrained",
+      volume: "murmur",
+      knowledgeBasis: "self-weather-distress",
+      priority: 740_000,
+      salience: 650_000,
+      variantSeed: 41,
+      durationSteps: 8,
+    });
+    const event = reduction.event;
+    const admission = createGuardianDogShelterWhineExpressionAdmissionRecord({
+      sourceActorId: "D-guardian-whine-authority",
+      triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:test",
+      activityTransactionId,
+      acceptedAtTick: 72,
+      shelterIntentScore: 720_000,
+      listenerWasSleepingAtAdmission: false,
+    });
+    if (event === null || admission === null) throw new Error("Expected whine fixtures");
+    const evidence = authority(noIncidentFeedback(), emptyPhysicalCargo());
+
+    expect(playerExpressionEventMatchesAdmission(event, admission, evidence)).toBe(false);
+    expect(playerExpressionMemoryMatchesAdmission(
+      memoryFor(event, 2),
+      admission,
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionAdmissionSoundPolicy(admission, evidence)).toBeNull();
   });
 });

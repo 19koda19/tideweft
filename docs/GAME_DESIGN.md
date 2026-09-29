@@ -97,8 +97,17 @@ and the working-animal owner commits the matching `defer-to-actor` /
 or stale retreat and mismatched actor, belief, or work state remain silent. The
 growl is a restrained, lower-range `animal-alarm`; it discloses no threat
 identity, uses the same visible / heard-unseen / unheard presentation boundary,
-and does not gain the bark's WAIT or REST/SLEEP interruption authority. These
-are two narrow causal guardian signals, not a complete dog-vocal repertoire.
+and does not gain the bark's WAIT or REST/SLEEP interruption authority.
+Separately, real weather exposure can newly commit `seek-shelter` plus the
+matching working-animal `defer-to-actor` transaction; that edge produces one
+soft shelter-request whine while the dog attempts physical travel toward its
+kennel. The call requires positive weather/exposure pressure and a dog still
+outside its assigned kennel; an already sheltered dog remains silent, while a
+real blocked route may prevent progress. Continued shelter seeking also remains
+silent. The whine is a neutral `animal-call`, reveals neither the exact weather
+cause nor hidden source position, and does not interrupt WAIT, REST, or SLEEP.
+These are three narrow causal guardian signals, not a complete dog-vocal
+repertoire.
 
 Actor expression and observed fact remain different presentations. The short
 line is situated at the authenticated speaker in Chart and Relief and repeated

@@ -267,7 +267,9 @@ export function situatedExpressionCaptionCopy(
     const subject = caption.speakerLabel === "Familiar dog"
       ? "The familiar dog"
       : "A dog";
-    const call = caption.animalCallKind === "growl"
+    const call = caption.animalCallKind === "whine"
+      ? { visible: "whines softly", directional: "whines" }
+      : caption.animalCallKind === "growl"
       ? { visible: "growls softly", directional: "growls" }
       : caption.animalCallKind === "bark"
         ? { visible: "barks sharply", directional: "barks" }

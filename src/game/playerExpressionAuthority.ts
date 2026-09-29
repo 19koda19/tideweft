@@ -186,6 +186,7 @@ export function playerExpressionEventMatchesAdmission(
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
     || admission.kind === "guardian-dog-defensive-growl"
+    || admission.kind === "guardian-dog-shelter-whine"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     // The v33 migrator already admitted only a uniquely reconstructed
@@ -231,6 +232,7 @@ export function playerExpressionMemoryMatchesAdmission(
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
     || admission.kind === "guardian-dog-defensive-growl"
+    || admission.kind === "guardian-dog-shelter-whine"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     return canonicalizeSituatedExpressionState({
@@ -259,6 +261,7 @@ export function playerExpressionAdmissionSoundPolicy(
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
     || admission.kind === "guardian-dog-defensive-growl"
+    || admission.kind === "guardian-dog-shelter-whine"
     || admission.kind === "legacy-v33-player"
   ) return null;
   const policy = policyForAdmission(admission, authority, 0);
@@ -278,6 +281,7 @@ function policyForAdmission(
       | "porter-heavy-departure"
       | "guardian-dog-warning"
       | "guardian-dog-defensive-growl"
+      | "guardian-dog-shelter-whine"
       | "legacy-v33-player";
   }>,
   authority: PlayerExpressionAuthority,
@@ -503,6 +507,7 @@ function policyFor(
     case "porter-heavy-load":
     case "guardian-dog-warning":
     case "guardian-dog-defensive-growl":
+    case "guardian-dog-shelter-whine":
       return null;
   }
 }

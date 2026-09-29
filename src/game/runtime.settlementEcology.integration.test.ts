@@ -43,6 +43,7 @@ import {
   replaceDogActorPhysiology,
   setDogActorIntent,
 } from "./dogActor";
+import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
@@ -146,7 +147,10 @@ import {
   regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
-import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import {
+  playerWorldPositionInRegionalWindow,
+  resolveResidentWorldPlacement,
+} from "./residentSpatial";
 import {
   advanceRuntimeResidentCircadian,
   createTideweftRuntime,
@@ -745,8 +749,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 36 || current.version !== 36) {
-    throw new Error("runtime fixture is not a current v36 save");
+  if (record.payloadVersion !== 37 || current.version !== 37) {
+    throw new Error("runtime fixture is not a current v37 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1784,7 +1788,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 36) throw new Error("fixture is not a current save");
+  if (current.version !== 37) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1814,7 +1818,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 36) throw new Error("fixture is not a current save");
+  if (current.version !== 37) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1844,7 +1848,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 36 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 37 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1898,7 +1902,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 36
+    current.version !== 37
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2759,8 +2763,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(36);
-    expect(envelope.version).toBe(36);
+    expect(record.payloadVersion).toBe(37);
+    expect(envelope.version).toBe(37);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2863,8 +2867,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(36);
-    expect(migratedEnvelope.version).toBe(36);
+    expect(migratedRecord.payloadVersion).toBe(37);
+    expect(migratedEnvelope.version).toBe(37);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2951,8 +2955,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(36);
-    expect(migratedEnvelope.version).toBe(36);
+    expect(migratedRecord.payloadVersion).toBe(37);
+    expect(migratedEnvelope.version).toBe(37);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3119,8 +3123,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(36);
-    expect(migratedEnvelope.version).toBe(36);
+    expect(migratedRecord.payloadVersion).toBe(37);
+    expect(migratedEnvelope.version).toBe(37);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3275,8 +3279,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(36);
-    expect(migratedEnvelope.version).toBe(36);
+    expect(migratedRecord.payloadVersion).toBe(37);
+    expect(migratedEnvelope.version).toBe(37);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3391,8 +3395,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(36);
-    expect(migratedEnvelope.version).toBe(36);
+    expect(migratedRecord.payloadVersion).toBe(37);
+    expect(migratedEnvelope.version).toBe(37);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -3731,7 +3735,7 @@ describe("runtime settlement ecology integration", () => {
     // duplicate the persisted sample/admission/channel.
     const { integrity: _currentIntegrity, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
-    expect(committedCarry.version).toBe(5);
+    expect(committedCarry.version).toBe(6);
     const v35Base = {
       ...committedFields,
       version: 35,
@@ -3753,10 +3757,10 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(36);
+    expect(migratedWarningEnvelope.version).toBe(37);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
       ...committedCarry,
-      version: 5,
+      version: 6,
     });
     migratedWarning.destroy();
 
@@ -4405,6 +4409,39 @@ describe("runtime settlement ecology integration", () => {
     expect(rejectedV35.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
     rejectedV35.destroy();
 
+    // v36/carry-v5 already owned defensive growls. Its exact nonempty
+    // interval migrates by version alone without replaying acknowledged audio
+    // or duplicating any sample, admission, channel, or reception.
+    const v36Base = {
+      ...growlFields,
+      version: 36,
+      perceptionCarry: { ...growlCarry, version: 5 },
+    };
+    const v36GrowlRepository = new MemoryRepository({
+      ...growlRecord,
+      payloadVersion: 36,
+      updatedAt: growlRecord.updatedAt + 2,
+      worldJson: JSON.stringify({
+        ...v36Base,
+        integrity: gameSaveEnvelopeIntegrity(v36Base),
+      }),
+    });
+    soundscapePlay.mockClear();
+    const migratedGrowl = await createTideweftRuntime(v36GrowlRepository);
+    expect(migratedGrowl.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    await migratedGrowl.save();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    const migratedGrowlRecord = v36GrowlRepository.snapshot();
+    const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
+    expect(migratedGrowlRecord.payloadVersion).toBe(37);
+    expect(migratedGrowlEnvelope.version).toBe(37);
+    expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
+      ...growlCarry,
+      version: 6,
+    });
+    migratedGrowl.destroy();
+
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     const resumedRepository = new MemoryRepository(growlRecord);
     const resumed = await createTideweftRuntime(resumedRepository);
@@ -4611,6 +4648,733 @@ describe("runtime settlement ecology integration", () => {
     expect(cancelledReload.getUIView().expressionCaption).toBeUndefined();
     cancelledReload.destroy();
   }, 180_000);
+
+  it("persists one weather-caused shelter whine without interrupting WAIT, REST, or SLEEP", async () => {
+    const nearDawnTick = WORLD_TICKS_PER_DAY + 333;
+    const world = createWorld("a", "wild");
+    runTicks(world, nearDawnTick - world.meta.completedTick);
+    world.weather.kind = "rain";
+    world.weather.intensity = FIXED_POINT;
+    world.weather.windX = FIXED_POINT;
+    world.weather.windY = -FIXED_POINT;
+    world.weather.nextChangeTick = nearDawnTick + WORLD_TICKS_PER_DAY;
+    assertWorldInvariants(world);
+
+    const migrationRepository = new MemoryRepository(legacyRuntimeSaveRecord(world));
+    const migration = await createTideweftRuntime(migrationRepository);
+    await migration.save();
+    const migratedRecord = migrationRepository.snapshot();
+    const before = savedEnvelope(migrationRepository);
+    const migratedWorld = deserializeWorld(String(before.world));
+    const roster = deserializeDogActorRoster(before.dogActorRoster);
+    const work = deserializeSettlementWorkingAnimalState(before.settlementWorkingAnimals);
+    const settlement = deserializeSettlementEcologyState(before.settlementEcology);
+    const guardian = roster?.actors[0];
+    const assignment = work?.assignments[0];
+    const custody = settlement.domesticCustodies.find(({ species }) => (
+      species === "domestic-dog"
+    ));
+    if (
+      guardian === undefined
+      || assignment === undefined
+      || custody === undefined
+      || custody.homeStructure.kind !== "kennel"
+    ) throw new Error("shelter-whine fixture omitted its guardian kennel relationship");
+    const migratedWorldView = createWorldView(migratedWorld);
+    const handler = migratedWorld.residents.find(({ identity }) => (
+      identity.stableId === assignment.handlerActorId
+    ));
+    const handlerPlacement = handler === undefined
+      ? null
+      : resolveResidentWorldPlacement(migratedWorldView, handler);
+    if (handlerPlacement === null) {
+      throw new Error("shelter-whine fixture omitted its nearby human handler");
+    }
+    const whineStartPosition = handlerPlacement.position;
+    const initialKennelDelta = worldPositionDelta(
+      whineStartPosition,
+      custody.homeStructure.position,
+    );
+    const initialKennelDistance = Math.hypot(initialKennelDelta.x, initialKennelDelta.y);
+    if (initialKennelDistance <= custody.homeStructure.radiusUnits) {
+      throw new Error("shelter-whine fixture guardian began inside its kennel");
+    }
+    const wakeTick = firstLivingCircadianActiveTick(
+      guardian.identity.stableId,
+      WORLD_TICKS_PER_DAY + 300,
+      WORLD_TICKS_PER_DAY + 400,
+      SETTLEMENT_WORKING_DOG_CIRCADIAN_POLICY,
+    );
+    if (wakeTick === null || wakeTick >= WORLD_TICKS_PER_DAY + WORLD_DAWN_START_TICK) {
+      throw new Error(`shelter-whine fixture guardian wakes too late: ${wakeTick ?? "never"}`);
+    }
+    expect(wakeTick).toBe(nearDawnTick + 1);
+
+    let preparedGuardian = replaceDogActorPhysiology(guardian, {
+      needs: { hunger: 0, thirst: 0, rest: 0, safety: 0, company: 0 },
+      condition: {
+        health: FIXED_POINT,
+        wetness: FIXED_POINT,
+        coldStress: 0,
+        heatStress: 0,
+        exhaustion: 0,
+        injuries: [],
+      },
+      humanFamiliarity: guardian.humanFamiliarity,
+      atTick: nearDawnTick,
+    });
+    preparedGuardian = setDogActorIntent(preparedGuardian, {
+      kind: "observe",
+      cause: { kind: "world-event", referenceId: "event:test-pre-whine-watch" },
+      enteredAtTick: nearDawnTick,
+      nextThinkTick: nearDawnTick + WORLD_TICKS_PER_DAY,
+    });
+    preparedGuardian = repositionDogActor(preparedGuardian, {
+      atTick: nearDawnTick,
+      heading: preparedGuardian.address.heading,
+      position: whineStartPosition,
+    });
+    const preparedRoster = replaceDogActorInRoster(roster!, preparedGuardian);
+    if (preparedRoster === null) {
+      throw new Error("shelter-whine fixture rejected its weathered guardian");
+    }
+    const preparedWhineRecord = withCurrentEnvelopeFields(migratedRecord, {
+      dogActorRoster: serializeDogActorRoster(preparedRoster),
+    });
+
+    const sleeperPlayer = structuredClone(before.player as PlayerState);
+    const sleeperTravel = restorePlayerRegionalTravel(
+      migratedWorld.meta.rootSeed,
+      sleeperPlayer,
+      String(before.regionalTravel),
+    );
+    const sleeperPosition = sleeperTravel === null
+      ? null
+      : playerWorldPositionInRegionalWindow(sleeperTravel.window, sleeperPlayer);
+    if (sleeperPosition === null) {
+      throw new Error("shelter-whine fixture omitted its sheltered listener position");
+    }
+    const nearbyPreparedGuardian = repositionDogActor(preparedGuardian, {
+      atTick: nearDawnTick,
+      heading: preparedGuardian.address.heading,
+      position: sleeperPosition,
+    });
+    const sleeperKennelDelta = worldPositionDelta(
+      nearbyPreparedGuardian.address.position,
+      custody.homeStructure.position,
+    );
+    if (Math.hypot(sleeperKennelDelta.x, sleeperKennelDelta.y)
+      <= custody.homeStructure.radiusUnits) {
+      throw new Error("sleep-whine listener fixture overlaps the guardian kennel");
+    }
+    const nearbyPreparedRoster = replaceDogActorInRoster(roster!, nearbyPreparedGuardian);
+    if (nearbyPreparedRoster === null) {
+      throw new Error("sleep-whine fixture rejected its nearby guardian position");
+    }
+    const preparedSleepWhineRecord = withCurrentEnvelopeFields(migratedRecord, {
+      dogActorRoster: serializeDogActorRoster(nearbyPreparedRoster),
+    });
+    const preparedVisibleWhineRecord = withPlayerWitnessingWorldPosition(
+      preparedWhineRecord,
+      preparedGuardian.address.position,
+      preparedGuardian.address.position,
+      Math.floor(FIXED_POINT / 2),
+    );
+    migration.destroy();
+
+    // A kennel is physical shelter, not a decorative destination label. Even
+    // under the same storm and condition pressure, a guardian already inside
+    // its assigned kennel cannot freshly request that shelter or emit the
+    // corresponding call.
+    const shelteredPreparedGuardian = repositionDogActor(preparedGuardian, {
+      atTick: nearDawnTick,
+      heading: preparedGuardian.address.heading,
+      position: custody.homeStructure.position,
+    });
+    const shelteredPreparedRoster = replaceDogActorInRoster(
+      roster!,
+      shelteredPreparedGuardian,
+    );
+    if (shelteredPreparedRoster === null) {
+      throw new Error("shelter-whine negative fixture rejected its kenneled guardian");
+    }
+    const shelteredRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      migratedRecord,
+      { dogActorRoster: serializeDogActorRoster(shelteredPreparedRoster) },
+    ));
+    const sheltered = await createTideweftRuntime(shelteredRepository);
+    expect(sheltered.getUIView().saveWarning).toBeUndefined();
+    advanceWaitFrames(sheltered, Math.max(1, wakeTick - nearDawnTick));
+    await sheltered.save();
+    const shelteredEnvelope = savedEnvelope(shelteredRepository);
+    const shelteredGuardian = deserializeDogActorRoster(
+      shelteredEnvelope.dogActorRoster,
+    )?.actors[0];
+    const shelteredAdmissions = (shelteredEnvelope.perceptionCarry as {
+      situatedExpressionAdmissions: { records: Array<{ kind: string }> };
+    }).situatedExpressionAdmissions.records;
+    expect(shelteredGuardian?.intent.kind).not.toBe("seek-shelter");
+    expect(shelteredAdmissions.some(({ kind }) => (
+      kind === "guardian-dog-shelter-whine"
+    ))).toBe(false);
+    expect(sheltered.getUIView().expressionCaption).toBeUndefined();
+    sheltered.destroy();
+
+    guardianPerceptionHarness.observerId = guardian.identity.stableId;
+    guardianPerceptionHarness.handlerId = "TEST-NO-WHINE-DISTRACTION";
+    guardianPerceptionHarness.mode = null;
+    const repository = new MemoryRepository(preparedVisibleWhineRecord);
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    const recoveryControls = runtime.getUIView().controls;
+    if (recoveryControls?.canRecover !== true || recoveryControls.recoveryKind !== "rest") {
+      throw new Error(`rest-whine recovery blocked: ${recoveryControls?.recoveryHint ?? "missing controls"}`);
+    }
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    await runtime.save();
+    const preWhineRest = (savedEnvelope(repository).player as PlayerState).timeAction;
+    if (preWhineRest === null) throw new Error("rest-whine fixture omitted its recovery receipt");
+
+    const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    advanceWaitFrames(runtime, Math.max(1, wakeTick - nearDawnTick));
+    await runtime.save();
+    const whineRecord = repository.snapshot();
+    const whineEnvelope = savedEnvelope(repository);
+    const whineTick = deserializeWorld(String(whineEnvelope.world)).meta.completedTick;
+    const whineRoster = deserializeDogActorRoster(whineEnvelope.dogActorRoster);
+    const whineWork = deserializeSettlementWorkingAnimalState(
+      whineEnvelope.settlementWorkingAnimals,
+    );
+    const whineGuardian = whineRoster?.actors[0];
+    const whineAssignment = whineWork?.assignments[0];
+    if (whineGuardian === undefined || whineAssignment === undefined) {
+      throw new Error("rest-whine fixture omitted its committed authorities");
+    }
+    const whineCarry = whineEnvelope.perceptionCarry as {
+      version: number;
+      intervalStartPosition: WorldPosition;
+      actorVocalizationSamples: Array<{
+        expressionEventId: string;
+        position: WorldPosition;
+        soundClass: string;
+        soundInterrupt: string;
+        sourceActorId: string;
+      }>;
+      situatedExpressionAdmissions: {
+        records: Array<{
+          kind: string;
+          eventId: string;
+          sourceActorId: string;
+          triggerEventId: string;
+          assignmentId?: string;
+          activityTransactionId?: string;
+          acceptedAtTick?: number;
+          admittedAtPlayerStepPhase?: number;
+          shelterIntentScore?: number;
+          listenerWasSleepingAtAdmission?: boolean;
+        }>;
+      };
+      situatedExpressionChannels: {
+        channels: Array<{
+          sourceActorId: string;
+          reception: null | { kind: string };
+          state: {
+            active: null | {
+              eventId: string;
+              meaning: string;
+              family: string;
+              vocalization: string;
+              audioAcknowledged: boolean;
+            };
+            recent: Array<{
+              triggerEventId: string;
+              meaning: string;
+              priority: number;
+            }>;
+          };
+        }>;
+      };
+    };
+    const whineAdmission = whineCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-shelter-whine",
+    );
+    if (whineAdmission === undefined) {
+      throw new Error(`rest-whine fixture omitted its admission receipt: ${JSON.stringify({
+        intent: whineGuardian.intent,
+        activity: whineAssignment.currentActivity,
+        condition: whineGuardian.condition,
+        admissions: whineCarry.situatedExpressionAdmissions.records,
+      })}`);
+    }
+    if (typeof whineAdmission.shelterIntentScore !== "number") {
+      throw new Error("rest-whine fixture omitted its shelter score receipt");
+    }
+    const expectedWhineTriggerEventId = guardianDogShelterWhineTriggerEventId(
+      whineAssignment.currentActivity.transactionId,
+      whineAdmission.shelterIntentScore,
+    );
+    if (expectedWhineTriggerEventId === null) {
+      throw new Error("rest-whine fixture could not derive its bound trigger");
+    }
+    expect(whineGuardian.intent).toMatchObject({
+      kind: "seek-shelter",
+      enteredAtTick: whineTick,
+      cause: {
+        kind: "condition",
+        referenceId: "condition:weather-exposure",
+      },
+    });
+    expect(whineAssignment.currentActivity).toMatchObject({
+      activity: "defer-to-actor",
+      acceptedAtTick: whineTick,
+      cause: {
+        kind: "actor-disposition",
+        referenceId: "actor-intent:seek-shelter",
+      },
+    });
+    expect(whineAdmission).toMatchObject({
+      sourceActorId: whineGuardian.identity.stableId,
+      triggerEventId: expectedWhineTriggerEventId,
+      assignmentId: whineAssignment.assignmentId,
+      activityTransactionId: whineAssignment.currentActivity.transactionId,
+      acceptedAtTick: whineTick,
+      shelterIntentScore: expect.any(Number),
+      listenerWasSleepingAtAdmission: false,
+    });
+    const movedKennelDelta = worldPositionDelta(
+      whineGuardian.address.position,
+      custody.homeStructure.position,
+    );
+    expect(Math.hypot(movedKennelDelta.x, movedKennelDelta.y)).toBeLessThan(
+      initialKennelDistance,
+    );
+    expect(whineCarry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        expressionEventId: whineAdmission.eventId,
+        position: whineGuardian.address.position,
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+        sourceActorId: whineGuardian.identity.stableId,
+      }),
+    ]);
+    expect(whineCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === whineGuardian.identity.stableId,
+    )).toMatchObject({
+      reception: { kind: expect.stringMatching(/^heard-(visible|unseen)$/) },
+      state: {
+        active: {
+          eventId: whineAdmission.eventId,
+          meaning: "guardian-dog-shelter-whine",
+          family: "animal-signal",
+          vocalization: "dog-shelter-whine",
+          audioAcknowledged: true,
+        },
+      },
+    });
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      text: "WHINE...",
+      presentationKind: "animal-call",
+      animalCallKind: "whine",
+      assertive: false,
+    });
+    expect((whineEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "rest",
+      startedAtWorldTick: preWhineRest.startedAtWorldTick,
+    });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    runtime.destroy();
+
+    const tamperedActivityCarry = structuredClone(whineCarry);
+    const tamperedActivityAdmission =
+      tamperedActivityCarry.situatedExpressionAdmissions.records.find(
+        ({ kind }) => kind === "guardian-dog-shelter-whine",
+      );
+    if (tamperedActivityAdmission === undefined) {
+      throw new Error("rest-whine activity tamper fixture omitted its admission");
+    }
+    tamperedActivityAdmission.activityTransactionId =
+      `${whineAssignment.currentActivity.transactionId}:forged`;
+    const rejectedActivity = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(whineRecord, {
+        perceptionCarry: tamperedActivityCarry,
+      }),
+    ));
+    expect(rejectedActivity.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedActivity.destroy();
+
+    const tamperedShelterScoreCarry = structuredClone(whineCarry);
+    const tamperedShelterScoreAdmission =
+      tamperedShelterScoreCarry.situatedExpressionAdmissions.records.find(
+        ({ kind }) => kind === "guardian-dog-shelter-whine",
+      );
+    if (typeof tamperedShelterScoreAdmission?.shelterIntentScore !== "number") {
+      throw new Error("rest-whine score tamper fixture omitted its cognition receipt");
+    }
+    tamperedShelterScoreAdmission.shelterIntentScore =
+      tamperedShelterScoreAdmission.shelterIntentScore >= FIXED_POINT
+        ? FIXED_POINT - 1
+        : tamperedShelterScoreAdmission.shelterIntentScore + 1;
+    const rejectedShelterScore = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(whineRecord, {
+        perceptionCarry: tamperedShelterScoreCarry,
+      }),
+    ));
+    expect(rejectedShelterScore.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedShelterScore.destroy();
+
+    // The score receipt remains bound after the audible event expires. A
+    // recent-only cooldown memory keeps the literal score-bearing trigger,
+    // while the working-animal transaction independently keeps its own ID.
+    const cooldownRepository = new MemoryRepository(whineRecord);
+    const cooldownRuntime = await createTideweftRuntime(cooldownRepository);
+    expect(cooldownRuntime.getUIView().saveWarning).toBeUndefined();
+    expect(cooldownRuntime.getRenderView().player.recoveryKind).toBe("rest");
+    cooldownRuntime.dispatchUI({ type: "recover", action: "cancel" });
+    expect(cooldownRuntime.getRenderView().player.recoveryKind).toBeUndefined();
+    // With accelerated REST cancelled, this establishes the frame clock and
+    // advances exactly the event's eight remaining fixed steps without closing
+    // the ten-step world interval.
+    advancePlayerSteps(cooldownRuntime, 8);
+    await cooldownRuntime.save();
+    const cooldownRecord = cooldownRepository.snapshot();
+    const cooldownCarry = savedEnvelope(cooldownRepository)
+      .perceptionCarry as typeof whineCarry;
+    const cooldownChannel = cooldownCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === whineGuardian.identity.stableId,
+    );
+    const cooldownAdmission = cooldownCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-shelter-whine",
+    );
+    expect(cooldownChannel?.state.active).toBeNull();
+    expect(cooldownChannel?.state.recent).toContainEqual(expect.objectContaining({
+      triggerEventId: whineAdmission.triggerEventId,
+      meaning: "guardian-dog-shelter-whine",
+      priority: 740_000,
+    }));
+    if (typeof cooldownAdmission?.shelterIntentScore !== "number") {
+      throw new Error("cooldown shelter-whine fixture omitted its score receipt");
+    }
+    cooldownRuntime.destroy();
+
+    const tamperedCooldownCarry = structuredClone(cooldownCarry);
+    const tamperedCooldownAdmission =
+      tamperedCooldownCarry.situatedExpressionAdmissions.records.find(
+        ({ kind }) => kind === "guardian-dog-shelter-whine",
+      );
+    if (typeof tamperedCooldownAdmission?.shelterIntentScore !== "number") {
+      throw new Error("cooldown shelter-whine tamper omitted its score receipt");
+    }
+    tamperedCooldownAdmission.shelterIntentScore =
+      tamperedCooldownAdmission.shelterIntentScore >= FIXED_POINT
+        ? FIXED_POINT - 1
+        : tamperedCooldownAdmission.shelterIntentScore + 1;
+    const rejectedCooldownScore = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(cooldownRecord, {
+        perceptionCarry: tamperedCooldownCarry,
+      }),
+    ));
+    expect(rejectedCooldownScore.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedCooldownScore.destroy();
+
+    // A pre-admission REST receipt proves this listener was not sleeping.
+    // Resealing only the quiet-call listener bit must not manufacture an
+    // unheard branch from otherwise authentic causal roots.
+    const forgedSleepingCarry = structuredClone(whineCarry);
+    const forgedSleepingAdmission = forgedSleepingCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-shelter-whine",
+    );
+    if (forgedSleepingAdmission === undefined) {
+      throw new Error("rest-whine listener tamper fixture omitted its admission");
+    }
+    forgedSleepingAdmission.listenerWasSleepingAtAdmission = true;
+    const rejectedSleepingFact = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(whineRecord, {
+        perceptionCarry: forgedSleepingCarry,
+      }),
+    ));
+    expect(rejectedSleepingFact.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedSleepingFact.destroy();
+
+    const forgedSourceGuardian = setDogActorIntent(whineGuardian, {
+      kind: "seek-shelter",
+      cause: { kind: "condition", referenceId: "condition:forged-weather-exposure" },
+      enteredAtTick: whineGuardian.intent.enteredAtTick,
+      nextThinkTick: whineGuardian.intent.nextThinkTick,
+    });
+    const forgedSourceRoster = replaceDogActorInRoster(whineRoster!, forgedSourceGuardian);
+    if (forgedSourceRoster === null) {
+      throw new Error("rest-whine source tamper fixture rejected its canonical actor");
+    }
+    const rejectedSource = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(whineRecord, {
+        dogActorRoster: serializeDogActorRoster(forgedSourceRoster),
+      }),
+    ));
+    expect(rejectedSource.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedSource.destroy();
+
+    const { integrity: _currentIntegrity, ...whineFields } = whineEnvelope;
+    const v36Base = {
+      ...whineFields,
+      version: 36,
+      perceptionCarry: { ...whineCarry, version: 5 },
+    };
+    const v36WhineRecord: SaveRecord = {
+      ...whineRecord,
+      payloadVersion: 36,
+      updatedAt: whineRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v36Base,
+        integrity: gameSaveEnvelopeIntegrity(v36Base),
+      }),
+    };
+    const rejectedV36 = await createTideweftRuntime(new MemoryRepository(v36WhineRecord));
+    expect(rejectedV36.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejectedV36.destroy();
+
+    const resumedRepository = new MemoryRepository(whineRecord);
+    const resumed = await createTideweftRuntime(resumedRepository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(resumed.getRenderView().player.recoveryKind).toBe("rest");
+    expect(resumed.getUIView().expressionCaption).toMatchObject({
+      text: "WHINE...",
+      animalCallKind: "whine",
+    });
+    await resumed.save();
+    const exactReload = savedEnvelope(resumedRepository);
+    expect(exactReload.perceptionCarry).toEqual(whineEnvelope.perceptionCarry);
+    expect(exactReload.dogActorRoster).toBe(whineEnvelope.dogActorRoster);
+    expect(exactReload.settlementWorkingAnimals).toBe(
+      whineEnvelope.settlementWorkingAnimals,
+    );
+    expect(exactReload.player).toEqual(whineEnvelope.player);
+
+    advanceWaitFrames(resumed, 1);
+    await resumed.save();
+    const continuedEnvelope = savedEnvelope(resumedRepository);
+    const continuedCarry = continuedEnvelope.perceptionCarry as typeof whineCarry;
+    const continuedGuardian = deserializeDogActorRoster(
+      continuedEnvelope.dogActorRoster,
+    )?.actors[0];
+    expect(continuedGuardian?.intent.kind).toBe("seek-shelter");
+    expect(continuedCarry.actorVocalizationSamples.some(({ expressionEventId }) => (
+      expressionEventId === whineAdmission.eventId
+    ))).toBe(false);
+    expect(continuedCarry.situatedExpressionAdmissions.records.some(({ kind }) => (
+      kind === "guardian-dog-shelter-whine"
+    ))).toBe(false);
+    expect((continuedEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "rest",
+      startedAtWorldTick: preWhineRest.startedAtWorldTick,
+    });
+    expect(resumed.getRenderView().player.recoveryKind).toBe("rest");
+    const whineSoundCallOrdinals = perceptionSpy.mock.calls.flatMap(([input], ordinal) => (
+      (input.supplementalSoundSamples ?? []).some(({ expressionEventId }) => (
+        expressionEventId === whineAdmission.eventId
+      )) ? [ordinal] : []
+    ));
+    expect(whineSoundCallOrdinals).toHaveLength(1);
+    const whineSoundCallOrdinal = whineSoundCallOrdinals[0];
+    if (whineSoundCallOrdinal === undefined) {
+      throw new Error("shelter whine never entered shared human perception");
+    }
+    expect(perceptionSpy.mock.calls[whineSoundCallOrdinal]?.[0].supplementalSoundSamples)
+      .toEqual([
+        expect.objectContaining({
+          expressionEventId: whineAdmission.eventId,
+          sourceActorId: whineGuardian.identity.stableId,
+          soundClass: "animal-call",
+          soundInterrupt: "none",
+        }),
+      ]);
+    const whineHumanBatches = perceptionSpy.mock.results[whineSoundCallOrdinal]?.value;
+    expect(whineHumanBatches.some(({ observations }: {
+      observations: readonly { perceivedClass: string; interrupt: string }[];
+    }) => observations.some(({ perceivedClass, interrupt }) => (
+      perceivedClass === "animal-call" && interrupt === "none"
+    )))).toBe(true);
+    resumed.destroy();
+    perceptionSpy.mockRestore();
+
+    guardianPerceptionHarness.mode = null;
+    const waitRepository = new MemoryRepository(preparedVisibleWhineRecord);
+    const waiting = await createTideweftRuntime(waitRepository);
+    expect(waiting.getUIView().saveWarning).toBeUndefined();
+    expect(waiting.getUIView().controls).toMatchObject({
+      canWait: true,
+      waitActive: false,
+    });
+    waiting.dispatchUI({ type: "wait", action: "begin" });
+    expect(waiting.getUIView().controls?.waitActive).toBe(true);
+    let waitCarry: typeof whineCarry | null = null;
+    let waitStillActiveAtWhine = false;
+    for (let frame = 0; frame < 20 && waiting.getUIView().controls?.waitActive; frame += 1) {
+      advanceWaitFrames(waiting, 1);
+      await waiting.save();
+      const candidate = savedEnvelope(waitRepository).perceptionCarry as typeof whineCarry;
+      if (candidate.situatedExpressionAdmissions.records.some(({ kind }) => (
+        kind === "guardian-dog-shelter-whine"
+      ))) {
+        waitCarry = candidate;
+        waitStillActiveAtWhine = waiting.getUIView().controls?.waitActive === true;
+        break;
+      }
+    }
+    if (waitCarry === null) {
+      throw new Error("WAIT shelter-whine fixture never admitted its world sound");
+    }
+    expect(waitStillActiveAtWhine).toBe(true);
+    expect(waitCarry.actorVocalizationSamples).toContainEqual(expect.objectContaining({
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+    }));
+    waiting.destroy();
+
+    guardianPerceptionHarness.mode = null;
+    const awakeRepository = new MemoryRepository(preparedSleepWhineRecord);
+    const awake = await createTideweftRuntime(awakeRepository);
+    expect(awake.getUIView().saveWarning).toBeUndefined();
+    advancePlayerSteps(awake, Math.max(10, (wakeTick - nearDawnTick) * 10));
+    await awake.save();
+    const awakeWhineEnvelope = savedEnvelope(awakeRepository);
+    const awakeWhineCarry = awakeWhineEnvelope.perceptionCarry as typeof whineCarry;
+    const awakeWhineAdmission = awakeWhineCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-shelter-whine",
+    );
+    if (awakeWhineAdmission === undefined) {
+      throw new Error("awake shelter-whine counterfactual omitted its admission");
+    }
+    expect(awakeWhineAdmission.listenerWasSleepingAtAdmission).toBe(false);
+    expect(awakeWhineCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === guardian.identity.stableId,
+    )?.reception).toMatchObject({
+      kind: expect.stringMatching(/^heard-(visible|unseen)$/),
+    });
+    expect(awake.getUIView().expressionCaption).toMatchObject({
+      text: "WHINE...",
+      animalCallKind: "whine",
+    });
+    expect(awake.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "sleep",
+      recoveryActive: false,
+    });
+    awake.dispatchUI({ type: "recover", action: "begin" });
+    await awake.save();
+    const postWhineSleepRecord = awakeRepository.snapshot();
+    const postWhineSleepEnvelope = savedEnvelope(awakeRepository);
+    expect((postWhineSleepEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "sleep",
+      startedAtWorldTick: awakeWhineAdmission.acceptedAtTick,
+    });
+    awake.destroy();
+
+    const postWhineSleeper = await createTideweftRuntime(
+      new MemoryRepository(postWhineSleepRecord),
+    );
+    expect(postWhineSleeper.getUIView().saveWarning).toBeUndefined();
+    expect(postWhineSleeper.getRenderView().player.recoveryKind).toBe("sleep");
+    postWhineSleeper.destroy();
+
+    guardianPerceptionHarness.mode = null;
+    const sleepRepository = new MemoryRepository(preparedSleepWhineRecord);
+    const sleeping = await createTideweftRuntime(sleepRepository);
+    expect(sleeping.getUIView().saveWarning).toBeUndefined();
+    expect(sleeping.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "sleep",
+      recoveryActive: false,
+    });
+    sleeping.dispatchUI({ type: "recover", action: "begin" });
+    advanceWaitFrames(sleeping, Math.max(1, wakeTick - nearDawnTick));
+    await sleeping.save();
+    const sleepEnvelope = savedEnvelope(sleepRepository);
+    const sleepCarry = sleepEnvelope.perceptionCarry as typeof whineCarry;
+    const sleepAdmission = sleepCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-shelter-whine",
+    );
+    if (sleepAdmission === undefined) {
+      throw new Error("sleep-whine branch omitted its world-authoritative admission");
+    }
+    expect(sleepAdmission.listenerWasSleepingAtAdmission).toBe(true);
+    expect(sleepAdmission.eventId).toBe(awakeWhineAdmission.eventId);
+    expect(sleepCarry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        expressionEventId: sleepAdmission.eventId,
+        sourceActorId: guardian.identity.stableId,
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+      }),
+    ]);
+    expect(sleepCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === guardian.identity.stableId,
+    )).toMatchObject({
+      reception: null,
+      state: {
+        active: {
+          eventId: sleepAdmission.eventId,
+          meaning: "guardian-dog-shelter-whine",
+          vocalization: "dog-shelter-whine",
+          audioAcknowledged: true,
+        },
+      },
+    });
+    expect(sleeping.getRenderView().expressions ?? []).toEqual([]);
+    expect(sleeping.getUIView().expressionCaption).toBeUndefined();
+    expect((sleepEnvelope.player as PlayerState).timeAction).toMatchObject({ kind: "sleep" });
+    expect(sleeping.getRenderView().player.recoveryKind).toBe("sleep");
+    sleeping.destroy();
+
+    const cancelRepository = new MemoryRepository(sleepRepository.snapshot());
+    const cancelling = await createTideweftRuntime(cancelRepository);
+    expect(cancelling.getUIView().saveWarning).toBeUndefined();
+    cancelling.dispatchUI({ type: "recover", action: "cancel" });
+    expect(cancelling.getRenderView().player.recoveryKind).toBeUndefined();
+    // Move beyond the phase-zero admission without closing its expression
+    // interval, then begin a distinct replacement sleep. Only a recovery that
+    // predates admission can attest the immutable listener bit.
+    advancePlayerSteps(cancelling, 1);
+    expect(cancelling.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "sleep",
+      recoveryActive: false,
+    });
+    cancelling.dispatchUI({ type: "recover", action: "begin" });
+    await cancelling.save();
+    const replacementSleepRecord = cancelRepository.snapshot();
+    const replacementSleepEnvelope = savedEnvelope(cancelRepository);
+    const replacementSleep = (replacementSleepEnvelope.player as PlayerState).timeAction;
+    if (replacementSleep === null) {
+      throw new Error("sleep-whine fixture omitted its replacement sleep receipt");
+    }
+    expect(replacementSleep).toMatchObject({
+      kind: "sleep",
+      startedAtWorldTick: sleepAdmission.acceptedAtTick,
+    });
+    expect(replacementSleep.startedAtPlayerStepPhase).toBeGreaterThan(
+      sleepAdmission.admittedAtPlayerStepPhase ?? -1,
+    );
+    cancelling.destroy();
+
+    const replacementSleepReload = await createTideweftRuntime(
+      new MemoryRepository(replacementSleepRecord),
+    );
+    expect(replacementSleepReload.getUIView().saveWarning).toBeUndefined();
+    expect(replacementSleepReload.getRenderView().player.recoveryKind).toBe("sleep");
+    expect(replacementSleepReload.getUIView().expressionCaption).toBeUndefined();
+    replacementSleepReload.destroy();
+  }, 240_000);
 
   it("carries one guardian through shared perception, work, locomotion, recovery, and a regional seam without duplication", async () => {
     const repository = new MemoryRepository();

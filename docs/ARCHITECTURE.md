@@ -193,6 +193,19 @@ F0 hearing, reception, and caption path. It reveals no threat identity and,
 unlike the sharp warning bark, has no strong WAIT or REST/SLEEP interruption
 authority.
 
+A third signal consumes the existing weather-to-working-animal chain rather
+than inventing ambient dog noise. One soft shelter-request whine is eligible
+only when weather exposure freshly commits the dog's `seek-shelter` intent and
+the exact same-tick `defer-to-actor` / `actor-intent:seek-shelter` work
+transaction. The cognition-owned positive shelter score is retained as the
+event-time condition receipt, and the dog must still be physically outside its
+assigned kennel; an already sheltered dog cannot manufacture the call. The dog
+attempts ordinary physical kennel travel, which may still be blocked by real
+terrain. Continued or stale shelter seeking is silent. This call uses the
+neutral `animal-call` acoustic class, discloses neither the exact exposure cause
+nor a hidden source position, and has no WAIT or REST/SLEEP interruption
+authority.
+
 Because a pending vocalization can become authoritative human knowledge, the
 guardian-warning candidate advances the outer save to v35 and the bounded
 perception carry to v4. That carry preserves source-bound pending vocal
@@ -208,6 +221,11 @@ admission retains whether SLEEP suppressed player hearing at the event, so a
 later sleep start, cancellation, or completion cannot rewrite an already
 accepted receipt; any still-active overlapping sleep must agree with that
 event-time fact.
+The shelter-whine candidate advances the unpublished outer save to v37 and
+bounded perception carry to v6. Its admission retains the same event-time sleep
+gate, while exact v36/carry-v5 migration accepts authenticated bark/growl state
+and rejects whine meaning, knowledge, vocalization, or admission as impossible
+historical v36 data.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -266,8 +284,8 @@ line once, but all pre-boundary active and cooldown-only state is then retired;
 new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
 This slice does not yet claim other work expression where no authoritative
-completed-work event exists; it also does not claim complete bark/growl
-breadth, whine/distress/play, general animal-call networks,
+completed-work event exists; it also does not claim complete bark/growl/whine
+breadth, distress/play, general animal-call networks,
 language/relationship realization, or complete Living Voice.
 
 ### Repository asset and storage law

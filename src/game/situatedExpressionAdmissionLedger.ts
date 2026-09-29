@@ -8,6 +8,7 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 import { SERIOUS_FALL_HAZARD } from "./fallRisk";
+import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
 
 /** Bounded causal evidence retained for one player-perception interval. */
 export const SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION = 1 as const;
@@ -21,6 +22,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "porter-heavy-departure",
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
+  "guardian-dog-shelter-whine",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -121,6 +123,18 @@ export interface GuardianDogDefensiveGrowlExpressionAdmissionRecord
   readonly listenerWasSleepingAtAdmission: boolean;
 }
 
+export interface GuardianDogShelterWhineExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "guardian-dog-shelter-whine";
+  readonly assignmentId: string;
+  readonly activityTransactionId: string;
+  readonly acceptedAtTick: number;
+  /** Event-time positive fixed-point score of the shelter intent's weather condition. */
+  readonly shelterIntentScore: number;
+  /** Exact phase-zero hearing gate; later sleep transitions cannot rewrite receipt history. */
+  readonly listenerWasSleepingAtAdmission: boolean;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -132,6 +146,7 @@ export type SituatedExpressionAdmissionRecord =
   | PorterHeavyDepartureExpressionAdmissionRecord
   | GuardianDogWarningExpressionAdmissionRecord
   | GuardianDogDefensiveGrowlExpressionAdmissionRecord
+  | GuardianDogShelterWhineExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -177,6 +192,15 @@ export interface GuardianDogWarningExpressionAdmissionInput
 
 export interface GuardianDogDefensiveGrowlExpressionAdmissionInput
   extends GuardianDogWarningExpressionAdmissionInput {
+  readonly listenerWasSleepingAtAdmission: boolean;
+}
+
+export interface GuardianDogShelterWhineExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly assignmentId: string;
+  readonly activityTransactionId: string;
+  readonly acceptedAtTick: number;
+  readonly shelterIntentScore: number;
   readonly listenerWasSleepingAtAdmission: boolean;
 }
 
@@ -353,6 +377,39 @@ export function createGuardianDogDefensiveGrowlExpressionAdmissionRecord(
   }) as GuardianDogDefensiveGrowlExpressionAdmissionRecord | null;
 }
 
+/** Creates one world-authoritative, shelter-seeking whine admission. */
+export function createGuardianDogShelterWhineExpressionAdmissionRecord(
+  input: GuardianDogShelterWhineExpressionAdmissionInput,
+): GuardianDogShelterWhineExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "activityTransactionId",
+    "admittedAtPlayerStepPhase",
+    "assignmentId",
+    "listenerWasSleepingAtAdmission",
+    "sampleOrdinal",
+    "shelterIntentScore",
+    "sourceActorId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "guardian-dog-shelter-whine",
+    assignmentId: value.assignmentId,
+    activityTransactionId: value.activityTransactionId,
+    acceptedAtTick: value.acceptedAtTick,
+    shelterIntentScore: value.shelterIntentScore,
+    listenerWasSleepingAtAdmission: value.listenerWasSleepingAtAdmission,
+  }) as GuardianDogShelterWhineExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -390,6 +447,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "porter-heavy-departure": return canonicalPorterRecord(value);
     case "guardian-dog-warning": return canonicalGuardianDogRecord(value);
     case "guardian-dog-defensive-growl": return canonicalGuardianDogGrowlRecord(value);
+    case "guardian-dog-shelter-whine": return canonicalGuardianDogShelterWhineRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -652,6 +710,55 @@ function canonicalGuardianDogGrowlRecord(
     ...warningShape,
     kind: "guardian-dog-defensive-growl",
     listenerWasSleepingAtAdmission,
+  });
+}
+
+function canonicalGuardianDogShelterWhineRecord(
+  value: Readonly<Record<string, unknown>>,
+): GuardianDogShelterWhineExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "activityTransactionId",
+    "admittedAtPlayerStepPhase",
+    "assignmentId",
+    "eventId",
+    "kind",
+    "listenerWasSleepingAtAdmission",
+    "sampleOrdinal",
+    "shelterIntentScore",
+    "sourceActorId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.admittedAtPlayerStepPhase !== 0
+    || value.kind !== "guardian-dog-shelter-whine"
+    || !validId(value.assignmentId)
+    || !validId(value.activityTransactionId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+    || !positiveBoundedUnit(value.shelterIntentScore)
+    || typeof value.listenerWasSleepingAtAdmission !== "boolean"
+  ) return null;
+  const expectedTriggerEventId = guardianDogShelterWhineTriggerEventId(
+    value.activityTransactionId as string,
+    value.shelterIntentScore as number,
+  );
+  if (expectedTriggerEventId === null || value.triggerEventId !== expectedTriggerEventId) {
+    return null;
+  }
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
+    kind: "guardian-dog-shelter-whine",
+    assignmentId: value.assignmentId,
+    activityTransactionId: value.activityTransactionId,
+    acceptedAtTick: value.acceptedAtTick,
+    shelterIntentScore: value.shelterIntentScore,
+    listenerWasSleepingAtAdmission: value.listenerWasSleepingAtAdmission,
   });
 }
 

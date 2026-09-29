@@ -91,6 +91,31 @@ describe("situated expression caption", () => {
     expect(situatedExpressionCaptionCopy(unseen)).not.toContain("retreat");
   });
 
+  it("describes a shelter whine without translating its hidden weather cause", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:dog:shelter-whine",
+      speakerLabel: "Familiar dog",
+      text: "WHINE...",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "whine",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[The familiar dog whines softly.]");
+
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      speakerLabel: "A dog",
+      directionLabel: "south-east",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[A dog whines somewhere south-east.]");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("weather");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("shelter");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("storm");
+  });
+
   it("does not infer an animal call kind from authored prose", () => {
     const unclassified: SituatedExpressionCaptionUIView = {
       id: "expression:animal:unclassified",

@@ -174,6 +174,7 @@ import {
 import {
   appendSituatedExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
+  createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
@@ -209,10 +210,16 @@ import {
   guardianDogDefensiveGrowlExpressionEventMatchesWorld,
   guardianDogDefensiveGrowlExpressionIntent,
   guardianDogDefensiveGrowlExpressionMemoryMatchesWorld,
+  guardianDogShelterWhineExpressionEventForTrigger,
+  guardianDogShelterWhineExpressionEventMatchesWorld,
+  guardianDogShelterWhineExpressionIntent,
+  guardianDogShelterWhineExpressionMemoryMatchesWorld,
+  guardianDogShelterWhineTriggerEventId,
   guardianDogWarningExpressionEventForTrigger,
   guardianDogWarningExpressionEventMatchesWorld,
   guardianDogWarningExpressionIntent,
   guardianDogWarningExpressionMemoryMatchesWorld,
+  type GuardianDogShelterWhineExpressionInput,
 } from "./dogSignalExpression";
 import { audibleContactPan } from "./audibleContactPresentation";
 import {
@@ -936,6 +943,7 @@ function recentMeaningAcousticTuples(
 }>[] {
   switch (meaning) {
     case "steady-after-stumble":
+    case "guardian-dog-shelter-whine":
       return [{ volume: "murmur", interrupt: "none" }];
     case "relief-after-near-fall":
     case "relief-after-cargo-recovery":
@@ -959,8 +967,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
+/** First save with a weather-backed guardian shelter whine. */
+const GAME_SAVE_VERSION = 37;
 /** First save with a threat-backed guardian defensive growl. */
-const GAME_SAVE_VERSION = 36;
+const GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION = 36;
 /** First save with a world-authoritative guardian warning bark. */
 const GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION = 35;
 /** First save with multi-actor situated expression channels and working people. */
@@ -997,7 +1007,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 5 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 6 as const;
+const GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION = 5 as const;
 const GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION = 4 as const;
 const WORKING_PEOPLE_PERCEPTION_CARRY_VERSION = 3 as const;
 const PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION = 2 as const;
@@ -8474,11 +8485,12 @@ function runtimeGeneratedDogView(dog: DogActorState): GeneratedDogState {
 
 function runtimeWorkingDogActionAccessibility(input: Readonly<{
   readonly actorOnOpenTerrain: boolean;
+  readonly actorSheltered: boolean;
   readonly hasTraversableStep: boolean;
 }>): DogActionAccessibility {
   return Object.freeze({
     retreat: input.hasTraversableStep,
-    "seek-shelter": input.hasTraversableStep,
+    "seek-shelter": !input.actorSheltered && input.hasTraversableStep,
     "avoid-human": input.hasTraversableStep,
     // Working-dog feeding is deliberately dormant until the same physical
     // settlement inventory owner can commit both the item and nutrition.
@@ -8486,6 +8498,80 @@ function runtimeWorkingDogActionAccessibility(input: Readonly<{
     "approach-food": false,
     rest: input.actorOnOpenTerrain,
     observe: true,
+  });
+}
+
+/**
+ * Re-derives the exact weather-backed shelter pressure used by ordinary dog
+ * cognition. The score is not itself expression authority: a whine also needs
+ * a fresh actor/work edge and the dog must still be physically outside its
+ * assigned kennel. The accepted score is bound into the expression trigger
+ * while the work owner independently retains its transaction ID, allowing
+ * cooldown-only save replay to authenticate the event-time receipt without
+ * pretending that post-step weather is the event-time weather sample.
+ */
+function runtimeWorkingDogShelterIntentScore(
+  dog: DogActorState,
+  tick: number,
+  weather: WeatherState,
+): number | null {
+  const exposure = bio0ExposureFromCompletedWeather(weather);
+  const evaluation = evaluateDogBehavior({
+    tick,
+    dog: runtimeGeneratedDogView(dog),
+    perception: dog.perception,
+    weather: {
+      coldPressure: exposure.ambientCold,
+      heatPressure: exposure.ambientHeat,
+      rainIntensity: exposure.rain,
+      windPressure: exposure.wind,
+    },
+    accessibility: runtimeWorkingDogActionAccessibility({
+      actorOnOpenTerrain: true,
+      actorSheltered: false,
+      hasTraversableStep: true,
+    }),
+    foodContact: { directlyConfirmed: false, accessible: false },
+    current: {
+      intent: dog.intent.kind,
+      enteredAtTick: dog.intent.enteredAtTick,
+    },
+  });
+  return evaluation?.decision.scores.find(({ intent }) => (
+    intent === "seek-shelter"
+  ))?.score ?? null;
+}
+
+function runtimeGuardianDogShelterWhineAuthority(input: Readonly<{
+  readonly dog: DogActorState;
+  readonly workingAnimals: SettlementWorkingAnimalState;
+  readonly settlement: SettlementEcologyState;
+  readonly completedTick: number;
+  readonly shelterIntentScore: number;
+}>): GuardianDogShelterWhineExpressionInput | null {
+  const assignments = input.workingAnimals.assignments.filter(({ workerActorId }) => (
+    workerActorId === input.dog.identity.stableId
+  ));
+  const assignment = assignments[0];
+  if (assignments.length !== 1 || assignment === undefined) return null;
+  const custody = input.settlement.domesticCustodies.find(({ relationshipId }) => (
+    relationshipId === assignment.workerCustodyRelationshipId
+  ));
+  if (
+    custody === undefined
+    || custody.homeStructure.kind !== "kennel"
+    || runtimeWorkingDogKennelArrived(input.dog, custody)
+  ) return null;
+  if (
+    !Number.isSafeInteger(input.shelterIntentScore)
+    || input.shelterIntentScore <= 0
+    || input.shelterIntentScore > FIXED_POINT
+  ) return null;
+  return Object.freeze({
+    dog: input.dog,
+    workingAnimals: input.workingAnimals,
+    completedTick: input.completedTick,
+    shelterIntentScore: input.shelterIntentScore,
   });
 }
 
@@ -8758,6 +8844,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
   readonly signalIntent: SituatedExpressionIntent | null;
+  readonly signalShelterIntentScore: number | null;
 }> | null {
   const assignment = input.workingAnimals.assignments[0];
   if (assignment === undefined || input.workingAnimals.assignments.length !== 1) return null;
@@ -8849,6 +8936,7 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   );
   const actionAccessibility = runtimeWorkingDogActionAccessibility({
     actorOnOpenTerrain,
+    actorSheltered: runtimeWorkingDogKennelArrived(dog, workerCustody),
     hasTraversableStep,
   });
   const autonomy = stepRuntimeWorkingDogAutonomy({
@@ -9244,11 +9332,33 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     workingAnimals,
     completedTick: tick,
   });
-  if (warningIntent !== null && defensiveGrowlIntent !== null) return null;
+  const shelterIntentScore = runtimeWorkingDogShelterIntentScore(
+    dog,
+    tick,
+    input.weather,
+  );
+  const shelterWhineAuthority = shelterIntentScore === null
+    ? null
+    : runtimeGuardianDogShelterWhineAuthority({
+        dog,
+        workingAnimals,
+        settlement: input.settlement,
+        completedTick: tick,
+        shelterIntentScore,
+      });
+  const shelterWhineIntent = shelterWhineAuthority === null
+    ? null
+    : guardianDogShelterWhineExpressionIntent(shelterWhineAuthority);
+  const signalIntents = [warningIntent, defensiveGrowlIntent, shelterWhineIntent]
+    .filter((intent): intent is SituatedExpressionIntent => intent !== null);
+  if (signalIntents.length > 1) return null;
   return Object.freeze({
     roster,
     workingAnimals,
-    signalIntent: defensiveGrowlIntent ?? warningIntent,
+    signalIntent: signalIntents[0] ?? null,
+    signalShelterIntentScore: shelterWhineIntent === null
+      ? null
+      : shelterWhineAuthority!.shelterIntentScore,
   });
 }
 
@@ -11004,6 +11114,7 @@ export async function createTideweftRuntime(
     if (
       expression.meaning === "guardian-dog-warning"
       || expression.meaning === "guardian-dog-defensive-growl"
+      || expression.meaning === "guardian-dog-shelter-whine"
     ) {
       const dog = dogActorRosterActor(dogActorRoster, expression.sourceActorId);
       if (
@@ -12001,6 +12112,7 @@ export async function createTideweftRuntime(
       dogActorRoster = workingDogStep.roster;
       settlementWorkingAnimals = workingDogStep.workingAnimals;
       const guardianDogSignalIntent = workingDogStep.signalIntent;
+      const guardianDogShelterIntentScore = workingDogStep.signalShelterIntentScore;
       const searchLinkedRecovery = advanceRuntimeDomesticRecoveryFromWorkingSearch({
         state: settlementDomesticAnimalRecovery,
         settlement: settlementEcology,
@@ -12616,26 +12728,45 @@ export async function createTideweftRuntime(
           assignment === undefined
           || activity === undefined
           || sourceDog === null
-          || activity.transactionId !== guardianDogSignalIntent.triggerEventId
         ) {
           throw new Error("Guardian signal lost its committed work authority");
         }
         const isWarning = guardianDogSignalIntent.meaning === "guardian-dog-warning";
         const isGrowl = guardianDogSignalIntent.meaning
           === "guardian-dog-defensive-growl";
+        const isWhine = guardianDogSignalIntent.meaning
+          === "guardian-dog-shelter-whine";
+        const expectedTriggerEventId = isWhine && guardianDogShelterIntentScore !== null
+          ? guardianDogShelterWhineTriggerEventId(
+              activity.transactionId,
+              guardianDogShelterIntentScore,
+            )
+          : activity.transactionId;
         const sourceBelief = sourceDog.intent.cause.kind === "perception"
           ? sourceDog.perception.beliefs.find(({ key }) => (
               key === sourceDog.intent.cause.referenceId
             )) ?? null
           : null;
         if (
-          (!isWarning && !isGrowl)
+          (!isWarning && !isGrowl && !isWhine)
+          || expectedTriggerEventId === null
+          || guardianDogSignalIntent.triggerEventId !== expectedTriggerEventId
+          || (!isWhine && guardianDogShelterIntentScore !== null)
           || (isWarning && activity.cause.kind !== "perception")
           || (isGrowl && (
             activity.activity !== "defer-to-actor"
             || activity.cause.kind !== "actor-disposition"
             || activity.cause.referenceId !== "actor-intent:retreat"
             || sourceBelief === null
+          ))
+          || (isWhine && (
+            guardianDogShelterIntentScore === null
+            || sourceDog.intent.kind !== "seek-shelter"
+            || sourceDog.intent.cause.kind !== "condition"
+            || sourceDog.intent.cause.referenceId !== "condition:weather-exposure"
+            || activity.activity !== "defer-to-actor"
+            || activity.cause.kind !== "actor-disposition"
+            || activity.cause.referenceId !== "actor-intent:seek-shelter"
           ))
         ) {
           throw new Error("Guardian signal did not match its causal expression kind");
@@ -12662,7 +12793,8 @@ export async function createTideweftRuntime(
                 sourceObservationId: activity.cause.referenceId,
                 acceptedAtTick: activity.acceptedAtTick,
               })
-            : createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+            : isGrowl
+              ? createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
                 sourceActorId: acceptedEvent.sourceActorId,
                 triggerEventId: acceptedEvent.triggerEventId,
                 sampleOrdinal,
@@ -12672,7 +12804,18 @@ export async function createTideweftRuntime(
                 sourceObservationId: sourceBelief!.sourceObservationId,
                 acceptedAtTick: activity.acceptedAtTick,
                 listenerWasSleepingAtAdmission,
-              }),
+              })
+              : createGuardianDogShelterWhineExpressionAdmissionRecord({
+                  sourceActorId: acceptedEvent.sourceActorId,
+                  triggerEventId: acceptedEvent.triggerEventId,
+                  sampleOrdinal,
+                  admittedAtPlayerStepPhase: 0,
+                  assignmentId: assignment.assignmentId,
+                  activityTransactionId: activity.transactionId,
+                  acceptedAtTick: activity.acceptedAtTick,
+                  shelterIntentScore: guardianDogShelterIntentScore!,
+                  listenerWasSleepingAtAdmission,
+                }),
         );
         if (
           admitted
@@ -12681,8 +12824,9 @@ export async function createTideweftRuntime(
           && audible.contact !== null
         ) {
           // A strong, lawfully admitted guardian warning interrupts WAIT and
-          // interrupts REST/SLEEP. A low defensive growl remains ordinary
-          // audible information and does not gain interrupt authority.
+          // interrupts REST/SLEEP. A low defensive growl or shelter whine
+          // remains ordinary audible information and does not gain interrupt
+          // authority.
           playerWaitDisturbedThisStep = true;
           if (wasRecovering) playerRecoveryDisturbedThisStep = true;
         }
@@ -16222,6 +16366,7 @@ export async function createTideweftRuntime(
         physicalCargo: snapshotPhysicalValidation.state,
       },
       dogActorRosterSnapshot,
+      settlementEcologySnapshot,
       settlementWorkingAnimalsSnapshot,
     )) {
       throw new Error("Refusing to save inconsistent expression/perception authority");
@@ -16863,6 +17008,7 @@ function canonicalPlayerPerceptionCarry(
     | typeof PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION
     | typeof WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
+    | typeof GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
 ): PlayerPerceptionCarry | null {
   if (
@@ -16872,6 +17018,7 @@ function canonicalPlayerPerceptionCarry(
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
   const hasCurrentShape = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION;
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
@@ -16887,7 +17034,8 @@ function canonicalPlayerPerceptionCarry(
         "situatedExpressionChannels",
         "version",
       ]
-    : expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
+    : expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
+        || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
         || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
       ? [
           "actorVocalizationSamples",
@@ -17064,6 +17212,11 @@ function canonicalPlayerPerceptionCarry(
           canonicalChannels,
           trajectory.admissionLedger,
         ))
+      || (expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
+        && !perceptionCarryUsesOnlyGuardianGrowlSemantics(
+          canonicalChannels,
+          trajectory.admissionLedger,
+        ))
       || causalAuthority.records.some(({ committedWorldTick }) => (
         committedWorldTick !== completedWorldTick
       ))
@@ -17154,6 +17307,7 @@ function perceptionCarryUsesOnlyWorkingPeopleSemantics(
   return admissions.records.every(({ kind }) => (
     kind !== "guardian-dog-warning"
     && kind !== "guardian-dog-defensive-growl"
+    && kind !== "guardian-dog-shelter-whine"
   ))
     && samples.every(({ soundClass }) => soundClass === "human-vocalization")
     && bank.channels.every((channel) => {
@@ -17161,16 +17315,20 @@ function perceptionCarryUsesOnlyWorkingPeopleSemantics(
       return channel.state.recent.every(({ meaning, family }) => (
         meaning !== "guardian-dog-warning"
         && meaning !== "guardian-dog-defensive-growl"
+        && meaning !== "guardian-dog-shelter-whine"
         && family !== "animal-signal"
       ))
         && (active === null || (
           active.meaning !== "guardian-dog-warning"
           && active.meaning !== "guardian-dog-defensive-growl"
+          && active.meaning !== "guardian-dog-shelter-whine"
           && active.family !== "animal-signal"
           && active.knowledgeBasis !== "self-heard-anonymous-alarm"
           && active.knowledgeBasis !== "self-perceived-threat"
+          && active.knowledgeBasis !== "self-weather-distress"
           && active.vocalization !== "dog-warning-bark"
           && active.vocalization !== "dog-defensive-growl"
+          && active.vocalization !== "dog-shelter-whine"
           && channel.reception !== null
           && channel.reception.kind !== "heard-unseen"
         ));
@@ -17184,14 +17342,38 @@ function perceptionCarryUsesOnlyGuardianWarningSemantics(
 ): boolean {
   return admissions.records.every(({ kind }) => (
     kind !== "guardian-dog-defensive-growl"
+    && kind !== "guardian-dog-shelter-whine"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning }) => (
       meaning !== "guardian-dog-defensive-growl"
+      && meaning !== "guardian-dog-shelter-whine"
     )) && (active === null || (
       active.meaning !== "guardian-dog-defensive-growl"
+      && active.meaning !== "guardian-dog-shelter-whine"
       && active.knowledgeBasis !== "self-perceived-threat"
+      && active.knowledgeBasis !== "self-weather-distress"
       && active.vocalization !== "dog-defensive-growl"
+      && active.vocalization !== "dog-shelter-whine"
+    ));
+  });
+}
+
+/** Exact semantic fence for v36/carry-v5 before shelter whines existed. */
+function perceptionCarryUsesOnlyGuardianGrowlSemantics(
+  bank: SituatedExpressionChannelBank,
+  admissions: SituatedExpressionAdmissionLedger,
+): boolean {
+  return admissions.records.every(({ kind }) => (
+    kind !== "guardian-dog-shelter-whine"
+  )) && bank.channels.every((channel) => {
+    const active = channel.state.active;
+    return channel.state.recent.every(({ meaning }) => (
+      meaning !== "guardian-dog-shelter-whine"
+    )) && (active === null || (
+      active.meaning !== "guardian-dog-shelter-whine"
+      && active.knowledgeBasis !== "self-weather-distress"
+      && active.vocalization !== "dog-shelter-whine"
     ));
   });
 }
@@ -17303,6 +17485,7 @@ function playerPerceptionCarryMatchesPosition(
   economy: WorldView,
   playerExpressionAuthority: PlayerExpressionAuthority,
   dogRoster: DogActorRosterState,
+  settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
 ): boolean {
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
@@ -17372,6 +17555,7 @@ function playerPerceptionCarryMatchesPosition(
     player,
     playerExpressionAuthority,
     dogRoster,
+    settlement,
     workingAnimals,
   );
   const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
@@ -17432,6 +17616,7 @@ function playerPerceptionCarryMatchesPosition(
     if (
       admission.kind === "guardian-dog-warning"
       || admission.kind === "guardian-dog-defensive-growl"
+      || admission.kind === "guardian-dog-shelter-whine"
     ) {
       const dog = dogActorRosterActor(dogRoster, sample.sourceActorId);
       if (dog === null) return false;
@@ -17440,15 +17625,31 @@ function playerPerceptionCarryMatchesPosition(
         workingAnimals,
         completedTick: economy.completedTick,
       } as const;
+      const shelterWhineAuthority = admission.kind === "guardian-dog-shelter-whine"
+        ? runtimeGuardianDogShelterWhineAuthority({
+            dog,
+            workingAnimals,
+            settlement,
+            completedTick: economy.completedTick,
+            shelterIntentScore: admission.shelterIntentScore,
+          })
+        : null;
       const event = admission.kind === "guardian-dog-warning"
         ? guardianDogWarningExpressionEventForTrigger(
             authority,
             admission.triggerEventId,
           )
-        : guardianDogDefensiveGrowlExpressionEventForTrigger(
-            authority,
-            admission.triggerEventId,
-          );
+        : admission.kind === "guardian-dog-defensive-growl"
+          ? guardianDogDefensiveGrowlExpressionEventForTrigger(
+              authority,
+              admission.triggerEventId,
+            )
+          : shelterWhineAuthority === null
+            ? null
+            : guardianDogShelterWhineExpressionEventForTrigger(
+                shelterWhineAuthority,
+                admission.triggerEventId,
+              );
       const admissionMatchesWorld = admission.kind === "guardian-dog-warning"
         ? guardianDogWarningAdmissionMatchesWorld(
             admission,
@@ -17456,12 +17657,17 @@ function playerPerceptionCarryMatchesPosition(
             workingAnimals,
             economy.completedTick,
           )
-        : guardianDogDefensiveGrowlAdmissionMatchesWorld(
-            admission,
-            dog,
-            workingAnimals,
-            economy.completedTick,
-          );
+        : admission.kind === "guardian-dog-defensive-growl"
+          ? guardianDogDefensiveGrowlAdmissionMatchesWorld(
+              admission,
+              dog,
+              workingAnimals,
+              economy.completedTick,
+            )
+          : guardianDogShelterWhineAdmissionMatchesWorld(
+              admission,
+              shelterWhineAuthority,
+            );
       if (
         event === null
         || !admissionMatchesWorld
@@ -17519,6 +17725,7 @@ function situatedExpressionChannelsMatchWorld(
   player: PlayerState,
   playerExpressionAuthority: PlayerExpressionAuthority,
   dogRoster: DogActorRosterState,
+  settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
 ): boolean {
   return bank.channels.every((channel) => {
@@ -17559,6 +17766,25 @@ function situatedExpressionChannelsMatchWorld(
         workingAnimals,
         completedTick: economy.completedTick,
       } as const;
+      const shelterWhineAuthorityFor = (
+        triggerEventId: string,
+      ): GuardianDogShelterWhineExpressionInput | null => {
+        const matchingAdmissions = admissions.filter((candidate) => (
+          candidate.kind === "guardian-dog-shelter-whine"
+          && candidate.triggerEventId === triggerEventId
+        ));
+        const whineAdmission = matchingAdmissions[0];
+        return matchingAdmissions.length !== 1
+          || whineAdmission?.kind !== "guardian-dog-shelter-whine"
+          ? null
+          : runtimeGuardianDogShelterWhineAuthority({
+              dog,
+              workingAnimals,
+              settlement,
+              completedTick: economy.completedTick,
+              shelterIntentScore: whineAdmission.shelterIntentScore,
+            });
+      };
       if (!channel.state.recent.every((memory) => {
         if (memory.meaning === "guardian-dog-warning") {
           return guardianDogWarningExpressionMemoryMatchesWorld(authority, memory);
@@ -17566,14 +17792,31 @@ function situatedExpressionChannelsMatchWorld(
         if (memory.meaning === "guardian-dog-defensive-growl") {
           return guardianDogDefensiveGrowlExpressionMemoryMatchesWorld(authority, memory);
         }
+        if (memory.meaning === "guardian-dog-shelter-whine") {
+          const shelterWhineAuthority = shelterWhineAuthorityFor(memory.triggerEventId);
+          return shelterWhineAuthority !== null
+            && guardianDogShelterWhineExpressionMemoryMatchesWorld(
+              shelterWhineAuthority,
+              memory,
+            );
+        }
         return false;
       })) return false;
       if (active !== null) {
+        const activeShelterWhineAuthority = active.meaning === "guardian-dog-shelter-whine"
+          ? shelterWhineAuthorityFor(active.triggerEventId)
+          : null;
         const activeMatchesWorld = active.meaning === "guardian-dog-warning"
           ? guardianDogWarningExpressionEventMatchesWorld(authority, active)
           : active.meaning === "guardian-dog-defensive-growl"
             ? guardianDogDefensiveGrowlExpressionEventMatchesWorld(authority, active)
-            : false;
+            : active.meaning === "guardian-dog-shelter-whine"
+              ? activeShelterWhineAuthority !== null
+                && guardianDogShelterWhineExpressionEventMatchesWorld(
+                  activeShelterWhineAuthority,
+                  active,
+                )
+              : false;
         if (
           stableStringify(dog.address.position) !== stableStringify(active.position)
           || !activeMatchesWorld
@@ -17583,7 +17826,11 @@ function situatedExpressionChannelsMatchWorld(
         if (
           admission.kind !== "guardian-dog-warning"
           && admission.kind !== "guardian-dog-defensive-growl"
+          && admission.kind !== "guardian-dog-shelter-whine"
         ) return false;
+        const shelterWhineAuthority = admission.kind === "guardian-dog-shelter-whine"
+          ? shelterWhineAuthorityFor(admission.triggerEventId)
+          : null;
         const admissionMatchesWorld = admission.kind === "guardian-dog-warning"
           ? guardianDogWarningAdmissionMatchesWorld(
               admission,
@@ -17591,12 +17838,17 @@ function situatedExpressionChannelsMatchWorld(
               workingAnimals,
               economy.completedTick,
             )
-          : guardianDogDefensiveGrowlAdmissionMatchesWorld(
-              admission,
-              dog,
-              workingAnimals,
-              economy.completedTick,
-            );
+          : admission.kind === "guardian-dog-defensive-growl"
+            ? guardianDogDefensiveGrowlAdmissionMatchesWorld(
+                admission,
+                dog,
+                workingAnimals,
+                economy.completedTick,
+              )
+            : guardianDogShelterWhineAdmissionMatchesWorld(
+                admission,
+                shelterWhineAuthority,
+              );
         return admissionMatchesWorld
           && (active?.eventId !== admission.eventId || guardianDogCallReceptionMatchesEventTime({
             carry,
@@ -17745,12 +17997,56 @@ function guardianDogDefensiveGrowlAdmissionMatchesWorld(
     && admission.sourceObservationId === sourceBelief.sourceObservationId;
 }
 
+function guardianDogShelterWhineAdmissionMatchesWorld(
+  admission: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "guardian-dog-shelter-whine" }
+  >,
+  authority: GuardianDogShelterWhineExpressionInput | null,
+): boolean {
+  if (authority === null) return false;
+  const { dog, workingAnimals, completedTick, shelterIntentScore } = authority;
+  const assignments = workingAnimals.assignments.filter(({ assignmentId, workerActorId }) => (
+    assignmentId === admission.assignmentId
+    && workerActorId === dog.identity.stableId
+  ));
+  const assignment = assignments[0];
+  const activity = assignment?.currentActivity;
+  return assignments.length === 1
+    && assignment !== undefined
+    && activity !== undefined
+    && assignment.role === "guardian"
+    && assignment.workerSpecies === "domestic-dog"
+    && assignment.pendingActivity === null
+    && admission.sourceActorId === dog.identity.stableId
+    && admission.activityTransactionId === activity.transactionId
+    && admission.triggerEventId === guardianDogShelterWhineTriggerEventId(
+      activity.transactionId,
+      shelterIntentScore,
+    )
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && admission.acceptedAtTick === activity.acceptedAtTick
+    && admission.shelterIntentScore === shelterIntentScore
+    && dog.updatedAtTick === completedTick
+    && dog.perception.tick === completedTick
+    && dog.intent.kind === "seek-shelter"
+    && dog.intent.enteredAtTick === completedTick
+    && dog.intent.cause.kind === "condition"
+    && dog.intent.cause.referenceId === "condition:weather-exposure"
+    && activity.activity === "defer-to-actor"
+    && activity.cause.kind === "actor-disposition"
+    && activity.cause.referenceId === "actor-intent:seek-shelter"
+    && activity.perceivedArea === null;
+}
+
 type GuardianDogCallAdmission = Extract<
   SituatedExpressionAdmissionRecord,
   {
     readonly kind:
       | "guardian-dog-warning"
-      | "guardian-dog-defensive-growl";
+      | "guardian-dog-defensive-growl"
+      | "guardian-dog-shelter-whine";
   }
 >;
 
@@ -17781,8 +18077,9 @@ function guardianDogCallReceptionMatchesEventTime(
 
 /**
  * Reconstructs whether a dog call physically reached the player and the only
- * lawful receipt for that contact. A low growl remains inaudible during sleep;
- * only the sharp warning bark owns the wake/strong-interruption exception.
+ * lawful receipt for that contact. A low growl or shelter whine remains
+ * inaudible during sleep; only the sharp warning bark owns the
+ * wake/strong-interruption exception.
  * This authority deliberately ignores the saved receipt so recovery
  * cancellation and receipt validation cannot attest one another circularly.
  */
@@ -17804,27 +18101,28 @@ function guardianDogCallReceptionAtEventTime(
     || event.sourceActorId !== dog.identity.stableId
     || (admission.kind === "guardian-dog-warning"
       ? event.meaning !== "guardian-dog-warning"
-      : event.meaning !== "guardian-dog-defensive-growl")
+      : admission.kind === "guardian-dog-defensive-growl"
+        ? event.meaning !== "guardian-dog-defensive-growl"
+        : event.meaning !== "guardian-dog-shelter-whine")
     || stableStringify(event.position) !== stableStringify(dog.address.position)
   ) return null;
-  if (admission.kind === "guardian-dog-defensive-growl") {
-    const activeSleep = playerTemplate.timeAction?.kind === "sleep"
-      ? playerTemplate.timeAction
-      : null;
-    const activeSleepPredatesAdmission = activeSleep !== null && (
-      activeSleep.startedAtWorldTick < admission.acceptedAtTick
+  if (admission.kind !== "guardian-dog-warning") {
+    const activeRecovery = playerTemplate.timeAction;
+    const activeRecoveryPredatesAdmission = activeRecovery !== null && (
+      activeRecovery.startedAtWorldTick < admission.acceptedAtTick
       || (
-        activeSleep.startedAtWorldTick === admission.acceptedAtTick
-        && activeSleep.startedAtPlayerStepPhase < admission.admittedAtPlayerStepPhase
+        activeRecovery.startedAtWorldTick === admission.acceptedAtTick
+        && activeRecovery.startedAtPlayerStepPhase < admission.admittedAtPlayerStepPhase
       )
     );
     if (
-      activeSleep !== null
-      && activeSleepPredatesAdmission !== admission.listenerWasSleepingAtAdmission
+      activeRecoveryPredatesAdmission
+      && (activeRecovery.kind === "sleep")
+        !== admission.listenerWasSleepingAtAdmission
     ) return null;
   }
   if (
-    admission.kind === "guardian-dog-defensive-growl"
+    admission.kind !== "guardian-dog-warning"
     && admission.listenerWasSleepingAtAdmission
   ) {
     return Object.freeze({ audible: false, reception: null });
@@ -18022,6 +18320,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== PLAYER_EXPRESSION_GAME_SAVE_VERSION
         && decoded.version !== WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         && decoded.version !== GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
+        && decoded.version !== GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -18043,6 +18342,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
@@ -18368,6 +18668,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
       || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
@@ -18393,6 +18694,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
@@ -18958,6 +19260,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
         )
+      : decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION,
+          )
       : decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
@@ -19312,6 +19620,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         compatibilityView,
         { traversalFeedback, physicalCargo: loadedPhysicalCargo },
         dogActorRoster,
+        settlementEcology,
         settlementWorkingAnimals,
       )
     ) {

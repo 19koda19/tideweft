@@ -19,11 +19,17 @@ import {
   guardianDogDefensiveGrowlExpressionEventMatchesWorld,
   guardianDogDefensiveGrowlExpressionIntent,
   guardianDogDefensiveGrowlExpressionMemoryMatchesWorld,
+  guardianDogShelterWhineExpressionEventForTrigger,
+  guardianDogShelterWhineExpressionEventMatchesWorld,
+  guardianDogShelterWhineExpressionIntent,
+  guardianDogShelterWhineExpressionMemoryMatchesWorld,
+  guardianDogShelterWhineTriggerEventId,
   guardianDogWarningExpressionEventForTrigger,
   guardianDogWarningExpressionEventMatchesWorld,
   guardianDogWarningExpressionIntent,
   guardianDogWarningExpressionMemoryMatchesWorld,
   type GuardianDogDefensiveGrowlExpressionInput,
+  type GuardianDogShelterWhineExpressionInput,
   type GuardianDogWarningExpressionInput,
 } from "./dogSignalExpression";
 import {
@@ -317,6 +323,39 @@ function defensiveGrowlFixture(
   });
 }
 
+function shelterWhineFixture(
+  workReferenceId = "actor-intent:seek-shelter",
+  conditionReferenceId = "condition:weather-exposure",
+  shelterIntentScore = 650_000,
+): Readonly<{
+  input: GuardianDogShelterWhineExpressionInput;
+  originalDog: DogActorState;
+  initialWork: SettlementWorkingAnimalState;
+}> {
+  const originalDog = dogAtTickZero();
+  const initialWork = workState(originalDog.identity.stableId);
+  const perception = quietPerception(originalDog.identity.stableId);
+  const dog = setDogActorIntent(
+    replaceDogActorPerception(originalDog, perception),
+    {
+      kind: "seek-shelter",
+      cause: { kind: "condition", referenceId: conditionReferenceId },
+      enteredAtTick: 1,
+      nextThinkTick: 3,
+    },
+  );
+  return Object.freeze({
+    input: Object.freeze({
+      dog,
+      workingAnimals: commitActorDeference(initialWork, perception, workReferenceId),
+      completedTick: 1,
+      shelterIntentScore,
+    }),
+    originalDog,
+    initialWork,
+  });
+}
+
 describe("guardian dog warning expression", () => {
   it("derives one deterministic warning call from a fresh lawful investigation", () => {
     const { input } = fixture();
@@ -567,5 +606,214 @@ describe("guardian dog defensive growl expression", () => {
     expect(guardianDogDefensiveGrowlExpressionIntent(
       defensiveGrowlFixture("large-predator", "actor-intent:avoid-human").input,
     )).toBeNull();
+  });
+});
+
+describe("guardian dog shelter whine expression", () => {
+  it("derives one deterministic restrained whine from the exact fresh shelter request", () => {
+    const { input } = shelterWhineFixture();
+    const assignment = input.workingAnimals.assignments[0]!;
+    const first = guardianDogShelterWhineExpressionIntent(input);
+    const second = guardianDogShelterWhineExpressionIntent(structuredClone(input));
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({
+      sourceActorId: input.dog.identity.stableId,
+      triggerEventId: guardianDogShelterWhineTriggerEventId(
+        assignment.currentActivity.transactionId,
+        input.shelterIntentScore,
+      ),
+      position: input.dog.address.position,
+      meaning: "guardian-dog-shelter-whine",
+      family: "animal-signal",
+      tone: "restrained",
+      volume: "murmur",
+      knowledgeBasis: "self-weather-distress",
+      priority: 740_000,
+      salience: 650_000,
+      durationSteps: 8,
+    });
+    expect(Number.isSafeInteger(first?.variantSeed)).toBe(true);
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), first);
+    expect(reduction.accepted).toBe(true);
+    expect(reduction.event).toMatchObject({
+      vocalization: "dog-shelter-whine",
+      realizationKey: "situated-expression.en.v1.guardian-dog-shelter-whine.0",
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "WHINE...",
+      realizationKey: "situated-expression.en.v1.guardian-dog-shelter-whine.0",
+      vocalization: "dog-shelter-whine",
+    });
+  });
+
+  it("reauthenticates only the exact event and reachable cooldown memory", () => {
+    const { input } = shelterWhineFixture();
+    const intent = guardianDogShelterWhineExpressionIntent(input);
+    if (intent === null) throw new Error("Dog shelter whine intent was not derived");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    const memory = reduction.state?.recent[0];
+    if (!reduction.accepted || reduction.event === null || memory === undefined) {
+      throw new Error("Dog shelter whine expression was not accepted");
+    }
+
+    expect(guardianDogShelterWhineExpressionEventForTrigger(
+      input,
+      intent.triggerEventId,
+    )).toEqual(reduction.event);
+    expect(guardianDogShelterWhineExpressionEventMatchesWorld(
+      input,
+      reduction.event,
+    )).toBe(true);
+    expect(guardianDogShelterWhineExpressionMemoryMatchesWorld(input, memory)).toBe(true);
+    expect(guardianDogShelterWhineExpressionEventMatchesWorld(input, {
+      ...reduction.event,
+      triggerEventId: "WORK-ACT-unrelated",
+    })).toBe(false);
+    expect(guardianDogShelterWhineExpressionMemoryMatchesWorld(input, {
+      ...memory,
+      triggerEventId: "WORK-ACT-unrelated",
+    })).toBe(false);
+  });
+
+  it("binds event reauthentication to the exact shelter intent score", () => {
+    const { input } = shelterWhineFixture();
+    const intent = guardianDogShelterWhineExpressionIntent(input);
+    if (intent === null) throw new Error("Dog shelter whine intent was not derived");
+    const event = guardianDogShelterWhineExpressionEventForTrigger(
+      input,
+      intent.triggerEventId,
+    );
+    if (event === null) throw new Error("Dog shelter whine event was not derived");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    const memory = reduction.state?.recent[0];
+    if (memory === undefined) throw new Error("Dog shelter whine memory was not derived");
+    const tamperedInput = {
+      ...input,
+      shelterIntentScore: input.shelterIntentScore + 1,
+    };
+    const tamperedIntent = guardianDogShelterWhineExpressionIntent(tamperedInput);
+
+    expect(tamperedIntent).not.toBeNull();
+    expect(tamperedIntent?.triggerEventId).not.toBe(intent.triggerEventId);
+    expect(tamperedIntent?.variantSeed).not.toBe(intent.variantSeed);
+    expect(guardianDogShelterWhineExpressionEventForTrigger(
+      tamperedInput,
+      intent.triggerEventId,
+    )).not.toEqual(event);
+    expect(guardianDogShelterWhineExpressionEventMatchesWorld(
+      tamperedInput,
+      event,
+    )).toBe(false);
+    expect(guardianDogShelterWhineExpressionMemoryMatchesWorld(
+      tamperedInput,
+      memory,
+    )).toBe(false);
+  });
+
+  it("rejects absent, extra, zero, or malformed shelter intent scores", () => {
+    const { input } = shelterWhineFixture();
+    const { shelterIntentScore: _omitted, ...withoutScore } = input;
+    expect(guardianDogShelterWhineExpressionIntent(
+      withoutScore as GuardianDogShelterWhineExpressionInput,
+    )).toBeNull();
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      unexpected: true,
+    } as GuardianDogShelterWhineExpressionInput)).toBeNull();
+
+    for (const shelterIntentScore of [
+      0,
+      -0,
+      -1,
+      1.5,
+      1_000_001,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "650000",
+    ] as const) {
+      expect(guardianDogShelterWhineExpressionIntent({
+        ...input,
+        shelterIntentScore,
+      } as unknown as GuardianDogShelterWhineExpressionInput)).toBeNull();
+    }
+
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      shelterIntentScore: 1,
+    })).not.toBeNull();
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      shelterIntentScore: 1_000_000,
+    })).not.toBeNull();
+  });
+
+  it("rejects a continuing shelter intent rather than repeating on every weather tick", () => {
+    const { input, initialWork } = shelterWhineFixture();
+    const continuedPerception = stepActorPerception(input.dog.perception, {
+      tick: 2,
+      observations: [],
+    });
+    if (continuedPerception === null) {
+      throw new Error("Dog shelter whine continued perception did not advance");
+    }
+    const continuedDog = replaceDogActorPerception(input.dog, continuedPerception);
+    expect(continuedDog.intent).toMatchObject({
+      kind: "seek-shelter",
+      enteredAtTick: 1,
+    });
+
+    expect(guardianDogShelterWhineExpressionIntent({
+      dog: continuedDog,
+      workingAnimals: commitActorDeference(
+        initialWork,
+        continuedPerception,
+        "actor-intent:seek-shelter",
+      ),
+      completedTick: 2,
+      shelterIntentScore: input.shelterIntentScore,
+    })).toBeNull();
+  });
+
+  it("rejects mismatched condition and work causes or a missing committed deference", () => {
+    const { input, initialWork } = shelterWhineFixture();
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      workingAnimals: initialWork,
+    })).toBeNull();
+    expect(guardianDogShelterWhineExpressionIntent(
+      shelterWhineFixture("actor-intent:rest").input,
+    )).toBeNull();
+    expect(guardianDogShelterWhineExpressionIntent(
+      shelterWhineFixture(
+        "actor-intent:seek-shelter",
+        "condition:forged-weather-exposure",
+      ).input,
+    )).toBeNull();
+
+    const wrongIntentDog = setDogActorIntent(input.dog, {
+      kind: "rest",
+      cause: { kind: "need", referenceId: "need:rest" },
+      enteredAtTick: 1,
+      nextThinkTick: 3,
+    });
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      dog: wrongIntentDog,
+    })).toBeNull();
+  });
+
+  it("requires exactly one canonical guardian assignment for the dog", () => {
+    const { input } = shelterWhineFixture();
+    const assignment = input.workingAnimals.assignments[0]!;
+    expect(guardianDogShelterWhineExpressionIntent({
+      ...input,
+      workingAnimals: {
+        ...input.workingAnimals,
+        assignments: [assignment, assignment],
+      },
+    })).toBeNull();
   });
 });

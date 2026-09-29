@@ -75,7 +75,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 36;
+  readonly version: 37;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -182,10 +182,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 36
-    || record.payloadVersion !== 36
+    || envelope.version !== 37
+    || record.payloadVersion !== 37
   ) {
-    throw new Error("fixture did not produce a current v36 regional session save");
+    throw new Error("fixture did not produce a current v37 regional session save");
   }
   return envelope;
 }
@@ -206,7 +206,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 36,
+    payloadVersion: 37,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -693,7 +693,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 36,
+      version: 37,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -716,7 +716,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 5,
+      version: 6,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,

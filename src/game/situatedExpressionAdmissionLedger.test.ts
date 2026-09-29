@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createRegionCoord } from "../sim/regions";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import { situatedExpressionEventIdForTrigger } from "./situatedExpression";
+import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
 import {
   SITUATED_EXPRESSION_ADMISSION_LEDGER_MAX_RECORDS,
   SITUATED_EXPRESSION_ADMISSION_MAX_SEPARATED_ENTITY_IDS,
@@ -10,12 +11,14 @@ import {
   canonicalizeSituatedExpressionAdmissionLedger,
   canonicalizeSituatedExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
+  createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
+  type GuardianDogShelterWhineExpressionAdmissionInput,
   type PlayerTraversalExpressionAdmissionInput,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
@@ -125,10 +128,28 @@ describe("situated-expression admission ledger", () => {
       acceptedAtTick: 912,
       listenerWasSleepingAtAdmission: false,
     });
+    const guardianWhineActivityId = "working-animal:activity:guardian-shelter-whine:1";
+    const guardianWhineScore = 640_000;
+    const guardianWhineTriggerId = guardianDogShelterWhineTriggerEventId(
+      guardianWhineActivityId,
+      guardianWhineScore,
+    );
+    if (guardianWhineTriggerId === null) throw new Error("Expected whine trigger fixture");
+    const guardianWhine = createGuardianDogShelterWhineExpressionAdmissionRecord({
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId: guardianWhineTriggerId,
+      sampleOrdinal: 5,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId: guardianWhineActivityId,
+      acceptedAtTick: 912,
+      shelterIntentScore: guardianWhineScore,
+      listenerWasSleepingAtAdmission: false,
+    });
     const legacy = createLegacyV33PlayerExpressionAdmissionRecord({
       sourceActorId: PLAYER_ID,
       triggerEventId: "legacy:event:1",
-      sampleOrdinal: 5,
+      sampleOrdinal: 6,
       admittedAtPlayerStepPhase: 9,
     });
 
@@ -138,6 +159,7 @@ describe("situated-expression admission ledger", () => {
       porter,
       guardianDog,
       guardianGrowl,
+      guardianWhine,
       legacy,
     ].map((record) => record?.kind))
       .toEqual([
@@ -146,6 +168,7 @@ describe("situated-expression admission ledger", () => {
       "porter-heavy-departure",
       "guardian-dog-warning",
       "guardian-dog-defensive-growl",
+      "guardian-dog-shelter-whine",
       "legacy-v33-player",
     ]);
     for (const record of [
@@ -154,6 +177,7 @@ describe("situated-expression admission ledger", () => {
       porter,
       guardianDog,
       guardianGrowl,
+      guardianWhine,
       legacy,
     ]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
@@ -164,6 +188,87 @@ describe("situated-expression admission ledger", () => {
     }
     expect(Object.isFrozen(porter?.listenerPosition)).toBe(true);
     expect(Object.isFrozen(porter?.listenerPosition.region)).toBe(true);
+  });
+
+  it("binds shelter whines to one non-player phase-zero assignment transaction", () => {
+    const activityTransactionId = "working-animal:activity:guardian-shelter-whine:2";
+    const shelterIntentScore = 650_000;
+    const triggerEventId = guardianDogShelterWhineTriggerEventId(
+      activityTransactionId,
+      shelterIntentScore,
+    );
+    if (triggerEventId === null) throw new Error("Expected whine trigger fixture");
+    const input = {
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId,
+      acceptedAtTick: 915,
+      shelterIntentScore,
+      listenerWasSleepingAtAdmission: false,
+    } as const;
+    const canonical = createGuardianDogShelterWhineExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        GUARDIAN_DOG_ID,
+        input.triggerEventId,
+      ),
+      kind: "guardian-dog-shelter-whine",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      sourceActorId: PLAYER_ID,
+    })).toBeNull();
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      activityTransactionId: "working-animal:activity:different",
+    })).toBeNull();
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      shelterIntentScore: shelterIntentScore + 1,
+    })).toBeNull();
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      admittedAtPlayerStepPhase: 1,
+    })).toBeNull();
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      listenerWasSleepingAtAdmission: "yes" as never,
+    })).toBeNull();
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+      ...input,
+      acceptedAtTick: -0,
+    })).toBeNull();
+
+    for (const shelterIntentScore of [0, -0, -1, 1.5, 1_000_001, Number.NaN]) {
+      expect(createGuardianDogShelterWhineExpressionAdmissionRecord({
+        ...input,
+        shelterIntentScore,
+      })).toBeNull();
+    }
+
+    const missingInputScore = { ...input } as Record<string, unknown>;
+    delete missingInputScore.shelterIntentScore;
+    expect(createGuardianDogShelterWhineExpressionAdmissionRecord(
+      missingInputScore as unknown as GuardianDogShelterWhineExpressionAdmissionInput,
+    )).toBeNull();
+
+    const missing = { ...canonical } as Record<string, unknown>;
+    delete missing.shelterIntentScore;
+    expect(canonicalizeSituatedExpressionAdmissionRecord(missing)).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      sourceObservationId: "not-part-of-shelter-whine-authority",
+    })).toBeNull();
   });
 
   it("binds defensive growls to one non-player phase-zero retreat transaction", () => {

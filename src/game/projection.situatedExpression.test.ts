@@ -156,6 +156,32 @@ function canonicalDogDefensiveGrowl(
   return reduced.state.active;
 }
 
+function canonicalDogShelterWhine(
+  dog: DogActorState,
+  triggerEventId: string,
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: dog.identity.stableId,
+    triggerEventId,
+    position: dog.address.position,
+    meaning: "guardian-dog-shelter-whine",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-weather-distress",
+    priority: 700_000,
+    salience: 680_000,
+    variantSeed: 0xd06,
+    durationSteps: 8,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Dog whine expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function dogInWindow(
   window: ReturnType<typeof createRegionalTerrainWindow>,
   tileX = 18,
@@ -573,5 +599,78 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toContain(dog.identity.stableId);
     expect(JSON.stringify(caption)).not.toContain(String(dog.address.position.localX));
     expect(JSON.stringify(caption)).not.toContain("threat");
+  });
+
+  it("anchors a heard-visible shelter whine only to its authenticated dog", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = recognizableDog(dogInWindow(window));
+    const dogActorRoster = createDogActorRoster([dog]);
+    const expression = canonicalDogShelterWhine(dog, "dog-signal:visible-whine");
+    const reception = heardVisibleReception(expression);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressions).toEqual([expect.objectContaining({
+      sourceActorId: dog.identity.stableId,
+      sourceKind: "animal",
+      speakerLabel: "Familiar dog",
+      text: "WHINE...",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "restrained",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Familiar dog",
+      text: "WHINE...",
+      presentationKind: "animal-call",
+      animalCallKind: "whine",
+      assertive: false,
+    });
+  });
+
+  it("keeps an unseen shelter whine directional without revealing its weather cause or exact position", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const expression = canonicalDogShelterWhine(dog, "dog-signal:hidden-whine");
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI / 2, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 2_000, maximum: 7_000 },
+      certainty: 0.61,
+    });
+    if (reception === null) throw new Error("Hidden whine reception fixture was rejected");
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A dog",
+      text: "WHINE...",
+      presentationKind: "animal-call",
+      animalCallKind: "whine",
+      directionLabel: "south",
+      assertive: false,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain(dog.identity.stableId);
+    expect(JSON.stringify(caption)).not.toContain(String(dog.address.position.localX));
+    expect(JSON.stringify(caption)).not.toContain("weather");
+    expect(JSON.stringify(caption)).not.toContain("shelter");
+    expect(JSON.stringify(caption)).not.toContain("storm");
   });
 });
