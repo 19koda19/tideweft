@@ -5,6 +5,7 @@ import { createTideweftRuntime } from "./runtime";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
+  spatialPanForBearing: () => 0,
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
     play(...args: unknown[]): void { soundscapePlay(...args); }

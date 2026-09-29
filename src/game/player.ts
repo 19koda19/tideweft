@@ -225,6 +225,15 @@ const PACE_SPEED: Record<TravelPace, number> = {
   swift: 164,
 };
 
+/**
+ * Exact radial ceiling for one currently supported ordinary fixed step.
+ * Save-authority replay imports this contract, so future gait work must update
+ * the movement owner rather than silently widening a persistence validator.
+ */
+export const PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS = Math.floor(
+  (PACE_SPEED.swift * 1_050 * 1_120) / 1_000_000,
+);
+
 const PACE_STAMINA_DRAIN: Readonly<Record<Exclude<TravelPace, "rest">, number>> = {
   // At ten fixed steps per second, an empty porter on ordinary meadow can
   // walk for a little over two minutes. Terrain and water add their own
@@ -718,7 +727,7 @@ export function stepPlayer(
   player.velocityX = velocityX;
   player.velocityY = velocityY;
   if (velocityX || velocityY) {
-    player.facingMilliRadians = approximateAngleMilliRadians(velocityX, velocityY);
+    player.facingMilliRadians = playerFacingMilliRadiansForVelocity(velocityX, velocityY);
     const paceDrain = PACE_STAMINA_DRAIN[player.pace === "swift" ? "swift" : "steady"];
     const burdenDrain = burdenEffortPerStep(loadRatio);
     const rawTerrainDrain = Math.max(
@@ -1630,7 +1639,10 @@ function stepSweptPlayer(
   player.stamina = clamp(player.stamina + motion.staminaDelta, 0, FIXED_POINT);
   player.pace = motion.paddling ? "steady" : "rest";
   if (player.velocityX !== 0 || player.velocityY !== 0) {
-    player.facingMilliRadians = approximateAngleMilliRadians(player.velocityX, player.velocityY);
+    player.facingMilliRadians = playerFacingMilliRadiansForVelocity(
+      player.velocityX,
+      player.velocityY,
+    );
   }
 
   player.sweepTicksRemaining = Math.max(0, player.sweepTicksRemaining - 1);
@@ -1975,7 +1987,8 @@ function tileIndexAt(x: number, y: number, width: number, height: number): numbe
   return tileY * width + tileX;
 }
 
-function approximateAngleMilliRadians(x: number, y: number): number {
+/** Exact fixed-step facing quantization shared by movement and save replay. */
+export function playerFacingMilliRadiansForVelocity(x: number, y: number): number {
   return Math.round(Math.atan2(y, x) * 1_000);
 }
 

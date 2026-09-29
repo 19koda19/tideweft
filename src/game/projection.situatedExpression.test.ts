@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { TILE_UNITS, createPlayer } from "./player";
-import { projectGameView } from "./projection";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import { projectGameView, projectResidentWorldPosition } from "./projection";
 import {
   createRegionalCartography,
   projectRegionalCartographyWindow,
@@ -19,16 +20,25 @@ import {
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
 } from "./situatedExpression";
+import {
+  createHeardVisibleSituatedExpressionReception,
+  createSelfSituatedExpressionReception,
+  type SituatedExpressionReception,
+} from "./situatedExpressionReception";
 import { createWorldPosition } from "./worldPosition";
+import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { createSessionState } from "./sessionTypes";
+import { projectUIView } from "./uiProjection";
 
 const SIGNED_REGION = createRegionCoord(-7, -12);
+const COMPATIBILITY_REGION = createRegionCoord(0, 0);
 
-function projectionFixture() {
+function projectionFixture(center = SIGNED_REGION) {
   const state = createWorld("signed situated expression projection", "standard");
   const compatibility = createWorldView(state);
   const stream = createTerrainRegionStreamingState({
     rootSeed: state.meta.rootSeed,
-    center: SIGNED_REGION,
+    center,
   });
   const window = createRegionalTerrainWindow(state.meta.rootSeed, stream);
   const knowledge = projectRegionalCartographyWindow(
@@ -49,16 +59,17 @@ function projectionFixture() {
   player.currentTrace = [playerIndex];
   player.surveyTrace = [playerIndex];
   player.sweepPath = [];
-  return { player, window, world };
+  return { compatibility, player, window, world };
 }
 
 function canonicalExpression(
   triggerEventId: string,
   position = createWorldPosition(SIGNED_REGION, 25_250, 44_500),
+  sourceActorId: string = LOCAL_PLAYER_LIVING_ACTOR_ID,
 ): SituatedExpressionEvent {
   const intent: SituatedExpressionIntent = {
     version: SITUATED_EXPRESSION_VERSION,
-    sourceActorId: "player:signed-projection",
+    sourceActorId,
     triggerEventId,
     position,
     meaning: "protect-important-cargo",
@@ -82,19 +93,39 @@ function canonicalExpression(
   return advanced.active;
 }
 
+function selfReception(event: SituatedExpressionEvent): SituatedExpressionReception {
+  const reception = createSelfSituatedExpressionReception(event, 42);
+  if (reception === null) throw new Error("Self expression receipt was rejected");
+  return reception;
+}
+
+function heardVisibleReception(event: SituatedExpressionEvent): SituatedExpressionReception {
+  const reception = createHeardVisibleSituatedExpressionReception(
+    event,
+    42,
+    800_000,
+    true,
+  );
+  if (reception === null) throw new Error("Heard-visible expression receipt was rejected");
+  return reception;
+}
+
 describe("situated expression game projection", () => {
   it("maps one canonical expression from signed negative regional coordinates", () => {
     const { player, window, world } = projectionFixture();
     const expression = canonicalExpression("projection:signed-window");
 
     expect(window.origin).toEqual({ x: -684, y: -888 });
-    expect(projectGameView(world, player, { situatedExpression: expression }).expressions)
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: selfReception(expression),
+    }).expressions)
       .toEqual([{
-        id: "situated-expression:event:v1:f58416b90699183a",
-        sourceActorId: "player:signed-projection",
+        id: "situated-expression:event:v1:2011fc98f7767b00",
+        sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
         sourceKind: "player",
         speakerLabel: "You",
-        text: "Keep the load close.",
+        text: "Hold fast.",
         position: { x: 894, y: 1_644 },
         progress: 0.375,
         priority: 420_000,
@@ -110,7 +141,150 @@ describe("situated expression game projection", () => {
       createWorldPosition(createRegionCoord(-9, -12), 25_250, 44_500),
     );
 
-    expect(projectGameView(world, player, { situatedExpression: expression }).expressions)
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: selfReception(expression),
+    }).expressions)
       .toEqual([]);
+  });
+
+  it("projects neither overhead text nor a caption without the exact reception receipt", () => {
+    const { compatibility, player, world } = projectionFixture();
+    const session = createSessionState(world.seedText);
+    const expression = canonicalExpression("projection:receipt-required");
+    const otherExpression = canonicalExpression("projection:other-receipt");
+    const mismatchedReceipt = selfReception(otherExpression);
+
+    for (const situatedExpressionReception of [undefined, mismatchedReceipt]) {
+      expect(projectGameView(world, player, {
+        situatedExpression: expression,
+        ...(situatedExpressionReception === undefined
+          ? {}
+          : { situatedExpressionReception }),
+      }).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        situatedExpression: expression,
+        ...(situatedExpressionReception === undefined
+          ? {}
+          : { situatedExpressionReception }),
+      }).expressionCaption).toBeUndefined();
+    }
+  });
+
+  it("projects neither overhead text nor a caption for impossible swapped reception modes", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const playerExpression = canonicalExpression(
+      "projection:player-heard-visible",
+      createWorldPosition(COMPATIBILITY_REGION, 25_250, 44_500),
+    );
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    const residentExpression = canonicalExpression(
+      "projection:resident-self",
+      placement.position,
+      resident.identity.stableId,
+    );
+
+    for (const [expression, situatedExpressionReception] of [
+      [playerExpression, heardVisibleReception(playerExpression)],
+      [residentExpression, selfReception(residentExpression)],
+    ] as const) {
+      expect(projectGameView(world, player, {
+        situatedExpression: expression,
+        situatedExpressionReception,
+      }).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        situatedExpression: expression,
+        situatedExpressionReception,
+      }).expressionCaption).toBeUndefined();
+    }
+  });
+
+  it("authenticates current residents and reveals only a legitimately known name", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    const expression = canonicalExpression(
+      "projection:resident-source",
+      placement.position,
+      resident.identity.stableId,
+    );
+    const reception = heardVisibleReception(expression);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressions?.[0])
+      .toMatchObject({
+        sourceActorId: resident.identity.stableId,
+        sourceKind: "human",
+        speakerLabel: "Unknown porter",
+      });
+
+    resident.playerKnowledge.facts.push("name");
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressions?.[0])
+      .toMatchObject({
+        sourceKind: "human",
+        speakerLabel: resident.name,
+      });
+  });
+
+  it("keeps Chart/Relief and caption labels aligned and rejects unauthenticated sources", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    const session = createSessionState(world.seedText);
+    const expression = canonicalExpression(
+      "projection:resident-caption",
+      placement.position,
+      resident.identity.stableId,
+    );
+    const reception = heardVisibleReception(expression);
+
+    const game = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    });
+    const ui = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    });
+    expect(game.expressions?.[0]?.speakerLabel).toBe("Unknown porter");
+    expect(ui.expressionCaption?.speakerLabel).toBe("Unknown porter");
+
+    const fabricated = canonicalExpression(
+      "projection:fabricated-source",
+      placement.position,
+      "human:not-a-current-resident",
+    );
+    expect(projectGameView(world, player, {
+      situatedExpression: fabricated,
+      situatedExpressionReception: heardVisibleReception(fabricated),
+    }).expressions)
+      .toEqual([]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: fabricated,
+      situatedExpressionReception: heardVisibleReception(fabricated),
+    }).expressionCaption).toBeUndefined();
   });
 });

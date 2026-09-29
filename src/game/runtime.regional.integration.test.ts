@@ -56,6 +56,7 @@ import {
   regionalStorageRegionsInView,
   regionalTileIndexInView,
 } from "./regionalWorldView";
+import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import type { PorterResponseState } from "./porterResponse";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { GameSessionState } from "./sessionTypes";
@@ -72,7 +73,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 33;
+  readonly version: 34;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -164,12 +165,12 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 33
-    || record.payloadVersion !== 33
-  ) throw new Error("fixture did not produce a current v33 regional save");
+    || value.version !== 34
+    || record.payloadVersion !== 34
+  ) throw new Error("fixture did not produce a current v34 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v33 outer envelope does not match its integrity seal");
+    throw new Error("fixture v34 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -208,7 +209,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 33,
+    payloadVersion: 34,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -507,11 +508,32 @@ function relocateToEastSeam(
         ),
       }
     : { version: 1, contractId: null, detoured: false, compatibilityTrace: [] };
+  const intervalStartPosition = playerWorldPositionInRegionalWindow(
+    alignedTravel.window,
+    player,
+  );
+  if (intervalStartPosition === null) {
+    throw new Error("relocated seam fixture has no canonical phase-zero pose");
+  }
+  if (
+    envelope.perceptionCarry === null
+    || typeof envelope.perceptionCarry !== "object"
+    || Array.isArray(envelope.perceptionCarry)
+  ) throw new Error("relocated seam fixture omitted its perception carry");
+  const perceptionCarry = structuredClone(envelope.perceptionCarry) as Record<string, unknown>;
+  if (perceptionCarry.playerStepsSinceWorldTick !== 0) {
+    throw new Error("relocated seam fixture requires a phase-zero perception interval");
+  }
   return {
     ...envelope,
     player,
     regionalTravel,
     promiseJourney,
+    perceptionCarry: {
+      ...perceptionCarry,
+      intervalStartPosition,
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
+    },
     regionalEcology: rebaseFixtureRegionalEcology(
       envelope.regionalEcology,
       world.meta.rootSeed,

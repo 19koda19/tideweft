@@ -14,6 +14,7 @@ const soundscapeControl = vi.hoisted(() => ({
 }));
 
 vi.mock("../audio/soundscape", () => ({
+  spatialPanForBearing: () => 0,
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
     play(cue: string, gain?: number): void {

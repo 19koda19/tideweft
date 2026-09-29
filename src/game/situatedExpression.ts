@@ -18,12 +18,14 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "protect-important-cargo",
   "alarm-at-cargo-loss",
   "relief-after-cargo-recovery",
+  "porter-heavy-load",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
 export const SITUATED_EXPRESSION_FAMILIES = Object.freeze([
   "footing",
   "cargo",
+  "work",
 ] as const);
 export type SituatedExpressionFamily = (typeof SITUATED_EXPRESSION_FAMILIES)[number];
 
@@ -48,6 +50,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-observed-cargo-risk",
   "self-observed-cargo-loss",
   "self-recovered-cargo",
+  "self-handled-heavy-cargo",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
@@ -173,6 +176,11 @@ interface SemanticLaw {
   readonly familyCooldownSteps: number;
 }
 
+export interface SituatedExpressionCooldownSteps {
+  readonly meaning: number;
+  readonly family: number;
+}
+
 const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = Object.freeze({
   "steady-after-stumble": Object.freeze({
     family: "footing",
@@ -214,7 +222,36 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 14,
     familyCooldownSteps: 5,
   }),
+  "porter-heavy-load": Object.freeze({
+    family: "work",
+    knowledgeBasis: "self-handled-heavy-cargo",
+    tones: new Set<SituatedExpressionTone>(["strained"]),
+    volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
+    meaningCooldownSteps: 30,
+    familyCooldownSteps: 10,
+  }),
 });
+
+/** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
+export function situatedExpressionCooldownSteps(
+  meaning: unknown,
+): SituatedExpressionCooldownSteps | null {
+  if (!isMeaning(meaning)) return null;
+  const law = SEMANTIC_LAWS[meaning];
+  return Object.freeze({
+    meaning: law.meaningCooldownSteps,
+    family: law.familyCooldownSteps,
+  });
+}
+
+/** Derives the stable event identity shared by active events and recent memory. */
+export function situatedExpressionEventIdForTrigger(
+  sourceActorId: unknown,
+  triggerEventId: unknown,
+): string | null {
+  if (!validId(sourceActorId) || !validId(triggerEventId)) return null;
+  return eventIdFor(sourceActorId, triggerEventId);
+}
 
 interface PresentationRealization {
   readonly key: string;
@@ -249,6 +286,11 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({ key: "situated-expression.en.v1.relief-after-cargo-recovery.0", text: "Got it back." }),
     Object.freeze({ key: "situated-expression.en.v1.relief-after-cargo-recovery.1", text: "Cargo secured." }),
     Object.freeze({ key: "situated-expression.en.v1.relief-after-cargo-recovery.2", text: "That's recovered." }),
+  ]),
+  "porter-heavy-load": Object.freeze([
+    Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.0", text: "Heavy one." }),
+    Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.1", text: "Got it." }),
+    Object.freeze({ key: "situated-expression.en.v1.porter-heavy-load.2", text: "Easy." }),
   ]),
 });
 
@@ -331,14 +373,16 @@ export function reduceSituatedExpression(
     return silentReduction(state, "duplicate-trigger");
   }
   if (state.recent.some((entry) => (
-    entry.meaning === intent.meaning
+    entry.sourceActorId === intent.sourceActorId
+      && entry.meaning === intent.meaning
       && entry.meaningCooldownRemainingSteps > 0
   ))) {
     return silentReduction(state, "meaning-cooldown");
   }
   const resolvesRecentCargoLoss = intentResolvesRecentCargoLoss(state, intent);
   if (state.recent.some((entry) => (
-    entry.family === intent.family
+    entry.sourceActorId === intent.sourceActorId
+      && entry.family === intent.family
       && entry.familyCooldownRemainingSteps > 0
       && intent.priority <= entry.priority
   )) && !resolvesRecentCargoLoss) {

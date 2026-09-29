@@ -6,6 +6,7 @@ import {
   SITUATED_EXPRESSION_VERSION,
   acknowledgeSituatedExpression,
   advanceSituatedExpression,
+  canonicalizeSituatedExpressionState,
   createSituatedExpressionState,
   projectSituatedExpression,
   reduceSituatedExpression,
@@ -90,6 +91,28 @@ function cargoRecoveryIntent(triggerEventId: string): SituatedExpressionIntent {
     salience: 720_000,
     variantSeed: 233,
     durationSteps: 7,
+  };
+}
+
+function heavyPorterIntent(
+  triggerEventId: string,
+  overrides: Partial<SituatedExpressionIntent> = {},
+): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: SPEAKER_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "porter-heavy-load",
+    family: "work",
+    tone: "strained",
+    volume: "spoken",
+    knowledgeBasis: "self-handled-heavy-cargo",
+    priority: 240_000,
+    salience: 320_000,
+    variantSeed: 377,
+    durationSteps: 6,
+    ...overrides,
   };
 }
 
@@ -232,6 +255,112 @@ describe("generic situated-expression kernel", () => {
     expect(projection?.text.length).toBeGreaterThan(0);
     expect(Object.keys(first.event)).not.toContain("text");
     expect(JSON.stringify(first.event)).not.toContain(projection?.text ?? "impossible-text");
+  });
+
+  it("admits restrained heavy-porter work only from self-handled cargo truth", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      heavyPorterIntent("work:porter:heavy:1"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      reason: "accepted",
+      event: {
+        meaning: "porter-heavy-load",
+        family: "work",
+        tone: "strained",
+        volume: "spoken",
+        knowledgeBasis: "self-handled-heavy-cargo",
+        vocalization: "strained",
+      },
+    });
+    if (reduction.event === null) throw new Error("Heavy porter expression was not accepted");
+    expect(projectSituatedExpression(reduction.event)?.text).toMatch(/^(Heavy one\.|Got it\.|Easy\.)$/u);
+
+    for (const forged of [
+      heavyPorterIntent("work:porter:heavy:wrong-family", { family: "cargo" }),
+      heavyPorterIntent("work:porter:heavy:wrong-knowledge", {
+        knowledgeBasis: "self-observed-cargo-risk",
+      }),
+      heavyPorterIntent("work:porter:heavy:wrong-tone", { tone: "alarmed" }),
+      heavyPorterIntent("work:porter:heavy:wrong-volume", { volume: "shout" }),
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged)).toMatchObject({
+        accepted: false,
+        reason: "invalid-intent",
+        event: null,
+      });
+    }
+  });
+
+  it("keeps heavy-work chatter bounded and every restrained authored line reachable", () => {
+    const acceptedWork = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      heavyPorterIntent("work:porter:heavy:cooldown"),
+    );
+    if (acceptedWork.state === null) throw new Error("Heavy porter cooldown fixture was not accepted");
+    const afterLine = advanceSituatedExpression(acceptedWork.state, 6);
+    if (afterLine === null) throw new Error("Heavy porter cooldown state failed to advance");
+    expect(reduceSituatedExpression(
+      afterLine,
+      heavyPorterIntent("work:porter:heavy:too-soon", { variantSeed: 378 }),
+    )).toMatchObject({
+      accepted: false,
+      reason: "meaning-cooldown",
+    });
+
+    const lines = new Set<string>();
+    for (let variantSeed = 0; variantSeed < 64; variantSeed += 1) {
+      const event = reduceSituatedExpression(
+        createSituatedExpressionState(),
+        heavyPorterIntent(`work:porter:heavy:line:${variantSeed}`, { variantSeed }),
+      ).event;
+      if (event === null) throw new Error("Heavy porter realization fixture was not accepted");
+      const projection = projectSituatedExpression(event);
+      if (projection === null) throw new Error("Heavy porter realization did not project");
+      lines.add(projection.text);
+    }
+    expect([...lines].sort()).toEqual(["Easy.", "Got it.", "Heavy one."]);
+  });
+
+  it("scopes semantic cooldowns to the actor who actually spoke", () => {
+    const first = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      heavyPorterIntent("work:porter:heavy:first"),
+    );
+    if (first.state === null) throw new Error("First porter expression was not accepted");
+    const afterLine = advanceSituatedExpression(first.state, 6);
+    if (afterLine === null) throw new Error("Porter expression state failed to advance");
+
+    expect(reduceSituatedExpression(
+      afterLine,
+      heavyPorterIntent("work:porter:heavy:other", {
+        sourceActorId: "human:porter:other",
+      }),
+    )).toMatchObject({
+      accepted: true,
+      reason: "accepted",
+      event: { sourceActorId: "human:porter:other" },
+    });
+  });
+
+  it("keeps existing version-one states canonical after appending work vocabulary", () => {
+    const priorVocabularyState = accepted(
+      createSituatedExpressionState(41),
+      stumbleIntent("traversal:v1-compatibility"),
+    );
+    const serialized = structuredClone(priorVocabularyState);
+    const restored = canonicalizeSituatedExpressionState(serialized);
+    expect(restored).toEqual(priorVocabularyState);
+    expect(restored).toMatchObject({
+      version: 1,
+      active: {
+        version: 1,
+        catalogVersion: 1,
+        meaning: "steady-after-stumble",
+        family: "footing",
+      },
+    });
   });
 
   it("fails closed on malformed input and keeps recent memory bounded", () => {

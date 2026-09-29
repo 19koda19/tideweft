@@ -1,0 +1,559 @@
+import { describe, expect, it } from "vitest";
+
+import { createRegionCoord } from "../sim/regions";
+import {
+  createSupplementalSoundSample,
+  type SupplementalSoundSample,
+} from "./humanPerception";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import {
+  acknowledgeSituatedExpression,
+  advanceSituatedExpression,
+  createSituatedExpressionState,
+  reduceSituatedExpression,
+  situatedExpressionEventIdForTrigger,
+  type SituatedExpressionEvent,
+  type SituatedExpressionIntent,
+  type SituatedExpressionState,
+} from "./situatedExpression";
+import {
+  canonicalizeSituatedExpressionAdmissionLedger,
+  createPorterHeavyDepartureExpressionAdmissionRecord,
+  type SituatedExpressionAdmissionLedger,
+  type SituatedExpressionAdmissionRecord,
+} from "./situatedExpressionAdmissionLedger";
+import {
+  canonicalizeSituatedExpressionChannelBank,
+  type SituatedExpressionChannelBank,
+} from "./situatedExpressionChannelBank";
+import {
+  createHeardVisibleSituatedExpressionReception,
+  createSelfSituatedExpressionReception,
+} from "./situatedExpressionReception";
+import {
+  canonicalizeSituatedExpressionTrajectory,
+  situatedExpressionTrajectoryIsCanonical,
+} from "./situatedExpressionTrajectory";
+import { createWorldPosition } from "./worldPosition";
+
+const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
+const PORTER_ID = "H-expression-trajectory-porter";
+const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
+
+interface Fixture {
+  readonly bank: SituatedExpressionChannelBank;
+  readonly ledger: SituatedExpressionAdmissionLedger;
+  readonly phase: number;
+  readonly samples: readonly SupplementalSoundSample[];
+}
+
+type Mutable<T> = T extends readonly (infer Element)[]
+  ? Mutable<Element>[]
+  : T extends object
+    ? { -readonly [Key in keyof T]: Mutable<T[Key]> }
+    : T;
+
+function mutable<T>(value: T): Mutable<T> {
+  return structuredClone(value) as Mutable<T>;
+}
+
+function intent(
+  triggerEventId: string,
+  priority = 180_000,
+  durationSteps = 7,
+): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: PLAYER_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "steady-after-stumble",
+    family: "footing",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-felt-stumble",
+    priority,
+    salience: priority + 80_000,
+    variantSeed: priority,
+    durationSteps,
+  };
+}
+
+function seriousIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...intent(triggerEventId, 420_000, 10),
+    meaning: "relief-after-near-fall",
+    tone: "relieved",
+    volume: "spoken",
+    knowledgeBasis: "self-felt-near-fall",
+    salience: 650_000,
+  };
+}
+
+function porterIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: PORTER_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "porter-heavy-load",
+    family: "work",
+    tone: "strained",
+    volume: "spoken",
+    knowledgeBasis: "self-handled-heavy-cargo",
+    priority: 240_000,
+    salience: 420_000,
+    variantSeed: 71,
+    durationSteps: 8,
+  };
+}
+
+function accept(
+  state: SituatedExpressionState,
+  candidate: SituatedExpressionIntent,
+): Readonly<{ event: SituatedExpressionEvent; state: SituatedExpressionState }> {
+  const reduction = reduceSituatedExpression(state, candidate);
+  if (!reduction.accepted || reduction.event === null || reduction.state === null) {
+    throw new Error(`fixture admission failed: ${reduction.reason}`);
+  }
+  const acknowledged = acknowledgeSituatedExpression(reduction.state);
+  if (acknowledged.state === null || acknowledged.state.active === null) {
+    throw new Error("fixture admission did not acknowledge");
+  }
+  return { event: acknowledged.state.active, state: acknowledged.state };
+}
+
+function traversalRecord(
+  event: SituatedExpressionEvent,
+  sampleOrdinal: number,
+  admittedAtPlayerStepPhase: number,
+): SituatedExpressionAdmissionRecord {
+  const serious = event.meaning === "relief-after-near-fall";
+  return {
+    version: 1,
+    kind: "player-traversal",
+    eventId: event.eventId,
+    sourceActorId: event.sourceActorId,
+    triggerEventId: event.triggerEventId,
+    sampleOrdinal,
+    admittedAtPlayerStepPhase,
+    causalClass: serious ? "serious-stumble" : "ordinary-stumble",
+    incidentKind: "stumble",
+    hazardSeverity: serious ? 700_000 : 200_000,
+    cargoOutcome: "unchanged",
+    selectedPayloadKind: null,
+    cargoShock: 0,
+    separatedEntityIds: [],
+    separationEventId: null,
+  };
+}
+
+function legacyRecord(
+  event: SituatedExpressionEvent,
+  sampleOrdinal: number,
+  admittedAtPlayerStepPhase: number,
+): SituatedExpressionAdmissionRecord {
+  return {
+    version: 1,
+    kind: "legacy-v33-player",
+    eventId: event.eventId,
+    sourceActorId: event.sourceActorId,
+    triggerEventId: event.triggerEventId,
+    sampleOrdinal,
+    admittedAtPlayerStepPhase,
+  };
+}
+
+function ledger(records: readonly SituatedExpressionAdmissionRecord[]) {
+  const canonical = canonicalizeSituatedExpressionAdmissionLedger({
+    version: 1,
+    records,
+  });
+  if (canonical === null) throw new Error("fixture ledger was not canonical");
+  return canonical;
+}
+
+function sample(event: SituatedExpressionEvent, ordinal: number): SupplementalSoundSample {
+  const result = createSupplementalSoundSample({
+    id: `av-40-${ordinal}`,
+    expressionEventId: event.eventId,
+    position: event.position,
+    soundLoudness: 360_000,
+    soundRangeUnits: 8_000,
+    soundClass: "human-vocalization",
+    soundInterrupt: "none",
+    sourceActorId: event.sourceActorId,
+  });
+  if (result === null) throw new Error("fixture sound was not canonical");
+  return result;
+}
+
+function bank(state: SituatedExpressionState): SituatedExpressionChannelBank {
+  const reception = state.active === null
+    ? null
+    : createSelfSituatedExpressionReception(state.active, 40);
+  const canonical = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: PLAYER_ID, state, reception }],
+  });
+  if (canonical === null) throw new Error("fixture bank was not canonical");
+  return canonical;
+}
+
+function porterFixture(): Fixture {
+  const phase = 3;
+  const receivedAtTick = 40;
+  const hearingCertainty = 800_000;
+  const admitted = accept(
+    createSituatedExpressionState(),
+    porterIntent("sim-event:contract-departed:12:7"),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture porter expression expired unexpectedly");
+  }
+  const reception = createHeardVisibleSituatedExpressionReception(
+    current.active,
+    receivedAtTick,
+    hearingCertainty,
+    true,
+  );
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: PORTER_ID, state: current, reception }],
+  });
+  const record = createPorterHeavyDepartureExpressionAdmissionRecord({
+    sourceActorId: PORTER_ID,
+    triggerEventId: admitted.event.triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    receivedAtTick,
+    listenerPosition: POSITION,
+    listenerFacingMilliRadians: 0,
+    hearingCertainty,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture porter trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [sample(admitted.event, 0)],
+  };
+}
+
+function oneAdmissionFixture(): Fixture {
+  const admissionPhase = 2;
+  const phase = 5;
+  const admitted = accept(createSituatedExpressionState(), intent("incident:one"));
+  const state = advanceSituatedExpression(admitted.state, phase - admissionPhase);
+  if (state === null) throw new Error("fixture state did not advance");
+  return {
+    bank: bank(state),
+    ledger: ledger([traversalRecord(admitted.event, 0, admissionPhase)]),
+    phase,
+    samples: [sample(admitted.event, 0)],
+  };
+}
+
+function legacyActiveFixture(): Fixture {
+  const admissionPhase = 2;
+  const phase = 5;
+  const admitted = accept(
+    createSituatedExpressionState(),
+    intent("legacy:trajectory:active"),
+  );
+  const state = advanceSituatedExpression(admitted.state, phase - admissionPhase);
+  if (state === null) throw new Error("legacy fixture state did not advance");
+  return {
+    bank: bank(state),
+    ledger: ledger([legacyRecord(admitted.event, 0, admissionPhase)]),
+    phase,
+    samples: [sample(admitted.event, 0)],
+  };
+}
+
+function interruptedFixture(): Fixture {
+  const firstPhase = 1;
+  const secondPhase = 3;
+  const phase = 5;
+  const first = accept(createSituatedExpressionState(), intent("incident:first"));
+  const atSecondPhase = advanceSituatedExpression(first.state, secondPhase - firstPhase);
+  if (atSecondPhase === null) throw new Error("fixture state did not reach interruption");
+  const second = accept(atSecondPhase, seriousIntent("incident:second"));
+  const current = advanceSituatedExpression(second.state, phase - secondPhase);
+  if (current === null) throw new Error("fixture interrupted state did not advance");
+  return {
+    bank: bank(current),
+    ledger: ledger([
+      traversalRecord(first.event, 0, firstPhase),
+      traversalRecord(second.event, 1, secondPhase),
+    ]),
+    phase,
+    samples: [sample(first.event, 0), sample(second.event, 1)],
+  };
+}
+
+function accepts(fixture: Fixture): boolean {
+  return situatedExpressionTrajectoryIsCanonical(
+    fixture.bank,
+    fixture.ledger,
+    fixture.phase,
+    fixture.samples,
+  );
+}
+
+describe("situated-expression admission trajectory", () => {
+  it("canonicalizes a phase-aged admission as one frozen conserved bundle", () => {
+    const fixture = oneAdmissionFixture();
+    const canonical = canonicalizeSituatedExpressionTrajectory(
+      fixture.bank,
+      fixture.ledger,
+      fixture.phase,
+      fixture.samples,
+    );
+
+    expect(canonical).not.toBeNull();
+    expect(canonical?.bank.channels[0]?.state).toMatchObject({
+      completedSteps: 3,
+      active: { audioAcknowledged: true, durationSteps: 7, remainingSteps: 4 },
+      recent: [{
+        meaningCooldownRemainingSteps: 9,
+        familyCooldownRemainingSteps: 1,
+      }],
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(Object.isFrozen(canonical?.supplementalSoundSamples)).toBe(true);
+  });
+
+  it("accepts exact newest-first chronology after a higher-priority interruption", () => {
+    const fixture = interruptedFixture();
+
+    expect(accepts(fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.recent.map(({ triggerEventId }) => triggerEventId))
+      .toEqual(["incident:second", "incident:first"]);
+  });
+
+  it("accepts an expired active event while retaining its exactly aged cooldown memory", () => {
+    const admissionPhase = 2;
+    const phase = 9;
+    const admitted = accept(
+      createSituatedExpressionState(),
+      intent("incident:expired"),
+    );
+    const state = advanceSituatedExpression(admitted.state, phase - admissionPhase);
+    if (state === null || state.active !== null) throw new Error("fixture event did not expire");
+    const fixture: Fixture = {
+      bank: bank(state),
+      ledger: ledger([traversalRecord(admitted.event, 0, admissionPhase)]),
+      phase,
+      samples: [sample(admitted.event, 0)],
+    };
+
+    expect(accepts(fixture)).toBe(true);
+  });
+
+  it("binds an active porter's receipt tick and certainty to its admission", () => {
+    const fixture = porterFixture();
+    expect(accepts(fixture)).toBe(true);
+
+    const changedTick = mutable(fixture.bank);
+    if (changedTick.channels[0]!.reception?.kind !== "heard-visible") {
+      throw new Error("fixture lost porter reception");
+    }
+    changedTick.channels[0]!.reception.receivedAtTick += 1;
+    const changedCertainty = mutable(fixture.bank);
+    if (changedCertainty.channels[0]!.reception?.kind !== "heard-visible") {
+      throw new Error("fixture lost porter reception");
+    }
+    changedCertainty.channels[0]!.reception.certainty -= 1;
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      changedTick, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      changedCertainty, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+  });
+
+  it("derives legacy-v33 lifetime from bound memory and rejects later erasure or reset", () => {
+    const fixture = legacyActiveFixture();
+    expect(accepts(fixture)).toBe(true);
+
+    const erased = mutable(fixture.bank);
+    erased.channels[0]!.state.active = null;
+    erased.channels[0]!.reception = null;
+    const reset = mutable(fixture.bank);
+    reset.channels[0]!.state.active!.durationSteps += 1;
+    reset.channels[0]!.state.active!.remainingSteps += 1;
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      erased, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      reset, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+  });
+
+  it("accepts a legacy-v33 event only once its bound fixed lifetime has expired", () => {
+    const admissionPhase = 2;
+    const phase = 9;
+    const admitted = accept(
+      createSituatedExpressionState(),
+      intent("legacy:trajectory:expired"),
+    );
+    const state = advanceSituatedExpression(admitted.state, phase - admissionPhase);
+    if (state === null || state.active !== null) {
+      throw new Error("legacy fixture event did not expire");
+    }
+    const fixture: Fixture = {
+      bank: bank(state),
+      ledger: ledger([legacyRecord(admitted.event, 0, admissionPhase)]),
+      phase,
+      samples: [sample(admitted.event, 0)],
+    };
+
+    expect(accepts(fixture)).toBe(true);
+  });
+
+  it("rejects a deleted, extra, reordered, or rebound pending sound", () => {
+    const fixture = interruptedFixture();
+    const rebound = mutable(fixture.samples);
+    rebound[0] = { ...rebound[0]!, expressionEventId: rebound[1]!.expressionEventId };
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, fixture.samples.slice(1),
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, [...fixture.samples, fixture.samples[0]!],
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, [...fixture.samples].reverse(),
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, rebound,
+    )).toBe(false);
+  });
+
+  it("rejects reordered or deleted recent memory and an orphan ledger admission", () => {
+    const fixture = interruptedFixture();
+    const reordered = mutable(fixture.bank);
+    reordered.channels[0]!.state.recent.reverse();
+    const missing = mutable(fixture.bank);
+    missing.channels[0]!.state.recent.pop();
+    const extraLedger = mutable(fixture.ledger);
+    const orphanEventId = situatedExpressionEventIdForTrigger(PLAYER_ID, "incident:orphan");
+    if (orphanEventId === null) throw new Error("fixture orphan identity failed");
+    extraLedger.records.push({
+      ...extraLedger.records[1]!,
+      triggerEventId: "incident:orphan",
+      eventId: orphanEventId,
+      sampleOrdinal: 2,
+    });
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      reordered, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      missing, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, extraLedger, fixture.phase, fixture.samples,
+    )).toBe(false);
+  });
+
+  it("rejects cooldown, completed-step, active-duration, and acknowledgement resets", () => {
+    const fixture = oneAdmissionFixture();
+    const cooldown = mutable(fixture.bank);
+    cooldown.channels[0]!.state.recent[0]!.meaningCooldownRemainingSteps += 1;
+    const completed = mutable(fixture.bank);
+    completed.channels[0]!.state.completedSteps = 0;
+    const duration = mutable(fixture.bank);
+    duration.channels[0]!.state.active!.remainingSteps += 1;
+    const durationReset = mutable(fixture.bank);
+    durationReset.channels[0]!.state.active!.durationSteps += 1;
+    durationReset.channels[0]!.state.active!.remainingSteps += 1;
+    const unacknowledged = mutable(fixture.bank);
+    unacknowledged.channels[0]!.state.active!.audioAcknowledged = false;
+    const erasedActive = mutable(fixture.bank);
+    erasedActive.channels[0]!.state.active = null;
+    erasedActive.channels[0]!.reception = null;
+
+    for (const candidate of [
+      cooldown,
+      completed,
+      duration,
+      durationReset,
+      unacknowledged,
+      erasedActive,
+    ]) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        candidate, fixture.ledger, fixture.phase, fixture.samples,
+      )).toBe(false);
+    }
+  });
+
+  it("rejects a negative-age phase wrap and an older interrupted event restored active", () => {
+    const single = oneAdmissionFixture();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      single.bank, single.ledger, 1, single.samples,
+    )).toBe(false);
+
+    const interrupted = interruptedFixture();
+    const restored = mutable(interrupted.bank);
+    const oldIntent = intent("incident:first");
+    const oldAtCurrentPhase = accept(createSituatedExpressionState(), oldIntent).state.active;
+    if (oldAtCurrentPhase === null) throw new Error("fixture old event was absent");
+    restored.channels[0]!.state.active = {
+      ...oldAtCurrentPhase,
+      remainingSteps: 3,
+      audioAcknowledged: true,
+    };
+    restored.channels[0]!.reception = createSelfSituatedExpressionReception(
+      restored.channels[0]!.state.active,
+      40,
+    );
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      restored, interrupted.ledger, interrupted.phase, interrupted.samples,
+    )).toBe(false);
+  });
+
+  it("rejects chronological phase rollback and a canonical causal-class rewrite", () => {
+    const interrupted = interruptedFixture();
+    const rollback = mutable(interrupted.ledger);
+    rollback.records[0]!.admittedAtPlayerStepPhase = 4;
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rollback)).not.toBeNull();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      interrupted.bank, rollback, interrupted.phase, interrupted.samples,
+    )).toBe(false);
+
+    const single = oneAdmissionFixture();
+    const rewritten = mutable(single.ledger);
+    const record = rewritten.records[0];
+    if (record?.kind !== "player-traversal") {
+      throw new Error("fixture lost traversal admission");
+    }
+    record.causalClass = "serious-stumble";
+    record.hazardSeverity = 700_000;
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rewritten)).not.toBeNull();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      single.bank, rewritten, single.phase, single.samples,
+    )).toBe(false);
+  });
+
+  it("rejects malformed phases and sparse sound arrays", () => {
+    const fixture = oneAdmissionFixture();
+    const sparse = Array<SupplementalSoundSample>(1);
+
+    for (const phase of [-1, -0, 1.5, Number.MAX_SAFE_INTEGER + 1, "5"]) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        fixture.bank, fixture.ledger, phase, fixture.samples,
+      )).toBe(false);
+    }
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, sparse,
+    )).toBe(false);
+  });
+});

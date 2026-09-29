@@ -110,14 +110,30 @@ Living Voice** is next.
 ### Living Voice: situated-expression foundation
 
 The current unpublished Directive 04_2 source begins with one event-driven
-situated-expression owner and a player traversal adapter. A committed stumble,
-near-fall, important-cargo impact, physical parcel separation, or causally
-proven recovery may submit a semantic intent. The kernel applies bounded
+situated-expression owner. A player traversal adapter can submit a committed
+stumble, near-fall, important-cargo impact, physical parcel separation, or
+causally proven recovery. The first porter-work adapter can submit one
+resident porter's committed departure only after the simulation proves that
+the same persistent human physically took custody of a heavy Promise load and
+entered the contract route. Light cargo, attempted work, and old ledger events
+remain silent; a porter line also requires the player to both lawfully hear it
+and directly see its source at event time. The kernel applies bounded
 salience, priority, interruption, family cooldown, and recent-trigger rules;
 silence is an explicit valid result. Authored wording is selected
 deterministically from actor ID, causal event ID, presentation seed, and catalog
 version. Rendering frequency, wall time, and global RNG cannot select or expire
 a line.
+
+Expression ownership is now isolated by source actor in a deterministically
+ordered bank capped at sixteen retained channels. One person's active line or
+cooldown cannot suppress another person's line. Presentation still selects at
+most one highest-priority local callout/caption at a time, so adding actor
+authority does not create an overhead-text wall. Every projected exact line
+also requires a canonical reception receipt, persisted with pending carry:
+`self` for the courier, or
+`heard-visible` for a non-player source that passed the shared event-time
+hearing model and direct visual disclosure. A receipt does not contain hidden
+identity, prose, or a second position.
 
 Only committed physical facts cross the traversal adapter. A fall cannot call
 itself a near-fall, an attempted pickup cannot claim recovery, and cargo speech
@@ -131,25 +147,62 @@ through the ordinary announcement/live-region path, so separating actor voice
 from system text does not make physical danger audio-only.
 
 Each accepted expression emits at most one brief synthetic vocal contour.
-Nearby humans receive it through a separately bounded hearing-only sound
-sidecar: it has source position, range, loudness, and interruption strength but
-no visual salience or sighting ordinal, so speech cannot manufacture or replace
-a visual observation. The existing fixed-step player-sense carry remains one
-base sample per completed player step.
+Eligible nearby humans may receive it through a separately bounded hearing-only sound
+sidecar: it has an authenticated source actor, source position, range,
+loudness, and interruption strength but no visual salience or sighting ordinal.
+The source actor never anonymously hears their own sample; other humans may hear
+an anonymous directional acoustic fact rather than gaining speaker identity.
+Speech therefore cannot manufacture or replace a visual observation. The
+existing fixed-step player-sense carry remains one base sample per completed
+player step.
 
 Because a pending vocalization can become authoritative human knowledge, the
-unpublished candidate advances the outer save to v33 and the bounded perception
-carry to v2. That carry preserves pending vocal samples plus the active
-expression, audio acknowledgement, and semantic cooldown memory; reload
-therefore cannot erase hearing, admit suppressed chatter, replay acknowledged
-audio, or reroll a line. Exact v5-v32 perception carries migrate to an empty
-voice channel without changing their prior player-recovery authority. Routine
-records still expire under fixed caps rather than growing with play time. Every
-pending voice source must remain on the courier's saved local movement path;
-a resealed remote vocalization is rejected before it can become NPC knowledge.
-Physical incidents, cargo custody, and recovery history remain their own durable
-owners. This first slice does not claim general NPC conversation, animal calls,
-language/relationship realization, or complete Living Voice.
+unpublished porter-work candidate advances the outer save to v34 and the
+bounded perception carry to v3. That carry preserves source-bound pending vocal
+samples plus every retained per-source channel, reception receipt, audio
+acknowledgement, semantic cooldown memory, and a bounded causal-admission
+ledger. The ledger binds each exact sound ordinal to the committed event class,
+admission phase, and only the minimum causal facts needed to reauthenticate its
+meaning. Sound, memory, channel lifetime, and receipt must form one canonical
+trajectory; deleting or acoustically rewriting one side rejects the carry.
+The current carry also records the exact segmented player position and facing
+at phase zero. Load replays every retained fixed step against the movement
+owner's exact displacement ceiling, movement salience, facing changes, final
+velocity, and final player pose. Player traversal/recovery speech must also
+match a separately retained current-interval causal-authority receipt created
+by the physical transaction. Porter departure receipts exist only at phase
+zero and must reproduce that exact anchored listener pose.
+Reload therefore cannot erase hearing, admit suppressed chatter, replay
+acknowledged audio, reset cooldowns, change why a line was selected, or reroll
+its wording.
+Exact v33 player-only carry-v2 saves migrate only uniquely reconstructable
+active or already-expired `pv-*` samples into one authenticated player channel
+and source-bound `av-*` samples; the missing historical phase-zero pose is
+reconstructed once from the retained path and saved player state, unrelated
+cooldown memory is discarded, and
+v34-only meanings are rejected. Exact v5-v32 perception carries still migrate
+through carry v1 to an empty voice bank without changing prior player-recovery
+authority. Routine records expire under fixed caps rather than growing with
+play time. Every current pending player sound remains bound to the exact saved
+physical step position, expression event, admission phase, and retained
+traversal/cargo cause. Resident sources must resolve uniquely to the same
+persistent human at the saved authoritative world position; their event-time
+listener position, facing, hearing certainty, direct visibility, active/recent
+expression, committed contract departure, cargo custody, and route state must
+all reauthenticate. Admission and sound capacity are atomic, so a ninth
+candidate stays silent instead of creating unconserved knowledge. Resealed
+remote, acoustically altered, temporally reset, or causally forged
+vocalizations fail before becoming NPC knowledge.
+
+The source bank is also bounded by the exact perception interval. Save/reload
+may preserve an active line, an expired line's pending sound, and its cooldown
+until that interval is consumed. The closing presentation may still show the
+line once, but all pre-boundary active and cooldown-only state is then retired;
+new same-tick source state survives as the next interval's authority. Physical
+incidents, cargo custody, and recovery history remain their own durable owners.
+This slice does not yet claim other work expression where no authoritative
+completed-work event exists; it also does not claim general NPC conversation,
+animal calls, language/relationship realization, or complete Living Voice.
 
 ### Repository asset and storage law
 

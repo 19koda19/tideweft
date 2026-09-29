@@ -15,6 +15,7 @@ const WORLD_ADVANCE_PHASE_KEYS = [
 ] as const;
 
 vi.mock("../audio/soundscape", () => ({
+  spatialPanForBearing: () => 0,
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
     play(): void {}

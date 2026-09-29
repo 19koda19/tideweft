@@ -218,14 +218,14 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 33;
+  readonly version: 34;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly perceptionCarry: CurrentPerceptionCarry;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v33 envelopes never carry this field. */
+  /** Historical fixtures only; current v34 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -237,11 +237,15 @@ interface CurrentEnvelope {
 }
 
 interface CurrentPerceptionCarry {
-  readonly version: 2;
+  readonly version: 3;
+  readonly intervalStartPosition: unknown;
+  readonly intervalStartFacingMilliRadians: number;
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly unknown[];
-  readonly playerVocalizationSamples: readonly unknown[];
-  readonly situatedExpression: unknown;
+  readonly actorVocalizationSamples: readonly unknown[];
+  readonly situatedExpressionChannels: unknown;
+  readonly situatedExpressionAdmissions: unknown;
+  readonly situatedExpressionCausalAuthority: unknown;
   readonly nextPlayerSenseSampleOrdinal: number;
 }
 
@@ -516,7 +520,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedRecord.payloadVersion).toBe(34);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -580,7 +584,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedRecord.payloadVersion).toBe(34);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -691,7 +695,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(33);
+    expect(repository.snapshot().payloadVersion).toBe(34);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -807,7 +811,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(33);
+    expect(v13Record.payloadVersion).toBe(34);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v10Envelope.player));
@@ -888,7 +892,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(33);
+    expect(v13Record.payloadVersion).toBe(34);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v11Envelope.player));
@@ -986,7 +990,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(33);
+    expect(v13Record.payloadVersion).toBe(34);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v12Envelope.player));
@@ -1073,7 +1077,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedRecord.payloadVersion).toBe(34);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v13Envelope.player));
@@ -1143,7 +1147,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(33);
+    expect(adoptedRecord.payloadVersion).toBe(34);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v14Envelope.player));
@@ -1556,7 +1560,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(33);
+    expect(before.version).toBe(34);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -3427,7 +3431,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(33);
+    expect(repository.snapshot().payloadVersion).toBe(34);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -3558,7 +3562,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(33);
+    expect(repository.snapshot().payloadVersion).toBe(34);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -3599,14 +3603,14 @@ describe("runtime core-ecology vertical slice", () => {
     expect(stableStringify(adoptedEnvelope.perceptionCarry))
       .toBe(stableStringify({
         ...alpha30Base.perceptionCarry,
-        version: 2,
-        playerVocalizationSamples: [],
-        situatedExpression: {
-          version: 1,
-          completedSteps: 0,
-          active: null,
-          recent: [],
-        },
+        version: 3,
+        intervalStartPosition: currentEnvelope.perceptionCarry.intervalStartPosition,
+        intervalStartFacingMilliRadians:
+          currentEnvelope.perceptionCarry.intervalStartFacingMilliRadians,
+        actorVocalizationSamples: [],
+        situatedExpressionAdmissions: { version: 1, records: [] },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+        situatedExpressionChannels: { version: 1, channels: [] },
       }));
 
     for (const key of Object.keys(alpha30Base).filter((key) => (
@@ -5189,10 +5193,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 33
+    || value.version !== 34
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v33 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v34 envelope");
   }
   return value;
 }
@@ -5354,19 +5358,27 @@ function legacyPerceptionCarry(
     return Object.freeze({ ...record });
   }
   const currentKeys = [
+    "actorVocalizationSamples",
+    "intervalStartFacingMilliRadians",
+    "intervalStartPosition",
     "nextPlayerSenseSampleOrdinal",
     "playerSenseSamples",
     "playerStepsSinceWorldTick",
-    "playerVocalizationSamples",
-    "situatedExpression",
+    "situatedExpressionAdmissions",
+    "situatedExpressionCausalAuthority",
+    "situatedExpressionChannels",
     "version",
   ];
-  if (record.version !== 2 || stableStringify(keys) !== stableStringify(currentKeys)) {
-    throw new Error("current fixture omitted the canonical v2 perception carry");
+  if (record.version !== 3 || stableStringify(keys) !== stableStringify(currentKeys)) {
+    throw new Error("current fixture omitted the canonical v3 perception carry");
   }
   const {
-    playerVocalizationSamples: _playerVocalizationSamples,
-    situatedExpression: _situatedExpression,
+    actorVocalizationSamples: _actorVocalizationSamples,
+    intervalStartFacingMilliRadians: _intervalStartFacingMilliRadians,
+    intervalStartPosition: _intervalStartPosition,
+    situatedExpressionAdmissions: _situatedExpressionAdmissions,
+    situatedExpressionCausalAuthority: _situatedExpressionCausalAuthority,
+    situatedExpressionChannels: _situatedExpressionChannels,
     ...legacy
   } = record;
   return Object.freeze({ ...legacy, version: 1 });
@@ -6033,7 +6045,13 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
-  if (version === 33 || version === 32 || version === 31 || version === 30) {
+  if (
+    version === 34
+    || version === 33
+    || version === 32
+    || version === 31
+    || version === 30
+  ) {
     return requiredRegionalEcologyV6(envelope).base.base.base.base.base;
   }
   if (version === 29) return requiredRegionalEcologyV5(envelope).base.base.base.base;

@@ -72,6 +72,7 @@ import {
 import { projectLivingActorInteractionChoices } from "../ui/livingActorInteractionProjection";
 import {
   TideweftSoundscape,
+  spatialPanForBearing,
   type SituatedVocalizationCue,
   type WaterAmbienceState,
 } from "../audio/soundscape";
@@ -99,6 +100,7 @@ import {
   BASE_CARGO_CAPACITY,
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
+  PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS,
   TILE_UNITS,
   activeTideHarpAtPlayer,
   cargoWeight,
@@ -106,6 +108,7 @@ import {
   createPlayer,
   loadContractCargo,
   playerTileIndex,
+  playerFacingMilliRadiansForVelocity,
   pulseScan,
   restoreSweptPlayer,
   settlementAtPlayer,
@@ -138,20 +141,61 @@ import {
 } from "./traversalFeedback";
 import type { FallRiskEvaluation } from "./fallRisk";
 import {
-  acknowledgeSituatedExpression,
-  advanceSituatedExpression,
-  canonicalizeSituatedExpressionState,
-  createSituatedExpressionState,
-  reduceSituatedExpression,
+  SITUATED_EXPRESSION_VERSION,
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
-  type SituatedExpressionState,
+  type SituatedExpressionMeaning,
+  type SituatedExpressionMemory,
 } from "./situatedExpression";
+import {
+  acknowledgeSituatedExpressionChannelBank,
+  advanceSituatedExpressionChannelBank,
+  captureSituatedExpressionChannelBankIntervalSnapshot,
+  canonicalizeSituatedExpressionChannelBank,
+  closeSituatedExpressionChannelBankInterval,
+  createSituatedExpressionChannelBank,
+  listActiveSituatedExpressionChannelPairs,
+  reduceSituatedExpressionChannelBank,
+  type ActiveSituatedExpressionChannelPair,
+  type SituatedExpressionChannelBank,
+  type SituatedExpressionChannelBankIntervalSnapshot,
+} from "./situatedExpressionChannelBank";
 import {
   playerFallCargoRecoveryExpressionIntent,
   playerTraversalExpressionIntent,
   type PlayerTraversalCargoExpressionContext,
 } from "./playerTraversalExpression";
+import {
+  playerExpressionAdmissionSoundPolicy,
+  playerExpressionEventMatchesAdmission,
+  playerExpressionMemoryMatchesAdmission,
+  type PlayerExpressionAuthority,
+} from "./playerExpressionAuthority";
+import {
+  appendSituatedExpressionAdmissionRecord,
+  createPlayerFallRecoveryExpressionAdmissionRecord,
+  createPlayerTraversalExpressionAdmissionRecord,
+  createPorterHeavyDepartureExpressionAdmissionRecord,
+  createSituatedExpressionAdmissionLedger,
+  type SituatedExpressionAdmissionLedger,
+  type SituatedExpressionAdmissionRecord,
+} from "./situatedExpressionAdmissionLedger";
+import { canonicalizeSituatedExpressionTrajectory } from "./situatedExpressionTrajectory";
+import {
+  appendSituatedExpressionCausalAuthorityRecord,
+  canonicalizeSituatedExpressionCausalAuthorityLedger,
+  createSituatedExpressionCausalAuthorityLedger,
+  createSituatedExpressionCausalAuthorityRecord,
+  situatedExpressionAdmissionMatchesCausalAuthority,
+  type SituatedExpressionCausalAuthorityLedger,
+} from "./situatedExpressionCausalAuthority";
+import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
+import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
+import { migrateLegacyV33PlayerVocalizations } from "./legacyPlayerVocalizationMigration";
+import {
+  createHeardVisibleSituatedExpressionReception,
+  createSelfSituatedExpressionReception,
+} from "./situatedExpressionReception";
 import {
   CRAFTING_CONDITION_MAX,
   CRAFTING_RECIPES,
@@ -187,6 +231,7 @@ import {
 } from "./projection";
 import {
   VISIBILITY_DIRECT,
+  evaluateAudibleContact,
   evaluateVisualContact,
   suppressPerceptionDetail,
 } from "./perception";
@@ -313,14 +358,24 @@ import {
   HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
+  ambientNoiseAt,
   collectExistingHumanObservations,
   createPlayerSenseSample,
   createSupplementalSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
 } from "./humanPerception";
-import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import {
+  playerWorldPositionInRegionalWindow,
+  resolveResidentWorldPlacement,
+} from "./residentSpatial";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import {
+  workingPeopleExpressionEventMatchesWorld,
+  workingPeopleExpressionEventForTrigger,
+  workingPeopleExpressionIntent,
+  workingPeopleExpressionMemoryMatchesWorld,
+} from "./workingPeopleExpression";
 import {
   projectCompatibilityFieldResources,
   regionalFieldResourceAtViewTile,
@@ -731,6 +786,7 @@ import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
   createWorldPosition,
+  isWorldPosition,
   translateWorldPosition,
   worldPositionDelta,
   worldPositionToSpatialFrame,
@@ -799,18 +855,78 @@ import {
 
 const FIXED_STEP_MS = 100;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
-/**
- * A command-originated expression can occur immediately before the next
- * physical step sample. One tile safely encloses that single lawful step while
- * still rejecting a voice injected elsewhere in the loaded world.
- */
-const PLAYER_VOCALIZATION_PATH_TOLERANCE_UNITS = WORLD_POSITION_UNITS_PER_TILE;
 const MAX_STEPS_PER_FRAME = 6;
 /** One world minute per presented frame keeps long recovery bounded and cancellable. */
 const PLAYER_TIME_ACTION_MAX_STEPS_PER_FRAME = PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE;
 /** One bounded WAIT advances ten real world-minutes through ordinary fixed steps. */
 const PLAYER_WAIT_MINUTES = 10;
 const PLAYER_WAIT_TOTAL_STEPS = PLAYER_WAIT_MINUTES * PLAYER_STEPS_PER_WORLD_TICK;
+
+function situatedExpressionSoundInterrupt(
+  event: Pick<SituatedExpressionEvent, "tone" | "volume">,
+): SupplementalSoundSample["soundInterrupt"] {
+  return event.tone === "alarmed" || event.volume === "shout" ? "strong" : "none";
+}
+
+function situatedExpressionEventIdForMemory(memory: SituatedExpressionMemory): string {
+  return `situated-expression:event:v${SITUATED_EXPRESSION_VERSION}:${hashCanonical({
+    sourceActorId: memory.sourceActorId,
+    triggerEventId: memory.triggerEventId,
+    version: SITUATED_EXPRESSION_VERSION,
+  })}`;
+}
+
+function vocalizationSampleMatchesActiveEvent(
+  sample: SupplementalSoundSample,
+  event: SituatedExpressionEvent,
+): boolean {
+  const acoustics = situatedExpressionAcoustics(event.volume);
+  return sample.expressionEventId === event.eventId
+    && sample.sourceActorId === event.sourceActorId
+    && stableStringify(sample.position) === stableStringify(event.position)
+    && sample.soundLoudness === acoustics.loudness
+    && sample.soundRangeUnits === acoustics.rangeUnits
+    && sample.soundInterrupt === situatedExpressionSoundInterrupt(event);
+}
+
+function vocalizationSampleMatchesRecentMemory(
+  sample: SupplementalSoundSample,
+  memory: SituatedExpressionMemory,
+): boolean {
+  if (
+    sample.expressionEventId !== situatedExpressionEventIdForMemory(memory)
+    || sample.sourceActorId !== memory.sourceActorId
+  ) return false;
+  return recentMeaningAcousticTuples(memory.meaning).some(({ volume, interrupt }) => {
+    const acoustics = situatedExpressionAcoustics(volume);
+    return sample.soundLoudness === acoustics.loudness
+      && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundInterrupt === interrupt;
+  });
+}
+
+function recentMeaningAcousticTuples(
+  meaning: SituatedExpressionMeaning,
+): readonly Readonly<{
+  readonly volume: SituatedExpressionEvent["volume"];
+  readonly interrupt: SupplementalSoundSample["soundInterrupt"];
+}>[] {
+  switch (meaning) {
+    case "steady-after-stumble":
+      return [{ volume: "murmur", interrupt: "none" }];
+    case "relief-after-near-fall":
+    case "relief-after-cargo-recovery":
+    case "porter-heavy-load":
+      return [{ volume: "spoken", interrupt: "none" }];
+    case "protect-important-cargo":
+      return [
+        { volume: "spoken", interrupt: "none" },
+        { volume: "shout", interrupt: "strong" },
+      ];
+    case "alarm-at-cargo-loss":
+      return [{ volume: "shout", interrupt: "strong" }];
+  }
+}
 const AUTOSAVE_INTERVAL_TICKS = 600;
 const AUTOSAVE_SLOT = "autosave";
 const SAVE_RETRY_BASE_DELAY_MS = 2_000;
@@ -818,7 +934,9 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-const GAME_SAVE_VERSION = 33;
+const GAME_SAVE_VERSION = 34;
+/** First save with the player-facing situated-expression carry (player voices only). */
+const PLAYER_EXPRESSION_GAME_SAVE_VERSION = 33;
 const PLAYER_RECOVERY_GAME_SAVE_VERSION = 32;
 const TURNING_DAY_GAME_SAVE_VERSION = 31;
 const REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION = 30;
@@ -849,7 +967,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 2 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 3 as const;
+const PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION = 2 as const;
 const LEGACY_PLAYER_PERCEPTION_CARRY_VERSION = 1 as const;
 /** Begin preparing the next storage neighborhood well before its invisible seam. */
 const TERRAIN_PREFETCH_MARGIN_TILES = 24;
@@ -863,6 +982,12 @@ const MAX_SAFE_CARGO_QUANTITY = Math.floor(
   Number.MAX_SAFE_INTEGER / (2 * PACK_LOAD_MILLI_PER_UNIT),
 );
 const LOOSE_CARGO_RECOVERY_REACH = LOOSE_CARGO_MAX_PICKUP_REACH;
+const PLAYER_FACING_MILLI_RADIANS_LIMIT = Math.round(Math.PI * 1_000);
+const EMPTY_PERCEPTION_INTERVAL_POSITION = createWorldPosition(
+  createRegionCoord(0, 0),
+  0,
+  0,
+);
 
 const PLAYER_CARGO_RESOURCES: ReadonlySet<ContractState["resource"]> = new Set([
   "food",
@@ -911,10 +1036,15 @@ interface GameSaveEnvelope {
 
 interface PlayerPerceptionCarry {
   readonly version: typeof PLAYER_PERCEPTION_CARRY_VERSION;
+  /** Exact player pose at phase zero; it anchors every later sample and porter receipt. */
+  readonly intervalStartPosition: WorldPosition;
+  readonly intervalStartFacingMilliRadians: number;
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
-  readonly playerVocalizationSamples: readonly SupplementalSoundSample[];
-  readonly situatedExpression: SituatedExpressionState;
+  readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
+  readonly situatedExpressionChannels: SituatedExpressionChannelBank;
+  readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+  readonly situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
   readonly nextPlayerSenseSampleOrdinal: number;
 }
 
@@ -922,6 +1052,7 @@ interface CommittedTraversalExpressionContext {
   readonly incident: TraversalIncident;
   readonly evaluation: FallRiskEvaluation;
   readonly cargo: PlayerTraversalCargoExpressionContext;
+  readonly separationEventId: string | null;
 }
 
 export interface TideweftRuntime {
@@ -9302,8 +9433,15 @@ export async function createTideweftRuntime(
   // Active presentation and bounded semantic cooldowns share the pending
   // perception carry so save/load cannot reroll expression admission or erase
   // a vocalization before nearby humans receive the next world-tick frame.
-  let situatedExpression: SituatedExpressionState = resumed?.perceptionCarry.situatedExpression
-    ?? createSituatedExpressionState();
+  let situatedExpressionChannels: SituatedExpressionChannelBank =
+    resumed?.perceptionCarry.situatedExpressionChannels
+      ?? createSituatedExpressionChannelBank();
+  let situatedExpressionAdmissions: SituatedExpressionAdmissionLedger =
+    resumed?.perceptionCarry.situatedExpressionAdmissions
+      ?? createSituatedExpressionAdmissionLedger();
+  let situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger =
+    resumed?.perceptionCarry.situatedExpressionCausalAuthority
+      ?? createSituatedExpressionCausalAuthorityLedger();
   const firstPromise = economyView.contracts.find((contract) => contract.status === "offered");
   let player = resumed?.player
     ?? createPlayer(economyView, firstPromise?.originSettlementId);
@@ -9380,12 +9518,14 @@ export async function createTideweftRuntime(
       });
       return presentation === null ? [] : [presentation];
     });
+  const initialSituatedExpression = activeSituatedExpressionPair();
   let renderView = projectRuntimeSettlementFoodStore(
     {
       ...projectGameView(worldView, player, {
         paused: true,
         traversalFeedback,
-        situatedExpression: situatedExpression.active,
+        situatedExpression: initialSituatedExpression?.event ?? null,
+        situatedExpressionReception: initialSituatedExpression?.reception ?? null,
         looseCargoWorld: physicalCargo.looseWorld,
         looseCargoWorlds: initialCargoPartitions,
         perception,
@@ -9405,7 +9545,8 @@ export async function createTideweftRuntime(
     looseCargoWorld: physicalCargo.looseWorld,
     inactiveLooseCargoWorlds: inactiveCargoPartitions(physicalCargo, initialCargoPartitions),
     traversalFeedback,
-    situatedExpression: situatedExpression.active,
+    situatedExpression: initialSituatedExpression?.event ?? null,
+    situatedExpressionReception: initialSituatedExpression?.reception ?? null,
     perception,
     suppressDetailPerception: player.timeAction?.kind === "sleep",
   });
@@ -9447,11 +9588,20 @@ export async function createTideweftRuntime(
   let playerStepsSinceWorldTick = 0;
   let playerSenseSamples: PlayerSenseSample[] = [];
   let nextPlayerSenseSampleOrdinal = 0;
+  let playerPerceptionIntervalStartPosition =
+    resumed?.perceptionCarry.intervalStartPosition
+      ?? playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+  if (playerPerceptionIntervalStartPosition === null) {
+    throw new Error("Player perception interval has no canonical start position");
+  }
+  let playerPerceptionIntervalStartFacingMilliRadians =
+    resumed?.perceptionCarry.intervalStartFacingMilliRadians
+      ?? player.facingMilliRadians;
   // Voice is a second acoustic fact beside impact/footsteps. It remains a
   // separate bounded channel, but persists with the unfinished perception
   // interval so interruption cannot change authoritative human hearing.
-  let playerVocalizationSamples: SupplementalSoundSample[] = [
-    ...(resumed?.perceptionCarry.playerVocalizationSamples ?? []),
+  let actorVocalizationSamples: SupplementalSoundSample[] = [
+    ...(resumed?.perceptionCarry.actorVocalizationSamples ?? []),
   ];
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
@@ -9753,6 +9903,7 @@ export async function createTideweftRuntime(
   function refreshViewsUnmeasured(): void {
     perception = projectPlayerPerception();
     captureNewlyObservedEvents();
+    const activeExpression = activeSituatedExpressionPair();
     const actorWindow = {
       origin: regionalTravel.window.origin,
       terrain: {
@@ -9885,7 +10036,8 @@ export async function createTideweftRuntime(
           fieldResourceCatalog: fieldResourceProjection.catalog,
           fieldResourceEcology,
           traversalFeedback,
-          situatedExpression: situatedExpression.active,
+          situatedExpression: activeExpression?.event ?? null,
+          situatedExpressionReception: activeExpression?.reception ?? null,
           looseCargoWorld: physicalCargo.looseWorld,
           looseCargoWorlds: visibleCargoPartitions,
           bracing: manualControl.brace,
@@ -10053,7 +10205,8 @@ export async function createTideweftRuntime(
         bracing: manualControl.brace,
         adriftControl: lastAdriftControl,
         traversalFeedback,
-        situatedExpression: situatedExpression.active,
+        situatedExpression: activeExpression?.event ?? null,
+        situatedExpressionReception: activeExpression?.reception ?? null,
         perception,
         suppressDetailPerception: playerIsSleeping(),
         ...(settlementStoreKeeper === null
@@ -10680,10 +10833,9 @@ export async function createTideweftRuntime(
   function capturePlayerSenseSample(strongImpact: boolean): void {
     const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
     if (position === null) throw new Error("Player has no canonical sensory position");
-    const speed = Math.hypot(player.velocityX, player.velocityY);
-    const movementSalience = Math.max(
-      0,
-      Math.min(FIXED_POINT, Math.round(speed * FIXED_POINT / 164)),
+    const movementSalience = playerMovementSalienceForDelta(
+      player.velocityX,
+      player.velocityY,
     );
     const moved = movementSalience > 0;
     const inWater = player.mode === "wading" || player.mode === "skiff" || player.mode === "swept";
@@ -10739,61 +10891,225 @@ export async function createTideweftRuntime(
     playerSenseSamples.push(sample);
   }
 
-  function capturePlayerVocalizationSample(event: SituatedExpressionEvent): void {
-    if (
-      playerVocalizationSamples.length
-      >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
-    ) return;
-    const loudness = event.volume === "shout"
-      ? 950_000
-      : event.volume === "spoken"
-        ? 620_000
-        : 360_000;
-    const rangeTiles = event.volume === "shout" ? 36 : event.volume === "spoken" ? 18 : 8;
-    const sample = createSupplementalSoundSample({
-      id: `pv-${world.meta.completedTick}-${playerVocalizationSamples.length}`,
-      position: event.position,
-      soundLoudness: loudness,
-      soundRangeUnits: rangeTiles * WORLD_POSITION_UNITS_PER_TILE,
-      soundClass: "human-vocalization",
-      soundInterrupt: event.tone === "alarmed" || event.volume === "shout"
-        ? "strong"
-        : "none",
-    });
-    if (sample === null) throw new Error("Player vocalization sample failed validation");
-    playerVocalizationSamples.push(sample);
+  function expressionAcoustics(
+    volume: SituatedExpressionEvent["volume"] | SituatedExpressionIntent["volume"],
+  ): { readonly loudness: number; readonly rangeUnits: number } {
+    return situatedExpressionAcoustics(volume);
   }
 
-  function acceptPlayerExpression(intent: SituatedExpressionIntent | null): void {
-    if (intent === null) return;
-    const reduction = reduceSituatedExpression(situatedExpression, intent);
-    if (reduction.state === null) {
-      throw new Error("Situated expression state failed validation");
+  function playerExpressionAudibility(
+    expression: Pick<SituatedExpressionIntent, "position" | "sourceActorId" | "volume">,
+  ): { readonly certainty: number; readonly pan: number } | null {
+    if (expression.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
+      return Object.freeze({ certainty: 1, pan: 0 });
     }
-    situatedExpression = reduction.state;
-    if (reduction.accepted && reduction.event !== null) {
-      capturePlayerVocalizationSample(reduction.event);
-    }
-  }
-
-  function playPendingPlayerExpression(): void {
-    const acknowledged = acknowledgeSituatedExpression(situatedExpression);
-    if (acknowledged.state === null) {
-      throw new Error("Situated expression acknowledgement failed validation");
-    }
-    situatedExpression = acknowledged.state;
-    if (acknowledged.event === null) return;
-    const intensity = acknowledged.event.volume === "shout"
-      ? 0.92
-      : acknowledged.event.volume === "spoken"
-        ? 0.68
-        : 0.42;
-    const cue: SituatedVocalizationCue = `vocalization-${acknowledged.event.vocalization}`;
-    soundscape.play(
-      cue,
-      intensity,
-      acknowledged.event.variantSeed,
+    if (playerIsSleeping()) return null;
+    const listenerPosition = playerWorldPositionInRegionalWindow(
+      regionalTravel.window,
+      player,
     );
+    if (listenerPosition === null) return null;
+    let delta: ReturnType<typeof worldPositionDelta>;
+    try {
+      delta = worldPositionDelta(listenerPosition, expression.position);
+    } catch {
+      return null;
+    }
+    const masking = ambientNoiseAt(worldView, playerTileIndex(player));
+    if (masking === null) return null;
+    const acoustics = expressionAcoustics(expression.volume);
+    const heard = evaluateAudibleContact({
+      listener: { x: 0, y: 0 },
+      source: { x: delta.x, y: delta.y },
+      baseRange: acoustics.rangeUnits,
+      ambientNoise: masking,
+      sourceLoudness: acoustics.loudness / FIXED_POINT,
+      wind: {
+        x: worldView.weather.windX / FIXED_POINT,
+        y: worldView.weather.windY / FIXED_POINT,
+      },
+    });
+    return heard === null
+      ? null
+      : Object.freeze({
+          certainty: Math.max(1, Math.round(heard.certainty * FIXED_POINT)),
+          pan: spatialPanForBearing(heard.bearing.centerRadians),
+        });
+  }
+
+  function playerDirectlyObservesExpressionSource(
+    expression: Pick<SituatedExpressionIntent, "position" | "sourceActorId">,
+  ): boolean {
+    if (playerIsSleeping()) return false;
+    const matches = economyView.residents.filter(
+      ({ identity }) => identity.stableId === expression.sourceActorId,
+    );
+    if (matches.length !== 1) return false;
+    const resident = matches[0];
+    if (resident === undefined) return false;
+    const address = livingActorAddressForResident(economyView, resident);
+    if (
+      address === null
+      || stableStringify(address.position) !== stableStringify(expression.position)
+    ) return false;
+    const placement = livingActorAddressInRegionalWindow(address, {
+      origin: regionalTravel.window.origin,
+      terrain: {
+        width: worldView.terrain.width,
+        height: worldView.terrain.height,
+      },
+    });
+    if (placement === null) return false;
+    return projectPlayerPerception().detailVisibilityGrades[placement.tileIndex]
+      === VISIBILITY_DIRECT;
+  }
+
+  function createSituatedVocalizationSample(
+    event: SituatedExpressionEvent,
+    sampleOrdinal: number,
+  ): SupplementalSoundSample {
+    const acoustics = expressionAcoustics(event.volume);
+    const sample = createSupplementalSoundSample({
+      expressionEventId: event.eventId,
+      id: `av-${world.meta.completedTick}-${sampleOrdinal}`,
+      position: event.position,
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+      soundClass: "human-vocalization",
+      soundInterrupt: situatedExpressionSoundInterrupt(event),
+      sourceActorId: event.sourceActorId,
+    });
+    if (sample === null) throw new Error("Situated vocalization sample failed validation");
+    return sample;
+  }
+
+  function activeSituatedExpressionPair(): ActiveSituatedExpressionChannelPair | null {
+    const pairs = listActiveSituatedExpressionChannelPairs(situatedExpressionChannels);
+    if (pairs === null) {
+      throw new Error("Situated expression channel bank failed validation");
+    }
+    return [...pairs].sort((left, right) => (
+      right.event.priority - left.event.priority
+      || right.event.salience - left.event.salience
+      || left.event.eventId.localeCompare(right.event.eventId)
+    ))[0] ?? null;
+  }
+
+  function acceptSituatedExpression(
+    intent: SituatedExpressionIntent | null,
+    reception: Readonly<{
+      readonly kind: "self";
+    }> | Readonly<{
+      readonly kind: "heard-visible";
+      readonly certainty: number;
+    }>,
+    admissionFor: (
+      event: SituatedExpressionEvent,
+      sampleOrdinal: number,
+    ) => SituatedExpressionAdmissionRecord | null,
+  ): void {
+    if (intent === null) return;
+    // Sound, memory, causal receipt, and presentation are one atomic admission.
+    // At the bounded sound budget the ninth candidate remains silent instead
+    // of creating a channel that nearby humans could never receive.
+    if (
+      actorVocalizationSamples.length >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+      || situatedExpressionAdmissions.records.length
+        >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+    ) return;
+    const reduction = reduceSituatedExpressionChannelBank(
+      situatedExpressionChannels,
+      intent,
+      (event: SituatedExpressionEvent) => reception.kind === "self"
+        ? event.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+          ? createSelfSituatedExpressionReception(event, world.meta.completedTick)
+          : null
+        : event.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
+          ? createHeardVisibleSituatedExpressionReception(
+              event,
+              world.meta.completedTick,
+              reception.certainty,
+              true,
+            )
+          : null,
+    );
+    if (reduction.bank === null || reduction.reason === "invalid-reception") {
+      throw new Error("Situated expression channel reduction failed validation");
+    }
+    if (reduction.accepted && reduction.event !== null) {
+      const sampleOrdinal = actorVocalizationSamples.length;
+      const admission = admissionFor(reduction.event, sampleOrdinal);
+      const nextAdmissions = admission === null
+        ? null
+        : appendSituatedExpressionAdmissionRecord(
+            situatedExpressionAdmissions,
+            admission,
+          );
+      let nextCausalAuthority = situatedExpressionCausalAuthority;
+      if (
+        admission?.kind === "player-traversal"
+        || admission?.kind === "player-fall-recovery"
+      ) {
+        const authorityRecord = createSituatedExpressionCausalAuthorityRecord(
+          admission,
+          world.meta.completedTick,
+          reduction.event.position,
+        );
+        const appended = authorityRecord === null
+          ? null
+          : appendSituatedExpressionCausalAuthorityRecord(
+              situatedExpressionCausalAuthority,
+              authorityRecord,
+            );
+        if (appended === null) {
+          throw new Error("Situated expression causal authority failed validation");
+        }
+        nextCausalAuthority = appended;
+      }
+      if (admission === null || nextAdmissions === null) {
+        throw new Error("Situated expression causal admission failed validation");
+      }
+      const sample = createSituatedVocalizationSample(reduction.event, sampleOrdinal);
+      situatedExpressionChannels = reduction.bank;
+      situatedExpressionAdmissions = nextAdmissions;
+      situatedExpressionCausalAuthority = nextCausalAuthority;
+      actorVocalizationSamples.push(sample);
+    }
+  }
+
+  function playPendingSituatedExpression(): void {
+    const acknowledged = acknowledgeSituatedExpressionChannelBank(
+      situatedExpressionChannels,
+    );
+    if (acknowledged.bank === null) {
+      throw new Error("Situated expression channel acknowledgement failed validation");
+    }
+    situatedExpressionChannels = acknowledged.bank;
+    for (const { event, reception } of acknowledged.acknowledgements) {
+      let pan = 0;
+      if (reception.kind === "heard-visible") {
+        const listenerPosition = playerWorldPositionInRegionalWindow(
+          regionalTravel.window,
+          player,
+        );
+        if (listenerPosition !== null) {
+          try {
+            const delta = worldPositionDelta(listenerPosition, event.position);
+            pan = spatialPanForBearing(Math.atan2(delta.y, delta.x));
+          } catch {
+            pan = 0;
+          }
+        }
+      }
+      const baseIntensity = event.volume === "shout"
+        ? 0.92
+        : event.volume === "spoken"
+          ? 0.68
+          : 0.42;
+      const intensity = baseIntensity * (0.35 + reception.certainty / FIXED_POINT * 0.65);
+      const cue: SituatedVocalizationCue = `vocalization-${event.vocalization}`;
+      soundscape.play(cue, intensity, event.variantSeed, pan);
+    }
   }
 
   function residentPerceptionFrame(
@@ -10805,7 +11121,7 @@ export async function createTideweftRuntime(
       window: regionalTravel.window,
       targetTick,
       playerSamples: playerSenseSamples,
-      supplementalSoundSamples: playerVocalizationSamples,
+      supplementalSoundSamples: actorVocalizationSamples,
     });
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
@@ -10853,9 +11169,20 @@ export async function createTideweftRuntime(
   }
 
   function clearPlayerSenseSamples(): void {
+    if (playerStepsSinceWorldTick !== 0) {
+      throw new Error("Player perception interval may only begin at phase zero");
+    }
     playerSenseSamples = [];
     nextPlayerSenseSampleOrdinal = 0;
-    playerVocalizationSamples = [];
+    actorVocalizationSamples = [];
+    situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
+    situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
+    const intervalStart = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+    if (intervalStart === null) {
+      throw new Error("Player perception interval could not anchor its start pose");
+    }
+    playerPerceptionIntervalStartPosition = intervalStart;
+    playerPerceptionIntervalStartFacingMilliRadians = player.facingMilliRadians;
   }
 
   function mirrorPhysicalCargoToPlayer(): void {
@@ -10948,6 +11275,9 @@ export async function createTideweftRuntime(
           separatedEntityIds: fall.separatedEntityIds,
           cargoShock: fall.cargoShock,
         },
+        separationEventId: fall.outcome === "separated"
+          ? looseCargoEventId(fall.world.region, fall.world.lastEventOrdinal)
+          : null,
       };
       if (fall.outcome === "separated") {
         session.sessionChanges.push(
@@ -11044,11 +11374,13 @@ export async function createTideweftRuntime(
 
   function tick(present = true): void {
     if (session.paused || session.titleVisible || session.quietHourVisible) return;
-    const advancedExpression = advanceSituatedExpression(situatedExpression);
-    if (advancedExpression === null) {
-      throw new Error("Situated expression step failed validation");
+    const advancedExpressionChannels = advanceSituatedExpressionChannelBank(
+      situatedExpressionChannels,
+    );
+    if (advancedExpressionChannels === null) {
+      throw new Error("Situated expression channel step failed validation");
     }
-    situatedExpression = advancedExpression;
+    situatedExpressionChannels = advancedExpressionChannels;
     const announcementIdBeforePlayerTimeStep = pendingPlayerWait === null
       && player.timeAction === null
       ? null
@@ -11133,13 +11465,56 @@ export async function createTideweftRuntime(
     }
     const traversalExpressionContext = applyPlayerStepToPhysicalCargo(result, incidentPosition);
     if (traversalExpressionContext !== null && incidentWorldPosition !== null) {
-      acceptPlayerExpression(playerTraversalExpressionIntent({
+      const traversalExpressionIntent = playerTraversalExpressionIntent({
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
         position: incidentWorldPosition,
         incident: traversalExpressionContext.incident,
         evaluation: traversalExpressionContext.evaluation,
         cargo: traversalExpressionContext.cargo,
-      }));
+      });
+      const expressionIncidentKind = traversalExpressionContext.incident.kind === "stumble"
+        || traversalExpressionContext.incident.kind === "fall"
+        || traversalExpressionContext.incident.kind === "sweep"
+        ? traversalExpressionContext.incident.kind
+        : null;
+      if (traversalExpressionIntent !== null && expressionIncidentKind === null) {
+        throw new Error("Traversal expression used a non-physical incident kind");
+      }
+      acceptSituatedExpression(
+        traversalExpressionIntent,
+        { kind: "self" },
+        (event, sampleOrdinal) => createPlayerTraversalExpressionAdmissionRecord({
+          sourceActorId: event.sourceActorId,
+          triggerEventId: event.triggerEventId,
+          sampleOrdinal,
+          // Phase ten closes before any checkpoint. Clamp only that terminal,
+          // non-persisting admission to the final representable phase.
+          admittedAtPlayerStepPhase: Math.min(
+            PLAYER_STEPS_PER_WORLD_TICK - 1,
+            playerStepsSinceWorldTick + 1,
+          ),
+          causalClass: event.meaning === "alarm-at-cargo-loss"
+            ? "cargo-separation"
+            : event.meaning === "protect-important-cargo"
+              ? "important-cargo-impact"
+              : event.meaning === "relief-after-near-fall"
+                ? "serious-stumble"
+                : "ordinary-stumble",
+          incidentKind: expressionIncidentKind ?? "stumble",
+          hazardSeverity: traversalExpressionContext.evaluation.forecast.hazardSeverity,
+          cargoOutcome: traversalExpressionContext.cargo.outcome === "rejected"
+            ? "unchanged"
+            : traversalExpressionContext.cargo.outcome,
+          selectedPayloadKind: traversalExpressionContext.cargo.selectedPayload === null
+            ? null
+            : traversalExpressionContext.cargo.selectedPayload.kind === "stack"
+              ? "crafting"
+              : traversalExpressionContext.cargo.selectedPayload.kind,
+          cargoShock: traversalExpressionContext.cargo.cargoShock,
+          separatedEntityIds: traversalExpressionContext.cargo.separatedEntityIds,
+          separationEventId: traversalExpressionContext.separationEventId,
+        }),
+      );
     }
     capturePlayerSenseSample(result.traversalIncident !== null || result.becameSwept);
     if (result.enteredTile !== null && result.settlementId !== null) {
@@ -11160,6 +11535,7 @@ export async function createTideweftRuntime(
     session.sessionDistanceUnits += acceptedDistance;
     playerStepsSinceWorldTick += 1;
     const worldAdvanced = playerStepsSinceWorldTick >= PLAYER_STEPS_PER_WORLD_TICK;
+    let closingSituatedExpressionInterval: SituatedExpressionChannelBankIntervalSnapshot | null = null;
     if (worldAdvanced) {
       let worldAdvancePhaseStartedAtMs = performanceTelemetryEnabled
         ? runtimePerformanceNow()
@@ -11367,6 +11743,7 @@ export async function createTideweftRuntime(
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
       });
+      const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorld(world, commandQueue, perceptionFrame);
       const completedEconomyView = createWorldView(world);
       const completedRegionalView = createRegionalWorldView(
@@ -12107,6 +12484,12 @@ export async function createTideweftRuntime(
         throw new Error("Resident circadian states could not commit atomically");
       }
       world = circadianWorld;
+      closingSituatedExpressionInterval = captureSituatedExpressionChannelBankIntervalSnapshot(
+        situatedExpressionChannels,
+      );
+      if (closingSituatedExpressionInterval === null) {
+        throw new Error("Situated expression interval could not close canonically");
+      }
       clearPlayerSenseSamples();
       commandQueue = [];
       fieldResourceEcology = advanceFieldResourceEcology(
@@ -12116,6 +12499,40 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      for (const event of [...economyView.events]
+        .filter(({ sequence }) => sequence >= firstNewWorldEventSequence)
+        .sort((left, right) => left.sequence - right.sequence)) {
+        const intent = workingPeopleExpressionIntent({ world: economyView, event });
+        if (intent === null) continue;
+        const audible = playerExpressionAudibility(intent);
+        if (audible === null || !playerDirectlyObservesExpressionSource(intent)) continue;
+        const listenerPosition = playerWorldPositionInRegionalWindow(
+          regionalTravel.window,
+          player,
+        );
+        if (listenerPosition === null) {
+          throw new Error("Porter expression listener has no canonical world position");
+        }
+        acceptSituatedExpression(
+          intent,
+          {
+            kind: "heard-visible",
+            certainty: audible.certainty,
+          },
+          (acceptedEvent, sampleOrdinal) => (
+            createPorterHeavyDepartureExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              receivedAtTick: world.meta.completedTick,
+              listenerPosition,
+              listenerFacingMilliRadians: player.facingMilliRadians,
+              hearingCertainty: audible.certainty,
+            })
+          ),
+        );
+      }
       if (worldAdvancePhaseStartedAtMs !== null) {
         const finishedAtMs = runtimePerformanceNow();
         worldAdvanceRegionalEcologyAggregateCommitPerformance.recordSpan(
@@ -12590,7 +13007,7 @@ export async function createTideweftRuntime(
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
       }
     }
-    playPendingPlayerExpression();
+    playPendingSituatedExpression();
     if (worldAdvanced) {
       reconcileResidentInteractions();
       reconcileContract();
@@ -12657,6 +13074,16 @@ export async function createTideweftRuntime(
       }
     }
     if (present) refreshRuntimePresentation();
+    if (closingSituatedExpressionInterval !== null) {
+      const closed = closeSituatedExpressionChannelBankInterval(
+        situatedExpressionChannels,
+        closingSituatedExpressionInterval,
+      );
+      if (closed === null) {
+        throw new Error("Situated expression interval closure failed validation");
+      }
+      situatedExpressionChannels = closed;
+    }
 
     if (world.meta.completedTick - lastAutosaveTick >= AUTOSAVE_INTERVAL_TICKS) {
       lastAutosaveTick = world.meta.completedTick;
@@ -14124,7 +14551,9 @@ export async function createTideweftRuntime(
     fieldResourceCatalog = runtimeFieldResourceCatalog(world);
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
-    situatedExpression = createSituatedExpressionState();
+    situatedExpressionChannels = createSituatedExpressionChannelBank();
+    situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
+    situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
     const promise = economyView.contracts.find((contract) => contract.status === "offered");
     player = createPlayer(economyView, promise?.originSettlementId);
     physicalCargo = createPhysicalCargoStateFromPlayer(
@@ -14418,17 +14847,27 @@ export async function createTideweftRuntime(
       if (expressionPosition === null) {
         throw new Error("Recovered fall cargo has no canonical expression position");
       }
-      acceptPlayerExpression(playerFallCargoRecoveryExpressionIntent({
+      const recoveryEventId = looseCargoEventId(
+        recovered.world.region,
+        recovered.world.lastEventOrdinal,
+      );
+      acceptSituatedExpression(playerFallCargoRecoveryExpressionIntent({
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
-        recoveryEventId: looseCargoEventId(
-          recovered.world.region,
-          recovered.world.lastEventOrdinal,
-        ),
+        recoveryEventId,
         position: expressionPosition,
         variantSeed: recovered.world.lastEventOrdinal >>> 0,
         recoveredFrom: "fall-separation",
-      }));
-      playPendingPlayerExpression();
+      }), { kind: "self" }, (event, sampleOrdinal) => (
+        createPlayerFallRecoveryExpressionAdmissionRecord({
+          sourceActorId: event.sourceActorId,
+          triggerEventId: event.triggerEventId,
+          sampleOrdinal,
+          admittedAtPlayerStepPhase: playerStepsSinceWorldTick,
+          recoveryEventId,
+          recoveredEntityId: parcelId,
+        })
+      ));
+      playPendingSituatedExpression();
     }
     return true;
   }
@@ -15527,6 +15966,31 @@ export async function createTideweftRuntime(
       throw new Error(`Refusing to save inconsistent physical cargo: ${snapshotPhysicalValidation.reason}`);
     }
     validatePhysicalPromiseCustody(worldSnapshot, playerSnapshot, snapshotPhysicalValidation.state);
+    const perceptionCarrySnapshot = canonicalPlayerPerceptionCarry({
+      version: PLAYER_PERCEPTION_CARRY_VERSION,
+      intervalStartPosition: playerPerceptionIntervalStartPosition,
+      intervalStartFacingMilliRadians: playerPerceptionIntervalStartFacingMilliRadians,
+      playerStepsSinceWorldTick,
+      playerSenseSamples,
+      actorVocalizationSamples,
+      situatedExpressionChannels,
+      situatedExpressionAdmissions,
+      situatedExpressionCausalAuthority,
+      nextPlayerSenseSampleOrdinal,
+    }, worldSnapshot.meta.completedTick, PLAYER_PERCEPTION_CARRY_VERSION)
+      ?? invalidPlayerPerceptionCarry();
+    if (!playerPerceptionCarryMatchesPosition(
+      perceptionCarrySnapshot,
+      regionalTravelSnapshot,
+      playerSnapshot,
+      createWorldView(worldSnapshot),
+      {
+        traversalFeedback,
+        physicalCargo: snapshotPhysicalValidation.state,
+      },
+    )) {
+      throw new Error("Refusing to save inconsistent expression/perception authority");
+    }
     const bio0EcologySnapshot = canonicalRuntimeBio0Ecology(bio0Ecology, worldSnapshot);
     if (bio0EcologySnapshot === null) {
       throw new Error("Refusing to save inconsistent BIO0 ecology state");
@@ -15608,15 +16072,7 @@ export async function createTideweftRuntime(
       physicalCargo: snapshotPhysicalCargoState(snapshotPhysicalValidation.state),
       regionalTravel: serializePlayerRegionalTravel(regionalTravelSnapshot),
       promiseJourney: promiseJourneySnapshot,
-      perceptionCarry: canonicalPlayerPerceptionCarry({
-        version: PLAYER_PERCEPTION_CARRY_VERSION,
-        playerStepsSinceWorldTick,
-        playerSenseSamples,
-        playerVocalizationSamples,
-        situatedExpression,
-        nextPlayerSenseSampleOrdinal,
-      }, worldSnapshot.meta.completedTick, PLAYER_PERCEPTION_CARRY_VERSION)
-        ?? invalidPlayerPerceptionCarry(),
+      perceptionCarry: perceptionCarrySnapshot,
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
       regionalEcology: serializeRegionalEcologyStateV6(regionalEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
@@ -15748,11 +16204,15 @@ export async function createTideweftRuntime(
       session: structuredClone(session),
       fieldResourceEcology: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
-      situatedExpression,
+      situatedExpressionChannels,
+      situatedExpressionAdmissions,
+      situatedExpressionCausalAuthority,
+      playerPerceptionIntervalStartPosition,
+      playerPerceptionIntervalStartFacingMilliRadians,
       commandQueue: structuredClone(commandQueue),
       playerStepsSinceWorldTick,
       playerSenseSamples: [...playerSenseSamples],
-      playerVocalizationSamples: [...playerVocalizationSamples],
+      actorVocalizationSamples: [...actorVocalizationSamples],
       nextPlayerSenseSampleOrdinal,
       commandSequence,
       pendingGatherNodeId,
@@ -15807,11 +16267,16 @@ export async function createTideweftRuntime(
       session = prior.session;
       fieldResourceEcology = prior.fieldResourceEcology;
       traversalFeedback = prior.traversalFeedback;
-      situatedExpression = prior.situatedExpression;
+      situatedExpressionChannels = prior.situatedExpressionChannels;
+      situatedExpressionAdmissions = prior.situatedExpressionAdmissions;
+      situatedExpressionCausalAuthority = prior.situatedExpressionCausalAuthority;
+      playerPerceptionIntervalStartPosition = prior.playerPerceptionIntervalStartPosition;
+      playerPerceptionIntervalStartFacingMilliRadians =
+        prior.playerPerceptionIntervalStartFacingMilliRadians;
       commandQueue = prior.commandQueue;
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       playerSenseSamples = prior.playerSenseSamples;
-      playerVocalizationSamples = prior.playerVocalizationSamples;
+      actorVocalizationSamples = prior.actorVocalizationSamples;
       nextPlayerSenseSampleOrdinal = prior.nextPlayerSenseSampleOrdinal;
       commandSequence = prior.commandSequence;
       pendingGatherNodeId = prior.pendingGatherNodeId;
@@ -16183,10 +16648,14 @@ type LoadedAutosave = {
 function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
   return Object.freeze({
     version: PLAYER_PERCEPTION_CARRY_VERSION,
+    intervalStartPosition: EMPTY_PERCEPTION_INTERVAL_POSITION,
+    intervalStartFacingMilliRadians: 0,
     playerStepsSinceWorldTick: 0,
     playerSenseSamples: Object.freeze([]),
-    playerVocalizationSamples: Object.freeze([]),
-    situatedExpression: createSituatedExpressionState(),
+    actorVocalizationSamples: Object.freeze([]),
+    situatedExpressionChannels: createSituatedExpressionChannelBank(),
+    situatedExpressionAdmissions: createSituatedExpressionAdmissionLedger(),
+    situatedExpressionCausalAuthority: createSituatedExpressionCausalAuthorityLedger(),
     nextPlayerSenseSampleOrdinal: 0,
   });
 }
@@ -16201,6 +16670,7 @@ function canonicalPlayerPerceptionCarry(
   completedWorldTick: number,
   expectedVersion:
     | typeof LEGACY_PLAYER_PERCEPTION_CARRY_VERSION
+    | typeof PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
 ): PlayerPerceptionCarry | null {
   if (
@@ -16211,13 +16681,26 @@ function canonicalPlayerPerceptionCarry(
   const record = value as Readonly<Record<string, unknown>>;
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
     ? [
+        "actorVocalizationSamples",
+        "intervalStartFacingMilliRadians",
+        "intervalStartPosition",
         "nextPlayerSenseSampleOrdinal",
         "playerSenseSamples",
         "playerStepsSinceWorldTick",
-        "playerVocalizationSamples",
-        "situatedExpression",
+        "situatedExpressionAdmissions",
+        "situatedExpressionCausalAuthority",
+        "situatedExpressionChannels",
         "version",
       ]
+    : expectedVersion === PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION
+      ? [
+          "nextPlayerSenseSampleOrdinal",
+          "playerSenseSamples",
+          "playerStepsSinceWorldTick",
+          "playerVocalizationSamples",
+          "situatedExpression",
+          "version",
+        ]
     : [
         "nextPlayerSenseSampleOrdinal",
         "playerSenseSamples",
@@ -16228,6 +16711,8 @@ function canonicalPlayerPerceptionCarry(
   const phase = record.playerStepsSinceWorldTick;
   const nextOrdinal = record.nextPlayerSenseSampleOrdinal;
   const rawSamples = record.playerSenseSamples;
+  const currentIntervalStartPosition = record.intervalStartPosition;
+  const currentIntervalStartFacing = record.intervalStartFacingMilliRadians;
   if (
     record.version !== expectedVersion
     || !Number.isSafeInteger(completedWorldTick)
@@ -16240,6 +16725,13 @@ function canonicalPlayerPerceptionCarry(
     || !Array.isArray(rawSamples)
     || rawSamples.length !== phase
     || rawSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
+    || (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+      && (!isWorldPosition(currentIntervalStartPosition)
+        || typeof currentIntervalStartFacing !== "number"
+        || !Number.isSafeInteger(currentIntervalStartFacing)
+        || Object.is(currentIntervalStartFacing, -0)
+        || Math.abs(currentIntervalStartFacing as number)
+          > PLAYER_FACING_MILLI_RADIANS_LIMIT))
   ) return null;
 
   const samples: PlayerSenseSample[] = [];
@@ -16284,17 +16776,29 @@ function canonicalPlayerPerceptionCarry(
   }
 
   const vocalizationSamples: SupplementalSoundSample[] = [];
-  let situatedExpression = createSituatedExpressionState();
+  let situatedExpressionChannels = createSituatedExpressionChannelBank();
+  let situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
+  let situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
   if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
-    const rawVocalizations = record.playerVocalizationSamples;
-    const canonicalExpression = canonicalizeSituatedExpressionState(
-      record.situatedExpression,
+    const rawVocalizations = record.actorVocalizationSamples;
+    const canonicalChannels = canonicalizeSituatedExpressionChannelBank(
+      record.situatedExpressionChannels,
     );
     if (
       !Array.isArray(rawVocalizations)
       || rawVocalizations.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
-      || canonicalExpression === null
+      || canonicalChannels === null
+      || canonicalChannels.channels.some((channel) => (
+        channel.reception !== null
+        && (
+          channel.reception.receivedAtTick !== completedWorldTick
+          || (channel.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+            ? channel.reception.kind !== "self"
+            : channel.reception.kind !== "heard-visible")
+        )
+      ))
     ) return null;
+    const expressionEventIds = new Set<string>();
     for (let ordinal = 0; ordinal < rawVocalizations.length; ordinal += 1) {
       const raw = rawVocalizations[ordinal];
       if (
@@ -16302,84 +16806,478 @@ function canonicalPlayerPerceptionCarry(
         || typeof raw !== "object"
         || Array.isArray(raw)
         || !hasExactObjectKeys(raw, [
+          "expressionEventId",
           "id",
           "position",
           "soundClass",
           "soundInterrupt",
           "soundLoudness",
           "soundRangeUnits",
+          "sourceActorId",
         ])
       ) return null;
       const candidate = raw as unknown as SupplementalSoundSample;
       if (
-        candidate.id !== `pv-${completedWorldTick}-${ordinal}`
+        candidate.id !== `av-${completedWorldTick}-${ordinal}`
         || candidate.soundClass !== "human-vocalization"
+        || expressionEventIds.has(candidate.expressionEventId)
       ) return null;
       const sample = createSupplementalSoundSample(candidate);
-      if (sample === null || stableStringify(sample) !== stableStringify(candidate)) return null;
+      if (
+        sample === null
+        || stableStringify(sample) !== stableStringify(candidate)
+        || !vocalizationSampleMatchesChannel(sample, canonicalChannels)
+      ) return null;
+      expressionEventIds.add(sample.expressionEventId);
       vocalizationSamples.push(sample);
     }
-    situatedExpression = canonicalExpression;
+    const trajectory = canonicalizeSituatedExpressionTrajectory(
+      canonicalChannels,
+      record.situatedExpressionAdmissions,
+      phase,
+      vocalizationSamples,
+    );
+    const causalAuthority = canonicalizeSituatedExpressionCausalAuthorityLedger(
+      record.situatedExpressionCausalAuthority,
+    );
+    if (
+      trajectory === null
+      || causalAuthority === null
+      || causalAuthority.records.some(({ committedWorldTick }) => (
+        committedWorldTick !== completedWorldTick
+      ))
+    ) return null;
+    situatedExpressionChannels = trajectory.bank;
+    situatedExpressionAdmissions = trajectory.admissionLedger;
+    situatedExpressionCausalAuthority = causalAuthority;
+  } else if (expectedVersion === PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION) {
+    const migrated = migrateLegacyV33PlayerVocalizations(
+      record.situatedExpression,
+      record.playerVocalizationSamples,
+      completedWorldTick,
+      phase as number,
+    );
+    if (migrated === null) return null;
+    vocalizationSamples.push(...migrated.actorVocalizationSamples);
+    situatedExpressionAdmissions = migrated.situatedExpressionAdmissions;
+    if (migrated.playerChannel !== null) {
+      const bank = canonicalizeSituatedExpressionChannelBank({
+        version: 1,
+        channels: [migrated.playerChannel],
+      });
+      if (bank === null) return null;
+      situatedExpressionChannels = bank;
+    }
+    const trajectory = canonicalizeSituatedExpressionTrajectory(
+      situatedExpressionChannels,
+      situatedExpressionAdmissions,
+      phase,
+      vocalizationSamples,
+    );
+    if (trajectory === null) return null;
+    situatedExpressionChannels = trajectory.bank;
+    situatedExpressionAdmissions = trajectory.admissionLedger;
   }
+  const intervalStartPosition = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    ? createWorldPosition(
+        (currentIntervalStartPosition as WorldPosition).region,
+        (currentIntervalStartPosition as WorldPosition).localX,
+        (currentIntervalStartPosition as WorldPosition).localY,
+      )
+    : samples[0]?.position ?? EMPTY_PERCEPTION_INTERVAL_POSITION;
+  const intervalStartFacingMilliRadians = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    ? currentIntervalStartFacing as number
+    : 0;
   return Object.freeze({
     version: PLAYER_PERCEPTION_CARRY_VERSION,
+    intervalStartPosition,
+    intervalStartFacingMilliRadians,
     playerStepsSinceWorldTick: phase as number,
     playerSenseSamples: Object.freeze(samples),
-    playerVocalizationSamples: Object.freeze(vocalizationSamples),
-    situatedExpression,
+    actorVocalizationSamples: Object.freeze(vocalizationSamples),
+    situatedExpressionChannels,
+    situatedExpressionAdmissions,
+    situatedExpressionCausalAuthority,
     nextPlayerSenseSampleOrdinal: nextOrdinal as number,
   });
+}
+
+function vocalizationSampleMatchesChannel(
+  sample: SupplementalSoundSample,
+  bank: SituatedExpressionChannelBank,
+): boolean {
+  const channel = bank.channels.find(
+    ({ sourceActorId }) => sourceActorId === sample.sourceActorId,
+  );
+  if (channel === undefined) return false;
+  if (channel.state.active?.eventId === sample.expressionEventId) {
+    return vocalizationSampleMatchesActiveEvent(sample, channel.state.active);
+  }
+  const recentMatches = channel.state.recent.filter((memory) => (
+    situatedExpressionEventIdForMemory(memory) === sample.expressionEventId
+  ));
+  return recentMatches.length === 1
+    && vocalizationSampleMatchesRecentMemory(sample, recentMatches[0]!);
 }
 
 function invalidPlayerPerceptionCarry(): never {
   throw new Error("Refusing to save an inconsistent pending perception interval");
 }
 
+/** Exact movement salience projection used both at capture and at save replay. */
+function playerMovementSalienceForDelta(deltaX: number, deltaY: number): number {
+  return Math.max(
+    0,
+    Math.min(
+      FIXED_POINT,
+      Math.round(Math.hypot(deltaX, deltaY) * FIXED_POINT / 164),
+    ),
+  );
+}
+
+/**
+ * v33 and earlier did not persist the phase-zero pose. Reconstruct one exact
+ * compatible first displacement once, then all later saves carry the real
+ * anchor. This is migration authority only; current envelopes never infer it.
+ */
+function migrateLegacyPlayerPerceptionIntervalPose(
+  carry: PlayerPerceptionCarry,
+  regionalTravel: RegionalPlayerTravelState,
+  player: PlayerState,
+): Readonly<{
+  intervalStartPosition: WorldPosition;
+  intervalStartFacingMilliRadians: number;
+}> | null {
+  const currentPosition = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+  if (currentPosition === null) return null;
+  const first = carry.playerSenseSamples[0];
+  if (first === undefined) {
+    return Object.freeze({
+      intervalStartPosition: currentPosition,
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
+    });
+  }
+
+  const laterHasMotion = carry.playerSenseSamples.slice(1).some((sample, index) => {
+    try {
+      const prior = carry.playerSenseSamples[index]!.position;
+      const delta = worldPositionDelta(prior, sample.position);
+      return delta.x !== 0 || delta.y !== 0;
+    } catch {
+      return false;
+    }
+  });
+  let firstDelta: Readonly<{ x: number; y: number }> | null = null;
+  const currentVelocityIsCompatible =
+    carry.playerSenseSamples.length === 1
+    && Math.abs(player.velocityX) <= PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+    && Math.abs(player.velocityY) <= PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+    && player.velocityX * player.velocityX + player.velocityY * player.velocityY
+      <= PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+        * PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+    && playerMovementSalienceForDelta(player.velocityX, player.velocityY)
+      === first.movementSalience;
+  if (currentVelocityIsCompatible) {
+    firstDelta = Object.freeze({ x: player.velocityX, y: player.velocityY });
+  } else {
+    const facingMustMatch = !laterHasMotion && first.movementSalience > 0;
+    search: for (
+      let deltaY = -PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS;
+      deltaY <= PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS;
+      deltaY += 1
+    ) {
+      for (
+        let deltaX = -PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS;
+        deltaX <= PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS;
+        deltaX += 1
+      ) {
+        if (
+          deltaX * deltaX + deltaY * deltaY
+            > PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+              * PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+          || playerMovementSalienceForDelta(deltaX, deltaY) !== first.movementSalience
+          || (facingMustMatch
+            && playerFacingMilliRadiansForVelocity(deltaX, deltaY)
+              !== player.facingMilliRadians)
+        ) continue;
+        firstDelta = Object.freeze({ x: deltaX, y: deltaY });
+        break search;
+      }
+    }
+  }
+  if (firstDelta === null) return null;
+  try {
+    return Object.freeze({
+      intervalStartPosition: translateWorldPosition(
+        first.position,
+        -firstDelta.x,
+        -firstDelta.y,
+      ),
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
+    });
+  } catch {
+    return null;
+  }
+}
+
 function playerPerceptionCarryMatchesPosition(
   carry: PlayerPerceptionCarry,
   regionalTravel: RegionalPlayerTravelState,
   player: PlayerState,
+  economy: WorldView,
+  playerExpressionAuthority: PlayerExpressionAuthority,
 ): boolean {
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
   if (position === null) return false;
+  let priorIntervalPosition = carry.intervalStartPosition;
+  let replayedFacingMilliRadians = carry.intervalStartFacingMilliRadians;
+  let finalDeltaX = 0;
+  let finalDeltaY = 0;
+  for (const sample of carry.playerSenseSamples) {
+    let delta: ReturnType<typeof worldPositionDelta>;
+    try {
+      delta = worldPositionDelta(priorIntervalPosition, sample.position);
+    } catch {
+      return false;
+    }
+    if (
+      Math.abs(delta.x) > PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+      || Math.abs(delta.y) > PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+      || delta.x * delta.x + delta.y * delta.y
+        > PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+          * PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
+      || sample.movementSalience !== playerMovementSalienceForDelta(delta.x, delta.y)
+    ) {
+      return false;
+    }
+    if (delta.x !== 0 || delta.y !== 0) {
+      replayedFacingMilliRadians = playerFacingMilliRadiansForVelocity(delta.x, delta.y);
+    }
+    finalDeltaX = delta.x;
+    finalDeltaY = delta.y;
+    priorIntervalPosition = sample.position;
+  }
   const latestPhysical = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
-  const latest = latestPhysical
-    ?? carry.playerVocalizationSamples[carry.playerVocalizationSamples.length - 1];
-  if (latest === undefined) return carry.playerStepsSinceWorldTick === 0;
-  if (latestPhysical === undefined && carry.playerStepsSinceWorldTick !== 0) return false;
   if (
-    position.region.x !== latest.position.region.x
-    || position.region.y !== latest.position.region.y
-    || position.localX !== latest.position.localX
-    || position.localY !== latest.position.localY
+    latestPhysical === undefined
+    && (
+      carry.playerStepsSinceWorldTick !== 0
+      || stableStringify(carry.intervalStartPosition) !== stableStringify(position)
+      || carry.intervalStartFacingMilliRadians !== player.facingMilliRadians
+    )
+  ) return false;
+  if (
+    latestPhysical !== undefined
+    && (
+      position.region.x !== latestPhysical.position.region.x
+      || position.region.y !== latestPhysical.position.region.y
+      || position.localX !== latestPhysical.position.localX
+      || position.localY !== latestPhysical.position.localY
+      || replayedFacingMilliRadians !== player.facingMilliRadians
+      || finalDeltaX !== player.velocityX
+      || finalDeltaY !== player.velocityY
+    )
   ) return false;
 
-  const pathAnchors = [
-    position,
-    ...carry.playerSenseSamples.map(({ position: samplePosition }) => samplePosition),
-  ];
-  return carry.playerVocalizationSamples.every(({ position: vocalizationPosition }) => (
-    pathAnchors.some((anchor) => worldPositionsWithinDistance(
-      anchor,
-      vocalizationPosition,
-      PLAYER_VOCALIZATION_PATH_TOLERANCE_UNITS,
-    ))
-  ));
-}
-
-function worldPositionsWithinDistance(
-  left: WorldPosition,
-  right: WorldPosition,
-  maximumDistance: number,
-): boolean {
-  try {
-    const delta = worldPositionDelta(left, right);
-    return Math.abs(delta.x) <= maximumDistance
-      && Math.abs(delta.y) <= maximumDistance
-      && Math.hypot(delta.x, delta.y) <= maximumDistance;
-  } catch {
+  const spatialWorld = createRegionalWorldView(
+    economy,
+    regionalTravel.window,
+    { discovered: player.discovered, depthSoundings: player.depthSoundings },
+    { immutable: true },
+  );
+  const channelsMatch = situatedExpressionChannelsMatchWorld(
+    carry,
+    carry.situatedExpressionChannels,
+    economy,
+    spatialWorld,
+    regionalTravel,
+    player,
+    playerExpressionAuthority,
+  );
+  const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
+    (admission) => admission.kind === "player-traversal"
+      || admission.kind === "player-fall-recovery",
+  );
+  if (currentPlayerAdmissions.length !== carry.situatedExpressionCausalAuthority.records.length) {
     return false;
   }
+  for (const admission of currentPlayerAdmissions) {
+    const matches = carry.situatedExpressionCausalAuthority.records.filter(
+      ({ eventId }) => eventId === admission.eventId,
+    );
+    const authorityRecord = matches[0];
+    const expectedPosition = playerExpressionAdmissionPosition(admission, carry);
+    if (
+      matches.length !== 1
+      || authorityRecord === undefined
+      || authorityRecord.committedWorldTick !== economy.completedTick
+      || expectedPosition === null
+      || stableStringify(authorityRecord.playerPosition)
+        !== stableStringify(expectedPosition)
+      || !situatedExpressionAdmissionMatchesCausalAuthority(
+        admission,
+        authorityRecord,
+      )
+    ) return false;
+  }
+  const samplesMatch = carry.actorVocalizationSamples.every((sample, ordinal) => {
+    const admission = carry.situatedExpressionAdmissions.records[ordinal];
+    if (
+      admission === undefined
+      || admission.eventId !== sample.expressionEventId
+      || admission.sourceActorId !== sample.sourceActorId
+    ) return false;
+    if (sample.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
+      const expectedPosition = playerExpressionAdmissionPosition(
+        admission,
+        carry,
+      );
+      if (
+        expectedPosition === null
+        || stableStringify(expectedPosition) !== stableStringify(sample.position)
+      ) return false;
+      if (admission.kind === "legacy-v33-player") {
+        return vocalizationSampleMatchesChannel(sample, carry.situatedExpressionChannels);
+      }
+      const policy = playerExpressionAdmissionSoundPolicy(
+        admission,
+        playerExpressionAuthority,
+      );
+      if (policy === null) return false;
+      const acoustics = situatedExpressionAcoustics(policy.volume);
+      return sample.soundLoudness === acoustics.loudness
+        && sample.soundRangeUnits === acoustics.rangeUnits
+        && sample.soundInterrupt === policy.interrupt;
+    }
+    if (admission.kind !== "porter-heavy-departure") return false;
+    const event = workingPeopleExpressionEventForTrigger(
+      economy,
+      admission.triggerEventId,
+    );
+    return event !== null
+      && stableStringify(admission.listenerPosition)
+        === stableStringify(carry.intervalStartPosition)
+      && admission.listenerFacingMilliRadians
+        === carry.intervalStartFacingMilliRadians
+      && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
+      && vocalizationSampleMatchesActiveEvent(sample, event)
+      && porterHeavyDepartureAdmissionMatchesEventTimePerception({
+        economyWorld: economy,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        event,
+        admission,
+        completedTick: economy.completedTick,
+      });
+  });
+  return channelsMatch && samplesMatch;
+}
+
+function situatedExpressionChannelsMatchWorld(
+  carry: PlayerPerceptionCarry,
+  bank: SituatedExpressionChannelBank,
+  economy: WorldView,
+  spatialWorld: WorldView,
+  regionalTravel: RegionalPlayerTravelState,
+  player: PlayerState,
+  playerExpressionAuthority: PlayerExpressionAuthority,
+): boolean {
+  return bank.channels.every((channel) => {
+    const active = channel.state.active;
+    const admissions = carry.situatedExpressionAdmissions.records.filter(
+      ({ sourceActorId }) => sourceActorId === channel.sourceActorId,
+    );
+    if (channel.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
+      const activeAdmission = active === null
+        ? null
+        : admissions.find(({ eventId }) => eventId === active.eventId) ?? null;
+      return (active === null || (
+        activeAdmission !== null
+        && stableStringify(active.position) === stableStringify(
+          carry.actorVocalizationSamples[activeAdmission.sampleOrdinal]?.position,
+        )
+        && playerExpressionAdmissionPosition(activeAdmission, carry) !== null
+        && playerExpressionEventMatchesAdmission(
+          active,
+          activeAdmission,
+          playerExpressionAuthority,
+        )
+      )) && channel.state.recent.every((memory) => {
+        const admission = admissions.find((candidate) => (
+          candidate.triggerEventId === memory.triggerEventId
+        ));
+        return admission !== undefined && playerExpressionMemoryMatchesAdmission(
+          memory,
+          admission,
+          playerExpressionAuthority,
+        );
+      });
+    }
+    const matches = economy.residents.filter(
+      ({ identity }) => identity.stableId === channel.sourceActorId,
+    );
+    if (matches.length !== 1) return false;
+    if (!channel.state.recent.every((memory) => (
+      workingPeopleExpressionMemoryMatchesWorld(economy, memory)
+    ))) return false;
+    if (!(
+      active === null
+      || (
+        residentSourcePositionMatches(economy, channel.sourceActorId, active.position)
+        && workingPeopleExpressionEventMatchesWorld(economy, active)
+      )
+    )) return false;
+    return admissions.every((admission) => {
+      if (admission.kind !== "porter-heavy-departure") return false;
+      const event = workingPeopleExpressionEventForTrigger(
+        economy,
+        admission.triggerEventId,
+      );
+      return event !== null && porterHeavyDepartureAdmissionMatchesEventTimePerception({
+        economyWorld: economy,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        event,
+        admission,
+        completedTick: economy.completedTick,
+      });
+    });
+  });
+}
+
+function playerExpressionAdmissionPosition(
+  admission: SituatedExpressionAdmissionRecord,
+  carry: PlayerPerceptionCarry,
+): WorldPosition | null {
+  if (admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID) return null;
+  const phase = admission.admittedAtPlayerStepPhase;
+  if (phase > 0) return carry.playerSenseSamples[phase - 1]?.position ?? null;
+  // Exact v33 did not retain the interval-start player anchor. Its uniquely
+  // reconstructed sound position is the narrow compatibility authority; all
+  // current admissions use a physical step sample or the exact phase-zero
+  // interval anchor.
+  if (admission.kind === "legacy-v33-player") {
+    return carry.actorVocalizationSamples[admission.sampleOrdinal]?.position ?? null;
+  }
+  return carry.intervalStartPosition;
+}
+
+function residentSourcePositionMatches(
+  economy: WorldView,
+  sourceActorId: string,
+  position: WorldPosition,
+): boolean {
+  const matches = economy.residents.filter(
+    ({ identity }) => identity.stableId === sourceActorId,
+  );
+  if (matches.length !== 1) return false;
+  const resident = matches[0];
+  if (resident === undefined) return false;
+  const placement = resolveResidentWorldPlacement(economy, resident);
+  return placement !== null
+    && stableStringify(placement.position) === stableStringify(position);
 }
 
 function nextSaveGeneration(version: AutosaveVersion): {
@@ -16483,6 +17381,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         && decoded.version !== REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         && decoded.version !== TURNING_DAY_GAME_SAVE_VERSION
         && decoded.version !== PLAYER_RECOVERY_GAME_SAVE_VERSION
+        && decoded.version !== PLAYER_EXPRESSION_GAME_SAVE_VERSION
         && decoded.version !== GAME_SAVE_VERSION
       ) ||
       typeof decoded.world !== "string" ||
@@ -16503,7 +17402,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
-        decoded.version === GAME_SAVE_VERSION
+          decoded.version === GAME_SAVE_VERSION
+        || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
@@ -16826,6 +17726,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
       || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
       || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
@@ -16848,6 +17749,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
         || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
@@ -17404,12 +18306,18 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (livingActorPlayerChoice === null) {
       throw new Error("Current save contains invalid living-actor player choice state");
     }
-    const perceptionCarry = decoded.version >= GAME_SAVE_VERSION
+    let perceptionCarry = decoded.version >= GAME_SAVE_VERSION
       ? canonicalPlayerPerceptionCarry(
           decoded.perceptionCarry,
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
         )
+      : decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION,
+          )
       : decoded.version >= PLAYER_PERCEPTION_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
@@ -17567,9 +18475,6 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       }
       regionalTravel = restored;
       promiseJourney = restoredJourney;
-      if (!playerPerceptionCarryMatchesPosition(perceptionCarry, regionalTravel, decoded.player)) {
-        throw new Error("Current save perception interval does not end at the saved player position");
-      }
     } else {
       promiseJourney = migrateRegionalPromiseJourney(decoded.player, compatibilityView);
       normalizePlayerForRuntime(decoded.player, compatibilityView);
@@ -17585,6 +18490,20 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       { discovered: decoded.player.discovered, depthSoundings: decoded.player.depthSoundings },
       { immutable: true },
     );
+    if (decoded.version < GAME_SAVE_VERSION) {
+      const migratedPose = migrateLegacyPlayerPerceptionIntervalPose(
+        perceptionCarry,
+        regionalTravel,
+        decoded.player,
+      );
+      if (migratedPose === null) {
+        throw new Error("Historical perception carry has no canonical player anchor");
+      }
+      perceptionCarry = Object.freeze({
+        ...perceptionCarry,
+        ...migratedPose,
+      });
+    }
     const activeEcologyRegions = regionalStorageRegionsInView(restoredRegionalView);
     const regionalEcology = persistedRegionalEcology === null
       ? (() => {
@@ -17726,6 +18645,18 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       && regionKey(loadedPhysicalCargo.activeRegion) !== regionKey(regionalTravel.stream.center)
     ) throw new Error("Current save physical cargo is active in the wrong region");
     validatePhysicalPromiseCustody(world, decoded.player, loadedPhysicalCargo);
+    if (
+      decoded.version >= REGIONAL_GAME_SAVE_VERSION
+      && !playerPerceptionCarryMatchesPosition(
+        perceptionCarry,
+        regionalTravel,
+        decoded.player,
+        compatibilityView,
+        { traversalFeedback, physicalCargo: loadedPhysicalCargo },
+      )
+    ) {
+      throw new Error("Current save perception interval does not match its saved physical authority");
+    }
     return {
       kind: "loaded",
       world,

@@ -103,6 +103,7 @@ import {
   projectPerception,
   projectResidentRoutePosition,
   projectResidentWorldPosition,
+  projectSituatedExpressionSource,
   RESIDENT_CONVERSATION_RANGE_TILES,
   type AdriftProjectionControl,
 } from "./projection";
@@ -111,6 +112,10 @@ import {
   projectSituatedExpression,
   type SituatedExpressionEvent,
 } from "./situatedExpression";
+import {
+  situatedExpressionReceptionMatchesActiveEvent,
+  type SituatedExpressionReception,
+} from "./situatedExpressionReception";
 import { eventSettlementLocusIds } from "./eventObservation";
 
 export interface UIProjectionOptions {
@@ -146,6 +151,8 @@ export interface UIProjectionOptions {
   readonly traversalFeedback?: TraversalFeedbackState;
   /** Current actor expression, projected separately from system announcements. */
   readonly situatedExpression?: SituatedExpressionEvent | null;
+  /** Event-time evidence that the player lawfully received the exact expression. */
+  readonly situatedExpressionReception?: SituatedExpressionReception | null;
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
   readonly settlementFoodStoreAction?: Readonly<{
     readonly id: string;
@@ -387,10 +394,18 @@ export function projectUIView(
         looseQuantity: projectedActiveCustody.looseQuantity,
       }
     : projectedActiveCustody;
-  const situatedExpression = options.situatedExpression === null
-    || options.situatedExpression === undefined
+  const situatedExpressionEvent = options.situatedExpression ?? null;
+  const receivedSituatedExpression = situatedExpressionEvent !== null
+    && situatedExpressionReceptionMatchesActiveEvent(
+      options.situatedExpressionReception ?? null,
+      situatedExpressionEvent,
+    );
+  const situatedExpression = !receivedSituatedExpression
     ? null
-    : projectSituatedExpression(options.situatedExpression);
+    : projectSituatedExpression(situatedExpressionEvent);
+  const situatedExpressionSource = !receivedSituatedExpression
+    ? null
+    : projectSituatedExpressionSource(world, situatedExpressionEvent, economy);
 
   return {
     revision: [
@@ -422,6 +437,8 @@ export function projectUIView(
       options.activePromiseCustody?.looseQuantity ?? "no-loose-promise",
       options.situatedExpression?.eventId ?? "no-situated-expression",
       options.situatedExpression?.remainingSteps ?? 0,
+      options.situatedExpressionReception?.eventId ?? "no-expression-reception",
+      situatedExpressionSource?.speakerLabel ?? "no-expression-source",
       suppressDetail
         ? "sleep-store-action-hidden"
         : options.settlementFoodStoreAction?.id ?? "no-store-action",
@@ -542,11 +559,11 @@ export function projectUIView(
           },
         }
       : {}),
-    ...(situatedExpression && options.situatedExpression
+    ...(situatedExpression && situatedExpressionSource && options.situatedExpression
       ? {
           expressionCaption: {
             id: options.situatedExpression.eventId,
-            speakerLabel: "You",
+            speakerLabel: situatedExpressionSource.speakerLabel,
             text: situatedExpression.text,
             tone: options.situatedExpression.tone,
             assertive: options.situatedExpression.tone === "alarmed"

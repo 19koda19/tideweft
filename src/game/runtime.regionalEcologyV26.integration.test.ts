@@ -42,7 +42,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 33;
+  readonly version: 34;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly perceptionCarry: unknown;
@@ -275,13 +275,13 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 33
-    || record.payloadVersion !== 33
+    || value.version !== 34
+    || record.payloadVersion !== 34
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a current v33 envelope");
+  ) throw new Error("runtime fixture did not produce a current v34 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
-    throw new Error("v33 envelope integrity did not authenticate");
+    throw new Error("v34 envelope integrity did not authenticate");
   }
   return value;
 }
@@ -291,8 +291,12 @@ function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, un
     throw new Error("current fixture omitted its player perception carry");
   }
   const {
-    playerVocalizationSamples: _futureVocalizations,
-    situatedExpression: _futureExpression,
+    actorVocalizationSamples: _futureVocalizations,
+    intervalStartFacingMilliRadians: _futureIntervalStartFacing,
+    intervalStartPosition: _futureIntervalStartPosition,
+    situatedExpressionAdmissions: _futureAdmissions,
+    situatedExpressionCausalAuthority: _futureCausalAuthority,
+    situatedExpressionChannels: _futureExpressionChannels,
     ...legacy
   } = structuredClone(value) as Record<string, unknown>;
   return Object.freeze({ ...legacy, version: 1 });

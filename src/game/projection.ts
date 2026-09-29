@@ -83,6 +83,10 @@ import {
   projectSituatedExpression,
   type SituatedExpressionEvent,
 } from "./situatedExpression";
+import {
+  situatedExpressionReceptionMatchesActiveEvent,
+  type SituatedExpressionReception,
+} from "./situatedExpressionReception";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import {
   LOOSE_CARGO_MAX_ENTITIES,
@@ -119,6 +123,7 @@ import {
   worldPositionDelta,
   worldPositionToSpatialFrame,
 } from "./worldPosition";
+import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 
 const CHOIR_HIGHLIGHT_TICKS = 24;
 const MAX_BIOME_CACHE_ENTRIES = 4;
@@ -219,6 +224,8 @@ export interface ProjectionOptions {
   traversalFeedback?: TraversalFeedbackState;
   /** One transient, semantic actor expression; routine chatter is not save authority. */
   situatedExpression?: SituatedExpressionEvent | null;
+  /** Event-time evidence that the player lawfully received the exact expression. */
+  situatedExpressionReception?: SituatedExpressionReception | null;
   /** Validated loaded-region parcels. Production always supplies this sidecar. */
   looseCargoWorld?: LooseCargoWorldState;
   /**
@@ -244,15 +251,55 @@ export interface AdriftProjectionControl {
 
 export const RESIDENT_CONVERSATION_RANGE_TILES = 3;
 
+export interface SituatedExpressionSourcePresentation {
+  readonly sourceKind: "player" | "human";
+  readonly speakerLabel: string;
+}
+
+/**
+ * Authenticate the speaking actor before any renderer or caption can label it.
+ * A resident name crosses the presentation boundary only after that exact
+ * persistent human is physically present and their name is known to the
+ * player. Unknown people remain unknown rather than borrowing hidden identity.
+ */
+export function projectSituatedExpressionSource(
+  spatialWorld: WorldView,
+  event: Pick<SituatedExpressionEvent, "sourceActorId">,
+  economyWorld: WorldView = regionalCompatibilityWorldForWorld(spatialWorld) ?? spatialWorld,
+): SituatedExpressionSourcePresentation | null {
+  if (event.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID) {
+    return Object.freeze({ sourceKind: "player", speakerLabel: "You" });
+  }
+
+  const matches = economyWorld.residents.filter(
+    ({ identity }) => identity.stableId === event.sourceActorId,
+  );
+  if (matches.length !== 1) return null;
+  const resident = matches[0];
+  if (resident === undefined || projectResidentWorldPosition(spatialWorld, resident, 1) === null) {
+    return null;
+  }
+  return Object.freeze({
+    sourceKind: "human",
+    speakerLabel: residentKnowsFact(resident.playerKnowledge, "name")
+      ? resident.name
+      : "Unknown porter",
+  });
+}
+
 function projectSituatedExpressionView(
   world: WorldView,
   event: SituatedExpressionEvent | null,
+  reception: SituatedExpressionReception | null,
   tileSize: number,
 ): readonly SituatedExpressionView[] {
-  if (event === null) return Object.freeze([]);
+  if (event === null || !situatedExpressionReceptionMatchesActiveEvent(reception, event)) {
+    return Object.freeze([]);
+  }
   const realization = projectSituatedExpression(event);
+  const source = projectSituatedExpressionSource(world, event);
   const window = regionalWindowForWorld(world);
-  if (realization === null || window === null) return Object.freeze([]);
+  if (realization === null || source === null || window === null) return Object.freeze([]);
   try {
     const origin = globalTileToRegion(window.origin.x, window.origin.y);
     const frame = createSpatialFrame(
@@ -269,8 +316,8 @@ function projectSituatedExpressionView(
     return Object.freeze([Object.freeze({
       id: event.eventId,
       sourceActorId: event.sourceActorId,
-      sourceKind: "player" as const,
-      speakerLabel: "You",
+      sourceKind: source.sourceKind,
+      speakerLabel: source.speakerLabel,
       text: realization.text,
       position: Object.freeze({
         x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
@@ -681,6 +728,7 @@ export function projectGameView(
   const expressions = projectSituatedExpressionView(
     world,
     options.situatedExpression ?? null,
+    options.situatedExpressionReception ?? null,
     tileSize,
   );
   const activeWayknotIds = new Set(

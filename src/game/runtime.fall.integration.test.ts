@@ -53,11 +53,15 @@ import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
 } from "./regionalWorldView";
+import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
-import type { SituatedExpressionState } from "./situatedExpression";
+import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
+import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
+import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
+import type { WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -71,7 +75,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 33;
+  readonly version: 34;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -81,11 +85,15 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 2;
+    readonly version: 3;
+    readonly intervalStartPosition: WorldPosition;
+    readonly intervalStartFacingMilliRadians: number;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly humanPerception.PlayerSenseSample[];
-    readonly playerVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
-    readonly situatedExpression: SituatedExpressionState;
+    readonly actorVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
+    readonly situatedExpressionChannels: SituatedExpressionChannelBank;
+    readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+    readonly situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
     readonly nextPlayerSenseSampleOrdinal: number;
   };
   readonly bio0Ecology: string;
@@ -174,10 +182,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 33
-    || record.payloadVersion !== 33
+    || envelope.version !== 34
+    || record.payloadVersion !== 34
   ) {
-    throw new Error("fixture did not produce a current v33 regional session save");
+    throw new Error("fixture did not produce a current v34 regional session save");
   }
   return envelope;
 }
@@ -198,7 +206,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 33,
+    payloadVersion: 34,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -463,6 +471,13 @@ function relocateToRidgeAtZeroStability(
       depthSoundings: player.depthSoundings,
     },
   );
+  const intervalStartPosition = playerWorldPositionInRegionalWindow(
+    alignedTravel.window,
+    player,
+  );
+  if (intervalStartPosition === null) {
+    throw new Error("relocated fixture has no canonical phase-zero player position");
+  }
   return {
     envelope: {
       ...envelope,
@@ -470,6 +485,11 @@ function relocateToRidgeAtZeroStability(
       player,
       regionalTravel: regionalTravelText,
       promiseJourney,
+      perceptionCarry: {
+        ...envelope.perceptionCarry,
+        intervalStartPosition,
+        intervalStartFacingMilliRadians: player.facingMilliRadians,
+      },
       regionalEcology: rebaseFixtureRegionalEcology(
         envelope.regionalEcology,
         world.meta.rootSeed,
@@ -672,7 +692,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 33,
+      version: 34,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -683,26 +703,62 @@ describe("production terrain fall and physical cargo", () => {
       },
     });
     expect(Object.keys(fallenSave.perceptionCarry).sort()).toEqual([
+      "actorVocalizationSamples",
+      "intervalStartFacingMilliRadians",
+      "intervalStartPosition",
       "nextPlayerSenseSampleOrdinal",
       "playerSenseSamples",
       "playerStepsSinceWorldTick",
-      "playerVocalizationSamples",
-      "situatedExpression",
+      "situatedExpressionAdmissions",
+      "situatedExpressionCausalAuthority",
+      "situatedExpressionChannels",
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 2,
+      version: 3,
+      intervalStartPosition: expect.any(Object),
+      intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,
       nextPlayerSenseSampleOrdinal: 1,
-      situatedExpression: {
-        active: { eventId: cargoLossExpression.id, audioAcknowledged: true },
+      situatedExpressionAdmissions: {
+        version: 1,
+        records: [{
+          kind: "player-traversal",
+          causalClass: "cargo-separation",
+          admittedAtPlayerStepPhase: 1,
+          sampleOrdinal: 0,
+        }],
+      },
+      situatedExpressionCausalAuthority: {
+        version: 1,
+        records: [expect.objectContaining({
+          eventId: cargoLossExpression.id,
+          sourceActorId: "player:local",
+          sampleOrdinal: 0,
+          admittedAtPlayerStepPhase: 1,
+        })],
+      },
+      situatedExpressionChannels: {
+        version: 1,
+        channels: [{
+          sourceActorId: "player:local",
+          state: {
+            active: { eventId: cargoLossExpression.id, audioAcknowledged: true },
+          },
+          reception: {
+            eventId: cargoLossExpression.id,
+            sourceActorId: "player:local",
+            kind: "self",
+          },
+        }],
       },
     });
     expect(fallenSave.perceptionCarry.playerSenseSamples.map(({ sampleOrdinal }) => sampleOrdinal))
       .toEqual([0]);
-    expect(fallenSave.perceptionCarry.playerVocalizationSamples).toEqual([
+    expect(fallenSave.perceptionCarry.actorVocalizationSamples).toEqual([
       expect.objectContaining({
-        id: `pv-${deserializeWorld(fallenSave.world).meta.completedTick}-0`,
+        id: `av-${deserializeWorld(fallenSave.world).meta.completedTick}-0`,
+        sourceActorId: "player:local",
         soundClass: "human-vocalization",
         soundInterrupt: "strong",
       }),
@@ -758,12 +814,12 @@ describe("production terrain fall and physical cargo", () => {
     expect(playerExpression(runtime, "alarmed").id).toBe(cargoLossExpression.id);
     expect(incidentCueCalls("vocalization-alarm")).toBe(1);
 
-    // The remaining thirteen fixed steps expire the fourteen-step expression.
-    // At the intervening world tick, human perception must receive distinct
-    // physical-impact and vocalization samples rather than one replacing the
-    // other. The bounded unfinished voice carry clears only after the world
-    // consumes that exact perception interval.
-    advancePlayerSteps(runtime, 12);
+    // The player line remains visible through the presentation that closes its
+    // exact ten-step perception interval. The world receives distinct physical
+    // impact and vocalization samples, then retires the interval-owned channel;
+    // speech cannot leak into the next interval merely because its display
+    // duration was longer.
+    advancePlayerSteps(runtime, 8);
     expect(playerExpression(runtime, "alarmed").id).toBe(cargoLossExpression.id);
     advancePlayerSteps(runtime, 1);
     expect(runtime.getRenderView().expressions).toEqual([]);
@@ -852,10 +908,10 @@ describe("production terrain fall and physical cargo", () => {
 
     // Let the original runtime finish the pending perception interval. This is
     // the reference for the interrupted branch below.
-    advancePlayerSteps(runtime, 5);
+    advancePlayerSteps(runtime, 9);
     await runtime.save();
     const uninterruptedSave = decodeCurrent(repository.snapshot());
-    expect(uninterruptedSave.perceptionCarry.playerVocalizationSamples).toEqual([]);
+    expect(uninterruptedSave.perceptionCarry.actorVocalizationSamples).toEqual([]);
     const uninterruptedResidentPerception = deserializeWorld(uninterruptedSave.world)
       .residents.map(({ id, perception }) => ({ id, perception }));
     const materialAndHistory = {
@@ -884,18 +940,18 @@ describe("production terrain fall and physical cargo", () => {
     } else {
       expect(resumed.getUIView().objective?.title).toContain("DELIVER");
     }
-    advancePlayerSteps(resumed, 5);
+    advancePlayerSteps(resumed, 9);
     const resumedPerceptionInput = humanPerceptionSpy.mock.calls
       .map(([input]) => input)
       .find(({ supplementalSoundSamples }) => supplementalSoundSamples?.some(
-        ({ id }) => id === recoveredSave.perceptionCarry.playerVocalizationSamples[0]?.id,
+        ({ id }) => id === recoveredSave.perceptionCarry.actorVocalizationSamples[0]?.id,
       ));
     expect(resumedPerceptionInput?.supplementalSoundSamples).toContainEqual(
-      recoveredSave.perceptionCarry.playerVocalizationSamples[0],
+      recoveredSave.perceptionCarry.actorVocalizationSamples[0],
     );
     await resumed.save();
     const roundTripped = decodeCurrent(resumedRepository.snapshot());
-    expect(roundTripped.perceptionCarry.playerVocalizationSamples).toEqual([]);
+    expect(roundTripped.perceptionCarry.actorVocalizationSamples).toEqual([]);
     expect(deserializeWorld(roundTripped.world).residents
       .map(({ id, perception }) => ({ id, perception })))
       .toEqual(uninterruptedResidentPerception);
@@ -910,6 +966,98 @@ describe("production terrain fall and physical cargo", () => {
     expect(promiseQuantity(roundTripped.physicalCargo, fixture.contractId))
       .toBe(fixture.promiseQuantity);
     resumed.destroy();
+  }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it("rejects a resealed player expression whose active event and cooldown agree with each other but not causal authority", async () => {
+    const repository = new MemoryRepository();
+    await createCurrentFixture(repository, "fall expression authority tamper", true);
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await runtime.save();
+    runtime.destroy();
+
+    const record = repository.snapshot();
+    const decoded = JSON.parse(record.worldJson) as Record<string, unknown>;
+    const carry = decoded.perceptionCarry as {
+      situatedExpressionChannels: {
+        channels: Array<{
+          sourceActorId: string;
+          state: {
+            active: { priority: number } | null;
+            recent: Array<{ priority: number }>;
+          };
+        }>;
+      };
+    };
+    const playerChannel = carry.situatedExpressionChannels.channels
+      .find(({ sourceActorId }) => sourceActorId === "player:local");
+    const active = playerChannel?.state.active;
+    const memory = playerChannel?.state.recent[0];
+    if (!active || !memory) throw new Error("player authority fixture omitted its expression");
+    active.priority += 1;
+    memory.priority += 1;
+    const { integrity: _integrity, ...base } = decoded;
+    repository.replace({
+      ...record,
+      updatedAt: record.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...base,
+        integrity: gameSaveEnvelopeIntegrity(base),
+      }),
+    });
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it("rejects a bound player vocalization and expression moved away from the carried physical path", async () => {
+    const repository = new MemoryRepository();
+    await createCurrentFixture(repository, "fall expression path tamper", true);
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await runtime.save();
+    runtime.destroy();
+
+    const record = repository.snapshot();
+    const decoded = JSON.parse(record.worldJson) as Record<string, unknown>;
+    const carry = decoded.perceptionCarry as {
+      actorVocalizationSamples: Array<{ position: { localX: number } }>;
+      situatedExpressionChannels: {
+        channels: Array<{
+          sourceActorId: string;
+          state: { active: { position: { localX: number } } | null };
+        }>;
+      };
+    };
+    const playerChannel = carry.situatedExpressionChannels.channels
+      .find(({ sourceActorId }) => sourceActorId === "player:local");
+    const active = playerChannel?.state.active;
+    const sample = carry.actorVocalizationSamples[0];
+    if (!active || !sample) throw new Error("player path fixture omitted its bound expression");
+    active.position.localX += 5 * TILE_UNITS;
+    sample.position.localX += 5 * TILE_UNITS;
+    const { integrity: _integrity, ...base } = decoded;
+    repository.replace({
+      ...record,
+      updatedAt: record.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...base,
+        integrity: gameSaveEnvelopeIntegrity(base),
+      }),
+    });
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
   it("applies one terrain fall to an empty porter without inventing player cargo", async () => {

@@ -59,14 +59,16 @@ const HEARING_AREA_MAX_RADIUS_UNITS = 10_000_000;
 const LOCAL_WATER_MASK_RADIUS_TILES = 2;
 const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const SOUND_CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
+const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
+const EXPRESSION_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/;
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
 
 /**
- * One bounded acoustic fact. Source position informs sound propagation only;
- * this shape deliberately carries no fields from which vision can be derived.
+ * Shared physical acoustic fields. Player step samples retain these fields
+ * without pretending that they are source-authenticated actor vocalizations.
  */
-export interface SupplementalSoundSample {
+interface AcousticSample {
   readonly id: string;
   readonly position: WorldPosition;
   /** Fixed-point 0..1 source loudness; zero means no sound. */
@@ -76,8 +78,18 @@ export interface SupplementalSoundSample {
   readonly soundInterrupt: ObservationInterrupt;
 }
 
+/**
+ * One bounded, source-authenticated hearing-only actor vocalization. Source
+ * position informs propagation only and never grants observers identity.
+ */
+export interface SupplementalSoundSample extends AcousticSample {
+  readonly sourceActorId: string;
+  /** Exact situated-expression event that emitted this one pending sound fact. */
+  readonly expressionEventId: string;
+}
+
 /** One bounded, explicit physical player stimulus at a canonical world point. */
-export interface PlayerSenseSample extends SupplementalSoundSample {
+export interface PlayerSenseSample extends AcousticSample {
   readonly version: typeof PLAYER_SENSE_SAMPLE_VERSION;
   /** Monotonic position inside the bounded player-step window. */
   readonly sampleOrdinal: number;
@@ -113,14 +125,21 @@ export function createSupplementalSoundSample(
 ): SupplementalSoundSample | null {
   const value: unknown = input;
   if (!plainRecord(value) || !exactKeys(value, [
+    "expressionEventId",
     "id",
     "position",
     "soundClass",
     "soundInterrupt",
     "soundLoudness",
     "soundRangeUnits",
-  ]) || !validSoundFields(value)) return null;
+    "sourceActorId",
+  ])
+    || !validSoundFields(value)
+    || !validActorId(value.sourceActorId)
+    || !validExpressionEventId(value.expressionEventId)
+  ) return null;
   return Object.freeze({
+    expressionEventId: value.expressionEventId,
     id: value.id,
     position: createWorldPosition(
       value.position.region,
@@ -131,6 +150,7 @@ export function createSupplementalSoundSample(
     soundRangeUnits: value.soundRangeUnits,
     soundClass: value.soundClass,
     soundInterrupt: value.soundInterrupt,
+    sourceActorId: value.sourceActorId,
   });
 }
 
@@ -251,7 +271,7 @@ export function collectExistingHumanObservations(
       readonly observation: ActorObservation;
     } | null = null;
     const appendHearingObservation = (
-      sample: SupplementalSoundSample,
+      sample: AcousticSample,
       targetPoint: SpatialFramePoint,
     ): boolean => {
       if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) return true;
@@ -338,6 +358,7 @@ export function collectExistingHumanObservations(
       if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
     }
     for (const sample of supplementalSounds) {
+      if (sample.sourceActorId === priorState.actorId) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
       if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
@@ -404,10 +425,16 @@ function canonicalSupplementalSoundSamples(
 ): readonly SupplementalSoundSample[] | null {
   const samples: SupplementalSoundSample[] = [];
   const ids = new Set<string>();
+  const expressionEventIds = new Set<string>();
   for (const raw of value) {
     const sample = createSupplementalSoundSample(raw);
-    if (sample === null || ids.has(sample.id)) return null;
+    if (
+      sample === null
+      || ids.has(sample.id)
+      || expressionEventIds.has(sample.expressionEventId)
+    ) return null;
     ids.add(sample.id);
+    expressionEventIds.add(sample.expressionEventId);
     samples.push(sample);
   }
   samples.sort((left, right) => compareText(left.id, right.id));
@@ -515,7 +542,12 @@ function translatedOrNull(
   }
 }
 
-function ambientNoiseAt(world: WorldView, listenerTileIndex: number): number | null {
+/**
+ * Resolves the same local rain/current masking used by human hearing. Runtime
+ * presentation gates consume this instead of inventing a second audibility
+ * model for sounds the player may hear.
+ */
+export function ambientNoiseAt(world: WorldView, listenerTileIndex: number): number | null {
   const listener = world.terrain.tiles[listenerTileIndex];
   if (!validTerrainTile(listener, listenerTileIndex, world.terrain.width)) return null;
   let waterTurbulence = 0;
@@ -646,7 +678,7 @@ function weatherVisibility(world: WorldView): number {
 
 function validSoundFields(
   value: Readonly<Record<string, unknown>>,
-): value is Readonly<Record<string, unknown>> & SupplementalSoundSample {
+): value is Readonly<Record<string, unknown>> & AcousticSample {
   const soundRangeUnits = value.soundRangeUnits;
   return typeof value.id === "string"
     && SAMPLE_ID_PATTERN.test(value.id)
@@ -659,6 +691,14 @@ function validSoundFields(
     && typeof value.soundClass === "string"
     && SOUND_CLASS_PATTERN.test(value.soundClass)
     && (value.soundInterrupt === "none" || value.soundInterrupt === "strong");
+}
+
+function validActorId(value: unknown): value is string {
+  return typeof value === "string" && ACTOR_ID_PATTERN.test(value);
+}
+
+function validExpressionEventId(value: unknown): value is string {
+  return typeof value === "string" && EXPRESSION_EVENT_ID_PATTERN.test(value);
 }
 
 function fixedUnit(value: unknown): value is number {

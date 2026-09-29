@@ -15,14 +15,23 @@ import {
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
+import {
+  SITUATED_EXPRESSION_VERSION,
+  acknowledgeSituatedExpression,
+  advanceSituatedExpression,
+  createSituatedExpressionState,
+  reduceSituatedExpression,
+} from "./situatedExpression";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState } from "./sessionTypes";
-import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
+import { WORLD_POSITION_UNITS_PER_TILE, type WorldPosition } from "./worldPosition";
+
+const soundscapePlay = vi.hoisted(() => vi.fn());
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(...args: unknown[]): void { soundscapePlay(...args); }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -67,8 +76,15 @@ interface TestGameSaveEnvelope {
   readonly settlementEcology?: string;
   readonly perceptionCarry?: {
     readonly version: number;
+    readonly intervalStartPosition?: WorldPosition;
+    readonly intervalStartFacingMilliRadians?: number;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly { readonly sampleOrdinal: number }[];
+    readonly actorVocalizationSamples?: readonly unknown[];
+    readonly situatedExpressionAdmissions?: unknown;
+    readonly situatedExpressionCausalAuthority?: unknown;
+    readonly situatedExpressionChannels?: unknown;
+    /** Legacy v33 / perception-carry-v2 fields. */
     readonly playerVocalizationSamples?: readonly unknown[];
     readonly situatedExpression?: unknown;
     readonly nextPlayerSenseSampleOrdinal: number;
@@ -79,6 +95,7 @@ let scheduledFrame: ((now: number) => void) | undefined;
 
 beforeEach(() => {
   scheduledFrame = undefined;
+  soundscapePlay.mockClear();
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
     scheduledFrame = callback;
     return 1;
@@ -197,11 +214,20 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 33,
+      version: 34,
       perceptionCarry: {
-        version: 2,
+        version: 3,
+        intervalStartPosition: expect.any(Object),
+        intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
         nextPlayerSenseSampleOrdinal: 9,
+        actorVocalizationSamples: [],
+        situatedExpressionAdmissions: { version: 1, records: [] },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+        situatedExpressionChannels: {
+          version: 1,
+          channels: [],
+        },
       },
     });
     expect(pending.perceptionCarry?.playerSenseSamples.map(({ sampleOrdinal }) => sampleOrdinal))
@@ -242,8 +268,12 @@ describe("runtime existing-human perception path", () => {
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
     const currentCarry = currentPerceptionCarry(decoded);
     const {
-      playerVocalizationSamples: _futureVocalizations,
-      situatedExpression: _futureExpression,
+      actorVocalizationSamples: _futureVocalizations,
+      intervalStartFacingMilliRadians: _futureIntervalStartFacing,
+      intervalStartPosition: _futureIntervalStartPosition,
+      situatedExpressionAdmissions: _futureAdmissions,
+      situatedExpressionCausalAuthority: _futureCausalAuthority,
+      situatedExpressionChannels: _futureExpressionChannels,
       ...v1Carry
     } = currentCarry;
     const { integrity: _currentIntegrity, ...currentBase } = decoded;
@@ -267,21 +297,207 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 33,
+      version: 34,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 2,
+        version: 3,
+        intervalStartPosition: expect.any(Object),
+        intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
         nextPlayerSenseSampleOrdinal: 3,
-        playerVocalizationSamples: [],
-        situatedExpression: {
+        actorVocalizationSamples: [],
+        situatedExpressionAdmissions: {
           version: 1,
-          active: null,
-          recent: [],
+          records: [],
+        },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+        situatedExpressionChannels: {
+          version: 1,
+          channels: [],
         },
       },
     });
     migrated.destroy();
+  }, 60_000);
+
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v34", async () => {
+    const fixture = perceptionFixture("runtime perception v33 carry migration");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    const legacy = replaceWithLegacyV33Envelope(repository);
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    await migrated.save();
+    expect(savedEnvelope(repository)).toMatchObject({
+      version: 34,
+      perceptionCarry: {
+        version: 3,
+        intervalStartPosition: expect.any(Object),
+        intervalStartFacingMilliRadians: 0,
+        playerStepsSinceWorldTick: 3,
+        nextPlayerSenseSampleOrdinal: 3,
+        actorVocalizationSamples: [{
+          expressionEventId: legacy.eventId,
+          id: `av-${legacy.completedTick}-0`,
+          sourceActorId: "player:local",
+          soundClass: "human-vocalization",
+        }],
+        situatedExpressionAdmissions: {
+          version: 1,
+          records: [{
+            kind: "legacy-v33-player",
+            eventId: legacy.eventId,
+            sourceActorId: "player:local",
+            triggerEventId: "player:0:traversal:0",
+            sampleOrdinal: 0,
+            admittedAtPlayerStepPhase: 0,
+          }],
+        },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+        situatedExpressionChannels: {
+          version: 1,
+          channels: [{
+            sourceActorId: "player:local",
+            reception: {
+              eventId: legacy.eventId,
+              sourceActorId: "player:local",
+              receivedAtTick: legacy.completedTick,
+              kind: "self",
+              certainty: 1_000_000,
+            },
+            state: {
+              active: {
+                eventId: legacy.eventId,
+                sourceActorId: "player:local",
+                audioAcknowledged: true,
+              },
+            },
+          }],
+        },
+      },
+    });
+    migrated.destroy();
+  }, 60_000);
+
+  it("rejects a coherently relocated earlier expression trajectory beyond one player step", async () => {
+    const fixture = perceptionFixture("runtime perception relocated expression trajectory");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    replaceWithLegacyV33Envelope(repository);
+    scheduledFrame = undefined;
+    const migrated = await createTideweftRuntime(repository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    await migrated.save();
+    migrated.destroy();
+
+    resealCurrentEnvelope(repository, (envelope) => {
+      const carry = currentPerceptionCarry(envelope);
+      const samples = carry.playerSenseSamples;
+      const sounds = carry.actorVocalizationSamples;
+      const channels = (carry.situatedExpressionChannels as {
+        channels?: Array<{
+          sourceActorId?: unknown;
+          state?: { active?: { position?: { localX?: unknown } } | null };
+        }>;
+      } | undefined)?.channels;
+      if (!Array.isArray(samples) || !Array.isArray(sounds) || !Array.isArray(channels)) {
+        throw new Error("relocated trajectory fixture omitted current expression authorities");
+      }
+      const firstSample = samples[0] as {
+        position?: { localX?: unknown };
+      } | undefined;
+      const sound = sounds[0] as {
+        position?: { localX?: unknown };
+      } | undefined;
+      const active = channels.find(({ sourceActorId }) => sourceActorId === "player:local")
+        ?.state?.active;
+      if (
+        typeof firstSample?.position?.localX !== "number"
+        || typeof sound?.position?.localX !== "number"
+        || typeof active?.position?.localX !== "number"
+      ) throw new Error("relocated trajectory fixture omitted its bound positions");
+      const displacement = 5 * WORLD_POSITION_UNITS_PER_TILE;
+      firstSample.position.localX += displacement;
+      sound.position.localX += displacement;
+      active.position.localX += displacement;
+    });
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, 90_000);
+
+  it("rejects a resealed v33 envelope whose old v2 carry has a future field", async () => {
+    const fixture = perceptionFixture("runtime perception v33 carry rejection");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    replaceWithLegacyV33Envelope(repository, (carry) => {
+      carry.situatedExpressionChannels = { version: 1, channels: [] };
+    });
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, 60_000);
+
+  it("rejects v34-only porter semantics smuggled through a resealed v33 carry", async () => {
+    const fixture = perceptionFixture("runtime perception v33 semantic fence");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    advancePlayerSteps(setup, 3);
+    await setup.save();
+    setup.destroy();
+
+    replaceWithLegacyV33Envelope(repository, (carry) => {
+      const legacyState = carry.situatedExpression as {
+        readonly active?: { readonly position?: WorldPosition } | null;
+      };
+      const position = legacyState.active?.position;
+      if (!position) throw new Error("v33 semantic-fence fixture omitted its active position");
+      const future = reduceSituatedExpression(createSituatedExpressionState(), {
+        version: SITUATED_EXPRESSION_VERSION,
+        sourceActorId: "player:local",
+        triggerEventId: "test:v33-future-porter-expression",
+        position,
+        meaning: "porter-heavy-load",
+        family: "work",
+        tone: "strained",
+        volume: "spoken",
+        knowledgeBasis: "self-handled-heavy-cargo",
+        priority: 240_000,
+        salience: 420_000,
+        variantSeed: 34,
+        durationSteps: 8,
+      });
+      if (!future.accepted || future.state === null) {
+        throw new Error("v33 semantic-fence fixture could not create future expression state");
+      }
+      carry.playerVocalizationSamples = [];
+      carry.situatedExpression = future.state;
+    });
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
   }, 60_000);
 
   it("migrates a sealed v4 regional save to an empty current perception interval", async () => {
@@ -325,16 +541,19 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 33,
+      version: 34,
       perceptionCarry: {
-        version: 2,
+        version: 3,
+        intervalStartPosition: expect.any(Object),
+        intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,
         playerSenseSamples: [],
-        playerVocalizationSamples: [],
-        situatedExpression: {
+        actorVocalizationSamples: [],
+        situatedExpressionAdmissions: { version: 1, records: [] },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+        situatedExpressionChannels: {
           version: 1,
-          active: null,
-          recent: [],
+          channels: [],
         },
         nextPlayerSenseSampleOrdinal: 0,
       },
@@ -377,7 +596,7 @@ describe("runtime existing-human perception path", () => {
       },
     },
     {
-      label: "a vocalization detached from the carried player path",
+      label: "a vocalization without an expression-event authority binding",
       tamper(envelope: Record<string, unknown>) {
         const carry = currentPerceptionCarry(envelope);
         const samples = carry.playerSenseSamples;
@@ -402,8 +621,8 @@ describe("runtime existing-human perception path", () => {
         const worldText = envelope.world;
         if (typeof worldText !== "string") throw new Error("fixture omitted its world");
         const completedTick = deserializeWorld(worldText).meta.completedTick;
-        carry.playerVocalizationSamples = [{
-          id: `pv-${completedTick}-0`,
+        carry.actorVocalizationSamples = [{
+          id: `av-${completedTick}-0`,
           position: {
             region: structuredClone(samplePosition.region),
             localX: remoteLocalX,
@@ -413,6 +632,7 @@ describe("runtime existing-human perception path", () => {
           soundRangeUnits: 18 * WORLD_POSITION_UNITS_PER_TILE,
           soundClass: "human-vocalization",
           soundInterrupt: "none",
+          sourceActorId: "player:local",
         }];
       },
     },
@@ -566,4 +786,109 @@ function resealCurrentEnvelope(
       integrity: gameSaveEnvelopeIntegrity(envelope),
     }),
   });
+}
+
+function replaceWithLegacyV33Envelope(
+  repository: MemoryRepository,
+  tamperCarry?: (carry: Record<string, unknown>) => void,
+): { readonly completedTick: number; readonly eventId: string } {
+  const current = repository.snapshot();
+  const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+  const currentCarry = currentPerceptionCarry(decoded);
+  const {
+    actorVocalizationSamples: _currentVocalizations,
+    intervalStartFacingMilliRadians: _currentIntervalStartFacing,
+    intervalStartPosition: _currentIntervalStartPosition,
+    situatedExpressionAdmissions: _currentAdmissions,
+    situatedExpressionCausalAuthority: _currentCausalAuthority,
+    situatedExpressionChannels: _currentChannels,
+    ...sharedCarry
+  } = currentCarry;
+  const rawSamples = currentCarry.playerSenseSamples;
+  if (!Array.isArray(rawSamples) || rawSamples.length === 0) {
+    throw new Error("v33 migration fixture requires one carried player sample");
+  }
+  const firstSample = rawSamples[0];
+  if (!firstSample || typeof firstSample !== "object" || Array.isArray(firstSample)) {
+    throw new Error("v33 migration fixture has a malformed player sample");
+  }
+  const position = (firstSample as Record<string, unknown>).position as WorldPosition;
+  const completedTick = deserializeWorld(String(decoded.world)).meta.completedTick;
+  const triggerEventId = "player:0:traversal:0";
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "player:local",
+    triggerEventId,
+    position,
+    meaning: "steady-after-stumble",
+    family: "footing",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-felt-stumble",
+    priority: 180_000,
+    salience: 260_000,
+    variantSeed: 33,
+    durationSteps: 7,
+  });
+  if (!reduced.accepted || reduced.state === null || reduced.event === null) {
+    throw new Error("v33 migration fixture could not create its player expression");
+  }
+  const acknowledged = acknowledgeSituatedExpression(reduced.state);
+  if (acknowledged.reason !== "acknowledged" || acknowledged.state === null) {
+    throw new Error("v33 migration fixture could not acknowledge its player expression");
+  }
+  const agedState = advanceSituatedExpression(acknowledged.state, 3);
+  if (agedState === null) {
+    throw new Error("v33 migration fixture could not age its player expression");
+  }
+  const legacyCarry: Record<string, unknown> = {
+    ...sharedCarry,
+    version: 2,
+    playerVocalizationSamples: [{
+      id: `pv-${completedTick}-0`,
+      position,
+      soundLoudness: 360_000,
+      soundRangeUnits: 8 * WORLD_POSITION_UNITS_PER_TILE,
+      soundClass: "human-vocalization",
+      soundInterrupt: "none",
+    }],
+    situatedExpression: agedState,
+  };
+  tamperCarry?.(legacyCarry);
+  const { integrity: _integrity, ...currentBase } = decoded;
+  const legacyBase = {
+    ...currentBase,
+    version: 33,
+    traversalFeedback: {
+      version: 1,
+      completedSteps: 3,
+      nextTraversalOrdinal: 1,
+      incident: {
+        id: triggerEventId,
+        actorId: 0,
+        traversalOrdinal: 0,
+        kind: "stumble",
+        primaryCause: "loose-rock",
+        label: "oop · loose rock",
+        detail: "Brace or choose a sounder line.",
+        position: { x: 0, y: 0 },
+        remainingSteps: 7,
+        totalSteps: 10,
+        variantSeed: 33,
+        cue: "stumble",
+      },
+      lastAudibleIncidentId: triggerEventId,
+    },
+    perceptionCarry: legacyCarry,
+  };
+  repository.replace({
+    ...current,
+    payloadVersion: 33,
+    updatedAt: current.updatedAt + 1,
+    worldJson: JSON.stringify({
+      ...legacyBase,
+      integrity: gameSaveEnvelopeIntegrity(legacyBase),
+    }),
+  });
+  return { completedTick, eventId: reduced.event.eventId };
 }
