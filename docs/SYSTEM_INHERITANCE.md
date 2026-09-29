@@ -21,6 +21,10 @@ ignored/private planning or domain material:
 - [Crafting design](./CRAFTING_DESIGN.md#authoritative-invariants) summarizes
   physical material, pack, recipe, condition, repair, dismantling, and
   field-equipment contracts.
+- [System composition](./SYSTEM_COMPOSITION.md) records whether established
+  systems actually exchange causal inputs, outputs, physical state, knowledge,
+  and consequences. It is the composition registry, not another inheritance
+  matrix.
 
 The permanent rule is:
 
@@ -80,6 +84,7 @@ registry before relying on it.
 | `actor-visuals` | Shared actor visual architecture | PARTIAL | [Architecture](./ARCHITECTURE.md); [game design](./GAME_DESIGN.md) | Future visual breadth composes silhouette, dimensions, carried equipment/items, injury, weather, posture, animation, grounding, and LOD over the authoritative actor rather than creating a visual duplicate. |
 | `deep-time` | Deep Time, provenance, and causal history | PARTIAL | [Architecture](./ARCHITECTURE.md); [game design](./GAME_DESIGN.md) | Future ruins, infrastructure, archaeology, repair, salvage, settlement history, and abandoned field gear follow causal provenance rather than scatter content as loot. |
 | `integration` | Integration and Beta-quality discipline | PARTIAL | [Architecture](./ARCHITECTURE.md); [game design](./GAME_DESIGN.md) | Compose through common authority; verify determinism, conservation, migration, recovery, long sessions, platform parity, and exact release truth. A schema, demo, or renderer-only stub is not completion. |
+| `system-composition` | Producer/consumer composition and causal closure | LIVE | [System composition](./SYSTEM_COMPOSITION.md); [architecture](./ARCHITECTURE.md#cross-system-inheritance-and-bounded-work) | Trace important inputs to accountable world sources and important outputs to real consumers. Classify bridges honestly, remove BYPASS paths through their domain owners, assign unresolved work to active/future owners, and use representative counterfactual scenarios rather than isolated feature claims or exhaustive pair matrices. |
 | `maritime` | Long Crossing and physical water transport | RESERVED | [Game design](./GAME_DESIGN.md); [architecture](./ARCHITECTURE.md) | Boats and later water transport are physical world objects with cargo, passengers, ownership, tides, currents, grounding, mooring, rescue, seamless travel, persistence, and coarse simulation—not fast-travel menus. |
 | `supernatural` | Other Shore and supernatural ecology | RESERVED | [Game design](./GAME_DESIGN.md); [architecture](./ARCHITECTURE.md) | Future beings and places first inherit applicable ordinary-world contracts, then add supernatural specialization; wonder does not bypass identity, ecology, knowledge, conservation, movement, persistence, or performance by default. |
 | `systemic-effects` | Exceptional and undisclosed systemic effects | RESERVED | [Architecture](./ARCHITECTURE.md); [game design](./GAME_DESIGN.md) | Exceptional effects bend the finished world through existing transactions, identities, conservation, save, knowledge, weather, actor, and recovery owners. They do not introduce a parallel ruleset, leak private inputs, or substitute for unfinished dependencies. |
@@ -125,9 +130,11 @@ settlement system, environmental system, interaction, or gameplay mechanic:
 4. Reuse existing shared architecture before adding a bespoke path.
 5. Identify save/migration and old-save behavior.
 6. Identify bounded runtime cost and distant/coarse behavior.
-7. Test shared invariants and representative compositions. Do not respond by
+7. Read `docs/SYSTEM_COMPOSITION.md`; trace the feature's important inputs and
+   outputs through applicable existing systems and own any gaps or bypasses.
+8. Test shared invariants and representative compositions. Do not respond by
    creating an exhaustive species-by-species or pair-by-pair matrix.
-8. Reconcile any new durable law into its canonical owner and this registry.
+9. Reconcile any new durable law into its canonical owner and this registry.
 
 Silent omission is not an outcome. RESERVED work is normally DEFERRED, not
 quietly approximated. NOT APPLICABLE requires a reason; it is not shorthand

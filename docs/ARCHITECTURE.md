@@ -42,6 +42,15 @@ applicable canonical domain owner. It does not replace that owner's detail or
 implementation evidence. Its directive family list is a current roadmap
 snapshot, not a claim that the roadmap ends there.
 
+[`SYSTEM_COMPOSITION.md`](SYSTEM_COMPOSITION.md) is the complementary canonical
+producer/consumer registry. It distinguishes documented intent, data, runtime
+foundation, live gameplay, and genuinely composed loops; records dead ends and
+magic-input bypasses; and assigns unresolved bridges to current canonical and
+future execution owners. New architecture must both inherit applicable
+contracts and exchange meaningful causes or consequences with the world where
+the fiction requires it. Completed directives remain read-only execution
+history; composition findings update current canonical truth instead.
+
 Two performance responsibilities remain distinct and cumulative:
 
 - **Early performance / scalability — The Breathing Room** establishes safe
