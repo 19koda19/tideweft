@@ -149,7 +149,8 @@ export function canonicalizeSituatedExpressionTrajectory(
         )
       ) return null;
       if (
-        latest.kind === "guardian-dog-warning"
+        (latest.kind === "guardian-dog-warning"
+          || latest.kind === "guardian-dog-defensive-growl")
         && channel.reception !== null
         && (
           channel.reception.kind === "self"
@@ -212,6 +213,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "porter-heavy-load";
     case "guardian-dog-warning":
       return meaning === "guardian-dog-warning";
+    case "guardian-dog-defensive-growl":
+      return meaning === "guardian-dog-defensive-growl";
     case "legacy-v33-player":
       return true;
   }
@@ -232,6 +235,7 @@ function admissionDurationSteps(
     case "player-fall-recovery": return 9;
     case "porter-heavy-departure": return 8;
     case "guardian-dog-warning": return 6;
+    case "guardian-dog-defensive-growl": return 8;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -245,6 +249,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "relief-after-cargo-recovery": return 9;
     case "porter-heavy-load": return 8;
     case "guardian-dog-warning": return 6;
+    case "guardian-dog-defensive-growl": return 8;
   }
 }
 
@@ -256,6 +261,7 @@ function admissionMeaning(
     case "player-fall-recovery": return "relief-after-cargo-recovery";
     case "porter-heavy-departure": return "porter-heavy-load";
     case "guardian-dog-warning": return "guardian-dog-warning";
+    case "guardian-dog-defensive-growl": return "guardian-dog-defensive-growl";
     case "legacy-v33-player": return "steady-after-stumble";
   }
 }

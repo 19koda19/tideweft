@@ -29,6 +29,7 @@ describe("situated expression caption", () => {
       text: "BARK!",
       tone: "alarmed",
       presentationKind: "animal-call",
+      animalCallKind: "bark",
       assertive: true,
     };
     const familiarDog: SituatedExpressionCaptionUIView = {
@@ -50,6 +51,7 @@ describe("situated expression caption", () => {
       text: "BARK!",
       tone: "alarmed",
       presentationKind: "animal-call",
+      animalCallKind: "bark",
       directionLabel: "east",
       assertive: true,
     };
@@ -63,6 +65,42 @@ describe("situated expression caption", () => {
       ...unseen,
       directionLabel: "all around",
     })).toBe("[A dog barks; the sound seems all around.]");
+  });
+
+  it("describes growls from explicit semantics without translating a hidden cause", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:dog:defensive-growl",
+      speakerLabel: "Familiar dog",
+      text: "GRRRR.",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "growl",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[The familiar dog growls softly.]");
+
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      speakerLabel: "A dog",
+      directionLabel: "north-west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[A dog growls somewhere north-west.]");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("threat");
+    expect(situatedExpressionCaptionCopy(unseen)).not.toContain("retreat");
+  });
+
+  it("does not infer an animal call kind from authored prose", () => {
+    const unclassified: SituatedExpressionCaptionUIView = {
+      id: "expression:animal:unclassified",
+      speakerLabel: "A dog",
+      text: "GRRRR.",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(unclassified)).toBe("[A dog calls.]");
   });
 
   it("keeps one pointer-transparent visible caption above the compact controls", () => {

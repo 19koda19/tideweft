@@ -76,6 +76,7 @@ describe("situated vocalization cues", () => {
       "vocalization-alarm",
       "vocalization-relief",
       "vocalization-dog-warning-bark",
+      "vocalization-dog-defensive-growl",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -138,6 +139,19 @@ describe("situated vocalization cues", () => {
     expect(bark[2]?.delay ?? 0).toBeGreaterThan(bark[1]?.delay ?? 0);
     expect(Math.max(...bark.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.25);
+  });
+
+  it("gives the defensive growl a distinct restrained low contour", () => {
+    const growl = situatedVocalizationPattern("dog-defensive-growl", 31);
+    const bark = situatedVocalizationPattern("dog-warning-bark", 31);
+    expect(growl).toEqual(situatedVocalizationPattern("dog-defensive-growl", 31));
+    expect(growl).not.toEqual(bark);
+    expect(growl).toHaveLength(3);
+    expect(growl[0]?.delay).toBe(0);
+    expect(Math.max(...growl.map(({ frequency }) => frequency)))
+      .toBeLessThan(Math.min(...bark.map(({ frequency }) => frequency)));
+    expect(Math.max(...growl.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.3);
   });
 });
 

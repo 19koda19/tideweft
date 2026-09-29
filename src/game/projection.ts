@@ -271,6 +271,17 @@ export interface SituatedExpressionSourcePresentation {
   readonly speakerLabel: string;
 }
 
+export type GuardianDogCallKind = "bark" | "growl";
+
+/** Presentation classification comes from authoritative meaning, never rendered prose. */
+export function guardianDogCallKind(
+  meaning: SituatedExpressionEvent["meaning"],
+): GuardianDogCallKind | null {
+  if (meaning === "guardian-dog-warning") return "bark";
+  if (meaning === "guardian-dog-defensive-growl") return "growl";
+  return null;
+}
+
 /**
  * Authenticate the speaking actor before any renderer or caption can label it.
  * A resident name crosses the presentation boundary only after that exact
@@ -288,7 +299,7 @@ export function projectSituatedExpressionSource(
     return Object.freeze({ sourceKind: "player", speakerLabel: "You" });
   }
 
-  if (event.meaning === "guardian-dog-warning") {
+  if (guardianDogCallKind(event.meaning) !== null) {
     if (reception?.kind === "heard-unseen") {
       return Object.freeze({ sourceKind: "animal", speakerLabel: "A dog" });
     }

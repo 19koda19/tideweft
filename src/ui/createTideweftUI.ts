@@ -267,14 +267,19 @@ export function situatedExpressionCaptionCopy(
     const subject = caption.speakerLabel === "Familiar dog"
       ? "The familiar dog"
       : "A dog";
-    if (caption.directionLabel === undefined) return `[${subject} barks sharply.]`;
+    const call = caption.animalCallKind === "growl"
+      ? { visible: "growls softly", directional: "growls" }
+      : caption.animalCallKind === "bark"
+        ? { visible: "barks sharply", directional: "barks" }
+        : { visible: "calls", directional: "calls" };
+    if (caption.directionLabel === undefined) return `[${subject} ${call.visible}.]`;
     if (caption.directionLabel === "all around") {
-      return `[${subject} barks; the sound seems all around.]`;
+      return `[${subject} ${call.directional}; the sound seems all around.]`;
     }
     if (caption.directionLabel === "direction unclear") {
-      return `[${subject} barks; direction unclear.]`;
+      return `[${subject} ${call.directional}; direction unclear.]`;
     }
-    return `[${subject} barks somewhere ${caption.directionLabel}.]`;
+    return `[${subject} ${call.directional} somewhere ${caption.directionLabel}.]`;
   }
   return `${caption.speakerLabel}: ${caption.text}`;
 }

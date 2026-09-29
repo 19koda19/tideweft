@@ -104,6 +104,7 @@ import {
   projectResidentRoutePosition,
   projectResidentWorldPosition,
   projectSituatedExpressionSource,
+  guardianDogCallKind,
   RESIDENT_CONVERSATION_RANGE_TILES,
   type AdriftProjectionControl,
 } from "./projection";
@@ -420,6 +421,9 @@ export function projectUIView(
   const situatedExpressionContact = situatedExpressionReceptionAudibleContact(
     options.situatedExpressionReception ?? null,
   );
+  const dogCallKind = situatedExpressionEvent === null
+    ? null
+    : guardianDogCallKind(situatedExpressionEvent.meaning);
 
   return {
     revision: [
@@ -584,9 +588,8 @@ export function projectUIView(
             speakerLabel: situatedExpressionSource.speakerLabel,
             text: situatedExpression.text,
             tone: options.situatedExpression.tone,
-            presentationKind: options.situatedExpression.meaning === "guardian-dog-warning"
-              ? "animal-call"
-              : "speech",
+            presentationKind: dogCallKind === null ? "speech" : "animal-call",
+            ...(dogCallKind === null ? {} : { animalCallKind: dogCallKind }),
             ...(situatedExpressionContact === null
               ? {}
               : { directionLabel: audibleContactDirection(situatedExpressionContact) }),

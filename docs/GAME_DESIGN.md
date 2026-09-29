@@ -89,9 +89,16 @@ recovery cannot survive a heard warning, while a later recovery or an unheard
 call remains valid. Leaving the dog's local presentation window does not erase
 the call or reveal it: event-time acoustics still decide unheard versus a vague
 heard-unseen receipt.
-Handler reports, identified or merely visual targets, stale work, and
-continued investigation do not fabricate repeated barking. This is one causal
-warning call, not a complete dog-vocal repertoire.
+Handler reports, identified or merely visual targets, stale work, and continued
+investigation do not fabricate repeated barking. Separately, when the guardian
+newly enters a perception-caused `retreat` from its own current threat belief
+and the working-animal owner commits the matching `defer-to-actor` /
+`actor-intent:retreat` transaction, it gives one low defensive growl. Continued
+or stale retreat and mismatched actor, belief, or work state remain silent. The
+growl is a restrained, lower-range `animal-alarm`; it discloses no threat
+identity, uses the same visible / heard-unseen / unheard presentation boundary,
+and does not gain the bark's WAIT or REST/SLEEP interruption authority. These
+are two narrow causal guardian signals, not a complete dog-vocal repertoire.
 
 Actor expression and observed fact remain different presentations. The short
 line is situated at the authenticated speaker in Chart and Relief and repeated

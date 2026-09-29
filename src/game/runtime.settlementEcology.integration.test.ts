@@ -215,6 +215,7 @@ const domesticRecoveryHarness = vi.hoisted(() => ({
   separatedActorId: null as string | null,
   memberActorIds: [] as string[],
 }));
+const soundscapePlay = vi.hoisted(() => vi.fn());
 
 function capturedGuardianPerceptionArea(): Readonly<{
   center: WorldPosition;
@@ -547,7 +548,9 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(): void {
+      soundscapePlay();
+    }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -586,6 +589,7 @@ let nextFrameTime = 100;
 beforeEach(() => {
   scheduledFrame = undefined;
   nextFrameTime = 100;
+  soundscapePlay.mockReset();
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
     scheduledFrame = callback;
     return 1;
@@ -741,8 +745,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 35 || current.version !== 35) {
-    throw new Error("runtime fixture is not a current v35 save");
+  if (record.payloadVersion !== 36 || current.version !== 36) {
+    throw new Error("runtime fixture is not a current v36 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1037,6 +1041,7 @@ function withPlayerWitnessingWorldPosition(
   record: SaveRecord,
   position: WorldPosition,
   lookAt: WorldPosition,
+  stamina: number = FIXED_POINT,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
   if (
@@ -1089,7 +1094,7 @@ function withPlayerWitnessingWorldPosition(
   player.previousY = player.y;
   player.velocityX = 0;
   player.velocityY = 0;
-  player.stamina = FIXED_POINT;
+  player.stamina = stamina;
   player.stability = FIXED_POINT;
   player.stabilityTrend = "steady";
   player.stabilityHint = "Stable on sound footing";
@@ -1779,7 +1784,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 35) throw new Error("fixture is not a current save");
+  if (current.version !== 36) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1809,7 +1814,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 35) throw new Error("fixture is not a current save");
+  if (current.version !== 36) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1839,7 +1844,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 35 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 36 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1893,7 +1898,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 35
+    current.version !== 36
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2754,8 +2759,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(35);
-    expect(envelope.version).toBe(35);
+    expect(record.payloadVersion).toBe(36);
+    expect(envelope.version).toBe(36);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2858,8 +2863,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(35);
-    expect(migratedEnvelope.version).toBe(35);
+    expect(migratedRecord.payloadVersion).toBe(36);
+    expect(migratedEnvelope.version).toBe(36);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2946,8 +2951,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(35);
-    expect(migratedEnvelope.version).toBe(35);
+    expect(migratedRecord.payloadVersion).toBe(36);
+    expect(migratedEnvelope.version).toBe(36);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3114,8 +3119,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(35);
-    expect(migratedEnvelope.version).toBe(35);
+    expect(migratedRecord.payloadVersion).toBe(36);
+    expect(migratedEnvelope.version).toBe(36);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3270,8 +3275,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(35);
-    expect(migratedEnvelope.version).toBe(35);
+    expect(migratedRecord.payloadVersion).toBe(36);
+    expect(migratedEnvelope.version).toBe(36);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3386,8 +3391,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(35);
-    expect(migratedEnvelope.version).toBe(35);
+    expect(migratedRecord.payloadVersion).toBe(36);
+    expect(migratedEnvelope.version).toBe(36);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -3720,6 +3725,40 @@ describe("runtime settlement ecology integration", () => {
     expect(runtime.getUIView().expressionCaption).toBeUndefined();
     expect((committed.player as PlayerState).timeAction).toMatchObject({ kind: "rest" });
     runtime.destroy();
+
+    // v35/carry-v4 already owned warning barks. Its exact nonempty interval
+    // migrates by version alone; loading must not replay acknowledged audio or
+    // duplicate the persisted sample/admission/channel.
+    const { integrity: _currentIntegrity, ...committedFields } = committed;
+    const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
+    expect(committedCarry.version).toBe(5);
+    const v35Base = {
+      ...committedFields,
+      version: 35,
+      perceptionCarry: { ...committedCarry, version: 4 },
+    };
+    const v35Repository = new MemoryRepository({
+      ...committedRecord,
+      payloadVersion: 35,
+      updatedAt: committedRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v35Base,
+        integrity: gameSaveEnvelopeIntegrity(v35Base),
+      }),
+    });
+    soundscapePlay.mockClear();
+    const migratedWarning = await createTideweftRuntime(v35Repository);
+    expect(migratedWarning.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    await migratedWarning.save();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    const migratedWarningEnvelope = savedEnvelope(v35Repository);
+    expect(migratedWarningEnvelope.version).toBe(36);
+    expect(migratedWarningEnvelope.perceptionCarry).toEqual({
+      ...committedCarry,
+      version: 5,
+    });
+    migratedWarning.destroy();
 
     // Keep the bark's cause and identity intact while coherently staging its
     // physical source inside the trailing strip. Event identity is cause-bound;
@@ -4096,6 +4135,482 @@ describe("runtime settlement ecology integration", () => {
     });
     waiting.destroy();
   }, 120_000);
+
+  it("persists one audible defensive growl without interrupting REST or repeating during retreat", async () => {
+    const nearDawnTick = WORLD_TICKS_PER_DAY + 333;
+    const world = createWorld("a", "wild");
+    runTicks(world, nearDawnTick - world.meta.completedTick);
+    world.weather.kind = "clear";
+    world.weather.intensity = 0;
+    world.weather.windX = 0;
+    world.weather.windY = 0;
+    world.weather.nextChangeTick = nearDawnTick + WORLD_TICKS_PER_DAY;
+    assertWorldInvariants(world);
+    const migrationRepository = new MemoryRepository(legacyRuntimeSaveRecord(world));
+    const migration = await createTideweftRuntime(migrationRepository);
+    await migration.save();
+    const migratedRecord = migrationRepository.snapshot();
+    const before = savedEnvelope(migrationRepository);
+    const roster = deserializeDogActorRoster(before.dogActorRoster);
+    const work = deserializeSettlementWorkingAnimalState(before.settlementWorkingAnimals);
+    const guardian = roster?.actors[0];
+    const assignment = work?.assignments[0];
+    if (guardian === undefined || assignment === undefined) {
+      throw new Error("rest-growl fixture omitted its guardian relationship");
+    }
+    const wakeTick = firstLivingCircadianActiveTick(
+      guardian.identity.stableId,
+      WORLD_TICKS_PER_DAY + 300,
+      WORLD_TICKS_PER_DAY + 400,
+      SETTLEMENT_WORKING_DOG_CIRCADIAN_POLICY,
+    );
+    if (wakeTick === null || wakeTick >= WORLD_TICKS_PER_DAY + WORLD_DAWN_START_TICK) {
+      throw new Error(`rest-growl fixture guardian wakes too late: ${wakeTick ?? "never"}`);
+    }
+    expect(wakeTick).toBe(nearDawnTick + 1);
+    const preparedGuardian = setDogActorIntent(guardian, {
+      kind: "observe",
+      cause: { kind: "world-event", referenceId: "event:test-pre-dawn-growl-watch" },
+      enteredAtTick: nearDawnTick,
+      nextThinkTick: nearDawnTick + WORLD_TICKS_PER_DAY,
+    });
+    const preparedRoster = replaceDogActorInRoster(roster!, preparedGuardian);
+    if (preparedRoster === null) {
+      throw new Error("rest-growl fixture rejected its neutral guardian intent");
+    }
+    const preparedGrowlRecord = withCurrentEnvelopeFields(migratedRecord, {
+      dogActorRoster: serializeDogActorRoster(preparedRoster),
+    });
+    const migratedWorld = deserializeWorld(String(before.world));
+    const sleeperPlayer = structuredClone(before.player as PlayerState);
+    const sleeperTravel = restorePlayerRegionalTravel(
+      migratedWorld.meta.rootSeed,
+      sleeperPlayer,
+      String(before.regionalTravel),
+    );
+    const sleeperPosition = sleeperTravel === null
+      ? null
+      : playerWorldPositionInRegionalWindow(sleeperTravel.window, sleeperPlayer);
+    if (sleeperPosition === null) {
+      throw new Error("sleep-growl fixture omitted its sheltered listener position");
+    }
+    const nearbyPreparedGuardian = repositionDogActor(preparedGuardian, {
+      atTick: nearDawnTick,
+      heading: preparedGuardian.address.heading,
+      position: sleeperPosition,
+    });
+    const nearbyPreparedRoster = replaceDogActorInRoster(roster!, nearbyPreparedGuardian);
+    if (nearbyPreparedRoster === null) {
+      throw new Error("sleep-growl fixture rejected its nearby guardian position");
+    }
+    const preparedSleepGrowlRecord = withCurrentEnvelopeFields(migratedRecord, {
+      dogActorRoster: serializeDogActorRoster(nearbyPreparedRoster),
+    });
+    const repository = new MemoryRepository(withPlayerWitnessingWorldPosition(
+      preparedGrowlRecord,
+      preparedGuardian.address.position,
+      preparedGuardian.address.position,
+      Math.floor(FIXED_POINT / 2),
+    ));
+    migration.destroy();
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    guardianPerceptionHarness.observerId = guardian.identity.stableId;
+    guardianPerceptionHarness.handlerId = assignment.handlerActorId;
+
+    const recoveryControls = runtime.getUIView().controls;
+    if (recoveryControls?.canRecover !== true) {
+      throw new Error(`rest-growl recovery blocked: ${recoveryControls?.recoveryHint ?? "missing controls"}`);
+    }
+    expect(recoveryControls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "rest",
+      recoveryActive: false,
+    });
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    await runtime.save();
+    const preGrowlAction = (savedEnvelope(repository).player as PlayerState).timeAction;
+    if (preGrowlAction === null) {
+      throw new Error("rest-growl fixture omitted its pre-growl recovery receipt");
+    }
+
+    // Wake the guardian before presenting the alarm. A perception sampled on
+    // the same tick as its circadian wake is retained honestly for the next
+    // cognition pass, but is not an immediate actor decision.
+    advanceWaitFrames(runtime, Math.max(1, wakeTick - nearDawnTick));
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    guardianPerceptionHarness.observationId = null;
+    guardianPerceptionHarness.area = null;
+    guardianPerceptionHarness.targetKind = null;
+    guardianPerceptionHarness.mode = "unreachable-or-outside-duty";
+    advanceWaitFrames(runtime, 1);
+    await runtime.save();
+    const growlRecord = repository.snapshot();
+    const growlEnvelope = savedEnvelope(repository);
+    const growlTick = deserializeWorld(String(growlEnvelope.world)).meta.completedTick;
+    const growlRoster = deserializeDogActorRoster(growlEnvelope.dogActorRoster);
+    const growlWork = deserializeSettlementWorkingAnimalState(
+      growlEnvelope.settlementWorkingAnimals,
+    );
+    const growlGuardian = growlRoster?.actors[0];
+    const growlAssignment = growlWork?.assignments[0];
+    const growlObservationId = guardianPerceptionHarness.observationId;
+    if (
+      growlGuardian === undefined
+      || growlAssignment === undefined
+      || growlObservationId === null
+    ) throw new Error("rest-growl fixture omitted its retreat authorities");
+    const growlCarry = growlEnvelope.perceptionCarry as {
+      version: number;
+      intervalStartPosition: WorldPosition;
+      actorVocalizationSamples: Array<{
+        expressionEventId: string;
+        position: WorldPosition;
+        soundClass: string;
+        soundInterrupt: string;
+        sourceActorId: string;
+      }>;
+      situatedExpressionAdmissions: {
+        records: Array<{
+          kind: string;
+          eventId: string;
+          sourceActorId: string;
+          triggerEventId: string;
+          assignmentId?: string;
+          activityTransactionId?: string;
+          sourceObservationId?: string;
+          acceptedAtTick?: number;
+          listenerWasSleepingAtAdmission?: boolean;
+        }>;
+      };
+      situatedExpressionChannels: {
+        channels: Array<{
+          sourceActorId: string;
+          reception: null | { kind: string };
+          state: {
+            active: null | {
+              eventId: string;
+              meaning: string;
+              family: string;
+              vocalization: string;
+              audioAcknowledged: boolean;
+            };
+          };
+        }>;
+      };
+    };
+    const growlAdmission = growlCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-defensive-growl",
+    );
+    if (growlAdmission === undefined) {
+      throw new Error(`rest-growl fixture omitted its admission receipt: ${JSON.stringify({
+        targetKind: guardianPerceptionHarness.targetKind,
+        intent: growlGuardian.intent,
+        activity: growlAssignment.currentActivity,
+        beliefs: growlGuardian.perception.beliefs,
+        admissions: growlCarry.situatedExpressionAdmissions.records,
+      })}`);
+    }
+    expect(growlGuardian.intent).toMatchObject({
+      kind: "retreat",
+      enteredAtTick: growlTick,
+      cause: { kind: "perception" },
+    });
+    expect(growlAssignment.currentActivity).toMatchObject({
+      activity: "defer-to-actor",
+      acceptedAtTick: growlTick,
+      cause: {
+        kind: "actor-disposition",
+        referenceId: "actor-intent:retreat",
+      },
+    });
+    expect(growlAdmission).toMatchObject({
+      sourceActorId: growlGuardian.identity.stableId,
+      triggerEventId: growlAssignment.currentActivity.transactionId,
+      assignmentId: growlAssignment.assignmentId,
+      activityTransactionId: growlAssignment.currentActivity.transactionId,
+      sourceObservationId: growlObservationId,
+      acceptedAtTick: growlTick,
+      listenerWasSleepingAtAdmission: false,
+    });
+    expect(growlCarry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        expressionEventId: growlAdmission.eventId,
+        position: growlGuardian.address.position,
+        soundClass: "animal-alarm",
+        soundInterrupt: "none",
+        sourceActorId: growlGuardian.identity.stableId,
+      }),
+    ]);
+    const growlChannel = growlCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === growlGuardian.identity.stableId,
+    );
+    expect(growlChannel).toMatchObject({
+      sourceActorId: growlGuardian.identity.stableId,
+      reception: { kind: expect.stringMatching(/^heard-(visible|unseen)$/) },
+      state: {
+        active: {
+          eventId: growlAdmission.eventId,
+          meaning: "guardian-dog-defensive-growl",
+          family: "animal-signal",
+          vocalization: "dog-defensive-growl",
+          audioAcknowledged: true,
+        },
+      },
+    });
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      text: "GRRRR.",
+      presentationKind: "animal-call",
+      animalCallKind: "growl",
+      assertive: false,
+    });
+    expect((growlEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "rest",
+      startedAtWorldTick: preGrowlAction.startedAtWorldTick,
+    });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    runtime.destroy();
+
+    const tamperedCarry = structuredClone(growlCarry);
+    const tamperedAdmission = tamperedCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-defensive-growl",
+    );
+    if (tamperedAdmission === undefined) {
+      throw new Error("rest-growl tamper fixture omitted its admission");
+    }
+    tamperedAdmission.sourceObservationId = `${growlObservationId}:forged`;
+    const tampered = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(growlRecord, { perceptionCarry: tamperedCarry }),
+    ));
+    expect(tampered.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    tampered.destroy();
+
+    const { integrity: _currentIntegrity, ...growlFields } = growlEnvelope;
+    const v35Base = {
+      ...growlFields,
+      version: 35,
+      perceptionCarry: { ...growlCarry, version: 4 },
+    };
+    const v35GrowlRecord: SaveRecord = {
+      ...growlRecord,
+      payloadVersion: 35,
+      updatedAt: growlRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v35Base,
+        integrity: gameSaveEnvelopeIntegrity(v35Base),
+      }),
+    };
+    const rejectedV35 = await createTideweftRuntime(new MemoryRepository(v35GrowlRecord));
+    expect(rejectedV35.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejectedV35.destroy();
+
+    const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    const resumedRepository = new MemoryRepository(growlRecord);
+    const resumed = await createTideweftRuntime(resumedRepository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(resumed.getRenderView().player.recoveryKind).toBe("rest");
+    expect(resumed.getUIView().expressionCaption).toMatchObject({
+      text: "GRRRR.",
+      animalCallKind: "growl",
+    });
+    await resumed.save();
+    const exactReload = savedEnvelope(resumedRepository);
+    expect(exactReload.perceptionCarry).toEqual(growlEnvelope.perceptionCarry);
+    expect(exactReload.dogActorRoster).toBe(growlEnvelope.dogActorRoster);
+    expect(exactReload.settlementWorkingAnimals).toBe(
+      growlEnvelope.settlementWorkingAnimals,
+    );
+    expect(exactReload.player).toEqual(growlEnvelope.player);
+
+    advanceWaitFrames(resumed, 1);
+    await resumed.save();
+    const continuedEnvelope = savedEnvelope(resumedRepository);
+    const continuedCarry = continuedEnvelope.perceptionCarry as typeof growlCarry;
+    const continuedGuardian = deserializeDogActorRoster(
+      continuedEnvelope.dogActorRoster,
+    )?.actors[0];
+    expect(continuedGuardian?.intent.kind).toBe("retreat");
+    expect(continuedCarry.actorVocalizationSamples.some(({ expressionEventId }) => (
+      expressionEventId === growlAdmission.eventId
+    ))).toBe(false);
+    expect(continuedCarry.situatedExpressionAdmissions.records.some(({ kind }) => (
+      kind === "guardian-dog-defensive-growl"
+    ))).toBe(false);
+    const continuedChannel = continuedCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === growlGuardian.identity.stableId,
+    );
+    expect(continuedChannel === undefined || continuedChannel.state.active === null).toBe(true);
+    expect((continuedEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "rest",
+      startedAtWorldTick: preGrowlAction.startedAtWorldTick,
+    });
+    expect(resumed.getRenderView().player.recoveryKind).toBe("rest");
+    const growlSoundIntervals = perceptionSpy.mock.calls
+      .map(([input]) => input.supplementalSoundSamples ?? [])
+      .filter((samples) => samples.some(({ expressionEventId }) => (
+        expressionEventId === growlAdmission.eventId
+      )));
+    expect(growlSoundIntervals).toHaveLength(1);
+    expect(growlSoundIntervals[0]?.filter(({ expressionEventId }) => (
+      expressionEventId === growlAdmission.eventId
+    ))).toEqual([
+      expect.objectContaining({
+        sourceActorId: growlGuardian.identity.stableId,
+        soundClass: "animal-alarm",
+        soundInterrupt: "none",
+      }),
+    ]);
+    resumed.destroy();
+    perceptionSpy.mockRestore();
+
+    // Place the same guardian at the sheltered listener's exact world point.
+    // The awake counterfactual must hear this spoken growl; SLEEP, not range,
+    // is therefore the only reason the otherwise identical sleeping branch
+    // receives no knowledge or caption.
+    guardianPerceptionHarness.observationId = null;
+    guardianPerceptionHarness.area = null;
+    guardianPerceptionHarness.targetKind = null;
+    guardianPerceptionHarness.mode = null;
+    const awakeRepository = new MemoryRepository(preparedSleepGrowlRecord);
+    const awake = await createTideweftRuntime(awakeRepository);
+    expect(awake.getUIView().saveWarning).toBeUndefined();
+    guardianPerceptionHarness.observerId = guardian.identity.stableId;
+    guardianPerceptionHarness.handlerId = assignment.handlerActorId;
+    advancePlayerSteps(awake, Math.max(10, (wakeTick - nearDawnTick) * 10));
+    guardianPerceptionHarness.observationId = null;
+    guardianPerceptionHarness.area = null;
+    guardianPerceptionHarness.targetKind = null;
+    guardianPerceptionHarness.mode = "unreachable-or-outside-duty";
+    advancePlayerSteps(awake, 10);
+    await awake.save();
+    const awakeGrowlEnvelope = savedEnvelope(awakeRepository);
+    const awakeGrowlCarry = awakeGrowlEnvelope.perceptionCarry as typeof growlCarry;
+    const awakeGrowlAdmission = awakeGrowlCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-defensive-growl",
+    );
+    if (awakeGrowlAdmission === undefined) {
+      throw new Error("awake growl counterfactual omitted its admission");
+    }
+    expect(awakeGrowlAdmission.listenerWasSleepingAtAdmission).toBe(false);
+    expect(awakeGrowlCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === guardian.identity.stableId,
+    )?.reception).toMatchObject({
+      kind: expect.stringMatching(/^heard-(visible|unseen)$/),
+    });
+    expect(awake.getUIView().expressionCaption).toMatchObject({
+      text: "GRRRR.",
+      animalCallKind: "growl",
+    });
+
+    // Starting SLEEP after the phase-zero event cannot rewrite its already
+    // authenticated awake receipt. The equal start tick is lawful on reload.
+    expect(awake.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "sleep",
+      recoveryActive: false,
+    });
+    awake.dispatchUI({ type: "recover", action: "begin" });
+    await awake.save();
+    const postGrowlSleepRecord = awakeRepository.snapshot();
+    const postGrowlSleepEnvelope = savedEnvelope(awakeRepository);
+    expect((postGrowlSleepEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "sleep",
+      startedAtWorldTick: awakeGrowlAdmission.acceptedAtTick,
+    });
+    awake.destroy();
+
+    const postGrowlSleeper = await createTideweftRuntime(
+      new MemoryRepository(postGrowlSleepRecord),
+    );
+    expect(postGrowlSleeper.getUIView().saveWarning).toBeUndefined();
+    expect(postGrowlSleeper.getRenderView().player.recoveryKind).toBe("sleep");
+    postGrowlSleeper.destroy();
+
+    guardianPerceptionHarness.observationId = null;
+    guardianPerceptionHarness.area = null;
+    guardianPerceptionHarness.targetKind = null;
+    guardianPerceptionHarness.mode = null;
+    const sleepRepository = new MemoryRepository(preparedSleepGrowlRecord);
+    const sleeping = await createTideweftRuntime(sleepRepository);
+    expect(sleeping.getUIView().saveWarning).toBeUndefined();
+    guardianPerceptionHarness.observerId = guardian.identity.stableId;
+    guardianPerceptionHarness.handlerId = assignment.handlerActorId;
+    expect(sleeping.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryKind: "sleep",
+      recoveryActive: false,
+    });
+    sleeping.dispatchUI({ type: "recover", action: "begin" });
+    advanceWaitFrames(sleeping, Math.max(1, wakeTick - nearDawnTick));
+    expect(sleeping.getRenderView().player.recoveryKind).toBe("sleep");
+    guardianPerceptionHarness.observationId = null;
+    guardianPerceptionHarness.area = null;
+    guardianPerceptionHarness.targetKind = null;
+    guardianPerceptionHarness.mode = "unreachable-or-outside-duty";
+    advanceWaitFrames(sleeping, 1);
+    await sleeping.save();
+    const sleepEnvelope = savedEnvelope(sleepRepository);
+    const sleepCarry = sleepEnvelope.perceptionCarry as typeof growlCarry;
+    const sleepAdmission = sleepCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "guardian-dog-defensive-growl",
+    );
+    if (sleepAdmission === undefined) {
+      throw new Error("sleep-growl branch omitted its world-authoritative admission");
+    }
+    expect(sleepAdmission.listenerWasSleepingAtAdmission).toBe(true);
+    expect(sleepAdmission.eventId).toBe(awakeGrowlAdmission.eventId);
+    expect(sleepCarry.intervalStartPosition).toEqual(
+      awakeGrowlCarry.intervalStartPosition,
+    );
+    expect(sleepCarry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        expressionEventId: sleepAdmission.eventId,
+        sourceActorId: guardian.identity.stableId,
+        soundClass: "animal-alarm",
+        soundInterrupt: "none",
+      }),
+    ]);
+    expect(sleepCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === guardian.identity.stableId,
+    )).toMatchObject({
+      reception: null,
+      state: {
+        active: {
+          eventId: sleepAdmission.eventId,
+          meaning: "guardian-dog-defensive-growl",
+          vocalization: "dog-defensive-growl",
+          audioAcknowledged: true,
+        },
+      },
+    });
+    expect(sleeping.getRenderView().expressions ?? []).toEqual([]);
+    expect(sleeping.getUIView().expressionCaption).toBeUndefined();
+    expect((sleepEnvelope.player as PlayerState).timeAction).toMatchObject({
+      kind: "sleep",
+    });
+    expect(sleeping.getRenderView().player.recoveryKind).toBe("sleep");
+    sleeping.destroy();
+
+    // Cancelling SLEEP after the event likewise cannot manufacture an awake
+    // receipt. The immutable admission remains the event-time hearing gate.
+    const cancelRepository = new MemoryRepository(sleepRepository.snapshot());
+    const cancelling = await createTideweftRuntime(cancelRepository);
+    expect(cancelling.getUIView().saveWarning).toBeUndefined();
+    cancelling.dispatchUI({ type: "recover", action: "cancel" });
+    expect(cancelling.getRenderView().player.recoveryKind).toBeUndefined();
+    await cancelling.save();
+    const cancelledRecord = cancelRepository.snapshot();
+    cancelling.destroy();
+
+    const cancelledReload = await createTideweftRuntime(
+      new MemoryRepository(cancelledRecord),
+    );
+    expect(cancelledReload.getUIView().saveWarning).toBeUndefined();
+    expect(cancelledReload.getRenderView().player.recoveryKind).toBeUndefined();
+    expect(cancelledReload.getUIView().expressionCaption).toBeUndefined();
+    cancelledReload.destroy();
+  }, 180_000);
 
   it("carries one guardian through shared perception, work, locomotion, recovery, and a regional seam without duplication", async () => {
     const repository = new MemoryRepository();

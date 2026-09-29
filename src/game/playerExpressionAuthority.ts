@@ -185,6 +185,7 @@ export function playerExpressionEventMatchesAdmission(
     || admission.triggerEventId !== event.triggerEventId
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
+    || admission.kind === "guardian-dog-defensive-growl"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     // The v33 migrator already admitted only a uniquely reconstructed
@@ -229,6 +230,7 @@ export function playerExpressionMemoryMatchesAdmission(
     || admission.triggerEventId !== memory.triggerEventId
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
+    || admission.kind === "guardian-dog-defensive-growl"
   ) return false;
   if (admission.kind === "legacy-v33-player") {
     return canonicalizeSituatedExpressionState({
@@ -256,6 +258,7 @@ export function playerExpressionAdmissionSoundPolicy(
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
     || admission.kind === "porter-heavy-departure"
     || admission.kind === "guardian-dog-warning"
+    || admission.kind === "guardian-dog-defensive-growl"
     || admission.kind === "legacy-v33-player"
   ) return null;
   const policy = policyForAdmission(admission, authority, 0);
@@ -274,6 +277,7 @@ function policyForAdmission(
     readonly kind:
       | "porter-heavy-departure"
       | "guardian-dog-warning"
+      | "guardian-dog-defensive-growl"
       | "legacy-v33-player";
   }>,
   authority: PlayerExpressionAuthority,
@@ -498,6 +502,7 @@ function policyFor(
         : null;
     case "porter-heavy-load":
     case "guardian-dog-warning":
+    case "guardian-dog-defensive-growl":
       return null;
   }
 }

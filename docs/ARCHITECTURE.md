@@ -182,6 +182,17 @@ signal even when the player is distant. Visible presentation resolves only the
 authenticated roster dog and its current position. Hidden presentation uses
 the uncertain acoustic receipt, and an unheard call has no player callout.
 
+A second narrow signal reuses the same owner: one low defensive growl when the
+guardian newly enters a perception-caused `retreat` and the working-animal
+authority commits the matching `defer-to-actor` activity with
+`actor-intent:retreat`. Admission reauthenticates the exact current threat
+belief against the dog intent and work transaction; continued or stale retreat
+and mismatched actor/work/perception state remain silent. The growl uses a
+restrained spoken-volume contour through the same source-bound `animal-alarm`,
+F0 hearing, reception, and caption path. It reveals no threat identity and,
+unlike the sharp warning bark, has no strong WAIT or REST/SLEEP interruption
+authority.
+
 Because a pending vocalization can become authoritative human knowledge, the
 guardian-warning candidate advances the outer save to v35 and the bounded
 perception carry to v4. That carry preserves source-bound pending vocal
@@ -191,6 +202,12 @@ ledger. The ledger binds each exact sound ordinal to the committed event class,
 admission phase, and only the minimum causal facts needed to reauthenticate its
 meaning. Sound, memory, channel lifetime, and receipt must form one canonical
 trajectory; deleting or acoustically rewriting one side rejects the carry.
+The defensive-growl candidate advances the outer save to v36 and bounded
+perception carry to v5 without changing the bounded carry model. Its growl
+admission retains whether SLEEP suppressed player hearing at the event, so a
+later sleep start, cancellation, or completion cannot rewrite an already
+accepted receipt; any still-active overlapping sleep must agree with that
+event-time fact.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -199,8 +216,9 @@ match a separately retained current-interval causal-authority receipt created
 by the physical transaction. Porter departure receipts exist only at phase
 zero and must reproduce that exact anchored listener pose. A lawfully heard,
 strong guardian warning interrupts WAIT or REST/SLEEP before
-source visibility is classified. Dog reception therefore replays from physical
-acoustics and line of sight without trusting a mutable historical sleep bit.
+source visibility is classified. Dog reception replays from physical acoustics
+and line of sight; the growl's admission-owned event-time sleep gate prevents a
+later recovery transition from rewriting whether the player heard it.
 A dog outside the current presentation window remains a lawful world source:
 inaudibility replays without requiring a local placement, while an audible
 off-window call can disclose only the bounded heard-unseen receipt.
@@ -215,7 +233,10 @@ active or already-expired `pv-*` samples into one authenticated player channel
 and source-bound `av-*` samples; the missing historical phase-zero pose is
 reconstructed once from the retained path and saved player state, unrelated
 cooldown memory is discarded, and
-v34-only meanings are rejected. Exact v34/carry-v3 saves preserve their
+v34-only meanings are rejected. Exact v35/carry-v4 saves migrate only through a
+strict semantic fence that rejects defensive-growl meaning, knowledge basis,
+vocalization, and admission as impossible historical v35 state. Exact
+v34/carry-v3 saves preserve their
 working-people channels under a strict semantic fence: animal-call meanings,
 animal sound classes, uncertain-hearing receipts, and dog admissions are not
 valid historical v34 data. Exact v5-v32 perception carries still migrate
@@ -228,9 +249,12 @@ persistent human at the saved authoritative world position; their event-time
 listener position, facing, hearing certainty, direct visibility, active/recent
 expression, committed contract departure, cargo custody, and route state must
 all reauthenticate. Guardian sources must resolve to the same roster dog,
-assignment, perception-caused activity, task observation, saved position, and
-event-time player receipt or lawful absence of one. Admission and sound
-capacity are atomic, so a ninth
+assignment, saved position, and event-time player receipt or lawful absence of
+one. Warning barks reauthenticate
+the perception-caused investigation and retained task observation; defensive
+growls reauthenticate the freshly entered perception-caused retreat, matching
+`defer-to-actor` transaction, exact current threat belief, and event-time sleep
+hearing gate. Admission and sound capacity are atomic, so a ninth
 candidate stays silent instead of creating unconserved knowledge. Resealed
 remote, acoustically altered, temporally reset, or causally forged
 vocalizations fail before becoming NPC knowledge.
@@ -242,9 +266,9 @@ line once, but all pre-boundary active and cooldown-only state is then retired;
 new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
 This slice does not yet claim other work expression where no authoritative
-completed-work event exists; it also does not claim general NPC conversation,
-the broader bark/whine/growl/distress/play repertoire, general animal-call
-networks, language/relationship realization, or complete Living Voice.
+completed-work event exists; it also does not claim complete bark/growl
+breadth, whine/distress/play, general animal-call networks,
+language/relationship realization, or complete Living Voice.
 
 ### Repository asset and storage law
 

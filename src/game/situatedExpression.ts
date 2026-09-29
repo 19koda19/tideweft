@@ -20,6 +20,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "relief-after-cargo-recovery",
   "porter-heavy-load",
   "guardian-dog-warning",
+  "guardian-dog-defensive-growl",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -54,6 +55,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-recovered-cargo",
   "self-handled-heavy-cargo",
   "self-heard-anonymous-alarm",
+  "self-perceived-threat",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
@@ -64,7 +66,8 @@ export type SituatedExpressionVocalization =
   | "strained"
   | "alarm"
   | "relief"
-  | "dog-warning-bark";
+  | "dog-warning-bark"
+  | "dog-defensive-growl";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -249,6 +252,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "guardian-dog-defensive-growl": Object.freeze({
+    family: "animal-signal",
+    knowledgeBasis: "self-perceived-threat",
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["spoken"]),
+    vocalization: "dog-defensive-growl",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -315,6 +327,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.guardian-dog-warning.0",
       text: "BARK!",
+    }),
+  ]),
+  "guardian-dog-defensive-growl": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.guardian-dog-defensive-growl.0",
+      text: "GRRRR.",
     }),
   ]),
 });
@@ -881,7 +899,8 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "strained"
     || value === "alarm"
     || value === "relief"
-    || value === "dog-warning-bark";
+    || value === "dog-warning-bark"
+    || value === "dog-defensive-growl";
 }
 
 function validId(value: unknown): value is string {

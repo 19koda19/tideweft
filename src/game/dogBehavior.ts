@@ -2,6 +2,7 @@ import {
   ACTOR_PERCEPTION_SCALE,
   canonicalizeActorPerceptionState,
   queryActorAttention,
+  type AgedActorBelief,
   type ActorBelief,
   type ActorPerceptionState,
 } from "../sim/actorPerception";
@@ -119,10 +120,10 @@ interface ScoredCandidate {
 }
 
 interface PerceivedSignals {
-  readonly food: Readonly<{ belief: ActorBelief; strength: number }> | null;
-  readonly human: Readonly<{ belief: ActorBelief; strength: number }> | null;
-  readonly threat: Readonly<{ belief: ActorBelief; strength: number }> | null;
-  readonly strongest: Readonly<{ belief: ActorBelief; strength: number }> | null;
+  readonly food: Readonly<{ belief: AgedActorBelief; strength: number }> | null;
+  readonly human: Readonly<{ belief: AgedActorBelief; strength: number }> | null;
+  readonly threat: Readonly<{ belief: AgedActorBelief; strength: number }> | null;
+  readonly strongest: Readonly<{ belief: AgedActorBelief; strength: number }> | null;
   readonly novelty: number;
 }
 
@@ -389,7 +390,7 @@ function canonicalCurrent(value: unknown, tick: number): DogCurrentIntent | null
   return Object.freeze({ intent: value.intent, enteredAtTick: value.enteredAtTick });
 }
 
-function perceivedSignals(attention: readonly ActorBelief[]): PerceivedSignals {
+function perceivedSignals(attention: readonly AgedActorBelief[]): PerceivedSignals {
   let food: PerceivedSignals["food"] = null;
   let human: PerceivedSignals["human"] = null;
   let threat: PerceivedSignals["threat"] = null;
@@ -406,11 +407,22 @@ function perceivedSignals(attention: readonly ActorBelief[]): PerceivedSignals {
   return Object.freeze({ food, human, threat, strongest, novelty });
 }
 
+/**
+ * Shared selector for the exact threat belief that owns a dog's retreat.
+ * Expression adapters consume this authority instead of copying its threat
+ * vocabulary or deterministic tie-break rules.
+ */
+export function strongestDogThreatBelief(
+  perception: ActorPerceptionState,
+): AgedActorBelief | null {
+  return perceivedSignals(queryActorAttention(perception)).threat?.belief ?? null;
+}
+
 function strongerSignal(
-  current: Readonly<{ belief: ActorBelief; strength: number }> | null,
-  belief: ActorBelief,
+  current: Readonly<{ belief: AgedActorBelief; strength: number }> | null,
+  belief: AgedActorBelief,
   strength: number,
-): Readonly<{ belief: ActorBelief; strength: number }> {
+): Readonly<{ belief: AgedActorBelief; strength: number }> {
   if (
     current === null
     || strength > current.strength

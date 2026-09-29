@@ -9,6 +9,7 @@ import {
   appendSituatedExpressionAdmissionRecord,
   canonicalizeSituatedExpressionAdmissionLedger,
   canonicalizeSituatedExpressionAdmissionRecord,
+  createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
@@ -113,22 +114,48 @@ describe("situated-expression admission ledger", () => {
       sourceObservationId: "observation:anonymous-alarm:1",
       acceptedAtTick: 912,
     });
+    const guardianGrowl = createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId: "working-animal:activity:guardian-growl:1",
+      sampleOrdinal: 4,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId: "working-animal:activity:guardian-growl:1",
+      sourceObservationId: "observation:threat:1",
+      acceptedAtTick: 912,
+      listenerWasSleepingAtAdmission: false,
+    });
     const legacy = createLegacyV33PlayerExpressionAdmissionRecord({
       sourceActorId: PLAYER_ID,
       triggerEventId: "legacy:event:1",
-      sampleOrdinal: 4,
+      sampleOrdinal: 5,
       admittedAtPlayerStepPhase: 9,
     });
 
-    expect([traversal, recovery, porter, guardianDog, legacy].map((record) => record?.kind))
+    expect([
+      traversal,
+      recovery,
+      porter,
+      guardianDog,
+      guardianGrowl,
+      legacy,
+    ].map((record) => record?.kind))
       .toEqual([
       "player-traversal",
       "player-fall-recovery",
       "porter-heavy-departure",
       "guardian-dog-warning",
+      "guardian-dog-defensive-growl",
       "legacy-v33-player",
     ]);
-    for (const record of [traversal, recovery, porter, guardianDog, legacy]) {
+    for (const record of [
+      traversal,
+      recovery,
+      porter,
+      guardianDog,
+      guardianGrowl,
+      legacy,
+    ]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
         record?.sourceActorId,
         record?.triggerEventId,
@@ -137,6 +164,50 @@ describe("situated-expression admission ledger", () => {
     }
     expect(Object.isFrozen(porter?.listenerPosition)).toBe(true);
     expect(Object.isFrozen(porter?.listenerPosition.region)).toBe(true);
+  });
+
+  it("binds defensive growls to one non-player phase-zero retreat transaction", () => {
+    const input = {
+      sourceActorId: GUARDIAN_DOG_ID,
+      triggerEventId: "working-animal:activity:guardian-growl:2",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      assignmentId: "working-animal:assignment:guardian:1",
+      activityTransactionId: "working-animal:activity:guardian-growl:2",
+      sourceObservationId: "observation:threat:2",
+      acceptedAtTick: 914,
+      listenerWasSleepingAtAdmission: false,
+    } as const;
+    const canonical = createGuardianDogDefensiveGrowlExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        GUARDIAN_DOG_ID,
+        input.triggerEventId,
+      ),
+      kind: "guardian-dog-defensive-growl",
+      ...input,
+    });
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    expect(createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+      ...input,
+      sourceActorId: PLAYER_ID,
+    })).toBeNull();
+    expect(createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+      ...input,
+      activityTransactionId: "working-animal:activity:different",
+    })).toBeNull();
+    expect(createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+      ...input,
+      admittedAtPlayerStepPhase: 1,
+    })).toBeNull();
+    expect(createGuardianDogDefensiveGrowlExpressionAdmissionRecord({
+      ...input,
+      listenerWasSleepingAtAdmission: "yes" as never,
+    })).toBeNull();
   });
 
   it("binds guardian warnings to one non-player phase-zero activity transaction", () => {

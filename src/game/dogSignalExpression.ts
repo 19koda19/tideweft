@@ -1,4 +1,5 @@
 import { hashCanonical, stableStringify } from "../sim/util";
+import type { AgedActorBelief } from "../sim/actorPerception";
 import {
   canonicalizeDogActorState,
   type DogActorState,
@@ -14,11 +15,21 @@ import {
   type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
+  canonicalizeSettlementWorkingAnimalState,
   settlementGuardianAlarmInvestigation,
+  type SettlementWorkingAnimalActivityTransaction,
+  type SettlementWorkingAnimalAssignment,
   type SettlementWorkingAnimalState,
 } from "./settlementWorkingAnimals";
+import { strongestDogThreatBelief } from "./dogBehavior";
 
 export interface GuardianDogWarningExpressionInput {
+  readonly dog: DogActorState;
+  readonly workingAnimals: SettlementWorkingAnimalState;
+  readonly completedTick: number;
+}
+
+export interface GuardianDogDefensiveGrowlExpressionInput {
   readonly dog: DogActorState;
   readonly workingAnimals: SettlementWorkingAnimalState;
   readonly completedTick: number;
@@ -86,6 +97,43 @@ export function guardianDogWarningExpressionIntent(
   });
 }
 
+/**
+ * Adapts one newly entered, perception-caused guardian retreat into a low
+ * defensive growl. Work must have committed the exact actor-owned retreat as
+ * `defer-to-actor`; a stale intent, a different belief, or a merely plausible
+ * threat label cannot manufacture a call.
+ */
+export function guardianDogDefensiveGrowlExpressionIntent(
+  inputValue: GuardianDogDefensiveGrowlExpressionInput,
+): SituatedExpressionIntent | null {
+  const evidence = guardianDogDefensiveGrowlEvidence(inputValue);
+  if (evidence === null) return null;
+  const { dog, activity, belief } = evidence;
+  const triggerEventId = activity.transactionId;
+  const variantSeed = Number.parseInt(hashCanonical({
+    domain: "guardian-dog-defensive-growl-expression:v1",
+    sourceActorId: dog.identity.stableId,
+    triggerEventId,
+    beliefKey: belief.key,
+    sourceObservationId: belief.sourceObservationId,
+  }).slice(0, 8), 16) >>> 0;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: dog.identity.stableId,
+    triggerEventId,
+    position: dog.address.position,
+    meaning: "guardian-dog-defensive-growl",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 780_000,
+    salience: Math.max(520_000, Math.min(belief.confidence, belief.salience)),
+    variantSeed,
+    durationSteps: 8,
+  });
+}
+
 /** Reauthenticates a pending warning event from the current dog/work roots. */
 export function guardianDogWarningExpressionEventMatchesWorld(
   input: GuardianDogWarningExpressionInput,
@@ -141,6 +189,67 @@ export function guardianDogWarningExpressionEventForTrigger(
   return deriveGuardianDogWarningExpression(input, triggerEventId)?.event ?? null;
 }
 
+/** Reauthenticates an exact defensive-growl event from current dog/work roots. */
+export function guardianDogDefensiveGrowlExpressionEventMatchesWorld(
+  input: GuardianDogDefensiveGrowlExpressionInput,
+  expression: SituatedExpressionEvent,
+): boolean {
+  if (projectSituatedExpression(expression) === null) return false;
+  const derived = deriveGuardianDogDefensiveGrowlExpression(
+    input,
+    expression.triggerEventId,
+  );
+  return derived !== null
+    && stableStringify(immutableExpressionFields(expression))
+      === stableStringify(immutableExpressionFields(derived.event));
+}
+
+/** Reauthenticates a defensive-growl cooldown retained in the same interval. */
+export function guardianDogDefensiveGrowlExpressionMemoryMatchesWorld(
+  input: GuardianDogDefensiveGrowlExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  const canonicalState = canonicalizeSituatedExpressionState({
+    version: SITUATED_EXPRESSION_VERSION,
+    completedSteps: 0,
+    active: null,
+    recent: [memory],
+  });
+  const canonicalMemory = canonicalState?.recent[0];
+  if (canonicalMemory === undefined) return false;
+  const derived = deriveGuardianDogDefensiveGrowlExpression(
+    input,
+    canonicalMemory.triggerEventId,
+  );
+  if (derived === null) return false;
+  if (
+    canonicalMemory.sourceActorId !== derived.memory.sourceActorId
+    || canonicalMemory.triggerEventId !== derived.memory.triggerEventId
+    || canonicalMemory.meaning !== derived.memory.meaning
+    || canonicalMemory.family !== derived.memory.family
+    || canonicalMemory.priority !== derived.memory.priority
+  ) return false;
+  const elapsedSteps = derived.memory.meaningCooldownRemainingSteps
+    - canonicalMemory.meaningCooldownRemainingSteps;
+  return nonnegativeSafeInteger(elapsedSteps)
+    && (
+      canonicalMemory.meaningCooldownRemainingSteps > 0
+      || canonicalMemory.familyCooldownRemainingSteps > 0
+    )
+    && canonicalMemory.familyCooldownRemainingSteps === Math.max(
+      0,
+      derived.memory.familyCooldownRemainingSteps - elapsedSteps,
+    );
+}
+
+/** Re-derives one exact defensive growl for trajectory/save authentication. */
+export function guardianDogDefensiveGrowlExpressionEventForTrigger(
+  input: GuardianDogDefensiveGrowlExpressionInput,
+  triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return deriveGuardianDogDefensiveGrowlExpression(input, triggerEventId)?.event ?? null;
+}
+
 function deriveGuardianDogWarningExpression(
   input: GuardianDogWarningExpressionInput,
   triggerEventId: string,
@@ -154,6 +263,78 @@ function deriveGuardianDogWarningExpression(
   const memory = reduction.state?.recent[0];
   if (!reduction.accepted || reduction.event === null || memory === undefined) return null;
   return Object.freeze({ event: reduction.event, memory });
+}
+
+function deriveGuardianDogDefensiveGrowlExpression(
+  input: GuardianDogDefensiveGrowlExpressionInput,
+  triggerEventId: string,
+): Readonly<{
+  event: SituatedExpressionEvent;
+  memory: SituatedExpressionMemory;
+}> | null {
+  const intent = guardianDogDefensiveGrowlExpressionIntent(input);
+  if (intent === null || intent.triggerEventId !== triggerEventId) return null;
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  const memory = reduction.state?.recent[0];
+  if (!reduction.accepted || reduction.event === null || memory === undefined) return null;
+  return Object.freeze({ event: reduction.event, memory });
+}
+
+interface GuardianDogDefensiveGrowlEvidence {
+  readonly dog: DogActorState;
+  readonly assignment: SettlementWorkingAnimalAssignment;
+  readonly activity: SettlementWorkingAnimalActivityTransaction;
+  readonly belief: AgedActorBelief;
+}
+
+function guardianDogDefensiveGrowlEvidence(
+  inputValue: GuardianDogDefensiveGrowlExpressionInput,
+): GuardianDogDefensiveGrowlEvidence | null {
+  const input: unknown = inputValue;
+  if (!plainRecord(input) || !exactKeys(input, [
+    "completedTick",
+    "dog",
+    "workingAnimals",
+  ])) return null;
+  const dog = canonicalizeDogActorState(input.dog);
+  const workingAnimals = canonicalizeSettlementWorkingAnimalState(input.workingAnimals);
+  if (
+    dog === null
+    || workingAnimals === null
+    || dog.address.species !== "domestic-dog"
+    || !nonnegativeSafeInteger(input.completedTick)
+    || dog.updatedAtTick !== input.completedTick
+    || dog.perception.tick !== input.completedTick
+    || dog.intent.kind !== "retreat"
+    || dog.intent.enteredAtTick !== input.completedTick
+    || dog.intent.cause.kind !== "perception"
+  ) return null;
+
+  const assignments = workingAnimals.assignments.filter(({ workerActorId }) => (
+    workerActorId === dog.identity.stableId
+  ));
+  if (assignments.length !== 1) return null;
+  const assignment = assignments[0];
+  if (assignment === undefined) return null;
+  const activity = assignment.currentActivity;
+  if (
+    assignment.role !== "guardian"
+    || assignment.workerSpecies !== "domestic-dog"
+    || assignment.pendingActivity !== null
+    || activity.activity !== "defer-to-actor"
+    || activity.acceptedAtTick !== input.completedTick
+    || activity.cause.kind !== "actor-disposition"
+    || activity.cause.referenceId !== "actor-intent:retreat"
+    || activity.perceivedArea !== null
+  ) return null;
+
+  const belief = strongestDogThreatBelief(dog.perception);
+  if (
+    belief === null
+    || belief.key !== dog.intent.cause.referenceId
+    || belief.ageTicks !== 0
+  ) return null;
+  return Object.freeze({ dog, assignment, activity, belief });
 }
 
 function immutableExpressionFields(event: SituatedExpressionEvent): Readonly<Record<string, unknown>> {

@@ -361,13 +361,16 @@ function legacyStateBelongsToPlayer(state: SituatedExpressionState): boolean {
 function legacyStateUsesV33Meanings(state: SituatedExpressionState): boolean {
   return state.active?.meaning !== "porter-heavy-load"
     && state.active?.meaning !== "guardian-dog-warning"
+    && state.active?.meaning !== "guardian-dog-defensive-growl"
     && state.active?.family !== "work"
     && state.active?.family !== "animal-signal"
     && state.active?.knowledgeBasis !== "self-handled-heavy-cargo"
     && state.active?.knowledgeBasis !== "self-heard-anonymous-alarm"
+    && state.active?.knowledgeBasis !== "self-perceived-threat"
     && state.recent.every(({ meaning, family }) => (
       meaning !== "porter-heavy-load"
       && meaning !== "guardian-dog-warning"
+      && meaning !== "guardian-dog-defensive-growl"
       && family !== "work"
       && family !== "animal-signal"
     ));
@@ -386,6 +389,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
       return [acousticsFor("shout", "strong")];
     case "porter-heavy-load":
     case "guardian-dog-warning":
+    case "guardian-dog-defensive-growl":
       return [];
   }
 }
@@ -399,6 +403,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "relief-after-cargo-recovery": return 9;
     case "porter-heavy-load": return 8;
     case "guardian-dog-warning": return 6;
+    case "guardian-dog-defensive-growl": return 8;
   }
 }
 

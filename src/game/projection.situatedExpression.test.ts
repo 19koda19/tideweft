@@ -130,6 +130,32 @@ function canonicalDogWarning(
   return reduced.state.active;
 }
 
+function canonicalDogDefensiveGrowl(
+  dog: DogActorState,
+  triggerEventId: string,
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: dog.identity.stableId,
+    triggerEventId,
+    position: dog.address.position,
+    meaning: "guardian-dog-defensive-growl",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 780_000,
+    salience: 780_000,
+    variantSeed: 0xd06,
+    durationSteps: 8,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Dog growl expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function dogInWindow(
   window: ReturnType<typeof createRegionalTerrainWindow>,
   tileX = 18,
@@ -399,6 +425,7 @@ describe("situated expression game projection", () => {
       speakerLabel: "Unknown dog",
       text: "BARK!",
       presentationKind: "animal-call",
+      animalCallKind: "bark",
     });
     expect(ui.expressionCaption).not.toHaveProperty("name");
   });
@@ -467,6 +494,7 @@ describe("situated expression game projection", () => {
       speakerLabel: "A dog",
       text: "BARK!",
       presentationKind: "animal-call",
+      animalCallKind: "bark",
       directionLabel: "east",
     });
     expect(ui.expressionCaption).not.toHaveProperty("position");
@@ -474,5 +502,76 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(ui.expressionCaption)).not.toContain(
       String(dog.address.position.localX),
     );
+  });
+
+  it("anchors a heard-visible defensive growl only to its authenticated dog", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const dogActorRoster = createDogActorRoster([dog]);
+    const expression = canonicalDogDefensiveGrowl(dog, "dog-signal:visible-growl");
+    const reception = heardVisibleReception(expression);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressions).toEqual([expect.objectContaining({
+      sourceActorId: dog.identity.stableId,
+      sourceKind: "animal",
+      speakerLabel: "Unknown dog",
+      text: "GRRRR.",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "restrained",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Unknown dog",
+      text: "GRRRR.",
+      presentationKind: "animal-call",
+      animalCallKind: "growl",
+      assertive: false,
+    });
+  });
+
+  it("keeps an unseen defensive growl directional without revealing dog or threat position", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const expression = canonicalDogDefensiveGrowl(dog, "dog-signal:hidden-growl");
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 3_000, maximum: 9_000 },
+      certainty: 0.66,
+    });
+    if (reception === null) throw new Error("Hidden growl reception fixture was rejected");
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster: createDogActorRoster([dog]),
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A dog",
+      text: "GRRRR.",
+      presentationKind: "animal-call",
+      animalCallKind: "growl",
+      directionLabel: "west",
+      assertive: false,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain(dog.identity.stableId);
+    expect(JSON.stringify(caption)).not.toContain(String(dog.address.position.localX));
+    expect(JSON.stringify(caption)).not.toContain("threat");
   });
 });

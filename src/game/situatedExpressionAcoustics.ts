@@ -12,12 +12,17 @@ export interface SituatedExpressionAcoustics {
 
 export type SituatedExpressionSoundClass = "human-vocalization" | "animal-alarm";
 
+const ANIMAL_SIGNAL_MEANINGS = new Set<SituatedExpressionMeaning>([
+  "guardian-dog-warning",
+  "guardian-dog-defensive-growl",
+]);
+
 /** Shared F0 sound class; species voice is semantic, not inferred from tone. */
 export function situatedExpressionSoundClass(
   value: Pick<SituatedExpressionEvent, "meaning"> | SituatedExpressionMeaning,
 ): SituatedExpressionSoundClass {
   const meaning = typeof value === "string" ? value : value.meaning;
-  return meaning === "guardian-dog-warning" ? "animal-alarm" : "human-vocalization";
+  return ANIMAL_SIGNAL_MEANINGS.has(meaning) ? "animal-alarm" : "human-vocalization";
 }
 
 /**
