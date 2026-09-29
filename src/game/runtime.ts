@@ -79,6 +79,7 @@ import {
 import {
   ConflictingSaveCopiesError,
   createSaveRepository,
+  NewerSaveSchemaError,
   NewerSaveUnavailableError,
   SAVE_WORLD_JSON_MAX_CHARACTERS,
   StaleSaveWriteError,
@@ -19296,6 +19297,23 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
   try {
     record = await repository.load(AUTOSAVE_SLOT);
   } catch (error) {
+    if (error instanceof NewerSaveSchemaError) {
+      const latest = error.latestVersion;
+      const version: AutosaveVersion = {
+        saveGenerationEra: latest.saveGenerationEra ?? 0,
+        saveGeneration: latest.saveGeneration ?? 0,
+        updatedAt: latest.updatedAt,
+        playTicks: latest.playTicks,
+      };
+      return error.schemaVersion > GAME_SAVE_VERSION
+        ? {
+            kind: "incompatible-newer",
+            reason: "future-schema",
+            schemaVersion: error.schemaVersion,
+            version,
+          }
+        : { kind: "conflict", version };
+    }
     if (error instanceof NewerSaveUnavailableError) {
       const latest = error.latestVersion;
       const version: AutosaveVersion = {

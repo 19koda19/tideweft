@@ -6,6 +6,7 @@ import {
   createSaveRepository,
   exportSave,
   importSave,
+  NewerSaveSchemaError,
   NewerSaveUnavailableError,
   StaleSaveWriteError,
   UnreadableSaveRecordError,
@@ -204,6 +205,13 @@ describe("local-storage save repository", () => {
     await repository.save(future);
 
     await expect(repository.load(future.slotId)).resolves.toEqual(future);
+    await expect(repository.save({
+      ...future,
+      payloadVersion: 38,
+      saveGeneration: 8,
+      worldJson: '{"format":"tideweft-session","version":38}',
+    })).rejects.toBeInstanceOf(NewerSaveSchemaError);
+    await expect(repository.load(future.slotId)).resolves.toEqual(future);
   });
 
   it("rejects invalid records without overwriting a valid slot", async () => {
@@ -348,6 +356,49 @@ describe("local-storage save repository", () => {
 });
 
 describe("IndexedDB runtime failover", () => {
+  it("blocks an older-generation future-schema copy from being downgraded", async () => {
+    const primaryRecord = makeRecord({
+      payloadVersion: 38,
+      saveGeneration: 10,
+      updatedAt: 500,
+      label: "Current-schema primary",
+    });
+    const futureFallback = makeRecord({
+      payloadVersion: 39,
+      saveGeneration: 9,
+      updatedAt: 400,
+      label: "Future-schema fallback",
+      worldJson: "{opaque-future-envelope",
+    });
+    const primary: SaveRepository = {
+      list: vi.fn(async () => [summary(primaryRecord)]),
+      load: vi.fn(async () => structuredClone(primaryRecord)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => [summary(futureFallback)]),
+      load: vi.fn(async () => structuredClone(futureFallback)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+
+    await expect(repository.load("autosave")).rejects.toMatchObject({
+      name: "NewerSaveSchemaError",
+      schemaVersion: 39,
+    });
+    await expect(repository.save({
+      ...primaryRecord,
+      saveGeneration: 11,
+      updatedAt: 600,
+    })).rejects.toBeInstanceOf(NewerSaveSchemaError);
+    expect(primary.save).not.toHaveBeenCalled();
+    expect(fallback.save).not.toHaveBeenCalled();
+    expect(primary.remove).not.toHaveBeenCalled();
+    expect(fallback.remove).not.toHaveBeenCalled();
+  });
+
   it("does not hide an unreadable primary copy behind a valid fallback", async () => {
     const other = makeRecord({ slotId: "other", label: "Other valid slot" });
     const fallbackRecord = makeRecord({ label: "Fallback must not win" });
@@ -497,7 +548,7 @@ describe("IndexedDB runtime failover", () => {
     await expect(repository.list()).rejects.toBeInstanceOf(ConflictingSaveCopiesError);
   });
 
-  it("rejects equal-version copies that disagree only on the outer payload-version fence", async () => {
+  it("fences equal-version copies that advertise different outer schemas", async () => {
     const primaryRecord = makeRecord({
       payloadVersion: 3,
       updatedAt: 331,
@@ -519,8 +570,8 @@ describe("IndexedDB runtime failover", () => {
     };
     const repository = createFailoverSaveRepository(primary, fallback);
 
-    await expect(repository.load("autosave")).rejects.toBeInstanceOf(ConflictingSaveCopiesError);
-    await expect(repository.list()).rejects.toBeInstanceOf(ConflictingSaveCopiesError);
+    await expect(repository.load("autosave")).rejects.toBeInstanceOf(NewerSaveSchemaError);
+    await expect(repository.list()).rejects.toBeInstanceOf(NewerSaveSchemaError);
   });
 
   it("surfaces a same-version divergence created between fallback preflight and mirror", async () => {

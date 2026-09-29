@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ConflictingSaveCopiesError,
+  createFailoverSaveRepository,
   NewerSaveUnavailableError,
   StaleSaveWriteError,
   createSaveRepository,
@@ -2109,6 +2110,54 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
 
     await expect(createSaveRepository().load("autosave")).resolves.toEqual(future);
+  });
+
+  it("blocks a future-schema fallback even when a current primary has a newer generation", async () => {
+    const world = createWorld("mixed schema failover", "calm");
+    const current = runtimeSaveRecord(
+      world,
+      createPlayer(createWorldView(world)),
+      createSessionState(world.meta.seedText, "hearth"),
+      "Current primary",
+    );
+    current.saveGeneration = 10;
+    const future = structuredClone(current);
+    future.label = "Future fallback";
+    future.payloadVersion = CURRENT_GAME_SAVE_VERSION + 1;
+    future.saveGeneration = 9;
+    future.worldJson = "{opaque-future-envelope";
+    const primary: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => structuredClone(current)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => []),
+      load: vi.fn(async () => structuredClone(future)),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+    const save = vi.spyOn(repository, "save");
+    const remove = vi.spyOn(repository, "remove");
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "SAVE REQUIRES NEWER TIDEWEFT",
+      detail: expect.stringContaining("Schema 39 belongs to a newer Tideweft build"),
+    });
+    await expect(runtime.save()).rejects.toThrow(
+      "requires a newer Tideweft build; it will not be overwritten",
+    );
+    expect(save).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(primary.save).not.toHaveBeenCalled();
+    expect(fallback.save).not.toHaveBeenCalled();
+    expect(primary.remove).not.toHaveBeenCalled();
+    expect(fallback.remove).not.toHaveBeenCalled();
+    runtime.destroy();
   });
 
   it("replaces a malformed saturated autosave with a durable newer generation", async () => {

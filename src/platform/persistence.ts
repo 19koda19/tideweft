@@ -46,6 +46,20 @@ export class StaleSaveWriteError extends Error {
   }
 }
 
+/** A stored copy advertises a schema newer than the record this build would use. */
+export class NewerSaveSchemaError extends StaleSaveWriteError {
+  readonly schemaVersion: number;
+  readonly latestVersion: SaveVersionMetadata;
+
+  constructor(schemaVersion: number, latestVersion: SaveVersionMetadata) {
+    super(latestVersion.slotId);
+    this.name = "NewerSaveSchemaError";
+    this.message = `Save slot ${latestVersion.slotId} contains newer schema ${schemaVersion} and was left unchanged.`;
+    this.schemaVersion = schemaVersion;
+    this.latestVersion = { ...latestVersion };
+  }
+}
+
 /** Stored bytes exist for a save slot, but they are not a valid SaveRecord. */
 export class UnreadableSaveRecordError extends Error {
   readonly slotId: string;
@@ -227,6 +241,14 @@ class IndexedDbSaveRepository implements SaveRepository {
       await transactionComplete(transaction);
       throw new UnreadableSaveRecordError(record.slotId);
     }
+    if (existing) {
+      try {
+        assertNoSaveSchemaDowngrade(existing, record);
+      } catch (error) {
+        await transactionComplete(transaction);
+        throw error;
+      }
+    }
     const superseded = Boolean(
       existing
       && saveWriteConflicts(existing, record),
@@ -305,6 +327,7 @@ class LocalStorageSaveRepository implements SaveRepository {
     validateRecord(record);
     const stored = this.readForMutation();
     const existing = stored.find((candidate) => candidate.slotId === record.slotId);
+    if (existing) assertNoSaveSchemaDowngrade(existing, record);
     if (existing && saveWriteConflicts(existing, record)) {
       throw new StaleSaveWriteError(record.slotId);
     }
@@ -606,6 +629,7 @@ class FailoverSaveRepository implements SaveRepository {
       // A working primary is still useful when localStorage is unavailable or
       // over quota. A primary failure below will surface the fallback error.
     }
+    if (fallbackRecord) assertNoSaveSchemaDowngrade(fallbackRecord, snapshot);
     if (fallbackRecord && saveWriteConflicts(fallbackRecord, snapshot)) {
       throw new StaleSaveWriteError(snapshot.slotId);
     }
@@ -719,6 +743,15 @@ class FailoverSaveRepository implements SaveRepository {
     for (const primarySummary of primary) {
       const fallbackSummary = fallbackBySlot.get(primarySummary.slotId);
       if (!fallbackSummary || !sameSaveVersion(primarySummary, fallbackSummary)) continue;
+      if (payloadVersionOf(primarySummary) !== payloadVersionOf(fallbackSummary)) {
+        const newerSchema = payloadVersionOf(primarySummary) > payloadVersionOf(fallbackSummary)
+          ? primarySummary
+          : fallbackSummary;
+        throw new NewerSaveSchemaError(
+          payloadVersionOf(newerSchema),
+          saveVersionMetadata(newerSchema),
+        );
+      }
       if (!sameSaveSummary(primarySummary, fallbackSummary)) {
         throw new ConflictingSaveCopiesError(saveVersionMetadata(primarySummary));
       }
@@ -732,6 +765,15 @@ class FailoverSaveRepository implements SaveRepository {
         && sameSaveVersion(primaryRecord, fallbackRecord)
         && !sameSaveRecord(primaryRecord, fallbackRecord)
       ) {
+        if (payloadVersionOf(primaryRecord) !== payloadVersionOf(fallbackRecord)) {
+          const newerSchema = payloadVersionOf(primaryRecord) > payloadVersionOf(fallbackRecord)
+            ? primaryRecord
+            : fallbackRecord;
+          throw new NewerSaveSchemaError(
+            payloadVersionOf(newerSchema),
+            saveVersionMetadata(newerSchema),
+          );
+        }
         throw new ConflictingSaveCopiesError(saveVersionMetadata(primaryRecord));
       }
     }
@@ -1068,6 +1110,19 @@ function saveWriteConflicts(existing: SaveRecord, candidate: SaveRecord): boolea
   return !sameSaveRecord(existing, candidate);
 }
 
+function payloadVersionOf(record: Pick<SaveRecord, "payloadVersion">): number {
+  return record.payloadVersion ?? 0;
+}
+
+function assertNoSaveSchemaDowngrade(existing: SaveRecord, candidate: SaveRecord): void {
+  if (payloadVersionOf(existing) > payloadVersionOf(candidate)) {
+    throw new NewerSaveSchemaError(
+      payloadVersionOf(existing),
+      saveVersionMetadata(existing),
+    );
+  }
+}
+
 function sameSaveRecord(left: SaveRecord, right: SaveRecord): boolean {
   return (
     left.slotId === right.slotId
@@ -1145,8 +1200,23 @@ function newestRecord(
 ): SaveRecord | undefined {
   if (!primary) return fallback;
   if (!fallback) return primary;
-  if (isRecordNewer(fallback, primary)) return fallback;
-  if (isRecordNewer(primary, fallback)) return primary;
+  if (isRecordNewer(fallback, primary)) {
+    assertNoSaveSchemaDowngrade(primary, fallback);
+    return fallback;
+  }
+  if (isRecordNewer(primary, fallback)) {
+    assertNoSaveSchemaDowngrade(fallback, primary);
+    return primary;
+  }
+  if (payloadVersionOf(primary) !== payloadVersionOf(fallback)) {
+    const newerSchema = payloadVersionOf(primary) > payloadVersionOf(fallback)
+      ? primary
+      : fallback;
+    throw new NewerSaveSchemaError(
+      payloadVersionOf(newerSchema),
+      saveVersionMetadata(newerSchema),
+    );
+  }
   if (!sameSaveRecord(primary, fallback)) {
     throw new ConflictingSaveCopiesError(saveVersionMetadata(primary));
   }
