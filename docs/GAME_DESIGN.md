@@ -1354,7 +1354,12 @@ travelers parts of one expedition loop rather than separate minigames.
   internal cumulative milestones in this released lineage rather than
   independent releases.
 
-There is no courier or human death, lost save, currency fine, streak break, or zero-progress reload loop in the current slice. The only current mortality is bounded exact marsh-fox, gray-wolf, or cougar contact against an eligible solitary rabbit, as described above.
+There is no courier or human death, gameplay setback that deletes a current
+supported save, currency fine, streak break, or zero-progress reload loop in
+the current slice. The only current mortality is bounded exact marsh-fox,
+gray-wolf, or cougar contact against an eligible solitary rabbit, as described
+above. Compatibility with obsolete pre-1.0 internal development schemas follows
+the canonical Architecture save contract rather than this setback rule.
 
 ## Perpetual play and pressure
 

@@ -8,6 +8,7 @@ import {
   importSave,
   NewerSaveUnavailableError,
   StaleSaveWriteError,
+  UnreadableSaveRecordError,
   type SaveRecord,
   type SaveRepository,
 } from "./persistence";
@@ -152,6 +153,9 @@ describe("local-storage save repository", () => {
     const { repository, storage } = useFallbackRepository();
     storage.setItem(FALLBACK_KEY, "{not json");
     expect(await repository.list()).toEqual([]);
+    await expect(repository.load("autosave")).rejects.toBeInstanceOf(
+      UnreadableSaveRecordError,
+    );
 
     const valid = makeRecord({ slotId: "valid" });
     storage.setItem(
@@ -177,6 +181,29 @@ describe("local-storage save repository", () => {
         hasScreenshot: false,
       },
     ]);
+    await expect(repository.load("negative")).rejects.toBeInstanceOf(
+      UnreadableSaveRecordError,
+    );
+    await expect(repository.load("valid")).resolves.toEqual(valid);
+
+    const rawBeforeBlockedWrite = storage.getItem(FALLBACK_KEY);
+    await expect(repository.save(makeRecord())).rejects.toBeInstanceOf(
+      UnreadableSaveRecordError,
+    );
+    expect(storage.getItem(FALLBACK_KEY)).toBe(rawBeforeBlockedWrite);
+  });
+
+  it("preserves an opaque future payload behind its outer version fence", async () => {
+    const { repository } = useFallbackRepository();
+    const future = makeRecord({
+      payloadVersion: 39,
+      saveGeneration: 7,
+      worldJson: "{opaque-to-this-build",
+    });
+
+    await repository.save(future);
+
+    await expect(repository.load(future.slotId)).resolves.toEqual(future);
   });
 
   it("rejects invalid records without overwriting a valid slot", async () => {
@@ -321,6 +348,34 @@ describe("local-storage save repository", () => {
 });
 
 describe("IndexedDB runtime failover", () => {
+  it("does not hide an unreadable primary copy behind a valid fallback", async () => {
+    const other = makeRecord({ slotId: "other", label: "Other valid slot" });
+    const fallbackRecord = makeRecord({ label: "Fallback must not win" });
+    const primary: SaveRepository = {
+      list: vi.fn(async () => [summary(other)]),
+      load: vi.fn(async (slotId) => {
+        if (slotId === "autosave") throw new UnreadableSaveRecordError(slotId);
+        return slotId === other.slotId ? structuredClone(other) : undefined;
+      }),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const fallback: SaveRepository = {
+      list: vi.fn(async () => [summary(fallbackRecord)]),
+      load: vi.fn(async (slotId) => (
+        slotId === fallbackRecord.slotId ? structuredClone(fallbackRecord) : undefined
+      )),
+      save: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    const repository = createFailoverSaveRepository(primary, fallback);
+
+    await expect(repository.load("autosave")).rejects.toBeInstanceOf(
+      UnreadableSaveRecordError,
+    );
+    await expect(repository.load("other")).resolves.toEqual(other);
+  });
+
   it("loads the newest copy across stores using ticks to break timestamp ties", async () => {
     const primaryRecord = makeRecord({ updatedAt: 700, playTicks: 80, label: "Primary copy" });
     const fallbackRecord = makeRecord({ updatedAt: 700, playTicks: 81, label: "Fallback copy" });

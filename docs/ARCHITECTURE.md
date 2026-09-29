@@ -2133,6 +2133,63 @@ The candidate presents these jobs separately from physical Promises. Report cont
 
 ## Save contract
 
+### Compatibility lifecycle
+
+The save contract has two compatibility eras, without weakening persistence in
+either era:
+
+- **Before official stable 1.0:** every current-schema save must round-trip its
+  complete authoritative state, explicit schema and generator versions,
+  deterministic outcomes, interruption state, stable identities, custody,
+  knowledge, and cross-system consequences without loss, duplication, reroll,
+  or silent repair. An obsolete internal development schema may be explicitly
+  retired when a safe migration is not worth its cost. The loader must then
+  reject it as incompatible and direct development toward a clean save; it may
+  not guess at missing fields, partially deserialize it, overwrite it silently,
+  or disguise an unexpected load failure as an intentional reset. The generic
+  migration, validation, and atomic-commit machinery remains available, and a
+  trivial safe migration may still be preferable.
+- **Official stable 1.0 and later:** the exact 1.0 schema and world-generator
+  versions become the first supported player-save baseline. Every later
+  supported schema change must detect, migrate in order, validate, and commit
+  deterministically without corrupting the original record on failure. Once an
+  official stable release at or above 1.0 exists, this strict obligation is
+  latched permanently; a later development, alpha, beta, or release-candidate
+  build cannot return the project to development-reset policy.
+
+Official stable means a valid release version at or above `1.0.0` with no
+prerelease component. `1.0.0-alpha`, `1.0.0-beta`, and `1.0.0-rc` remain in the
+pre-1.0 development era. Release identity is evaluated with semantic-version
+rules from the authoritative release ledger, never lexicographic string
+comparison or directive numbering. Before declaring official 1.0, the project
+must freeze the exact save-schema baseline, generator version, persistence
+invariants, representative fixture saves, and migration-failure tests.
+
+`src/content/patchNotes.ts` supplies the ledger-wide official-stable latch, and
+`src/game/saveCompatibilityPolicy.ts` binds it to the explicit `1.0.0` baseline
+and the first stable outer-schema version. That schema freeze is deliberately
+`null` before 1.0; adding an official stable ledger entry without setting it is
+a fail-fast release error. Because the latch scans the append-only ledger, a
+later prerelease cannot erase an earlier stable commitment.
+
+Product release version, outer save-schema version, embedded subsystem schema
+versions, and world-generator version are distinct authorities. A schema bump
+does not by itself imply a public compatibility promise, and relaxing obsolete
+pre-1.0 compatibility never permits an unversioned current save. Procedural
+worlds continue to store their seed, generator version, and sparse authoritative
+deviations rather than a giant derived world image. After 1.0, generator
+evolution must preserve an existing player's established geography through a
+versioned generator or an explicit safe migration.
+
+The outer `SaveRecord` is also a compatibility preamble, not disposable UI
+metadata. Future writers must leave an older build enough validated structure
+to identify the slot, its monotonic replacement tuple, and `payloadVersion`
+before that build attempts to decode `worldJson`. Extra fields may be added,
+but a wrapper redesign must retain or bridge this backward-readable version
+fence. A repository adapter must surface stored-but-invalid bytes as a read
+failure; it may not filter them into an apparently empty slot that an older
+writer can overwrite.
+
 There are two nested versions:
 
 1. `tideweft-world` contains the save-format version, rules version, checksum, and canonical `WorldState`. The perception slice uses embedded simulation format 4 and `tideweft-sim/6`; checksum-first migrations from supported format-1 through format-3 worlds add deterministic resident identity, condition, knowledge, memory, and an initially unaware actor-perception state at the already-completed tick before current invariants run.
@@ -2303,6 +2360,14 @@ reciprocal settlement-rest digest add no new root or migration. Alpha40–52 are
 internal cumulative milestones first shipped in Alpha53, not standalone
 releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
+
+The current unpublished Directive 04_2 source lineage advances the outer
+session through versions 33–38 and the bounded perception carry through version
+7; the current source writer emits outer version 38. Its authenticated v1–v37
+readers remain implemented and tested where retained, but before official 1.0
+that implementation fact is not a permanent promise to preserve every internal
+development format. Current-v38 roundtrip and all conservation, determinism,
+integrity, and no-overwrite laws remain mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

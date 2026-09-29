@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import patchNotesJson from "./patchNotes.json";
 import {
+  HAS_OFFICIAL_STABLE_RELEASE,
   LATEST_PATCH_NOTE,
   PATCH_NOTE_CATEGORIES,
   PATCH_NOTES_SCHEMA_VERSION,
   TIDEWEFT_PATCH_NOTES,
   comparePatchNoteVersions,
+  isOfficialStableReleaseVersion,
   validatePatchNotesDocument,
 } from "./patchNotes";
 
@@ -35,6 +37,37 @@ describe("canonical offline patch notes", () => {
     const document = copy() as { releases: unknown[] };
     document.releases.reverse();
     expect(() => validatePatchNotesDocument(document)).toThrow(/newest first/u);
+  });
+
+  it("recognizes only official stable versions at or beyond the 1.0 boundary", () => {
+    expect([
+      "1.0.0",
+      "1.0.0+build.7",
+      "1.2.3",
+      "2.0.0",
+    ].every(isOfficialStableReleaseVersion)).toBe(true);
+    expect([
+      "0.99.99",
+      "0.3.3-alpha.60",
+      "1.0.0-alpha.1",
+      "1.0.0-beta.2",
+      "1.0.0-rc.1",
+      "1.0",
+      "v1.0.0",
+      "01.0.0",
+      "not-a-version",
+      null,
+      1,
+    ].some(isOfficialStableReleaseVersion)).toBe(false);
+  });
+
+  it("latches strict compatibility from any historical stable release", () => {
+    expect(HAS_OFFICIAL_STABLE_RELEASE).toBe(false);
+    expect([
+      "1.1.0-alpha.1",
+      "1.0.0",
+      "0.3.3-alpha.60",
+    ].some(isOfficialStableReleaseVersion)).toBe(true);
   });
 
   it("rejects duplicate versions, builds, missing categories, and malformed contracts", () => {

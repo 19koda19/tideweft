@@ -10,6 +10,7 @@ const packageRelativePath = "package.json";
 const htmlMetadataRelativePath = "index.html";
 const electronMainRelativePath = "electron/main.cjs";
 const runtimeRelativePath = "src/game/runtime.ts";
+const savePolicyRelativePath = "src/game/saveCompatibilityPolicy.ts";
 const tutorialSourceRelativePath = "src/ui/tutorialGuide.ts";
 const patchNoteSourceRelativePath = "src/content/patchNotes.json";
 const generatedPatchNotesRelativePath = "CHANGELOG.md";
@@ -419,27 +420,35 @@ function validateElectronSmokeMetadata(source, manifest, packageDocument) {
   return errors;
 }
 
-function validateElectronSmokeSaveVersion(electronSource, runtimeSource) {
-  if (typeof electronSource !== "string" || typeof runtimeSource !== "string") {
-    return ["Packaged-smoke and runtime save-version sources must both be readable."];
+function validateElectronSmokeSaveVersion(electronSource, runtimeSource, savePolicySource) {
+  if (
+    typeof electronSource !== "string"
+    || typeof runtimeSource !== "string"
+    || typeof savePolicySource !== "string"
+  ) {
+    return ["Packaged-smoke and canonical save-version sources must all be readable."];
   }
   const electronMatches = [...electronSource.matchAll(
     /\bconst\s+SMOKE_EXPECTED_SAVE_VERSION\s*=\s*([0-9]+)\s*;/gu,
   )];
-  const runtimeMatches = [...runtimeSource.matchAll(
-    /\bconst\s+GAME_SAVE_VERSION\s*=\s*([0-9]+)\s*;/gu,
+  const policyMatches = [...savePolicySource.matchAll(
+    /\bexport\s+const\s+CURRENT_GAME_SAVE_VERSION\s*=\s*([0-9]+)\s+as\s+const\s*;/gu,
+  )];
+  const runtimeAliases = [...runtimeSource.matchAll(
+    /\bconst\s+GAME_SAVE_VERSION\s*=\s*CURRENT_GAME_SAVE_VERSION\s*;/gu,
   )];
   const electronVersion = Number(electronMatches[0]?.[1]);
-  const runtimeVersion = Number(runtimeMatches[0]?.[1]);
+  const policyVersion = Number(policyMatches[0]?.[1]);
   if (
     electronMatches.length !== 1
-    || runtimeMatches.length !== 1
+    || policyMatches.length !== 1
+    || runtimeAliases.length !== 1
     || !Number.isSafeInteger(electronVersion)
-    || !Number.isSafeInteger(runtimeVersion)
-    || electronVersion !== runtimeVersion
+    || !Number.isSafeInteger(policyVersion)
+    || electronVersion !== policyVersion
   ) {
     return [
-      `${electronMainRelativePath} packaged-smoke save version must match ${runtimeRelativePath}.`,
+      `${electronMainRelativePath} packaged-smoke save version and ${runtimeRelativePath} writer alias must match ${savePolicyRelativePath}.`,
     ];
   }
   return [];
@@ -493,6 +502,7 @@ function validateLocalContent(root = projectRoot) {
   let htmlSource;
   let electronMainSource;
   let runtimeSource;
+  let savePolicySource;
   const readErrors = [];
   try {
     tutorialSource = fs.readFileSync(path.join(root, manifest.tutorialSourcePath), "utf8");
@@ -524,6 +534,11 @@ function validateLocalContent(root = projectRoot) {
   } catch (error) {
     readErrors.push(`${runtimeRelativePath} is missing or unreadable: ${error.message}`);
   }
+  try {
+    savePolicySource = fs.readFileSync(path.join(root, savePolicyRelativePath), "utf8");
+  } catch (error) {
+    readErrors.push(`${savePolicyRelativePath} is missing or unreadable: ${error.message}`);
+  }
   if (readErrors.length > 0) return { errors: readErrors, manifest, tutorialVersion: null };
   const result = validateContentDocuments({ manifest, tutorialSource, patchNotes, packageDocument });
   return {
@@ -532,7 +547,7 @@ function validateLocalContent(root = projectRoot) {
       ...result.errors,
       ...validateBuildMetadata(htmlSource, manifest, packageDocument),
       ...validateElectronSmokeMetadata(electronMainSource, manifest, packageDocument),
-      ...validateElectronSmokeSaveVersion(electronMainSource, runtimeSource),
+      ...validateElectronSmokeSaveVersion(electronMainSource, runtimeSource, savePolicySource),
     ],
     manifest,
     patchNotes,

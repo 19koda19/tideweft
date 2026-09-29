@@ -46,6 +46,17 @@ export class StaleSaveWriteError extends Error {
   }
 }
 
+/** Stored bytes exist for a save slot, but they are not a valid SaveRecord. */
+export class UnreadableSaveRecordError extends Error {
+  readonly slotId: string;
+
+  constructor(slotId: string) {
+    super(`Stored save data for slot ${slotId} is unreadable and was left unchanged.`);
+    this.name = "UnreadableSaveRecordError";
+    this.slotId = slotId;
+  }
+}
+
 export interface SaveVersionMetadata {
   readonly slotId: string;
   readonly saveGenerationEra?: number;
@@ -199,7 +210,9 @@ class IndexedDbSaveRepository implements SaveRepository {
       transaction.objectStore(SAVE_STORE).get(slotId) as IDBRequest<SaveRecord | undefined>,
     );
     await transactionComplete(transaction);
-    return record && isValidSaveRecord(record) ? structuredClone(record) : undefined;
+    if (record === undefined) return undefined;
+    if (!isValidSaveRecord(record)) throw new UnreadableSaveRecordError(slotId);
+    return structuredClone(record);
   }
 
   async save(record: SaveRecord): Promise<void> {
@@ -210,9 +223,12 @@ class IndexedDbSaveRepository implements SaveRepository {
     const existing = await requestResult(
       store.get(record.slotId) as IDBRequest<SaveRecord | undefined>,
     );
+    if (existing !== undefined && !isValidSaveRecord(existing)) {
+      await transactionComplete(transaction);
+      throw new UnreadableSaveRecordError(record.slotId);
+    }
     const superseded = Boolean(
       existing
-      && isValidSaveRecord(existing)
       && saveWriteConflicts(existing, record),
     );
     if (!superseded) {
@@ -233,15 +249,32 @@ class IndexedDbSaveRepository implements SaveRepository {
 class LocalStorageSaveRepository implements SaveRepository {
   constructor(private readonly storage: Storage) {}
 
-  private read(): SaveRecord[] {
+  private parse(): unknown[] {
     const raw = this.storage.getItem(FALLBACK_KEY);
     if (!raw) return [];
     try {
       const records = JSON.parse(raw) as unknown;
-      return Array.isArray(records) ? records.filter(isValidSaveRecord) : [];
+      if (!Array.isArray(records)) throw new Error("Save store is not an array");
+      return records;
+    } catch {
+      throw new UnreadableSaveRecordError("local-storage");
+    }
+  }
+
+  private readForList(): SaveRecord[] {
+    try {
+      return this.parse().filter(isValidSaveRecord);
     } catch {
       return [];
     }
+  }
+
+  private readForMutation(): SaveRecord[] {
+    const records = this.parse();
+    if (!records.every(isValidSaveRecord)) {
+      throw new UnreadableSaveRecordError("local-storage");
+    }
+    return records;
   }
 
   private write(records: SaveRecord[]): void {
@@ -249,18 +282,28 @@ class LocalStorageSaveRepository implements SaveRepository {
   }
 
   async list(): Promise<SaveSummary[]> {
-    return this.read()
+    return this.readForList()
       .sort((left, right) => right.updatedAt - left.updatedAt || left.slotId.localeCompare(right.slotId))
       .map(summarize);
   }
 
   async load(slotId: string): Promise<SaveRecord | undefined> {
-    return this.read().find((record) => record.slotId === slotId);
+    const candidates = this.parse().filter((record) => (
+      typeof record === "object"
+      && record !== null
+      && "slotId" in record
+      && record.slotId === slotId
+    ));
+    if (candidates.length === 0) return undefined;
+    if (candidates.length !== 1 || !isValidSaveRecord(candidates[0])) {
+      throw new UnreadableSaveRecordError(slotId);
+    }
+    return structuredClone(candidates[0]);
   }
 
   async save(record: SaveRecord): Promise<void> {
     validateRecord(record);
-    const stored = this.read();
+    const stored = this.readForMutation();
     const existing = stored.find((candidate) => candidate.slotId === record.slotId);
     if (existing && saveWriteConflicts(existing, record)) {
       throw new StaleSaveWriteError(record.slotId);
@@ -272,7 +315,7 @@ class LocalStorageSaveRepository implements SaveRepository {
   }
 
   async remove(slotId: string): Promise<void> {
-    this.write(this.read().filter((record) => record.slotId !== slotId));
+    this.write(this.readForMutation().filter((record) => record.slotId !== slotId));
   }
 }
 
@@ -516,7 +559,7 @@ class FailoverSaveRepository implements SaveRepository {
     try {
       primary = await this.primary.load(slotId);
     } catch (error) {
-      this.primaryFailed = true;
+      if (!(error instanceof UnreadableSaveRecordError)) this.primaryFailed = true;
       throw error;
     }
 
@@ -558,7 +601,8 @@ class FailoverSaveRepository implements SaveRepository {
     let fallbackRecord: SaveRecord | undefined;
     try {
       fallbackRecord = await this.fallback.load(snapshot.slotId);
-    } catch {
+    } catch (error) {
+      if (error instanceof UnreadableSaveRecordError) throw error;
       // A working primary is still useful when localStorage is unavailable or
       // over quota. A primary failure below will surface the fallback error.
     }
@@ -569,7 +613,9 @@ class FailoverSaveRepository implements SaveRepository {
     try {
       await this.primary.save(structuredClone(snapshot));
     } catch (error) {
-      if (error instanceof StaleSaveWriteError) throw error;
+      if (error instanceof StaleSaveWriteError || error instanceof UnreadableSaveRecordError) {
+        throw error;
+      }
       this.primaryFailed = true;
       await this.fallback.save(structuredClone(snapshot));
       await this.persistFenceBestEffort(snapshot);
@@ -584,7 +630,9 @@ class FailoverSaveRepository implements SaveRepository {
     try {
       await this.fallback.save(structuredClone(snapshot));
     } catch (error) {
-      if (error instanceof StaleSaveWriteError) throw error;
+      if (error instanceof StaleSaveWriteError || error instanceof UnreadableSaveRecordError) {
+        throw error;
+      }
       const currentFallback = await this.fallback.load(snapshot.slotId).catch(() => undefined);
       if (currentFallback && saveWriteConflicts(currentFallback, snapshot)) {
         throw new StaleSaveWriteError(snapshot.slotId);

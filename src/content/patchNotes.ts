@@ -81,6 +81,17 @@ function semverParts(version: string): SemverParts {
   };
 }
 
+/**
+ * Returns true only for an official stable release at or beyond the 1.0
+ * compatibility boundary. Pre-release 1.0 builds remain development builds;
+ * build metadata does not change release precedence or stability.
+ */
+export function isOfficialStableReleaseVersion(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match = SEMVER_PATTERN.exec(value);
+  return match !== null && Number(match[1]) >= 1 && match[4] === undefined;
+}
+
 /** Positive means `left` has newer SemVer precedence than `right`. */
 export function comparePatchNoteVersions(left: string, right: string): number {
   const a = semverParts(left);
@@ -206,3 +217,11 @@ export function validatePatchNotesDocument(value: unknown): PatchNotesDocument {
 
 export const TIDEWEFT_PATCH_NOTES = validatePatchNotesDocument(patchNotesJson);
 export const LATEST_PATCH_NOTE = TIDEWEFT_PATCH_NOTES.releases[0]!;
+/**
+ * This is deliberately ledger-wide rather than latest-release-only. Once an
+ * official stable release exists, a later preview build cannot return save
+ * compatibility to the pre-1.0 development era.
+ */
+export const HAS_OFFICIAL_STABLE_RELEASE = TIDEWEFT_PATCH_NOTES.releases.some(
+  ({ version }) => isOfficialStableReleaseVersion(version),
+);

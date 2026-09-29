@@ -46,6 +46,7 @@ import {
   type PlayerState,
 } from "./player";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   captureSessionBaseline,
   createSessionState,
@@ -1950,6 +1951,166 @@ describe("perpetual new worlds", () => {
     resumed.destroy();
   }, 30_000);
 
+  it("loads and rewrites the current schema without a compatibility warning", async () => {
+    const repository = new MemoryRepository();
+    const created = await createTideweftRuntime(repository);
+    created.dispatchUI({
+      type: "new-world",
+      seed: "current schema roundtrip",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await created.save();
+    created.destroy();
+
+    expect(repository.snapshot().payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().title.visible).toBe(false);
+    expect(resumed.getUIView().worldName).toContain("Current Schema Roundtrip");
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    expect(repository.snapshot().payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    resumed.destroy();
+  });
+
+  it("explicitly replaces an unsupported pre-1.0 development schema in a newer generation", async () => {
+    const oldWorld = createWorld("unsupported development save", "calm");
+    const incompatible = runtimeSaveRecord(
+      oldWorld,
+      createPlayer(createWorldView(oldWorld)),
+      createSessionState(oldWorld.meta.seedText, "hearth"),
+      "Unsupported development save",
+    );
+    const incompatibleEnvelope = decodeGameSave(incompatible);
+    incompatibleEnvelope.version = 0;
+    incompatible.payloadVersion = 0;
+    incompatible.saveGeneration = 6;
+    incompatible.worldJson = JSON.stringify(incompatibleEnvelope);
+    const repository = new VersionedMemoryRepository(incompatible);
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().title.requiresSeed).toBe(true);
+    expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "PRE-1.0 SAVE INCOMPATIBLE",
+      detail: expect.stringContaining("No legacy fields were guessed or partially loaded"),
+    });
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "development schema 0 is intentionally unsupported",
+    );
+    await expect(runtime.save()).rejects.toThrow(
+      "non-empty seed before replacing the incompatible pre-1.0 development save",
+    );
+    expect(repository.snapshot()).toEqual(incompatible);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "   ",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "incompatible pre-1.0 development save is unchanged",
+    );
+    expect(repository.snapshot()).toEqual(incompatible);
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "fresh development schema",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await runtime.save();
+    const replacement = repository.snapshot();
+    expect(replacement).toMatchObject({
+      payloadVersion: CURRENT_GAME_SAVE_VERSION,
+      saveGeneration: 7,
+    });
+    expect(decodeGameSave(replacement).version).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(
+      deserializeWorld(decodeGameSave(replacement).world).meta.seedText,
+    ).toBe("fresh development schema");
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "new current-schema estuary is durable",
+    );
+    runtime.destroy();
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().worldName).toContain("Fresh Development Schema");
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    resumed.destroy();
+  });
+
+  it.each([
+    [
+      "outer future fence before parsing",
+      (record: SaveRecord) => {
+        record.payloadVersion = CURRENT_GAME_SAVE_VERSION + 1;
+        record.worldJson = "{not-json-and-must-not-be-parsed";
+      },
+    ],
+    [
+      "embedded future schema without an outer fence",
+      (record: SaveRecord) => {
+        delete record.payloadVersion;
+        record.worldJson = JSON.stringify({
+          format: "tideweft-session",
+          version: CURRENT_GAME_SAVE_VERSION + 1,
+        });
+      },
+    ],
+  ])("blocks a %s and never overwrites it", async (_case, makeFuture) => {
+    vi.stubGlobal("indexedDB", undefined);
+    vi.stubGlobal("localStorage", new RuntimeTestStorage());
+    const futureWorld = createWorld("future save remains authoritative", "calm");
+    const future = runtimeSaveRecord(
+      futureWorld,
+      createPlayer(createWorldView(futureWorld)),
+      createSessionState(futureWorld.meta.seedText, "hearth"),
+      "Future save remains authoritative",
+    );
+    future.saveGeneration = 9;
+    makeFuture(future);
+    const repository = createSaveRepository();
+    await repository.save(future);
+    const save = vi.spyOn(repository, "save");
+    const remove = vi.spyOn(repository, "remove");
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().title.requiresSeed).toBeUndefined();
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "SAVE REQUIRES NEWER TIDEWEFT",
+      detail: expect.stringContaining("Schema 39 belongs to a newer Tideweft build"),
+    });
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "Nothing was opened or overwritten",
+    );
+
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must never replace future schema",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain(
+      "schema 39 remains untouched",
+    );
+    await expect(runtime.save()).rejects.toThrow(
+      "requires a newer Tideweft build; it will not be overwritten",
+    );
+    expect(save).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    runtime.destroy();
+
+    await expect(createSaveRepository().load("autosave")).resolves.toEqual(future);
+  });
+
   it("replaces a malformed saturated autosave with a durable newer generation", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1_200);
     const corruptWorld = createWorld("corrupt saturated autosave", "calm");
@@ -2478,6 +2639,36 @@ describe("perpetual new worlds", () => {
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     expect(repository.save).not.toHaveBeenCalled();
     resumed.destroy();
+  });
+
+  it("surfaces malformed production storage instead of treating it as an empty slot", async () => {
+    const storage = new RuntimeTestStorage();
+    const malformedBytes = "{not-a-save-array";
+    storage.setItem("tideweft.saves.v1", malformedBytes);
+    vi.stubGlobal("indexedDB", undefined);
+    vi.stubGlobal("localStorage", storage);
+    const repository = createSaveRepository();
+    const save = vi.spyOn(repository, "save");
+    const remove = vi.spyOn(repository, "remove");
+
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.visible).toBe(true);
+    expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
+    expect(runtime.getUIView().saveWarning).toMatchObject({
+      message: "LOCAL SAVE UNAVAILABLE",
+      detail: expect.stringContaining("could not prove that local storage is empty"),
+    });
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "must not erase malformed stored bytes",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await expect(runtime.save()).rejects.toThrow("could not be read");
+    expect(save).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(storage.getItem("tideweft.saves.v1")).toBe(malformedBytes);
+    runtime.destroy();
   });
 
   it("truthfully replaces equal-version conflicting copies in a newer generation", async () => {

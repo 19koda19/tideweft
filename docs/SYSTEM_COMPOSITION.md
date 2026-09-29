@@ -480,9 +480,15 @@ Reject:
 - full-world scans where an index or event suffices;
 - save logs that append every routine use forever.
 
-Every completed bridge must survive save/reload and migration. A sold item stays
-sold, processed body stays processed, stock stays moved, route stays repaired,
-population pressure stays changed, and a receipt cannot pay twice.
+Every completed bridge must survive current-schema save/reload. A sold item
+stays sold, processed body stays processed, stock stays moved, route stays
+repaired, population pressure stays changed, and a receipt cannot pay twice.
+That conservation requirement is independent of compatibility era. Before
+official stable 1.0, an obsolete internal development format may instead be
+explicitly rejected and reset fail-closed; it must never receive a best-effort
+partial load. From the official 1.0 baseline onward, the same consequences must
+also survive every supported deterministic forward migration, and later
+prerelease work cannot retire that baseline.
 
 ## Feature-closure composition record
 

@@ -90,6 +90,11 @@ import {
   type RuntimePerformanceSnapshot,
 } from "../performance/runtimePerformanceTelemetry";
 import { acceptsRestartPhrase } from "./restartPolicy";
+import {
+  classifyUnsupportedSaveSchema,
+  CURRENT_GAME_SAVE_VERSION,
+  SAVE_COMPATIBILITY_POLICY,
+} from "./saveCompatibilityPolicy";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { deriveWaterFlowProfile } from "./waterFlow";
 import {
@@ -988,7 +993,7 @@ const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
 /** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
-const GAME_SAVE_VERSION = 38;
+const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
 /** First save with a weather-backed guardian shelter whine. */
 const GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION = 37;
 /** First save with a threat-backed guardian defensive growl. */
@@ -1043,6 +1048,53 @@ const TERRAIN_PREFETCH_TILE_BUDGET = 1_024;
 const TERRAIN_PREFETCH_MAX_JOBS = 9;
 const FIELD_RESOURCE_GAME_SAVE_VERSION = 2;
 const LEGACY_GAME_SAVE_VERSION = 1;
+/**
+ * Development schemas are resettable only after an explicit retirement
+ * decision. Schema zero represents the pre-versioned internal fixture; an
+ * arbitrary unknown number must remain corrupt rather than becoming a reset
+ * authorization by accident.
+ */
+const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([0]);
+const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
+  LEGACY_GAME_SAVE_VERSION,
+  FIELD_RESOURCE_GAME_SAVE_VERSION,
+  PHYSICAL_CARGO_GAME_SAVE_VERSION,
+  REGIONAL_GAME_SAVE_VERSION,
+  PLAYER_PERCEPTION_GAME_SAVE_VERSION,
+  BIO0_GAME_SAVE_VERSION,
+  LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION,
+  CORE_ECOLOGY_GAME_SAVE_VERSION,
+  WAVE_A_GAME_SAVE_VERSION,
+  HARBOR_EDGE_GAME_SAVE_VERSION,
+  MARSH_EDGE_GAME_SAVE_VERSION,
+  RAIN_CHORUS_GAME_SAVE_VERSION,
+  TIDAL_TABLE_GAME_SAVE_VERSION,
+  WATERFOWL_GAME_SAVE_VERSION,
+  TIDAL_CONVERGENCE_GAME_SAVE_VERSION,
+  STOREHOUSE_GAME_SAVE_VERSION,
+  DOMESTIC_YARD_GAME_SAVE_VERSION,
+  DOMESTIC_PEN_GAME_SAVE_VERSION,
+  PADDOCK_WATCH_GAME_SAVE_VERSION,
+  WATCH_RETURNS_GAME_SAVE_VERSION,
+  DOMESTIC_GOAT_GAME_SAVE_VERSION,
+  MORTALITY_BODY_GAME_SAVE_VERSION,
+  REGIONAL_UPLAND_GAME_SAVE_VERSION,
+  REGIONAL_PREDATOR_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V2_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION,
+  REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION,
+  TURNING_DAY_GAME_SAVE_VERSION,
+  PLAYER_RECOVERY_GAME_SAVE_VERSION,
+  PLAYER_EXPRESSION_GAME_SAVE_VERSION,
+  WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
+  GAME_SAVE_VERSION,
+]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
   Number.MAX_SAFE_INTEGER / (2 * PACK_LOAD_MILLI_PER_UNIT),
@@ -10229,10 +10281,14 @@ export async function createTideweftRuntime(
   let saveFailureVisible = false;
   let saveRecoveryBlocked = false;
   let newerSaveUnavailable = false;
+  let blockedIncompatibleSave: Readonly<{
+    reason: BlockedIncompatibleSaveReason;
+    schemaVersion: number;
+  }> | null = null;
   let staleSaveDetected = false;
   let saveReadFailed = false;
   let runtimeIntegrityFailure: string | null = null;
-  let recoverableSaveIssue: "corrupt" | "conflict" | null = null;
+  let recoverableSaveIssue: "corrupt" | "conflict" | "incompatible-pre-1.0" | null = null;
   let replacementSeedRequired = false;
   let destroyed = false;
   const saveWaiters: Array<{
@@ -10261,6 +10317,24 @@ export async function createTideweftRuntime(
     announce(
       session,
       "LOCAL SAVE TEMPORARILY UNAVAILABLE — a newer copy exists, so Tideweft will not open or overwrite an older fallback. Reload when local storage is available again.",
+      true,
+    );
+  }
+  if (loaded?.kind === "incompatible-newer") {
+    saveGenerationEra = loaded.version.saveGenerationEra;
+    saveGeneration = loaded.version.saveGeneration;
+    lastIssuedSaveTimestamp = loaded.version.updatedAt;
+    saveRecoveryBlocked = true;
+    blockedIncompatibleSave = Object.freeze({
+      reason: loaded.reason,
+      schemaVersion: loaded.schemaVersion,
+    });
+    saveFailureVisible = true;
+    announce(
+      session,
+      loaded.reason === "future-schema"
+        ? `SAVE REQUIRES NEWER TIDEWEFT — schema ${loaded.schemaVersion} is newer than this build. Nothing was opened or overwritten; update Tideweft to continue.`
+        : `SAVE MIGRATION REQUIRED — supported schema ${loaded.schemaVersion} has no registered path in this build. Nothing was opened or overwritten.`,
       true,
     );
   }
@@ -10314,6 +10388,33 @@ export async function createTideweftRuntime(
       announce(
         session,
         "LOCAL SAVE CANNOT BE REPLACED — its safe replacement counter is exhausted. Clear Tideweft's stored site data, reload, and begin the seed again.",
+        true,
+      );
+    }
+  }
+  if (loaded?.kind === "incompatible-pre-1.0") {
+    const recovery = nextSaveGeneration(loaded.version);
+    if (recovery) {
+      saveGenerationEra = recovery.saveGenerationEra;
+      saveGeneration = recovery.saveGeneration;
+      lastIssuedSaveTimestamp = -1;
+      saveFailureVisible = true;
+      recoverableSaveIssue = "incompatible-pre-1.0";
+      replacementSeedRequired = true;
+      announce(
+        session,
+        `PRE-1.0 SAVE INCOMPATIBLE — development schema ${loaded.schemaVersion} is intentionally unsupported. Start a non-empty seed to replace it with the current schema.`,
+        true,
+      );
+    } else {
+      saveGenerationEra = Number.MAX_SAFE_INTEGER;
+      saveGeneration = Number.MAX_SAFE_INTEGER;
+      lastIssuedSaveTimestamp = loaded.version.updatedAt;
+      saveRecoveryBlocked = true;
+      saveFailureVisible = true;
+      announce(
+        session,
+        "PRE-1.0 SAVE CANNOT BE REPLACED — its safe replacement counter is exhausted. Clear Tideweft's stored site data, reload, and begin the seed again.",
         true,
       );
     }
@@ -10814,29 +10915,9 @@ export async function createTideweftRuntime(
           : saveFailureVisible
             ? {
                 saveWarning: {
-                  id: `local-save-${recoverableSaveIssue ?? (saveReadFailed ? "read-unavailable" : staleSaveDetected ? "superseded" : newerSaveUnavailable ? "unavailable" : saveRecoveryBlocked ? "blocked" : "failed")}-era-${saveGenerationEra}-generation-${saveGeneration}`,
-                  message: recoverableSaveIssue === "corrupt"
-                    ? "LOCAL AUTOSAVE UNREADABLE"
-                    : recoverableSaveIssue === "conflict"
-                      ? "LOCAL AUTOSAVES CONFLICT"
-                      : saveReadFailed
-                        ? "LOCAL SAVE UNAVAILABLE"
-                        : staleSaveDetected
-                          ? "LOCAL SAVE SUPERSEDED"
-                          : "LOCAL SAVE NOT STORED",
-                  detail: recoverableSaveIssue === "corrupt"
-                    ? "No damaged data was loaded. Enter a seed to replace that copy safely; this warning remains until the replacement is stored."
-                    : recoverableSaveIssue === "conflict"
-                      ? "Neither equal-version copy was chosen. Enter a seed to replace both safely; this warning remains until the replacement is stored."
-                      : saveReadFailed
-                        ? "Tideweft could not prove that local storage is empty. Nothing will be opened, started, or overwritten in this window. Reload to retry local storage."
-                        : staleSaveDetected
-                          ? "Another tab or copy stored a different or newer durable version. This window will not retry or overwrite it. Reload to resolve the copies and continue."
-                          : newerSaveUnavailable
-                            ? "A newer local copy exists but its storage backend is unavailable. Reload; Tideweft will not overwrite it with an older fallback."
-                            : saveRecoveryBlocked
-                              ? "This browser save exhausted its replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again."
-                              : "This estuary currently exists only in this open window. Keep it open while Tideweft retries local storage automatically.",
+                  id: localSaveWarningId(),
+                  message: localSaveWarningMessage(),
+                  detail: localSaveWarningDetail(),
                   tone: "danger" as const,
                 },
               }
@@ -14728,7 +14809,9 @@ export async function createTideweftRuntime(
         if (replacementSeedRequired && command.seed.trim().length === 0) {
           announce(
             session,
-            "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase before replacing it.",
+            recoverableSaveIssue === "incompatible-pre-1.0"
+              ? "The incompatible pre-1.0 development save is unchanged. Enter a non-empty seed phrase before replacing it."
+              : "The unreadable or conflicting autosave is unchanged. Enter a non-empty seed phrase before replacing it.",
             true,
           );
           break;
@@ -14912,7 +14995,75 @@ export async function createTideweftRuntime(
     );
   }
 
+  function localSaveWarningId(): string {
+    const state = recoverableSaveIssue
+      ?? (blockedIncompatibleSave === null
+        ? saveReadFailed
+          ? "read-unavailable"
+          : staleSaveDetected
+            ? "superseded"
+            : newerSaveUnavailable
+              ? "unavailable"
+              : saveRecoveryBlocked ? "blocked" : "failed"
+        : `${blockedIncompatibleSave.reason}-schema-${blockedIncompatibleSave.schemaVersion}`);
+    return `local-save-${state}-era-${saveGenerationEra}-generation-${saveGeneration}`;
+  }
+
+  function localSaveWarningMessage(): string {
+    if (recoverableSaveIssue === "incompatible-pre-1.0") {
+      return "PRE-1.0 SAVE INCOMPATIBLE";
+    }
+    if (recoverableSaveIssue === "corrupt") return "LOCAL AUTOSAVE UNREADABLE";
+    if (recoverableSaveIssue === "conflict") return "LOCAL AUTOSAVES CONFLICT";
+    if (blockedIncompatibleSave?.reason === "future-schema") {
+      return "SAVE REQUIRES NEWER TIDEWEFT";
+    }
+    if (blockedIncompatibleSave?.reason === "missing-migration") {
+      return "SAVE MIGRATION REQUIRED";
+    }
+    if (saveReadFailed) return "LOCAL SAVE UNAVAILABLE";
+    if (staleSaveDetected) return "LOCAL SAVE SUPERSEDED";
+    return "LOCAL SAVE NOT STORED";
+  }
+
+  function localSaveWarningDetail(): string {
+    if (recoverableSaveIssue === "incompatible-pre-1.0") {
+      return "No legacy fields were guessed or partially loaded. Enter a non-empty seed to replace this development save; the warning remains until the current-schema replacement is stored.";
+    }
+    if (recoverableSaveIssue === "corrupt") {
+      return "No damaged data was loaded. Enter a seed to replace that copy safely; this warning remains until the replacement is stored.";
+    }
+    if (recoverableSaveIssue === "conflict") {
+      return "Neither equal-version copy was chosen. Enter a seed to replace both safely; this warning remains until the replacement is stored.";
+    }
+    if (blockedIncompatibleSave?.reason === "future-schema") {
+      return `Schema ${blockedIncompatibleSave.schemaVersion} belongs to a newer Tideweft build. Update Tideweft; this window will not open, reset, or overwrite that save.`;
+    }
+    if (blockedIncompatibleSave?.reason === "missing-migration") {
+      return `Schema ${blockedIncompatibleSave.schemaVersion} is at or beyond the official 1.0 save baseline, but this build has no migration path. The save remains untouched.`;
+    }
+    if (saveReadFailed) {
+      return "Tideweft could not prove that local storage is empty. Nothing will be opened, started, or overwritten in this window. Reload to retry local storage.";
+    }
+    if (staleSaveDetected) {
+      return "Another tab or copy stored a different or newer durable version. This window will not retry or overwrite it. Reload to resolve the copies and continue.";
+    }
+    if (newerSaveUnavailable) {
+      return "A newer local copy exists but its storage backend is unavailable. Reload; Tideweft will not overwrite it with an older fallback.";
+    }
+    if (saveRecoveryBlocked) {
+      return "This browser save exhausted its replacement counter. Clear Tideweft's stored site data, reload, and begin the seed again.";
+    }
+    return "This estuary currently exists only in this open window. Keep it open while Tideweft retries local storage automatically.";
+  }
+
   function blockedWorldCreationMessage(action: "resume" | "start"): string {
+    if (blockedIncompatibleSave?.reason === "future-schema") {
+      return `SAVE REQUIRES NEWER TIDEWEFT — schema ${blockedIncompatibleSave.schemaVersion} remains untouched. Update Tideweft before trying to continue it.`;
+    }
+    if (blockedIncompatibleSave?.reason === "missing-migration") {
+      return `SAVE MIGRATION REQUIRED — schema ${blockedIncompatibleSave.schemaVersion} remains untouched because this build has no supported migration path.`;
+    }
     if (saveReadFailed) {
       return action === "resume"
         ? "LOCAL SAVE UNAVAILABLE — reload to retry local storage. This window will not open or overwrite an unknown save."
@@ -16748,7 +16899,9 @@ export async function createTideweftRuntime(
     announce(
       session,
       resolvedRecoverableIssue
-        ? "LOCAL SAVE REPLACED — the new estuary is durable and the unreadable or conflicting copy can no longer return."
+        ? resolvedRecoverableIssue === "incompatible-pre-1.0"
+          ? "LOCAL SAVE REPLACED — the new current-schema estuary is durable and the incompatible pre-1.0 development save can no longer return."
+          : "LOCAL SAVE REPLACED — the new estuary is durable and the unreadable or conflicting copy can no longer return."
         : "LOCAL SAVE RESTORED — the current estuary is durable on this device again.",
       true,
     );
@@ -16760,15 +16913,30 @@ export async function createTideweftRuntime(
       throw new Error("Local save storage could not be read; reload before starting or saving.");
     }
     if (replacementSeedRequired) {
-      throw new Error("Choose a seed before replacing the unreadable or conflicting local autosave.");
+      throw new Error(
+        recoverableSaveIssue === "incompatible-pre-1.0"
+          ? "Choose a non-empty seed before replacing the incompatible pre-1.0 development save."
+          : "Choose a seed before replacing the unreadable or conflicting local autosave.",
+      );
     }
     if (saveRecoveryBlocked) {
       noteSaveFailure(false);
-      throw new Error(staleSaveDetected
-        ? "This runtime was superseded by a newer local save; reload before continuing."
-        : newerSaveUnavailable
-          ? "A newer local save is temporarily unavailable."
-          : "The local save replacement counter is exhausted.");
+      if (staleSaveDetected) {
+        throw new Error("This runtime was superseded by a newer local save; reload before continuing.");
+      }
+      if (blockedIncompatibleSave?.reason === "future-schema") {
+        throw new Error(
+          `Save schema ${blockedIncompatibleSave.schemaVersion} requires a newer Tideweft build; it will not be overwritten.`,
+        );
+      }
+      if (blockedIncompatibleSave?.reason === "missing-migration") {
+        throw new Error(
+          `Save schema ${blockedIncompatibleSave.schemaVersion} requires a supported migration path; it will not be overwritten.`,
+        );
+      }
+      throw new Error(newerSaveUnavailable
+        ? "A newer local save is temporarily unavailable."
+        : "The local save replacement counter is exhausted.");
     }
     const startedAtMs = performanceTelemetryEnabled ? runtimePerformanceNow() : null;
     return captureAndQueueSave(startedAtMs);
@@ -17494,6 +17662,8 @@ interface AutosaveVersion {
   readonly playTicks: number;
 }
 
+type BlockedIncompatibleSaveReason = "future-schema" | "missing-migration";
+
 type LoadedAutosave = {
   readonly kind: "loaded";
   readonly world: WorldState;
@@ -17521,6 +17691,20 @@ type LoadedAutosave = {
   readonly kind: "corrupt";
   readonly version: AutosaveVersion;
 } | {
+  /**
+   * A deliberately unsupported internal format from before the official 1.0
+   * compatibility line. Its bytes were recognized, not partially adopted.
+   */
+  readonly kind: "incompatible-pre-1.0";
+  readonly schemaVersion: number;
+  readonly version: AutosaveVersion;
+} | {
+  /** A newer format, or a supported-era format whose migration is missing. */
+  readonly kind: "incompatible-newer";
+  readonly reason: BlockedIncompatibleSaveReason;
+  readonly schemaVersion: number;
+  readonly version: AutosaveVersion;
+} | {
   readonly kind: "unavailable";
   readonly version: AutosaveVersion;
 } | {
@@ -17529,6 +17713,39 @@ type LoadedAutosave = {
 } | {
   readonly kind: "read-failed";
 };
+
+function isNonNegativeSaveSchemaVersion(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isSupportedGameSaveVersion(value: unknown): value is number {
+  return isNonNegativeSaveSchemaVersion(value) && SUPPORTED_GAME_SAVE_VERSIONS.has(value);
+}
+
+function classifyUnsupportedGameSaveVersion(
+  schemaVersion: number,
+): Readonly<
+  | { readonly kind: "incompatible-pre-1.0" }
+  | {
+      readonly kind: "incompatible-newer";
+      readonly reason: BlockedIncompatibleSaveReason;
+    }
+  | { readonly kind: "corrupt" }
+> {
+  const disposition = classifyUnsupportedSaveSchema({
+    schemaVersion,
+    currentGameSaveVersion: GAME_SAVE_VERSION,
+    retiredPre1GameSaveVersions: RETIRED_PRE_1_0_GAME_SAVE_VERSIONS,
+    policy: SAVE_COMPATIBILITY_POLICY,
+  });
+  if (disposition === "future-schema" || disposition === "missing-migration") {
+    return Object.freeze({ kind: "incompatible-newer", reason: disposition });
+  }
+  if (disposition === "retired-pre-1.0") {
+    return Object.freeze({ kind: "incompatible-pre-1.0" });
+  }
+  return Object.freeze({ kind: "corrupt" });
+}
 
 function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
   return Object.freeze({
@@ -19114,58 +19331,74 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     || !Number.isSafeInteger(version.updatedAt) || version.updatedAt < 0
     || !Number.isSafeInteger(version.playTicks) || version.playTicks < 0
   ) {
-    return undefined;
+    // Without a trustworthy monotonic version tuple the runtime cannot safely
+    // advance or replace any record, regardless of its claimed payload schema.
+    return { kind: "read-failed" };
   }
   try {
+    // The outer format fence is deliberately checked before parsing. A future
+    // build may use an envelope this runtime cannot safely or cheaply decode;
+    // its mere newer schema fence is enough to prohibit overwrite.
+    if (
+      isNonNegativeSaveSchemaVersion(record.payloadVersion)
+      && record.payloadVersion > GAME_SAVE_VERSION
+    ) {
+      return {
+        kind: "incompatible-newer",
+        reason: "future-schema",
+        schemaVersion: record.payloadVersion,
+        version,
+      };
+    }
     if (record.worldJson.length > SAVE_WORLD_JSON_MAX_CHARACTERS) {
       throw new Error("Save envelope exceeds the safe local size limit");
     }
     const decoded = JSON.parse(record.worldJson) as Partial<GameSaveEnvelope>;
+    if (decoded.format !== "tideweft-session") {
+      throw new Error("Save contains an invalid session envelope");
+    }
     if (
-      decoded.format !== "tideweft-session" ||
-      (
-        decoded.version !== LEGACY_GAME_SAVE_VERSION
-        && decoded.version !== FIELD_RESOURCE_GAME_SAVE_VERSION
-        && decoded.version !== PHYSICAL_CARGO_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_GAME_SAVE_VERSION
-        && decoded.version !== PLAYER_PERCEPTION_GAME_SAVE_VERSION
-        && decoded.version !== BIO0_GAME_SAVE_VERSION
-        && decoded.version !== LIVING_ACTOR_CHOICE_GAME_SAVE_VERSION
-        && decoded.version !== CORE_ECOLOGY_GAME_SAVE_VERSION
-        && decoded.version !== WAVE_A_GAME_SAVE_VERSION
-        && decoded.version !== HARBOR_EDGE_GAME_SAVE_VERSION
-        && decoded.version !== MARSH_EDGE_GAME_SAVE_VERSION
-        && decoded.version !== RAIN_CHORUS_GAME_SAVE_VERSION
-        && decoded.version !== TIDAL_TABLE_GAME_SAVE_VERSION
-        && decoded.version !== WATERFOWL_GAME_SAVE_VERSION
-        && decoded.version !== TIDAL_CONVERGENCE_GAME_SAVE_VERSION
-        && decoded.version !== STOREHOUSE_GAME_SAVE_VERSION
-        && decoded.version !== DOMESTIC_YARD_GAME_SAVE_VERSION
-        && decoded.version !== DOMESTIC_PEN_GAME_SAVE_VERSION
-        && decoded.version !== PADDOCK_WATCH_GAME_SAVE_VERSION
-        && decoded.version !== WATCH_RETURNS_GAME_SAVE_VERSION
-        && decoded.version !== DOMESTIC_GOAT_GAME_SAVE_VERSION
-        && decoded.version !== MORTALITY_BODY_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_UPLAND_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_PREDATOR_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V1_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V2_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V3_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
-        && decoded.version !== REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
-        && decoded.version !== TURNING_DAY_GAME_SAVE_VERSION
-        && decoded.version !== PLAYER_RECOVERY_GAME_SAVE_VERSION
-        && decoded.version !== PLAYER_EXPRESSION_GAME_SAVE_VERSION
-        && decoded.version !== WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
-        && decoded.version !== GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
-        && decoded.version !== GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
-        && decoded.version !== GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
-        && decoded.version !== GAME_SAVE_VERSION
-      ) ||
-      typeof decoded.world !== "string" ||
-      !decoded.player ||
-      !decoded.session
+      isNonNegativeSaveSchemaVersion(decoded.version)
+      && decoded.version > GAME_SAVE_VERSION
+    ) {
+      return {
+        kind: "incompatible-newer",
+        reason: "future-schema",
+        schemaVersion: decoded.version,
+        version,
+      };
+    }
+    if (!isSupportedGameSaveVersion(decoded.version)) {
+      if (!isNonNegativeSaveSchemaVersion(decoded.version)) {
+        throw new Error("Save contains an invalid session envelope");
+      }
+      if (
+        record.payloadVersion !== undefined
+        && record.payloadVersion !== decoded.version
+      ) {
+        throw new Error("Save record format fence does not match its embedded envelope");
+      }
+      const classification = classifyUnsupportedGameSaveVersion(decoded.version);
+      if (classification.kind === "corrupt") {
+        throw new Error("Save contains an unrecognized session schema");
+      }
+      return classification.kind === "incompatible-pre-1.0"
+        ? {
+            kind: classification.kind,
+            schemaVersion: decoded.version,
+            version,
+          }
+        : {
+            kind: classification.kind,
+            reason: classification.reason,
+            schemaVersion: decoded.version,
+            version,
+          };
+    }
+    if (
+      typeof decoded.world !== "string"
+      || !decoded.player
+      || !decoded.session
     ) {
       throw new Error("Save contains an invalid session envelope");
     }

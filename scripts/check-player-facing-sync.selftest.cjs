@@ -184,17 +184,32 @@ test("packaged smoke expectations match the current release contract", () => {
 
 test("packaged smoke expects the current authoritative save version", () => {
   const electronSource = "const SMOKE_EXPECTED_SAVE_VERSION = 23;";
-  const runtimeSource = "const GAME_SAVE_VERSION = 23;";
-  assert.deepEqual(validateElectronSmokeSaveVersion(electronSource, runtimeSource), []);
+  const runtimeSource = "const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;";
+  const savePolicySource = "export const CURRENT_GAME_SAVE_VERSION = 23 as const;";
+  assert.deepEqual(
+    validateElectronSmokeSaveVersion(electronSource, runtimeSource, savePolicySource),
+    [],
+  );
   assert.equal(
     validateElectronSmokeSaveVersion(
       electronSource.replace("23", "22"),
       runtimeSource,
+      savePolicySource,
     ).length,
     1,
   );
-  assert.equal(validateElectronSmokeSaveVersion("", runtimeSource).length, 1);
-  assert.equal(validateElectronSmokeSaveVersion(electronSource, "").length, 1);
+  assert.equal(
+    validateElectronSmokeSaveVersion("", runtimeSource, savePolicySource).length,
+    1,
+  );
+  assert.equal(
+    validateElectronSmokeSaveVersion(electronSource, "", savePolicySource).length,
+    1,
+  );
+  assert.equal(
+    validateElectronSmokeSaveVersion(electronSource, runtimeSource, "").length,
+    1,
+  );
 });
 
 test("unsafe or missing gameplay schema fails closed", () => {
