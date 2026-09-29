@@ -85,6 +85,7 @@ import {
 } from "./looseCargoPresentation";
 import {
   actorCalloutViewport,
+  layoutAcousticTextCallouts,
   placeIncidentCallout,
   playerBalancePresentation,
   selectSituatedExpression,
@@ -3050,7 +3051,11 @@ export function createTideweftRenderer(
       }
     };
 
-    const drawPorters = (porters: readonly PorterView[], now: number): void => {
+    const drawPorters = (
+      porters: readonly PorterView[],
+      now: number,
+      sharedAcousticTextActive: boolean,
+    ): void => {
       for (const porter of porters) {
         if (
           latestView?.perception
@@ -3082,25 +3087,33 @@ export function createTideweftRenderer(
         p.rect(-length * 0.9, 0, length * 0.72, breadth * 0.88, radius * 0.12);
         p.pop();
 
+        const legacySpeech = sharedAcousticTextActive ? undefined : porter.speech;
+        // Shared acoustic speech already owns this actor's one collision-aware
+        // label. The old emotion glyph was formerly bundled into that speech;
+        // suppress it while the shared label is active rather than restoring a
+        // second unarbitrated mark over the same source.
+        const standaloneEmotionMark = sharedAcousticTextActive && porter.speech
+          ? undefined
+          : porter.emotionMark;
         const quickLabel = porterQuickLabel(
           porter,
           Boolean((porter.selected || hovered) && !porter.speech),
         );
-        if (quickLabel || porter.speech || porter.emotionMark) {
+        if (quickLabel || legacySpeech || standaloneEmotionMark) {
           const screen = worldLabelScreen(`porter-${porter.id}`, porter.position, now);
           p.push();
           p.resetMatrix();
           p.textAlign(p.CENTER, p.CENTER);
           p.textSize(10.5);
           p.noStroke();
-          if (porter.speech) {
+          if (legacySpeech) {
             const charactersPerLine = Math.max(
               8,
               Math.min(p.width < 440 ? 22 : 30, Math.floor((p.width - 32) / 6.5)),
             );
             const lines = [
               ...(porter.emotionMark ? [porter.emotionMark] : []),
-              ...wrapPorterSpeech(porter.speech, charactersPerLine),
+              ...wrapPorterSpeech(legacySpeech, charactersPerLine),
             ];
             const lineHeight = 13;
             const width = Math.min(
@@ -3126,13 +3139,13 @@ export function createTideweftRenderer(
               p.fill(PALETTE.foam);
               p.text(line, textX, textY);
             }
-          } else if (porter.emotionMark) {
+          } else if (standaloneEmotionMark) {
             const emotionX = clamp(screen.x, 8, Math.max(8, p.width - 8));
             const emotionY = clamp(screen.y - 20, 10, Math.max(10, p.height - 10));
             p.fill(withAlpha(PALETTE.ink, 235));
-            p.text(porter.emotionMark, emotionX + 1, emotionY + 1);
+            p.text(standaloneEmotionMark, emotionX + 1, emotionY + 1);
             p.fill(PALETTE.foam);
-            p.text(porter.emotionMark, emotionX, emotionY);
+            p.text(standaloneEmotionMark, emotionX, emotionY);
           }
           if (quickLabel) {
             const width = Math.min(p.width - 16, p.textWidth(quickLabel) + 12);
@@ -5225,7 +5238,8 @@ export function createTideweftRenderer(
       p.fill(withAlpha(PALETTE.foam, 238));
       p.text(presentation.instruction, x, y + (compact ? 13 : 15));
       if (
-        presentation.soundSyllable
+        view.acousticText === undefined
+        && presentation.soundSyllable
         && Math.floor(now / (reducedMotion ? 900 : 560)) % 3 === 0
       ) {
         p.textStyle(p.BOLD);
@@ -5348,7 +5362,64 @@ export function createTideweftRenderer(
       if (player.recoveryKind === undefined) drawPlayerBalanceMark(presentation, radius);
     };
 
-    const drawSituatedExpressionOrIncident = (view: TideweftView, now: number): void => {
+    const drawAcousticTextOrLegacyCallout = (view: TideweftView, now: number): void => {
+      const viewport = actorCalloutViewport(p.width, p.height);
+      if (view.acousticText !== undefined) {
+        const layout = layoutAcousticTextCallouts(
+          view.acousticText,
+          viewport,
+          (acousticText) => worldToScreen(acousticText.position),
+        );
+        if (layout.placements.length === 0) return;
+        p.push();
+        p.resetMatrix();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textStyle(p.BOLD);
+        p.textSize(viewport.compact ? 10 : 11);
+        p.rectMode(p.CENTER);
+        for (const placed of layout.placements) {
+          const acousticText = placed.candidate.acousticText;
+          p.textStyle(acousticText.acousticKind === "physical" ? p.ITALIC : p.BOLD);
+          usedLabelPositions.add(`acoustic-text-${acousticText.id}`);
+          const presentation = situatedExpressionPresentation(acousticText.tone);
+          const centerX = placed.rect.x + placed.rect.width / 2;
+          const centerY = placed.rect.y + placed.rect.height / 2;
+          const progress = unit(acousticText.progress);
+          const alpha = 246 - Math.trunc(progress * 38);
+          const connectorY = centerY < placed.candidate.anchor.y
+            ? placed.rect.y + placed.rect.height
+            : placed.rect.y;
+          p.stroke(withAlpha(presentation.fill, alpha * 0.82));
+          p.strokeWeight(1);
+          p.line(
+            centerX,
+            connectorY,
+            placed.candidate.anchor.x,
+            placed.candidate.anchor.y,
+          );
+          p.fill(withAlpha(PALETTE.ink, alpha));
+          p.stroke(withAlpha(presentation.fill, alpha));
+          p.strokeWeight(1.2);
+          p.rect(
+            centerX,
+            centerY,
+            placed.rect.width,
+            placed.rect.height,
+            5,
+          );
+          p.noStroke();
+          p.fill(withAlpha(presentation.outline, alpha));
+          p.text(
+            acousticText.text,
+            centerX,
+            centerY - 0.5,
+            placed.rect.width - 12,
+            placed.rect.height - 4,
+          );
+        }
+        p.pop();
+        return;
+      }
       const expression = view.expressions === undefined
         ? undefined
         : selectSituatedExpression(view.expressions);
@@ -5368,7 +5439,6 @@ export function createTideweftRenderer(
         : `incident-${incident!.id}`;
       const anchor = expression?.position ?? view.player.position;
       const courier = worldLabelScreen(calloutId, anchor, now);
-      const viewport = actorCalloutViewport(p.width, p.height);
       const label = expression
         ? situatedExpressionCalloutText(expression)
         : incident!.label;
@@ -5881,7 +5951,7 @@ export function createTideweftRenderer(
       drawAggregateWildlifeEvidence(latestView.aggregateWildlifeEvidence ?? [], now);
       drawWildlifeCarcasses(latestView.wildlifeCarcasses ?? [], now);
       drawSettlements(latestView.settlements, now);
-      drawPorters(latestView.porters, now);
+      drawPorters(latestView.porters, now, latestView.acousticText !== undefined);
       drawDogs(latestView.dogs ?? [], now);
       drawWildlife(latestView.wildlife ?? [], now);
       const particles = drawParticles(latestView.particles ?? [], detailedTelemetry);
@@ -5892,7 +5962,7 @@ export function createTideweftRenderer(
       drawEvents(latestView.events ?? [], now);
       drawWind(latestView.weather, now);
       drawWeather(latestView.weather, now);
-      drawSituatedExpressionOrIncident(latestView, now);
+      drawAcousticTextOrLegacyCallout(latestView, now);
       if (latestView.paused) drawPausedVeil();
       cleanupWorldLabelPositions();
       telemetry.recordFrame(

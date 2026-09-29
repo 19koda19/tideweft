@@ -106,6 +106,7 @@ function restartFlowHarness() {
   const beginButton = new FakeButton();
   const dispatch = vi.fn();
   const announce = vi.fn();
+  const onNewWorldDispatched = vi.fn();
   let title = {
     visible: false,
     hasSave: true,
@@ -125,6 +126,7 @@ function restartFlowHarness() {
     getTitle: () => title,
     dispatch,
     announce,
+    onNewWorldDispatched,
   });
   return {
     flow,
@@ -138,6 +140,7 @@ function restartFlowHarness() {
     beginButton,
     dispatch,
     announce,
+    onNewWorldDispatched,
     setTitle(next: typeof title) {
       title = next;
     },
@@ -339,10 +342,12 @@ describe("saved-world restart DOM flow", () => {
       sessionShape: "wander",
       restartPhrase: "restartrestartrestart",
     });
+    expect(harness.onNewWorldDispatched).toHaveBeenCalledOnce();
     expect(harness.flow.submitting).toBe(true);
     expect(harness.beginButton.disabled).toBe(true);
     expect(harness.newWorldForm.getAttribute("aria-busy")).toBe("true");
   });
+
 });
 
 function keyEvent(overrides: Partial<{

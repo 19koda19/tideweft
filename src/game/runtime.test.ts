@@ -459,7 +459,7 @@ function exactV24CoreFromV29(
     regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
   )
     throw new Error(
-      "fixture requires a canonical current v38 regional ecology save",
+      "fixture requires a canonical current v39 regional ecology save",
     );
   const world = deserializeWorld(envelope.world);
   const habitat = regional.settlementHome.patch.derivation.habitat;
@@ -726,7 +726,7 @@ function rebaseFixtureRegionalEcology(
   );
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v38 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v39 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -734,8 +734,8 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = exactV24CoreFromV29(envelope);
   if (
-    envelope.version !== 38 ||
-    record.payloadVersion !== 38 ||
+    envelope.version !== 39 ||
+    record.payloadVersion !== 39 ||
     (current.derivation.kind !== "habitat-v11" &&
       current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11")
   )
@@ -1329,8 +1329,8 @@ describe("perpetual new worlds", () => {
 
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    expect(currentRecord.payloadVersion).toBe(38);
-    expect(currentEnvelope.version).toBe(38);
+    expect(currentRecord.payloadVersion).toBe(39);
+    expect(currentEnvelope.version).toBe(39);
     const currentRegional = deserializeRegionalEcologyStateV6(
       currentEnvelope.regionalEcology,
     );
@@ -1382,8 +1382,8 @@ describe("perpetual new worlds", () => {
     }
     const migratedActors = migratedRegional.base.base.base.base.base.settlementHome.patch
       .populations.flatMap(({ members }) => members.map(({ actor }) => actor));
-    expect(migratedRecord.payloadVersion).toBe(38);
-    expect(migratedEnvelope.version).toBe(38);
+    expect(migratedRecord.payloadVersion).toBe(39);
+    expect(migratedEnvelope.version).toBe(39);
     expect(migratedEnvelope.regionalEcology).toBe(exactV30Child);
     expect(
       migratedActors.every((actor) => !Object.hasOwn(actor, "circadian")),
@@ -1403,8 +1403,8 @@ describe("perpetual new worlds", () => {
     await reloaded.save();
     const reloadedRecord = repository.snapshot();
     const reloadedEnvelope = decodeGameSave(reloadedRecord);
-    expect(reloadedRecord.payloadVersion).toBe(38);
-    expect(reloadedEnvelope.version).toBe(38);
+    expect(reloadedRecord.payloadVersion).toBe(39);
+    expect(reloadedEnvelope.version).toBe(39);
     expect(reloadedEnvelope.regionalEcology).toBe(exactV30Child);
     reloaded.destroy();
   }, 30_000);
@@ -1426,8 +1426,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(38);
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstRecord.payloadVersion).toBe(39);
+    expect(firstEnvelope.version).toBe(39);
     expect(deserializeWorld(firstEnvelope.world).meta.completedTick).toBe(
       WORLD_NEW_GAME_START_TICK + 1,
     );
@@ -1478,8 +1478,8 @@ describe("perpetual new worlds", () => {
     const reloadedRegionalV5 = deserializeCurrentRegionalEcologyV5(
       reloadedEnvelope.regionalEcology,
     );
-    expect(reloadedRecord.payloadVersion).toBe(38);
-    expect(reloadedEnvelope.version).toBe(38);
+    expect(reloadedRecord.payloadVersion).toBe(39);
+    expect(reloadedEnvelope.version).toBe(39);
     expect(reloadedEnvelope.regionalEcology).toBe(firstRegionalText);
     expect(
       reloadedRegionalV5?.base.base.polarShoreActiveResidents
@@ -1508,7 +1508,7 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegional).not.toBeNull();
     expect(firstRegional?.polarConsumerActiveResidents).toHaveLength(1);
     const firstPatch = firstRegional!.polarConsumerActiveResidents[0]!.patch;
@@ -1558,8 +1558,8 @@ describe("perpetual new worlds", () => {
       firstEnvelope.regionalEcology,
     );
     const firstWorld = deserializeWorld(firstEnvelope.world);
-    expect(firstRecord.payloadVersion).toBe(38);
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstRecord.payloadVersion).toBe(39);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegional).not.toBeNull();
     expect(firstWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK + 1);
     expect(firstRegional?.updatedAtTick).toBe(firstWorld.meta.completedTick);
@@ -1599,7 +1599,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v38 breadth root once`, async () => {
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v39 breadth root once`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBeGreaterThan(1);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1615,7 +1615,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v38 breadth fixture is invalid");
+    if (current === null) throw new Error("current v39 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const activeRegions = current.base.base.base.base.base.activeRegions;
     const oldRoot = createPristineRegionalBreadthEcologyRoot({
@@ -1652,8 +1652,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(38);
-    expect(adoptedEnvelope.version).toBe(38);
+    expect(adoptedRecord.payloadVersion).toBe(39);
+    expect(adoptedEnvelope.version).toBe(39);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(
       CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     );
@@ -1670,7 +1670,7 @@ describe("perpetual new worlds", () => {
     replayRuntime.destroy();
   }, 30_000);
 
-  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v38 breadth root once`, async () => {
+  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v39 breadth root once`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(3);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1686,7 +1686,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v38 breadth fixture is invalid");
+    if (current === null) throw new Error("current v39 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const binding = {
       rootSeed: world.meta.rootSeed,
@@ -1736,8 +1736,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(38);
-    expect(adoptedEnvelope.version).toBe(38);
+    expect(adoptedRecord.payloadVersion).toBe(39);
+    expect(adoptedEnvelope.version).toBe(39);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(3);
     expect(stableStringify(adopted?.breadthRoot.activations.slice(0, 2))).toBe(
       exactActivationPrefix,
@@ -2085,7 +2085,9 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "SAVE REQUIRES NEWER TIDEWEFT",
-      detail: expect.stringContaining("Schema 39 belongs to a newer Tideweft build"),
+      detail: expect.stringContaining(
+        `Schema ${CURRENT_GAME_SAVE_VERSION + 1} belongs to a newer Tideweft build`,
+      ),
     });
     expect(runtime.getUIView().announcement?.message).toContain(
       "Nothing was opened or overwritten",
@@ -2100,7 +2102,7 @@ describe("perpetual new worlds", () => {
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getUIView().title.visible).toBe(true);
     expect(runtime.getUIView().announcement?.message).toContain(
-      "schema 39 remains untouched",
+      `schema ${CURRENT_GAME_SAVE_VERSION + 1} remains untouched`,
     );
     await expect(runtime.save()).rejects.toThrow(
       "requires a newer Tideweft build; it will not be overwritten",
@@ -2146,7 +2148,9 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().title.worldCreationBlocked).toBe(true);
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "SAVE REQUIRES NEWER TIDEWEFT",
-      detail: expect.stringContaining("Schema 39 belongs to a newer Tideweft build"),
+      detail: expect.stringContaining(
+        `Schema ${CURRENT_GAME_SAVE_VERSION + 1} belongs to a newer Tideweft build`,
+      ),
     });
     await expect(runtime.save()).rejects.toThrow(
       "requires a newer Tideweft build; it will not be overwritten",
@@ -2984,7 +2988,7 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
-  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v38 breadth wrapper`, async () => {
+  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v39 breadth wrapper`, async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -3025,8 +3029,8 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(38);
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstRecord.payloadVersion).toBe(39);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV4(firstRegional?.base)).toBe(
       exactV28Child,
@@ -3088,8 +3092,8 @@ describe("perpetual new worlds", () => {
     const migratedRegional = deserializeRegionalEcologyStateV6(
       migratedEnvelope.regionalEcology,
     );
-    expect(migratedRecord.payloadVersion).toBe(38);
-    expect(migratedEnvelope.version).toBe(38);
+    expect(migratedRecord.payloadVersion).toBe(39);
+    expect(migratedEnvelope.version).toBe(39);
     expect(migratedRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV5(migratedRegional?.base)).toBe(exactV29Child);
     expect(migratedRegional?.adoption).toMatchObject({
@@ -3151,8 +3155,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(38);
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstRecord.payloadVersion).toBe(39);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV3(firstRegionalV5?.base.base)).toBe(
       exactV27Child,
@@ -3214,7 +3218,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV2(firstRegionalV5?.base.base.base)).toBe(
       exactV26Child,
@@ -3278,7 +3282,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(38);
+    expect(firstEnvelope.version).toBe(39);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyState(firstRegionalV5?.base.base.base.base)).toBe(
       exactV25Child,
@@ -3314,8 +3318,8 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const currentEcology = exactV24CoreFromV29(currentEnvelope);
-    expect(currentEnvelope.version).toBe(38);
-    expect(currentRecord.payloadVersion).toBe(38);
+    expect(currentEnvelope.version).toBe(39);
+    expect(currentRecord.payloadVersion).toBe(39);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -3393,8 +3397,8 @@ describe("perpetual new worlds", () => {
     );
     const migratedEcology =
       migratedRegionalEcology?.base.base.base.base.root.legacyCohort?.sourcePatch ?? null;
-    expect(migratedEnvelope.version).toBe(38);
-    expect(migratedRecord.payloadVersion).toBe(38);
+    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(39);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
       throw new Error(
@@ -3530,7 +3534,7 @@ describe("perpetual new worlds", () => {
       "weave",
     );
     runtime.destroy();
-  });
+  }, 30_000);
 });
 
 describe("runtime clarity guards", () => {
@@ -3855,9 +3859,16 @@ describe("runtime clarity guards", () => {
       kind: "weather",
       new: true,
     }));
-    // An actual sweep without cargo has no near-fall line. The short physical
-    // cue stays actor-situated while the cause belongs to observed EVENTS.
-    expect(ui.expressionCaption).toBeUndefined();
+    // An actual sweep without cargo has no fabricated near-fall speech. The
+    // same structured contact drives one restrained physical cue while the
+    // cause and consequence remain in observed EVENTS.
+    expect(ui.expressionCaption).toMatchObject({
+      presentationKind: "physical",
+      physicalSoundKind: "splash",
+      speakerLabel: "Sound",
+      text: "splash",
+      tone: "alarmed",
+    });
     expect(ui.announcement?.message).toContain("CURRENT FOOTING FAILED IN DEEP WATER");
     expect(ui.announcement?.message).toContain("ADRIFT");
     expect(ui.announcement?.message).not.toContain("WHHSH!");
@@ -3891,7 +3902,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(38);
+    expect(prepared.version).toBe(39);
     expect(
       prepared.physicalCargo?.expectedManifest.entries.length,
     ).toBeGreaterThan(0);
@@ -4131,8 +4142,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(38);
-    expect(durableRecord.payloadVersion).toBe(38);
+    expect(durable.version).toBe(39);
+    expect(durableRecord.payloadVersion).toBe(39);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");
@@ -4222,7 +4233,7 @@ describe("runtime clarity guards", () => {
     );
     expect(runtime.getUIView().player.pace).toBe("rest");
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("preserves a legitimately high-tide Tide anchor when its tidal flat reloads at low water", async () => {
     const world = createWorld("receded anchor save", "calm");
@@ -4272,7 +4283,7 @@ describe("runtime clarity guards", () => {
       )?.tileIndex,
     ).toBe(tidalFlat.index);
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("returns malformed Tide anchors on permanently unsuitable meadow and ridge to the pack", async () => {
     const world = createWorld("dry anchor repair", "calm");
@@ -4317,7 +4328,7 @@ describe("runtime clarity guards", () => {
     expect(repaired.find((wayknot) => wayknot.id === 3)?.tileIndex).toBeNull();
     expect(repaired.find((wayknot) => wayknot.id === 4)?.tileIndex).toBeNull();
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("requires a sounding before binding a flooded non-channel anchor but still permits reclaim", async () => {
     const world = createWorld("sound before anchor", "calm");
@@ -4568,7 +4579,7 @@ describe("runtime clarity guards", () => {
     expect(repairedContract?.cargoQuantity).toBe(0);
     expectConserved(repairedWorld);
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("repairs a 64x48 Alpha pickup before deriving trace and restores its choir baseline", async () => {
     const world = legacySizedWorld(
@@ -4689,7 +4700,7 @@ describe("runtime clarity guards", () => {
     );
     assertWorldInvariants(repairedWorld);
     runtime.destroy();
-  });
+  }, 30_000);
 
   it("repairs a failed pickup when saving before its queued release tick", async () => {
     const world = createWorld("pickup stock race", "calm");
@@ -4768,7 +4779,7 @@ describe("runtime clarity guards", () => {
     ).toBe("Pick up cargo here");
     expect(resumed.getUIView().player.cargoLoad).toBe(0);
     resumed.destroy();
-  });
+  }, 30_000);
 
   it("rolls back an interrupted optimistic pickup in the save and can reload, retry, and deliver", async () => {
     const repository = new MemoryRepository();

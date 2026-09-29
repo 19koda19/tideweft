@@ -508,6 +508,13 @@ button:disabled {
   white-space: pre-line;
 }
 
+.relief-world-label[data-acoustic-kind="physical"] {
+  font-style: italic;
+  font-weight: 560;
+  letter-spacing: 0.025em;
+  text-transform: lowercase;
+}
+
 .canvas-mount canvas:focus-visible {
   outline-offset: -0.32rem;
 }

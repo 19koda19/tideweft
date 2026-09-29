@@ -23,6 +23,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
   "fish-crow-alarm-call",
+  "human-danger-warning",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -31,6 +32,7 @@ export const SITUATED_EXPRESSION_FAMILIES = Object.freeze([
   "cargo",
   "work",
   "animal-signal",
+  "warning",
 ] as const);
 export type SituatedExpressionFamily = (typeof SITUATED_EXPRESSION_FAMILIES)[number];
 
@@ -186,7 +188,7 @@ export interface SituatedExpressionProjection {
 
 interface SemanticLaw {
   readonly family: SituatedExpressionFamily;
-  readonly knowledgeBasis: SituatedExpressionKnowledgeBasis;
+  readonly knowledgeBases: ReadonlySet<SituatedExpressionKnowledgeBasis>;
   readonly tones: ReadonlySet<SituatedExpressionTone>;
   readonly volumes: ReadonlySet<SituatedExpressionVolume>;
   readonly vocalization?: SituatedExpressionVocalization;
@@ -202,7 +204,7 @@ export interface SituatedExpressionCooldownSteps {
 const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = Object.freeze({
   "steady-after-stumble": Object.freeze({
     family: "footing",
-    knowledgeBasis: "self-felt-stumble",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-felt-stumble"]),
     tones: new Set<SituatedExpressionTone>(["restrained", "strained"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
     meaningCooldownSteps: 12,
@@ -210,7 +212,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "relief-after-near-fall": Object.freeze({
     family: "footing",
-    knowledgeBasis: "self-felt-near-fall",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-felt-near-fall"]),
     tones: new Set<SituatedExpressionTone>(["strained", "relieved"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
     meaningCooldownSteps: 16,
@@ -218,7 +220,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "protect-important-cargo": Object.freeze({
     family: "cargo",
-    knowledgeBasis: "self-observed-cargo-risk",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-observed-cargo-risk"]),
     tones: new Set<SituatedExpressionTone>(["restrained", "strained", "alarmed"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken", "shout"]),
     meaningCooldownSteps: 12,
@@ -226,7 +228,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "alarm-at-cargo-loss": Object.freeze({
     family: "cargo",
-    knowledgeBasis: "self-observed-cargo-loss",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-observed-cargo-loss"]),
     tones: new Set<SituatedExpressionTone>(["alarmed"]),
     volumes: new Set<SituatedExpressionVolume>(["spoken", "shout"]),
     meaningCooldownSteps: 20,
@@ -234,7 +236,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "relief-after-cargo-recovery": Object.freeze({
     family: "cargo",
-    knowledgeBasis: "self-recovered-cargo",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-recovered-cargo"]),
     tones: new Set<SituatedExpressionTone>(["restrained", "relieved"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
     meaningCooldownSteps: 14,
@@ -242,7 +244,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "porter-heavy-load": Object.freeze({
     family: "work",
-    knowledgeBasis: "self-handled-heavy-cargo",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-handled-heavy-cargo"]),
     tones: new Set<SituatedExpressionTone>(["strained"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur", "spoken"]),
     meaningCooldownSteps: 30,
@@ -250,7 +252,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "guardian-dog-warning": Object.freeze({
     family: "animal-signal",
-    knowledgeBasis: "self-heard-anonymous-alarm",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-heard-anonymous-alarm"]),
     tones: new Set<SituatedExpressionTone>(["alarmed"]),
     volumes: new Set<SituatedExpressionVolume>(["shout"]),
     vocalization: "dog-warning-bark",
@@ -259,7 +261,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "guardian-dog-defensive-growl": Object.freeze({
     family: "animal-signal",
-    knowledgeBasis: "self-perceived-threat",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
     tones: new Set<SituatedExpressionTone>(["restrained"]),
     volumes: new Set<SituatedExpressionVolume>(["spoken"]),
     vocalization: "dog-defensive-growl",
@@ -268,7 +270,7 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "guardian-dog-shelter-whine": Object.freeze({
     family: "animal-signal",
-    knowledgeBasis: "self-weather-distress",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-weather-distress"]),
     tones: new Set<SituatedExpressionTone>(["restrained"]),
     volumes: new Set<SituatedExpressionVolume>(["murmur"]),
     vocalization: "dog-shelter-whine",
@@ -277,11 +279,22 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
   }),
   "fish-crow-alarm-call": Object.freeze({
     family: "animal-signal",
-    knowledgeBasis: "self-perceived-threat",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
     tones: new Set<SituatedExpressionTone>(["alarmed"]),
     volumes: new Set<SituatedExpressionVolume>(["shout"]),
     vocalization: "fish-crow-alarm",
     meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
+  "human-danger-warning": Object.freeze({
+    family: "warning",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
+      "self-heard-anonymous-alarm",
+      "self-perceived-threat",
+    ]),
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["shout"]),
+    meaningCooldownSteps: 28,
     familyCooldownSteps: 12,
   }),
 });
@@ -368,6 +381,16 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.fish-crow-alarm-call.0",
       text: "KRAA! KRAA!",
+    }),
+  ]),
+  "human-danger-warning": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.human-danger-warning.0",
+      text: "Watch out!",
+    }),
+    Object.freeze({
+      key: "situated-expression.en.v1.human-danger-warning.1",
+      text: "Heads up!",
     }),
   ]),
 });
@@ -728,7 +751,7 @@ function canonicalIntent(value: unknown): SituatedExpressionIntent | null {
   const law = SEMANTIC_LAWS[value.meaning];
   if (
     value.family !== law.family
-    || value.knowledgeBasis !== law.knowledgeBasis
+    || !law.knowledgeBases.has(value.knowledgeBasis)
     || !law.tones.has(value.tone)
     || !law.volumes.has(value.volume)
   ) return null;
@@ -805,7 +828,7 @@ function canonicalEvent(value: unknown): SituatedExpressionEvent | null {
   });
   if (
     value.family !== law.family
-    || value.knowledgeBasis !== law.knowledgeBasis
+    || !law.knowledgeBases.has(value.knowledgeBasis)
     || !law.tones.has(value.tone)
     || !law.volumes.has(value.volume)
     || value.vocalization !== vocalizationFor({

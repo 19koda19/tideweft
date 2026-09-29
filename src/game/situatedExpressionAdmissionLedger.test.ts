@@ -14,6 +14,7 @@ import {
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
+  createHumanDangerWarningExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
@@ -156,6 +157,14 @@ describe("situated-expression admission ledger", () => {
       sourceObservationId: "observation:aerial-predator:1",
       acceptedAtTick: 912,
     });
+    const humanWarning = createHumanDangerWarningExpressionAdmissionRecord({
+      sourceActorId: "H-human-warning-admission",
+      triggerEventId: "human-warning:observation:1",
+      sampleOrdinal: 7,
+      admittedAtPlayerStepPhase: 0,
+      sourceObservationId: "observation:human-danger:1",
+      acceptedAtTick: 912,
+    });
     const legacy = createLegacyV33PlayerExpressionAdmissionRecord({
       sourceActorId: PLAYER_ID,
       triggerEventId: "legacy:event:1",
@@ -171,6 +180,7 @@ describe("situated-expression admission ledger", () => {
       guardianGrowl,
       guardianWhine,
       crowAlarm,
+      humanWarning,
       legacy,
     ].map((record) => record?.kind))
       .toEqual([
@@ -181,6 +191,7 @@ describe("situated-expression admission ledger", () => {
       "guardian-dog-defensive-growl",
       "guardian-dog-shelter-whine",
       "core-wildlife-fish-crow-alarm",
+      "human-danger-warning",
       "legacy-v33-player",
     ]);
     for (const record of [
@@ -191,6 +202,7 @@ describe("situated-expression admission ledger", () => {
       guardianGrowl,
       guardianWhine,
       crowAlarm,
+      humanWarning,
       legacy,
     ]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
@@ -250,6 +262,68 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       hiddenPredatorId: "HARRIER-secret",
+    })).toBeNull();
+  });
+
+  it("binds a human danger warning to one exact non-player observation and rejects ledger tampering", () => {
+    const input = {
+      sourceActorId: "H-human-warning-admission",
+      triggerEventId: "human-warning:observation:2",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceObservationId: "observation:human-danger:2",
+      acceptedAtTick: 913,
+    } as const;
+    const canonical = createHumanDangerWarningExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "human-danger-warning",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(
+      rawLedger([structuredClone(canonical)]),
+    )?.records).toEqual([canonical]);
+
+    expect(createHumanDangerWarningExpressionAdmissionRecord({
+      ...input,
+      sourceActorId: PLAYER_ID,
+    })).toBeNull();
+    expect(createHumanDangerWarningExpressionAdmissionRecord({
+      ...input,
+      admittedAtPlayerStepPhase: 1,
+    })).toBeNull();
+    expect(createHumanDangerWarningExpressionAdmissionRecord({
+      ...input,
+      sourceObservationId: " padded ",
+    })).toBeNull();
+    expect(createHumanDangerWarningExpressionAdmissionRecord({
+      ...input,
+      acceptedAtTick: -0,
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      eventId: "situated-expression:event:v1:forged-warning",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rawLedger([{
+      ...canonical,
+      eventId: "situated-expression:event:v1:forged-warning",
+    }]))).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      triggerEventId: "human-warning:rewritten-observation",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenDangerIdentity: "PREDATOR-secret",
     })).toBeNull();
   });
 

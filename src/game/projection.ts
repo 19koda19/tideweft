@@ -88,6 +88,11 @@ import {
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
 import {
+  projectWorldAcousticText,
+  type WorldAcousticPresentationReception,
+} from "./worldAcousticPresentation";
+import type { WorldAcousticEvent } from "./worldAcoustics";
+import {
   dogActorRosterActor,
   type DogActorRosterState,
 } from "./dogActorRoster";
@@ -241,6 +246,27 @@ export interface ProjectionOptions {
   situatedExpression?: SituatedExpressionEvent | null;
   /** Event-time evidence that the player lawfully received the exact expression. */
   situatedExpressionReception?: SituatedExpressionReception | null;
+  /**
+   * Bounded active expression channels. Production supplies this collection so
+   * speech and animal calls reach one shared acoustic-text arbitration pass;
+   * the singular fields remain the small-fixture compatibility seam.
+   */
+  situatedExpressions?: readonly Readonly<{
+    readonly event: SituatedExpressionEvent;
+    readonly reception: SituatedExpressionReception;
+  }>[];
+  /** One structured physical sound; its domain event remains authoritative. */
+  worldAcousticEvent?: WorldAcousticEvent | null;
+  /** Fixed-step presentation lifetime retained separately from immutable event semantics. */
+  worldAcousticEventRemainingSteps?: number;
+  /** Event-bound evidence that the player lawfully heard the physical sound. */
+  worldAcousticReception?: WorldAcousticPresentationReception | null;
+  /** Bounded, already-received physical sounds sharing the same presenter. */
+  worldAcousticPresentations?: readonly Readonly<{
+    readonly event: WorldAcousticEvent;
+    readonly remainingSteps: number;
+    readonly reception: WorldAcousticPresentationReception;
+  }>[];
   /** Exact dog bodies used only to authenticate a directly visible animal caller. */
   dogActorRoster?: DogActorRosterState;
   /** Bounded materialized wildlife sources used only to authenticate a visible call. */
@@ -365,6 +391,11 @@ export function projectSituatedExpressionSource(
     return Object.freeze({ sourceKind: "animal", speakerLabel: "Fish crow" });
   }
 
+  if (reception?.kind === "heard-unseen") {
+    return Object.freeze({ sourceKind: "human", speakerLabel: "Someone" });
+  }
+  if (reception?.kind !== "heard-visible") return null;
+
   const matches = economyWorld.residents.filter(
     ({ identity }) => identity.stableId === event.sourceActorId,
   );
@@ -418,7 +449,9 @@ function projectSituatedExpressionView(
     );
     const point = worldPositionToSpatialFrame(frame, event.position);
     if (point === null) return Object.freeze([]);
+    const callKind = animalCallKind(event.meaning);
     return Object.freeze([Object.freeze({
+      acousticKind: callKind === null ? "speech" as const : "animal-call" as const,
       id: event.eventId,
       sourceActorId: event.sourceActorId,
       sourceKind: source.sourceKind,
@@ -430,12 +463,61 @@ function projectSituatedExpressionView(
       }),
       progress: 1 - event.remainingSteps / Math.max(1, event.durationSteps),
       priority: event.priority,
+      salience: event.salience,
       tone: event.tone,
       variantSeed: event.variantSeed,
     })]);
   } catch {
     return Object.freeze([]);
   }
+}
+
+/**
+ * Adapts the older direct-detail resident speech seam into Living Voice's one
+ * acoustic-text layout. This does not promote the compatibility utterance to
+ * save authority; it only prevents a second renderer-owned speech universe.
+ */
+function projectResidentSpeechViews(
+  world: WorldView,
+  perception: PerceptionResult,
+  residentSpeech: ReadonlyMap<number, string> | undefined,
+  selectedResidentId: number | null,
+  tileSize: number,
+): readonly SituatedExpressionView[] {
+  const views: SituatedExpressionView[] = [];
+  for (const resident of world.residents) {
+    const routeProjection = projectResidentWorldPosition(world, resident, tileSize);
+    if (
+      routeProjection === null
+      || perception.detailVisibilityGrades[routeProjection.tileIndex] !== VISIBILITY_DIRECT
+    ) continue;
+    const selected = selectedResidentId === resident.id;
+    const text = residentSpeech?.get(resident.id)
+      ?? porterStateSpeech(resident, world.completedTick, selected);
+    if (text === undefined || text.trim().length === 0) continue;
+    const sourceActorId = resident.identity.stableId;
+    const speakerLabel = residentKnowsFact(resident.playerKnowledge, "name")
+      ? resident.name
+      : resident.location.kind === "route"
+        ? "Unknown porter"
+        : "Unknown resident";
+    const variantSeed = seedFromText(`${sourceActorId}:${text}`)[0] >>> 0;
+    views.push(Object.freeze({
+      acousticKind: "speech",
+      id: `resident-speech:${sourceActorId}:${variantSeed}`,
+      sourceActorId,
+      sourceKind: "human",
+      speakerLabel,
+      text,
+      position: Object.freeze({ ...routeProjection.position }),
+      progress: 0,
+      priority: selected ? 560_000 : 430_000,
+      salience: selected ? 620_000 : 470_000,
+      tone: "restrained",
+      variantSeed,
+    }));
+  }
+  return Object.freeze(views.sort((left, right) => left.id.localeCompare(right.id)));
 }
 
 export interface ResidentRouteProjection {
@@ -830,14 +912,47 @@ export function projectGameView(
     })
     .slice(0, LOOSE_CARGO_MAX_ENTITIES);
   const traversalIncident = projectTraversalIncident(options.traversalFeedback?.incident ?? null);
-  const expressions = projectSituatedExpressionView(
+  const expressionInputs = options.situatedExpressions
+    ?? (options.situatedExpression === undefined || options.situatedExpression === null
+      ? []
+      : [{
+          event: options.situatedExpression,
+          reception: options.situatedExpressionReception ?? null,
+        }]);
+  const expressions = Object.freeze(expressionInputs.flatMap(({ event, reception }) => (
+    projectSituatedExpressionView(
+      world,
+      event,
+      reception,
+      tileSize,
+      options.dogActorRoster,
+      options.coreWildlifeExpressionSources,
+    )
+  )));
+  const residentSpeechExpressions = projectResidentSpeechViews(
     world,
-    options.situatedExpression ?? null,
-    options.situatedExpressionReception ?? null,
+    perception,
+    options.residentSpeech,
+    options.selectedResidentId ?? null,
     tileSize,
-    options.dogActorRoster,
-    options.coreWildlifeExpressionSources,
   );
+  const physicalInputs = options.worldAcousticPresentations
+    ?? (options.worldAcousticEvent === undefined || options.worldAcousticEvent === null
+      ? []
+      : [{
+          event: options.worldAcousticEvent,
+          remainingSteps: options.worldAcousticEventRemainingSteps ?? 0,
+          reception: options.worldAcousticReception ?? null,
+        }]);
+  const physicalAcousticText = physicalInputs.flatMap((input) => {
+    const projected = projectWorldAcousticText({ world, tileSize, ...input });
+    return projected === null ? [] : [projected];
+  });
+  const acousticText = Object.freeze([
+    ...expressions,
+    ...residentSpeechExpressions,
+    ...physicalAcousticText,
+  ]);
   const activeWayknotIds = new Set(
     wayknotEffectsAt(player, world, currentPlayerTileIndex)
       .influences
@@ -1167,6 +1282,7 @@ export function projectGameView(
         : {}),
     },
     expressions,
+    acousticText,
     wayknots: player.wayknots.wayknots.flatMap((wayknot) => {
       if (wayknot.region === null || wayknot.tileIndex === null) return [];
       const viewTileIndex = regionalWayknotViewTileIndex(world, wayknot.region, wayknot.tileIndex);

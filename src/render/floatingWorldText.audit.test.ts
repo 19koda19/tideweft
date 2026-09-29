@@ -30,7 +30,7 @@ describe("pane-free Chart world text", () => {
     expect(drawPorters).toContain(
       "const emotionY = clamp(screen.y - 20, 10, Math.max(10, p.height - 10))",
     );
-    expect(drawPorters).toContain("p.text(porter.emotionMark, emotionX, emotionY)");
-    expect(drawPorters).not.toContain("p.text(porter.emotionMark, screen.x, emotionY)");
+    expect(drawPorters).toContain("p.text(standaloneEmotionMark, emotionX, emotionY)");
+    expect(drawPorters).not.toContain("p.text(standaloneEmotionMark, screen.x, emotionY)");
   });
 });

@@ -497,6 +497,7 @@ describe("Chart situated expression presentation", () => {
       },
       expressions: [
         {
+          acousticKind: "speech",
           id: "z-low",
           sourceActorId: "human:z-low",
           sourceKind: "human",
@@ -505,10 +506,12 @@ describe("Chart situated expression presentation", () => {
           position: { x: 12, y: 12 },
           progress: 0.2,
           priority: 1,
+          salience: 1,
           tone: "restrained",
           variantSeed: 1,
         },
         {
+          acousticKind: "animal-call",
           id: "b-high",
           sourceActorId: "animal:b-high",
           sourceKind: "animal",
@@ -517,10 +520,12 @@ describe("Chart situated expression presentation", () => {
           position: { x: 12, y: 12 },
           progress: 0.3,
           priority: 8,
+          salience: 5,
           tone: "strained",
           variantSeed: 2,
         },
         {
+          acousticKind: "speech",
           id: "a-high",
           sourceActorId: "player",
           sourceKind: "player",
@@ -529,6 +534,7 @@ describe("Chart situated expression presentation", () => {
           position: { x: 12, y: 12 },
           progress: 0.4,
           priority: 8,
+          salience: 5,
           tone: "alarmed",
           variantSeed: 3,
         },
@@ -557,6 +563,131 @@ describe("Chart situated expression presentation", () => {
     current = legacy;
     draw();
     expect(text.mock.calls.some(([copy]) => copy === "LEGACY INCIDENT")).toBe(true);
+    renderer.destroy();
+  });
+
+  it("uses unified acoustic arbitration and treats an explicit empty list as authoritative", () => {
+    const base = view("chart-acoustic-text", { x: 12, y: 12 });
+    let current: TideweftView = {
+      ...base,
+      porters: [{
+        id: "porter:shared-acoustic",
+        position: { x: 12, y: 12 },
+        facing: 0,
+        state: "alert",
+        emotionMark: ":S",
+        speech: "LEGACY PORTER SPEECH",
+      }],
+      player: {
+        ...base.player,
+        incident: {
+          id: "legacy-acoustic-fall",
+          kind: "fall",
+          label: "LEGACY ACOUSTIC INCIDENT",
+          progress: 0.2,
+          variantSeed: 1,
+        },
+      },
+      expressions: [{
+        acousticKind: "speech",
+        id: "legacy-expression",
+        sourceActorId: "human:legacy",
+        sourceKind: "human",
+        speakerLabel: "Nearby porter",
+        text: "LEGACY EXPRESSION FALLBACK",
+        position: { x: 12, y: 12 },
+        progress: 0.2,
+        priority: 4,
+        salience: 4,
+        tone: "restrained",
+        variantSeed: 2,
+      }],
+      acousticText: [
+        {
+          acousticKind: "speech",
+          id: "lower-speech",
+          sourceActorId: "human:lower",
+          sourceKind: "human",
+          speakerLabel: "Nearby porter",
+          text: "LOWER ACOUSTIC SPEECH",
+          position: { x: 12, y: 12 },
+          progress: 0.2,
+          priority: 8,
+          salience: 99,
+          tone: "restrained",
+          variantSeed: 99,
+        },
+        {
+          acousticKind: "physical",
+          id: "equal-lower-salience",
+          sourceId: "object:crate",
+          sourceKind: "object",
+          text: "LOWER SALIENCE THUD",
+          position: { x: 12, y: 12 },
+          progress: 0.3,
+          priority: 9,
+          salience: 3,
+          tone: "alarmed",
+          variantSeed: 8,
+          semanticFamily: "thud",
+        },
+        {
+          acousticKind: "animal-call",
+          id: "highest-salience",
+          sourceActorId: "animal:warning",
+          sourceKind: "animal",
+          speakerLabel: "Nearby animal",
+          text: "HIGHEST ACOUSTIC CALL",
+          position: { x: 12, y: 12 },
+          progress: 0.4,
+          priority: 9,
+          salience: 7,
+          tone: "alarmed",
+          variantSeed: 7,
+        },
+      ],
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "HIGHEST ACOUSTIC CALL")).toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "LOWER SALIENCE THUD")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LOWER ACOUSTIC SPEECH")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY EXPRESSION FALLBACK")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY ACOUSTIC INCIDENT")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === ":S")).toBe(false);
+
+    text.mockClear();
+    const physicalAcousticText = current.acousticText?.find(({ acousticKind }) => (
+      acousticKind === "physical"
+    ));
+    if (!physicalAcousticText) throw new Error("expected physical acoustic fixture");
+    current = { ...current, acousticText: [physicalAcousticText] };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LOWER SALIENCE THUD")).toBe(true);
+
+    text.mockClear();
+    current = { ...current, acousticText: [] };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY EXPRESSION FALLBACK")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY ACOUSTIC INCIDENT")).toBe(false);
+
+    text.mockClear();
+    const { acousticText: _acousticText, ...expressionFallback } = current;
+    current = expressionFallback;
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY EXPRESSION FALLBACK")).toBe(true);
+
+    text.mockClear();
+    const { expressions: _expressions, ...incidentFallback } = current;
+    current = incidentFallback;
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "LEGACY ACOUSTIC INCIDENT")).toBe(true);
     renderer.destroy();
   });
 });
@@ -1328,6 +1459,7 @@ describe("Chart ADRIFT presentation path", () => {
 
     current = {
       ...legacySwept,
+      acousticText: [],
       player: {
         ...legacySwept.player,
         adrift: {
@@ -1344,19 +1476,29 @@ describe("Chart ADRIFT presentation path", () => {
     const label = text.mock.calls.find(([copy]) => copy === "PADDLING");
     const instruction = text.mock.calls.find(([copy]) => copy === "PADDLE TOWARD SHALLOW WATER");
     const syllable = text.mock.calls.find(([copy]) => copy === "WHHSH");
-    for (const call of [label, instruction, syllable]) {
+    for (const call of [label, instruction]) {
       expect(call).toBeDefined();
       expect(Number(call?.[1])).toBeGreaterThanOrEqual(0);
       expect(Number(call?.[1])).toBeLessThanOrEqual(200);
       expect(Number(call?.[2])).toBeGreaterThanOrEqual(0);
       expect(Number(call?.[2])).toBeLessThanOrEqual(100);
     }
+    expect(syllable).toBeUndefined();
     const renderedCopy = text.mock.calls.map(([copy]) => String(copy)).join(" ");
     expect(renderedCopy).not.toMatch(/ashore|arrived|\bETA\b|\d+(?:\.\d+)?\s*%|percent/iu);
     expect(color).toHaveBeenCalledWith("#61e6d2");
     expect(color).toHaveBeenCalledWith("#edfff9");
     expect(line).toHaveBeenCalledTimes(legacyLineCount + 1);
     expect(rect).toHaveBeenCalledTimes(legacyRectCount);
+
+    text.mockClear();
+    const { acousticText: _acousticText, ...legacyAdrift } = current;
+    current = legacyAdrift;
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "PADDLING")).toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "PADDLE TOWARD SHALLOW WATER"))
+      .toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "WHHSH")).toBe(true);
     renderer.destroy();
   });
 });

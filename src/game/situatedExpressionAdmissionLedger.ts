@@ -24,6 +24,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
   "core-wildlife-fish-crow-alarm",
+  "human-danger-warning",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -146,6 +147,14 @@ export interface CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   readonly acceptedAtTick: number;
 }
 
+export interface HumanDangerWarningExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "human-danger-warning";
+  /** Exact fresh belief observation that caused the warning. */
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -159,6 +168,7 @@ export type SituatedExpressionAdmissionRecord =
   | GuardianDogDefensiveGrowlExpressionAdmissionRecord
   | GuardianDogShelterWhineExpressionAdmissionRecord
   | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
+  | HumanDangerWarningExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -219,6 +229,12 @@ export interface GuardianDogShelterWhineExpressionAdmissionInput
 export interface CoreWildlifeFishCrowAlarmExpressionAdmissionInput
   extends SituatedExpressionAdmissionInputBase {
   readonly sourceOwnerKey: string;
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
+export interface HumanDangerWarningExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
   readonly sourceObservationId: string;
   readonly acceptedAtTick: number;
 }
@@ -458,6 +474,33 @@ export function createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord(
   }) as CoreWildlifeFishCrowAlarmExpressionAdmissionRecord | null;
 }
 
+/** Creates one source-honest human warning admission from fresh perception. */
+export function createHumanDangerWarningExpressionAdmissionRecord(
+  input: HumanDangerWarningExpressionAdmissionInput,
+): HumanDangerWarningExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "human-danger-warning",
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  }) as HumanDangerWarningExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -497,6 +540,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "guardian-dog-defensive-growl": return canonicalGuardianDogGrowlRecord(value);
     case "guardian-dog-shelter-whine": return canonicalGuardianDogShelterWhineRecord(value);
     case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
+    case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -842,6 +886,39 @@ function canonicalFishCrowAlarmRecord(
     admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
     kind: "core-wildlife-fish-crow-alarm",
     sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  });
+}
+
+function canonicalHumanDangerWarningRecord(
+  value: Readonly<Record<string, unknown>>,
+): HumanDangerWarningExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "eventId",
+    "kind",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.admittedAtPlayerStepPhase !== 0
+    || value.kind !== "human-danger-warning"
+    || !validId(value.sourceObservationId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
+    kind: "human-danger-warning",
     sourceObservationId: value.sourceObservationId,
     acceptedAtTick: value.acceptedAtTick,
   });

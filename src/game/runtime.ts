@@ -73,6 +73,7 @@ import { projectLivingActorInteractionChoices } from "../ui/livingActorInteracti
 import {
   TideweftSoundscape,
   spatialPanForBearing,
+  type SoundCue,
   type SituatedVocalizationCue,
   type WaterAmbienceState,
 } from "../audio/soundscape";
@@ -142,6 +143,7 @@ import {
   acknowledgeIncidentCue,
   canonicalizeTraversalFeedback,
   createTraversalFeedbackState,
+  traversalCauseLabel,
   type TraversalIncident,
   type TraversalFeedbackState,
 } from "./traversalFeedback";
@@ -183,6 +185,7 @@ import {
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
+  createHumanDangerWarningExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
@@ -235,6 +238,15 @@ import {
   fishCrowAlarmExpressionMemoryMatchesWorld,
   type FishCrowAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
+import {
+  humanDangerWarningExpressionCandidate,
+  humanDangerWarningExpressionEventForTrigger,
+  humanDangerWarningExpressionEventMatchesWorld,
+  humanDangerWarningExpressionMemoryMatchesWorld,
+  humanDangerWarningTriggerEventId,
+  selectHumanDangerWarningExpression,
+  type HumanDangerWarningExpressionInput,
+} from "./humanDangerWarningExpression";
 import { audibleContactPan } from "./audibleContactPresentation";
 import {
   CRAFTING_CONDITION_MAX,
@@ -412,6 +424,25 @@ import {
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import {
+  animalContactAcousticEvent,
+  cargoImpactAcousticEvent,
+  createWorldAcousticEvent,
+  traversalIncidentAcousticEvent,
+  type WorldAcousticEvent,
+} from "./worldAcoustics";
+import {
+  createDirectContactWorldAcousticReception,
+  createHeardUnseenWorldAcousticReception,
+  createHeardVisibleWorldAcousticReception,
+  createSelfWorldAcousticReception,
+} from "./worldAcousticPresentation";
+import {
+  admitWorldAcousticPresentation,
+  advanceWorldAcousticPresentations,
+  selectWorldAcousticCaptionPresentation,
+  type ActiveWorldAcousticPresentation,
+} from "./worldAcousticPresentationQueue";
 import {
   workingPeopleExpressionEventMatchesWorld,
   workingPeopleExpressionEventForTrigger,
@@ -983,6 +1014,7 @@ function recentMeaningAcousticTuples(
     case "alarm-at-cargo-loss":
     case "guardian-dog-warning":
     case "fish-crow-alarm-call":
+    case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
 }
@@ -993,8 +1025,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
+/** First save whose closed situated-expression union persists human danger warnings. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
+const FISH_CROW_ALARM_GAME_SAVE_VERSION = 38;
 /** First save with a weather-backed guardian shelter whine. */
 const GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION = 37;
 /** First save with a threat-backed guardian defensive growl. */
@@ -1094,6 +1128,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION,
   GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION,
   GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
+  FISH_CROW_ALARM_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -1172,6 +1207,8 @@ interface CommittedTraversalExpressionContext {
   readonly evaluation: FallRiskEvaluation;
   readonly cargo: PlayerTraversalCargoExpressionContext;
   readonly separationEventId: string | null;
+  /** Stable physical lot that actually absorbed the committed shock. */
+  readonly cargoAcousticSourceId: string | null;
 }
 
 export interface TideweftRuntime {
@@ -1307,6 +1344,34 @@ export interface TideweftRuntimePerformanceTelemetry {
   /** Primitive-only retained-owner counts; never authoritative or serialized. */
   readonly resources: TideweftRuntimeResourceCounts;
   readonly lastSerializedSaveBytes: number;
+}
+
+/** Existing audio synthesis consumes the same semantics as hearing and text. */
+function worldAcousticSoundCue(event: WorldAcousticEvent): SoundCue {
+  switch (event.semanticFamily) {
+    case "splash":
+    case "slosh":
+      return "sweep";
+    case "thud":
+    case "clatter":
+    case "crack":
+      return "impact";
+    case "scrape":
+    case "rustle":
+    case "skitter":
+    case "creak":
+      return "stumble";
+    case "vocalization":
+    case "other":
+      return "impact";
+  }
+}
+
+interface CommittedWorldAcousticAudioCue {
+  readonly cue: SoundCue;
+  readonly volume: number;
+  readonly variantSeed: number;
+  readonly pan: number;
 }
 
 function runtimePerformanceNow(): number {
@@ -10139,7 +10204,8 @@ export async function createTideweftRuntime(
       });
       return presentation === null ? [] : [presentation];
     });
-  const initialSituatedExpression = activeSituatedExpressionPair();
+  const initialSituatedExpressions = activeSituatedExpressionPairs();
+  const initialSituatedExpression = initialSituatedExpressions[0] ?? null;
   const initialCoreWildlifeExpressionSources = runtimeCoreWildlifeExpressionSources(
     projectActiveRegionalEcology(),
   );
@@ -10148,8 +10214,7 @@ export async function createTideweftRuntime(
       ...projectGameView(worldView, player, {
         paused: true,
         traversalFeedback,
-        situatedExpression: initialSituatedExpression?.event ?? null,
-        situatedExpressionReception: initialSituatedExpression?.reception ?? null,
+        situatedExpressions: initialSituatedExpressions,
         dogActorRoster,
         coreWildlifeExpressionSources: initialCoreWildlifeExpressionSources,
         looseCargoWorld: physicalCargo.looseWorld,
@@ -10216,6 +10281,10 @@ export async function createTideweftRuntime(
   let playerStepsSinceWorldTick = 0;
   let playerSenseSamples: PlayerSenseSample[] = [];
   let nextPlayerSenseSampleOrdinal = 0;
+  // Ephemeral text is never save authority and therefore never replays after
+  // reload. The structured event still feeds this step's audio and NPC hearing.
+  let activeWorldAcousticPresentations: readonly ActiveWorldAcousticPresentation[] =
+    Object.freeze([]);
   let playerPerceptionIntervalStartPosition =
     resumed?.perceptionCarry.intervalStartPosition
       ?? playerWorldPositionInRegionalWindow(regionalTravel.window, player);
@@ -10580,7 +10649,12 @@ export async function createTideweftRuntime(
   function refreshViewsUnmeasured(): void {
     perception = projectPlayerPerception();
     captureNewlyObservedEvents();
-    const activeExpression = activeSituatedExpressionPair();
+    const activeExpressions = activeSituatedExpressionPairs();
+    const activeExpression = activeExpressions[0] ?? null;
+    const activeWorldAcousticInputs = activeWorldAcousticPresentations;
+    const activeWorldAcousticInput = selectWorldAcousticCaptionPresentation(
+      activeWorldAcousticInputs,
+    );
     const actorWindow = {
       origin: regionalTravel.window.origin,
       terrain: {
@@ -10716,8 +10790,8 @@ export async function createTideweftRuntime(
           fieldResourceCatalog: fieldResourceProjection.catalog,
           fieldResourceEcology,
           traversalFeedback,
-          situatedExpression: activeExpression?.event ?? null,
-          situatedExpressionReception: activeExpression?.reception ?? null,
+          situatedExpressions: activeExpressions,
+          worldAcousticPresentations: activeWorldAcousticInputs,
           dogActorRoster,
           coreWildlifeExpressionSources,
           looseCargoWorld: physicalCargo.looseWorld,
@@ -10889,6 +10963,13 @@ export async function createTideweftRuntime(
         traversalFeedback,
         situatedExpression: activeExpression?.event ?? null,
         situatedExpressionReception: activeExpression?.reception ?? null,
+        ...(activeWorldAcousticInput === null
+          ? {}
+          : {
+              worldAcousticEvent: activeWorldAcousticInput.event,
+              worldAcousticRemainingSteps: activeWorldAcousticInput.remainingSteps,
+              worldAcousticReception: activeWorldAcousticInput.reception,
+            }),
         dogActorRoster,
         coreWildlifeExpressionSources,
         perception,
@@ -11494,7 +11575,7 @@ export async function createTideweftRuntime(
    * the next authoritative world tick. Residents later receive only contacts
    * their own sensory queries admit; this buffer is never itself NPC knowledge.
    */
-  function capturePlayerSenseSample(strongImpact: boolean): void {
+  function capturePlayerSenseSample(acousticEvent: WorldAcousticEvent | null): void {
     const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
     if (position === null) throw new Error("Player has no canonical sensory position");
     const movementSalience = playerMovementSalienceForDelta(
@@ -11514,8 +11595,8 @@ export async function createTideweftRuntime(
     if (lightVisibility === null) {
       throw new Error("Player sensory illumination failed validation");
     }
-    const soundLoudness = strongImpact
-      ? FIXED_POINT
+    const soundLoudness = acousticEvent !== null
+      ? acousticEvent.intensity
       : !moved
         ? 0
         : inWater
@@ -11523,8 +11604,8 @@ export async function createTideweftRuntime(
           : player.pace === "swift"
             ? Math.max(720_000, movementSalience)
             : Math.max(360_000, Math.round(movementSalience * 0.72));
-    const soundRangeUnits = strongImpact
-      ? 28 * TILE_UNITS
+    const soundRangeUnits = acousticEvent !== null
+      ? acousticEvent.rangeUnits
       : !moved
         ? 0
         : inWater
@@ -11540,8 +11621,8 @@ export async function createTideweftRuntime(
       lightVisibility,
       soundLoudness,
       soundRangeUnits,
-      soundClass: strongImpact ? "impact" : inWater ? "splash" : "footsteps",
-      soundInterrupt: strongImpact ? "strong" : "none",
+      soundClass: acousticEvent?.soundClass ?? (inWater ? "splash" : "footsteps"),
+      soundInterrupt: acousticEvent?.interrupt ?? "none",
     });
     if (sample === null) throw new Error("Player sensory sample failed validation");
     nextPlayerSenseSampleOrdinal += 1;
@@ -11579,6 +11660,7 @@ export async function createTideweftRuntime(
       playerIsSleeping()
       && expression.meaning !== "guardian-dog-warning"
       && expression.meaning !== "fish-crow-alarm-call"
+      && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
       regionalTravel.window,
@@ -11709,16 +11791,20 @@ export async function createTideweftRuntime(
     return sample;
   }
 
-  function activeSituatedExpressionPair(): ActiveSituatedExpressionChannelPair | null {
+  function activeSituatedExpressionPairs(): readonly ActiveSituatedExpressionChannelPair[] {
     const pairs = listActiveSituatedExpressionChannelPairs(situatedExpressionChannels);
     if (pairs === null) {
       throw new Error("Situated expression channel bank failed validation");
     }
-    return [...pairs].sort((left, right) => (
+    return Object.freeze([...pairs].sort((left, right) => (
       right.event.priority - left.event.priority
       || right.event.salience - left.event.salience
       || left.event.eventId.localeCompare(right.event.eventId)
-    ))[0] ?? null;
+    )));
+  }
+
+  function activeSituatedExpressionPair(): ActiveSituatedExpressionChannelPair | null {
+    return activeSituatedExpressionPairs()[0] ?? null;
   }
 
   function acceptSituatedExpression(
@@ -12026,6 +12112,9 @@ export async function createTideweftRuntime(
         separationEventId: fall.outcome === "separated"
           ? looseCargoEventId(fall.world.region, fall.world.lastEventOrdinal)
           : null,
+        cargoAcousticSourceId: fall.selectedLotId === null
+          ? null
+          : `cargo-lot:${fall.selectedLotId}`,
       };
       if (fall.outcome === "separated") {
         session.sessionChanges.push(
@@ -12120,8 +12209,13 @@ export async function createTideweftRuntime(
     if (job.complete) terrainPrefetchJobs.shift();
   }
 
-  function tick(present = true): void {
-    if (session.paused || session.titleVisible || session.quietHourVisible) return;
+  function tick(present = true): readonly CommittedWorldAcousticAudioCue[] {
+    if (session.paused || session.titleVisible || session.quietHourVisible) {
+      return Object.freeze([]);
+    }
+    activeWorldAcousticPresentations = advanceWorldAcousticPresentations(
+      activeWorldAcousticPresentations,
+    );
     const advancedExpressionChannels = advanceSituatedExpressionChannelBank(
       situatedExpressionChannels,
     );
@@ -12212,6 +12306,93 @@ export async function createTideweftRuntime(
       adriftTapTicksRemaining = 0;
     }
     const traversalExpressionContext = applyPlayerStepToPhysicalCargo(result, incidentPosition);
+    const stepAcousticEvents: WorldAcousticEvent[] = [];
+    const deferredWorldAcousticAudio: CommittedWorldAcousticAudioCue[] = [];
+    let stepAcousticEvent: WorldAcousticEvent | null = null;
+    if (result.traversalIncident !== null && incidentWorldPosition !== null) {
+      stepAcousticEvent = traversalIncidentAcousticEvent({
+        incident: result.traversalIncident,
+        sourceId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+        sourcePosition: incidentWorldPosition,
+        occurredAtTick: world.meta.completedTick,
+      });
+      if (stepAcousticEvent === null) {
+        throw new Error("Traversal incident could not enter shared world acoustics");
+      }
+    } else if (result.becameSwept) {
+      const sweepPosition = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+      if (sweepPosition === null) {
+        throw new Error("Current sweep has no canonical acoustic position");
+      }
+      const triggerEventId = `player-sweep:${world.meta.completedTick}:${nextPlayerSenseSampleOrdinal}`;
+      stepAcousticEvent = createWorldAcousticEvent({
+        triggerEventId,
+        domain: "traversal",
+        sourceId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+        sourceCategory: "human",
+        sourcePosition: sweepPosition,
+        occurredAtTick: world.meta.completedTick,
+        action: "sweep",
+        sourceMaterial: "body",
+        surfaceMaterial: "water",
+        semanticFamily: "splash",
+        intensity: 760_000,
+        rangeUnits: 24 * WORLD_POSITION_UNITS_PER_TILE,
+        durationSteps: 4,
+        priority: 720_000,
+        salience: 860_000,
+        repetitionKey: "player-sweep:water",
+        textualEligibility: "salience-gated",
+        accessibilityRelevance: "urgent",
+        variantSeed: Number.parseInt(hashCanonical(triggerEventId).slice(0, 8), 16) >>> 0,
+      });
+      if (stepAcousticEvent === null) {
+        throw new Error("Current sweep could not enter shared world acoustics");
+      }
+    }
+    if (stepAcousticEvent !== null) {
+      stepAcousticEvents.push(stepAcousticEvent);
+    }
+    if (
+      traversalExpressionContext?.cargoAcousticSourceId !== null
+      && traversalExpressionContext?.cargoAcousticSourceId !== undefined
+      && traversalExpressionContext.cargo.cargoShock > 0
+      && incidentWorldPosition !== null
+    ) {
+      const cargoTriggerEventId = traversalExpressionContext.separationEventId
+        ?? `cargo-impact:${hashCanonical({
+          incidentId: traversalExpressionContext.incident.id,
+          sourceId: traversalExpressionContext.cargoAcousticSourceId,
+        })}`;
+      const cargoAcousticEvent = cargoImpactAcousticEvent({
+        triggerEventId: cargoTriggerEventId,
+        sourceId: traversalExpressionContext.cargoAcousticSourceId,
+        sourcePosition: incidentWorldPosition,
+        occurredAtTick: world.meta.completedTick,
+        cargoShock: traversalExpressionContext.cargo.cargoShock,
+        cargoKind: traversalExpressionContext.cargo.selectedPayload?.kind === "gear"
+          ? "gear"
+          : "other",
+        surfaceMaterial: stepAcousticEvent?.surfaceMaterial ?? "unknown",
+      });
+      if (cargoAcousticEvent === null) {
+        throw new Error("Committed cargo impact could not enter shared world acoustics");
+      }
+      stepAcousticEvents.push(cargoAcousticEvent);
+    }
+    for (const acousticEvent of stepAcousticEvents) {
+      const reception = acousticEvent.sourceId === LOCAL_PLAYER_LIVING_ACTOR_ID
+        ? createSelfWorldAcousticReception(acousticEvent)
+        : acousticEvent.domain === "object-contact"
+          ? createDirectContactWorldAcousticReception(acousticEvent)
+          : createHeardVisibleWorldAcousticReception(acousticEvent);
+      if (reception === null) throw new Error("Local physical sound lost reception authority");
+      activeWorldAcousticPresentations = admitWorldAcousticPresentation(
+        activeWorldAcousticPresentations,
+        acousticEvent,
+        reception,
+      );
+    }
     if (traversalExpressionContext !== null && incidentWorldPosition !== null) {
       const traversalExpressionIntent = playerTraversalExpressionIntent({
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
@@ -12264,7 +12445,12 @@ export async function createTideweftRuntime(
         }),
       );
     }
-    capturePlayerSenseSample(result.traversalIncident !== null || result.becameSwept);
+    const perceivedStepAcousticEvent = [...stepAcousticEvents].sort(
+      (left, right) => right.intensity - left.intensity
+        || right.salience - left.salience
+        || left.eventId.localeCompare(right.eventId),
+    )[0] ?? null;
+    capturePlayerSenseSample(perceivedStepAcousticEvent);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
       const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
@@ -12680,6 +12866,104 @@ export async function createTideweftRuntime(
       }
       dogActorRoster = workingDogStep.roster;
       settlementWorkingAnimals = workingDogStep.workingAnimals;
+      const priorDogAddresses = [ecologyForStep.dog.address, ...priorWorkingDogs];
+      const movedDogAddresses = [
+        bio0Ecology.dog.address,
+        ...dogActorRoster.actors.map(({ address }) => address),
+      ].filter((after) => {
+        const before = priorDogAddresses.find(({ actorId }) => actorId === after.actorId);
+        return before !== undefined
+          && !sameRuntimeWorldPosition(before.position, after.position);
+      }).sort((left, right) => compareText(left.actorId, right.actorId));
+      if (movedDogAddresses.length > 0) {
+        const eventTimePerception = projectPerception(completedRegionalView, player);
+        const listenerMasking = ambientNoiseAt(
+          completedRegionalView,
+          playerTileIndex(player),
+        );
+        if (listenerMasking === null) {
+          throw new Error("Animal-contact hearing could not resolve ambient masking");
+        }
+        for (const after of movedDogAddresses) {
+          const before = priorDogAddresses.find(({ actorId }) => actorId === after.actorId);
+          const placement = livingActorAddressInRegionalWindow(
+            after,
+            regionalTravel.window,
+          );
+          const tile = placement === null
+            ? undefined
+            : completedRegionalView.terrain.tiles[placement.tileIndex];
+          if (before === undefined || placement === null || tile === undefined) continue;
+          let deltaFromPrior: ReturnType<typeof worldPositionDelta>;
+          let deltaFromPlayer: ReturnType<typeof worldPositionDelta>;
+          try {
+            deltaFromPrior = worldPositionDelta(before.position, after.position);
+            deltaFromPlayer = worldPositionDelta(playerAddress.position, after.position);
+          } catch {
+            continue;
+          }
+          const surfaceMaterial = tile.waterDepth > 60_000
+              || tile.terrain === "deep-water"
+            ? "water" as const
+            : tile.terrain === "marsh"
+              ? "foliage" as const
+              : tile.terrain === "ridge"
+                ? "stone" as const
+                : tile.terrain === "tidal-flat"
+                  ? "sand" as const
+                : "soil" as const;
+          const movementDistance = Math.hypot(deltaFromPrior.x, deltaFromPrior.y);
+          const triggerEventId = `animal-contact:${targetTick}:${hashCanonical({
+            actorId: after.actorId,
+            from: before.position,
+            to: after.position,
+          })}`;
+          const acousticEvent = animalContactAcousticEvent({
+            triggerEventId,
+            sourceId: after.actorId,
+            sourcePosition: after.position,
+            occurredAtTick: targetTick,
+            bodySize: "medium",
+            movement: movementDistance > WORLD_POSITION_UNITS_PER_TILE ? "fast" : "ordinary",
+            surfaceMaterial,
+          });
+          if (acousticEvent === null) {
+            throw new Error("Committed dog movement could not enter shared world acoustics");
+          }
+          const contact = evaluateAudibleContact({
+            listener: { x: 0, y: 0 },
+            source: { x: deltaFromPlayer.x, y: deltaFromPlayer.y },
+            baseRange: acousticEvent.rangeUnits,
+            ambientNoise: listenerMasking,
+            sourceLoudness: acousticEvent.intensity / FIXED_POINT,
+            wind: {
+              x: completedRegionalView.weather.windX / FIXED_POINT,
+              y: completedRegionalView.weather.windY / FIXED_POINT,
+            },
+          });
+          if (contact === null) continue;
+          const directlyVisible = eventTimePerception
+            .detailVisibilityGrades[placement.tileIndex] === VISIBILITY_DIRECT;
+          const reception = directlyVisible
+            ? createHeardVisibleWorldAcousticReception(acousticEvent)
+            : createHeardUnseenWorldAcousticReception(acousticEvent, contact);
+          if (reception === null) {
+            throw new Error("Animal-contact hearing receipt failed validation");
+          }
+          activeWorldAcousticPresentations = admitWorldAcousticPresentation(
+            activeWorldAcousticPresentations,
+            acousticEvent,
+            reception,
+          );
+          deferredWorldAcousticAudio.push(Object.freeze({
+            cue: worldAcousticSoundCue(acousticEvent),
+            volume: acousticEvent.intensity / FIXED_POINT
+              * (0.35 + contact.certainty * 0.65),
+            variantSeed: acousticEvent.presentationVariantSeed,
+            pan: audibleContactPan(contact),
+          }));
+        }
+      }
       const guardianDogSignalIntent = workingDogStep.signalIntent;
       const guardianDogShelterIntentScore = workingDogStep.signalShelterIntentScore;
       const searchLinkedRecovery = advanceRuntimeDomesticRecoveryFromWorkingSearch({
@@ -13308,6 +13592,34 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      const humanDangerWarning = selectHumanDangerWarningExpression(economyView);
+      if (humanDangerWarning !== null) {
+        const audible = playerExpressionAudibility(humanDangerWarning.intent);
+        const reception = audible === null || audible.contact === null
+          ? { kind: "none" as const }
+          : playerDirectlyObservesExpressionSource(humanDangerWarning.intent)
+            ? { kind: "heard-visible" as const, certainty: audible.certainty }
+            : { kind: "heard-unseen" as const, contact: audible.contact };
+        const wasRecovering = player.timeAction !== null;
+        const admitted = acceptSituatedExpression(
+          humanDangerWarning.intent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            createHumanDangerWarningExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              sourceObservationId: humanDangerWarning.sourceObservationId,
+              acceptedAtTick: world.meta.completedTick,
+            })
+          ),
+        );
+        if (admitted && audible !== null && audible.contact !== null) {
+          playerWaitDisturbedThisStep = true;
+          if (wasRecovering) playerRecoveryDisturbedThisStep = true;
+        }
+      }
       if (guardianDogSignalIntent !== null) {
         const assignment = settlementWorkingAnimals.assignments.find(({ workerActorId }) => (
           workerActorId === guardianDogSignalIntent.sourceActorId
@@ -13950,17 +14262,45 @@ export async function createTideweftRuntime(
       );
       soundscape.play("warning", 0.32);
     }
+    for (const acousticEvent of stepAcousticEvents) {
+      // The body event for a retained traversal incident is acknowledged once
+      // below through that incident's durable audio cursor. Independent cargo
+      // contact and non-incident sweeps retain their own event-time sound.
+      if (acousticEvent.triggerEventId === result.traversalIncident?.id) continue;
+      deferredWorldAcousticAudio.push(Object.freeze({
+        cue: worldAcousticSoundCue(acousticEvent),
+        volume: acousticEvent.intensity / FIXED_POINT,
+        variantSeed: acousticEvent.presentationVariantSeed,
+        pan: 0,
+      }));
+    }
     const audibleIncident = acknowledgeIncidentCue(traversalFeedback);
     traversalFeedback = audibleIncident.state;
     if (audibleIncident.incident) {
       const incident = audibleIncident.incident;
-      soundscape.play(incident.cue, incident.kind === "stumble" ? 0.58 : 0.9, incident.variantSeed);
+      const acousticEvent = stepAcousticEvents.find(
+        (event) => event.triggerEventId === incident.id,
+      ) ?? null;
+      if (acousticEvent !== null) {
+        deferredWorldAcousticAudio.push(Object.freeze({
+          cue: worldAcousticSoundCue(acousticEvent),
+          volume: acousticEvent.intensity / FIXED_POINT,
+          variantSeed: acousticEvent.presentationVariantSeed,
+          pan: 0,
+        }));
+      } else {
+        // Compatibility fallback for an already-active legacy incident. New
+        // incidents always cross the structured acoustic-event boundary.
+        deferredWorldAcousticAudio.push(Object.freeze({
+          cue: incident.cue,
+          volume: incident.kind === "stumble" ? 0.58 : 0.9,
+          variantSeed: incident.variantSeed,
+          pan: 0,
+        }));
+      }
       if (incident.kind !== "stumble") {
         if (incident.kind === "fall") {
-          const separator = incident.label.indexOf(" · ");
-          const observedCause = separator < 0
-            ? "You fell"
-            : titleCaseWord(incident.label.slice(separator + 3));
+          const observedCause = titleCaseWord(traversalCauseLabel(incident.primaryCause));
           announce(session, `${observedCause} — ${incident.detail}`, true);
         }
         session.sessionChanges.push(
@@ -14051,6 +14391,7 @@ export async function createTideweftRuntime(
       lastAutosaveTick = world.meta.completedTick;
       saveInBackground();
     }
+    return Object.freeze(deferredWorldAcousticAudio);
   }
 
   function refreshRuntimePresentation(): void {
@@ -15616,6 +15957,7 @@ export async function createTideweftRuntime(
     previousFrame = 0;
     playerStepsSinceWorldTick = 0;
     clearPlayerSenseSamples();
+    activeWorldAcousticPresentations = Object.freeze([]);
     terrainPrefetchJobs = [];
     autopilotPath = [];
     adriftTapControl = null;
@@ -17258,6 +17600,7 @@ export async function createTideweftRuntime(
       session: structuredClone(session),
       fieldResourceEcology: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
+      activeWorldAcousticPresentations,
       situatedExpressionChannels,
       situatedExpressionAdmissions,
       situatedExpressionCausalAuthority,
@@ -17297,9 +17640,9 @@ export async function createTideweftRuntime(
         runtimePerformanceNow(),
       );
     }
+    let committedWorldAcousticAudio: readonly CommittedWorldAcousticAudioCue[];
     try {
-      tick(present);
-      return true;
+      committedWorldAcousticAudio = tick(present);
     } catch (error) {
       if (priorWorld) {
         world = priorWorld;
@@ -17321,6 +17664,7 @@ export async function createTideweftRuntime(
       session = prior.session;
       fieldResourceEcology = prior.fieldResourceEcology;
       traversalFeedback = prior.traversalFeedback;
+      activeWorldAcousticPresentations = prior.activeWorldAcousticPresentations;
       situatedExpressionChannels = prior.situatedExpressionChannels;
       situatedExpressionAdmissions = prior.situatedExpressionAdmissions;
       situatedExpressionCausalAuthority = prior.situatedExpressionCausalAuthority;
@@ -17384,6 +17728,14 @@ export async function createTideweftRuntime(
         }
       }
     }
+    // Physical event audio is an external side effect: release it only after
+    // the fallible authoritative tick has returned successfully. A fail-closed
+    // rollback can restore the event/text queue, but cannot unplay an escaped
+    // sound.
+    for (const audio of committedWorldAcousticAudio) {
+      soundscape.play(audio.cue, audio.volume, audio.variantSeed, audio.pan);
+    }
+    return true;
   }
 
   function frame(now: number): void {
@@ -17779,6 +18131,7 @@ function canonicalPlayerPerceptionCarry(
     | typeof GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
+  semanticSchema: "human-warning" | "fish-crow" = "human-warning",
 ): PlayerPerceptionCarry | null {
   if (
     value === null
@@ -17993,6 +18346,11 @@ function canonicalPlayerPerceptionCarry(
           canonicalChannels,
           trajectory.admissionLedger,
         ))
+      || (semanticSchema === "fish-crow"
+        && !perceptionCarryUsesOnlyFishCrowSemantics(
+          canonicalChannels,
+          trajectory.admissionLedger,
+        ))
       || causalAuthority.records.some(({ committedWorldTick }) => (
         committedWorldTick !== completedWorldTick
       ))
@@ -18182,6 +18540,20 @@ function perceptionCarryUsesOnlyGuardianShelterWhineSemantics(
       && active.vocalization !== "fish-crow-alarm"
     ));
   });
+}
+
+/** Exact semantic fence for outer v38 before human danger warnings persisted. */
+function perceptionCarryUsesOnlyFishCrowSemantics(
+  bank: SituatedExpressionChannelBank,
+  admissions: SituatedExpressionAdmissionLedger,
+): boolean {
+  return admissions.records.every(({ kind }) => kind !== "human-danger-warning")
+    && bank.channels.every((channel) => {
+      const active = channel.state.active;
+      return channel.state.recent.every(({ meaning }) => (
+        meaning !== "human-danger-warning"
+      )) && (active === null || active.meaning !== "human-danger-warning");
+    });
 }
 
 function invalidPlayerPerceptionCarry(): never {
@@ -18547,6 +18919,44 @@ function playerPerceptionCarryMatchesPosition(
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
     }
+    if (admission.kind === "human-danger-warning") {
+      const authority = runtimeHumanDangerWarningExpressionAuthority(
+        economy,
+        admission,
+      );
+      const event = authority === null
+        ? null
+        : humanDangerWarningExpressionEventForTrigger(
+            authority,
+            admission.triggerEventId,
+          );
+      if (
+        authority === null
+        || event === null
+        || !humanDangerWarningAdmissionMatchesWorld(
+          admission,
+          authority,
+          economy.completedTick,
+        )
+        || !residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
+        || !vocalizationSampleMatchesActiveEvent(sample, event)
+      ) return false;
+      const eventTimeReception = humanDangerWarningReceptionAtEventTime({
+        carry,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        event,
+        admission,
+        authority,
+      });
+      return eventTimeReception !== null
+        && !(
+          eventTimeReception.audible
+          && player.timeAction !== null
+          && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
+        );
+    }
     if (admission.kind !== "porter-heavy-departure") return false;
     const event = workingPeopleExpressionEventForTrigger(
       economy,
@@ -18776,18 +19186,64 @@ function situatedExpressionChannelsMatchWorld(
     const matches = economy.residents.filter(
       ({ identity }) => identity.stableId === channel.sourceActorId,
     );
-    if (matches.length !== 1) return false;
-    if (!channel.state.recent.every((memory) => (
-      workingPeopleExpressionMemoryMatchesWorld(economy, memory)
-    ))) return false;
-    if (!(
-      active === null
-      || (
-        residentSourcePositionMatches(economy, channel.sourceActorId, active.position)
-        && workingPeopleExpressionEventMatchesWorld(economy, active)
-      )
-    )) return false;
+    const resident = matches[0];
+    if (matches.length !== 1 || resident === undefined) return false;
+    const warningAuthorityFor = (
+      triggerEventId: string,
+    ): Readonly<{
+      admission: HumanDangerWarningAdmission;
+      authority: HumanDangerWarningExpressionInput;
+    }> | null => {
+      const warningAdmissions = admissions.filter((candidate): candidate is HumanDangerWarningAdmission => (
+        candidate.kind === "human-danger-warning"
+        && candidate.triggerEventId === triggerEventId
+      ));
+      const admission = warningAdmissions[0];
+      if (warningAdmissions.length !== 1 || admission === undefined) return null;
+      const authority = runtimeHumanDangerWarningExpressionAuthority(economy, admission);
+      return authority === null ? null : { admission, authority };
+    };
+    if (!channel.state.recent.every((memory) => {
+      if (memory.meaning !== "human-danger-warning") {
+        return workingPeopleExpressionMemoryMatchesWorld(economy, memory);
+      }
+      const warning = warningAuthorityFor(memory.triggerEventId);
+      return warning !== null
+        && humanDangerWarningExpressionMemoryMatchesWorld(warning.authority, memory);
+    })) return false;
+    if (active !== null) {
+      if (!residentSourcePositionMatches(economy, channel.sourceActorId, active.position)) {
+        return false;
+      }
+      if (active.meaning === "human-danger-warning") {
+        const warning = warningAuthorityFor(active.triggerEventId);
+        if (
+          warning === null
+          || !humanDangerWarningExpressionEventMatchesWorld(warning.authority, active)
+          || !humanDangerWarningReceptionMatchesEventTime({
+            carry,
+            spatialWorld,
+            window: regionalTravel.window,
+            playerTemplate: player,
+            event: active,
+            admission: warning.admission,
+            authority: warning.authority,
+            reception: channel.reception,
+          })
+        ) return false;
+      } else if (!workingPeopleExpressionEventMatchesWorld(economy, active)) {
+        return false;
+      }
+    }
     return admissions.every((admission) => {
+      if (admission.kind === "human-danger-warning") {
+        const authority = runtimeHumanDangerWarningExpressionAuthority(economy, admission);
+        return humanDangerWarningAdmissionMatchesWorld(
+          admission,
+          authority,
+          economy.completedTick,
+        );
+      }
       if (admission.kind !== "porter-heavy-departure") return false;
       const event = workingPeopleExpressionEventForTrigger(
         economy,
@@ -18837,6 +19293,164 @@ function residentSourcePositionMatches(
   const placement = resolveResidentWorldPlacement(economy, resident);
   return placement !== null
     && stableStringify(placement.position) === stableStringify(position);
+}
+
+type HumanDangerWarningAdmission = Extract<
+  SituatedExpressionAdmissionRecord,
+  { readonly kind: "human-danger-warning" }
+>;
+
+function runtimeHumanDangerWarningExpressionAuthority(
+  economy: WorldView,
+  admission: HumanDangerWarningAdmission,
+): HumanDangerWarningExpressionInput | null {
+  const matches = economy.residents.filter(({ identity }) => (
+    identity.stableId === admission.sourceActorId
+  ));
+  const resident = matches[0];
+  if (matches.length !== 1 || resident === undefined) return null;
+  const authority = Object.freeze({ world: economy, resident });
+  const candidate = humanDangerWarningExpressionCandidate(authority);
+  return candidate !== null
+    && candidate.sourceObservationId === admission.sourceObservationId
+    && candidate.intent.triggerEventId === admission.triggerEventId
+    && humanDangerWarningTriggerEventId(
+      admission.sourceActorId,
+      admission.sourceObservationId,
+    ) === admission.triggerEventId
+    ? authority
+    : null;
+}
+
+function humanDangerWarningAdmissionMatchesWorld(
+  admission: HumanDangerWarningAdmission,
+  authority: HumanDangerWarningExpressionInput | null,
+  completedTick: number,
+): boolean {
+  if (authority === null) return false;
+  const candidate = humanDangerWarningExpressionCandidate(authority);
+  const event = humanDangerWarningExpressionEventForTrigger(
+    authority,
+    admission.triggerEventId,
+  );
+  return candidate !== null
+    && event !== null
+    && admission.sourceActorId === authority.resident.identity.stableId
+    && admission.sourceObservationId === candidate.sourceObservationId
+    && admission.triggerEventId === candidate.intent.triggerEventId
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && authority.resident.perception.tick === completedTick
+    && stableStringify(event.position) === stableStringify(candidate.intent.position);
+}
+
+interface HumanDangerWarningReceptionAuthorityInput {
+  readonly carry: PlayerPerceptionCarry;
+  readonly spatialWorld: WorldView;
+  readonly window: RegionalPlayerTravelState["window"];
+  readonly playerTemplate: PlayerState;
+  readonly event: SituatedExpressionEvent;
+  readonly admission: HumanDangerWarningAdmission;
+  readonly authority: HumanDangerWarningExpressionInput;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+function humanDangerWarningReceptionMatchesEventTime(
+  input: HumanDangerWarningReceptionAuthorityInput,
+): boolean {
+  const expected = humanDangerWarningReceptionAtEventTime(input);
+  return expected !== null
+    && stableStringify(expected.reception) === stableStringify(input.reception);
+}
+
+/** Replays one phase-zero human warning without trusting saved reception data. */
+function humanDangerWarningReceptionAtEventTime(
+  input: Omit<HumanDangerWarningReceptionAuthorityInput, "reception">,
+): GuardianDogCallEventTimeReception | null {
+  const {
+    carry,
+    spatialWorld,
+    window,
+    playerTemplate,
+    event,
+    admission,
+    authority,
+  } = input;
+  if (
+    spatialWorld.completedTick !== admission.acceptedAtTick
+    || event.eventId !== admission.eventId
+    || event.sourceActorId !== admission.sourceActorId
+    || event.triggerEventId !== admission.triggerEventId
+    || event.meaning !== "human-danger-warning"
+    || stableStringify(event.position) !== stableStringify(
+      livingActorAddressForResident(authority.world, authority.resident)?.position,
+    )
+  ) return null;
+  const listenerPoint = perceptionIntervalPointInWindow(window, carry.intervalStartPosition);
+  if (listenerPoint === null) return null;
+  const eventTimePlayer: PlayerState = {
+    ...playerTemplate,
+    worldWidth: window.terrain.width,
+    worldHeight: window.terrain.height,
+    x: listenerPoint.x,
+    y: listenerPoint.y,
+    previousX: listenerPoint.x,
+    previousY: listenerPoint.y,
+    velocityX: 0,
+    velocityY: 0,
+    facingMilliRadians: carry.intervalStartFacingMilliRadians,
+  };
+  const reconstructed = playerWorldPositionInRegionalWindow(window, eventTimePlayer);
+  if (
+    reconstructed === null
+    || stableStringify(reconstructed) !== stableStringify(carry.intervalStartPosition)
+  ) return null;
+  let delta: ReturnType<typeof worldPositionDelta>;
+  try {
+    delta = worldPositionDelta(carry.intervalStartPosition, event.position);
+  } catch {
+    return null;
+  }
+  const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
+  if (masking === null) return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const contact = evaluateAudibleContact({
+    listener: { x: 0, y: 0 },
+    source: { x: delta.x, y: delta.y },
+    baseRange: acoustics.rangeUnits,
+    ambientNoise: masking,
+    sourceLoudness: acoustics.loudness / FIXED_POINT,
+    wind: {
+      x: spatialWorld.weather.windX / FIXED_POINT,
+      y: spatialWorld.weather.windY / FIXED_POINT,
+    },
+  });
+  if (contact === null) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  const placement = livingActorAddressForResident(authority.world, authority.resident);
+  if (placement === null) return null;
+  const projected = livingActorAddressInRegionalWindow(placement, window);
+  const directlyVisible = projected !== null
+    && projectPerception(spatialWorld, {
+      ...eventTimePlayer,
+      timeAction: null,
+    }).detailVisibilityGrades[projected.tileIndex] === VISIBILITY_DIRECT;
+  const expected = directlyVisible
+    ? createHeardVisibleSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        Math.max(1, Math.round(contact.certainty * FIXED_POINT)),
+        true,
+      )
+    : createHeardUnseenSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        contact,
+      );
+  return expected === null
+    ? null
+    : Object.freeze({ audible: true, reception: expected });
 }
 
 function guardianDogWarningAdmissionMatchesWorld(
@@ -19426,12 +20040,13 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Save record format fence does not match its embedded envelope");
     }
-    // The retained alarm-event locus first exists in v38. Older wrappers may
+    // The retained wildlife alarm-event locus first exists in v38. Older wrappers may
     // carry the same nested wildlife schema, so reject a resealed historical
     // envelope that tries to smuggle future event-position authority through
-    // either its regional owner or the pre-v25 compatibility core.
+    // either its regional owner or the pre-v25 compatibility core. Outer v38
+    // remains valid now that v39 separately owns persistent human warnings.
     if (
-      decoded.version < GAME_SAVE_VERSION
+      decoded.version < FISH_CROW_ALARM_GAME_SAVE_VERSION
       && [decoded.regionalEcology, decoded.coreEcology].some((serialized) => (
         typeof serialized === "string" && serialized.includes('"eventPosition":')
       ))
@@ -19445,6 +20060,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
@@ -19772,6 +20388,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
@@ -19793,7 +20410,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             world,
             bio0Ecology,
             compatibilityView,
-            decoded.version === GAME_SAVE_VERSION,
+            decoded.version >= FISH_CROW_ALARM_GAME_SAVE_VERSION,
           );
           return runtimeState !== null && runtimeAllStoredAlarmLociMatchActors(runtimeState)
             ? runtimeState
@@ -19803,6 +20420,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION
@@ -20365,12 +20983,20 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (livingActorPlayerChoice === null) {
       throw new Error("Current save contains invalid living-actor player choice state");
     }
-    let perceptionCarry = decoded.version >= GAME_SAVE_VERSION
+    let perceptionCarry = decoded.version === GAME_SAVE_VERSION
       ? canonicalPlayerPerceptionCarry(
           decoded.perceptionCarry,
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
+          "human-warning",
         )
+      : decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            PLAYER_PERCEPTION_CARRY_VERSION,
+            "fish-crow",
+          )
       : decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
@@ -20575,7 +21201,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     );
     if (
       persistedRegionalEcology !== null
-      && decoded.version < GAME_SAVE_VERSION
+      && decoded.version < FISH_CROW_ALARM_GAME_SAVE_VERSION
     ) {
       const adoptedAlarmLoci = adoptLegacyRegionalAlarmEventLoci(
         persistedRegionalEcology,

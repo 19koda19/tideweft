@@ -22,6 +22,7 @@ import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
 } from "./situatedExpressionAcoustics";
+import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
 
 /** One reauthenticated pending expression interval, safe for a save owner to retain. */
 export interface SituatedExpressionTrajectory {
@@ -155,7 +156,8 @@ export function canonicalizeSituatedExpressionTrajectory(
         (latest.kind === "guardian-dog-warning"
           || latest.kind === "guardian-dog-defensive-growl"
           || latest.kind === "guardian-dog-shelter-whine"
-          || latest.kind === "core-wildlife-fish-crow-alarm")
+          || latest.kind === "core-wildlife-fish-crow-alarm"
+          || latest.kind === "human-danger-warning")
         && channel.reception !== null
         && (
           channel.reception.kind === "self"
@@ -198,6 +200,8 @@ function memoryMatchesAdmission(
     || !eventMeaningMatchesAdmission(memory.meaning, record)
     || (record.kind === "core-wildlife-fish-crow-alarm"
       && memory.priority !== 760_000)
+    || (record.kind === "human-danger-warning"
+      && memory.priority !== HUMAN_DANGER_WARNING_PRIORITY)
   ) return false;
   const age = currentPhase - record.admittedAtPlayerStepPhase;
   if (!nonnegativeSafeInteger(age)) return false;
@@ -226,6 +230,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "guardian-dog-shelter-whine";
     case "core-wildlife-fish-crow-alarm":
       return meaning === "fish-crow-alarm-call";
+    case "human-danger-warning":
+      return meaning === "human-danger-warning";
     case "legacy-v33-player":
       return isLegacyV33PlayerMeaning(meaning);
   }
@@ -236,9 +242,12 @@ function eventMatchesAdmission(
   record: SituatedExpressionAdmissionRecord,
 ): boolean {
   if (!eventMeaningMatchesAdmission(event.meaning, record)) return false;
-  return record.kind !== "core-wildlife-fish-crow-alarm"
+  return (record.kind !== "core-wildlife-fish-crow-alarm"
+    && record.kind !== "human-danger-warning")
     || (
-      event.priority === 760_000
+      event.priority === (record.kind === "human-danger-warning"
+        ? HUMAN_DANGER_WARNING_PRIORITY
+        : 760_000)
       && event.tone === "alarmed"
       && event.volume === "shout"
     );
@@ -248,11 +257,14 @@ function sampleAcousticsMatchAdmission(
   sample: SupplementalSoundSample,
   record: SituatedExpressionAdmissionRecord,
 ): boolean {
-  if (record.kind !== "core-wildlife-fish-crow-alarm") return true;
-  const acoustics = situatedExpressionAcoustics({
-    meaning: "fish-crow-alarm-call",
-    volume: "shout",
-  });
+  if (
+    record.kind !== "core-wildlife-fish-crow-alarm"
+    && record.kind !== "human-danger-warning"
+  ) return true;
+  const meaning = record.kind === "core-wildlife-fish-crow-alarm"
+    ? "fish-crow-alarm-call"
+    : "human-danger-warning";
+  const acoustics = situatedExpressionAcoustics({ meaning, volume: "shout" });
   return sample.soundLoudness === acoustics.loudness
     && sample.soundRangeUnits === acoustics.rangeUnits
     && sample.soundInterrupt === "strong";
@@ -276,6 +288,7 @@ function admissionDurationSteps(
     case "guardian-dog-defensive-growl": return 8;
     case "guardian-dog-shelter-whine": return 8;
     case "core-wildlife-fish-crow-alarm": return 6;
+    case "human-danger-warning": return 6;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -292,6 +305,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "guardian-dog-defensive-growl": return 8;
     case "guardian-dog-shelter-whine": return 8;
     case "fish-crow-alarm-call": return 6;
+    case "human-danger-warning": return 6;
   }
 }
 
@@ -306,6 +320,7 @@ function admissionMeaning(
     case "guardian-dog-defensive-growl": return "guardian-dog-defensive-growl";
     case "guardian-dog-shelter-whine": return "guardian-dog-shelter-whine";
     case "core-wildlife-fish-crow-alarm": return "fish-crow-alarm-call";
+    case "human-danger-warning": return "human-danger-warning";
     case "legacy-v33-player": return "steady-after-stumble";
   }
 }

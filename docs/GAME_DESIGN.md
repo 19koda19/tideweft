@@ -129,21 +129,102 @@ example `[A bird calls somewhere north-east.]`. An unheard call has no player
 presentation; that absence does not erase the world event or lawful non-player
 hearing.
 
+That same anonymous alarm may become ordinary human knowledge before it becomes
+speech. At most one deterministic nearby resident who has a fresh, strongly
+attended direct predator sighting or anonymous animal-alarm belief may issue a
+short shouted warning from their actual position. The warning retains the exact
+source observation that caused it, enters the same hearing and expression
+channels, can be heard anonymously by other residents, and cannot recursively
+make every listener repeat the warning. A stale belief, a reported fact without
+the required perception, or an already-heard human danger sound does not create
+a new warning.
+
 Actor expression and observed fact remain different presentations. The short
 line is situated at the authenticated speaker in Chart and Relief and repeated
 in the accessible caption when an exact self or heard-and-visible receipt
 exists. An unseen animal call may instead use only an uncertainty-bounded
 directional caption and never gains an actor-anchored world callout. A bounded
 per-actor channel bank prevents one speaker's cooldown from
-silencing another actor while the presentation budget still shows at most one
-local callout at a time. The physical footing/cargo cause remains in EVENTS,
-where the player directly experienced or observed it, instead of becoming a
-second omniscient voice above the character. Source-bound sound uses ordinary
+silencing another actor. All active expression channels and directly rendered
+legacy resident speech now enter the shared world-label budget: at most four
+labels globally and one per source. The accessible caption surface keeps one
+highest-priority receipt-backed cue; legacy interaction speech is not promoted
+to an auditory caption merely because its currently visible actor can share the
+collision layout. The physical footing/cargo cause remains in
+EVENTS where the player directly experienced or observed it; eligible sound
+text is only a restrained presentation of that same cause, never a second
+omniscient narrator. Source-bound sound uses ordinary
 weather- and distance-aware hearing; the speaker does not hear their own voice
 as an anonymous event, and other humans do not gain cargo contents, intent,
 identity, or a visual position from sound alone. Other work lines remain silent
 until their real completed-work facts have an authoritative owner. This slice
 does not yet add general NPC conversation or a broad animal-expression system.
+
+### Embodied sound and visible acoustics
+
+Living Voice also owns the restrained textual language of the audible physical
+world. Speech, muttering, cries, animal calls, foot/body contact, splashes,
+slides, scrapes, brush, landings, cargo impacts, and later tool, violence, and
+vessel sounds all enter one acoustic perception and presentation grammar. The
+system that caused an action still owns why it happened; it emits a structured
+world acoustic event rather than drawing text. Living Voice decides how a
+lawfully perceived event may be expressed as short sound text alongside speech
+and calls.
+
+A visible and heard authenticated source may carry a brief nearby cue such as
+`scrape`, `splash`, `rustle`, or `thud`. A heard but unseen source receives only
+an uncertainty-bounded directional or descriptive cue. An unheard or fully
+masked source receives nothing. Text never identifies a hidden actor, object,
+tool, cargo content, or cause that the sound itself did not disclose.
+Accessibility can make that same available information clearer; it cannot add
+hearing or localization.
+
+The screen does not narrate every step. Routine walking, continuous wading,
+animal-group movement, and repeated work normally remain audio and animation.
+Salient physical events may become text according to intensity, novelty,
+danger, distance, source relevance, repetition, and the current text load. One
+shared bounded presenter arbitrates human speech, vocal nonverbal sound, animal
+calls, onomatopoeia, and eligible world sound. It uses stable source-associated
+lanes, category priority, same-source repetition control, and suppression so a
+warning stays readable and no busy settlement becomes a wall of words. Future
+multi-source grouping must use this presenter rather than a parallel path.
+
+Current implementation remains intentionally partial, but three representative
+physical seams are live in the local candidate. An accepted stumble, fall,
+water slip, or current sweep becomes one structured event—without reading its
+legacy display sentence—and that same event drives audio semantics, a bounded
+physical-sound sample for lawful NPC hearing, and an optional
+`scrape`/`splash`/`slosh`/`thud`-family text candidate. A committed cargo shock
+may emit a separate source-bound `clatter`, `thud`, or `splash` from the same
+conserved lot. Actual movement of the existing medium-sized dogs also derives a
+body/surface contact event from distance and terrain; water and vegetation can
+therefore sound differently from ordinary dry ground without making every step
+visible text.
+
+Active Living Voice channels, legacy visible resident speech, animal calls,
+and eligible physical candidates enter one Chart/Relief layout with
+deterministic source-relative lanes, collision suppression, a four-label global
+cap, and a one-label-per-source cap. The physical presentation queue is bounded
+and coalesces repeated semantics from the same source. A busy moment loses
+low-value text rather than its audio or world consequence. Aggregate
+multi-source clustering remains later work rather than a claimed consequence of
+that temporal coalescing.
+
+Physical sound text is transient and does not persist or replay after reload.
+An unseen physical source receives no exact world anchor or identity from
+hearing alone; authenticated direct physical contact may still localize the
+object the player is carrying. When an unseen source's lawful hearing receipt
+is strong enough, the accessible surface may instead show only the coarse
+audible word and direction. Ambient-water syllables are
+still renderer-owned legacy presentation. The old ADRIFT syllable fallback is
+suppressed whenever a production view supplies the shared `acousticText`
+projection, but remains available to legacy views that omit it. Cargo impact
+and representative dog-body contact are live; broader animal bodies, arbitrary
+object/foliage contacts, general physical-sound consumers, tool/material work,
+violence, and vessel producers remain incomplete. Future Work of Hands, Weight
+of Violence, Long Crossing, traversal equipment, tools, and vehicles inherit
+this acoustic world; none receives a separate crafting, combat, or boat
+subtitle universe.
 
 Tide Harps are spatial understanding, not crafting inventory. The pure selector chooses an exact maximum knot-disjoint set; equally numerous arrangements prefer shorter total strings, then canonical fixed-piece IDs. Their eight deterministic names—Glass-Ebb, Gullweather, Moon-Reed, Lantern Shoal, Mothcurrent, Brine Lullaby, Quiet Rigging, and Estuary Chime—give stable personality without random loot. Because the formation is derived from Wayknots already in the save, it introduces no currency, resource sink, timer, PlayerState field, or migration.
 

@@ -237,6 +237,7 @@ export interface PlayerIncidentView {
  * bounded callout budget and never infer additional dialogue.
  */
 export interface SituatedExpressionView {
+  readonly acousticKind: "speech" | "animal-call";
   readonly id: string;
   readonly sourceActorId: string;
   readonly sourceKind: "player" | "human" | "animal" | "supernatural";
@@ -247,10 +248,43 @@ export interface SituatedExpressionView {
   /** 0 at birth, 1 when presentation should end. */
   readonly progress: number;
   readonly priority: number;
+  readonly salience: number;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
   /** Presentation variation only. This is not the expression's identity. */
   readonly variantSeed: number;
 }
+
+/**
+ * One perceived physical sound admitted to the same bounded text layer as
+ * speech and animal calls. It contains heard semantics, never hidden cause.
+ */
+export interface PhysicalAcousticTextView {
+  readonly acousticKind: "physical";
+  readonly id: string;
+  readonly sourceId: string;
+  readonly sourceKind: "player" | "human" | "animal" | "supernatural" | "object" | "tool" | "vehicle" | "world";
+  readonly text: string;
+  readonly position: WorldPoint;
+  readonly progress: number;
+  readonly priority: number;
+  readonly salience: number;
+  readonly tone: "restrained" | "alarmed";
+  readonly variantSeed: number;
+  readonly semanticFamily:
+    | "scrape"
+    | "splash"
+    | "slosh"
+    | "rustle"
+    | "thud"
+    | "clatter"
+    | "creak"
+    | "crack"
+    | "skitter"
+    | "vocalization"
+    | "other";
+}
+
+export type AcousticTextView = SituatedExpressionView | PhysicalAcousticTextView;
 
 /**
  * Current physical ADRIFT facts. This object is absent outside swept mode so
@@ -722,6 +756,8 @@ export interface TideweftView {
    * player incident callout path.
    */
   readonly expressions?: readonly SituatedExpressionView[];
+  /** Shared bounded acoustic-text candidates consumed by both world views. */
+  readonly acousticText?: readonly AcousticTextView[];
   readonly camera: CameraView;
   readonly paused?: boolean;
 }

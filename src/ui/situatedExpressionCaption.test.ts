@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { situatedExpressionCaptionCopy } from "./createTideweftUI";
+import {
+  ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT,
+  createAcousticCaptionAnnouncementLedger,
+  shouldResetAcousticCaptionAnnouncementLedger,
+  situatedExpressionCaptionCopy,
+  situatedExpressionCaptionVisibleText,
+} from "./situatedExpressionCaption";
 import type { SituatedExpressionCaptionUIView } from "./types";
 
 const uiSource = readFileSync(new URL("./createTideweftUI.ts", import.meta.url), "utf8");
@@ -17,9 +23,96 @@ describe("situated expression caption", () => {
     assertive: true,
   };
 
+  it("does not replay a still-active caption after a temporary higher-priority cue", () => {
+    const ledger = createAcousticCaptionAnnouncementLedger();
+    expect(ledger.admit("warning:w")).toBe(true);
+    expect(ledger.admit("physical:p")).toBe(true);
+    expect(ledger.admit("warning:w")).toBe(false);
+  });
+
+  it("bounds announcement memory while admitting genuinely later event identities", () => {
+    const ledger = createAcousticCaptionAnnouncementLedger();
+    for (let index = 0; index <= ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT; index += 1) {
+      expect(ledger.admit(`caption:${index}`)).toBe(true);
+    }
+    expect(ledger.admit("caption:0")).toBe(true);
+    expect(ledger.admit(`caption:${ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT}`)).toBe(false);
+  });
+
+  it("admits a reused deterministic event ID after an accepted world replacement", () => {
+    const ledger = createAcousticCaptionAnnouncementLedger();
+    expect(ledger.admit("acoustic:traversal:reused-id")).toBe(true);
+    expect(ledger.admit("acoustic:traversal:reused-id")).toBe(false);
+    ledger.reset();
+    expect(ledger.admit("acoustic:traversal:reused-id")).toBe(true);
+  });
+
+  it("requires both a replacement request and authoritative title closure before reset", () => {
+    expect(shouldResetAcousticCaptionAnnouncementLedger(false, false)).toBe(false);
+    expect(shouldResetAcousticCaptionAnnouncementLedger(true, true)).toBe(false);
+    expect(shouldResetAcousticCaptionAnnouncementLedger(true, false)).toBe(true);
+  });
+
   it("shares exact speaker and expression wording with the live announcement", () => {
     expect(situatedExpressionCaptionCopy(caption))
       .toBe("Nearby courier: Keep off the flooded boards.");
+    expect(situatedExpressionCaptionVisibleText(caption))
+      .toBe("Keep off the flooded boards.");
+  });
+
+  it("keeps a heard-unseen human warning generic while exposing only coarse direction", () => {
+    const warning: SituatedExpressionCaptionUIView = {
+      id: "expression:human:hidden-warning",
+      speakerLabel: "Someone",
+      text: "Watch out!",
+      tone: "alarmed",
+      presentationKind: "speech",
+      directionLabel: "east",
+      assertive: true,
+    };
+
+    expect(situatedExpressionCaptionCopy(warning))
+      .toBe("Someone, somewhere east: Watch out!");
+    expect(situatedExpressionCaptionVisibleText(warning))
+      .toBe("Watch out! · east");
+    expect(situatedExpressionCaptionCopy({
+      ...warning,
+      directionLabel: "direction unclear",
+    })).toBe("Someone, direction unclear: Watch out!");
+    expect(situatedExpressionCaptionCopy({
+      ...warning,
+      directionLabel: "all around",
+    })).toBe("Someone, the voice seeming all around: Watch out!");
+    expect(JSON.stringify(warning)).not.toContain("Mara");
+    expect(JSON.stringify(warning)).not.toContain("sourceActorId");
+    expect(JSON.stringify(warning)).not.toContain("position");
+  });
+
+  it("presents physical acoustics as restrained semantics without inventing a speaker", () => {
+    const physical: SituatedExpressionCaptionUIView = {
+      id: "acoustic:traversal:scrape",
+      speakerLabel: "Sound",
+      text: "scrape",
+      tone: "restrained",
+      presentationKind: "physical",
+      physicalSoundKind: "scrape",
+      assertive: false,
+    };
+
+    expect(situatedExpressionCaptionCopy(physical)).toBe("[scrape]");
+    expect(situatedExpressionCaptionVisibleText(physical)).toBe("[scrape]");
+    expect(situatedExpressionCaptionCopy({
+      ...physical,
+      directionLabel: "east",
+    })).toBe("[scrape somewhere east.]");
+    expect(situatedExpressionCaptionVisibleText({
+      ...physical,
+      directionLabel: "east",
+    })).toBe("[scrape · east]");
+    const { physicalSoundKind: _omitted, ...unclassifiedPhysical } = physical;
+    expect(situatedExpressionCaptionCopy(unclassifiedPhysical)).toBe("[sound]");
+    expect(situatedExpressionCaptionCopy(physical)).not.toContain("Sound");
+    expect(situatedExpressionCaptionCopy(physical)).not.toContain(":");
   });
 
   it("renders animal calls as sounds rather than quoted human speech", () => {
@@ -160,6 +253,8 @@ describe("situated expression caption", () => {
   it("keeps one pointer-transparent visible caption above the compact controls", () => {
     expect(uiSource).toContain('createElement("p", "situated-expression-caption")');
     expect(uiSource).toContain("expressionCaption.hidden = true");
+    expect(uiSource).toContain("situatedExpressionCaptionVisibleText(caption)");
+    expect(uiSource).toContain('caption.presentationKind !== "physical"');
     expect(uiSource).not.toContain("expression-transcript");
     const captionRule = styles.match(/\.situated-expression-caption \{([\s\S]*?)\n\}/u)?.[1] ?? "";
     expect(captionRule).toContain("pointer-events: none");
@@ -171,9 +266,11 @@ describe("situated expression caption", () => {
     );
   });
 
-  it("deduplicates by a caption-only ID and never infers urgency from tone", () => {
-    expect(uiSource).toContain('let lastExpressionAnnouncementId = ""');
-    expect(uiSource).toContain("caption.id === lastExpressionAnnouncementId");
+  it("deduplicates through the bounded caption-ID ledger and never infers urgency from tone", () => {
+    expect(uiSource).toContain("createAcousticCaptionAnnouncementLedger()");
+    expect(uiSource).toContain("expressionAnnouncementLedger.admit(caption.id)");
+    expect(uiSource).toContain("expressionAnnouncementLedger.reset()");
+    expect(uiSource).toContain("acousticCaptionWorldReplacementDispatched");
     expect(uiSource).toContain("announce(copy, caption.assertive === true)");
     expect(uiSource).not.toContain('caption.tone === "alarmed"');
   });

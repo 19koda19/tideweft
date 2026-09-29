@@ -38,6 +38,15 @@ import {
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
 import {
+  createHeardUnseenWorldAcousticReception,
+  createHeardVisibleWorldAcousticReception,
+  createSelfWorldAcousticReception,
+} from "./worldAcousticPresentation";
+import {
+  createWorldAcousticEvent,
+  type WorldAcousticEvent,
+} from "./worldAcoustics";
+import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
 } from "./worldPosition";
@@ -106,6 +115,36 @@ function canonicalExpression(
     throw new Error("Expression fixture expired before projection");
   }
   return advanced.active;
+}
+
+function canonicalPhysicalAcousticEvent(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId = "traversal:projection:physical",
+  sourceId: string = LOCAL_PLAYER_LIVING_ACTOR_ID,
+): WorldAcousticEvent {
+  const event = createWorldAcousticEvent({
+    triggerEventId,
+    domain: "traversal",
+    sourceId,
+    sourceCategory: sourceId === LOCAL_PLAYER_LIVING_ACTOR_ID ? "human" : "object",
+    sourcePosition: position,
+    occurredAtTick: 42,
+    action: "slide",
+    sourceMaterial: sourceId === LOCAL_PLAYER_LIVING_ACTOR_ID ? "body" : "cargo",
+    surfaceMaterial: "stone",
+    semanticFamily: "scrape",
+    intensity: 520_000,
+    rangeUnits: 18_000,
+    durationSteps: 6,
+    priority: 540_000,
+    salience: 680_000,
+    repetitionKey: `physical-scrape:${sourceId}`,
+    textualEligibility: "salience-gated",
+    accessibilityRelevance: "informative",
+    variantSeed: 0xa11,
+  });
+  if (event === null) throw new Error("Physical acoustic projection fixture was rejected");
+  return event;
 }
 
 function canonicalDogWarning(
@@ -213,6 +252,33 @@ function canonicalFishCrowAlarm(
   return reduced.state.active;
 }
 
+function canonicalHumanDangerWarning(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId: string,
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "human-danger-warning",
+    family: "warning",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 900_000,
+    salience: 820_000,
+    variantSeed: 0xcafe,
+    durationSteps: 6,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Human warning expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function wildlifePositionInWindow(
   window: ReturnType<typeof createRegionalTerrainWindow>,
   tileX = 18,
@@ -307,6 +373,7 @@ describe("situated expression game projection", () => {
       situatedExpressionReception: selfReception(expression),
     }).expressions)
       .toEqual([{
+        acousticKind: "speech",
         id: "situated-expression:event:v1:2011fc98f7767b00",
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
         sourceKind: "player",
@@ -315,9 +382,149 @@ describe("situated expression game projection", () => {
         position: { x: 894, y: 1_644 },
         progress: 0.375,
         priority: 420_000,
+        salience: 540_000,
         tone: "strained",
         variantSeed: 81,
       }]);
+  });
+
+  it("combines lawful physical sound with situated expression without replacing expressions", () => {
+    const { player, world } = projectionFixture();
+    const expression = canonicalExpression("projection:combined-acoustic-text");
+    const worldAcousticEvent = canonicalPhysicalAcousticEvent(expression.position);
+    const worldAcousticReception = createSelfWorldAcousticReception(worldAcousticEvent);
+    if (worldAcousticReception === null) throw new Error("Self acoustic receipt was rejected");
+
+    const view = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: selfReception(expression),
+      worldAcousticEvent,
+      worldAcousticEventRemainingSteps: 4,
+      worldAcousticReception,
+    });
+
+    expect(view.expressions).toHaveLength(1);
+    expect(view.expressions?.[0]).toMatchObject({
+      acousticKind: "speech",
+      id: expression.eventId,
+    });
+    expect(view.acousticText).toHaveLength(2);
+    expect(view.acousticText?.[0]).toBe(view.expressions?.[0]);
+    expect(view.acousticText?.[1]).toMatchObject({
+      acousticKind: "physical",
+      id: worldAcousticEvent.eventId,
+      sourceId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+      sourceKind: "player",
+      semanticFamily: "scrape",
+      position: { x: 894, y: 1_644 },
+    });
+  });
+
+  it("projects every bounded active expression and physical sound into one acoustic list", () => {
+    const { player, world } = projectionFixture();
+    const firstExpression = canonicalExpression("projection:many:first");
+    const secondExpression = canonicalExpression("projection:many:second");
+    const firstPhysical = canonicalPhysicalAcousticEvent(
+      firstExpression.position,
+      "projection:many:physical:first",
+    );
+    const secondPhysical = canonicalPhysicalAcousticEvent(
+      secondExpression.position,
+      "projection:many:physical:second",
+    );
+    const firstPhysicalReception = createSelfWorldAcousticReception(firstPhysical);
+    const secondPhysicalReception = createSelfWorldAcousticReception(secondPhysical);
+    if (firstPhysicalReception === null || secondPhysicalReception === null) {
+      throw new Error("Self acoustic receipts were rejected");
+    }
+
+    const view = projectGameView(world, player, {
+      situatedExpressions: [
+        { event: firstExpression, reception: selfReception(firstExpression) },
+        { event: secondExpression, reception: selfReception(secondExpression) },
+      ],
+      worldAcousticPresentations: [
+        { event: firstPhysical, reception: firstPhysicalReception, remainingSteps: 4 },
+        { event: secondPhysical, reception: secondPhysicalReception, remainingSteps: 3 },
+      ],
+    });
+
+    expect(view.expressions?.map(({ id }) => id)).toEqual([
+      firstExpression.eventId,
+      secondExpression.eventId,
+    ]);
+    expect(view.acousticText?.map(({ id }) => id)).toEqual([
+      firstExpression.eventId,
+      secondExpression.eventId,
+      firstPhysical.eventId,
+      secondPhysical.eventId,
+    ]);
+  });
+
+  it("adapts directly visible resident speech into the shared acoustic layer", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) => (
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    ));
+    if (resident === undefined) throw new Error("fixture needs an in-window porter");
+    const placement = projectResidentWorldPosition(world, resident, 1);
+    if (placement === null) throw new Error("fixture porter lost its projected position");
+    player.x = Math.floor(placement.position.x * TILE_UNITS);
+    player.y = Math.floor(placement.position.y * TILE_UNITS);
+    player.previousX = player.x;
+    player.previousY = player.y;
+    const baseline = projectGameView(world, player);
+    const visiblePorter = baseline.porters.find(({ id }) => Number(id) === resident.id);
+    if (visiblePorter === undefined) throw new Error("fixture needs a directly visible porter");
+    const residentId = Number(visiblePorter.id);
+    const speech = "Mind the wet stone.";
+
+    const view = projectGameView(world, player, {
+      residentSpeech: new Map([[residentId, speech]]),
+    });
+
+    expect(view.porters.find(({ id }) => id === visiblePorter.id)?.speech).toBe(speech);
+    expect(view.acousticText).toContainEqual(expect.objectContaining({
+      acousticKind: "speech",
+      sourceKind: "human",
+      text: speech,
+      position: visiblePorter.position,
+    }));
+  });
+
+  it("withholds exact physical sound anchors for unheard, unseen, or mismatched receipts", () => {
+    const { player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const position = wildlifePositionInWindow(window);
+    const hiddenSourceId = "object:hidden-private-cargo";
+    const worldAcousticEvent = canonicalPhysicalAcousticEvent(
+      position,
+      "cargo:hidden-impact",
+      hiddenSourceId,
+    );
+    const otherEvent = canonicalPhysicalAcousticEvent(
+      position,
+      "cargo:other-impact",
+      "object:other-cargo",
+    );
+    const heardUnseen = createHeardUnseenWorldAcousticReception(worldAcousticEvent, {
+      bearing: { centerRadians: 0.5, uncertaintyRadians: 0.2 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.72,
+    });
+    const mismatched = createHeardVisibleWorldAcousticReception(otherEvent);
+
+    for (const worldAcousticReception of [undefined, heardUnseen, mismatched]) {
+      const view = projectGameView(world, player, {
+        worldAcousticEvent,
+        worldAcousticEventRemainingSteps: 4,
+        ...(worldAcousticReception === undefined ? {} : { worldAcousticReception }),
+      });
+      expect(view.expressions).toEqual([]);
+      expect(view.acousticText).toEqual([]);
+      expect(JSON.stringify(view.acousticText)).not.toContain(hiddenSourceId);
+      expect(JSON.stringify(view.acousticText)).not.toContain(String(position.localX));
+      expect(JSON.stringify(view.acousticText)).not.toContain(String(position.localY));
+    }
   });
 
   it("fails closed when the canonical expression is outside the spatial window", () => {
@@ -472,6 +679,53 @@ describe("situated expression game projection", () => {
       situatedExpression: fabricated,
       situatedExpressionReception: heardVisibleReception(fabricated),
     }).expressionCaption).toBeUndefined();
+  });
+
+  it("keeps a heard-unseen human warning generic, directional, and free of an exact world anchor", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    resident.playerKnowledge.facts.push("name");
+    const expression = canonicalHumanDangerWarning(
+      placement.position,
+      "human-warning:hidden-danger",
+      resident.identity.stableId,
+    );
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI / 60 },
+      distanceBand: { minimum: 3_000, maximum: 11_000 },
+      certainty: 0.74,
+    });
+    if (reception === null) throw new Error("Hidden human warning reception was rejected");
+
+    const game = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    });
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressionCaption;
+
+    expect(game.expressions).toEqual([]);
+    expect(caption).toMatchObject({
+      speakerLabel: "Someone",
+      presentationKind: "speech",
+      directionLabel: "east",
+      tone: "alarmed",
+      assertive: true,
+    });
+    expect(["Watch out!", "Heads up!"]).toContain(caption?.text);
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain(resident.identity.stableId);
+    expect(JSON.stringify(caption)).not.toContain(resident.name);
+    expect(JSON.stringify(caption)).not.toContain(String(placement.position.localX));
   });
 
   it("anchors a heard-visible guardian bark to its authenticated dog without inventing a name", () => {

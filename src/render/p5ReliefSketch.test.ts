@@ -2038,6 +2038,9 @@ describe("Relief ADRIFT presentation path", () => {
     expect(Number.parseFloat(floatingLabel.style.left ?? "NaN")).toBeLessThanOrEqual(186.4);
     expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeGreaterThanOrEqual(62);
     expect(Number.parseFloat(floatingLabel.style.top ?? "NaN")).toBeLessThanOrEqual(206);
+    expect(layer?.children.some((child) =>
+      child.textContent === "OHM" && child.dataset.tone === "sound" && !child.removed))
+      .toBe(true);
     expect(ambientMaterial).toHaveBeenCalledWith("#55c7dc");
     expect(stroke.mock.calls.some(([value]) =>
       value === "#e5fbff"
@@ -2048,17 +2051,21 @@ describe("Relief ADRIFT presentation path", () => {
     line.mockClear();
     stroke.mockClear();
     ambientMaterial.mockClear();
-    harness.setView({
+    const paddlingWithAcousticText: TideweftView = {
       ...floating,
+      acousticText: [],
       player: {
         ...floating.player,
         adrift: { ...floating.player.adrift!, paddling: true },
       },
-    });
+    };
+    harness.setView(paddlingWithAcousticText);
     harness.draw();
     const paddleLabel = layer?.children.find((child) =>
       child.textContent === "PADDLING · PADDLE TOWARD SHALLOW WATER" && !child.removed);
     if (!paddleLabel) throw new Error("expected paddling ADRIFT label");
+    expect(layer?.children.some((child) =>
+      child.dataset.tone === "sound" && !child.removed)).toBe(false);
     const renderedCopy = layer?.children
       .filter((child) => !child.removed)
       .map((child) => child.textContent ?? "")
@@ -2071,6 +2078,13 @@ describe("Relief ADRIFT presentation path", () => {
     )).toBe(true);
     expect(line).toHaveBeenCalledTimes(legacyLineCount + 1);
     expect(line).toHaveBeenCalledWith(0, 0, 0, 11.52, 3.84, 5.76);
+
+    const { acousticText: _acousticText, ...legacyPaddling } = paddlingWithAcousticText;
+    harness.setView(legacyPaddling);
+    harness.draw();
+    expect(layer?.children.some((child) =>
+      child.textContent === "WHHSH" && child.dataset.tone === "sound" && !child.removed))
+      .toBe(true);
 
     harness.setView(legacySwept);
     harness.draw();
@@ -2099,6 +2113,7 @@ describe("Relief situated expression presentation", () => {
       },
       expressions: [
         {
+          acousticKind: "speech",
           id: "b-equal",
           sourceActorId: "human:b",
           sourceKind: "human",
@@ -2107,10 +2122,12 @@ describe("Relief situated expression presentation", () => {
           position: { x: 48, y: 48 },
           progress: 0.2,
           priority: 5,
+          salience: 4,
           tone: "restrained",
           variantSeed: 4,
         },
         {
+          acousticKind: "animal-call",
           id: "a-equal",
           sourceActorId: "animal:a",
           sourceKind: "animal",
@@ -2119,6 +2136,7 @@ describe("Relief situated expression presentation", () => {
           position: { x: 48, y: 48 },
           progress: 0.3,
           priority: 5,
+          salience: 4,
           tone: "alarmed",
           variantSeed: 9,
         },
@@ -2152,6 +2170,136 @@ describe("Relief situated expression presentation", () => {
     harness.draw();
     expect(layer?.children.some((child) =>
       child.textContent === "LEGACY INCIDENT" && !child.removed)).toBe(true);
+    harness.renderer.destroy();
+  });
+
+  it("uses the unified acoustic layer and never revives legacy text for an explicit empty list", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("relief-acoustic-text", { x: 48, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      porters: [{
+        id: "porter:shared-acoustic",
+        position: { x: 48, y: 48 },
+        facing: 0,
+        state: "alert",
+        emotionMark: ":S",
+        speech: "LEGACY PORTER SPEECH",
+      }],
+      player: {
+        ...base.player,
+        incident: {
+          id: "legacy-acoustic-stumble",
+          kind: "stumble",
+          label: "LEGACY ACOUSTIC INCIDENT",
+          progress: 0.2,
+          variantSeed: 1,
+        },
+      },
+      expressions: [{
+        acousticKind: "speech",
+        id: "legacy-relief-expression",
+        sourceActorId: "human:legacy",
+        sourceKind: "human",
+        speakerLabel: "Nearby porter",
+        text: "LEGACY RELIEF EXPRESSION",
+        position: { x: 48, y: 48 },
+        progress: 0.2,
+        priority: 4,
+        salience: 4,
+        tone: "restrained",
+        variantSeed: 2,
+      }],
+      acousticText: [
+        {
+          acousticKind: "physical",
+          id: "physical-thud",
+          sourceId: "object:crate",
+          sourceKind: "object",
+          text: "RELIEF THUD",
+          position: { x: 48, y: 48 },
+          progress: 0.3,
+          priority: 9,
+          salience: 3,
+          tone: "alarmed",
+          variantSeed: 91,
+          semanticFamily: "thud",
+        },
+        {
+          acousticKind: "animal-call",
+          id: "animal-warning",
+          sourceActorId: "animal:warning",
+          sourceKind: "animal",
+          speakerLabel: "Nearby animal",
+          text: "RELIEF WARNING CALL",
+          position: { x: 48, y: 48 },
+          progress: 0.4,
+          priority: 9,
+          salience: 7,
+          tone: "alarmed",
+          variantSeed: 37,
+        },
+      ],
+    };
+    const harness = renderHarness(current);
+    harness.draw();
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const selected = layer?.children.find((child) =>
+      child.textContent === "RELIEF WARNING CALL" && !child.removed);
+    if (!selected) throw new Error("expected unified Relief acoustic label");
+    expect(selected.dataset).toMatchObject({
+      acousticKind: "animal-call",
+      expressionTone: "alarmed",
+      sourceKind: "animal",
+      tone: "expression",
+    });
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY RELIEF EXPRESSION" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY ACOUSTIC INCIDENT" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.dataset.tone === "porter-emotion" && !child.removed)).toBe(false);
+
+    const physicalAcousticText = current.acousticText?.find(({ acousticKind }) => (
+      acousticKind === "physical"
+    ));
+    if (!physicalAcousticText) throw new Error("expected physical acoustic fixture");
+    current = { ...current, acousticText: [physicalAcousticText] };
+    harness.setView(current);
+    harness.draw();
+    const physical = layer?.children.find((child) =>
+      child.textContent === "RELIEF THUD" && !child.removed);
+    if (!physical) throw new Error("expected physical Relief acoustic label");
+    expect(physical.dataset).toMatchObject({
+      acousticKind: "physical",
+      expressionTone: "alarmed",
+      semanticFamily: "thud",
+      sourceKind: "object",
+      tone: "incident",
+    });
+
+    current = { ...current, acousticText: [] };
+    harness.setView(current);
+    harness.draw();
+    expect(selected.removed).toBe(true);
+    expect(physical.removed).toBe(true);
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY RELIEF EXPRESSION" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY ACOUSTIC INCIDENT" && !child.removed)).toBe(false);
+
+    const { acousticText: _acousticText, ...expressionFallback } = current;
+    current = expressionFallback;
+    harness.setView(current);
+    harness.draw();
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY RELIEF EXPRESSION" && !child.removed)).toBe(true);
+
+    const { expressions: _expressions, ...incidentFallback } = current;
+    harness.setView(incidentFallback);
+    harness.draw();
+    expect(layer?.children.some((child) =>
+      child.textContent === "LEGACY ACOUSTIC INCIDENT" && !child.removed)).toBe(true);
     harness.renderer.destroy();
   });
 });

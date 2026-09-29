@@ -15,6 +15,7 @@ export interface SituatedExpressionAcoustics {
 
 export type SituatedExpressionSoundClass =
   | "human-vocalization"
+  | "danger-sound"
   | "animal-alarm"
   | "animal-call";
 
@@ -33,6 +34,7 @@ export function situatedExpressionSoundClass(
   value: Pick<SituatedExpressionEvent, "meaning"> | SituatedExpressionMeaning,
 ): SituatedExpressionSoundClass {
   const meaning = typeof value === "string" ? value : value.meaning;
+  if (meaning === "human-danger-warning") return "danger-sound";
   if (ANIMAL_ALARM_MEANINGS.has(meaning)) return "animal-alarm";
   if (ANIMAL_CALL_MEANINGS.has(meaning)) return "animal-call";
   return "human-vocalization";

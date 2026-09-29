@@ -29,6 +29,7 @@ import type {
   ResidentAboutUIView,
   SaveWarningUIView,
   SettlementInspectorUIView,
+  SituatedExpressionCaptionUIView,
   TideweftUIView,
 } from "../ui/types";
 import { adriftPresentation } from "../render/adriftPresentation";
@@ -122,6 +123,14 @@ import {
 import type { DogActorRosterState } from "./dogActorRoster";
 import { audibleContactDirection } from "./audibleContactPresentation";
 import { eventSettlementLocusIds } from "./eventObservation";
+import {
+  projectWorldAcousticText,
+  realizeWorldAcousticText,
+  worldAcousticPresentationReceptionMatchesEvent,
+  worldAcousticReceptionAudibleContact,
+  type WorldAcousticPresentationReception,
+} from "./worldAcousticPresentation";
+import type { WorldAcousticEvent } from "./worldAcoustics";
 
 export interface UIProjectionOptions {
   /** Full compatibility economy used for names, Promises, people, routes, and events. */
@@ -162,6 +171,12 @@ export interface UIProjectionOptions {
   readonly dogActorRoster?: DogActorRosterState;
   /** Same bounded materialized wildlife source set used by world-callout projection. */
   readonly coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[];
+  /** One authoritative physical sound competing for the shared caption slot. */
+  readonly worldAcousticEvent?: WorldAcousticEvent | null;
+  /** Current bounded presentation lifetime for `worldAcousticEvent`. */
+  readonly worldAcousticRemainingSteps?: number;
+  /** Event-bound proof that the player lawfully perceived the physical sound. */
+  readonly worldAcousticReception?: WorldAcousticPresentationReception | null;
   /** Runtime-authorized in-person store response; absence reveals no remote store state. */
   readonly settlementFoodStoreAction?: Readonly<{
     readonly id: string;
@@ -303,6 +318,35 @@ function projectResidentAbout(
   };
 }
 
+interface AcousticCaptionCandidate {
+  readonly caption: SituatedExpressionCaptionUIView;
+  readonly priority: number;
+  readonly salience: number;
+  readonly stableId: string;
+}
+
+/** One deterministic shared caption slot; simulation timing remains untouched. */
+function selectAcousticCaption(
+  expression: AcousticCaptionCandidate | null,
+  physical: AcousticCaptionCandidate | null,
+): SituatedExpressionCaptionUIView | undefined {
+  if (expression === null) return physical?.caption;
+  if (physical === null) return expression.caption;
+  if (expression.priority !== physical.priority) {
+    return expression.priority > physical.priority
+      ? expression.caption
+      : physical.caption;
+  }
+  if (expression.salience !== physical.salience) {
+    return expression.salience > physical.salience
+      ? expression.caption
+      : physical.caption;
+  }
+  return expression.stableId <= physical.stableId
+    ? expression.caption
+    : physical.caption;
+}
+
 export function projectUIView(
   world: WorldView,
   player: PlayerState,
@@ -435,6 +479,83 @@ export function projectUIView(
   const presentedExpressionText = presentedAnimalCallKind === "bird-call"
     ? "CALL! CALL!"
     : situatedExpression?.text;
+  const expressionCaptionCandidate: AcousticCaptionCandidate | null =
+    situatedExpression !== null
+      && situatedExpressionSource !== null
+      && situatedExpressionEvent !== null
+    ? {
+        caption: {
+          id: situatedExpressionEvent.eventId,
+          speakerLabel: situatedExpressionSource.speakerLabel,
+          text: presentedExpressionText ?? situatedExpression.text,
+          tone: situatedExpressionEvent.tone,
+          presentationKind: presentedAnimalCallKind === null ? "speech" : "animal-call",
+          ...(presentedAnimalCallKind === null
+            ? {}
+            : { animalCallKind: presentedAnimalCallKind }),
+          ...(situatedExpressionContact === null
+            ? {}
+            : { directionLabel: audibleContactDirection(situatedExpressionContact) }),
+          assertive: situatedExpressionEvent.tone === "alarmed"
+            || situatedExpressionEvent.volume === "shout",
+        },
+        priority: situatedExpressionEvent.priority,
+        salience: situatedExpressionEvent.salience,
+        stableId: situatedExpressionEvent.eventId,
+      }
+    : null;
+  const projectedWorldAcoustic = options.worldAcousticEvent === undefined
+    || options.worldAcousticEvent === null
+    || options.worldAcousticRemainingSteps === undefined
+    ? null
+    : projectWorldAcousticText({
+        world,
+        event: options.worldAcousticEvent,
+        reception: options.worldAcousticReception ?? null,
+        remainingSteps: options.worldAcousticRemainingSteps,
+        tileSize: 24,
+      });
+  const worldAcousticContact = worldAcousticReceptionAudibleContact(
+    options.worldAcousticReception ?? null,
+  );
+  const anonymousWorldAcoustic = options.worldAcousticEvent === undefined
+      || options.worldAcousticEvent === null
+      || options.worldAcousticRemainingSteps === undefined
+      || !worldAcousticPresentationReceptionMatchesEvent(
+        options.worldAcousticReception ?? null,
+        options.worldAcousticEvent,
+      )
+    ? null
+    : realizeWorldAcousticText(
+        options.worldAcousticEvent,
+        options.worldAcousticRemainingSteps,
+      );
+  const physicalAcoustic = projectedWorldAcoustic ?? anonymousWorldAcoustic;
+  const physicalCaptionCandidate: AcousticCaptionCandidate | null =
+    physicalAcoustic === null
+    ? null
+    : {
+        caption: {
+          id: options.worldAcousticEvent!.eventId,
+          // Physical captions never synthesize an actor/object identity.
+          speakerLabel: "Sound",
+          text: physicalAcoustic.text,
+          tone: physicalAcoustic.tone,
+          presentationKind: "physical",
+          physicalSoundKind: physicalAcoustic.semanticFamily,
+          ...(worldAcousticContact === null
+            ? {}
+            : { directionLabel: audibleContactDirection(worldAcousticContact) }),
+          assertive: physicalAcoustic.tone === "alarmed",
+        },
+        priority: physicalAcoustic.priority,
+        salience: physicalAcoustic.salience,
+        stableId: options.worldAcousticEvent!.eventId,
+      };
+  const expressionCaption = selectAcousticCaption(
+    expressionCaptionCandidate,
+    physicalCaptionCandidate,
+  );
 
   return {
     revision: [
@@ -468,6 +589,10 @@ export function projectUIView(
       options.situatedExpression?.remainingSteps ?? 0,
       options.situatedExpressionReception?.eventId ?? "no-expression-reception",
       options.situatedExpressionReception?.kind ?? "no-expression-reception-kind",
+      options.worldAcousticEvent?.eventId ?? "no-world-acoustic-event",
+      options.worldAcousticRemainingSteps ?? "no-world-acoustic-lifetime",
+      options.worldAcousticReception?.eventId ?? "no-world-acoustic-reception",
+      options.worldAcousticReception?.kind ?? "no-world-acoustic-reception-kind",
       situatedExpressionContact === null
         ? "no-expression-direction"
         : audibleContactDirection(situatedExpressionContact),
@@ -592,25 +717,7 @@ export function projectUIView(
           },
         }
       : {}),
-    ...(situatedExpression && situatedExpressionSource && options.situatedExpression
-      ? {
-          expressionCaption: {
-            id: options.situatedExpression.eventId,
-            speakerLabel: situatedExpressionSource.speakerLabel,
-            text: presentedExpressionText ?? situatedExpression.text,
-            tone: options.situatedExpression.tone,
-            presentationKind: presentedAnimalCallKind === null ? "speech" : "animal-call",
-            ...(presentedAnimalCallKind === null
-              ? {}
-              : { animalCallKind: presentedAnimalCallKind }),
-            ...(situatedExpressionContact === null
-              ? {}
-              : { directionLabel: audibleContactDirection(situatedExpressionContact) }),
-            assertive: options.situatedExpression.tone === "alarmed"
-              || options.situatedExpression.volume === "shout",
-          },
-        }
-      : {}),
+    ...(expressionCaption === undefined ? {} : { expressionCaption }),
     ...(options.saveWarning ? { saveWarning: options.saveWarning } : {}),
     controls: {
       canScan: player.mode !== "swept" && player.scanCharge >= 280_000,

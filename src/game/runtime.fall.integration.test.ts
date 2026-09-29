@@ -75,7 +75,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 38;
+  readonly version: 39;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -182,10 +182,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 38
-    || record.payloadVersion !== 38
+    || envelope.version !== 39
+    || record.payloadVersion !== 39
   ) {
-    throw new Error("fixture did not produce a current v38 regional session save");
+    throw new Error("fixture did not produce a current v39 regional session save");
   }
   return envelope;
 }
@@ -206,7 +206,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 38,
+    payloadVersion: 39,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -667,6 +667,22 @@ describe("production terrain fall and physical cargo", () => {
       kind: "fall",
     });
     expect(fallenView.player.balanceState).toBe("fallen");
+    expect(fallenView.acousticText).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        acousticKind: "speech",
+        sourceActorId: "player:local",
+      }),
+      expect.objectContaining({
+        acousticKind: "physical",
+        sourceId: "player:local",
+        semanticFamily: "thud",
+      }),
+      expect.objectContaining({
+        acousticKind: "physical",
+        sourceKind: "object",
+        semanticFamily: expect.stringMatching(/^(?:clatter|thud)$/u),
+      }),
+    ]));
     // X-before-Y is authoritative: the porter reaches the ridge edge and does
     // not also commit the diagonal edge after this first mishap.
     expect(renderedTileIndex(fallenView)).toBe(fixture.corner.ridgeTileIndex);
@@ -693,7 +709,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 38,
+      version: 39,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -764,6 +780,11 @@ describe("production terrain fall and physical cargo", () => {
         soundInterrupt: "strong",
       }),
     ]);
+    const reloadedDuringFall = await createTideweftRuntime(repository);
+    expect(reloadedDuringFall.getRenderView().acousticText?.some(
+      ({ acousticKind }) => acousticKind === "physical",
+    )).toBe(false);
+    reloadedDuringFall.destroy();
     expect(restorePlayerRegionalTravel(
       deserializeWorld(fallenSave.world).meta.rootSeed,
       fallenSave.player,
@@ -783,7 +804,10 @@ describe("production terrain fall and physical cargo", () => {
       nextTraversalOrdinal: 1,
       lastAudibleIncidentId: incident.id,
     });
-    expect(incidentCueCalls(incident.cue)).toBe(1);
+    // One cue belongs to the committed body impact and one to the separately
+    // conserved cargo impact. The exact count guards both dropped audio and a
+    // retry/adapter duplication at the post-commit side-effect boundary.
+    expect(incidentCueCalls(incident.cue)).toBe(2);
 
     const parcels = fallenSave.physicalCargo.looseWorld.entities.filter(({ payload }) =>
       payload.kind === "promise" && payload.contractId === fixture.contractId);
@@ -836,7 +860,7 @@ describe("production terrain fall and physical cargo", () => {
       throw new Error("fall vocalization never reached the human perception bridge");
     }
     const impactSamples = perceptionInput.playerSamples.filter(({ soundClass }) =>
-      soundClass === "impact");
+      soundClass === "physical-thud");
     const vocalizationSamples = (perceptionInput.supplementalSoundSamples ?? []).filter(({
       soundClass,
     }) =>

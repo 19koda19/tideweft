@@ -135,9 +135,11 @@ a line.
 
 Expression ownership is now isolated by source actor in a deterministically
 ordered bank capped at sixteen retained channels. One source actor's active line
-or cooldown cannot suppress another's. Presentation still selects at
-most one highest-priority local callout/caption at a time, so adding actor
-authority does not create an overhead-text wall. Every projected exact line
+or cooldown cannot suppress another's. The accessible caption surface selects
+one highest-priority local cue at a time, while Chart and Relief use the shared
+bounded acoustic layout described below: at most four labels globally and one
+per source. Adding actor authority therefore does not create an overhead-text
+wall. Every projected exact line
 also requires a canonical reception receipt, persisted with pending carry:
 `self` for the courier, or
 `heard-visible` for a non-player source that passed the shared event-time
@@ -169,6 +171,104 @@ an anonymous directional acoustic fact rather than gaining speaker identity.
 Speech therefore cannot manufacture or replace a visual observation. The
 existing fixed-step player-sense carry remains one base sample per completed
 player step.
+
+#### Embodied acoustic event and receipt pipeline
+
+Directive 04_2 establishes the durable acoustic boundary for physical as well
+as vocal sound. The domain that commits an action owns why it happened and the
+facts it may disclose: traversal owns a slip, cargo owns a load shift, ecology
+owns animal behavior, and future material, violence, and vessel domains own
+their corresponding contacts. Those domains emit or adapt one source-bound
+acoustic event with stable identity, event-time segmented position, semantic
+action/source family, bounded intensity/reach/duration, material and surface
+classes where relevant, and a repetition key. Producer adapters may use bounded
+body classes to derive those event semantics without retaining unnecessary
+anatomy on the shared event. The acoustic layer propagates
+that event through the current environment and derives listener-specific
+receipts. Living Voice owns vocal semantics and the restrained optional textual
+expression of both vocal and embodied sounds; it does not take over the causal
+domains.
+
+World event, listener receipt, and presentation label are separate records.
+Exact source identity and position enter a player-facing world anchor only
+through authenticated heard-and-visible receipt or the player's authenticated
+direct physical contact with the sounding object. Heard-unseen receipt retains
+only lawful direction, distance, certainty, and uncertainty bands; it can feed
+a vague caption or edge/lane cue but never a hidden actor anchor. Unheard or
+fully masked events have no player presentation. Presentation suppression,
+coalescing, or accessibility settings cannot erase the event, change NPC
+hearing, or alter audio timing. Other actors receive only the acoustic fact
+their own perception admitted, so a `thud` behind a wall cannot disclose who
+dropped which object.
+
+Three representative physical bridges are now live in the local candidate.
+Every newly accepted stumble, fall, water slip, or current sweep adapts its
+committed incident into one immutable structured acoustic event without parsing
+the incident's legacy free-form label. That event's semantic family, intensity,
+reach, interrupt strength, and deterministic variant drive the existing audio
+cue, the bounded player physical-sound sample heard by eligible nearby NPCs,
+and an optional acoustic-text candidate. A committed cargo shock may emit a
+second object-contact event bound to the same conserved lot and the traversal
+owner's bounded contact-surface classification. Actual movement of the existing
+BIO0 and settlement-working dogs may
+emit one body/surface event derived from their before/after positions, terrain,
+and bounded medium-body semantics; the player receives it only through ordinary
+event-time hearing and sight/localization. The owning traversal, cargo, and
+ecology domains keep every physical consequence. Active labels are transient,
+are not serialized, and do not replay as new sounds after reload.
+External audio for these structured embodied-contact events is released only
+after the fallible fixed-step transaction commits, so fail-closed rollback
+cannot leak and then replay a rejected contact while the event itself retains
+its original simulation tick. Legacy step/paddle playback has not yet crossed
+that transaction boundary and is not claimed by this slice.
+
+These are representative producers, not false whole-world completion.
+Production views suppress the old renderer-created ADRIFT syllables whenever
+the shared `acousticText` projection is present; their fallback remains only for
+legacy views and tests that omit the field. Ambient-water syllables still lack
+the structured event/receipt boundary. Broad non-dog animal contact, arbitrary
+object and foliage contact, tool/material work, violence, and vessel producers
+remain incomplete. A heard-unseen physical event still receives no exact world
+anchor or source identity; its lawful receipt may now feed only a coarse
+directional accessible caption.
+
+#### Shared acoustic-text presentation arbitration
+
+One renderer-neutral acoustic presentation candidate family covers speech,
+animal calls, human/animal nonverbal sounds, physical contact, object/cargo
+impact, and eligible environmental sound. Every candidate is derived from an
+authenticated player receipt, except the explicitly bounded legacy
+current-visibility resident-speech adapter: it joins world-label collision
+layout only and cannot become an acoustic DOM caption until its old interaction
+seam gains event-time sound authority. The presenter—not producer domains—owns category
+style, category-specific lifetime, source/contact anchoring, bounded
+deterministic lanes, collision checks, salience/priority, per-source queues,
+repetition merging, and suppression. The live bounded physical queue coalesces
+the same source plus repetition key; aggregate clustering across different
+sources remains future work. Critical speech and warnings outrank routine
+contact. Routine steps, continuous wading, and repetitive work normally remain
+audio/animation only.
+
+Chart and Relief now consume the same combined active-expression, directly
+visible legacy resident-speech, and eligible physical-acoustic candidate list.
+One shared renderer-neutral layout ranks by priority, salience, and stable
+identity, admits at most four labels globally and one per source, tries the same
+small deterministic source-relative lanes, rejects anchors too far outside the
+playable aperture, and suppresses a lower-ranked candidate when no
+collision-free lane remains. Neither renderer may jitter around this decision
+or restore the old independent incident/speech-label paths. An NPC warning can
+therefore remain readable while a player scrape uses another lane or is
+suppressed; presentation loss never erases audio or actor hearing.
+
+The layout envelopes, bounded active physical queue, and fade progress are ephemeral
+and neither persist nor replay after load. Chart and Relief share the bounded
+world-text arbitration; the accessible caption path consumes the same lawful
+self/visible candidate or a coarse directional heard-unseen physical cue where
+supported. Ambient-water syllables remain
+legacy renderer presentation outside the shared budget; ADRIFT's old syllable
+fallback is suppressed in production shared-projection views. The live dog and
+cargo representatives do not make broader animal/object/tool/violence/vessel
+producers live merely because the common contracts can receive them.
 
 The first animal-signal adapter is deliberately narrow. The existing persistent
 settlement guardian dog emits one warning bark only when it newly commits a
@@ -228,6 +328,16 @@ Exact visible-source authentication permits an actor-anchored call; heard-unseen
 projection has no world callout and exposes only an uncertainty-bounded generic
 bird direction.
 
+The first human-to-human warning consumes that hearing result instead of
+inventing a dialogue trigger. One linear, ownership-indexed selector examines
+current resident perception and admits at most one deterministic source whose
+fresh attended belief is either an identified direct-vision large predator or
+an anonymous strong animal alarm. Its shouted warning retains the exact source
+observation, resident position, admission, acoustic sample, receipt, and bounded
+memory through the ordinary expression trajectory. Other residents may hear
+only an anonymous `danger-sound`; that derived class is deliberately ineligible
+to trigger another warning, preventing an acoustic recursion cascade.
+
 Because a pending vocalization can become authoritative human knowledge, the
 guardian-warning candidate advances the outer save to v35 and the bounded
 perception carry to v4. That carry preserves source-bound pending vocal
@@ -257,6 +367,12 @@ listener pose, waking-before-visibility reception, and strong interruption.
 Exact v37/carry-v6 migration accepts authenticated bark/growl/whine state but
 rejects fish-crow meaning, vocalization, or admission as impossible historical
 v37 data; the earlier semantic fences reject those later crow semantics too.
+The human-warning candidate advances the unpublished outer save to v39 while
+retaining carry v7. Outer v38 remains a valid fish-crow-era reader, but its
+semantic fence rejects human-warning meaning or admission as impossible v38
+state. Current v39 checkpoints reauthenticate the warning against the exact
+resident belief and event-time player reception; reload neither replays its
+acknowledged audio nor recursively admits a second warning.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -2362,11 +2478,11 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through versions 33–38 and the bounded perception carry through version
-7; the current source writer emits outer version 38. Its authenticated v1–v37
+session through versions 33–39 and the bounded perception carry through version
+7; the current source writer emits outer version 39. Its authenticated v1–v38
 readers remain implemented and tested where retained, but before official 1.0
 that implementation fact is not a permanent promise to preserve every internal
-development format. Current-v38 roundtrip and all conservation, determinism,
+development format. Current-v39 roundtrip and all conservation, determinism,
 integrity, and no-overwrite laws remain mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,

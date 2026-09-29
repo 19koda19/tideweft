@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlayerBalanceView, SituatedExpressionView } from "./types";
 import {
+  acousticTextCalloutSize,
   actorCalloutViewport,
   placeIncidentCallout,
   playerBalancePresentation,
@@ -134,6 +135,7 @@ describe("situated expression callout budget", () => {
     priority: number,
     text = id,
   ): SituatedExpressionView => ({
+    acousticKind: "speech",
     id,
     sourceActorId: `actor:${id}`,
     sourceKind: "human",
@@ -142,6 +144,7 @@ describe("situated expression callout budget", () => {
     position: { x: 10, y: 20 },
     progress: 0.25,
     priority,
+    salience: 1,
     tone: "restrained",
     variantSeed: 7,
   });
@@ -165,5 +168,30 @@ describe("situated expression callout budget", () => {
       expression("finite", -100),
     ])?.id).toBe("finite");
     expect(selectSituatedExpression([])).toBeUndefined();
+  });
+});
+
+describe("acoustic text callout bounds", () => {
+  it("retains a one-line envelope for short physical semantics", () => {
+    expect(acousticTextCalloutSize("scrape", actorCalloutViewport(844, 390)))
+      .toMatchObject({ height: 22 });
+  });
+
+  it("reserves multi-line height when longer speech reaches the width cap", () => {
+    const copy = "Watch your footing near the flooded boards and keep the medicine case steady.";
+    const compact = acousticTextCalloutSize(copy, actorCalloutViewport(390, 700));
+    const wide = acousticTextCalloutSize(copy, actorCalloutViewport(1_280, 720));
+
+    expect(compact.width).toBeLessThanOrEqual(226);
+    expect(compact.height).toBeGreaterThan(22);
+    expect(wide.width).toBeLessThanOrEqual(310);
+    expect(wide.height).toBeGreaterThan(22);
+  });
+
+  it("counts explicit line breaks even when each line is short", () => {
+    expect(acousticTextCalloutSize(
+      "First warning.\nSecond warning.",
+      actorCalloutViewport(1_280, 720),
+    ).height).toBe(35);
   });
 });

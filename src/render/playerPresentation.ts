@@ -1,8 +1,19 @@
 import type {
+  AcousticTextView,
   PlayerBalanceView,
   SituatedExpressionView,
   WorldPoint,
 } from "./types";
+import {
+  DEFAULT_ACOUSTIC_TEXT_GUTTER,
+  DEFAULT_ACOUSTIC_TEXT_PER_SOURCE_CAP,
+  MAX_ACOUSTIC_TEXT_PLACEMENTS,
+  layoutAcousticText,
+  type AcousticTextCandidate,
+  type AcousticTextLane,
+  type AcousticTextLayoutResult,
+  type AcousticTextSize,
+} from "./acousticTextLayout";
 
 /**
  * One semantic presentation table shared by Chart and Relief. The `mark` and
@@ -164,6 +175,111 @@ export const situatedExpressionCalloutText = (
 export const situatedExpressionPresentation = (
   tone: SituatedExpressionView["tone"],
 ): SituatedExpressionPresentation => SITUATED_EXPRESSION_PRESENTATION[tone];
+
+export interface AcousticTextScreenCandidate extends AcousticTextCandidate {
+  readonly acousticText: AcousticTextView;
+}
+
+export const acousticTextSourceId = (acousticText: AcousticTextView): string =>
+  acousticText.acousticKind === "physical"
+    ? acousticText.sourceId
+    : acousticText.sourceActorId;
+
+/** One shared text envelope keeps Chart and Relief collision inputs aligned. */
+export function acousticTextCalloutSize(
+  text: string,
+  viewport: IncidentViewport,
+): AcousticTextSize {
+  const availableWidth = Math.max(1, viewport.width - Math.min(24, viewport.width - 1));
+  const minimumWidth = Math.min(86, availableWidth);
+  const averageCharacterWidth = viewport.compact ? 5.8 : 6.4;
+  const estimatedWidth = Array.from(text).length * averageCharacterWidth + 22;
+  const width = Math.min(
+    availableWidth,
+    viewport.compact ? 226 : 310,
+    Math.max(minimumWidth, estimatedWidth),
+  );
+  const contentWidth = Math.max(1, width - 22);
+  const wrappedLineCount = text.split(/\r?\n/u).reduce((total, line) => (
+    total + Math.max(1, Math.ceil(
+      Array.from(line).length * averageCharacterWidth / contentWidth - 1e-9,
+    ))
+  ), 0);
+  return Object.freeze({
+    width,
+    height: 22 + Math.max(0, wrappedLineCount - 1) * (viewport.compact ? 12 : 13),
+  });
+}
+
+const acousticTextLanes = (viewport: IncidentViewport): readonly AcousticTextLane[] => {
+  const lift = viewport.compact ? 58 : 42;
+  const side = viewport.compact ? 18 : 24;
+  return Object.freeze([
+    Object.freeze({ id: "above", order: 0, offset: { x: 0, y: -lift } }),
+    Object.freeze({
+      id: "above-right",
+      order: 1,
+      offset: { x: side, y: -(lift + 18) },
+    }),
+    Object.freeze({
+      id: "above-left",
+      order: 2,
+      offset: { x: -side, y: -(lift + 18) },
+    }),
+    Object.freeze({
+      id: "below",
+      order: 3,
+      offset: { x: 0, y: viewport.compact ? 42 : 34 },
+    }),
+  ]);
+};
+
+const acousticTextViewport = (viewport: IncidentViewport) => {
+  const horizontalMargin = Math.min(12, Math.max(0, (viewport.width - 1) / 2));
+  const top = clamp(viewport.safeTop, 0, Math.max(0, viewport.height - 24));
+  const bottom = Math.max(
+    top + 24,
+    viewport.height - clamp(viewport.safeBottom, 0, viewport.height),
+  );
+  return Object.freeze({
+    x: horizontalMargin,
+    y: top + 1,
+    width: Math.max(1, viewport.width - horizontalMargin * 2),
+    height: Math.max(22, bottom - top - 2),
+  });
+};
+
+/**
+ * Shared Chart/Relief candidate adapter and source-relative lane policy.
+ * Projection into screen space remains renderer-specific; arbitration does not.
+ */
+export function layoutAcousticTextCallouts(
+  acousticText: readonly AcousticTextView[],
+  viewport: IncidentViewport,
+  screenAnchor: (candidate: AcousticTextView) => WorldPoint | null,
+): AcousticTextLayoutResult<AcousticTextScreenCandidate> {
+  const candidates: AcousticTextScreenCandidate[] = [];
+  for (const item of acousticText) {
+    const anchor = screenAnchor(item);
+    if (anchor === null) continue;
+    candidates.push(Object.freeze({
+      acousticText: item,
+      id: item.id,
+      sourceId: acousticTextSourceId(item),
+      priority: item.priority,
+      salience: item.salience,
+      anchor: Object.freeze({ x: anchor.x, y: anchor.y }),
+      box: acousticTextCalloutSize(item.text, viewport),
+    }));
+  }
+  return layoutAcousticText(candidates, {
+    lanes: acousticTextLanes(viewport),
+    viewport: acousticTextViewport(viewport),
+    globalCap: MAX_ACOUSTIC_TEXT_PLACEMENTS,
+    perSourceCap: DEFAULT_ACOUSTIC_TEXT_PER_SOURCE_CAP,
+    gutter: DEFAULT_ACOUSTIC_TEXT_GUTTER,
+  });
+}
 
 /**
  * Shared playable aperture for actor callouts. Compact bottom space covers the

@@ -20,6 +20,13 @@ import {
   type TitleOverlayUIView,
 } from "./types";
 import {
+  createAcousticCaptionAnnouncementLedger,
+  shouldResetAcousticCaptionAnnouncementLedger,
+  situatedExpressionCaptionCopy,
+  situatedExpressionCaptionVisibleText,
+} from "./situatedExpressionCaption";
+export { situatedExpressionCaptionCopy } from "./situatedExpressionCaption";
+import {
   resolveActorAboutSurface,
   type ActorAboutCloseCommand,
   type ResolvedActorAboutSurface,
@@ -257,39 +264,6 @@ export interface MobileHudCopy {
 /** Compact HUD uses the same already-projected clock as the desktop bar. */
 export function mobileClockCopy(clock: TideweftUIView["clock"]): string {
   return `${clock.dayLabel ?? `Day ${clock.day}`} · ${clock.timeLabel}`;
-}
-
-/** Shared visible and live-region wording for one situated expression. */
-export function situatedExpressionCaptionCopy(
-  caption: NonNullable<TideweftUIView["expressionCaption"]>,
-): string {
-  if (caption.presentationKind === "animal-call") {
-    const subject = caption.animalCallKind === "fish-crow-call"
-      ? "A fish crow"
-      : caption.animalCallKind === "bird-call"
-        ? "A bird"
-        : caption.speakerLabel === "Familiar dog"
-          ? "The familiar dog"
-          : "A dog";
-    const call = caption.animalCallKind === "whine"
-      ? { visible: "whines softly", directional: "whines" }
-      : caption.animalCallKind === "growl"
-      ? { visible: "growls softly", directional: "growls" }
-      : caption.animalCallKind === "bark"
-        ? { visible: "barks sharply", directional: "barks" }
-        : caption.animalCallKind === "fish-crow-call"
-          ? { visible: "calls sharply", directional: "calls" }
-        : { visible: "calls", directional: "calls" };
-    if (caption.directionLabel === undefined) return `[${subject} ${call.visible}.]`;
-    if (caption.directionLabel === "all around") {
-      return `[${subject} ${call.directional}; the sound seems all around.]`;
-    }
-    if (caption.directionLabel === "direction unclear") {
-      return `[${subject} ${call.directional}; direction unclear.]`;
-    }
-    return `[${subject} ${call.directional} somewhere ${caption.directionLabel}.]`;
-  }
-  return `${caption.speakerLabel}: ${caption.text}`;
 }
 
 interface LiveRegionAnnouncement {
@@ -650,6 +624,8 @@ interface TitleRestartFlowOptions {
   readonly getTitle: () => TitleOverlayUIView | null;
   readonly dispatch: (command: TideweftUICommand) => void;
   readonly announce: (message: string, assertive?: boolean) => void;
+  /** Marks a non-throwing request; the next authoritative view proves acceptance. */
+  readonly onNewWorldDispatched?: () => void;
 }
 
 /**
@@ -891,6 +867,7 @@ export function bindTitleRestartFlow(
         sessionShape: PERPETUAL_SESSION_SHAPE,
         ...(title.hasSave ? { restartPhrase: RESTART_PHRASE } : {}),
       });
+      options.onNewWorldDispatched?.();
     } catch (error) {
       submitting = false;
       awaitingResult = false;
@@ -2461,7 +2438,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastChronicle = "";
   let lastResidentAbout = "__unrendered__";
   let lastAnnouncement = "";
-  let lastExpressionAnnouncementId = "";
+  const expressionAnnouncementLedger = createAcousticCaptionAnnouncementLedger();
+  let acousticCaptionWorldReplacementDispatched = false;
   let lastNavigationCopy = "";
   let lastMobileNavigationCopy = "";
   let lastNavigationTitle = "";
@@ -2510,17 +2488,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       return;
     }
     const copy = situatedExpressionCaptionCopy(caption);
-    const animalCall = caption.presentationKind === "animal-call";
-    refs.expressionCaptionSpeaker.textContent = animalCall ? "" : `${caption.speakerLabel}:`;
-    refs.expressionCaptionText.textContent = animalCall && caption.directionLabel !== undefined
-      ? `${caption.text} · ${caption.directionLabel}`
-      : caption.text;
+    const showSpeakerLabel = caption.presentationKind !== "animal-call"
+      && caption.presentationKind !== "physical";
+    refs.expressionCaptionSpeaker.textContent = showSpeakerLabel
+      ? `${caption.speakerLabel}:`
+      : "";
+    refs.expressionCaptionText.textContent = situatedExpressionCaptionVisibleText(caption);
     refs.expressionCaption.dataset.tone = caption.tone;
     refs.expressionCaption.dataset.expressionId = caption.id;
     refs.expressionCaption.setAttribute("aria-label", copy);
     refs.expressionCaption.hidden = false;
-    if (caption.id === lastExpressionAnnouncementId) return;
-    lastExpressionAnnouncementId = caption.id;
+    if (!expressionAnnouncementLedger.admit(caption.id)) return;
     announce(copy, caption.assertive === true);
   };
 
@@ -2546,6 +2524,9 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     getTitle: () => latestView?.title ?? null,
     dispatch: options.dispatch,
     announce,
+    onNewWorldDispatched: () => {
+      acousticCaptionWorldReplacementDispatched = true;
+    },
   });
 
   const setMobileHudExpanded = (expanded: boolean): void => {
@@ -3065,6 +3046,14 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const updateUnmeasured = (providedView?: TideweftUIView | null): void => {
     const view = providedView === undefined ? options.getView() ?? null : providedView;
     latestView = view;
+    if (view !== null && acousticCaptionWorldReplacementDispatched) {
+      const replacementAccepted = shouldResetAcousticCaptionAnnouncementLedger(
+        acousticCaptionWorldReplacementDispatched,
+        view.title.visible,
+      );
+      acousticCaptionWorldReplacementDispatched = false;
+      if (replacementAccepted) expressionAnnouncementLedger.reset();
+    }
     renderExpressionCaption(view?.expressionCaption);
     const actorAbout = view ? resolveTideweftAboutSurface(view) : undefined;
     refs.kit.update(view?.kit);

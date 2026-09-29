@@ -141,6 +141,7 @@ import {
 } from "./looseCargoPresentation";
 import {
   actorCalloutViewport,
+  layoutAcousticTextCallouts,
   placeIncidentCallout,
   playerBalancePresentation,
   selectSituatedExpression,
@@ -1094,7 +1095,8 @@ export function createTideweftReliefRenderer(
         true,
       );
       if (
-        adrift.soundSyllable
+        view.acousticText === undefined
+        && adrift.soundSyllable
         && Math.floor(now / (reducedMotion ? 900 : 560)) % 3 === 0
       ) {
         const soundPoint = {
@@ -1196,7 +1198,7 @@ export function createTideweftReliefRenderer(
           highlighted,
         );
       }
-      if (porter.speech) {
+      if (porter.speech && view.acousticText === undefined) {
         const viewportWidth = instance?.width ?? 1;
         const charactersPerLine = Math.max(
           8,
@@ -1242,7 +1244,13 @@ export function createTideweftReliefRenderer(
         node.style.width = `${width.toFixed(1)}px`;
         node.style.left = `${placement.x.toFixed(1)}px`;
         node.style.top = `${placement.y.toFixed(1)}px`;
-      } else if (porter.emotionMark) {
+      } else if (
+        porter.emotionMark
+        && !(porter.speech && view.acousticText !== undefined)
+      ) {
+        // Shared acoustic speech owns the source's collision-aware label. The
+        // legacy emotion mark used to be bundled with speech and must not
+        // reappear as a second overlapping node beside the shared presenter.
         place(
           `porter-emotion-${porter.id}`,
           porter.emotionMark,
@@ -1556,38 +1564,94 @@ export function createTideweftReliefRenderer(
         labelPositions.delete(id);
       }
     };
-    const expression = view.expressions === undefined
-      ? undefined
-      : selectSituatedExpression(view.expressions);
-    if (expression) {
-      placeActorCallout(
-        `situated-expression-${expression.id}`,
-        situatedExpressionCalloutText(expression),
-        expression.position,
-        expression.progress,
-        expression.variantSeed,
-        situatedExpressionPresentation(expression.tone),
-        (node) => {
-          node.dataset.tone = "expression";
-          node.dataset.expressionTone = expression.tone;
-          node.dataset.sourceKind = expression.sourceKind;
+    if (view.acousticText !== undefined) {
+      const viewport = actorCalloutViewport(activeInstance.width, activeInstance.height);
+      const layout = layoutAcousticTextCallouts(
+        view.acousticText,
+        viewport,
+        (acousticText) => {
+          const sourceSurface = discoveredReliefSurfaceHeightAt(
+            view.terrain,
+            acousticText.position,
+            cache.mesh.verticalScale,
+            true,
+          );
+          const projected = projectReliefPoint(
+            acousticText.position,
+            sourceSurface + tileSize * 0.72,
+            camera,
+            { width: activeInstance.width, height: activeInstance.height },
+          );
+          return projected.visible ? projected : null;
         },
       );
-    }
-    const incident = view.expressions === undefined ? view.player.incident : undefined;
-    if (incident && typeof incident.id === "string" && incident.id.length > 0) {
-      placeActorCallout(
-        `player-incident-${incident.id}`,
-        incident.label,
-        view.player.position,
-        incident.progress,
-        incident.variantSeed,
-        playerBalancePresentation(view.player.balanceState),
-        (node) => {
-          node.dataset.tone = "incident";
-          node.dataset.incidentKind = incident.kind;
-        },
-      );
+      for (const placed of layout.placements) {
+        const acousticText = placed.candidate.acousticText;
+        const id = `acoustic-text-${acousticText.id}`;
+        const node = labelNode(id, acousticText.text);
+        const presentation = situatedExpressionPresentation(acousticText.tone);
+        const centerX = placed.rect.x + placed.rect.width / 2;
+        const centerY = placed.rect.y + placed.rect.height / 2;
+        node.hidden = false;
+        node.dataset.selected = "false";
+        node.dataset.placement = centerY < placed.candidate.anchor.y ? "above" : "below";
+        node.dataset.tone = acousticText.acousticKind === "physical"
+          ? "incident"
+          : "expression";
+        node.dataset.acousticKind = acousticText.acousticKind;
+        node.dataset.expressionTone = acousticText.tone;
+        node.dataset.sourceKind = acousticText.sourceKind;
+        if (acousticText.acousticKind === "physical") {
+          node.dataset.semanticFamily = acousticText.semanticFamily;
+        } else {
+          delete node.dataset.semanticFamily;
+        }
+        node.style.left = `${centerX.toFixed(1)}px`;
+        node.style.top = `${centerY.toFixed(1)}px`;
+        node.style.width = `${placed.rect.width.toFixed(1)}px`;
+        node.style.maxWidth = `${placed.rect.width.toFixed(1)}px`;
+        node.style.boxSizing = "border-box";
+        node.style.color = presentation.outline;
+        node.style.borderLeftColor = presentation.fill;
+        node.style.boxShadow = `0 0 0 1px ${presentation.fill}55`;
+        node.style.opacity = `${(0.98 - unit(acousticText.progress) * 0.14).toFixed(3)}`;
+        node.style.transform = "translate(-50%, -50%)";
+        labelPositions.delete(id);
+      }
+    } else {
+      const expression = view.expressions === undefined
+        ? undefined
+        : selectSituatedExpression(view.expressions);
+      if (expression) {
+        placeActorCallout(
+          `situated-expression-${expression.id}`,
+          situatedExpressionCalloutText(expression),
+          expression.position,
+          expression.progress,
+          expression.variantSeed,
+          situatedExpressionPresentation(expression.tone),
+          (node) => {
+            node.dataset.tone = "expression";
+            node.dataset.expressionTone = expression.tone;
+            node.dataset.sourceKind = expression.sourceKind;
+          },
+        );
+      }
+      const incident = view.expressions === undefined ? view.player.incident : undefined;
+      if (incident && typeof incident.id === "string" && incident.id.length > 0) {
+        placeActorCallout(
+          `player-incident-${incident.id}`,
+          incident.label,
+          view.player.position,
+          incident.progress,
+          incident.variantSeed,
+          playerBalancePresentation(view.player.balanceState),
+          (node) => {
+            node.dataset.tone = "incident";
+            node.dataset.incidentKind = incident.kind;
+          },
+        );
+      }
     }
     for (const [id, node] of labelNodes) {
       if (used.has(id)) continue;

@@ -2,6 +2,7 @@ import type {
   AdriftView,
   CargoProperty,
   PaceView,
+  PhysicalAcousticTextView,
   SettlementStatus,
   TidePhase,
   WeatherKind,
@@ -467,13 +468,13 @@ export interface AnnouncementUIView {
   readonly assertive?: boolean;
 }
 
-/** One bounded, visible caption for the currently presented actor expression. */
+/** One bounded, visible caption for the winning perceived acoustic event. */
 export interface SituatedExpressionCaptionUIView {
   readonly id: string;
   readonly speakerLabel: string;
   readonly text: string;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
-  readonly presentationKind?: "speech" | "animal-call";
+  readonly presentationKind?: "speech" | "animal-call" | "physical";
   /** Explicit knowledge-safe presentation kind; never inferred from localized text. */
   readonly animalCallKind?:
     | "bark"
@@ -481,6 +482,8 @@ export interface SituatedExpressionCaptionUIView {
     | "whine"
     | "bird-call"
     | "fish-crow-call";
+  /** Structured physical semantics; never inferred from localized text. */
+  readonly physicalSoundKind?: PhysicalAcousticTextView["semanticFamily"];
   readonly directionLabel?:
     | "east"
     | "south-east"

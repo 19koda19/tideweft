@@ -20,10 +20,12 @@ import {
   canonicalizeSituatedExpressionAdmissionLedger,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
+  createHumanDangerWarningExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
+import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
@@ -48,6 +50,7 @@ const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
+const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
 
 interface Fixture {
@@ -150,6 +153,24 @@ function fishCrowIntent(triggerEventId: string): SituatedExpressionIntent {
     priority: 760_000,
     salience: 840_000,
     variantSeed: 127,
+    durationSteps: 6,
+  };
+}
+
+function humanWarningIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: WARNING_HUMAN_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "human-danger-warning",
+    family: "warning",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: HUMAN_DANGER_WARNING_PRIORITY,
+    salience: 920_000,
+    variantSeed: 149,
     durationSteps: 6,
   };
 }
@@ -430,6 +451,64 @@ function fishCrowFixture(
   };
 }
 
+function humanWarningFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "human-warning:0123456789abcdef";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    humanWarningIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture human warning expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          820_000,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 3, maximum: 7 },
+            certainty: 0.82,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture human warning reception was not canonical");
+  }
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: WARNING_HUMAN_ID, state: current, reception }],
+  });
+  const record = createHumanDangerWarningExpressionAdmissionRecord({
+    sourceActorId: WARNING_HUMAN_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceObservationId: "observation:large-predator:trajectory-test",
+    acceptedAtTick,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture human warning trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
 function oneAdmissionFixture(): Fixture {
   const admissionPhase = 2;
   const phase = 5;
@@ -667,6 +746,37 @@ describe("situated-expression admission trajectory", () => {
     expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
     expect(situatedExpressionTrajectoryIsCanonical(
       resetDuration, exact.ledger, exact.phase, exact.samples,
+    )).toBe(false);
+  });
+
+  it("binds human warnings to critical priority and non-recursive danger acoustics", () => {
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = humanWarningFixture(receptionKind);
+      expect(accepts(fixture), receptionKind).toBe(true);
+      expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+        meaning: "human-danger-warning",
+        priority: HUMAN_DANGER_WARNING_PRIORITY,
+        tone: "alarmed",
+        volume: "shout",
+        remainingSteps: 3,
+      });
+      expect(fixture.samples[0]).toMatchObject({
+        sourceActorId: WARNING_HUMAN_ID,
+        soundClass: "danger-sound",
+        soundInterrupt: "strong",
+      });
+    }
+
+    const exact = humanWarningFixture("none");
+    const wrongPriority = mutable(exact.bank);
+    wrongPriority.channels[0]!.state.active!.priority -= 1;
+    wrongPriority.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(wrongPriority)).not.toBeNull();
+    expect(situatedExpressionTrajectoryIsCanonical(
+      wrongPriority,
+      exact.ledger,
+      exact.phase,
+      exact.samples,
     )).toBe(false);
   });
 

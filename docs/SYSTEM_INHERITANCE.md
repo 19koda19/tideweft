@@ -76,7 +76,8 @@ registry before relying on it.
 | `world-time` | World time, routine, and circadian life | LIVE | [Architecture](./ARCHITECTURE.md) | One saved fixed-step civil clock owns time. Later schedules, sleep, work, ecology, and weather consume it rather than inventing wall-time or per-feature clocks. |
 | `ecology` | Biodiversity and ecology | LIVE | [Architecture](./ARCHITECTURE.md); [game design](./GAME_DESIGN.md) | Biological actors extend shared species, habitat, food-web, population/group, activity, materialization, evidence, promotion, and sparse-persistence owners. Representative invariants replace bespoke species brains and an N-squared pair matrix. |
 | `perf-early` | Early performance and scalability — Breathing Room | LIVE | [Architecture](./ARCHITECTURE.md) | Separate render and authoritative cadence; query spatially; avoid global/N-squared scans; reuse immutable authority only behind exact validation and complete fallbacks; stagger expensive work deterministically; bound materialization, UI, and allocation; release unloaded resources. Reduce work, not truth. |
-| `living-voice` | Expression and Living Voice | PARTIAL | [Game design](./GAME_DESIGN.md); [architecture](./ARCHITECTURE.md) | Player traversal, the first real porter-work expression, three causal guardian calls, and the fish crow's ecology-owned alarm share event-driven semantic intent, deterministic realization, bounded interval-owned per-source channels, exact admission/sound/memory trajectories, event-bound acoustics, cooldown, caption/audio, and source-specific authority. A core-wildlife call must consume one committed perception/event/memory chain from the bounded active materialized set rather than invent a parallel timer. Core ecology may carry one alarm to wildlife and dogs while Living Voice carries it to humans only with explicit duplicate suppression. Player reception is separately authenticated as self, heard-visible, uncertainty-bounded heard-unseen, or legitimately absent; exact fish-crow identity/position requires visible-source authentication, while heard-unseen remains generic-bird and directional. Further human work/speech, animal-call breadth, gesture, and contextual expression must extend these owners through committed experience, lawful knowledge, emotion, relationship, intent, and repetition control—never omniscient dialogue, player-gated world events, floating sound, unconserved acoustic facts, or bespoke speaker-global cooldowns. |
+| `living-voice` | Expression and Living Voice | PARTIAL | [Game design](./GAME_DESIGN.md); [architecture](./ARCHITECTURE.md) | Player traversal reactions, the first real porter-work expression, three causal guardian calls, the fish crow's ecology-owned alarm, and one perception-caused human warning share event-driven semantic intent, deterministic realization, bounded per-source channels, exact admission/sound/memory trajectories, cooldown, and source-specific authority. The warning retains its source observation and cannot recursively propagate from derived human `danger-sound`. Vocal expression follows committed experience, lawful knowledge, emotion, relationship, and intent. It inherits `embodied-acoustics` for propagation and player presentation: exact anchoring requires heard-and-visible source authentication or authenticated direct physical contact; heard-unseen remains uncertain and directional. New actors extend these owners—never omniscient dialogue, player-gated events, unconserved acoustic facts, private floating text, or bespoke speaker-global cooldowns. |
+| `embodied-acoustics` | Acoustic world events, hearing receipts, and shared sound-text presentation | PARTIAL | [Architecture](./ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline); [game design](./GAME_DESIGN.md#embodied-sound-and-visible-acoustics) | Any system that produces speech, vocalization, impact, contact, tool/material work, movement sound, violence sound, or vessel/vehicle sound emits or adapts one structured source-bound world acoustic event. Shared environmental propagation derives lawful listener receipts; Living Voice's shared acoustic-text presenter may textify lawful player receipts using one bounded collision/repetition/clutter budget. Hidden or unheard sources gain no exact anchor or identity. Humans, animals, supernatural physical actors, Hard Country, cargo, foliage interaction, Work of Hands, Weight of Violence, Long Crossing, tools, vehicles, and future physical systems must reuse this path rather than create parallel floating-sound-text systems. Traversal, committed cargo impact, representative dog movement contact, same-source repetition coalescing, coarse heard-unseen physical captions, and shared bounded Chart/Relief layout are live; legacy ambient-water syllables and broad non-dog animal/arbitrary-object/tool/violence/vessel adoption remain incomplete. The old ADRIFT syllable fallback is suppressed in production shared-projection views. |
 | `botany` | Living foliage and botanical sources | RESERVED | [Crafting design](./CRAFTING_DESIGN.md); [architecture](./ARCHITECTURE.md) | Future living plants add identity, biomass, harvest, regrowth, succession, and source custody without creating a second infinite resource stock for an existing field material. |
 | `hard-country` | Hard Country and physical traversal | PARTIAL | [Game design](./GAME_DESIGN.md); [crafting design](./CRAFTING_DESIGN.md); [architecture](./ARCHITECTURE.md) | Extend current footing, current, slope, speed, weather, load, brace, and recovery through physical aids, deployment, reclaim, injury, detour, waiting, cargo staging, multi-trip solutions, and infrastructure. Easy-ground gait does not erase difficult-ground exertion or causal fast-gait instability. |
 | `locomotion-gait` | Player gait and input intent | RESERVED | [Game design](./GAME_DESIGN.md#reconciled-expedition-movement-and-navigation-contract); [architecture](./ARCHITECTURE.md#reserved-expedition-movement-cartography-and-field-history-architecture) | Keyboard same-key double tap requests fast gait through real input edges; continuous nonzero direction chords preserve it and zero intent ends it. Device adapters feed one fixed-step movement owner. Flat walking is sustainable, sprinting exerts, and terrain/load/slope/injury determine actual capability. |
@@ -194,11 +195,11 @@ means the contract applies when that thing has the named capability or effect.
 <!-- SYSTEM_INHERITANCE_MATRIX_BEGIN -->
 | New thing | Baseline inherited contracts | Conditional / specialization contracts |
 | --- | --- | --- |
-| Ordinary human | `governance world-streaming living-actor perception-information world-time movement-visibility actor-visuals human-identity save-migration chart-relief accessibility-mobile perf-early perf-scale` | `physical-conservation material-culture deep-time memory-attunement promise-network living-voice hard-country violence environment` according to possessions, role, experience, expression, travel, and conflict |
+| Ordinary human | `governance world-streaming living-actor perception-information world-time movement-visibility actor-visuals human-identity save-migration chart-relief accessibility-mobile perf-early perf-scale` | `physical-conservation material-culture deep-time memory-attunement promise-network living-voice embodied-acoustics hard-country violence environment` according to possessions, role, experience, expression, audible physical contact, travel, and conflict |
 | Hostile or rogue human | Every ordinary-human contract | `violence` plus physical inventory/weapon `physical-conservation` and `health-recovery` for injury/incapacity; hostility adds context after the complete human exists |
 | Hunter, fisher, courier, traveler, or worker | Every ordinary-human contract | `ecology maritime promise-network material-culture hard-country violence` only as the physical occupation requires |
-| Dog | `governance world-streaming living-actor perception-information world-time ecology movement-visibility actor-visuals save-migration chart-relief accessibility-mobile perf-early perf-scale` | `physical-conservation` for custody/gear, `living-voice` for calls, `memory-attunement` for bond/history, `hard-country environment` for travel and exposure |
-| Ordinary addressable wildlife | `governance world-streaming living-actor perception-information world-time ecology movement-visibility actor-visuals save-migration chart-relief accessibility-mobile perf-early perf-scale` | `living-voice violence physical-conservation deep-time memory-attunement` only when the species or individual supports them |
+| Dog | `governance world-streaming living-actor perception-information world-time ecology movement-visibility actor-visuals save-migration chart-relief accessibility-mobile perf-early perf-scale` | `physical-conservation` for custody/gear, `living-voice embodied-acoustics` for calls and audible body/world contact, `memory-attunement` for bond/history, `hard-country environment` for travel and exposure |
+| Ordinary addressable wildlife | `governance world-streaming living-actor perception-information world-time ecology movement-visibility actor-visuals save-migration chart-relief accessibility-mobile perf-early perf-scale` | `living-voice embodied-acoustics violence physical-conservation deep-time memory-attunement` only when the species or individual supports vocalization, audible contact, or the other named behavior |
 | Aggregate wildlife population | `governance world-streaming ecology save-migration chart-relief accessibility-mobile perf-early perf-scale` | `perception-information` only for honest aggregate observation/pressure; never fabricate individuals solely to satisfy an actor API |
 | Recognizable or promoted wildlife individual | Ordinary addressable-wildlife contracts | `deep-time memory-attunement physical-conservation` for stable promotion, relationship, evidence, possessions/custody, and long-term state |
 | Magical fox or magical animal | Complete ordinary species/fox contracts first | `supernatural altered-perception` only after ordinary ecology, movement, evidence, and performance are intact |
@@ -208,12 +209,12 @@ means the contract applies when that thing has the named capability or effect.
 | Carcass | `governance world-streaming physical-conservation ecology save-migration chart-relief accessibility-mobile perf-early perf-scale` | `material-culture deep-time environment` for processing, decomposition, evidence, or provenance; it is not a floating loot table |
 | Raw plant/animal/geological material | `governance world-streaming physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `botany ecology deep-time environment` according to physical source and transformation |
 | Processed material or recipe output | `governance physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `deep-time asset-storage perf-early` when persistent, visually distinct, or produced at scale |
-| Tool | `governance world-streaming physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `hard-country actor-visuals deep-time keepsakes violence sparse-field-gear` according to real verbs, provenance, discovery, and use |
-| Weapon | `governance world-streaming physical-conservation material-culture violence save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `health-recovery` for injury/incapacity and `deep-time keepsakes living-voice perception-information` for provenance, significance, and lawful sensory signature |
-| Cargo, parcel, or loose supply | `governance world-streaming physical-conservation promise-network save-migration chart-relief accessibility-mobile perf-early perf-scale` | `fall-cargo-recovery material-culture deep-time keepsakes environment perception-information` for incident separation, condition, provenance, significance, drift, wetness, heat, or scent |
+| Tool | `governance world-streaming physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `hard-country actor-visuals deep-time keepsakes violence sparse-field-gear embodied-acoustics` according to real verbs, provenance, discovery, use, and audible contact |
+| Weapon | `governance world-streaming physical-conservation material-culture violence save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `health-recovery` for injury/incapacity and `deep-time keepsakes embodied-acoustics living-voice perception-information` for provenance, significance, lawful impact/shot acoustics, and vocal response |
+| Cargo, parcel, or loose supply | `governance world-streaming physical-conservation promise-network save-migration chart-relief accessibility-mobile perf-early perf-scale` | `fall-cargo-recovery material-culture deep-time keepsakes environment perception-information embodied-acoustics` for incident separation, condition, provenance, significance, drift, wetness, heat, scent, shift, or impact |
 | Keepsake | `governance world-streaming physical-conservation deep-time memory-attunement keepsakes save-migration chart-relief accessibility-mobile` | The ordinary contract of its physical object type still applies; keepsake status never replaces it |
-| Boat | `governance world-streaming physical-conservation movement-visibility maritime hard-country save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `promise-network material-culture deep-time environment health-recovery` for cargo work, repair, provenance, weather/current, collision, grounding, exposure, injury, and rescue |
-| Other vehicle | `governance world-streaming physical-conservation movement-visibility save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `maritime hard-country material-culture promise-network deep-time environment health-recovery` according to travel domain, collision/exposure risk, and use |
+| Boat | `governance world-streaming physical-conservation movement-visibility maritime hard-country save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `promise-network material-culture deep-time environment health-recovery embodied-acoustics` for cargo work, repair, provenance, weather/current, paddle/hull/rope contact, collision, grounding, exposure, injury, and rescue |
+| Other vehicle | `governance world-streaming physical-conservation movement-visibility save-migration actor-visuals chart-relief accessibility-mobile perf-early perf-scale` | `maritime hard-country material-culture promise-network deep-time environment health-recovery embodied-acoustics` according to travel domain, audible operation/contact, collision/exposure risk, and use |
 | Infrastructure or route aid | `governance world-streaming physical-conservation hard-country deep-time save-migration chart-relief accessibility-mobile perf-early perf-scale` | `material-culture promise-network environment maritime` for construction, civic funding, exposure, or water use |
 | Settlement or service network | `governance world-streaming settlement-generation promise-network deep-time save-migration chart-relief accessibility-mobile perf-early perf-scale` | `delivery-scale expedition-cartography economy living-actor world-time living-voice health-recovery maritime perception-information` as destination distribution, discovery, population, schedules, trade, rescue, transport, and rumor become live |
 | Ruin or historical site | `governance world-streaming deep-time save-migration chart-relief accessibility-mobile perf-early perf-scale` | `physical-conservation material-culture ecology supernatural altered-perception` according to real contents and causal history |
@@ -221,9 +222,9 @@ means the contract applies when that thing has the named capability or effect.
 | Hallucinated actor or presentation echo | `governance altered-perception chart-relief accessibility-mobile` | It references one real actor if appropriate but receives no independent collision, custody, inventory, Promise identity, or save identity |
 | Supernatural place | `governance world-streaming supernatural save-migration chart-relief accessibility-mobile perf-early perf-scale` | `ecology altered-perception deep-time environment` according to real world effects and subjective presentation |
 | Exceptional systemic effect | `governance systemic-effects save-migration perf-early perf-scale` | Every physical, actor, knowledge, weather, recovery, and presentation contract it actually bends; no parallel ruleset |
-| Loud or violent sound | `governance living-actor perception-information environment living-voice chart-relief accessibility-mobile perf-early` | `violence deep-time` if evidence or incident history; it propagates from a real source rather than globally informing actors |
-| Recipe or processing action | `governance physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `botany ecology deep-time perf-early` according to sources, by-products, provenance, and scale |
-| Traversal mechanic | `governance world-streaming hard-country movement-visibility save-migration chart-relief accessibility-mobile perf-early perf-scale` | `locomotion-gait fall-cargo-recovery expedition-cartography physical-conservation health-recovery environment maritime` when it changes gait, separates cargo, records route knowledge, deploys items, causes injury, or crosses water |
+| Loud or violent sound | `governance living-actor perception-information environment embodied-acoustics chart-relief accessibility-mobile perf-early` | `violence deep-time living-voice` if it records violence/evidence or includes vocal expression; it propagates from a real source rather than globally informing actors |
+| Recipe or processing action | `governance physical-conservation material-culture save-migration chart-relief accessibility-mobile` | `botany ecology deep-time perf-early embodied-acoustics` according to sources, by-products, provenance, scale, and real tool/material contact |
+| Traversal mechanic | `governance world-streaming hard-country movement-visibility save-migration chart-relief accessibility-mobile perf-early perf-scale` | `locomotion-gait fall-cargo-recovery expedition-cartography physical-conservation health-recovery environment maritime embodied-acoustics` when it changes gait, separates cargo, records route knowledge, deploys items, causes injury, crosses water, or produces salient contact sound |
 | Environmental or world-scale simulation | `governance world-streaming environment save-migration integration perf-early perf-scale` | Every domain contract whose truth it advances; scale never grants permission to flatten ownership, knowledge, ecology, or history |
 | Save-backed system or schema migration | `governance save-migration integration perf-early perf-scale` | Every contract whose authority is serialized; always prove current-schema round-trip, interruption behavior, deterministic/conserved restore, validation, and bounded growth. Before official stable 1.0, either support or explicitly retire an obsolete development schema fail-closed; from the 1.0 baseline onward, prove supported forward migration. |
 | Chart, Relief, HUD, or inspection projection | `governance chart-relief accessibility-mobile integration perf-early perf-scale` | `expedition-cartography` plus the authoritative and knowledge contracts for every fact projected; presentation never becomes a second simulation owner |
@@ -358,7 +359,7 @@ People learn the player's name through introduction, records, reports,
 conversation, reputation, or social propagation—not by reading save data.
 Reputation may spread identity locally, but there is no global hive mind.
 
-### Voice and information
+### Expression, acoustic world, and information
 
 Expression follows experience, knowledge, emotion, relationship, intent, and
 context. Human combat lines do not bypass `living-voice`; animal calls do not bypass
@@ -370,6 +371,29 @@ When Living Voice adapts an existing ecological or working-animal signal, that
 causal domain retains semantic and physical authority. Living Voice may add
 human hearing and presentation only through one source-bound admission and must
 suppress any duplicate human observation or player cue for the same event.
+
+Any applicable speech, vocalization, impact, contact, tool/material action,
+movement sound, violent sound, or vessel/vehicle sound follows:
+
+```text
+COMMITTED DOMAIN EVENT
+→ STRUCTURED SOURCE-BOUND ACOUSTIC EVENT
+→ ENVIRONMENTAL PROPAGATION
+→ LISTENER-SPECIFIC RECEIPT
+→ ACTOR ATTENTION / BELIEF / RESPONSE
+  + AUTHENTICATED PLAYER AUDIO / OPTIONAL ACOUSTIC TEXT
+```
+
+The producer owns the cause; `embodied-acoustics` owns shared propagation and
+receipts; Living Voice owns vocal semantics and the shared restrained
+acoustic-text presenter. Exact world anchoring requires heard-and-visible
+source authentication or authenticated direct physical contact. Unseen hearing
+stays uncertain/directional and unheard
+events produce no player cue. Layout, repetition merging, and clutter
+suppression never delete authoritative events or NPC hearing. Work of Hands,
+Weight of Violence, Hard Country, cargo, foliage interaction, Long Crossing,
+future tools, future vehicles, and new physical actors inherit this contract;
+none may create a private floating-sound-text system.
 
 ### Biodiversity and ecology
 
@@ -386,6 +410,14 @@ New terrain and traversal preserve physical consequence and multiple honest
 responses: preparation, equipment, route choice, detour, retreat, waiting,
 staging cargo, or multiple trips. Tools remain physical, deployment remains
 physical, and reclaim is an action rather than a refund.
+
+### Maritime and vehicles
+
+Paddles, hulls, ropes, cargo, grounding, waves, docks, collisions, and repair
+remain actions of physical vessels and materials. When audible they emit
+ordinary `embodied-acoustics` events through water/weather-aware propagation;
+Long Crossing and future vehicles do not create boat-specific subtitle or
+hearing universes.
 
 ### Deep Time and memory
 
@@ -414,12 +446,24 @@ ecological consequences, social consequences, memory, and recovery work. Do
 not introduce combat XP, DPS tiers, enemy waves, or kill filler without an
 explicit canonical replacement of the existing product law.
 
+Impacts, weapon/material contact, projectiles, gunshots where canonical, body
+falls, and breakage are committed physical events that inherit
+`embodied-acoustics`. Living Voice owns cries, shouts, and other vocal response,
+not the physical cause of a shot or strike. Presentation never names a hidden
+attacker, weapon, or victim beyond what the listener lawfully perceived.
+
 ### Material culture
 
 Future crafting extends PACK / MAKE / MEND, recipe knowledge, condition,
 repair, dismantling, processing, assembly, and physical sources. Do not create
 an unrelated Crafting V2. A fallen tree or carcass stays a world source until
 real processing moves conserved matter into another form.
+
+Committed cutting, chopping, sawing, scraping, hammering, lashing, tightening,
+shaping, cooking, repairing, dismantling, breaking, and other tool/material
+actions may emit sparse structured `embodied-acoustics` events. Repeated work
+does not create per-tick text, and Work of Hands does not own a separate
+crafting-floating-text system.
 
 ### Chart, Relief, accessibility, and mobile
 

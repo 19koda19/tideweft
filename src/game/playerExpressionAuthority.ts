@@ -501,6 +501,7 @@ function policyFor(
     case "guardian-dog-defensive-growl":
     case "guardian-dog-shelter-whine":
     case "fish-crow-alarm-call":
+    case "human-danger-warning":
       return null;
   }
 }

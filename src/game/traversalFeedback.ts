@@ -63,6 +63,11 @@ const CAUSE_LABELS: Readonly<Record<FallRiskCauseCode, string>> = {
   "travel-pace": "downhill speed",
 };
 
+/** Stable player-facing cause wording; consumers never parse incident prose. */
+export function traversalCauseLabel(cause: FallRiskCauseCode): string {
+  return CAUSE_LABELS[cause];
+}
+
 const STUMBLE_VOICES = ["oop", "nnf", "hup", "skk"] as const;
 
 export function createTraversalFeedbackState(): TraversalFeedbackState {
