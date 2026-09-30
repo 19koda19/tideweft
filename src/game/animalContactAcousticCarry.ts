@@ -2,10 +2,10 @@ import { hashCanonical } from "../sim/util";
 import type { DogSize } from "../sim/dogIdentity";
 import { MAX_LIVING_ACTOR_LOCOMOTION_STEP_UNITS } from "./livingActorLocomotion";
 import {
-  HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
+  PHYSICAL_ACOUSTIC_MAX_SAMPLES,
   createPhysicalSoundSample,
   type PhysicalSoundSample,
-} from "./humanPerception";
+} from "./physicalAcousticPerception";
 import {
   ACOUSTIC_MATERIAL_CLASSES,
   animalContactAcousticEvent,
@@ -28,7 +28,7 @@ import {
  */
 export const ANIMAL_CONTACT_ACOUSTIC_CARRY_VERSION = 1 as const;
 export const ANIMAL_CONTACT_ACOUSTIC_CARRY_MAX_RECORDS =
-  HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES;
+  PHYSICAL_ACOUSTIC_MAX_SAMPLES;
 
 const RECORD_KEYS = Object.freeze([
   "beforePosition",
@@ -313,7 +313,7 @@ export function appendAnimalContactAcousticCarryRecord(
   return freezeCarry([...carry.records, record]);
 }
 
-/** Projects one authenticated contact into the generic human-hearing API. */
+/** Projects one authenticated contact into the shared physical-hearing API. */
 export function physicalSoundSampleForAnimalContact(
   recordValue: unknown,
 ): PhysicalSoundSample | null {

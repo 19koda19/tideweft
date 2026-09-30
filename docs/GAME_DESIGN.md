@@ -199,12 +199,15 @@ may emit a separate source-bound `clatter`, `thud`, or `splash` from the same
 conserved lot. Actual movement of the existing dogs also derives a body/surface
 contact event from distance, body size, gait, and terrain; water and vegetation
 can therefore sound differently from ordinary dry ground without making every
-step visible text. Dog contact also reaches the next bounded human-perception
-frame even when the courier cannot hear it and no caption is admitted. Eligible
-nearby humans receive only anonymous, weather- and range-limited sound knowledge
-through a source-ID-excluding bridge. Dog and broader cross-species response to
-physical contact remains incomplete rather than being implied by that human
-consumer.
+step visible text. Dog contact also reaches the next bounded living-actor
+perception frame even when the courier cannot hear it and no caption is
+admitted. Eligible nearby humans and the other eligible full-simulation
+in-window dog receive
+only anonymous, weather- and range-limited sound knowledge through a shared
+source-ID-excluding evaluator; the dog applies its registered hearing
+sensitivity and may notice ordinary contact without treating it as a danger
+alarm. Broader species, coarse, and cross-frame response to physical contact
+remain incomplete.
 
 Active Living Voice channels, legacy visible resident speech, animal calls,
 and eligible physical candidates enter one Chart/Relief layout with
@@ -224,10 +227,11 @@ audible word and direction. Ambient-water syllables are
 still renderer-owned legacy presentation. The old ADRIFT syllable fallback is
 suppressed whenever a production view supplies the shared `acousticText`
 projection, but remains available to legacy views that omit it. Cargo impact
-and representative dog-body contact are live, including human hearing of that
-dog contact; broader animal bodies, arbitrary object/foliage contacts,
-cross-species physical-sound consumers, tool/material work, violence, and
-vessel producers remain incomplete. Future Work of Hands, Weight
+and representative dog-body contact are live, including bounded human and
+dog-to-dog hearing of that contact; broader animal bodies, arbitrary
+object/foliage contacts, broad cross-species physical-sound consumers,
+tool/material work, violence, and vessel producers remain incomplete. Future
+Work of Hands, Weight
 of Violence, Long Crossing, traversal equipment, tools, and vehicles inherit
 this acoustic world; none receives a separate crafting, combat, or boat
 subtitle universe.

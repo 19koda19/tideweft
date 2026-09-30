@@ -448,6 +448,50 @@ describe("settlement working-animal authority", () => {
     })?.activity).toBe("watch");
   });
 
+  it("keeps ordinary embodied contact out of the guardian alarm and task path", () => {
+    const state = stateAt();
+    const assignment = state.assignments[0]!;
+    const perception = perceptionWithObservation(assignment.workerActorId, {
+      id: "OBS-physical-rustle",
+      perceivedClass: "physical-rustle",
+      confidence: ACTOR_PERCEPTION_SCALE,
+      salience: ACTOR_PERCEPTION_SCALE,
+    });
+    const decision = decideSettlementWorkingAnimalActivity({
+      assignment,
+      tick: 1,
+      perception,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    });
+
+    expect(decision).toEqual({
+      version: SETTLEMENT_WORKING_ANIMAL_ACTIVITY_VERSION,
+      assignmentId: assignment.assignmentId,
+      workerActorId: assignment.workerActorId,
+      activity: "watch",
+      decidedAtTick: 1,
+      cause: { kind: "assignment", referenceId: assignment.assignmentId },
+      perceivedArea: null,
+    });
+    expect(stageSettlementWorkingAnimalActivity(state, {
+      assignmentId: assignment.assignmentId,
+      tick: 1,
+      perception,
+      welfare: ZERO_WELFARE,
+      accessibility: ALL_ACCESSIBLE,
+      actorDisposition: AVAILABLE_FOR_WORK,
+      workerInsideDutyArea: true,
+    })).toMatchObject({
+      state,
+      transaction: null,
+      staged: false,
+      reusedPendingTransaction: false,
+    });
+  });
+
   it("copies only lawful large-predator evidence and never its identified actor into work state", () => {
     const state = stateAt();
     const assignment = state.assignments[0]!;

@@ -5999,6 +5999,13 @@ describe("runtime settlement ecology integration", () => {
       perceivedArea: reachedArea,
     });
     const advancedCarry = advancedEnvelope.perceptionCarry as {
+      animalContactAcousticCarry: {
+        version: number;
+        records: Array<{
+          beforePosition: WorldPosition;
+          event: WorldAcousticEvent;
+        }>;
+      };
       actorVocalizationSamples: Array<{
         expressionEventId: string;
         position: WorldPosition;
@@ -6077,6 +6084,12 @@ describe("runtime settlement ecology integration", () => {
       advancedBio0.dog.identity.stableId,
       ...advancedRoster.actors.map(({ identity }) => identity.stableId),
     ]).size).toBe(2);
+    const guardianPhysicalContact = advancedCarry.animalContactAcousticCarry.records.find(
+      ({ event }) => event.sourceId === advancedGuardian.identity.stableId,
+    );
+    if (guardianPhysicalContact === undefined) {
+      throw new Error("guardian witness omitted its committed physical contact");
+    }
 
     expect(advancedAssignment.currentTask).toMatchObject({
       taskOrdinal: 1,
@@ -6095,6 +6108,101 @@ describe("runtime settlement ecology integration", () => {
     // not renewed omniscient target knowledge, must carry the dog to its exact
     // search probe and physically home again.
     runtime.destroy();
+
+    // Branch from the real pending contact and place the other current dog at
+    // its source locus. The next authoritative frame must admit one anonymous
+    // physical belief to that listener, never to the source dog itself, and
+    // must persist cognition without adding a replay marker to the save.
+    const dogHearingWorld = deserializeWorld(String(advancedEnvelope.world));
+    const stagedBio0 = {
+      ...advancedBio0,
+      dog: repositionDogActor(advancedBio0.dog, {
+        position: guardianPhysicalContact.event.sourcePosition,
+        heading: advancedBio0.dog.address.heading,
+        atTick: advancedBio0.tick,
+      }),
+    };
+    const stagedPhysicalCarry = structuredClone(advancedCarry);
+    stagedPhysicalCarry.animalContactAcousticCarry.records = [guardianPhysicalContact];
+    const dogHearingRecord = withCurrentEnvelopeFields(advancedRecord, {
+      world: serializeWorld(dogHearingWorld),
+      bio0Ecology: serializeBio0Ecology(stagedBio0),
+      perceptionCarry: stagedPhysicalCarry,
+    });
+    const dogHearingRepository = new MemoryRepository(dogHearingRecord);
+    const dogHearingRuntime = await createTideweftRuntime(dogHearingRepository);
+    expect(dogHearingRuntime.getUIView().saveWarning).toBeUndefined();
+    advancePlayerSteps(dogHearingRuntime, 10);
+    await dogHearingRuntime.save();
+    const dogHearingEnvelope = savedEnvelope(dogHearingRepository);
+    const heardBio0 = deserializeBio0Ecology(dogHearingEnvelope.bio0Ecology);
+    const heardRoster = deserializeDogActorRoster(dogHearingEnvelope.dogActorRoster);
+    const heardWork = deserializeSettlementWorkingAnimalState(
+      dogHearingEnvelope.settlementWorkingAnimals,
+    );
+    if (heardBio0 === null || heardRoster === null || heardWork === null) {
+      throw new Error("dog physical-hearing witness lost a current authority");
+    }
+    const contactObservationTick = dogHearingWorld.meta.completedTick + 1;
+    const otherDogObservationId = `physical-hearing:${hashCanonical({
+      acousticEventId: guardianPhysicalContact.event.eventId,
+      observerId: stagedBio0.dog.identity.stableId,
+      targetTick: contactObservationTick,
+    })}`;
+    const sourceSelfObservationId = `physical-hearing:${hashCanonical({
+      acousticEventId: guardianPhysicalContact.event.eventId,
+      observerId: advancedGuardian.identity.stableId,
+      targetTick: contactObservationTick,
+    })}`;
+    const heardContactBelief = heardBio0.dog.perception.beliefs.find(
+      ({ sourceObservationId }) => sourceObservationId === otherDogObservationId,
+    );
+    expect(heardContactBelief).toMatchObject({
+      channel: "hearing",
+      perceivedClass: guardianPhysicalContact.event.soundClass,
+      subjectId: null,
+      identification: "anonymous",
+      firstObservedTick: contactObservationTick,
+      lastObservedTick: contactObservationTick,
+      sourceObservationId: otherDogObservationId,
+      strongInterrupt: false,
+    });
+    expect(heardContactBelief?.area.radiusUnits).toBeGreaterThan(0);
+    expect(heardContactBelief?.area.center).not.toEqual(
+      guardianPhysicalContact.event.sourcePosition,
+    );
+    const heardGuardian = heardRoster.actors.find(({ identity }) => (
+      identity.stableId === advancedGuardian.identity.stableId
+    ));
+    expect(heardGuardian?.perception.beliefs.some(({ sourceObservationId }) => (
+      sourceObservationId === sourceSelfObservationId
+    ))).toBe(false);
+    expect(heardWork.assignments[0]?.currentTask?.sourceObservationId)
+      .not.toBe(sourceSelfObservationId);
+    expect(stableStringify(heardWork)).not.toContain(sourceSelfObservationId);
+    expect((dogHearingEnvelope.perceptionCarry as typeof advancedCarry)
+      .animalContactAcousticCarry.records.some(({ event }) => (
+        event.eventId === guardianPhysicalContact.event.eventId
+      ))).toBe(false);
+    dogHearingRuntime.destroy();
+
+    const dogHearingReload = await createTideweftRuntime(dogHearingRepository);
+    expect(dogHearingReload.getUIView().saveWarning).toBeUndefined();
+    advancePlayerSteps(dogHearingReload, 10);
+    await dogHearingReload.save();
+    const replayBio0 = deserializeBio0Ecology(
+      savedEnvelope(dogHearingRepository).bio0Ecology,
+    );
+    const replayedBelief = replayBio0?.dog.perception.beliefs.find(
+      ({ sourceObservationId }) => sourceObservationId === otherDogObservationId,
+    );
+    expect(replayedBelief?.lastObservedTick).toBe(contactObservationTick);
+    expect((savedEnvelope(dogHearingRepository).perceptionCarry as typeof advancedCarry)
+      .animalContactAcousticCarry.records.some(({ event }) => (
+        event.eventId === guardianPhysicalContact.event.eventId
+      ))).toBe(false);
+    dogHearingReload.destroy();
+
     const recoveredRepository = new MemoryRepository(advancedRecord);
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     const recovered = await createTideweftRuntime(recoveredRepository);

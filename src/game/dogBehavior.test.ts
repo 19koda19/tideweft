@@ -310,6 +310,28 @@ describe("pure deterministic dog behavior", () => {
     expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({ kind: "available" });
   });
 
+  it("notices anonymous physical contact without relabeling it as danger or assigned alarm work", () => {
+    const state = dog();
+    state.needs.safety = ACTOR_PERCEPTION_SCALE;
+    const input = behaviorInput(state, [{
+      id: "heard-brush-contact",
+      perceivedClass: "physical-rustle",
+      channel: "hearing",
+      confidence: 860_000,
+      salience: 940_000,
+    }]);
+    const decision = decide(input);
+
+    expect(decision.intent).toBe("observe");
+    expect(decision.cause).toEqual({
+      kind: "perception",
+      referenceId: "contact:hearing:heard-brush-contact",
+    });
+    expect(decision.focusBeliefKey).toBeNull();
+    expect(score(decision, "retreat")).toBe(0);
+    expect(evaluateDogBehavior(input)?.assignmentReadiness).toEqual({ kind: "available" });
+  });
+
   it("uses human familiarity and accepted human perception for avoidance", () => {
     const state = dog();
     state.humanFamiliarity = { level: "wary", confidence: 300_000 };

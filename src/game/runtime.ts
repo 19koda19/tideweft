@@ -412,13 +412,17 @@ import {
   HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
-  ambientNoiseAt,
   collectExistingHumanObservations,
   createPlayerSenseSample,
   createSupplementalSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
 } from "./humanPerception";
+import {
+  ambientNoiseAt,
+  type PhysicalSoundSample,
+} from "./physicalAcousticPerception";
+import { collectDogPhysicalAcousticObservationBatches } from "./dogPhysicalAcousticPerception";
 import {
   animalContactAcousticBodySizeForDogSize,
   animalContactMovementForDistance,
@@ -1212,7 +1216,7 @@ interface PlayerPerceptionCarry {
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
   readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
-  /** Committed contact facts waiting for the next human-perception interval. */
+  /** Committed contact facts waiting for the next bounded living-actor hearing interval. */
   readonly animalContactAcousticCarry: AnimalContactAcousticCarry;
   readonly situatedExpressionChannels: SituatedExpressionChannelBank;
   readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
@@ -3411,8 +3415,8 @@ function runtimeDogContactMaximumStepUnits(
 }
 
 /**
- * Retains only pending contacts that the bounded current-frame human hearing
- * bridge can still project. A frame rebase may leave a source behind; keeping
+ * Retains only pending contacts that bounded current-frame living-actor hearing
+ * can still project. A frame rebase may leave a source behind; keeping
  * that record would preserve no eligible consumer and would make its event-time
  * terrain impossible to reauthenticate from the active immutable window.
  */
@@ -10385,7 +10389,8 @@ export async function createTideweftRuntime(
   ];
   // Contact happens after the resident frame for its world tick. Retain that
   // exact causal fact until the following frame so player audibility and text
-  // suppression can never decide whether nearby humans heard the world.
+  // suppression can never decide whether nearby humans or current dogs heard
+  // the world.
   let animalContactAcousticCarry = resumed?.perceptionCarry.animalContactAcousticCarry
     ?? createAnimalContactAcousticCarry();
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
@@ -12036,14 +12041,9 @@ export async function createTideweftRuntime(
 
   function residentPerceptionFrame(
     targetTick: number,
+    physicalSoundSamples: readonly PhysicalSoundSample[],
     porterVisual: RuntimePorterVisualFrame | null = null,
   ): ResidentPerceptionFrame {
-    const physicalSoundSamples = physicalSoundSamplesForAnimalContactCarry(
-      animalContactAcousticCarry,
-    );
-    if (physicalSoundSamples === null) {
-      throw new Error("Animal-contact acoustic carry failed reauthentication");
-    }
     const batches = collectExistingHumanObservations({
       world: worldView,
       window: regionalTravel.window,
@@ -12578,6 +12578,12 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick = 0;
       const elapsedWeather = { ...world.weather };
       const targetTick = world.meta.completedTick + 1;
+      const physicalSoundSamples = physicalSoundSamplesForAnimalContactCarry(
+        animalContactAcousticCarry,
+      );
+      if (physicalSoundSamples === null) {
+        throw new Error("Animal-contact acoustic carry failed reauthentication");
+      }
       const priorPorter = runtimeBio0Porter(
         economyView,
         bio0Ecology.porterAddress.actorId,
@@ -12721,10 +12727,22 @@ export async function createTideweftRuntime(
           : rawPropagated;
         coreAlarmObservationBatches.push(propagated);
       }
+      const dogPhysicalAcousticObservationBatches =
+        collectDogPhysicalAcousticObservationBatches({
+          dogs: runtimeDogActors(bio0Ecology, dogActorRoster),
+          physicalSoundSamples,
+          world: worldView,
+          window: regionalTravel.window,
+          targetTick,
+        });
+      if (dogPhysicalAcousticObservationBatches === null) {
+        throw new Error("Animal-contact acoustics could not enter dog hearing");
+      }
       const coreObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [
         coreVisualObservations,
         coreAggregateActivityObservationBatches,
         ...coreAlarmObservationBatches,
+        dogPhysicalAcousticObservationBatches,
       ];
       const bio0Simulation = resolveLivingActorSimulationPolicy({
         participants: [bio0Ecology.dog.address, priorPorter.address],
@@ -12810,7 +12828,7 @@ export async function createTideweftRuntime(
       ) {
         throw new Error("Porter world observations could not be canonicalized");
       }
-      const perceptionFrame = residentPerceptionFrame(targetTick, {
+      const perceptionFrame = residentPerceptionFrame(targetTick, physicalSoundSamples, {
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
       });
@@ -13050,12 +13068,12 @@ export async function createTideweftRuntime(
                 carryRecord,
               );
           if (nextAnimalContactCarry === null) {
-            throw new Error("Committed dog contact could not enter bounded human hearing");
+            throw new Error("Committed dog contact could not enter bounded living-actor hearing");
           }
           animalContactAcousticCarry = nextAnimalContactCarry;
           // Player reception is only one consumer. Failure to derive its local
           // masking cannot erase the already committed world event or the next
-          // nearby-human hearing interval.
+          // bounded nearby-actor hearing interval.
           if (listenerMasking === null) continue;
           const contact = evaluateAudibleContact({
             listener: { x: 0, y: 0 },

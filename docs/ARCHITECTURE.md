@@ -214,16 +214,21 @@ BIO0 and settlement-working dogs may
 emit one body/surface event derived from their before/after positions, terrain,
 and bounded body-size/gait semantics; the player receives it only through ordinary
 event-time hearing and sight/localization. That same dog-contact event enters a
-separate authenticated, eight-record human-hearing carry before any player
-hearing or text gate. The next world perception frame offers it exactly once to
-eligible nearby humans through ordinary range, weather masking, anonymous
-localization, and source-ID exclusion. The carry survives a current-schema
+separate authenticated, eight-record living-actor hearing carry before any
+player hearing or text gate. The next world perception frame offers it exactly
+once to eligible nearby humans and eligible full-simulation in-window dogs
+through one physical acoustic evaluator with ordinary range, listener-local
+rain/water masking,
+anonymous localization, and source-ID exclusion. Dog listeners additionally
+apply their registered species hearing sensitivity; ordinary contact remains a
+`physical-*` observation rather than being promoted to an alarm or threat. The
+carry survives a current-schema
 interruption; its self-consistent movement evidence is cross-checked against
 current dog identity, final position, tick, body, terrain, heading, and step
 ceiling. Its v1 prior point is carried evidence rather than an independently
 retained locomotion receipt, so exact historical-path authentication remains
 future work. A regional-frame rebase deterministically retires only contacts
-whose source can no longer reach this bounded human-perception bridge. The
+whose source can no longer reach this bounded living-actor bridge. The
 optional player label remains transient and cannot replay after reload. The
 owning traversal, cargo, and ecology domains keep every physical consequence.
 External audio for these structured embodied-contact events is released only
@@ -237,9 +242,10 @@ Production views suppress the old renderer-created ADRIFT syllables whenever
 the shared `acousticText` projection is present; their fallback remains only for
 legacy views and tests that omit the field. Ambient-water syllables still lack
 the structured event/receipt boundary. Broad non-dog animal contact, arbitrary
-object and foliage contact, tool/material work, violence, and vessel producers
-remain incomplete. A heard-unseen physical event still receives no exact world
-anchor or source identity; its lawful receipt may now feed only a coarse
+object and foliage contact, tool/material work, violence, vessel producers,
+and coarse/cross-frame physical hearing remain incomplete. A heard-unseen
+physical event still receives no exact world anchor or source identity; its
+lawful receipt may now feed only a coarse
 directional accessible caption.
 
 #### Shared acoustic-text presentation arbitration
@@ -383,16 +389,21 @@ semantic fence rejects human-warning meaning or admission as impossible v38
 state. Current v39 checkpoints reauthenticate the warning against the exact
 resident belief and event-time player reception; reload neither replays its
 acknowledged audio nor recursively admits a second warning.
-The dog-contact human-hearing candidate advances the unpublished outer save to
+The dog-contact hearing candidate advances the unpublished outer save to
 v40 and bounded perception carry to v8. Exact v39/carry-v7 migration initializes
 an empty physical-contact lane rather than inventing a historical sound. A
 current v40 checkpoint retains pending committed dog contact across interruption
 and reauthenticates its event tick, structured movement/acoustic semantics,
 source identity, and final source position against current dog authority before
-it may reach the next human-perception frame. The carried prior point is bounded
-by the current dog's heading and step authority but does not yet have a separate
+it may reach the next bounded human/dog perception frame. Human and dog
+listeners consume the same authenticated fact; listener-local masking,
+species sensitivity, anonymous uncertainty, and self-source exclusion are
+derived without adding a serialized listener receipt. The carried prior point
+is bounded by the current dog's heading and step authority but does not yet
+have a separate
 locomotion receipt; off-frame contacts are retired when a regional rebase removes
-their only current-frame consumers.
+their only current-frame consumers. Cross-frame/coarse animal hearing remains
+future work.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final

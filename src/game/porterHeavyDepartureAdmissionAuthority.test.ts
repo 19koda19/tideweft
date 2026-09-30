@@ -7,7 +7,7 @@ import {
   stepWorld,
 } from "../sim/public";
 import { FIXED_POINT, type SimEvent } from "../sim/types";
-import { ambientNoiseAt } from "./humanPerception";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
   livingActorAddressForResident,
   livingActorAddressInRegionalWindow,

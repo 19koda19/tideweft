@@ -1,6 +1,5 @@
 import {
   ACTOR_PERCEPTION_SCALE,
-  MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
   canonicalizeActorObservations,
   canonicalizeActorPerceptionState,
   createActorObservation,
@@ -9,15 +8,12 @@ import {
   type ActorObservation,
   type ActorPerceptionState,
   type ObservationInterrupt,
-  type ObservedArea,
 } from "../sim/actorPerception";
 import { globalTileToRegion } from "../sim/regions";
-import { FIXED_POINT, type TerrainTileView, type WorldView } from "../sim/types";
+import { FIXED_POINT, type WorldView } from "../sim/types";
 import {
-  calculateAmbientNoise,
   evaluateAudibleContact,
   evaluateVisualContact,
-  type AudibleContact,
 } from "./perception";
 import { buildWorldPerceptionCells } from "./outdoorIllumination";
 import type { RegionalTerrainWindow } from "./regionalTravel";
@@ -31,13 +27,11 @@ import {
   resolveResidentWorldPlacement,
   type ResidentWorldPlacement,
 } from "./residentSpatial";
-import { deriveWaterFlowProfile } from "./waterFlow";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
   createWorldPosition,
   isWorldPosition,
-  translateWorldPosition,
   worldPositionDelta,
   worldPositionToSpatialFrame,
   type SpatialFrame,
@@ -45,32 +39,37 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 import {
-  ACOUSTIC_SEMANTIC_FAMILIES,
-  type PhysicalSoundClass,
-} from "./worldAcoustics";
+  PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS,
+  PHYSICAL_ACOUSTIC_MAX_SAMPLES,
+  ambientNoiseAt,
+  createPhysicalSoundSample,
+  evaluatePhysicalAcousticListener,
+  inferAnonymousHearingArea,
+  type PhysicalSoundSample,
+} from "./physicalAcousticPerception";
+
+export {
+  ambientNoiseAt,
+  createPhysicalSoundSample,
+  type PhysicalSoundSample,
+} from "./physicalAcousticPerception";
 
 export const PLAYER_SENSE_SAMPLE_VERSION = 1 as const;
 export const LOCAL_PLAYER_SUBJECT_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 export const HUMAN_PERCEPTION_MAX_RESIDENTS = 64 as const;
 export const HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES = 16 as const;
 export const HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES = 8 as const;
-export const HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES = 8 as const;
+export const HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES = PHYSICAL_ACOUSTIC_MAX_SAMPLES;
 export const HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT =
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES * 2
   + HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
   + HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES;
-export const HUMAN_HEARING_MAX_RANGE_UNITS = 64 * WORLD_POSITION_UNITS_PER_TILE;
+export const HUMAN_HEARING_MAX_RANGE_UNITS = PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS;
 
-const HEARING_AREA_MAX_RADIUS_UNITS = 10_000_000;
-const LOCAL_WATER_MASK_RADIUS_TILES = 2;
 const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const SOUND_CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const EXPRESSION_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/;
-const ACOUSTIC_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
-const PHYSICAL_SOUND_CLASSES = new Set<string>(
-  ACOUSTIC_SEMANTIC_FAMILIES.map((family) => `physical-${family}`),
-);
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
 const EMPTY_PHYSICAL_SOUND_SAMPLES: readonly PhysicalSoundSample[] = Object.freeze([]);
@@ -97,17 +96,6 @@ export interface SupplementalSoundSample extends AcousticSample {
   readonly sourceActorId: string;
   /** Exact situated-expression event that emitted this one pending sound fact. */
   readonly expressionEventId: string;
-}
-
-/**
- * One bounded, source-authenticated physical-world sound. It remains distinct
- * from actor vocalization/expression samples: its event ID points to the
- * committed acoustic fact that caused it, never a situated-expression event.
- */
-export interface PhysicalSoundSample extends AcousticSample {
-  readonly soundClass: PhysicalSoundClass;
-  readonly sourceActorId: string;
-  readonly acousticEventId: string;
 }
 
 /** One bounded, explicit physical player stimulus at a canonical world point. */
@@ -165,42 +153,6 @@ export function createSupplementalSoundSample(
   ) return null;
   return Object.freeze({
     expressionEventId: value.expressionEventId,
-    id: value.id,
-    position: createWorldPosition(
-      value.position.region,
-      value.position.localX,
-      value.position.localY,
-    ),
-    soundLoudness: value.soundLoudness,
-    soundRangeUnits: value.soundRangeUnits,
-    soundClass: value.soundClass,
-    soundInterrupt: value.soundInterrupt,
-    sourceActorId: value.sourceActorId,
-  });
-}
-
-/** Creates one validated immutable physical-world hearing stimulus, or null. */
-export function createPhysicalSoundSample(
-  input: PhysicalSoundSampleInput,
-): PhysicalSoundSample | null {
-  const value: unknown = input;
-  if (!plainRecord(value) || !exactKeys(value, [
-    "acousticEventId",
-    "id",
-    "position",
-    "soundClass",
-    "soundInterrupt",
-    "soundLoudness",
-    "soundRangeUnits",
-    "sourceActorId",
-  ])
-    || !validSoundFields(value)
-    || !isPhysicalSoundClass(value.soundClass)
-    || !validActorId(value.sourceActorId)
-    || !validAcousticEventId(value.acousticEventId)
-  ) return null;
-  return Object.freeze({
-    acousticEventId: value.acousticEventId,
     id: value.id,
     position: createWorldPosition(
       value.position.region,
@@ -356,7 +308,7 @@ export function collectExistingHumanObservations(
         },
       });
       if (heard === null) return true;
-      const area = inferredHearingArea(placement.position, sample.position, heard);
+      const area = inferAnonymousHearingArea(placement.position, sample.position, heard);
       if (area === null) return false;
       const observation = createActorObservation({
         id: observationId("h", targetTick, resident.id, sample.id),
@@ -433,10 +385,23 @@ export function collectExistingHumanObservations(
       if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
     }
     for (const sample of physicalSounds) {
-      if (sample.sourceActorId === priorState.actorId) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
-      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+      const reception = evaluatePhysicalAcousticListener({
+        observationId: observationId("h", targetTick, resident.id, sample.id),
+        observerId: priorState.actorId,
+        observerPosition: placement.position,
+        observedAtTick: targetTick,
+        sample,
+        effectiveRangeUnits: sample.soundRangeUnits,
+        ambientNoise,
+        wind: {
+          x: world.weather.windX / FIXED_POINT,
+          y: world.weather.windY / FIXED_POINT,
+        },
+      });
+      if (reception === null) return EMPTY_BATCHES;
+      if (reception.kind === "heard") observations.push(reception.observation);
     }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
@@ -596,105 +561,6 @@ function facingTowardSavedPoint(
   }
 }
 
-function inferredHearingArea(
-  listener: WorldPosition,
-  source: WorldPosition,
-  heard: AudibleContact,
-): ObservedArea | null {
-  const minimum = Math.max(0, Math.round(heard.distanceBand.minimum));
-  const maximum = Math.max(minimum, Math.round(heard.distanceBand.maximum));
-  const estimatedDistance = Math.round((minimum * 2 + maximum) / 3);
-  const deltaX = Math.round(Math.cos(heard.bearing.centerRadians) * estimatedDistance);
-  const deltaY = Math.round(Math.sin(heard.bearing.centerRadians) * estimatedDistance);
-  let center = translatedOrNull(listener, deltaX, deltaY);
-  if (center === null) return null;
-  const radialUncertainty = Math.ceil((maximum - minimum) / 2);
-  const angularUncertainty = Math.ceil(
-    maximum * Math.sin(Math.min(Math.PI / 2, heard.bearing.uncertaintyRadians)),
-  );
-  const radiusUnits = Math.min(
-    HEARING_AREA_MAX_RADIUS_UNITS,
-    Math.max(
-      MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS,
-      radialUncertainty + angularUncertainty,
-    ),
-  );
-  if (sameWorldPosition(center, source)) {
-    const offsetX = Math.round(Math.cos(heard.bearing.centerRadians + Math.PI / 2)
-      * MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS);
-    const offsetY = Math.round(Math.sin(heard.bearing.centerRadians + Math.PI / 2)
-      * MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS);
-    center = translatedOrNull(center, offsetX, offsetY)
-      ?? translatedOrNull(center, -offsetX, -offsetY);
-    if (center === null || sameWorldPosition(center, source)) return null;
-  }
-  return Object.freeze({ center, radiusUnits });
-}
-
-function translatedOrNull(
-  position: WorldPosition,
-  deltaX: number,
-  deltaY: number,
-): WorldPosition | null {
-  try {
-    return translateWorldPosition(position, deltaX, deltaY);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Resolves the same local rain/current masking used by human hearing. Runtime
- * presentation gates consume this instead of inventing a second audibility
- * model for sounds the player may hear.
- */
-export function ambientNoiseAt(world: WorldView, listenerTileIndex: number): number | null {
-  const listener = world.terrain.tiles[listenerTileIndex];
-  if (!validTerrainTile(listener, listenerTileIndex, world.terrain.width)) return null;
-  let waterTurbulence = 0;
-  for (let offsetY = -LOCAL_WATER_MASK_RADIUS_TILES; offsetY <= LOCAL_WATER_MASK_RADIUS_TILES; offsetY += 1) {
-    for (let offsetX = -LOCAL_WATER_MASK_RADIUS_TILES; offsetX <= LOCAL_WATER_MASK_RADIUS_TILES; offsetX += 1) {
-      const x = listener.x + offsetX;
-      const y = listener.y + offsetY;
-      if (x < 0 || y < 0 || x >= world.terrain.width || y >= world.terrain.height) continue;
-      const index = y * world.terrain.width + x;
-      const tile = world.terrain.tiles[index];
-      if (!validTerrainTile(tile, index, world.terrain.width)) return null;
-      const profile = deriveWaterFlowProfile({
-        waterDepth: tile.waterDepth,
-        bedRoughness: tile.roughness,
-        tideLevel: world.tide.level,
-        weatherIntensity: world.weather.intensity,
-      });
-      const distance = Math.hypot(offsetX, offsetY);
-      const attenuation = 1 / (1 + distance * 0.8);
-      waterTurbulence = Math.max(
-        waterTurbulence,
-        profile.turbulence / FIXED_POINT * attenuation,
-      );
-    }
-  }
-  const raining = world.weather.kind === "rain" || world.weather.kind === "storm";
-  return calculateAmbientNoise({
-    rainIntensity: raining ? world.weather.intensity / FIXED_POINT : 0,
-    localWaterTurbulence: Math.max(0, Math.min(1, waterTurbulence)),
-  });
-}
-
-function validTerrainTile(
-  tile: TerrainTileView | undefined,
-  expectedIndex: number,
-  width: number,
-): tile is TerrainTileView {
-  return tile !== undefined
-    && tile.index === expectedIndex
-    && tile.x === expectedIndex % width
-    && tile.y === Math.floor(expectedIndex / width)
-    && fixedUnit(tile.elevation)
-    && fixedUnit(tile.roughness)
-    && fixedUnit(tile.waterDepth);
-}
-
 function spatialFrameForWindow(window: RegionalTerrainWindow): SpatialFrame | null {
   try {
     const address = globalTileToRegion(window.origin.x, window.origin.y);
@@ -802,14 +668,6 @@ function validExpressionEventId(value: unknown): value is string {
   return typeof value === "string" && EXPRESSION_EVENT_ID_PATTERN.test(value);
 }
 
-function validAcousticEventId(value: unknown): value is string {
-  return typeof value === "string" && ACOUSTIC_EVENT_ID_PATTERN.test(value);
-}
-
-function isPhysicalSoundClass(value: unknown): value is PhysicalSoundClass {
-  return typeof value === "string" && PHYSICAL_SOUND_CLASSES.has(value);
-}
-
 function fixedUnit(value: unknown): value is number {
   return typeof value === "number"
     && Number.isSafeInteger(value)
@@ -822,13 +680,6 @@ function signedFixedUnit(value: unknown): value is number {
     && Number.isSafeInteger(value)
     && value >= -FIXED_POINT
     && value <= FIXED_POINT;
-}
-
-function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {
-  return left.region.x === right.region.x
-    && left.region.y === right.region.y
-    && left.localX === right.localX
-    && left.localY === right.localY;
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {

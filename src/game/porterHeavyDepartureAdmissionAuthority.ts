@@ -1,7 +1,7 @@
 import { FIXED_POINT, type WorldView } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import { globalTileToRegion } from "../sim/regions";
-import { ambientNoiseAt } from "./humanPerception";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
   livingActorAddressForResident,
   livingActorAddressInRegionalWindow,
