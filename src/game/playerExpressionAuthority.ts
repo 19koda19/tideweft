@@ -502,6 +502,7 @@ function policyFor(
     case "guardian-dog-shelter-whine":
     case "fish-crow-alarm-call":
     case "human-danger-warning":
+    case "keeper-secure-store-response":
       return null;
   }
 }

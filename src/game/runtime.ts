@@ -189,6 +189,7 @@ import {
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
+  createSettlementKeeperStoreResponseExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
@@ -207,6 +208,10 @@ import {
   situatedExpressionSoundClass,
 } from "./situatedExpressionAcoustics";
 import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
+import {
+  settlementKeeperStoreResponseAdmissionMatchesWorld,
+  settlementKeeperStoreResponseReceptionMatchesEventTime,
+} from "./settlementKeeperStoreResponseAdmissionAuthority";
 import { migrateLegacyV33PlayerVocalizations } from "./legacyPlayerVocalizationMigration";
 import {
   createHeardUnseenSituatedExpressionReception,
@@ -466,6 +471,13 @@ import {
   workingPeopleExpressionMemoryMatchesWorld,
 } from "./workingPeopleExpression";
 import {
+  settlementKeeperStoreResponseExpressionEventForTrigger,
+  settlementKeeperStoreResponseExpressionEventMatchesWorld,
+  settlementKeeperStoreResponseExpressionIntent,
+  settlementKeeperStoreResponseExpressionMemoryMatchesWorld,
+  type SettlementKeeperStoreResponseExpressionInput,
+} from "./settlementKeeperStoreResponseExpression";
+import {
   projectCompatibilityFieldResources,
   regionalFieldResourceAtViewTile,
   regionalFieldResourceById,
@@ -707,6 +719,7 @@ import {
   deserializeSettlementEcologyState,
   establishSettlementDomesticAnimalCustody,
   projectSettlementFoodStoreSource,
+  projectSettlementKeeperStoreClosureAuthority,
   proposeSettlementKeeperStoreResponse,
   proposeSettlementRatAttraction,
   recordSettlementKeeperKnowledge,
@@ -1021,6 +1034,7 @@ function recentMeaningAcousticTuples(
     case "relief-after-cargo-recovery":
     case "porter-heavy-load":
     case "guardian-dog-defensive-growl":
+    case "keeper-secure-store-response":
       return [{ volume: "spoken", interrupt: "none" }];
     case "protect-important-cargo":
       return [
@@ -1041,8 +1055,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** First save whose pending perception carry owns physical animal contact. */
+/** First save whose situated-expression union owns the keeper's store reply. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** First save whose pending perception carry owns physical animal contact. */
+const ANIMAL_CONTACT_GAME_SAVE_VERSION = 40;
 /** First save whose closed situated-expression union persists human danger warnings. */
 const HUMAN_DANGER_WARNING_GAME_SAVE_VERSION = 39;
 /** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
@@ -1087,7 +1103,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 8 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 9 as const;
+const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
 const GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION = 5 as const;
@@ -1149,6 +1166,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
   FISH_CROW_ALARM_GAME_SAVE_VERSION,
   HUMAN_DANGER_WARNING_GAME_SAVE_VERSION,
+  ANIMAL_CONTACT_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -16763,22 +16781,57 @@ export async function createTideweftRuntime(
       refreshViews();
       return true;
     }
-    settlementEcology = resolution.state;
-    const keeperSpeech = "I'll bar the storehouse door.";
-    residentSpeech.set(keeper.resident.id, {
-      text: keeperSpeech.slice(0, 72),
-      untilSessionMs: Math.min(
-        Number.MAX_SAFE_INTEGER,
-        Math.max(0, session.sessionPlayMilliseconds) + 4_000,
-      ),
+    const closure = projectSettlementKeeperStoreClosureAuthority(resolution.state);
+    const listenerPosition = playerWorldPositionInRegionalWindow(
+      regionalTravel.window,
+      player,
+    );
+    const expressionIntent = settlementKeeperStoreResponseExpressionIntent({
+      world: economyView,
+      settlement: resolution.state,
     });
+    if (
+      closure === null
+      || listenerPosition === null
+      || expressionIntent === null
+      || expressionIntent.sourceActorId !== keeper.resident.identity.stableId
+      || !playerDirectlyObservesExpressionSource(expressionIntent)
+    ) {
+      throw new Error("Committed store closure could not authorize its keeper response");
+    }
+    const heard = playerExpressionAudibility(expressionIntent);
+    const responseAdmitted = acceptSituatedExpression(
+      expressionIntent,
+      heard === null
+        ? { kind: "none" }
+        : { kind: "heard-visible", certainty: heard.certainty },
+      (event, sampleOrdinal) => (
+        createSettlementKeeperStoreResponseExpressionAdmissionRecord({
+          sourceActorId: event.sourceActorId,
+          triggerEventId: event.triggerEventId,
+          sampleOrdinal,
+          admittedAtPlayerStepPhase: playerStepsSinceWorldTick,
+          storeId: closure.storeId,
+          closureTransactionId: closure.transactionId,
+          sourceEvidenceId: closure.sourceEvidenceId,
+          respondedAtTick: atTick,
+          listenerPosition,
+          listenerFacingMilliRadians: player.facingMilliRadians,
+          hearingCertainty: heard?.certainty ?? null,
+        })
+      ),
+    );
+    settlementEcology = resolution.state;
+    // Authoritative closure and expression roots commit before optional
+    // presentation/audio is released. A presentation failure must never leave
+    // a spoken secured-store response attached to an open store.
+    if (responseAdmitted) playPendingSituatedExpression();
     session.sessionChanges.push("You warned a visible store keeper, who secured the physical food stock.");
     if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
     announce(
       session,
       "You warn the keeper. The storehouse door is barred, and the remaining food stays physically inside.",
     );
-    soundscape.play("ui", 0.6);
     refreshViews();
     saveInBackground();
     return true;
@@ -18282,8 +18335,9 @@ function canonicalPlayerPerceptionCarry(
     | typeof GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     | typeof HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
+    | typeof ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
-  semanticSchema: "human-warning" | "fish-crow" = "human-warning",
+  semanticSchema: "keeper-response" | "human-warning" | "fish-crow" = "human-warning",
 ): PlayerPerceptionCarry | null {
   if (
     value === null
@@ -18292,12 +18346,14 @@ function canonicalPlayerPerceptionCarry(
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
   const hasCurrentShape = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || expectedVersion === ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     || expectedVersion === HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION;
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+      || expectedVersion === ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     ? [
         "actorVocalizationSamples",
         "animalContactAcousticCarry",
@@ -18507,6 +18563,11 @@ function canonicalPlayerPerceptionCarry(
           canonicalChannels,
           trajectory.admissionLedger,
         ))
+      || (expectedVersion !== PLAYER_PERCEPTION_CARRY_VERSION
+        && !perceptionCarryUsesOnlyPreKeeperResponseSemantics(
+          canonicalChannels,
+          trajectory.admissionLedger,
+        ))
       || causalAuthority.records.some(({ committedWorldTick }) => (
         committedWorldTick !== completedWorldTick
       ))
@@ -18514,7 +18575,10 @@ function canonicalPlayerPerceptionCarry(
     situatedExpressionChannels = trajectory.bank;
     situatedExpressionAdmissions = trajectory.admissionLedger;
     situatedExpressionCausalAuthority = causalAuthority;
-    if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
+    if (
+      expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+      || expectedVersion === ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
+    ) {
       const canonicalContactCarry = canonicalizeAnimalContactAcousticCarry(
         record.animalContactAcousticCarry,
       );
@@ -18723,6 +18787,28 @@ function perceptionCarryUsesOnlyFishCrowSemantics(
         meaning !== "human-danger-warning"
       )) && (active === null || active.meaning !== "human-danger-warning");
     });
+}
+
+/**
+ * Cumulative semantic fence for every current-shape carry before outer v41.
+ * Nested expression schemas intentionally retain version 1, so every v34-v40
+ * reader must reject the keeper reply introduced only by v41/carry-v9.
+ */
+function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
+  bank: SituatedExpressionChannelBank,
+  admissions: SituatedExpressionAdmissionLedger,
+): boolean {
+  return admissions.records.every(({ kind }) => (
+    kind !== "settlement-keeper-store-response"
+  )) && bank.channels.every((channel) => {
+    const active = channel.state.active;
+    return channel.state.recent.every(({ meaning }) => (
+      meaning !== "keeper-secure-store-response"
+    )) && (active === null || (
+      active.meaning !== "keeper-secure-store-response"
+      && active.knowledgeBasis !== "self-committed-store-closure"
+    ));
+  });
 }
 
 function invalidPlayerPerceptionCarry(): never {
@@ -19183,6 +19269,25 @@ function playerPerceptionCarryMatchesPosition(
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
     }
+    if (admission.kind === "settlement-keeper-store-response") {
+      const authority = { world: economy, settlement } as const;
+      const event = settlementKeeperStoreResponseExpressionEventForTrigger(
+        authority,
+        admission.triggerEventId,
+      );
+      return event !== null
+        && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
+        && vocalizationSampleMatchesActiveEvent(sample, event)
+        && settlementKeeperStoreResponseAdmissionMatchesWorld({
+          economyWorld: economy,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          settlement,
+          event,
+          admission,
+        });
+    }
     if (admission.kind !== "porter-heavy-departure") return false;
     const event = workingPeopleExpressionEventForTrigger(
       economy,
@@ -19429,13 +19534,42 @@ function situatedExpressionChannelsMatchWorld(
       const authority = runtimeHumanDangerWarningExpressionAuthority(economy, admission);
       return authority === null ? null : { admission, authority };
     };
+    const keeperAuthorityFor = (
+      triggerEventId: string,
+    ): Readonly<{
+      admission: Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "settlement-keeper-store-response" }
+      >;
+      authority: SettlementKeeperStoreResponseExpressionInput;
+    }> | null => {
+      const keeperAdmissions = admissions.filter((candidate): candidate is Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "settlement-keeper-store-response" }
+      > => (
+        candidate.kind === "settlement-keeper-store-response"
+        && candidate.triggerEventId === triggerEventId
+      ));
+      const admission = keeperAdmissions[0];
+      return keeperAdmissions.length !== 1 || admission === undefined
+        ? null
+        : { admission, authority: { world: economy, settlement } };
+    };
     if (!channel.state.recent.every((memory) => {
-      if (memory.meaning !== "human-danger-warning") {
-        return workingPeopleExpressionMemoryMatchesWorld(economy, memory);
+      if (memory.meaning === "human-danger-warning") {
+        const warning = warningAuthorityFor(memory.triggerEventId);
+        return warning !== null
+          && humanDangerWarningExpressionMemoryMatchesWorld(warning.authority, memory);
       }
-      const warning = warningAuthorityFor(memory.triggerEventId);
-      return warning !== null
-        && humanDangerWarningExpressionMemoryMatchesWorld(warning.authority, memory);
+      if (memory.meaning === "keeper-secure-store-response") {
+        const keeperResponse = keeperAuthorityFor(memory.triggerEventId);
+        return keeperResponse !== null
+          && settlementKeeperStoreResponseExpressionMemoryMatchesWorld(
+            keeperResponse.authority,
+            memory,
+          );
+      }
+      return workingPeopleExpressionMemoryMatchesWorld(economy, memory);
     })) return false;
     if (active !== null) {
       if (!residentSourcePositionMatches(economy, channel.sourceActorId, active.position)) {
@@ -19457,6 +19591,25 @@ function situatedExpressionChannelsMatchWorld(
             reception: channel.reception,
           })
         ) return false;
+      } else if (active.meaning === "keeper-secure-store-response") {
+        const keeperResponse = keeperAuthorityFor(active.triggerEventId);
+        if (
+          keeperResponse === null
+          || !settlementKeeperStoreResponseExpressionEventMatchesWorld(
+            keeperResponse.authority,
+            active,
+          )
+          || !settlementKeeperStoreResponseReceptionMatchesEventTime({
+            economyWorld: economy,
+            spatialWorld,
+            window: regionalTravel.window,
+            playerTemplate: player,
+            settlement,
+            event: active,
+            admission: keeperResponse.admission,
+            reception: channel.reception,
+          })
+        ) return false;
       } else if (!workingPeopleExpressionEventMatchesWorld(economy, active)) {
         return false;
       }
@@ -19469,6 +19622,21 @@ function situatedExpressionChannelsMatchWorld(
           authority,
           economy.completedTick,
         );
+      }
+      if (admission.kind === "settlement-keeper-store-response") {
+        const event = settlementKeeperStoreResponseExpressionEventForTrigger(
+          { world: economy, settlement },
+          admission.triggerEventId,
+        );
+        return event !== null && settlementKeeperStoreResponseAdmissionMatchesWorld({
+          economyWorld: economy,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          settlement,
+          event,
+          admission,
+        });
       }
       if (admission.kind !== "porter-heavy-departure") return false;
       const event = workingPeopleExpressionEventForTrigger(
@@ -20286,6 +20454,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
         || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
@@ -20615,6 +20784,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
       || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
       || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
@@ -20648,6 +20818,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
         || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
@@ -21217,8 +21388,15 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           decoded.perceptionCarry,
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
-          "human-warning",
+          "keeper-response",
         )
+      : decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION,
+            "human-warning",
+          )
       : decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,

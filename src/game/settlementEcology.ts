@@ -322,6 +322,26 @@ export interface SettlementKeeperStoreResponseResolution {
   readonly applied: boolean;
 }
 
+/**
+ * Exact retained authority for the one store-closing transaction.
+ *
+ * The settlement state does not retain a separate response timestamp. The
+ * only exact tick available after closure is the source evidence's learned
+ * tick, so this projection names it honestly instead of inferring when the
+ * keeper later acted on older knowledge.
+ */
+export interface SettlementKeeperStoreClosureAuthority {
+  readonly transactionId: string;
+  readonly keeperActorId: string;
+  readonly storeId: string;
+  readonly sourceEvidenceId: string;
+  readonly source: SettlementKeeperKnowledgeSource;
+  readonly sourceActorId: string;
+  readonly sourceEvidenceAtTick: number;
+  readonly sourceRisk: SettlementFoodStoreRisk;
+  readonly sourceConfidence: number;
+}
+
 export interface SettlementFoodLossStageResult {
   readonly state: SettlementEcologyState;
   readonly transaction: SettlementFoodLossTransaction;
@@ -1216,6 +1236,35 @@ export function applySettlementKeeperStoreResponse(
     lastClosureTransactionId: proposal.transactionId,
   });
   return nextState === null ? null : deepFreeze({ state: nextState, applied: true });
+}
+
+/**
+ * Projects the unique retained evidence that authorized a secured store.
+ * Open, malformed, or transaction-ambiguous roots fail closed.
+ */
+export function projectSettlementKeeperStoreClosureAuthority(
+  stateValue: unknown,
+): SettlementKeeperStoreClosureAuthority | null {
+  const state = canonicalizeSettlementEcologyState(stateValue);
+  if (state === null || state.closure !== "secured" || state.lastClosureTransactionId === null) {
+    return null;
+  }
+  const matchingEvidence = state.keeperKnowledge.filter(({ evidenceId }) => (
+    closureTransactionId(state.identity.storeId, evidenceId) === state.lastClosureTransactionId
+  ));
+  const evidence = matchingEvidence[0];
+  if (matchingEvidence.length !== 1 || evidence === undefined) return null;
+  return deepFreeze({
+    transactionId: state.lastClosureTransactionId,
+    keeperActorId: state.identity.keeperActorId,
+    storeId: state.identity.storeId,
+    sourceEvidenceId: evidence.evidenceId,
+    source: evidence.source,
+    sourceActorId: evidence.sourceActorId,
+    sourceEvidenceAtTick: evidence.learnedAtTick,
+    sourceRisk: evidence.risk,
+    sourceConfidence: evidence.confidence,
+  });
 }
 
 /** Stages one loss only after v3 emits a matching conserved relocation. */

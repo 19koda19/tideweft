@@ -261,7 +261,9 @@ function policy(
     case "guardian-dog-defensive-growl": throw new Error("Dog calls are not player authority");
     case "guardian-dog-shelter-whine": throw new Error("Dog calls are not player authority");
     case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
-    case "human-danger-warning": throw new Error("Other human warnings are not player authority");
+    case "human-danger-warning":
+    case "keeper-secure-store-response":
+      throw new Error("Other human expressions are not player authority");
   }
 }
 

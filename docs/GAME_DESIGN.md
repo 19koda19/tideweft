@@ -61,6 +61,13 @@ custody. It does not fire for light cargo or an attempted or stale action, and
 requires the player to both lawfully hear the porter and directly see the source
 at event time. Matching captions and original synthetic voice contours use the
 same accepted semantic event.
+The starting-store keeper now answers an immediate in-person warning only after
+that report commits the exact persistent closure transaction. The retained
+store, keeper, source evidence, recorded listener pose, visibility/range, and
+hearing outcome authorize one restrained response through the same expression,
+audio, caption, and world-label path. Presentation can be suppressed and sound
+can be masked without reopening the store; an already-secured historical store
+does not acquire retroactive dialogue.
 Salience, semantic cooldowns, priority, and causal event identity prevent
 chatter spam; the same accepted event always chooses the same authored wording.
 Ordinary routine speech expires rather than bloating the save. Pending sound
@@ -146,10 +153,12 @@ exists. An unseen animal call may instead use only an uncertainty-bounded
 directional caption and never gains an actor-anchored world callout. A bounded
 per-actor channel bank prevents one speaker's cooldown from
 silencing another actor. All active expression channels and directly rendered
-legacy resident speech now enter the shared world-label budget: at most four
-labels globally and one per source. The accessible caption surface keeps one
-highest-priority receipt-backed cue; legacy interaction speech is not promoted
-to an auditory caption merely because its currently visible actor can share the
+remaining legacy resident greeting/state speech now enter the shared
+world-label budget: at most four labels globally and one per source. The
+secured-store response is receipt-backed and no longer uses that compatibility
+adapter. The accessible caption surface keeps one highest-priority
+receipt-backed cue; remaining legacy interaction speech is not promoted to an
+auditory caption merely because its currently visible actor can share the
 collision layout. The physical footing/cargo cause remains in
 EVENTS where the player directly experienced or observed it; eligible sound
 text is only a restrained presentation of that same cause, never a second
@@ -209,8 +218,9 @@ sensitivity and may notice ordinary contact without treating it as a danger
 alarm. Broader species, coarse, and cross-frame response to physical contact
 remain incomplete.
 
-Active Living Voice channels, legacy visible resident speech, animal calls,
-and eligible physical candidates enter one Chart/Relief layout with
+Active Living Voice channels, remaining legacy visible resident greeting/state
+speech, animal calls, and eligible physical candidates enter one Chart/Relief
+layout with
 deterministic source-relative lanes, collision suppression, a four-label global
 cap, and a one-label-per-source cap. The physical presentation queue is bounded
 and coalesces repeated semantics from the same source. A busy moment loses
@@ -862,6 +872,14 @@ invariants, a bounded signed-coordinate property sweep, item and aggregate
 conservation, and one representative store-rat-visible-cat composition. The
 existing shared fuzz and performance gates remain in regression; this is not
 an exhaustive species or pair matrix.
+
+In the current unpublished Living Voice candidate, the applied in-person
+closure also causes one restrained keeper reply through the shared
+source-bound acoustic/expression channel. It replaces the former session-local
+label and generic UI cue without changing the physical settlement owner.
+Nearby actors may receive only an ordinary human-vocalization sound fact; the
+line does not grant them semantic knowledge of the closure, and no autonomous
+keeper-observation or general conversation system is implied.
 
 Released Alpha 24 composes the same settlement-custody seam with
 the new yard flock. Habitat version 8 retains the complete version-7 population

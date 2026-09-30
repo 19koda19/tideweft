@@ -25,6 +25,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "guardian-dog-shelter-whine",
   "core-wildlife-fish-crow-alarm",
   "human-danger-warning",
+  "settlement-keeper-store-response",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -155,6 +156,20 @@ export interface HumanDangerWarningExpressionAdmissionRecord
   readonly acceptedAtTick: number;
 }
 
+export interface SettlementKeeperStoreResponseExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "settlement-keeper-store-response";
+  readonly storeId: string;
+  readonly closureTransactionId: string;
+  readonly sourceEvidenceId: string;
+  readonly respondedAtTick: number;
+  /** Recorded event-time listener pose, never present-time player authority. */
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  /** Null means the committed reply was masked from the player. */
+  readonly hearingCertainty: number | null;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -169,6 +184,7 @@ export type SituatedExpressionAdmissionRecord =
   | GuardianDogShelterWhineExpressionAdmissionRecord
   | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   | HumanDangerWarningExpressionAdmissionRecord
+  | SettlementKeeperStoreResponseExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -237,6 +253,17 @@ export interface HumanDangerWarningExpressionAdmissionInput
   extends SituatedExpressionAdmissionInputBase {
   readonly sourceObservationId: string;
   readonly acceptedAtTick: number;
+}
+
+export interface SettlementKeeperStoreResponseExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly storeId: string;
+  readonly closureTransactionId: string;
+  readonly sourceEvidenceId: string;
+  readonly respondedAtTick: number;
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  readonly hearingCertainty: number | null;
 }
 
 export type LegacyV33PlayerExpressionAdmissionInput = SituatedExpressionAdmissionInputBase;
@@ -501,6 +528,43 @@ export function createHumanDangerWarningExpressionAdmissionRecord(
   }) as HumanDangerWarningExpressionAdmissionRecord | null;
 }
 
+/** Creates one exact store-closure reply with its event-time player receipt. */
+export function createSettlementKeeperStoreResponseExpressionAdmissionRecord(
+  input: SettlementKeeperStoreResponseExpressionAdmissionInput,
+): SettlementKeeperStoreResponseExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "closureTransactionId",
+    "hearingCertainty",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "respondedAtTick",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceEvidenceId",
+    "storeId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "settlement-keeper-store-response",
+    storeId: value.storeId,
+    closureTransactionId: value.closureTransactionId,
+    sourceEvidenceId: value.sourceEvidenceId,
+    respondedAtTick: value.respondedAtTick,
+    listenerPosition: value.listenerPosition,
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    hearingCertainty: value.hearingCertainty,
+  }) as SettlementKeeperStoreResponseExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -541,6 +605,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "guardian-dog-shelter-whine": return canonicalGuardianDogShelterWhineRecord(value);
     case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
     case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
+    case "settlement-keeper-store-response": return canonicalSettlementKeeperStoreResponseRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -921,6 +986,58 @@ function canonicalHumanDangerWarningRecord(
     kind: "human-danger-warning",
     sourceObservationId: value.sourceObservationId,
     acceptedAtTick: value.acceptedAtTick,
+  });
+}
+
+function canonicalSettlementKeeperStoreResponseRecord(
+  value: Readonly<Record<string, unknown>>,
+): SettlementKeeperStoreResponseExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "closureTransactionId",
+    "eventId",
+    "hearingCertainty",
+    "kind",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "respondedAtTick",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceEvidenceId",
+    "storeId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.kind !== "settlement-keeper-store-response"
+    || !validId(value.storeId)
+    || !validId(value.closureTransactionId)
+    || value.triggerEventId !== value.closureTransactionId
+    || !validId(value.sourceEvidenceId)
+    || !nonnegativeSafeInteger(value.respondedAtTick)
+    || !isWorldPosition(value.listenerPosition)
+    || !canonicalSafeInteger(value.listenerFacingMilliRadians)
+    || !(value.hearingCertainty === null || positiveBoundedUnit(value.hearingCertainty))
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
+    kind: "settlement-keeper-store-response",
+    storeId: value.storeId,
+    closureTransactionId: value.closureTransactionId,
+    sourceEvidenceId: value.sourceEvidenceId,
+    respondedAtTick: value.respondedAtTick,
+    listenerPosition: createWorldPosition(
+      value.listenerPosition.region,
+      value.listenerPosition.localX,
+      value.listenerPosition.localY,
+    ),
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    hearingCertainty: value.hearingCertainty,
   });
 }
 

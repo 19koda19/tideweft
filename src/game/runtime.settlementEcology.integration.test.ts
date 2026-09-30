@@ -769,8 +769,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 40 || current.version !== 40) {
-    throw new Error("runtime fixture is not a current v40 save");
+  if (record.payloadVersion !== 41 || current.version !== 41) {
+    throw new Error("runtime fixture is not a current v41 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1808,7 +1808,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 40) throw new Error("fixture is not a current save");
+  if (current.version !== 41) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1838,7 +1838,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 40) throw new Error("fixture is not a current save");
+  if (current.version !== 41) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1868,7 +1868,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 40 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 41 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1922,7 +1922,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 40
+    current.version !== 41
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2783,8 +2783,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(40);
-    expect(envelope.version).toBe(40);
+    expect(record.payloadVersion).toBe(41);
+    expect(envelope.version).toBe(41);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2844,6 +2844,201 @@ describe("runtime settlement ecology integration", () => {
     reloaded.destroy();
   });
 
+  it("voices the committed store closure once through shared Living Voice authority", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "one keeper reply in the acoustic world",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "interact" });
+
+    const replyLabels = (runtime.getRenderView().acousticText ?? []).filter(({ text }) => (
+      text === "I'll bar the storehouse door."
+    ));
+    expect(replyLabels).toHaveLength(1);
+    expect(replyLabels[0]).toMatchObject({
+      acousticKind: "speech",
+      sourceKind: "human",
+      text: "I'll bar the storehouse door.",
+    });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "ui")).toHaveLength(0);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      text: "I'll bar the storehouse door.",
+      presentationKind: "speech",
+    });
+
+    await runtime.save();
+    const saved = savedEnvelope(repository);
+    const settlement = deserializeSettlementEcologyState(saved.settlementEcology);
+    const carry = saved.perceptionCarry as {
+      version: number;
+      actorVocalizationSamples: Array<Record<string, unknown>>;
+      animalContactAcousticCarry: unknown;
+      situatedExpressionAdmissions: { records: Array<Record<string, unknown>> };
+      situatedExpressionChannels: {
+        channels: Array<{
+          sourceActorId: string;
+          reception: Record<string, unknown> | null;
+          state: { active: Record<string, unknown> | null };
+        }>;
+      };
+    };
+    expect(carry.version).toBe(9);
+    expect(carry.situatedExpressionAdmissions.records).toEqual([
+      expect.objectContaining({
+        kind: "settlement-keeper-store-response",
+        sourceActorId: settlement.identity.keeperActorId,
+        storeId: settlement.identity.storeId,
+        closureTransactionId: settlement.lastClosureTransactionId,
+        sourceEvidenceId: settlement.keeperKnowledge[0]?.evidenceId,
+        respondedAtTick: deserializeWorld(String(saved.world)).meta.completedTick,
+        hearingCertainty: expect.any(Number),
+      }),
+    ]);
+    expect(carry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        sourceActorId: settlement.identity.keeperActorId,
+        soundClass: "human-vocalization",
+        soundInterrupt: "none",
+      }),
+    ]);
+    expect(carry.situatedExpressionChannels.channels).toEqual([
+      expect.objectContaining({
+        sourceActorId: settlement.identity.keeperActorId,
+        reception: expect.objectContaining({ kind: "heard-visible" }),
+        state: expect.objectContaining({
+          active: expect.objectContaining({
+            meaning: "keeper-secure-store-response",
+            knowledgeBasis: "self-committed-store-closure",
+            audioAcknowledged: true,
+          }),
+        }),
+      }),
+    ]);
+    const savedRecord = repository.snapshot();
+    runtime.destroy();
+
+    const tamperedCarry = structuredClone(carry);
+    const tamperedAdmission = tamperedCarry.situatedExpressionAdmissions.records[0];
+    if (tamperedAdmission === undefined) {
+      throw new Error("keeper reply fixture omitted its admission");
+    }
+    tamperedAdmission.hearingCertainty = Number(tamperedAdmission.hearingCertainty) - 1;
+    const rejected = await createTideweftRuntime(new MemoryRepository(
+      withCurrentEnvelopeFields(savedRecord, { perceptionCarry: tamperedCarry }),
+    ));
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+
+    soundscapePlay.mockClear();
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    expect((reloaded.getRenderView().acousticText ?? []).filter(({ text }) => (
+      text === "I'll bar the storehouse door."
+    ))).toHaveLength(1);
+    await reloaded.save();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    reloaded.destroy();
+  });
+
+  it("migrates honest v40 store state without inventing speech and fences future reply semantics from v34-v40", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "v40 store closure has no retroactive voice",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    source.dispatchUI({ type: "interact" });
+    await source.save();
+    source.destroy();
+
+    const currentRecord = sourceRepository.snapshot();
+    const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
+    const currentCarry = structuredClone(current.perceptionCarry) as Record<string, unknown>;
+    const { integrity: _currentIntegrity, ...currentFields } = current;
+    const honestV40Base = {
+      ...currentFields,
+      version: 40,
+      perceptionCarry: {
+        ...currentCarry,
+        version: 8,
+        actorVocalizationSamples: [],
+        situatedExpressionChannels: { version: 1, channels: [] },
+        situatedExpressionAdmissions: { version: 1, records: [] },
+        situatedExpressionCausalAuthority: { version: 1, records: [] },
+      },
+    };
+    const honestRepository = new MemoryRepository({
+      ...currentRecord,
+      payloadVersion: 40,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...honestV40Base,
+        integrity: gameSaveEnvelopeIntegrity(honestV40Base),
+      }),
+    });
+    soundscapePlay.mockClear();
+    const migrated = await createTideweftRuntime(honestRepository);
+    expect(migrated.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    expect((migrated.getRenderView().acousticText ?? []).some(({ text }) => (
+      text === "I'll bar the storehouse door."
+    ))).toBe(false);
+    await migrated.save();
+    const migratedEnvelope = savedEnvelope(honestRepository);
+    expect(migratedEnvelope.version).toBe(41);
+    expect(migratedEnvelope.perceptionCarry).toMatchObject({
+      version: 9,
+      actorVocalizationSamples: [],
+      situatedExpressionAdmissions: { records: [] },
+      situatedExpressionChannels: { channels: [] },
+    });
+    migrated.destroy();
+
+    for (const [index, historical] of [
+      { outerVersion: 40, carryVersion: 8, keepsAnimalContactCarry: true },
+      { outerVersion: 39, carryVersion: 7, keepsAnimalContactCarry: false },
+      { outerVersion: 34, carryVersion: 3, keepsAnimalContactCarry: false },
+    ].entries()) {
+      const {
+        animalContactAcousticCarry: _futureAnimalContactCarry,
+        ...preContactCarry
+      } = currentCarry;
+      const forgedCarry = historical.keepsAnimalContactCarry
+        ? { ...currentCarry, version: historical.carryVersion }
+        : { ...preContactCarry, version: historical.carryVersion };
+      const forgedHistoricalBase = {
+        ...currentFields,
+        version: historical.outerVersion,
+        perceptionCarry: forgedCarry,
+      };
+      const rejected = await createTideweftRuntime(new MemoryRepository({
+        ...currentRecord,
+        payloadVersion: historical.outerVersion,
+        updatedAt: currentRecord.updatedAt + 2 + index,
+        worldJson: JSON.stringify({
+          ...forgedHistoricalBase,
+          integrity: gameSaveEnvelopeIntegrity(forgedHistoricalBase),
+        }),
+      }));
+      expect(
+        rejected.getUIView().saveWarning?.message,
+        `outer v${historical.outerVersion}/carry-v${historical.carryVersion}`,
+      ).toBe("LOCAL AUTOSAVE UNREADABLE");
+      rejected.destroy();
+    }
+  });
+
   it("migrates an exact v15 envelope once without allowing the future root into v15", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
@@ -2887,8 +3082,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(40);
-    expect(migratedEnvelope.version).toBe(40);
+    expect(migratedRecord.payloadVersion).toBe(41);
+    expect(migratedEnvelope.version).toBe(41);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2975,8 +3170,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(40);
-    expect(migratedEnvelope.version).toBe(40);
+    expect(migratedRecord.payloadVersion).toBe(41);
+    expect(migratedEnvelope.version).toBe(41);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3060,7 +3255,13 @@ describe("runtime settlement ecology integration", () => {
     ]) {
       expect(migratedEnvelope[field], field).toEqual(v16Envelope[field]);
     }
-    expect(migratedEnvelope.perceptionCarry).toEqual(currentEnvelope.perceptionCarry);
+    // Historical store closure is authoritative; speech that was never emitted is not.
+    expect(migratedEnvelope.perceptionCarry).toEqual({
+      ...(currentEnvelope.perceptionCarry as Record<string, unknown>),
+      actorVocalizationSamples: [],
+      situatedExpressionAdmissions: { version: 1, records: [] },
+      situatedExpressionChannels: { version: 1, channels: [] },
+    });
 
     const committedRegional = migratedEnvelope.regionalEcology;
     const committedStore = migratedEnvelope.settlementEcology;
@@ -3143,8 +3344,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(40);
-    expect(migratedEnvelope.version).toBe(40);
+    expect(migratedRecord.payloadVersion).toBe(41);
+    expect(migratedEnvelope.version).toBe(41);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3299,8 +3500,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(40);
-    expect(migratedEnvelope.version).toBe(40);
+    expect(migratedRecord.payloadVersion).toBe(41);
+    expect(migratedEnvelope.version).toBe(41);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3415,8 +3616,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(40);
-    expect(migratedEnvelope.version).toBe(40);
+    expect(migratedRecord.payloadVersion).toBe(41);
+    expect(migratedEnvelope.version).toBe(41);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -3794,7 +3995,7 @@ describe("runtime settlement ecology integration", () => {
     // duplicate the persisted sample/admission/channel.
     const { integrity: _currentIntegrity, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
-    expect(committedCarry.version).toBe(8);
+    expect(committedCarry.version).toBe(9);
     const {
       animalContactAcousticCarry: _currentAnimalContactCarry,
       ...v7CommittedCarry
@@ -3820,10 +4021,10 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(40);
+    expect(migratedWarningEnvelope.version).toBe(41);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
       ...v7CommittedCarry,
-      version: 8,
+      version: 9,
       animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedWarning.destroy();
@@ -4925,11 +5126,11 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedGrowlRecord = v36GrowlRepository.snapshot();
     const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(40);
-    expect(migratedGrowlEnvelope.version).toBe(40);
+    expect(migratedGrowlRecord.payloadVersion).toBe(41);
+    expect(migratedGrowlEnvelope.version).toBe(41);
     expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
       ...v7GrowlCarry,
-      version: 8,
+      version: 9,
       animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedGrowl.destroy();
@@ -5643,7 +5844,7 @@ describe("runtime settlement ecology integration", () => {
     // v37/carry-v6 already owned shelter whines. Its exact nonempty interval
     // migrates by version alone without replaying acknowledged audio or
     // duplicating any retained sample, admission, channel, or reception.
-    expect(whineCarry.version).toBe(8);
+    expect(whineCarry.version).toBe(9);
     const v37Base = {
       ...whineFields,
       version: 37,
@@ -5666,11 +5867,11 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWhineRecord = v37WhineRepository.snapshot();
     const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(40);
-    expect(migratedWhineEnvelope.version).toBe(40);
+    expect(migratedWhineRecord.payloadVersion).toBe(41);
+    expect(migratedWhineEnvelope.version).toBe(41);
     expect(migratedWhineEnvelope.perceptionCarry).toEqual({
       ...v7WhineCarry,
-      version: 8,
+      version: 9,
       animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedWhine.destroy();

@@ -75,7 +75,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 40;
+  readonly version: 41;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -85,7 +85,7 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 8;
+    readonly version: 9;
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
     readonly playerStepsSinceWorldTick: number;
@@ -183,10 +183,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 40
-    || record.payloadVersion !== 40
+    || envelope.version !== 41
+    || record.payloadVersion !== 41
   ) {
-    throw new Error("fixture did not produce a current v40 regional session save");
+    throw new Error("fixture did not produce a current v41 regional session save");
   }
   return envelope;
 }
@@ -207,7 +207,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 40,
+    payloadVersion: 41,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -710,7 +710,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 40,
+      version: 41,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -734,7 +734,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 8,
+      version: 9,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,

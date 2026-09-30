@@ -164,6 +164,14 @@ export function canonicalizeSituatedExpressionTrajectory(
           || channel.reception.receivedAtTick !== latest.acceptedAtTick
         )
       ) return null;
+      if (
+        latest.kind === "settlement-keeper-store-response"
+        && (latest.hearingCertainty === null
+          ? channel.reception !== null
+          : channel.reception?.kind !== "heard-visible"
+            || channel.reception.receivedAtTick !== latest.respondedAtTick
+            || channel.reception.certainty !== latest.hearingCertainty)
+      ) return null;
     }
   }
 
@@ -232,6 +240,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "fish-crow-alarm-call";
     case "human-danger-warning":
       return meaning === "human-danger-warning";
+    case "settlement-keeper-store-response":
+      return meaning === "keeper-secure-store-response";
     case "legacy-v33-player":
       return isLegacyV33PlayerMeaning(meaning);
   }
@@ -289,6 +299,7 @@ function admissionDurationSteps(
     case "guardian-dog-shelter-whine": return 8;
     case "core-wildlife-fish-crow-alarm": return 6;
     case "human-danger-warning": return 6;
+    case "settlement-keeper-store-response": return 12;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -306,6 +317,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "guardian-dog-shelter-whine": return 8;
     case "fish-crow-alarm-call": return 6;
     case "human-danger-warning": return 6;
+    case "keeper-secure-store-response": return 12;
   }
 }
 
@@ -321,6 +333,7 @@ function admissionMeaning(
     case "guardian-dog-shelter-whine": return "guardian-dog-shelter-whine";
     case "core-wildlife-fish-crow-alarm": return "fish-crow-alarm-call";
     case "human-danger-warning": return "human-danger-warning";
+    case "settlement-keeper-store-response": return "keeper-secure-store-response";
     case "legacy-v33-player": return "steady-after-stumble";
   }
 }

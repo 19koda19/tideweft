@@ -24,6 +24,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-shelter-whine",
   "fish-crow-alarm-call",
   "human-danger-warning",
+  "keeper-secure-store-response",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -61,6 +62,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-heard-anonymous-alarm",
   "self-perceived-threat",
   "self-weather-distress",
+  "self-committed-store-closure",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
@@ -297,6 +299,16 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 28,
     familyCooldownSteps: 12,
   }),
+  "keeper-secure-store-response": Object.freeze({
+    family: "work",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
+      "self-committed-store-closure",
+    ]),
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["spoken"]),
+    meaningCooldownSteps: 30,
+    familyCooldownSteps: 10,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -391,6 +403,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.human-danger-warning.1",
       text: "Heads up!",
+    }),
+  ]),
+  "keeper-secure-store-response": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.keeper-secure-store-response.0",
+      text: "I'll bar the storehouse door.",
     }),
   ]),
 });

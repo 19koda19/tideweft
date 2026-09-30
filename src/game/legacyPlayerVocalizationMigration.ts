@@ -388,6 +388,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "guardian-dog-shelter-whine":
     case "fish-crow-alarm-call":
     case "human-danger-warning":
+    case "keeper-secure-store-response":
       return [];
   }
 }
@@ -405,6 +406,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "guardian-dog-shelter-whine": return 8;
     case "fish-crow-alarm-call": return 6;
     case "human-danger-warning": return 6;
+    case "keeper-secure-store-response": return 12;
   }
 }
 

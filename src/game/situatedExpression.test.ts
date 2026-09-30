@@ -138,6 +138,24 @@ function fishCrowAlarmIntent(
   };
 }
 
+function keeperStoreResponseIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "H-store-keeper-expression-test",
+    triggerEventId,
+    position: POSITION,
+    meaning: "keeper-secure-store-response",
+    family: "work",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-committed-store-closure",
+    priority: 600_000,
+    salience: 700_000,
+    variantSeed: 987,
+    durationSteps: 12,
+  };
+}
+
 function accepted(
   state: SituatedExpressionState,
   intent: SituatedExpressionIntent,
@@ -150,6 +168,31 @@ function accepted(
 }
 
 describe("generic situated-expression kernel", () => {
+  it("projects the keeper's committed reply as fixed authored speech", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      keeperStoreResponseIntent("STORE-SECURE-store-1-evidence-1"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "keeper-secure-store-response",
+        family: "work",
+        vocalization: "steady",
+        volume: "spoken",
+        durationSteps: 12,
+      },
+    });
+    expect(projectSituatedExpression(reduction.event)).toMatchObject({
+      text: "I'll bar the storehouse door.",
+      vocalization: "steady",
+    });
+    expect(reduceSituatedExpression(createSituatedExpressionState(), {
+      ...keeperStoreResponseIntent("STORE-SECURE-store-1-evidence-1"),
+      knowledgeBasis: "self-handled-heavy-cargo",
+    })).toMatchObject({ accepted: false, reason: "invalid-intent" });
+  });
+
   it("suppresses a repeated mild stumble by semantic meaning", () => {
     const first = reduceSituatedExpression(
       createSituatedExpressionState(),

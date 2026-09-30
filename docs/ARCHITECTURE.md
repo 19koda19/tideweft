@@ -133,6 +133,17 @@ deterministically from actor ID, causal event ID, presentation seed, and catalog
 version. Rendering frequency, wall time, and global RNG cannot select or expire
 a line.
 
+The first migrated legacy interaction seam consumes the exact committed
+starting-store closure. An immediate in-person player report, its retained
+evidence, the unique store/keeper identity, and the applied closure transaction
+authorize one restrained keeper response through the same expression channel,
+vocal sample, audio, caption, and shared world-label path. The recorded
+event-time player pose must still reproduce a lawful direct-visible,
+conversation-range hearing outcome; a masked response remains world sound
+without player presentation. Other listeners receive only an ordinary acoustic
+fact, not semantic knowledge that the store was secured. Already-secured
+historical state cannot synthesize retroactive speech.
+
 Expression ownership is now isolated by source actor in a deterministically
 ordered bank capped at sixteen retained channels. One source actor's active line
 or cooldown cannot suppress another's. The accessible caption surface selects
@@ -254,10 +265,12 @@ One renderer-neutral acoustic presentation candidate family covers speech,
 animal calls, human/animal nonverbal sounds, physical contact, object/cargo
 impact, and eligible environmental sound. Every candidate is derived from an
 authenticated player receipt, except the explicitly bounded legacy
-current-visibility resident-speech adapter: it joins world-label collision
-layout only and cannot become an acoustic DOM caption until its old interaction
-seam gains event-time sound authority. The presenter—not producer domains—owns category
-style, category-specific lifetime, source/contact anchoring, bounded
+current-visibility resident greeting/state-speech adapter: it joins world-label
+collision layout only and cannot become an acoustic DOM caption until each
+remaining interaction seam gains event-time sound authority. The storekeeper's
+committed closure response no longer uses this adapter. The presenter—not
+producer domains—owns category style, category-specific lifetime,
+source/contact anchoring, bounded
 deterministic lanes, collision checks, salience/priority, per-source queues,
 repetition merging, and suppression. The live bounded physical queue coalesces
 the same source plus repetition key; aggregate clustering across different
@@ -266,7 +279,8 @@ contact. Routine steps, continuous wading, and repetitive work normally remain
 audio/animation only.
 
 Chart and Relief now consume the same combined active-expression, directly
-visible legacy resident-speech, and eligible physical-acoustic candidate list.
+visible remaining legacy resident greeting/state speech, and eligible
+physical-acoustic candidate list.
 One shared renderer-neutral layout ranks by priority, salience, and stable
 identity, admits at most four labels globally and one per source, tries the same
 small deterministic source-relative lanes, rejects anchors too far outside the
@@ -404,6 +418,16 @@ have a separate
 locomotion receipt; off-frame contacts are retired when a regional rebase removes
 their only current-frame consumers. Cross-frame/coarse animal hearing remains
 future work.
+The secured-storekeeper response advances the unpublished outer save to v41 and
+bounded perception carry to v9. Exact v40/carry-v8 migration initializes no
+reply, never reconstructs speech for an already-secured store, and preserves
+the physical closure unchanged. Every current-shape v34-v40 reader applies a
+cumulative semantic fence: a resealed historical carry cannot smuggle the v41
+keeper meaning, knowledge basis, admission, channel, or sample through the
+still-version-1 nested expression schemas. Current v41 reload reauthenticates
+the retained closure transaction, store and keeper identity, source evidence,
+recorded listener pose, lawful visibility/range/hearing outcome, sample, receipt,
+and bounded memory without replaying acknowledged audio.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -2012,6 +2036,13 @@ An open store with a matching scent observation may propose attraction, but the 
 
 The knowledge kernel admits only an authenticated direct keeper observation or an explicit in-person player report. Alpha 23's playable runtime wires the report path: it is offered only while the player is physically near both the store and its actual keeper, and a remote settlement selection cannot command them. Autonomous keeper observation is not generated in this slice. Applying the response persistently secures the door and reduces later store leakage to zero without deleting the store, remaining food, rats, or cat pressure. Chart and Relief derive the same store mark and closure from this state. Store detail, the keeper action, and any loss narration remain gated by current lawful proximity or event-time observation, so returning later cannot turn unseen history into an EVENTS report.
 
+In the current unpublished Living Voice candidate, that same committed closure
+also authorizes one keeper response through shared situated expression and
+acoustic perception. It replaces the former session-local resident label and
+generic UI cue without changing the settlement transaction owner. Shared
+presentation may suppress the label, and local masking may withhold the player
+receipt, but neither can undo the physical closure or manufacture later speech.
+
 This slice validates a reusable owner boundary through shared abstraction checks, a bounded signed-coordinate property sweep, exact item and aggregate conservation, deterministic migration/replay, and one representative store-rat-visible-cat composition. Existing shared bounded-fuzz and performance gates remain in the regression suite. It is not an exhaustive species or animal-pair matrix, worldwide settlement ecology, schedules, livestock, rumors, harmful attack, injury, mortality, carcasses, live-prey consumption, the full bestiary, or broader biodiversity completion.
 
 ## First domestic-yard flock composition
@@ -2509,11 +2540,11 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through versions 33–40 and the bounded perception carry through version
-8; the current source writer emits outer version 40. Its authenticated v1–v39
+session through versions 33–41 and the bounded perception carry through version
+9; the current source writer emits outer version 41. Its authenticated v1–v40
 readers remain implemented and tested where retained, but before official 1.0
 that implementation fact is not a permanent promise to preserve every internal
-development format. Current-v40 roundtrip and all conservation, determinism,
+development format. Current-v41 roundtrip and all conservation, determinism,
 integrity, and no-overwrite laws remain mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,

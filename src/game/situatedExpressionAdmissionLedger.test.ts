@@ -19,6 +19,7 @@ import {
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
+  createSettlementKeeperStoreResponseExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
   type GuardianDogShelterWhineExpressionAdmissionInput,
   type PlayerTraversalExpressionAdmissionInput,
@@ -324,6 +325,60 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       hiddenDangerIdentity: "PREDATOR-secret",
+    })).toBeNull();
+  });
+
+  it("binds a keeper reply to the exact closure transaction and recorded event-time hearing pose", () => {
+    const input = {
+      sourceActorId: "H-store-keeper-admission",
+      triggerEventId: "STORE-SECURE-store-1-evidence-1",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 4,
+      storeId: "store-1",
+      closureTransactionId: "STORE-SECURE-store-1-evidence-1",
+      sourceEvidenceId: "evidence-1",
+      respondedAtTick: 913,
+      listenerPosition: POSITION,
+      listenerFacingMilliRadians: -1_571,
+      hearingCertainty: 780_000,
+    } as const;
+    const canonical = createSettlementKeeperStoreResponseExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "settlement-keeper-store-response",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical?.listenerPosition)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    expect(createSettlementKeeperStoreResponseExpressionAdmissionRecord({
+      ...input,
+      hearingCertainty: null,
+    })?.hearingCertainty).toBeNull();
+
+    for (const mutation of [
+      { sourceActorId: PLAYER_ID },
+      { triggerEventId: "other-transaction" },
+      { storeId: " padded " },
+      { sourceEvidenceId: "" },
+      { respondedAtTick: -0 },
+      { listenerFacingMilliRadians: 0.5 },
+      { hearingCertainty: 0 },
+    ]) {
+      expect(createSettlementKeeperStoreResponseExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      })).toBeNull();
+    }
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenStoreContents: "fresh-produce",
     })).toBeNull();
   });
 
