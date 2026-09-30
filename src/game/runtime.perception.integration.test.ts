@@ -185,7 +185,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   }, 30_000);
 
-  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v39", async () => {
+  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v40", async () => {
     const fixture = perceptionFixture("runtime perception v38 forward read");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -194,9 +194,18 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(39);
+    expect(decoded.version).toBe(40);
+    const currentCarry = currentPerceptionCarry(decoded);
+    const {
+      animalContactAcousticCarry: _futureAnimalContactCarry,
+      ...v7Carry
+    } = currentCarry;
     const { integrity: _currentIntegrity, ...currentBase } = decoded;
-    const v38Base = { ...currentBase, version: 38 };
+    const v38Base = {
+      ...currentBase,
+      version: 38,
+      perceptionCarry: { ...v7Carry, version: 7 },
+    };
     repository.replace({
       ...current,
       payloadVersion: 38,
@@ -211,8 +220,51 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(39);
-    expect(savedEnvelope(repository).version).toBe(39);
+    expect(repository.snapshot().payloadVersion).toBe(40);
+    expect(savedEnvelope(repository).version).toBe(40);
+    resumed.destroy();
+  }, 30_000);
+
+  it("loads the exact v39 human-warning carry with an empty physical-contact lane", async () => {
+    const fixture = perceptionFixture("runtime perception v39 contact-carry migration");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const {
+      animalContactAcousticCarry: _futureAnimalContactCarry,
+      ...v7Carry
+    } = currentPerceptionCarry(decoded);
+    const { integrity: _integrity, ...currentBase } = decoded;
+    const v39Base = {
+      ...currentBase,
+      version: 39,
+      perceptionCarry: { ...v7Carry, version: 7 },
+    };
+    repository.replace({
+      ...current,
+      payloadVersion: 39,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v39Base,
+        integrity: gameSaveEnvelopeIntegrity(v39Base),
+      }),
+    });
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    expect(repository.snapshot().payloadVersion).toBe(40);
+    expect(savedEnvelope(repository)).toMatchObject({
+      version: 40,
+      perceptionCarry: {
+        version: 8,
+        animalContactAcousticCarry: { version: 1, records: [] },
+      },
+    });
     resumed.destroy();
   }, 30_000);
 
@@ -257,9 +309,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 39,
+      version: 40,
       perceptionCarry: {
-        version: 7,
+        version: 8,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
@@ -312,6 +364,7 @@ describe("runtime existing-human perception path", () => {
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       actorVocalizationSamples: _futureVocalizations,
+      animalContactAcousticCarry: _futureAnimalContactCarry,
       intervalStartFacingMilliRadians: _futureIntervalStartFacing,
       intervalStartPosition: _futureIntervalStartPosition,
       situatedExpressionAdmissions: _futureAdmissions,
@@ -340,10 +393,10 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 39,
+      version: 40,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 7,
+        version: 8,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
@@ -363,7 +416,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v39", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v40", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -380,9 +433,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 39,
+      version: 40,
       perceptionCarry: {
-        version: 7,
+        version: 8,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: 0,
         playerStepsSinceWorldTick: 3,
@@ -430,7 +483,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v34 carry-v3 schema to v39 without replay", async () => {
+  it("migrates the exact sealed v34 carry-v3 schema to v40 without replay", async () => {
     const fixture = perceptionFixture("runtime perception v34 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -441,6 +494,7 @@ describe("runtime existing-human perception path", () => {
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
     const {
+      animalContactAcousticCarry: _futureAnimalContactCarry,
       ...v3Carry
     } = currentPerceptionCarry(decoded);
     const { integrity: _integrity, ...currentBase } = decoded;
@@ -465,9 +519,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 39,
+      version: 40,
       perceptionCarry: {
-        version: 7,
+        version: 8,
         playerStepsSinceWorldTick: 3,
         nextPlayerSenseSampleOrdinal: 3,
       },
@@ -556,6 +610,7 @@ describe("runtime existing-human perception path", () => {
       throw new Error("v34 semantic-fence fixture could not build a canonical dog trajectory");
     }
     const {
+      animalContactAcousticCarry: _futureAnimalContactCarry,
       ...v3Carry
     } = carry;
     const { integrity: _integrity, ...currentBase } = decoded;
@@ -739,9 +794,9 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 39,
+      version: 40,
       perceptionCarry: {
-        version: 7,
+        version: 8,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,
@@ -995,6 +1050,7 @@ function replaceWithLegacyV33Envelope(
   const currentCarry = currentPerceptionCarry(decoded);
   const {
     actorVocalizationSamples: _currentVocalizations,
+    animalContactAcousticCarry: _currentAnimalContactCarry,
     intervalStartFacingMilliRadians: _currentIntervalStartFacing,
     intervalStartPosition: _currentIntervalStartPosition,
     situatedExpressionAdmissions: _currentAdmissions,

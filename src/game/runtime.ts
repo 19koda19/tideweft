@@ -420,6 +420,17 @@ import {
   type SupplementalSoundSample,
 } from "./humanPerception";
 import {
+  animalContactAcousticBodySizeForDogSize,
+  animalContactMovementForDistance,
+  animalContactAcousticTriggerEventId,
+  appendAnimalContactAcousticCarryRecord,
+  canonicalizeAnimalContactAcousticCarry,
+  createAnimalContactAcousticCarry,
+  createAnimalContactAcousticCarryRecord,
+  physicalSoundSamplesForAnimalContactCarry,
+  type AnimalContactAcousticCarry,
+} from "./animalContactAcousticCarry";
+import {
   playerWorldPositionInRegionalWindow,
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
@@ -429,6 +440,7 @@ import {
   cargoImpactAcousticEvent,
   createWorldAcousticEvent,
   traversalIncidentAcousticEvent,
+  type AcousticMaterialClass,
   type WorldAcousticEvent,
 } from "./worldAcoustics";
 import {
@@ -1025,8 +1037,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** First save whose closed situated-expression union persists human danger warnings. */
+/** First save whose pending perception carry owns physical animal contact. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** First save whose closed situated-expression union persists human danger warnings. */
+const HUMAN_DANGER_WARNING_GAME_SAVE_VERSION = 39;
 /** First save with a core-wildlife fish-crow alarm carried through Living Voice. */
 const FISH_CROW_ALARM_GAME_SAVE_VERSION = 38;
 /** First save with a weather-backed guardian shelter whine. */
@@ -1069,7 +1083,8 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 7 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 8 as const;
+const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
 const GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION = 5 as const;
 const GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION = 4 as const;
@@ -1129,6 +1144,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION,
   GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
   FISH_CROW_ALARM_GAME_SAVE_VERSION,
+  HUMAN_DANGER_WARNING_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -1196,6 +1212,8 @@ interface PlayerPerceptionCarry {
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
   readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
+  /** Committed contact facts waiting for the next human-perception interval. */
+  readonly animalContactAcousticCarry: AnimalContactAcousticCarry;
   readonly situatedExpressionChannels: SituatedExpressionChannelBank;
   readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
   readonly situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
@@ -3361,6 +3379,71 @@ function runtimeDogActors(
     throw new Error("Dog actor authorities contain a duplicate stable identity");
   }
   return Object.freeze(actors);
+}
+
+function runtimeAnimalContactSurfaceMaterial(
+  tile: WorldView["terrain"]["tiles"][number],
+): AcousticMaterialClass {
+  return tile.waterDepth > 60_000 || tile.terrain === "deep-water"
+    ? "water"
+    : tile.terrain === "marsh"
+      ? "foliage"
+      : tile.terrain === "ridge"
+        ? "stone"
+        : tile.terrain === "tidal-flat"
+          ? "sand"
+          : "soil";
+}
+
+function runtimeDogContactMaximumStepUnits(
+  dog: DogActorState,
+  bio0: Bio0EcologyState,
+): number | null {
+  if (dog.identity.stableId !== bio0.dog.identity.stableId) {
+    return runtimeWorkingDogStepUnits(dog);
+  }
+  const request = bio0.pendingMovement;
+  return request !== null
+    && request.dogActorId === dog.identity.stableId
+    && request.issuedAtTick === dog.updatedAtTick
+      ? request.maximumStepUnits
+      : null;
+}
+
+/**
+ * Retains only pending contacts that the bounded current-frame human hearing
+ * bridge can still project. A frame rebase may leave a source behind; keeping
+ * that record would preserve no eligible consumer and would make its event-time
+ * terrain impossible to reauthenticate from the active immutable window.
+ */
+function retainRuntimeAnimalContactCarryInWindow(
+  value: AnimalContactAcousticCarry,
+  bio0: Bio0EcologyState,
+  roster: DogActorRosterState,
+  window: RegionalPlayerTravelState["window"],
+): AnimalContactAcousticCarry {
+  const carry = canonicalizeAnimalContactAcousticCarry(value);
+  if (carry === null) {
+    throw new Error("Animal-contact acoustic carry failed before regional rebase");
+  }
+  let retained = createAnimalContactAcousticCarry();
+  for (const record of carry.records) {
+    const source = runtimeDogActorById(bio0, roster, record.event.sourceId);
+    if (
+      source === null
+      || source.updatedAtTick !== record.event.occurredAtTick
+      || !sameRuntimeWorldPosition(source.address.position, record.event.sourcePosition)
+    ) {
+      throw new Error("Animal-contact acoustic source changed before regional rebase");
+    }
+    if (livingActorAddressInRegionalWindow(source.address, window) === null) continue;
+    const next = appendAnimalContactAcousticCarryRecord(retained, record);
+    if (next === null) {
+      throw new Error("Animal-contact acoustic carry failed during regional rebase");
+    }
+    retained = next;
+  }
+  return retained;
 }
 
 function runtimeDogActorById(
@@ -10300,6 +10383,11 @@ export async function createTideweftRuntime(
   let actorVocalizationSamples: SupplementalSoundSample[] = [
     ...(resumed?.perceptionCarry.actorVocalizationSamples ?? []),
   ];
+  // Contact happens after the resident frame for its world tick. Retain that
+  // exact causal fact until the following frame so player audibility and text
+  // suppression can never decide whether nearby humans heard the world.
+  let animalContactAcousticCarry = resumed?.perceptionCarry.animalContactAcousticCarry
+    ?? createAnimalContactAcousticCarry();
   let terrainPrefetchJobs: TerrainRegionPrefetchJob[] = [];
   let manualControl: PlayerControl = { moveX: 0, moveY: 0, brace: false };
   // WAIT is intentionally session-local: save/page interruption preserves every
@@ -11950,12 +12038,19 @@ export async function createTideweftRuntime(
     targetTick: number,
     porterVisual: RuntimePorterVisualFrame | null = null,
   ): ResidentPerceptionFrame {
+    const physicalSoundSamples = physicalSoundSamplesForAnimalContactCarry(
+      animalContactAcousticCarry,
+    );
+    if (physicalSoundSamples === null) {
+      throw new Error("Animal-contact acoustic carry failed reauthentication");
+    }
     const batches = collectExistingHumanObservations({
       world: worldView,
       window: regionalTravel.window,
       targetTick,
       playerSamples: playerSenseSamples,
       supplementalSoundSamples: actorVocalizationSamples,
+      physicalSoundSamples,
     });
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
@@ -12294,6 +12389,12 @@ export async function createTideweftRuntime(
         worldView,
         economyView,
       );
+      animalContactAcousticCarry = retainRuntimeAnimalContactCarryInWindow(
+        animalContactAcousticCarry,
+        bio0Ecology,
+        dogActorRoster,
+        regionalTransition.state.window,
+      );
     } else if (regionalTransition.crossed) {
       // Crossing an invisible persistence-cell boundary does not imply that
       // the bounded visible frame moved. Retarget metadata in place so the
@@ -12481,7 +12582,8 @@ export async function createTideweftRuntime(
         economyView,
         bio0Ecology.porterAddress.actorId,
       );
-      const priorWorkingDogs = dogActorRoster.actors.map(({ address }) => address);
+      const priorWorkingDogActors = [...dogActorRoster.actors];
+      const priorWorkingDogs = priorWorkingDogActors.map(({ address }) => address);
       const regionalEcologyProjectionForStep = projectActiveRegionalEcology();
       const projectedEcologySources = runtimeRegionalEcologyProjectedSources(
         regionalEcologyProjectionForStep,
@@ -12714,6 +12816,9 @@ export async function createTideweftRuntime(
       });
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorld(world, commandQueue, perceptionFrame);
+      // The preceding frame consumed the prior interval exactly once. New
+      // contacts committed below become the next interval's carry.
+      animalContactAcousticCarry = createAnimalContactAcousticCarry();
       const completedEconomyView = createWorldView(world);
       const completedRegionalView = createRegionalWorldView(
         completedEconomyView,
@@ -12866,26 +12971,29 @@ export async function createTideweftRuntime(
       }
       dogActorRoster = workingDogStep.roster;
       settlementWorkingAnimals = workingDogStep.workingAnimals;
-      const priorDogAddresses = [ecologyForStep.dog.address, ...priorWorkingDogs];
-      const movedDogAddresses = [
-        bio0Ecology.dog.address,
-        ...dogActorRoster.actors.map(({ address }) => address),
-      ].filter((after) => {
-        const before = priorDogAddresses.find(({ actorId }) => actorId === after.actorId);
+      const priorDogActors = [ecologyForStep.dog, ...priorWorkingDogActors];
+      const movedDogActors = runtimeDogActors(bio0Ecology, dogActorRoster).filter((after) => {
+        const before = priorDogActors.find(({ identity }) => (
+          identity.stableId === after.identity.stableId
+        ));
         return before !== undefined
-          && !sameRuntimeWorldPosition(before.position, after.position);
-      }).sort((left, right) => compareText(left.actorId, right.actorId));
-      if (movedDogAddresses.length > 0) {
+          && !sameRuntimeWorldPosition(before.address.position, after.address.position);
+      }).sort((left, right) => compareText(
+        left.identity.stableId,
+        right.identity.stableId,
+      ));
+      if (movedDogActors.length > 0) {
         const eventTimePerception = projectPerception(completedRegionalView, player);
         const listenerMasking = ambientNoiseAt(
           completedRegionalView,
           playerTileIndex(player),
         );
-        if (listenerMasking === null) {
-          throw new Error("Animal-contact hearing could not resolve ambient masking");
-        }
-        for (const after of movedDogAddresses) {
-          const before = priorDogAddresses.find(({ actorId }) => actorId === after.actorId);
+        for (const afterDog of movedDogActors) {
+          const after = afterDog.address;
+          const beforeDog = priorDogActors.find(({ identity }) => (
+            identity.stableId === after.actorId
+          ));
+          const before = beforeDog?.address;
           const placement = livingActorAddressInRegionalWindow(
             after,
             regionalTravel.window,
@@ -12902,34 +13010,53 @@ export async function createTideweftRuntime(
           } catch {
             continue;
           }
-          const surfaceMaterial = tile.waterDepth > 60_000
-              || tile.terrain === "deep-water"
-            ? "water" as const
-            : tile.terrain === "marsh"
-              ? "foliage" as const
-              : tile.terrain === "ridge"
-                ? "stone" as const
-                : tile.terrain === "tidal-flat"
-                  ? "sand" as const
-                : "soil" as const;
+          const surfaceMaterial = runtimeAnimalContactSurfaceMaterial(tile);
           const movementDistance = Math.hypot(deltaFromPrior.x, deltaFromPrior.y);
-          const triggerEventId = `animal-contact:${targetTick}:${hashCanonical({
-            actorId: after.actorId,
-            from: before.position,
-            to: after.position,
-          })}`;
+          const movement = animalContactMovementForDistance(movementDistance);
+          if (movement === null) {
+            throw new Error("Committed dog movement has no bounded acoustic gait");
+          }
+          const triggerEventId = animalContactAcousticTriggerEventId({
+            sourceId: after.actorId,
+            beforePosition: before.position,
+            afterPosition: after.position,
+            occurredAtTick: targetTick,
+          });
+          if (triggerEventId === null) {
+            throw new Error("Committed dog movement has no canonical acoustic trigger");
+          }
           const acousticEvent = animalContactAcousticEvent({
             triggerEventId,
             sourceId: after.actorId,
             sourcePosition: after.position,
             occurredAtTick: targetTick,
-            bodySize: "medium",
-            movement: movementDistance > WORLD_POSITION_UNITS_PER_TILE ? "fast" : "ordinary",
+            bodySize: animalContactAcousticBodySizeForDogSize(
+              afterDog.identity.body.size,
+            ),
+            movement,
             surfaceMaterial,
           });
           if (acousticEvent === null) {
             throw new Error("Committed dog movement could not enter shared world acoustics");
           }
+          const carryRecord = createAnimalContactAcousticCarryRecord({
+            beforePosition: before.position,
+            event: acousticEvent,
+          });
+          const nextAnimalContactCarry = carryRecord === null
+            ? null
+            : appendAnimalContactAcousticCarryRecord(
+                animalContactAcousticCarry,
+                carryRecord,
+              );
+          if (nextAnimalContactCarry === null) {
+            throw new Error("Committed dog contact could not enter bounded human hearing");
+          }
+          animalContactAcousticCarry = nextAnimalContactCarry;
+          // Player reception is only one consumer. Failure to derive its local
+          // masking cannot erase the already committed world event or the next
+          // nearby-human hearing interval.
+          if (listenerMasking === null) continue;
           const contact = evaluateAudibleContact({
             listener: { x: 0, y: 0 },
             source: { x: deltaFromPlayer.x, y: deltaFromPlayer.y },
@@ -15957,6 +16084,7 @@ export async function createTideweftRuntime(
     previousFrame = 0;
     playerStepsSinceWorldTick = 0;
     clearPlayerSenseSamples();
+    animalContactAcousticCarry = createAnimalContactAcousticCarry();
     activeWorldAcousticPresentations = Object.freeze([]);
     terrainPrefetchJobs = [];
     autopilotPath = [];
@@ -17364,6 +17492,7 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick,
       playerSenseSamples,
       actorVocalizationSamples,
+      animalContactAcousticCarry,
       situatedExpressionChannels,
       situatedExpressionAdmissions,
       situatedExpressionCausalAuthority,
@@ -17425,6 +17554,7 @@ export async function createTideweftRuntime(
         traversalFeedback,
         physicalCargo: snapshotPhysicalValidation.state,
       },
+      bio0EcologySnapshot,
       dogActorRosterSnapshot,
       settlementEcologySnapshot,
       settlementWorkingAnimalsSnapshot,
@@ -17610,6 +17740,7 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick,
       playerSenseSamples: [...playerSenseSamples],
       actorVocalizationSamples: [...actorVocalizationSamples],
+      animalContactAcousticCarry,
       nextPlayerSenseSampleOrdinal,
       commandSequence,
       pendingGatherNodeId,
@@ -17675,6 +17806,7 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       playerSenseSamples = prior.playerSenseSamples;
       actorVocalizationSamples = prior.actorVocalizationSamples;
+      animalContactAcousticCarry = prior.animalContactAcousticCarry;
       nextPlayerSenseSampleOrdinal = prior.nextPlayerSenseSampleOrdinal;
       commandSequence = prior.commandSequence;
       pendingGatherNodeId = prior.pendingGatherNodeId;
@@ -18108,6 +18240,7 @@ function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
     playerStepsSinceWorldTick: 0,
     playerSenseSamples: Object.freeze([]),
     actorVocalizationSamples: Object.freeze([]),
+    animalContactAcousticCarry: createAnimalContactAcousticCarry(),
     situatedExpressionChannels: createSituatedExpressionChannelBank(),
     situatedExpressionAdmissions: createSituatedExpressionAdmissionLedger(),
     situatedExpressionCausalAuthority: createSituatedExpressionCausalAuthorityLedger(),
@@ -18130,6 +18263,7 @@ function canonicalPlayerPerceptionCarry(
     | typeof GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     | typeof GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
+    | typeof HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
   semanticSchema: "human-warning" | "fish-crow" = "human-warning",
 ): PlayerPerceptionCarry | null {
@@ -18140,6 +18274,7 @@ function canonicalPlayerPerceptionCarry(
   ) return null;
   const record = value as Readonly<Record<string, unknown>>;
   const hasCurrentShape = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    || expectedVersion === HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
     || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
@@ -18147,6 +18282,7 @@ function canonicalPlayerPerceptionCarry(
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
     ? [
         "actorVocalizationSamples",
+        "animalContactAcousticCarry",
         "intervalStartFacingMilliRadians",
         "intervalStartPosition",
         "nextPlayerSenseSampleOrdinal",
@@ -18157,7 +18293,8 @@ function canonicalPlayerPerceptionCarry(
         "situatedExpressionChannels",
         "version",
       ]
-    : expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
+    : expectedVersion === HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
+        || expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
         || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
         || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
         || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION
@@ -18258,6 +18395,7 @@ function canonicalPlayerPerceptionCarry(
   }
 
   const vocalizationSamples: SupplementalSoundSample[] = [];
+  let animalContactCarry = createAnimalContactAcousticCarry();
   let situatedExpressionChannels = createSituatedExpressionChannelBank();
   let situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
   let situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
@@ -18358,6 +18496,18 @@ function canonicalPlayerPerceptionCarry(
     situatedExpressionChannels = trajectory.bank;
     situatedExpressionAdmissions = trajectory.admissionLedger;
     situatedExpressionCausalAuthority = causalAuthority;
+    if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
+      const canonicalContactCarry = canonicalizeAnimalContactAcousticCarry(
+        record.animalContactAcousticCarry,
+      );
+      if (
+        canonicalContactCarry === null
+        || canonicalContactCarry.records.some(({ event }) => (
+          event.occurredAtTick !== completedWorldTick
+        ))
+      ) return null;
+      animalContactCarry = canonicalContactCarry;
+    }
   } else if (expectedVersion === PLAYER_EXPRESSION_PERCEPTION_CARRY_VERSION) {
     const migrated = migrateLegacyV33PlayerVocalizations(
       record.situatedExpression,
@@ -18403,6 +18553,7 @@ function canonicalPlayerPerceptionCarry(
     playerStepsSinceWorldTick: phase as number,
     playerSenseSamples: Object.freeze(samples),
     actorVocalizationSamples: Object.freeze(vocalizationSamples),
+    animalContactAcousticCarry: animalContactCarry,
     situatedExpressionChannels,
     situatedExpressionAdmissions,
     situatedExpressionCausalAuthority,
@@ -18662,6 +18813,7 @@ function playerPerceptionCarryMatchesPosition(
   player: PlayerState,
   economy: WorldView,
   playerExpressionAuthority: PlayerExpressionAuthority,
+  bio0: Bio0EcologyState,
   dogRoster: DogActorRosterState,
   settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
@@ -18733,6 +18885,62 @@ function playerPerceptionCarryMatchesPosition(
     },
   );
   if (regionalProjection === null) return false;
+  const physicalContactMatches = carry.animalContactAcousticCarry.records.every(
+    ({ beforePosition, event }) => {
+      const sources = runtimeDogActors(bio0, dogRoster).filter(({ identity }) => (
+        identity.stableId === event.sourceId
+      ));
+      const source = sources[0];
+      if (
+        sources.length !== 1
+        || source === undefined
+        || source.updatedAtTick !== economy.completedTick
+        || event.occurredAtTick !== economy.completedTick
+        || !sameRuntimeWorldPosition(source.address.position, event.sourcePosition)
+      ) return false;
+      const placement = livingActorAddressInRegionalWindow(
+        source.address,
+        regionalTravel.window,
+      );
+      const tile = placement === null
+        ? undefined
+        : spatialWorld.terrain.tiles[placement.tileIndex];
+      const maximumStepUnits = runtimeDogContactMaximumStepUnits(source, bio0);
+      if (tile === undefined || maximumStepUnits === null) return false;
+      let delta: ReturnType<typeof worldPositionDelta>;
+      try {
+        delta = worldPositionDelta(beforePosition, event.sourcePosition);
+      } catch {
+        return false;
+      }
+      const movementDistance = Math.hypot(delta.x, delta.y);
+      const movement = animalContactMovementForDistance(movementDistance);
+      const triggerEventId = animalContactAcousticTriggerEventId({
+        sourceId: event.sourceId,
+        beforePosition,
+        afterPosition: event.sourcePosition,
+        occurredAtTick: event.occurredAtTick,
+      });
+      if (
+        movement === null
+        || triggerEventId === null
+        || movementDistance > maximumStepUnits
+        || headingFromRadians(Math.atan2(delta.y, delta.x)) !== source.address.heading
+      ) return false;
+      const expected = animalContactAcousticEvent({
+        triggerEventId,
+        sourceId: event.sourceId,
+        sourcePosition: event.sourcePosition,
+        occurredAtTick: event.occurredAtTick,
+        bodySize: animalContactAcousticBodySizeForDogSize(source.identity.body.size),
+        movement,
+        surfaceMaterial: runtimeAnimalContactSurfaceMaterial(tile),
+      });
+      return expected !== null
+        && stableStringify(expected) === stableStringify(event);
+    },
+  );
+  if (!physicalContactMatches) return false;
   const channelsMatch = situatedExpressionChannelsMatchWorld(
     carry,
     carry.situatedExpressionChannels,
@@ -20060,6 +20268,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
         || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
@@ -20388,6 +20597,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
       || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
       || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
@@ -20420,6 +20630,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
         || decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
         || decoded.version === GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION
@@ -20990,11 +21201,18 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           PLAYER_PERCEPTION_CARRY_VERSION,
           "human-warning",
         )
+      : decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
+        ? canonicalPlayerPerceptionCarry(
+            decoded.perceptionCarry,
+            world.meta.completedTick,
+            HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION,
+            "human-warning",
+          )
       : decoded.version === FISH_CROW_ALARM_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(
             decoded.perceptionCarry,
             world.meta.completedTick,
-            PLAYER_PERCEPTION_CARRY_VERSION,
+            HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION,
             "fish-crow",
           )
       : decoded.version === GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION
@@ -21395,6 +21613,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         decoded.player,
         compatibilityView,
         { traversalFeedback, physicalCargo: loadedPhysicalCargo },
+        bio0Ecology,
         dogActorRoster,
         settlementEcology,
         settlementWorkingAnimals,

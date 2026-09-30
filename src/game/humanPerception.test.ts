@@ -19,13 +19,16 @@ import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
 import {
+  HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
   HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   collectExistingHumanObservations,
+  createPhysicalSoundSample,
   createPlayerSenseSample,
   createSupplementalSoundSample,
   type HumanObservationBatch,
+  type PhysicalSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
 } from "./humanPerception";
@@ -377,6 +380,160 @@ describe("existing-human sensory bridge", () => {
       .some(({ channel }) => channel === "hearing")).toBe(false);
   });
 
+  it("hears an authenticated physical-world sound anonymously without inventing sight", () => {
+    const current = fixture("physical contact remains an acoustic fact", { facing: "east" });
+    const rustle = physicalSoundSample(
+      "animal-rustle",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      "ANIMAL-DEER-1",
+      { soundClass: "physical-rustle" },
+    );
+
+    const observations = observationsFor(current, [], 1, [], [rustle]);
+    const heard = observations.find(({ id }) => id.includes(rustle.id));
+
+    expect(heard).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "physical-rustle",
+      identification: "anonymous",
+      subjectId: null,
+    });
+    expect(heard?.area.radiusUnits).toBeGreaterThanOrEqual(250);
+    expect(heard?.area.center).not.toEqual(rustle.position);
+    expect(heard).not.toHaveProperty("sourceActorId");
+    expect(heard).not.toHaveProperty("acousticEventId");
+    expect(observations.some(({ channel }) => channel === "vision")).toBe(false);
+  });
+
+  it("suppresses a physical source's own contact while another resident hears it", () => {
+    const current = fixture("a body does not separately hear its own contact", { facing: "east" });
+    const listener = current.state.residents.find(({ id }) => id !== current.resident.id);
+    const route = current.state.routes[0];
+    if (!listener || !route) throw new Error("physical sound fixture needs two residents");
+    listener.location = { kind: "route", routeId: route.id, progress: 0 };
+    const rebuilt = rebuildWorld(current);
+    const contact = physicalSoundSample(
+      "resident-contact",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      current.resident.identity.stableId,
+      { soundClass: "physical-thud" },
+    );
+
+    const batches = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      physicalSoundSamples: [contact],
+    });
+    const sourceObservations = batchFor(batches, current.resident.id)?.observations ?? [];
+    const listenerObservations = batchFor(batches, listener.id)?.observations ?? [];
+
+    expect(sourceObservations.some(({ id }) => id.includes(contact.id))).toBe(false);
+    expect(listenerObservations).toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      perceivedClass: "physical-thud",
+      identification: "anonymous",
+      subjectId: null,
+    }));
+  });
+
+  it("routes physical sounds through shared masking and range with deterministic order", () => {
+    const calm = fixture("physical sounds carry over calm ground", { facing: "west" });
+    const masked = fixture("weather masks physical sounds", {
+      facing: "west",
+      turbulentWater: true,
+      storm: true,
+    });
+    const carrying = physicalSoundSample(
+      "carrying-impact",
+      OBSERVER_X + 6,
+      OBSERVER_Y,
+      "OBJECT-CRATE-1",
+      {
+        soundClass: "physical-thud",
+        soundLoudness: 800_000,
+        soundRangeUnits: 20_000,
+      },
+    );
+    const nearby = physicalSoundSample(
+      "nearby-scrape",
+      OBSERVER_X + 3,
+      OBSERVER_Y,
+      "OBJECT-CRATE-2",
+      { soundClass: "physical-scrape" },
+    );
+    const shortRange = physicalSoundSample(
+      "short-impact",
+      OBSERVER_X + 6,
+      OBSERVER_Y,
+      "OBJECT-CRATE-3",
+      { soundClass: "physical-thud", soundRangeUnits: 1_000 },
+    );
+
+    expect(observationsFor(calm, [], 1, [], [carrying])
+      .some(({ channel }) => channel === "hearing")).toBe(true);
+    expect(observationsFor(masked, [], 1, [], [carrying])
+      .some(({ channel }) => channel === "hearing")).toBe(false);
+    expect(observationsFor(calm, [], 1, [], [shortRange])
+      .some(({ channel }) => channel === "hearing")).toBe(false);
+    expect(observationsFor(calm, [], 1, [], [carrying, nearby]))
+      .toEqual(observationsFor(calm, [], 1, [], [nearby, carrying]));
+  });
+
+  it("fails closed for malformed or unauthenticated physical sound samples", () => {
+    const current = fixture("invalid physical sounds teach nothing", { facing: "east" });
+    const valid = physicalSoundSample(
+      "valid-impact",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      "OBJECT-CRATE-1",
+      { soundClass: "physical-thud" },
+    );
+    const { acousticEventId: _omitted, ...missingEvent } = valid;
+    const invalidEvent = { ...valid, acousticEventId: "invalid event id" };
+    const expressionDisguisedAsPhysical = {
+      ...valid,
+      soundClass: "human-vocalization",
+    };
+    const extraKey = { ...valid, expressionEventId: "situated-expression:event:wrong" };
+
+    for (const malformed of [
+      missingEvent,
+      invalidEvent,
+      expressionDisguisedAsPhysical,
+      extraKey,
+    ]) {
+      expect(createPhysicalSoundSample(
+        malformed as unknown as PhysicalSoundSample,
+      )).toBeNull();
+      expect(collectExistingHumanObservations({
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [],
+        physicalSoundSamples: [malformed as unknown as PhysicalSoundSample],
+      })).toEqual([]);
+    }
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [],
+      physicalSoundSamples: undefined,
+    } as unknown as Parameters<typeof collectExistingHumanObservations>[0])).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [],
+      physicalSoundSamples: [valid],
+      unexpected: true,
+    } as unknown as Parameters<typeof collectExistingHumanObservations>[0])).toEqual([]);
+  });
+
   it("preserves canonical observations across negative moving-frame origins", () => {
     const base = fixture("the sensory frame may rebase", { facing: "east" });
     expect(base.window.origin.x).toBeLessThan(0);
@@ -557,6 +714,51 @@ describe("existing-human sensory bridge", () => {
       playerSamples: [],
       supplementalSoundSamples: [{ ...voice, id: "duplicate-expression-event" }, voice],
     })).toEqual([]);
+    const impact = physicalSoundSample(
+      "valid-impact",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      "OBJECT-CRATE-1",
+      { soundClass: "physical-thud" },
+    );
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [valid],
+      physicalSoundSamples: Array.from(
+        { length: HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES + 1 },
+        (_, index) => physicalSoundSample(
+          `impact-${index}`,
+          OBSERVER_X + 2,
+          OBSERVER_Y,
+          `OBJECT-CRATE-${index}`,
+          { soundClass: "physical-thud" },
+        ),
+      ),
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [valid],
+      physicalSoundSamples: [{ ...impact, id: valid.id }],
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [{ ...voice, id: impact.id }],
+      physicalSoundSamples: [impact],
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: current.world,
+      window: current.window,
+      targetTick: fixtureTick(current, 1),
+      playerSamples: [],
+      physicalSoundSamples: [{ ...impact, id: "duplicate-acoustic-event" }, impact],
+    })).toEqual([]);
     const unrelated = fixture("another registered window", { facing: "east" });
     expect(collectExistingHumanObservations({
       world: current.world,
@@ -712,6 +914,7 @@ function observationsFor(
   samples: readonly PlayerSenseSample[],
   targetTick: number,
   supplementalSoundSamples: readonly SupplementalSoundSample[] = [],
+  physicalSoundSamples: readonly PhysicalSoundSample[] = [],
 ) {
   return batchFor(collectExistingHumanObservations({
     world: current.world,
@@ -719,6 +922,7 @@ function observationsFor(
     targetTick: fixtureTick(current, targetTick),
     playerSamples: samples,
     supplementalSoundSamples,
+    physicalSoundSamples,
   }), current.resident.id)?.observations ?? [];
 }
 
@@ -788,6 +992,28 @@ function supplementalSoundSample(
     sourceActorId,
   });
   if (!sample) throw new Error("test supplemental sound must be valid");
+  return sample;
+}
+
+function physicalSoundSample(
+  id: string,
+  tileX: number,
+  tileY: number,
+  sourceActorId: string,
+  overrides: Partial<Pick<PhysicalSoundSample,
+    "soundClass" | "soundInterrupt" | "soundLoudness" | "soundRangeUnits">> = {},
+): PhysicalSoundSample {
+  const sample = createPhysicalSoundSample({
+    acousticEventId: `acoustic:animal-contact:test:${id}`,
+    id,
+    position: worldPoint(tileX, tileY),
+    soundLoudness: overrides.soundLoudness ?? FIXED_POINT,
+    soundRangeUnits: overrides.soundRangeUnits ?? 12_000,
+    soundClass: overrides.soundClass ?? "physical-rustle",
+    soundInterrupt: overrides.soundInterrupt ?? "none",
+    sourceActorId,
+  });
+  if (!sample) throw new Error("test physical sound must be valid");
   return sample;
 }
 

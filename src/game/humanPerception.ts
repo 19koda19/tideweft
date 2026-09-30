@@ -44,15 +44,21 @@ import {
   type SpatialFramePoint,
   type WorldPosition,
 } from "./worldPosition";
+import {
+  ACOUSTIC_SEMANTIC_FAMILIES,
+  type PhysicalSoundClass,
+} from "./worldAcoustics";
 
 export const PLAYER_SENSE_SAMPLE_VERSION = 1 as const;
 export const LOCAL_PLAYER_SUBJECT_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 export const HUMAN_PERCEPTION_MAX_RESIDENTS = 64 as const;
 export const HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES = 16 as const;
 export const HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES = 8 as const;
+export const HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES = 8 as const;
 export const HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT =
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES * 2
-  + HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES;
+  + HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+  + HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES;
 export const HUMAN_HEARING_MAX_RANGE_UNITS = 64 * WORLD_POSITION_UNITS_PER_TILE;
 
 const HEARING_AREA_MAX_RADIUS_UNITS = 10_000_000;
@@ -61,8 +67,13 @@ const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const SOUND_CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const EXPRESSION_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/;
+const ACOUSTIC_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
+const PHYSICAL_SOUND_CLASSES = new Set<string>(
+  ACOUSTIC_SEMANTIC_FAMILIES.map((family) => `physical-${family}`),
+);
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
+const EMPTY_PHYSICAL_SOUND_SAMPLES: readonly PhysicalSoundSample[] = Object.freeze([]);
 
 /**
  * Shared physical acoustic fields. Player step samples retain these fields
@@ -88,6 +99,17 @@ export interface SupplementalSoundSample extends AcousticSample {
   readonly expressionEventId: string;
 }
 
+/**
+ * One bounded, source-authenticated physical-world sound. It remains distinct
+ * from actor vocalization/expression samples: its event ID points to the
+ * committed acoustic fact that caused it, never a situated-expression event.
+ */
+export interface PhysicalSoundSample extends AcousticSample {
+  readonly soundClass: PhysicalSoundClass;
+  readonly sourceActorId: string;
+  readonly acousticEventId: string;
+}
+
 /** One bounded, explicit physical player stimulus at a canonical world point. */
 export interface PlayerSenseSample extends AcousticSample {
   readonly version: typeof PLAYER_SENSE_SAMPLE_VERSION;
@@ -100,6 +122,7 @@ export interface PlayerSenseSample extends AcousticSample {
 }
 
 export type SupplementalSoundSampleInput = SupplementalSoundSample;
+export type PhysicalSoundSampleInput = PhysicalSoundSample;
 export interface PlayerSenseSampleInput extends Omit<PlayerSenseSample, "version"> {}
 
 export interface HumanPerceptionInput {
@@ -110,6 +133,8 @@ export interface HumanPerceptionInput {
   readonly playerSamples: readonly PlayerSenseSample[];
   /** Bounded hearing-only facts carried beside, never merged into, physical step samples. */
   readonly supplementalSoundSamples?: readonly SupplementalSoundSample[];
+  /** Bounded physical-world sounds bound to committed acoustic events. */
+  readonly physicalSoundSamples?: readonly PhysicalSoundSample[];
 }
 
 export interface HumanObservationBatch {
@@ -140,6 +165,42 @@ export function createSupplementalSoundSample(
   ) return null;
   return Object.freeze({
     expressionEventId: value.expressionEventId,
+    id: value.id,
+    position: createWorldPosition(
+      value.position.region,
+      value.position.localX,
+      value.position.localY,
+    ),
+    soundLoudness: value.soundLoudness,
+    soundRangeUnits: value.soundRangeUnits,
+    soundClass: value.soundClass,
+    soundInterrupt: value.soundInterrupt,
+    sourceActorId: value.sourceActorId,
+  });
+}
+
+/** Creates one validated immutable physical-world hearing stimulus, or null. */
+export function createPhysicalSoundSample(
+  input: PhysicalSoundSampleInput,
+): PhysicalSoundSample | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acousticEventId",
+    "id",
+    "position",
+    "soundClass",
+    "soundInterrupt",
+    "soundLoudness",
+    "soundRangeUnits",
+    "sourceActorId",
+  ])
+    || !validSoundFields(value)
+    || !isPhysicalSoundClass(value.soundClass)
+    || !validActorId(value.sourceActorId)
+    || !validAcousticEventId(value.acousticEventId)
+  ) return null;
+  return Object.freeze({
+    acousticEventId: value.acousticEventId,
     id: value.id,
     position: createWorldPosition(
       value.position.region,
@@ -204,16 +265,20 @@ export function collectExistingHumanObservations(
   const value: unknown = input;
   if (!plainRecord(value)) return EMPTY_BATCHES;
   const hasSupplementalSounds = Object.hasOwn(value, "supplementalSoundSamples");
-  if (!exactKeys(value, hasSupplementalSounds
-    ? ["playerSamples", "supplementalSoundSamples", "targetTick", "window", "world"]
-    : ["playerSamples", "targetTick", "window", "world"])) return EMPTY_BATCHES;
+  const hasPhysicalSounds = Object.hasOwn(value, "physicalSoundSamples");
+  const expectedKeys = ["playerSamples", "targetTick", "window", "world"];
+  if (hasSupplementalSounds) expectedKeys.push("supplementalSoundSamples");
+  if (hasPhysicalSounds) expectedKeys.push("physicalSoundSamples");
+  if (!exactKeys(value, expectedKeys)) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
   if (
-    hasSupplementalSounds
-    && !Array.isArray(input.supplementalSoundSamples)
+    (hasSupplementalSounds && !Array.isArray(input.supplementalSoundSamples))
+    || (hasPhysicalSounds && !Array.isArray(input.physicalSoundSamples))
   ) return EMPTY_BATCHES;
   const rawSupplementalSounds = input.supplementalSoundSamples
     ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
+  const rawPhysicalSounds = input.physicalSoundSamples
+    ?? EMPTY_PHYSICAL_SOUND_SAMPLES;
   if (
     regionalWindowForWorld(world) !== window
     || !Number.isSafeInteger(targetTick)
@@ -222,6 +287,8 @@ export function collectExistingHumanObservations(
     || input.playerSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
     || !Array.isArray(rawSupplementalSounds)
     || rawSupplementalSounds.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+    || !Array.isArray(rawPhysicalSounds)
+    || rawPhysicalSounds.length > HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES
     || !validRegionalWorld(world, window)
     || !validWeather(world)
   ) return EMPTY_BATCHES;
@@ -232,9 +299,11 @@ export function collectExistingHumanObservations(
   const samples = canonicalSamples(input.playerSamples);
   if (samples === null) return EMPTY_BATCHES;
   const supplementalSounds = canonicalSupplementalSoundSamples(rawSupplementalSounds);
+  const physicalSounds = canonicalPhysicalSoundSamples(rawPhysicalSounds);
   if (
     supplementalSounds === null
-    || !disjointSampleIds(samples, supplementalSounds)
+    || physicalSounds === null
+    || !disjointSampleIds(samples, supplementalSounds, physicalSounds)
   ) return EMPTY_BATCHES;
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
@@ -363,6 +432,12 @@ export function collectExistingHumanObservations(
       if (targetPoint === null) continue;
       if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
     }
+    for (const sample of physicalSounds) {
+      if (sample.sourceActorId === priorState.actorId) continue;
+      const targetPoint = projectedSamplePoint(frame, world, sample.position);
+      if (targetPoint === null) continue;
+      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+    }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
     }
@@ -441,12 +516,38 @@ function canonicalSupplementalSoundSamples(
   return Object.freeze(samples);
 }
 
+function canonicalPhysicalSoundSamples(
+  value: readonly PhysicalSoundSample[],
+): readonly PhysicalSoundSample[] | null {
+  const samples: PhysicalSoundSample[] = [];
+  const ids = new Set<string>();
+  const acousticEventIds = new Set<string>();
+  for (const raw of value) {
+    const sample = createPhysicalSoundSample(raw);
+    if (
+      sample === null
+      || ids.has(sample.id)
+      || acousticEventIds.has(sample.acousticEventId)
+    ) return null;
+    ids.add(sample.id);
+    acousticEventIds.add(sample.acousticEventId);
+    samples.push(sample);
+  }
+  samples.sort((left, right) => compareText(left.id, right.id));
+  return Object.freeze(samples);
+}
+
 function disjointSampleIds(
   playerSamples: readonly PlayerSenseSample[],
   supplementalSounds: readonly SupplementalSoundSample[],
+  physicalSounds: readonly PhysicalSoundSample[],
 ): boolean {
-  const playerIds = new Set(playerSamples.map(({ id }) => id));
-  return supplementalSounds.every(({ id }) => !playerIds.has(id));
+  const ids = new Set(playerSamples.map(({ id }) => id));
+  for (const { id } of supplementalSounds) {
+    if (ids.has(id)) return false;
+    ids.add(id);
+  }
+  return physicalSounds.every(({ id }) => !ids.has(id));
 }
 
 function projectedSamplePoint(
@@ -699,6 +800,14 @@ function validActorId(value: unknown): value is string {
 
 function validExpressionEventId(value: unknown): value is string {
   return typeof value === "string" && EXPRESSION_EVENT_ID_PATTERN.test(value);
+}
+
+function validAcousticEventId(value: unknown): value is string {
+  return typeof value === "string" && ACOUSTIC_EVENT_ID_PATTERN.test(value);
+}
+
+function isPhysicalSoundClass(value: unknown): value is PhysicalSoundClass {
+  return typeof value === "string" && PHYSICAL_SOUND_CLASSES.has(value);
 }
 
 function fixedUnit(value: unknown): value is number {

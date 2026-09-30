@@ -35,6 +35,13 @@ import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/t
 import { hashCanonical, stableStringify } from "../sim/util";
 import * as humanPerception from "./humanPerception";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
+import {
+  animalContactAcousticBodySizeForDogSize,
+  animalContactAcousticTriggerEventId,
+  animalContactMovementForDistance,
+  canonicalizeAnimalContactAcousticCarry,
+  createAnimalContactAcousticCarryRecord,
+} from "./animalContactAcousticCarry";
 import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
 import {
   repositionDogActor,
@@ -95,7 +102,12 @@ import {
   livingActorAddressInRegionalWindow,
 } from "./livingActor";
 import { createPorterResponseState } from "./porterResponse";
-import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import {
+  gameSaveEnvelopeIntegrity,
+  snapshotPhysicalCargoState,
+  transitionPhysicalCargoRegion,
+  validatePhysicalCargoState,
+} from "./physicalCargoState";
 import {
   repositionCoreWildlifeActor,
   replaceCoreWildlifeActorPhysiology,
@@ -122,6 +134,9 @@ import {
 import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
+  REGIONAL_TRAVEL_SAFE_MAX_X,
+  REGIONAL_TRAVEL_SAFE_MAX_Y,
+  REGIONAL_TRAVEL_SAFE_MIN_Y,
   regionLocalToWindowTile,
 } from "./regionalTravel";
 import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
@@ -186,6 +201,10 @@ import {
   settlementWorkingDogCircadianRestDestinationId,
 } from "./settlementWorkingDogCircadian";
 import { createHeardUnseenSituatedExpressionReception } from "./situatedExpressionReception";
+import {
+  animalContactAcousticEvent,
+  type WorldAcousticEvent,
+} from "./worldAcoustics";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -734,6 +753,7 @@ function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, un
   }
   const {
     actorVocalizationSamples: _futureVocalizations,
+    animalContactAcousticCarry: _futureAnimalContactCarry,
     intervalStartFacingMilliRadians: _futureIntervalStartFacing,
     intervalStartPosition: _futureIntervalStartPosition,
     situatedExpressionAdmissions: _futureAdmissions,
@@ -749,8 +769,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 39 || current.version !== 39) {
-    throw new Error("runtime fixture is not a current v39 save");
+  if (record.payloadVersion !== 40 || current.version !== 40) {
+    throw new Error("runtime fixture is not a current v40 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1788,7 +1808,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 39) throw new Error("fixture is not a current save");
+  if (current.version !== 40) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1818,7 +1838,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 39) throw new Error("fixture is not a current save");
+  if (current.version !== 40) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1848,7 +1868,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 39 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 40 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1902,7 +1922,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 39
+    current.version !== 40
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2763,8 +2783,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(39);
-    expect(envelope.version).toBe(39);
+    expect(record.payloadVersion).toBe(40);
+    expect(envelope.version).toBe(40);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2867,8 +2887,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(39);
-    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(40);
+    expect(migratedEnvelope.version).toBe(40);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -2955,8 +2975,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(39);
-    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(40);
+    expect(migratedEnvelope.version).toBe(40);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3123,8 +3143,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(39);
-    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(40);
+    expect(migratedEnvelope.version).toBe(40);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3279,8 +3299,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(39);
-    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(40);
+    expect(migratedEnvelope.version).toBe(40);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3395,8 +3415,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(39);
-    expect(migratedEnvelope.version).toBe(39);
+    expect(migratedRecord.payloadVersion).toBe(40);
+    expect(migratedEnvelope.version).toBe(40);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -3648,6 +3668,8 @@ describe("runtime settlement ecology integration", () => {
     const after = savedEnvelope(repository);
     expect(after.dogActorRoster).toBe(before.dogActorRoster);
     expect(after.settlementWorkingAnimals).toBe(before.settlementWorkingAnimals);
+    expect((after.perceptionCarry as Record<string, unknown>).animalContactAcousticCarry)
+      .toEqual((before.perceptionCarry as Record<string, unknown>).animalContactAcousticCarry);
     expect(deserializeWorld(String(after.world)).meta.completedTick).toBe(
       deserializeWorld(String(before.world)).meta.completedTick,
     );
@@ -3698,9 +3720,20 @@ describe("runtime settlement ecology integration", () => {
     const committedRecord = repository.snapshot();
     const committed = savedEnvelope(repository);
     const carry = committed.perceptionCarry as {
+      intervalStartPosition: WorldPosition;
+      intervalStartFacingMilliRadians: number;
+      playerStepsSinceWorldTick: number;
+      playerSenseSamples: unknown[];
       actorVocalizationSamples: Array<Record<string, unknown> & {
         position: WorldPosition;
       }>;
+      animalContactAcousticCarry: {
+        version: number;
+        records: Array<{
+          beforePosition: WorldPosition;
+          event: WorldAcousticEvent;
+        }>;
+      };
       situatedExpressionChannels: {
         channels: Array<{
           sourceActorId: string;
@@ -3729,6 +3762,28 @@ describe("runtime settlement ecology integration", () => {
         },
       },
     });
+    const guardianContact = carry.animalContactAcousticCarry.records.find(
+      ({ event }) => event.sourceId === guardian.identity.stableId,
+    );
+    expect(guardianContact).toMatchObject({
+      beforePosition: guardian.address.position,
+      event: {
+        sourceId: guardian.identity.stableId,
+      },
+    });
+    expect(guardianContact?.event.sourcePosition).not.toEqual(
+      guardianContact?.beforePosition,
+    );
+    if (guardianContact === undefined) {
+      throw new Error("unheard guardian fixture omitted its committed contact");
+    }
+    expect(runtime.getRenderView().acousticText?.some((label) => (
+      label.acousticKind === "physical"
+      && label.sourceId === guardian.identity.stableId
+    ))).toBe(false);
+    expect(soundscapePlay.mock.calls.some(([cue]) => (
+      cue === "impact" || cue === "stumble" || cue === "sweep"
+    ))).toBe(false);
     expect(runtime.getRenderView().expressions ?? []).toEqual([]);
     expect(runtime.getUIView().expressionCaption).toBeUndefined();
     expect((committed.player as PlayerState).timeAction).toMatchObject({ kind: "rest" });
@@ -3739,11 +3794,15 @@ describe("runtime settlement ecology integration", () => {
     // duplicate the persisted sample/admission/channel.
     const { integrity: _currentIntegrity, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
-    expect(committedCarry.version).toBe(7);
+    expect(committedCarry.version).toBe(8);
+    const {
+      animalContactAcousticCarry: _currentAnimalContactCarry,
+      ...v7CommittedCarry
+    } = committedCarry;
     const v35Base = {
       ...committedFields,
       version: 35,
-      perceptionCarry: { ...committedCarry, version: 4 },
+      perceptionCarry: { ...v7CommittedCarry, version: 4 },
     };
     const v35Repository = new MemoryRepository({
       ...committedRecord,
@@ -3761,10 +3820,11 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(39);
+    expect(migratedWarningEnvelope.version).toBe(40);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
-      ...committedCarry,
-      version: 7,
+      ...v7CommittedCarry,
+      version: 8,
+      animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedWarning.destroy();
 
@@ -3781,14 +3841,44 @@ describe("runtime settlement ecology integration", () => {
     if (boundaryRoster === null || boundaryWork === null || boundaryGuardian === undefined) {
       throw new Error("unheard guardian boundary fixture lost its source authorities");
     }
+    const boundaryWorld = deserializeWorld(String(committed.world));
+    const boundaryPlayer = structuredClone(committed.player) as PlayerState;
+    const boundaryTravel = restorePlayerRegionalTravel(
+      boundaryWorld.meta.rootSeed,
+      boundaryPlayer,
+      String(committed.regionalTravel),
+    );
+    if (boundaryTravel === null) {
+      throw new Error("unheard guardian boundary fixture lost regional authority");
+    }
+    const boundaryView = createRegionalWorldView(
+      createWorldView(boundaryWorld),
+      boundaryTravel.window,
+      {
+        discovered: boundaryPlayer.discovered,
+        depthSoundings: boundaryPlayer.depthSoundings,
+      },
+    );
+    const boundarySourceTileIndex = Math.floor(REGIONAL_TRAVEL_ROWS / 2)
+      * REGIONAL_TRAVEL_COLUMNS + 8;
+    const boundarySourceAddress = regionalAddressAt(
+      boundaryView,
+      boundarySourceTileIndex,
+    );
+    if (boundarySourceAddress === null) {
+      throw new Error("unheard guardian boundary fixture lost its trailing-strip address");
+    }
+    const boundarySourcePosition = createWorldPosition(
+      boundarySourceAddress.region,
+      boundarySourceAddress.localX * WORLD_POSITION_UNITS_PER_TILE
+        + WORLD_POSITION_UNITS_PER_TILE / 2,
+      boundarySourceAddress.localY * WORLD_POSITION_UNITS_PER_TILE
+        + WORLD_POSITION_UNITS_PER_TILE / 2,
+    );
     let trailingGuardian = repositionDogActor(boundaryGuardian, {
-      atTick: deserializeWorld(String(committed.world)).meta.completedTick,
+      atTick: boundaryWorld.meta.completedTick,
       heading: boundaryGuardian.address.heading,
-      position: translateWorldPosition(
-        boundaryGuardian.address.position,
-        -6 * WORLD_POSITION_UNITS_PER_TILE,
-        0,
-      ),
+      position: boundarySourcePosition,
     });
     if (trailingGuardian.circadian !== undefined) {
       const boundarySettlement = deserializeSettlementEcologyState(
@@ -3827,6 +3917,78 @@ describe("runtime settlement ecology integration", () => {
     }
     const trailingRoster = replaceDogActorInRoster(boundaryRoster, trailingGuardian);
     const boundaryCarry = structuredClone(carry);
+    const trailingPlacement = livingActorAddressInRegionalWindow(
+      trailingGuardian.address,
+      boundaryTravel.window,
+    );
+    const trailingTile = trailingPlacement === null
+      ? undefined
+      : boundaryView.terrain.tiles[trailingPlacement.tileIndex];
+    if (trailingTile === undefined) {
+      throw new Error("unheard guardian boundary fixture left the starting window too early");
+    }
+    const originalContactDelta = worldPositionDelta(
+      guardianContact.beforePosition,
+      guardianContact.event.sourcePosition,
+    );
+    const boundaryBeforePosition = translateWorldPosition(
+      trailingGuardian.address.position,
+      -originalContactDelta.x,
+      -originalContactDelta.y,
+    );
+    const boundaryDelta = worldPositionDelta(
+      boundaryBeforePosition,
+      trailingGuardian.address.position,
+    );
+    const boundaryMovement = animalContactMovementForDistance(Math.hypot(
+      boundaryDelta.x,
+      boundaryDelta.y,
+    ));
+    const boundaryTriggerEventId = animalContactAcousticTriggerEventId({
+      sourceId: trailingGuardian.identity.stableId,
+      beforePosition: boundaryBeforePosition,
+      afterPosition: trailingGuardian.address.position,
+      occurredAtTick: boundaryWorld.meta.completedTick,
+    });
+    const boundarySurfaceMaterial = trailingTile.waterDepth > 60_000
+      || trailingTile.terrain === "deep-water"
+      ? "water" as const
+      : trailingTile.terrain === "marsh"
+        ? "foliage" as const
+        : trailingTile.terrain === "ridge"
+          ? "stone" as const
+          : trailingTile.terrain === "tidal-flat"
+            ? "sand" as const
+            : "soil" as const;
+    const boundaryEvent = boundaryMovement === null || boundaryTriggerEventId === null
+      ? null
+      : animalContactAcousticEvent({
+          triggerEventId: boundaryTriggerEventId,
+          sourceId: trailingGuardian.identity.stableId,
+          sourcePosition: trailingGuardian.address.position,
+          occurredAtTick: boundaryWorld.meta.completedTick,
+          bodySize: animalContactAcousticBodySizeForDogSize(
+            trailingGuardian.identity.body.size,
+          ),
+          movement: boundaryMovement,
+          surfaceMaterial: boundarySurfaceMaterial,
+        });
+    const boundaryContact = boundaryEvent === null
+      ? null
+      : createAnimalContactAcousticCarryRecord({
+          beforePosition: boundaryBeforePosition,
+          event: boundaryEvent,
+        });
+    if (boundaryContact === null) {
+      throw new Error("unheard guardian boundary fixture could not move its contact cause");
+    }
+    boundaryCarry.animalContactAcousticCarry = {
+      version: 1,
+      records: [boundaryContact],
+    };
+    expect(canonicalizeAnimalContactAcousticCarry(
+      boundaryCarry.animalContactAcousticCarry,
+    )?.records).toHaveLength(1);
     const boundaryChannel = boundaryCarry.situatedExpressionChannels.channels.find(
       ({ sourceActorId }) => sourceActorId === guardian.identity.stableId,
     );
@@ -3841,17 +4003,112 @@ describe("runtime settlement ecology integration", () => {
     ) throw new Error("unheard guardian boundary fixture lost its bark trajectory");
     boundaryChannel.state.active.position = trailingGuardian.address.position;
     boundarySample.position = trailingGuardian.address.position;
+    const boundaryRebaseRow = Array.from(
+      { length: REGIONAL_TRAVEL_SAFE_MAX_Y - REGIONAL_TRAVEL_SAFE_MIN_Y + 1 },
+      (_, offset) => REGIONAL_TRAVEL_SAFE_MIN_Y + offset,
+    ).find((row) => {
+      const currentAddress = regionalAddressAt(
+        boundaryView,
+        row * REGIONAL_TRAVEL_COLUMNS + REGIONAL_TRAVEL_SAFE_MAX_X,
+      );
+      const currentTile = boundaryView.terrain.tiles[
+        row * REGIONAL_TRAVEL_COLUMNS + REGIONAL_TRAVEL_SAFE_MAX_X
+      ];
+      const nextTile = boundaryView.terrain.tiles[
+        row * REGIONAL_TRAVEL_COLUMNS + REGIONAL_TRAVEL_SAFE_MAX_X + 1
+      ];
+      return currentAddress?.region.y === boundaryTravel.stream.center.y
+        && currentAddress.region.x !== boundaryTravel.stream.center.x
+        && currentTile !== undefined
+        && nextTile !== undefined
+        && currentTile.terrain !== "ridge"
+        && nextTile.terrain !== "ridge"
+        && currentTile.waterDepth <= ADRIFT_STAND_DEPTH
+        && nextTile.waterDepth <= ADRIFT_STAND_DEPTH
+        && currentTile.roughness < 650_000
+        && nextTile.roughness < 650_000;
+    });
+    if (boundaryRebaseRow === undefined) {
+      throw new Error("unheard guardian boundary fixture found no safe rebase crossing");
+    }
+    const boundaryPlayerTileIndex = boundaryRebaseRow * REGIONAL_TRAVEL_COLUMNS
+      + REGIONAL_TRAVEL_SAFE_MAX_X;
+    boundaryPlayer.x = (REGIONAL_TRAVEL_SAFE_MAX_X + 1) * TILE_UNITS - 1;
+    boundaryPlayer.y = boundaryRebaseRow * TILE_UNITS + Math.floor(TILE_UNITS / 2);
+    boundaryPlayer.previousX = boundaryPlayer.x;
+    boundaryPlayer.previousY = boundaryPlayer.y;
+    boundaryPlayer.velocityX = 0;
+    boundaryPlayer.velocityY = 0;
+    boundaryPlayer.facingMilliRadians = 0;
+    boundaryPlayer.stamina = FIXED_POINT;
+    boundaryPlayer.stability = FIXED_POINT;
+    boundaryPlayer.stabilityTrend = "steady";
+    boundaryPlayer.stabilityHint = "Stable on sound footing";
+    boundaryPlayer.pace = "steady";
+    boundaryPlayer.mode = "foot";
+    boundaryPlayer.timeAction = null;
+    boundaryPlayer.sweepTicksRemaining = 0;
+    boundaryPlayer.sweepTotalTicks = 0;
+    boundaryPlayer.sweepPath = [];
+    boundaryPlayer.sweepSupport = null;
+    boundaryPlayer.currentTrace = [boundaryPlayerTileIndex];
+    boundaryPlayer.surveyTrace = [boundaryPlayerTileIndex];
+    if (
+      boundaryCarry.playerStepsSinceWorldTick !== 0
+      || boundaryCarry.playerSenseSamples.length !== 0
+    ) {
+      throw new Error("unheard guardian boundary fixture requires a phase-zero interval");
+    }
+    const boundaryPlayerPosition = playerWorldPositionInRegionalWindow(
+      boundaryTravel.window,
+      boundaryPlayer,
+    );
+    if (boundaryPlayerPosition === null) {
+      throw new Error("unheard guardian boundary fixture lost its staged player position");
+    }
+    boundaryCarry.intervalStartPosition = boundaryPlayerPosition;
+    boundaryCarry.intervalStartFacingMilliRadians = boundaryPlayer.facingMilliRadians;
+    const boundaryCenterTransition = recenterRegionalPlayer(
+      boundaryWorld.meta.rootSeed,
+      boundaryTravel,
+      boundaryPlayer,
+    );
+    if (!boundaryCenterTransition.crossed || boundaryCenterTransition.rebased) {
+      throw new Error("unheard guardian boundary fixture could not stage its storage owner");
+    }
+    const boundaryRegionalTravel = serializePlayerRegionalTravel(
+      capturePlayerRegionalTravel(boundaryCenterTransition.state, boundaryPlayer),
+    );
+    const boundaryCargoValidation = validatePhysicalCargoState(
+      committed.physicalCargo,
+      boundaryPlayer,
+      WORLD_WIDTH,
+      WORLD_HEIGHT,
+    );
+    if (!boundaryCargoValidation.valid || boundaryCargoValidation.state === null) {
+      throw new Error("unheard guardian boundary fixture lost physical cargo authority");
+    }
+    const boundaryPhysicalCargo = snapshotPhysicalCargoState(
+      transitionPhysicalCargoRegion(
+        boundaryCargoValidation.state,
+        boundaryCenterTransition.to,
+        WORLD_WIDTH,
+        WORLD_HEIGHT,
+      ),
+    );
     const boundaryRepository = new MemoryRepository(withCurrentEnvelopeFields(
       committedRecord,
       {
+        player: boundaryPlayer,
+        regionalTravel: boundaryRegionalTravel,
+        physicalCargo: boundaryPhysicalCargo,
         dogActorRoster: serializeDogActorRoster(trailingRoster),
         perceptionCarry: boundaryCarry,
       },
     ));
     const boundaryRuntime = await createTideweftRuntime(boundaryRepository);
     expect(boundaryRuntime.getUIView().saveWarning).toBeUndefined();
-    boundaryRuntime.dispatchUI({ type: "recover", action: "cancel" });
-    boundaryRuntime.dispatchRenderer({ type: "brace", active: true });
+    boundaryRuntime.dispatchRenderer({ type: "brace", active: false });
     boundaryRuntime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     boundaryRuntime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(boundaryRuntime, 1);
@@ -3873,21 +4130,132 @@ describe("runtime settlement ecology integration", () => {
       throw new Error("unheard guardian rebase fixture lost its physical authorities");
     }
     expect(rebasedTravel.stream.center).toEqual({ x: 1, y: 0 });
+    expect(rebasedTravel.window.origin.x).not.toBe(boundaryTravel.window.origin.x);
     expect(livingActorAddressInRegionalWindow(
       rebasedGuardian.address,
       rebasedTravel.window,
     )).toBeNull();
     expect((rebasedEnvelope.perceptionCarry as typeof carry).actorVocalizationSamples)
       .toHaveLength(1);
+    expect((rebasedEnvelope.perceptionCarry as typeof carry).animalContactAcousticCarry)
+      .toEqual({ version: 1, records: [] });
     boundaryRuntime.destroy();
-
-    const reloaded = await createTideweftRuntime(new MemoryRepository(committedRecord));
+    const hearingFixtureWorld = deserializeWorld(String(committed.world));
+    const hearingResident = hearingFixtureWorld.residents.at(-1);
+    const routeCandidates = hearingFixtureWorld.routes.flatMap((route) => (
+      route.path.map((tileIndex, offset) => {
+        const position = createWorldPosition(
+          { x: 0, y: 0 },
+          (tileIndex % WORLD_WIDTH) * WORLD_POSITION_UNITS_PER_TILE
+            + WORLD_POSITION_UNITS_PER_TILE / 2,
+          Math.floor(tileIndex / WORLD_WIDTH) * WORLD_POSITION_UNITS_PER_TILE
+            + WORLD_POSITION_UNITS_PER_TILE / 2,
+        );
+        const delta = worldPositionDelta(guardianContact.event.sourcePosition, position);
+        return {
+          route,
+          offset,
+          position,
+          distance: Math.hypot(delta.x, delta.y),
+        };
+      })
+    )).sort((left, right) => left.distance - right.distance);
+    const nearestRoute = routeCandidates[0];
+    if (hearingResident === undefined || nearestRoute === undefined) {
+      throw new Error("unheard guardian fixture omitted a human/route hearing locus");
+    }
+    hearingResident.location = {
+      kind: "route",
+      routeId: nearestRoute.route.id,
+      progress: nearestRoute.route.path.length <= 1
+        ? 0
+        : Math.round(
+            nearestRoute.offset * FIXED_POINT / (nearestRoute.route.path.length - 1),
+          ),
+    };
+    delete hearingResident.circadian;
+    const hearingWind = worldPositionDelta(
+      guardianContact.event.sourcePosition,
+      nearestRoute.position,
+    );
+    const hearingWindDistance = Math.hypot(hearingWind.x, hearingWind.y);
+    hearingFixtureWorld.weather.kind = "clear";
+    hearingFixtureWorld.weather.intensity = 0;
+    hearingFixtureWorld.weather.windX = Math.round(
+      hearingWind.x / hearingWindDistance * FIXED_POINT,
+    );
+    hearingFixtureWorld.weather.windY = Math.round(
+      hearingWind.y / hearingWindDistance * FIXED_POINT,
+    );
+    hearingFixtureWorld.weather.nextChangeTick = hearingFixtureWorld.meta.completedTick
+      + WORLD_TICKS_PER_DAY;
+    assertWorldInvariants(hearingFixtureWorld);
+    const hearingRecord = withCurrentEnvelopeFields(committedRecord, {
+      world: serializeWorld(hearingFixtureWorld),
+    });
+    const hearingRepository = new MemoryRepository(hearingRecord);
+    const hearingSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    const reloaded = await createTideweftRuntime(hearingRepository);
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     expect(reloaded.getRenderView().player.recoveryKind).toBe("rest");
+    advancePlayerSteps(reloaded, 10);
+    await reloaded.save();
+    const physicalIntervals = hearingSpy.mock.calls
+      .map(([input]) => input.physicalSoundSamples ?? [])
+      .filter((samples) => samples.some(({ acousticEventId }) => (
+        acousticEventId === guardianContact?.event.eventId
+      )));
+    expect(physicalIntervals).toHaveLength(1);
+    expect(physicalIntervals[0]).toContainEqual(expect.objectContaining({
+      acousticEventId: guardianContact?.event.eventId,
+      sourceActorId: guardian.identity.stableId,
+      soundClass: guardianContact?.event.soundClass,
+    }));
+    const hearingWorld = deserializeWorld(String(savedEnvelope(hearingRepository).world));
+    const contactBeliefs = hearingWorld.residents.flatMap(({ perception }) => (
+      perception.beliefs.filter(({ perceivedClass }) => (
+        perceivedClass === guardianContact?.event.soundClass
+      ))
+    ));
+    expect(contactBeliefs.length).toBeGreaterThan(0);
+    expect(contactBeliefs.every((belief) => (
+      belief.channel === "hearing"
+      && belief.identification === "anonymous"
+      && belief.subjectId === null
+      && belief.sourceObservationId.includes("-pac-")
+    ))).toBe(true);
+    advancePlayerSteps(reloaded, 10);
+    await reloaded.save();
+    expect(hearingSpy.mock.calls
+      .map(([input]) => input.physicalSoundSamples ?? [])
+      .filter((samples) => samples.some(({ acousticEventId }) => (
+        acousticEventId === guardianContact?.event.eventId
+      )))).toHaveLength(1);
     reloaded.destroy();
+
+    const replacementRepository = new MemoryRepository(committedRecord);
+    const replacement = await createTideweftRuntime(replacementRepository);
+    replacement.dispatchUI({
+      type: "new-world",
+      seed: "replacement world clears pending contact",
+      posture: "gale",
+      sessionShape: "wander",
+      restartPhrase: "restartrestartrestart",
+    });
+    await replacement.save();
+    expect((savedEnvelope(replacementRepository).perceptionCarry as typeof carry)
+      .animalContactAcousticCarry).toEqual({ version: 1, records: [] });
+    replacement.destroy();
 
     const rebasedReload = await createTideweftRuntime(new MemoryRepository(rebasedRecord));
     expect(rebasedReload.getUIView().saveWarning).toBeUndefined();
+    hearingSpy.mockClear();
+    advancePlayerSteps(rebasedReload, 10);
+    expect(hearingSpy.mock.calls.some(([input]) => (
+      input.physicalSoundSamples?.some(({ acousticEventId }) => (
+        acousticEventId === boundaryEvent?.eventId
+      )) ?? false
+    ))).toBe(false);
     await rebasedReload.save();
     rebasedReload.destroy();
 
@@ -3926,6 +4294,120 @@ describe("runtime settlement ecology integration", () => {
     const rejected = await createTideweftRuntime(tamperedRepository);
     expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
     rejected.destroy();
+
+    const forgedSurfaceCarry = structuredClone(carry);
+    const forgedSurfaceRecord = forgedSurfaceCarry.animalContactAcousticCarry.records.find(
+      ({ event }) => event.sourceId === guardian.identity.stableId,
+    );
+    if (forgedSurfaceRecord === undefined) {
+      throw new Error("unheard guardian fixture omitted its physical contact record");
+    }
+    const forgedDelta = worldPositionDelta(
+      forgedSurfaceRecord.beforePosition,
+      forgedSurfaceRecord.event.sourcePosition,
+    );
+    const forgedMovement = animalContactMovementForDistance(Math.hypot(
+      forgedDelta.x,
+      forgedDelta.y,
+    ));
+    const forgedSurface = forgedSurfaceRecord.event.surfaceMaterial === "water"
+      ? "stone" as const
+      : "water" as const;
+    const forgedSurfaceEvent = forgedMovement === null
+      ? null
+      : animalContactAcousticEvent({
+          triggerEventId: forgedSurfaceRecord.event.triggerEventId,
+          sourceId: forgedSurfaceRecord.event.sourceId,
+          sourcePosition: forgedSurfaceRecord.event.sourcePosition,
+          occurredAtTick: forgedSurfaceRecord.event.occurredAtTick,
+          bodySize: guardian.identity.body.size === "tiny"
+              || guardian.identity.body.size === "small"
+            ? "small"
+            : guardian.identity.body.size === "medium"
+              ? "medium"
+              : "large",
+          movement: forgedMovement,
+          surfaceMaterial: forgedSurface,
+        });
+    if (forgedSurfaceEvent === null) {
+      throw new Error("unheard guardian fixture could not forge canonical surface semantics");
+    }
+    forgedSurfaceRecord.event = forgedSurfaceEvent;
+    expect(canonicalizeAnimalContactAcousticCarry(
+      forgedSurfaceCarry.animalContactAcousticCarry,
+    )).not.toBeNull();
+    const forgedSurfaceRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      committedRecord,
+      { perceptionCarry: forgedSurfaceCarry },
+    ));
+    const rejectedSurface = await createTideweftRuntime(forgedSurfaceRepository);
+    expect(rejectedSurface.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedSurface.destroy();
+
+    const forgedPriorCarry = structuredClone(carry);
+    const forgedPriorRecord = forgedPriorCarry.animalContactAcousticCarry.records.find(
+      ({ event }) => event.sourceId === guardian.identity.stableId,
+    );
+    if (forgedPriorRecord === undefined) {
+      throw new Error("unheard guardian fixture omitted its prior-position evidence");
+    }
+    const forgedPriorPosition = [
+      [-500, 0],
+      [500, 0],
+      [0, -500],
+      [0, 500],
+    ].map(([x, y]) => translateWorldPosition(
+      forgedPriorRecord.event.sourcePosition,
+      x!,
+      y!,
+    )).find((candidate) => {
+      const delta = worldPositionDelta(candidate, forgedPriorRecord.event.sourcePosition);
+      return headingFromRadians(Math.atan2(delta.y, delta.x)) !== guardian.address.heading;
+    });
+    if (forgedPriorPosition === undefined) {
+      throw new Error("unheard guardian fixture could not choose a forged prior heading");
+    }
+    const forgedPriorTrigger = animalContactAcousticTriggerEventId({
+      sourceId: forgedPriorRecord.event.sourceId,
+      beforePosition: forgedPriorPosition,
+      afterPosition: forgedPriorRecord.event.sourcePosition,
+      occurredAtTick: forgedPriorRecord.event.occurredAtTick,
+    });
+    const forgedPriorEvent = forgedPriorTrigger === null
+      ? null
+      : animalContactAcousticEvent({
+          triggerEventId: forgedPriorTrigger,
+          sourceId: forgedPriorRecord.event.sourceId,
+          sourcePosition: forgedPriorRecord.event.sourcePosition,
+          occurredAtTick: forgedPriorRecord.event.occurredAtTick,
+          bodySize: guardian.identity.body.size === "tiny"
+              || guardian.identity.body.size === "small"
+            ? "small"
+            : guardian.identity.body.size === "medium"
+              ? "medium"
+              : "large",
+          movement: "slow",
+          surfaceMaterial: forgedPriorRecord.event.surfaceMaterial,
+        });
+    if (forgedPriorEvent === null) {
+      throw new Error("unheard guardian fixture could not forge prior-position semantics");
+    }
+    forgedPriorRecord.beforePosition = forgedPriorPosition;
+    forgedPriorRecord.event = forgedPriorEvent;
+    expect(canonicalizeAnimalContactAcousticCarry(
+      forgedPriorCarry.animalContactAcousticCarry,
+    )).not.toBeNull();
+    const forgedPriorRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      committedRecord,
+      { perceptionCarry: forgedPriorCarry },
+    ));
+    const rejectedPrior = await createTideweftRuntime(forgedPriorRepository);
+    expect(rejectedPrior.getUIView().saveWarning?.message).toBe(
+      "LOCAL AUTOSAVE UNREADABLE",
+    );
+    rejectedPrior.destroy();
   }, 90_000);
 
   it("authenticates recovery interruption across an audible guardian warning", async () => {
@@ -4272,6 +4754,7 @@ describe("runtime settlement ecology integration", () => {
     const growlCarry = growlEnvelope.perceptionCarry as {
       version: number;
       intervalStartPosition: WorldPosition;
+      animalContactAcousticCarry: unknown;
       actorVocalizationSamples: Array<{
         expressionEventId: string;
         position: WorldPosition;
@@ -4395,10 +4878,14 @@ describe("runtime settlement ecology integration", () => {
     tampered.destroy();
 
     const { integrity: _currentIntegrity, ...growlFields } = growlEnvelope;
+    const {
+      animalContactAcousticCarry: _currentAnimalContactCarry,
+      ...v7GrowlCarry
+    } = growlCarry;
     const v35Base = {
       ...growlFields,
       version: 35,
-      perceptionCarry: { ...growlCarry, version: 4 },
+      perceptionCarry: { ...v7GrowlCarry, version: 4 },
     };
     const v35GrowlRecord: SaveRecord = {
       ...growlRecord,
@@ -4419,7 +4906,7 @@ describe("runtime settlement ecology integration", () => {
     const v36Base = {
       ...growlFields,
       version: 36,
-      perceptionCarry: { ...growlCarry, version: 5 },
+      perceptionCarry: { ...v7GrowlCarry, version: 5 },
     };
     const v36GrowlRepository = new MemoryRepository({
       ...growlRecord,
@@ -4438,11 +4925,12 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedGrowlRecord = v36GrowlRepository.snapshot();
     const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(39);
-    expect(migratedGrowlEnvelope.version).toBe(39);
+    expect(migratedGrowlRecord.payloadVersion).toBe(40);
+    expect(migratedGrowlEnvelope.version).toBe(40);
     expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
-      ...growlCarry,
-      version: 7,
+      ...v7GrowlCarry,
+      version: 8,
+      animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedGrowl.destroy();
 
@@ -4858,6 +5346,7 @@ describe("runtime settlement ecology integration", () => {
     const whineCarry = whineEnvelope.perceptionCarry as {
       version: number;
       intervalStartPosition: WorldPosition;
+      animalContactAcousticCarry: unknown;
       actorVocalizationSamples: Array<{
         expressionEventId: string;
         position: WorldPosition;
@@ -5129,10 +5618,14 @@ describe("runtime settlement ecology integration", () => {
     rejectedSource.destroy();
 
     const { integrity: _currentIntegrity, ...whineFields } = whineEnvelope;
+    const {
+      animalContactAcousticCarry: _currentAnimalContactCarry,
+      ...v7WhineCarry
+    } = whineCarry;
     const v36Base = {
       ...whineFields,
       version: 36,
-      perceptionCarry: { ...whineCarry, version: 5 },
+      perceptionCarry: { ...v7WhineCarry, version: 5 },
     };
     const v36WhineRecord: SaveRecord = {
       ...whineRecord,
@@ -5150,11 +5643,11 @@ describe("runtime settlement ecology integration", () => {
     // v37/carry-v6 already owned shelter whines. Its exact nonempty interval
     // migrates by version alone without replaying acknowledged audio or
     // duplicating any retained sample, admission, channel, or reception.
-    expect(whineCarry.version).toBe(7);
+    expect(whineCarry.version).toBe(8);
     const v37Base = {
       ...whineFields,
       version: 37,
-      perceptionCarry: { ...whineCarry, version: 6 },
+      perceptionCarry: { ...v7WhineCarry, version: 6 },
     };
     const v37WhineRepository = new MemoryRepository({
       ...whineRecord,
@@ -5173,11 +5666,12 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWhineRecord = v37WhineRepository.snapshot();
     const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(39);
-    expect(migratedWhineEnvelope.version).toBe(39);
+    expect(migratedWhineRecord.payloadVersion).toBe(40);
+    expect(migratedWhineEnvelope.version).toBe(40);
     expect(migratedWhineEnvelope.perceptionCarry).toEqual({
-      ...whineCarry,
-      version: 7,
+      ...v7WhineCarry,
+      version: 8,
+      animalContactAcousticCarry: { version: 1, records: [] },
     });
     migratedWhine.destroy();
 

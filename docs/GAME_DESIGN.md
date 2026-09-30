@@ -196,10 +196,15 @@ legacy display sentence—and that same event drives audio semantics, a bounded
 physical-sound sample for lawful NPC hearing, and an optional
 `scrape`/`splash`/`slosh`/`thud`-family text candidate. A committed cargo shock
 may emit a separate source-bound `clatter`, `thud`, or `splash` from the same
-conserved lot. Actual movement of the existing medium-sized dogs also derives a
-body/surface contact event from distance and terrain; water and vegetation can
-therefore sound differently from ordinary dry ground without making every step
-visible text.
+conserved lot. Actual movement of the existing dogs also derives a body/surface
+contact event from distance, body size, gait, and terrain; water and vegetation
+can therefore sound differently from ordinary dry ground without making every
+step visible text. Dog contact also reaches the next bounded human-perception
+frame even when the courier cannot hear it and no caption is admitted. Eligible
+nearby humans receive only anonymous, weather- and range-limited sound knowledge
+through a source-ID-excluding bridge. Dog and broader cross-species response to
+physical contact remains incomplete rather than being implied by that human
+consumer.
 
 Active Living Voice channels, legacy visible resident speech, animal calls,
 and eligible physical candidates enter one Chart/Relief layout with
@@ -219,9 +224,10 @@ audible word and direction. Ambient-water syllables are
 still renderer-owned legacy presentation. The old ADRIFT syllable fallback is
 suppressed whenever a production view supplies the shared `acousticText`
 projection, but remains available to legacy views that omit it. Cargo impact
-and representative dog-body contact are live; broader animal bodies, arbitrary
-object/foliage contacts, general physical-sound consumers, tool/material work,
-violence, and vessel producers remain incomplete. Future Work of Hands, Weight
+and representative dog-body contact are live, including human hearing of that
+dog contact; broader animal bodies, arbitrary object/foliage contacts,
+cross-species physical-sound consumers, tool/material work, violence, and
+vessel producers remain incomplete. Future Work of Hands, Weight
 of Violence, Long Crossing, traversal equipment, tools, and vehicles inherit
 this acoustic world; none receives a separate crafting, combat, or boat
 subtitle universe.

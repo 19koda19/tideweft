@@ -212,10 +212,20 @@ second object-contact event bound to the same conserved lot and the traversal
 owner's bounded contact-surface classification. Actual movement of the existing
 BIO0 and settlement-working dogs may
 emit one body/surface event derived from their before/after positions, terrain,
-and bounded medium-body semantics; the player receives it only through ordinary
-event-time hearing and sight/localization. The owning traversal, cargo, and
-ecology domains keep every physical consequence. Active labels are transient,
-are not serialized, and do not replay as new sounds after reload.
+and bounded body-size/gait semantics; the player receives it only through ordinary
+event-time hearing and sight/localization. That same dog-contact event enters a
+separate authenticated, eight-record human-hearing carry before any player
+hearing or text gate. The next world perception frame offers it exactly once to
+eligible nearby humans through ordinary range, weather masking, anonymous
+localization, and source-ID exclusion. The carry survives a current-schema
+interruption; its self-consistent movement evidence is cross-checked against
+current dog identity, final position, tick, body, terrain, heading, and step
+ceiling. Its v1 prior point is carried evidence rather than an independently
+retained locomotion receipt, so exact historical-path authentication remains
+future work. A regional-frame rebase deterministically retires only contacts
+whose source can no longer reach this bounded human-perception bridge. The
+optional player label remains transient and cannot replay after reload. The
+owning traversal, cargo, and ecology domains keep every physical consequence.
 External audio for these structured embodied-contact events is released only
 after the fallible fixed-step transaction commits, so fail-closed rollback
 cannot leak and then replay a rejected contact while the event itself retains
@@ -373,6 +383,16 @@ semantic fence rejects human-warning meaning or admission as impossible v38
 state. Current v39 checkpoints reauthenticate the warning against the exact
 resident belief and event-time player reception; reload neither replays its
 acknowledged audio nor recursively admits a second warning.
+The dog-contact human-hearing candidate advances the unpublished outer save to
+v40 and bounded perception carry to v8. Exact v39/carry-v7 migration initializes
+an empty physical-contact lane rather than inventing a historical sound. A
+current v40 checkpoint retains pending committed dog contact across interruption
+and reauthenticates its event tick, structured movement/acoustic semantics,
+source identity, and final source position against current dog authority before
+it may reach the next human-perception frame. The carried prior point is bounded
+by the current dog's heading and step authority but does not yet have a separate
+locomotion receipt; off-frame contacts are retired when a regional rebase removes
+their only current-frame consumers.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -2478,11 +2498,11 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through versions 33–39 and the bounded perception carry through version
-7; the current source writer emits outer version 39. Its authenticated v1–v38
+session through versions 33–40 and the bounded perception carry through version
+8; the current source writer emits outer version 40. Its authenticated v1–v39
 readers remain implemented and tested where retained, but before official 1.0
 that implementation fact is not a permanent promise to preserve every internal
-development format. Current-v39 roundtrip and all conservation, determinism,
+development format. Current-v40 roundtrip and all conservation, determinism,
 integrity, and no-overwrite laws remain mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
