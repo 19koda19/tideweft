@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import { createRegionCoord } from "../sim/regions";
 import { hashCanonical } from "../sim/util";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 import {
   createLegacyV33PlayerExpressionAdmissionRecord,
+  createPlayerExhaustionExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   type PlayerFallRecoveryExpressionAdmissionRecord,
+  type PlayerExhaustionExpressionAdmissionRecord,
   type PlayerTraversalExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
 import {
@@ -68,8 +71,32 @@ function recovery(
   return admission;
 }
 
+function exhaustion(
+  sampleOrdinal = 2,
+  phase = 7,
+): PlayerExhaustionExpressionAdmissionRecord {
+  const evidence = {
+    committedWorldTick: WORLD_TICK,
+    admittedAtPlayerStepPhase: phase,
+    acceptedDistanceUnits: 105,
+    resolution: "dry-exhaustion-camp" as const,
+  };
+  const policy = playerEffortExpressionPolicy(LOCAL_PLAYER_LIVING_ACTOR_ID, evidence);
+  if (policy === null) throw new Error("Expected effort policy fixture");
+  const admission = createPlayerExhaustionExpressionAdmissionRecord({
+    sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+    triggerEventId: policy.triggerEventId,
+    sampleOrdinal,
+    ...evidence,
+  });
+  if (admission === null) throw new Error("Expected exhaustion admission fixture");
+  return admission;
+}
+
 function authority(
-  admission: PlayerTraversalExpressionAdmissionRecord | PlayerFallRecoveryExpressionAdmissionRecord,
+  admission: PlayerTraversalExpressionAdmissionRecord
+    | PlayerFallRecoveryExpressionAdmissionRecord
+    | PlayerExhaustionExpressionAdmissionRecord,
   position = POSITION,
   committedWorldTick = WORLD_TICK,
 ): SituatedExpressionCausalAuthorityRecord {
@@ -143,6 +170,29 @@ describe("situated-expression player causal authority", () => {
       ...record,
       admittedAtPlayerStepPhase: 6,
     })).toBe(false);
+  });
+
+  it("binds exhaustion semantics while leaving physical proof to movement state", () => {
+    const admission = exhaustion();
+    const record = authority(admission);
+    expect(record.causalDigest).toBe(hashCanonical({
+      version: 1,
+      kind: "player-exhaustion",
+      committedWorldTick: WORLD_TICK,
+      acceptedDistanceUnits: 105,
+      resolution: "dry-exhaustion-camp",
+    }));
+    expect(Object.keys(record)).not.toContain("playerExhaustionTransition");
+    expect(situatedExpressionAdmissionMatchesCausalAuthority(admission, record)).toBe(true);
+    expect(createSituatedExpressionCausalAuthorityRecord(
+      admission,
+      WORLD_TICK + 1,
+      POSITION,
+    )).toBeNull();
+    expect(situatedExpressionAdmissionMatchesCausalAuthority({
+      ...admission,
+      acceptedDistanceUnits: 104,
+    }, record)).toBe(false);
   });
 
   it("refuses porter and legacy admissions instead of admitting parallel authority", () => {

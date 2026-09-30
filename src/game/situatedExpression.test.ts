@@ -156,6 +156,24 @@ function keeperStoreResponseIntent(triggerEventId: string): SituatedExpressionIn
   };
 }
 
+function effortIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: SPEAKER_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "need-rest-after-exertion",
+    family: "condition",
+    tone: "strained",
+    volume: "murmur",
+    knowledgeBasis: "self-felt-exhaustion",
+    priority: 260_000,
+    salience: 440_000,
+    variantSeed: 1_597,
+    durationSteps: 8,
+  };
+}
+
 function accepted(
   state: SituatedExpressionState,
   intent: SituatedExpressionIntent,
@@ -168,6 +186,54 @@ function accepted(
 }
 
 describe("generic situated-expression kernel", () => {
+  it("keeps effort sparse and yields its shared channel to urgent warnings", () => {
+    const effort = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      effortIntent("player-dry-exhaustion:effort-1"),
+    );
+    expect(effort).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "need-rest-after-exertion",
+        family: "condition",
+        vocalization: "strained",
+      },
+    });
+    expect(projectSituatedExpression(effort.event)?.text)
+      .toMatch(/^(Need a minute\.|Just a second\.|Catch my breath\.)$/u);
+    if (effort.state === null) throw new Error("Effort fixture omitted state");
+    const afterLine = advanceSituatedExpression(effort.state, 8);
+    if (afterLine === null) throw new Error("Effort fixture failed to advance");
+    expect(reduceSituatedExpression(
+      afterLine,
+      effortIntent("player-dry-exhaustion:effort-2"),
+    )).toMatchObject({ accepted: false, reason: "meaning-cooldown" });
+
+    const warning = accepted(
+      createSituatedExpressionState(),
+      cargoLossIntent("cargo:loss:warning-first"),
+    );
+    expect(reduceSituatedExpression(
+      warning,
+      effortIntent("player-dry-exhaustion:effort-blocked"),
+    )).toMatchObject({
+      accepted: false,
+      reason: "active-expression-has-priority",
+      state: warning,
+    });
+    expect(reduceSituatedExpression(
+      accepted(
+        createSituatedExpressionState(),
+        effortIntent("player-dry-exhaustion:effort-first"),
+      ),
+      cargoLossIntent("cargo:loss:warning-interrupts"),
+    )).toMatchObject({
+      accepted: true,
+      reason: "interrupted",
+      event: { meaning: "alarm-at-cargo-loss" },
+    });
+  });
+
   it("projects the keeper's committed reply as fixed authored speech", () => {
     const reduction = reduceSituatedExpression(
       createSituatedExpressionState(),

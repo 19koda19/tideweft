@@ -25,6 +25,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "fish-crow-alarm-call",
   "human-danger-warning",
   "keeper-secure-store-response",
+  "need-rest-after-exertion",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -34,6 +35,7 @@ export const SITUATED_EXPRESSION_FAMILIES = Object.freeze([
   "work",
   "animal-signal",
   "warning",
+  "condition",
 ] as const);
 export type SituatedExpressionFamily = (typeof SITUATED_EXPRESSION_FAMILIES)[number];
 
@@ -63,6 +65,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-perceived-threat",
   "self-weather-distress",
   "self-committed-store-closure",
+  "self-felt-exhaustion",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
@@ -309,6 +312,16 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 30,
     familyCooldownSteps: 10,
   }),
+  "need-rest-after-exertion": Object.freeze({
+    family: "condition",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
+      "self-felt-exhaustion",
+    ]),
+    tones: new Set<SituatedExpressionTone>(["strained"]),
+    volumes: new Set<SituatedExpressionVolume>(["murmur"]),
+    meaningCooldownSteps: 36,
+    familyCooldownSteps: 12,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -409,6 +422,20 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.keeper-secure-store-response.0",
       text: "I'll bar the storehouse door.",
+    }),
+  ]),
+  "need-rest-after-exertion": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.need-rest-after-exertion.0",
+      text: "Need a minute.",
+    }),
+    Object.freeze({
+      key: "situated-expression.en.v1.need-rest-after-exertion.1",
+      text: "Just a second.",
+    }),
+    Object.freeze({
+      key: "situated-expression.en.v1.need-rest-after-exertion.2",
+      text: "Catch my breath.",
     }),
   ]),
 });

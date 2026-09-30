@@ -12,6 +12,7 @@ const PRODUCTION_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 const DEV_ORIGIN = 'http://127.0.0.1:5173';
 const DEV_ENTRY_URL = `${DEV_ORIGIN}/`;
 const SMOKE_COMPATIBILITY_COLUMNS = 96;
+const SMOKE_COMPATIBILITY_ROWS = 72;
 const SMOKE_REGIONAL_COLUMNS = 120;
 const SMOKE_REGIONAL_ROWS = 120;
 // The deterministic smoke seed starts at compatibility tile 32,68. Its
@@ -28,7 +29,7 @@ const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
 const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.60';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 51;
-const SMOKE_EXPECTED_SAVE_VERSION = 41;
+const SMOKE_EXPECTED_SAVE_VERSION = 42;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -2180,10 +2181,33 @@ async function installSmokeTideHarpFixture(contents) {
       detoured: true,
       compatibilityTrace: [],
     };
+    const travelPayload = JSON.parse(envelope.regionalTravel);
+    const playerGlobalX = travelPayload.origin.x * 1_000 + player.x;
+    const playerGlobalY = travelPayload.origin.y * 1_000 + player.y;
+    const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
+    const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 1,
+      version: 10,
+      intervalStartPosition: {
+        region: { x: playerRegionX, y: playerRegionY },
+        localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},
+        localY: playerGlobalY - playerRegionY * ${SMOKE_COMPATIBILITY_ROWS * 1_000},
+      },
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
       playerStepsSinceWorldTick: 0,
       playerSenseSamples: [],
+      playerStepStateSamples: [],
+      playerStepStateAnchor: {
+        version: 1,
+        sampleOrdinal: 0,
+        stamina: player.stamina,
+        mode: player.mode,
+      },
+      actorVocalizationSamples: [],
+      animalContactAcousticCarry: { version: 1, records: [] },
+      situatedExpressionChannels: { version: 1, channels: [] },
+      situatedExpressionAdmissions: { version: 1, records: [] },
+      situatedExpressionCausalAuthority: { version: 1, records: [] },
       nextPlayerSenseSampleOrdinal: 0,
     };
 
@@ -2499,10 +2523,33 @@ async function installSmokeAdriftFixture(contents) {
     player.sweepSupport = null;
     player.currentTrace = [candidate.index];
     player.surveyTrace = [candidate.index];
+    const travelPayload = JSON.parse(envelope.regionalTravel);
+    const playerGlobalX = travelPayload.origin.x * 1_000 + player.x;
+    const playerGlobalY = travelPayload.origin.y * 1_000 + player.y;
+    const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
+    const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 1,
+      version: 10,
+      intervalStartPosition: {
+        region: { x: playerRegionX, y: playerRegionY },
+        localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},
+        localY: playerGlobalY - playerRegionY * ${SMOKE_COMPATIBILITY_ROWS * 1_000},
+      },
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
       playerStepsSinceWorldTick: 0,
       playerSenseSamples: [],
+      playerStepStateSamples: [],
+      playerStepStateAnchor: {
+        version: 1,
+        sampleOrdinal: 0,
+        stamina: player.stamina,
+        mode: player.mode,
+      },
+      actorVocalizationSamples: [],
+      animalContactAcousticCarry: { version: 1, records: [] },
+      situatedExpressionChannels: { version: 1, channels: [] },
+      situatedExpressionAdmissions: { version: 1, records: [] },
+      situatedExpressionCausalAuthority: { version: 1, records: [] },
       nextPlayerSenseSampleOrdinal: 0,
     };
 

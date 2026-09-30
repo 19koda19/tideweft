@@ -54,7 +54,12 @@ The published `29ea8dc` checkpoint gives each discovered place one stable derive
 The current unpublished Living Voice source makes expression belong to the
 actor rather than to the system log. Mild player stumbles, severe near-falls,
 danger to important carried cargo, an actual parcel breaking loose, and
-successful recovery can produce one restrained contextual line. The first
+successful recovery can produce one restrained contextual line. A committed
+dry-ground movement step that takes positive stamina exactly to zero may also
+produce one self-felt restrained murmur through the same situated-expression,
+acoustic, and perception authority. Idle and recovery steps, water or rescue,
+an already exhausted player, and a step already owned by a traversal incident
+remain silent. The first
 porter-work extension lets a resident porter react after that exact
 persistent human commits a real heavy-Promise departure with physical cargo
 custody. It does not fire for light cargo or an attempted or stale action, and
@@ -78,9 +83,15 @@ to the exact committed reason, physical source position, interval phase, and
 semantic memory; sound cannot be deleted, amplified, or relabeled independently
 on reload. The same interval records its exact phase-zero player pose, replays
 the bounded physical step path through movement salience, facing, velocity, and
-final position, and cross-checks player traversal/recovery speech against a
-separate causal receipt created by the physical transaction. For the porter,
-the phase-zero saved listener position, facing,
+final position, and cross-checks player traversal/recovery speech against
+separate causal authority created by the physical transaction. Dry-exhaustion
+expression additionally requires the aligned generic movement step-state
+trajectory, its pre-trajectory stamina/mode anchor, continuous later samples,
+and the final authoritative player state. The admitting exhaustion step must
+also continue its exact movement-owned predecessor; a lawful but
+unauthenticated between-step gathering gap may persist, but it cannot become
+speech evidence. The expression adapter cannot supply its own stamina history. For
+the porter, the phase-zero saved listener position, facing,
 hearing result, and direct sight must reproduce through the shared perception
 model. Consuming the interval retires its old channel state.
 
@@ -217,6 +228,16 @@ source-ID-excluding evaluator; the dog applies its registered hearing
 sensitivity and may notice ordinary contact without treating it as a danger
 alarm. Broader species, coarse, and cross-frame response to physical contact
 remain incomplete.
+
+The player's sparse dry-exhaustion murmur is the vocal consequence of a
+committed movement-and-stamina transition, not a footstep caption. It uses the
+shared situated-expression channel, self reception, acoustic sample, bounded
+presentation arbitration, and an independently retained movement-owned
+step-state sample whose anchored state sequence survives later lawful recovery.
+The exhaustion sample must continue its exact predecessor, so a between-step
+stamina gap cannot be relabeled as the cause of the murmur.
+It does not fire from idle or recovery, water or rescue,
+already-zero stamina, or a step with a competing traversal incident.
 
 Active Living Voice channels, remaining legacy visible resident greeting/state
 speech, animal calls, and eligible physical candidates enter one Chart/Relief

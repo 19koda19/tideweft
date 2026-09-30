@@ -4,6 +4,7 @@ import { createRegionCoord } from "../sim/regions";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import { situatedExpressionEventIdForTrigger } from "./situatedExpression";
 import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
+import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 import {
   SITUATED_EXPRESSION_ADMISSION_LEDGER_MAX_RECORDS,
   SITUATED_EXPRESSION_ADMISSION_MAX_SEPARATED_ENTITY_IDS,
@@ -16,6 +17,7 @@ import {
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
+  createPlayerExhaustionExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
@@ -172,6 +174,20 @@ describe("situated-expression admission ledger", () => {
       sampleOrdinal: 7,
       admittedAtPlayerStepPhase: 9,
     });
+    const effortEvidence = {
+      committedWorldTick: 912,
+      admittedAtPlayerStepPhase: 5,
+      acceptedDistanceUnits: 105,
+      resolution: "dry-exhaustion-camp" as const,
+    };
+    const effortPolicy = playerEffortExpressionPolicy(PLAYER_ID, effortEvidence);
+    if (effortPolicy === null) throw new Error("Expected effort policy fixture");
+    const effort = createPlayerExhaustionExpressionAdmissionRecord({
+      sourceActorId: PLAYER_ID,
+      triggerEventId: effortPolicy.triggerEventId,
+      sampleOrdinal: 0,
+      ...effortEvidence,
+    });
 
     expect([
       traversal,
@@ -182,6 +198,7 @@ describe("situated-expression admission ledger", () => {
       guardianWhine,
       crowAlarm,
       humanWarning,
+      effort,
       legacy,
     ].map((record) => record?.kind))
       .toEqual([
@@ -193,6 +210,7 @@ describe("situated-expression admission ledger", () => {
       "guardian-dog-shelter-whine",
       "core-wildlife-fish-crow-alarm",
       "human-danger-warning",
+      "player-exhaustion",
       "legacy-v33-player",
     ]);
     for (const record of [
@@ -204,6 +222,7 @@ describe("situated-expression admission ledger", () => {
       guardianWhine,
       crowAlarm,
       humanWarning,
+      effort,
       legacy,
     ]) {
       expect(record?.eventId).toBe(situatedExpressionEventIdForTrigger(
@@ -214,6 +233,53 @@ describe("situated-expression admission ledger", () => {
     }
     expect(Object.isFrozen(porter?.listenerPosition)).toBe(true);
     expect(Object.isFrozen(porter?.listenerPosition.region)).toBe(true);
+  });
+
+  it("binds player exhaustion to one exact dry movement transition", () => {
+    const evidence = {
+      committedWorldTick: 37,
+      admittedAtPlayerStepPhase: 4,
+      acceptedDistanceUnits: 105,
+      resolution: "dry-exhaustion-camp" as const,
+    };
+    const policy = playerEffortExpressionPolicy(PLAYER_ID, evidence);
+    if (policy === null) throw new Error("Expected effort policy fixture");
+    const input = {
+      sourceActorId: PLAYER_ID,
+      triggerEventId: policy.triggerEventId,
+      sampleOrdinal: 0,
+      ...evidence,
+    };
+    const canonical = createPlayerExhaustionExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(PLAYER_ID, policy.triggerEventId),
+      kind: "player-exhaustion",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+
+    for (const mutation of [
+      { sourceActorId: PORTER_ID },
+      { committedWorldTick: -0 },
+      { admittedAtPlayerStepPhase: 0 },
+      { acceptedDistanceUnits: 0 },
+      { resolution: "swept" },
+      { triggerEventId: "player-dry-exhaustion:0000000000000000" },
+    ]) {
+      expect(createPlayerExhaustionExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      } as never)).toBeNull();
+    }
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      becameSwept: false,
+    })).toBeNull();
   });
 
   it("binds a fish-crow alarm to one regional owner and direct observation", () => {

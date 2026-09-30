@@ -6,6 +6,7 @@ import {
   SITUATED_EXPRESSION_ADMISSION_MAX_PLAYER_STEP_PHASE,
   canonicalizeSituatedExpressionAdmissionRecord,
   type PlayerFallRecoveryExpressionAdmissionRecord,
+  type PlayerExhaustionExpressionAdmissionRecord,
   type PlayerTraversalExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
 import {
@@ -21,7 +22,8 @@ export const SITUATED_EXPRESSION_CAUSAL_AUTHORITY_MAX_RECORDS =
 
 export type PlayerSituatedExpressionAdmissionRecord =
   | PlayerTraversalExpressionAdmissionRecord
-  | PlayerFallRecoveryExpressionAdmissionRecord;
+  | PlayerFallRecoveryExpressionAdmissionRecord
+  | PlayerExhaustionExpressionAdmissionRecord;
 
 export interface SituatedExpressionCausalAuthorityRecord {
   readonly version: typeof SITUATED_EXPRESSION_CAUSAL_AUTHORITY_VERSION;
@@ -74,6 +76,15 @@ export function situatedExpressionAdmissionCausalDigest(
       separationEventId: admission.separationEventId,
     });
   }
+  if (admission.kind === "player-exhaustion") {
+    return hashCanonical({
+      version: SITUATED_EXPRESSION_CAUSAL_AUTHORITY_VERSION,
+      kind: admission.kind,
+      committedWorldTick: admission.committedWorldTick,
+      acceptedDistanceUnits: admission.acceptedDistanceUnits,
+      resolution: admission.resolution,
+    });
+  }
   return hashCanonical({
     version: SITUATED_EXPRESSION_CAUSAL_AUTHORITY_VERSION,
     kind: admission.kind,
@@ -89,8 +100,15 @@ export function createSituatedExpressionCausalAuthorityRecord(
   playerPosition: WorldPosition,
 ): SituatedExpressionCausalAuthorityRecord | null {
   const admission = canonicalPlayerAdmission(admissionValue);
+  if (admission === null) return null;
   const causalDigest = situatedExpressionAdmissionCausalDigest(admission);
-  if (admission === null || causalDigest === null) return null;
+  if (causalDigest === null) return null;
+  if (
+    admission.kind === "player-exhaustion"
+    && admission.committedWorldTick !== committedWorldTick
+  ) {
+    return null;
+  }
   return canonicalizeSituatedExpressionCausalAuthorityRecord({
     version: SITUATED_EXPRESSION_CAUSAL_AUTHORITY_VERSION,
     eventId: admission.eventId,
@@ -234,12 +252,16 @@ export function situatedExpressionAdmissionMatchesCausalAuthority(
     && authority.triggerEventId === admission.triggerEventId
     && authority.sampleOrdinal === admission.sampleOrdinal
     && authority.admittedAtPlayerStepPhase === admission.admittedAtPlayerStepPhase
+    && (admission.kind !== "player-exhaustion"
+      || authority.committedWorldTick === admission.committedWorldTick)
     && authority.causalDigest === digest;
 }
 
 function canonicalPlayerAdmission(value: unknown): PlayerSituatedExpressionAdmissionRecord | null {
   const admission = canonicalizeSituatedExpressionAdmissionRecord(value);
-  return admission?.kind === "player-traversal" || admission?.kind === "player-fall-recovery"
+  return admission?.kind === "player-traversal"
+      || admission?.kind === "player-fall-recovery"
+      || admission?.kind === "player-exhaustion"
     ? admission
     : null;
 }

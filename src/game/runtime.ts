@@ -131,6 +131,16 @@ import {
   type TravelPace,
 } from "./player";
 import {
+  canonicalizePlayerStepStateAnchor,
+  canonicalizePlayerStepStateSample,
+  createPlayerStepStateAnchor,
+  createPlayerStepStateSample,
+  playerStepStateHasExactPredecessor,
+  playerStepStateProvesDryExhaustion,
+  type PlayerStepStateAnchor,
+  type PlayerStepStateSample,
+} from "./playerStepState";
+import {
   PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE,
   advancePlayerTimeActionOneStep,
   canonicalizePlayerTimeAction,
@@ -173,6 +183,7 @@ import {
   playerTraversalExpressionIntent,
   type PlayerTraversalCargoExpressionContext,
 } from "./playerTraversalExpression";
+import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import {
   playerExpressionAdmissionSoundPolicy,
   playerExpressionEventMatchesAdmission,
@@ -186,11 +197,13 @@ import {
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
+  createPlayerExhaustionExpressionAdmissionRecord,
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   createSettlementKeeperStoreResponseExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
+  type PlayerExhaustionExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
@@ -1029,6 +1042,7 @@ function recentMeaningAcousticTuples(
   switch (meaning) {
     case "steady-after-stumble":
     case "guardian-dog-shelter-whine":
+    case "need-rest-after-exertion":
       return [{ volume: "murmur", interrupt: "none" }];
     case "relief-after-near-fall":
     case "relief-after-cargo-recovery":
@@ -1055,7 +1069,7 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** First save whose situated-expression union owns the keeper's store reply. */
+/** First save whose situated-expression union owns dry-exhaustion effort. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
 /** First save whose pending perception carry owns physical animal contact. */
 const ANIMAL_CONTACT_GAME_SAVE_VERSION = 40;
@@ -1103,7 +1117,7 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 9 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 10 as const;
 const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
@@ -1125,7 +1139,7 @@ const LEGACY_GAME_SAVE_VERSION = 1;
  * arbitrary unknown number must remain corrupt rather than becoming a reset
  * authorization by accident.
  */
-const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([0]);
+const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([0, 41]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
   FIELD_RESOURCE_GAME_SAVE_VERSION,
@@ -1233,6 +1247,10 @@ interface PlayerPerceptionCarry {
   readonly intervalStartFacingMilliRadians: number;
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
+  /** Parallel movement facts; null marks unsupported pre-v42 interval history. */
+  readonly playerStepStateSamples: readonly (PlayerStepStateSample | null)[];
+  /** State immediately before the first non-null movement fact. */
+  readonly playerStepStateAnchor: PlayerStepStateAnchor | null;
   readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
   /** Committed contact facts waiting for the next bounded living-actor hearing interval. */
   readonly animalContactAcousticCarry: AnimalContactAcousticCarry;
@@ -10385,6 +10403,11 @@ export async function createTideweftRuntime(
   let commandQueue: SimCommand[] = [];
   let playerStepsSinceWorldTick = 0;
   let playerSenseSamples: PlayerSenseSample[] = [];
+  let playerStepStateSamples: Array<PlayerStepStateSample | null> = [];
+  let playerStepStateAnchor = createPlayerStepStateAnchor(0, player.stamina, player.mode);
+  if (playerStepStateAnchor === null) {
+    throw new Error("Player perception interval has no canonical state anchor");
+  }
   let nextPlayerSenseSampleOrdinal = 0;
   // Ephemeral text is never save authority and therefore never replays after
   // reload. The structured event still feeds this step's audio and NPC hearing.
@@ -10633,6 +10656,12 @@ export async function createTideweftRuntime(
     promiseJourney = loaded.promiseJourney;
     playerStepsSinceWorldTick = loaded.perceptionCarry.playerStepsSinceWorldTick;
     playerSenseSamples = [...loaded.perceptionCarry.playerSenseSamples];
+    playerStepStateSamples = [...loaded.perceptionCarry.playerStepStateSamples];
+    playerStepStateAnchor = loaded.perceptionCarry.playerStepStateAnchor
+      ?? createPlayerStepStateAnchor(playerStepsSinceWorldTick, player.stamina, player.mode);
+    if (playerStepStateAnchor === null) {
+      throw new Error("Loaded player perception interval has no canonical state anchor");
+    }
     nextPlayerSenseSampleOrdinal = loaded.perceptionCarry.nextPlayerSenseSampleOrdinal;
     rebuildRegionalWorldView();
     normalizePlayerForRuntime(player, worldView, economyView);
@@ -11686,7 +11715,10 @@ export async function createTideweftRuntime(
    * the next authoritative world tick. Residents later receive only contacts
    * their own sensory queries admit; this buffer is never itself NPC knowledge.
    */
-  function capturePlayerSenseSample(acousticEvent: WorldAcousticEvent | null): void {
+  function capturePlayerSenseSample(
+    acousticEvent: WorldAcousticEvent | null,
+    stepStateSample: PlayerStepStateSample,
+  ): void {
     const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
     if (position === null) throw new Error("Player has no canonical sensory position");
     const movementSalience = playerMovementSalienceForDelta(
@@ -11743,8 +11775,12 @@ export async function createTideweftRuntime(
       playerSenseSamples = playerSenseSamples.slice(
         playerSenseSamples.length - HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES + 1,
       );
+      playerStepStateSamples = playerStepStateSamples.slice(
+        playerStepStateSamples.length - HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES + 1,
+      );
     }
     playerSenseSamples.push(sample);
+    playerStepStateSamples.push(stepStateSample);
   }
 
   function expressionAcoustics(
@@ -11937,7 +11973,7 @@ export async function createTideweftRuntime(
     ) => SituatedExpressionAdmissionRecord | null,
   ): boolean {
     if (intent === null) return false;
-    // Sound, memory, causal receipt, and presentation are one atomic admission.
+    // Sound, memory, causal authority, and presentation are one atomic admission.
     // At the bounded sound budget the ninth candidate remains silent instead
     // of creating a channel that nearby humans could never receive.
     if (
@@ -11986,6 +12022,7 @@ export async function createTideweftRuntime(
       if (
         admission?.kind === "player-traversal"
         || admission?.kind === "player-fall-recovery"
+        || admission?.kind === "player-exhaustion"
       ) {
         const authorityRecord = createSituatedExpressionCausalAuthorityRecord(
           admission,
@@ -12115,11 +12152,16 @@ export async function createTideweftRuntime(
     };
   }
 
-  function clearPlayerSenseSamples(): void {
+  function clearPlayerPerceptionInterval(): void {
     if (playerStepsSinceWorldTick !== 0) {
       throw new Error("Player perception interval may only begin at phase zero");
     }
     playerSenseSamples = [];
+    playerStepStateSamples = [];
+    playerStepStateAnchor = createPlayerStepStateAnchor(0, player.stamina, player.mode);
+    if (playerStepStateAnchor === null) {
+      throw new Error("Player perception interval reset lost its state anchor");
+    }
     nextPlayerSenseSampleOrdinal = 0;
     actorVocalizationSamples = [];
     situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
@@ -12345,6 +12387,9 @@ export async function createTideweftRuntime(
     advancePendingParcelTarget();
     const beforeX = player.x;
     const beforeY = player.y;
+    const staminaBeforePlayerStep = player.stamina;
+    const modeBeforePlayerStep = player.mode;
+    const startingTileWaterDepth = worldView.terrain.tiles[playerTileIndex(player)]?.waterDepth;
     const acceptedControl = currentControl();
     lastAdriftControl = player.mode === "swept"
       ? { ...acceptedControl }
@@ -12364,7 +12409,10 @@ export async function createTideweftRuntime(
       economyView,
       worldView,
     );
-    const acceptedDistance = Math.round(Math.hypot(player.x - beforeX, player.y - beforeY));
+    const acceptedDistance = Math.round(Math.hypot(
+      player.x - beforeX,
+      player.y - beforeY,
+    ));
     const incidentPosition = result.traversalIncident
       ? looseCargoPositionAtRegionalPlayer(
           worldView,
@@ -12418,6 +12466,28 @@ export async function createTideweftRuntime(
       // the bounded visible frame moved. Retarget metadata in place so the
       // renderer keeps the exact same terrain/camera objects across the seam.
       rebindRegionalWorldViewWindow(worldView, regionalTransition.state.window);
+    }
+    const endingTileWaterDepth = worldView.terrain.tiles[playerTileIndex(player)]?.waterDepth;
+    if (startingTileWaterDepth === undefined || endingTileWaterDepth === undefined) {
+      throw new Error("Player step has no canonical terrain-depth authority");
+    }
+    const playerStepStateSample = createPlayerStepStateSample({
+      sampleOrdinal: nextPlayerSenseSampleOrdinal,
+      staminaBefore: staminaBeforePlayerStep,
+      staminaAfter: player.stamina,
+      modeBefore: modeBeforePlayerStep,
+      modeAfter: player.mode,
+      acceptedDistanceUnits: acceptedDistance,
+      moved: result.moved,
+      exhausted: result.exhausted,
+      rescued: result.rescued,
+      becameSwept: result.becameSwept,
+      traversalIncidentKind: result.traversalIncident?.kind ?? null,
+      startingWaterDepth: startingTileWaterDepth,
+      endingWaterDepth: endingTileWaterDepth,
+    });
+    if (playerStepStateSample === null) {
+      throw new Error("Player step state failed canonical validation");
     }
     if (adriftTapTicksRemaining > 0) adriftTapTicksRemaining -= 1;
     if (adriftTapTicksRemaining <= 0 || player.mode !== "swept") {
@@ -12564,12 +12634,56 @@ export async function createTideweftRuntime(
         }),
       );
     }
+    const playerStepStatePredecessor = playerStepStateAnchor !== null
+      && playerStepStateSample.sampleOrdinal === playerStepStateAnchor.sampleOrdinal
+      ? playerStepStateAnchor
+      : playerStepStateSamples[playerStepStateSample.sampleOrdinal - 1] ?? null;
+    if (
+      playerStepStateProvesDryExhaustion(playerStepStateSample)
+      && playerStepStateHasExactPredecessor(
+        playerStepStateSample,
+        playerStepStatePredecessor,
+      )
+    ) {
+      const effortPosition = playerWorldPositionInRegionalWindow(
+        regionalTravel.window,
+        player,
+      );
+      if (effortPosition === null) {
+        throw new Error("Dry exhaustion has no canonical expression position");
+      }
+      const admittedAtPlayerStepPhase = Math.min(
+        PLAYER_STEPS_PER_WORLD_TICK - 1,
+        playerStepsSinceWorldTick + 1,
+      );
+      const effortIntent = playerEffortExpressionIntent({
+        sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+        position: effortPosition,
+        committedWorldTick: world.meta.completedTick,
+        admittedAtPlayerStepPhase,
+        acceptedDistanceUnits: playerStepStateSample.acceptedDistanceUnits,
+        resolution: "dry-exhaustion-camp",
+      });
+      acceptSituatedExpression(
+        effortIntent,
+        { kind: "self" },
+        (event, sampleOrdinal) => createPlayerExhaustionExpressionAdmissionRecord({
+          sourceActorId: event.sourceActorId,
+          triggerEventId: event.triggerEventId,
+          sampleOrdinal,
+          admittedAtPlayerStepPhase,
+          committedWorldTick: world.meta.completedTick,
+          acceptedDistanceUnits: playerStepStateSample.acceptedDistanceUnits,
+          resolution: "dry-exhaustion-camp",
+        }),
+      );
+    }
     const perceivedStepAcousticEvent = [...stepAcousticEvents].sort(
       (left, right) => right.intensity - left.intensity
         || right.salience - left.salience
         || left.eventId.localeCompare(right.eventId),
     )[0] ?? null;
-    capturePlayerSenseSample(perceivedStepAcousticEvent);
+    capturePlayerSenseSample(perceivedStepAcousticEvent, playerStepStateSample);
     if (result.enteredTile !== null && result.settlementId !== null) {
       recordHarborArrival(result.settlementId);
       const unlockedTool = unlockFieldToolAtSettlement(player, worldView, result.settlementId);
@@ -13746,7 +13860,7 @@ export async function createTideweftRuntime(
       if (closingSituatedExpressionInterval === null) {
         throw new Error("Situated expression interval could not close canonically");
       }
-      clearPlayerSenseSamples();
+      clearPlayerPerceptionInterval();
       commandQueue = [];
       fieldResourceEcology = advanceFieldResourceEcology(
         fieldResourceCatalog,
@@ -16119,7 +16233,7 @@ export async function createTideweftRuntime(
     accumulator = 0;
     previousFrame = 0;
     playerStepsSinceWorldTick = 0;
-    clearPlayerSenseSamples();
+    clearPlayerPerceptionInterval();
     animalContactAcousticCarry = createAnimalContactAcousticCarry();
     activeWorldAcousticPresentations = Object.freeze([]);
     terrainPrefetchJobs = [];
@@ -17562,6 +17676,8 @@ export async function createTideweftRuntime(
       intervalStartFacingMilliRadians: playerPerceptionIntervalStartFacingMilliRadians,
       playerStepsSinceWorldTick,
       playerSenseSamples,
+      playerStepStateSamples,
+      playerStepStateAnchor,
       actorVocalizationSamples,
       animalContactAcousticCarry,
       situatedExpressionChannels,
@@ -17810,6 +17926,8 @@ export async function createTideweftRuntime(
       commandQueue: structuredClone(commandQueue),
       playerStepsSinceWorldTick,
       playerSenseSamples: [...playerSenseSamples],
+      playerStepStateSamples: [...playerStepStateSamples],
+      playerStepStateAnchor,
       actorVocalizationSamples: [...actorVocalizationSamples],
       animalContactAcousticCarry,
       nextPlayerSenseSampleOrdinal,
@@ -17876,6 +17994,8 @@ export async function createTideweftRuntime(
       commandQueue = prior.commandQueue;
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       playerSenseSamples = prior.playerSenseSamples;
+      playerStepStateSamples = prior.playerStepStateSamples;
+      playerStepStateAnchor = prior.playerStepStateAnchor;
       actorVocalizationSamples = prior.actorVocalizationSamples;
       animalContactAcousticCarry = prior.animalContactAcousticCarry;
       nextPlayerSenseSampleOrdinal = prior.nextPlayerSenseSampleOrdinal;
@@ -18310,6 +18430,8 @@ function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
     intervalStartFacingMilliRadians: 0,
     playerStepsSinceWorldTick: 0,
     playerSenseSamples: Object.freeze([]),
+    playerStepStateSamples: Object.freeze([]),
+    playerStepStateAnchor: null,
     actorVocalizationSamples: Object.freeze([]),
     animalContactAcousticCarry: createAnimalContactAcousticCarry(),
     situatedExpressionChannels: createSituatedExpressionChannelBank(),
@@ -18353,7 +18475,6 @@ function canonicalPlayerPerceptionCarry(
     || expectedVersion === GUARDIAN_DOG_WARNING_PERCEPTION_CARRY_VERSION
     || expectedVersion === WORKING_PEOPLE_PERCEPTION_CARRY_VERSION;
   const expectedKeys = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
-      || expectedVersion === ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     ? [
         "actorVocalizationSamples",
         "animalContactAcousticCarry",
@@ -18361,12 +18482,28 @@ function canonicalPlayerPerceptionCarry(
         "intervalStartPosition",
         "nextPlayerSenseSampleOrdinal",
         "playerSenseSamples",
+        "playerStepStateAnchor",
+        "playerStepStateSamples",
         "playerStepsSinceWorldTick",
         "situatedExpressionAdmissions",
         "situatedExpressionCausalAuthority",
         "situatedExpressionChannels",
         "version",
       ]
+    : expectedVersion === ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
+      ? [
+          "actorVocalizationSamples",
+          "animalContactAcousticCarry",
+          "intervalStartFacingMilliRadians",
+          "intervalStartPosition",
+          "nextPlayerSenseSampleOrdinal",
+          "playerSenseSamples",
+          "playerStepsSinceWorldTick",
+          "situatedExpressionAdmissions",
+          "situatedExpressionCausalAuthority",
+          "situatedExpressionChannels",
+          "version",
+        ]
     : expectedVersion === HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
         || expectedVersion === GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION
         || expectedVersion === GUARDIAN_DOG_GROWL_PERCEPTION_CARRY_VERSION
@@ -18403,6 +18540,8 @@ function canonicalPlayerPerceptionCarry(
   const phase = record.playerStepsSinceWorldTick;
   const nextOrdinal = record.nextPlayerSenseSampleOrdinal;
   const rawSamples = record.playerSenseSamples;
+  const rawStepStateAnchor = record.playerStepStateAnchor;
+  const rawStepStates = record.playerStepStateSamples;
   const currentIntervalStartPosition = record.intervalStartPosition;
   const currentIntervalStartFacing = record.intervalStartFacingMilliRadians;
   if (
@@ -18417,6 +18556,8 @@ function canonicalPlayerPerceptionCarry(
     || !Array.isArray(rawSamples)
     || rawSamples.length !== phase
     || rawSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
+    || (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+      && (!Array.isArray(rawStepStates) || rawStepStates.length !== phase))
     || (hasCurrentShape
       && (!isWorldPosition(currentIntervalStartPosition)
         || typeof currentIntervalStartFacing !== "number"
@@ -18466,6 +18607,34 @@ function canonicalPlayerPerceptionCarry(
     });
     if (sample === null || stableStringify(sample) !== stableStringify(candidate)) return null;
     samples.push(sample);
+  }
+
+  const stepStateSamples: Array<PlayerStepStateSample | null> = [];
+  let stepStateAnchor: PlayerStepStateAnchor | null = null;
+  if (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION) {
+    stepStateAnchor = canonicalizePlayerStepStateAnchor(rawStepStateAnchor);
+    if (stepStateAnchor === null || stepStateAnchor.sampleOrdinal > (phase as number)) {
+      return null;
+    }
+    for (let ordinal = 0; ordinal < (rawStepStates as readonly unknown[]).length; ordinal += 1) {
+      const raw = (rawStepStates as readonly unknown[])[ordinal];
+      if (raw === null) {
+        if (ordinal >= stepStateAnchor.sampleOrdinal) return null;
+        stepStateSamples.push(null);
+        continue;
+      }
+      if (ordinal < stepStateAnchor.sampleOrdinal) return null;
+      const sample = canonicalizePlayerStepStateSample(raw);
+      if (sample === null || sample.sampleOrdinal !== ordinal) return null;
+      stepStateSamples.push(sample);
+    }
+  } else {
+    // Historical schemas never owned stamina/mode step history. Preserve the
+    // interval phase honestly without manufacturing evidence future meanings
+    // could consume; new current steps append after this null prefix.
+    for (let ordinal = 0; ordinal < (phase as number); ordinal += 1) {
+      stepStateSamples.push(null);
+    }
   }
 
   const vocalizationSamples: SupplementalSoundSample[] = [];
@@ -18634,6 +18803,8 @@ function canonicalPlayerPerceptionCarry(
     intervalStartFacingMilliRadians,
     playerStepsSinceWorldTick: phase as number,
     playerSenseSamples: Object.freeze(samples),
+    playerStepStateSamples: Object.freeze(stepStateSamples),
+    playerStepStateAnchor: stepStateAnchor,
     actorVocalizationSamples: Object.freeze(vocalizationSamples),
     animalContactAcousticCarry: animalContactCarry,
     situatedExpressionChannels,
@@ -18790,9 +18961,10 @@ function perceptionCarryUsesOnlyFishCrowSemantics(
 }
 
 /**
- * Cumulative semantic fence for every current-shape carry before outer v41.
- * Nested expression schemas intentionally retain version 1, so every v34-v40
- * reader must reject the keeper reply introduced only by v41/carry-v9.
+ * Cumulative semantic fence for every supported current-shape carry before
+ * outer v42. Nested expression schemas intentionally retain version 1, so
+ * every v34-v40 reader rejects both the keeper reply introduced in retired
+ * development v41 and the effort semantic introduced by v42/carry-v10.
  */
 function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
   bank: SituatedExpressionChannelBank,
@@ -18800,13 +18972,19 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
 ): boolean {
   return admissions.records.every(({ kind }) => (
     kind !== "settlement-keeper-store-response"
+    && kind !== "player-exhaustion"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
-    return channel.state.recent.every(({ meaning }) => (
+    return channel.state.recent.every(({ meaning, family }) => (
       meaning !== "keeper-secure-store-response"
+      && meaning !== "need-rest-after-exertion"
+      && family !== "condition"
     )) && (active === null || (
       active.meaning !== "keeper-secure-store-response"
+      && active.meaning !== "need-rest-after-exertion"
+      && active.family !== "condition"
       && active.knowledgeBasis !== "self-committed-store-closure"
+      && active.knowledgeBasis !== "self-felt-exhaustion"
     ));
   });
 }
@@ -18925,16 +19103,59 @@ function playerPerceptionCarryMatchesPosition(
 ): boolean {
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
   if (position === null) return false;
+  const spatialWorld = createRegionalWorldView(
+    economy,
+    regionalTravel.window,
+    { discovered: player.discovered, depthSoundings: player.depthSoundings },
+    { immutable: true },
+  );
   let priorIntervalPosition = carry.intervalStartPosition;
   let replayedFacingMilliRadians = carry.intervalStartFacingMilliRadians;
   let finalDeltaX = 0;
   let finalDeltaY = 0;
-  for (const sample of carry.playerSenseSamples) {
+  let priorStepStamina = carry.playerStepStateAnchor?.stamina ?? null;
+  let priorStepMode = carry.playerStepStateAnchor?.mode ?? null;
+  for (let ordinal = 0; ordinal < carry.playerSenseSamples.length; ordinal += 1) {
+    const sample = carry.playerSenseSamples[ordinal];
+    if (sample === undefined) return false;
     let delta: ReturnType<typeof worldPositionDelta>;
     try {
       delta = worldPositionDelta(priorIntervalPosition, sample.position);
     } catch {
       return false;
+    }
+    const stepState = carry.playerStepStateSamples[ordinal];
+    if (stepState !== null && stepState !== undefined) {
+      const startingTile = playerPerceptionTileAtWorldPosition(
+        spatialWorld,
+        regionalTravel.window,
+        priorIntervalPosition,
+      );
+      const endingTile = playerPerceptionTileAtWorldPosition(
+        spatialWorld,
+        regionalTravel.window,
+        sample.position,
+      );
+      if (
+        stepState.sampleOrdinal !== ordinal
+        || carry.playerStepStateAnchor === null
+        || ordinal < carry.playerStepStateAnchor.sampleOrdinal
+        || priorStepStamina === null
+        || priorStepMode === null
+        // Gathering is the sole lawful between-step stamina mutation and can
+        // only spend reserve. It may create a downward gap; it can never mint
+        // stamina or change locomotion mode between retained fixed steps.
+        || stepState.staminaBefore > priorStepStamina
+        || stepState.modeBefore !== priorStepMode
+        || stepState.acceptedDistanceUnits !== Math.round(Math.hypot(delta.x, delta.y))
+        || stepState.moved !== (delta.x !== 0 || delta.y !== 0)
+        || startingTile === null
+        || endingTile === null
+        || stepState.startingWaterDepth !== startingTile.waterDepth
+        || stepState.endingWaterDepth !== endingTile.waterDepth
+      ) return false;
+      priorStepStamina = stepState.staminaAfter;
+      priorStepMode = stepState.modeAfter;
     }
     if (
       Math.abs(delta.x) > PLAYER_MAX_FIXED_STEP_DISPLACEMENT_UNITS
@@ -18953,6 +19174,17 @@ function playerPerceptionCarryMatchesPosition(
     finalDeltaY = delta.y;
     priorIntervalPosition = sample.position;
   }
+  if (
+    carry.playerStepStateAnchor !== null
+    && (
+      priorStepStamina === null
+      || priorStepMode === null
+      // A gather after the last fixed step may spend reserve, but no
+      // out-of-step action may restore it or alter player mode.
+      || player.stamina > priorStepStamina
+      || player.mode !== priorStepMode
+    )
+  ) return false;
   const latestPhysical = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
   if (
     latestPhysical === undefined
@@ -18975,12 +19207,6 @@ function playerPerceptionCarryMatchesPosition(
     )
   ) return false;
 
-  const spatialWorld = createRegionalWorldView(
-    economy,
-    regionalTravel.window,
-    { discovered: player.discovered, depthSoundings: player.depthSoundings },
-    { immutable: true },
-  );
   const regionalProjection = projectRegionalEcologyStateV6ActiveState(
     regionalEcology,
     {
@@ -19060,7 +19286,8 @@ function playerPerceptionCarryMatchesPosition(
   );
   const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
     (admission) => admission.kind === "player-traversal"
-      || admission.kind === "player-fall-recovery",
+      || admission.kind === "player-fall-recovery"
+      || admission.kind === "player-exhaustion",
   );
   if (currentPlayerAdmissions.length !== carry.situatedExpressionCausalAuthority.records.length) {
     return false;
@@ -19075,6 +19302,8 @@ function playerPerceptionCarryMatchesPosition(
       matches.length !== 1
       || authorityRecord === undefined
       || authorityRecord.committedWorldTick !== economy.completedTick
+      || (admission.kind === "player-exhaustion"
+        && admission.committedWorldTick !== economy.completedTick)
       || expectedPosition === null
       || stableStringify(authorityRecord.playerPosition)
         !== stableStringify(expectedPosition)
@@ -19082,6 +19311,13 @@ function playerPerceptionCarryMatchesPosition(
         admission,
         authorityRecord,
       )
+      || (admission.kind === "player-exhaustion"
+        && !playerExhaustionStepStateMatchesTrajectory(
+          admission,
+          carry,
+          spatialWorld,
+          regionalTravel.window,
+        ))
     ) return false;
   }
   const samplesMatch = carry.actorVocalizationSamples.every((sample, ordinal) => {
@@ -19671,6 +19907,71 @@ function playerExpressionAdmissionPosition(
     return carry.actorVocalizationSamples[admission.sampleOrdinal]?.position ?? null;
   }
   return carry.intervalStartPosition;
+}
+
+/**
+ * Replays the independently retained movement-owned step against the exact
+ * phase-N physical trajectory. Later idle recovery is deliberately irrelevant:
+ * an expression may still be active after the player has caught their breath.
+ */
+function playerExhaustionStepStateMatchesTrajectory(
+  admission: PlayerExhaustionExpressionAdmissionRecord,
+  carry: PlayerPerceptionCarry,
+  spatialWorld: WorldView,
+  window: RegionalPlayerTravelState["window"],
+): boolean {
+  const phase = admission.admittedAtPlayerStepPhase;
+  const afterSample = carry.playerSenseSamples[phase - 1];
+  const stepState = carry.playerStepStateSamples[phase - 1] ?? null;
+  const stepStatePredecessor = stepState?.sampleOrdinal
+    === carry.playerStepStateAnchor?.sampleOrdinal
+    ? carry.playerStepStateAnchor
+    : carry.playerStepStateSamples[phase - 2] ?? null;
+  const beforePosition = phase === 1
+    ? carry.intervalStartPosition
+    : carry.playerSenseSamples[phase - 2]?.position;
+  if (
+    afterSample === undefined
+    || !playerStepStateProvesDryExhaustion(stepState)
+    || !playerStepStateHasExactPredecessor(stepState, stepStatePredecessor)
+    || beforePosition === undefined
+    || stepState.sampleOrdinal !== phase - 1
+    || stepState.acceptedDistanceUnits !== admission.acceptedDistanceUnits
+    || afterSample.soundClass !== "footsteps"
+    || afterSample.soundInterrupt !== "none"
+    || afterSample.movementSalience <= 0
+    || afterSample.soundLoudness !== Math.max(
+      360_000,
+      Math.round(afterSample.movementSalience * 0.72),
+    )
+    || afterSample.soundRangeUnits !== 12 * TILE_UNITS
+  ) return false;
+  const startingTile = playerPerceptionTileAtWorldPosition(
+    spatialWorld,
+    window,
+    beforePosition,
+  );
+  const endingTile = playerPerceptionTileAtWorldPosition(
+    spatialWorld,
+    window,
+    afterSample.position,
+  );
+  return startingTile !== null
+    && endingTile !== null
+    && startingTile.waterDepth === stepState.startingWaterDepth
+    && endingTile.waterDepth === stepState.endingWaterDepth;
+}
+
+function playerPerceptionTileAtWorldPosition(
+  world: WorldView,
+  window: RegionalPlayerTravelState["window"],
+  position: WorldPosition,
+): WorldView["terrain"]["tiles"][number] | null {
+  const point = perceptionIntervalPointInWindow(window, position);
+  if (point === null) return null;
+  const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
+  return world.terrain.tiles[y * world.terrain.width + x] ?? null;
 }
 
 function residentSourcePositionMatches(

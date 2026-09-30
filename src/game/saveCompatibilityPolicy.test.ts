@@ -13,7 +13,7 @@ import {
 describe("save compatibility policy", () => {
   it("keeps the current repository in the pre-1.0 development era", () => {
     expect(OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION).toBe("1.0.0");
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(41);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(42);
     expect(FIRST_OFFICIAL_STABLE_GAME_SAVE_VERSION).toBeNull();
     expect(SAVE_COMPATIBILITY_POLICY).toEqual({
       baselineVersion: "1.0.0",
@@ -90,6 +90,12 @@ describe("save compatibility policy", () => {
       retiredPre1GameSaveVersions: new Set(),
       policy: SAVE_COMPATIBILITY_POLICY,
     })).toBe("corrupt");
+    expect(classifyUnsupportedSaveSchema({
+      schemaVersion: 41,
+      currentGameSaveVersion: CURRENT_GAME_SAVE_VERSION,
+      retiredPre1GameSaveVersions: new Set([0, 41]),
+      policy: SAVE_COMPATIBILITY_POLICY,
+    })).toBe("retired-pre-1.0");
   });
 
   it("rejects invalid frozen schema boundaries", () => {

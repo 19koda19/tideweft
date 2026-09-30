@@ -21,10 +21,12 @@ import {
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
+  createPlayerExhaustionExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
+import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
 import {
   situatedExpressionAcoustics,
@@ -523,6 +525,40 @@ function oneAdmissionFixture(): Fixture {
   };
 }
 
+function playerExhaustionFixture(): Fixture {
+  const admissionPhase = 3;
+  const phase = 6;
+  const evidence = {
+    committedWorldTick: 73,
+    admittedAtPlayerStepPhase: admissionPhase,
+    acceptedDistanceUnits: 105,
+    resolution: "dry-exhaustion-camp" as const,
+  };
+  const candidate = playerEffortExpressionIntent({
+    sourceActorId: PLAYER_ID,
+    position: POSITION,
+    ...evidence,
+  });
+  if (candidate === null) throw new Error("fixture effort intent was not canonical");
+  const admitted = accept(createSituatedExpressionState(), candidate);
+  const state = advanceSituatedExpression(admitted.state, phase - admissionPhase);
+  const record = createPlayerExhaustionExpressionAdmissionRecord({
+    sourceActorId: PLAYER_ID,
+    triggerEventId: admitted.event.triggerEventId,
+    sampleOrdinal: 0,
+    ...evidence,
+  });
+  if (state === null || state.active === null || record === null) {
+    throw new Error("fixture effort trajectory was not canonical");
+  }
+  return {
+    bank: bank(state),
+    ledger: ledger([record]),
+    phase,
+    samples: [sample(admitted.event, 0)],
+  };
+}
+
 function legacyActiveFixture(): Fixture {
   const admissionPhase = 2;
   const phase = 5;
@@ -591,6 +627,100 @@ describe("situated-expression admission trajectory", () => {
     });
     expect(Object.isFrozen(canonical)).toBe(true);
     expect(Object.isFrozen(canonical?.supplementalSoundSamples)).toBe(true);
+  });
+
+  it("binds phase-aged dry exhaustion to its exact murmur, lifetime, and cooldowns", () => {
+    const fixture = playerExhaustionFixture();
+    const canonical = canonicalizeSituatedExpressionTrajectory(
+      fixture.bank,
+      fixture.ledger,
+      fixture.phase,
+      fixture.samples,
+    );
+
+    expect(canonical).not.toBeNull();
+    expect(canonical?.bank.channels[0]).toMatchObject({
+      sourceActorId: PLAYER_ID,
+      reception: { kind: "self", certainty: 1_000_000 },
+      state: {
+        completedSteps: 3,
+        active: {
+          meaning: "need-rest-after-exertion",
+          family: "condition",
+          tone: "strained",
+          volume: "murmur",
+          knowledgeBasis: "self-felt-exhaustion",
+          priority: 260_000,
+          salience: 440_000,
+          durationSteps: 8,
+          remainingSteps: 5,
+          audioAcknowledged: true,
+        },
+        recent: [{
+          meaning: "need-rest-after-exertion",
+          family: "condition",
+          priority: 260_000,
+          meaningCooldownRemainingSteps: 33,
+          familyCooldownRemainingSteps: 9,
+        }],
+      },
+    });
+    expect(canonical?.supplementalSoundSamples[0]).toMatchObject({
+      soundLoudness: 360_000,
+      soundRangeUnits: 8_000,
+      soundClass: "human-vocalization",
+      soundInterrupt: "none",
+      sourceActorId: PLAYER_ID,
+    });
+  });
+
+  it("rejects tampered dry-exhaustion admission, event, acoustics, or phase", () => {
+    const fixture = playerExhaustionFixture();
+
+    const changedAdmission = mutable(fixture.ledger);
+    const admission = changedAdmission.records[0];
+    if (admission?.kind !== "player-exhaustion") {
+      throw new Error("fixture lost effort admission");
+    }
+    admission.acceptedDistanceUnits += 1;
+
+    const changedEvent = mutable(fixture.bank);
+    changedEvent.channels[0]!.state.active!.priority -= 1;
+    changedEvent.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(changedEvent)).not.toBeNull();
+
+    const acousticMutations = [
+      { soundLoudness: 360_001 },
+      { soundRangeUnits: 8_001 },
+      { soundInterrupt: "strong" as const },
+    ];
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank,
+      changedAdmission,
+      fixture.phase,
+      fixture.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      changedEvent,
+      fixture.ledger,
+      fixture.phase,
+      fixture.samples,
+    )).toBe(false);
+    for (const mutation of acousticMutations) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        fixture.bank,
+        fixture.ledger,
+        fixture.phase,
+        [{ ...fixture.samples[0]!, ...mutation }],
+      )).toBe(false);
+    }
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank,
+      fixture.ledger,
+      fixture.phase + 1,
+      fixture.samples,
+    )).toBe(false);
   });
 
   it("accepts exact newest-first chronology after a higher-priority interruption", () => {

@@ -52,6 +52,7 @@ import {
 } from "./traversalFeedback";
 import type { RootSeed } from "../sim/rng";
 import {
+  ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE,
   querySweptRockCrossing,
   type LadderKitState,
   type RockCrossingEffect,
@@ -74,6 +75,10 @@ export const TIDE_HARP_SCAN_RECHARGE = 900;
 export const PACK_LOAD_MILLI_PER_UNIT = 1_000;
 /** New and migrated porters always receive this much shared transport + kit space. */
 export const BASE_CARGO_CAPACITY = 18;
+/** A fixed step can begin only above this reserve; reaching it collapses to exhausted zero. */
+export const PLAYER_MOVEMENT_STAMINA_GATE = 12_000 as const;
+/** Greatest water depth still treated as ordinary dry-foot travel rather than wading. */
+export const PLAYER_FOOT_MAX_WATER_DEPTH = 35_000 as const;
 
 export type TravelPace = "rest" | "steady" | "swift";
 export type StabilityTrend = "recovering" | "steady" | "falling";
@@ -253,6 +258,18 @@ const TERRAIN_DRAG: Record<WorldView["terrain"]["tiles"][number]["terrain"], num
   ridge: 570,
 };
 
+/**
+ * Greatest stamina spend one accepted dry ordinary fixed step can cause before
+ * the movement gate collapses its remaining reserve to exhausted zero. Save
+ * authority imports this bound; new gait, burden, terrain, or rock costs must
+ * update the movement owner rather than widening a persistence guess.
+ */
+export const PLAYER_MAX_DRY_FIXED_STEP_STAMINA_SPEND =
+  PACE_STAMINA_DRAIN.swift
+  + FULL_LOAD_STAMINA_DRAIN
+  + Math.max(...Object.values(TERRAIN_DRAG).map((drag) => 1_000 - drag)) * 3
+  + (ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE - 1_000) * 3;
+
 export function createPlayer(world: WorldView, startSettlementId?: number): PlayerState {
   const start = world.settlements.find((settlement) => settlement.id === startSettlementId) ?? world.settlements[0];
   if (!start) throw new Error("Cannot create a player in a world without a settlement.");
@@ -379,7 +396,11 @@ export function stepPlayer(
     ),
   );
   const waterDepth = priorTile.waterDepth;
-  player.mode = waterDepth > 360_000 ? "skiff" : waterDepth > 35_000 ? "wading" : "foot";
+  player.mode = waterDepth > 360_000
+    ? "skiff"
+    : waterDepth > PLAYER_FOOT_MAX_WATER_DEPTH
+      ? "wading"
+      : "foot";
   const onMarshGround = priorTile.terrain === "marsh" || priorTile.terrain === "tidal-flat";
   const onRidgeGround = priorTile.terrain === "ridge";
   const carriedGearEffects = queryCarriedGearEffects(player.craftingInventory, {
@@ -392,7 +413,7 @@ export function stepPlayer(
 
   let velocityX = 0;
   let velocityY = 0;
-  if (hasInput && player.stamina > 12_000) {
+  if (hasInput && player.stamina > PLAYER_MOVEMENT_STAMINA_GATE) {
     const diagonal = effectiveControl.moveX !== 0 && effectiveControl.moveY !== 0;
     const baseSpeed = PACE_SPEED[player.pace];
     const hasStilts = hasFieldTool(player, "marsh-stilts")
@@ -748,7 +769,7 @@ export function stepPlayer(
     // The movement gate below this threshold prevents another step. Collapse
     // the remaining sliver of stamina into the explicit exhausted state so a
     // player cannot get trapped in a move/recover oscillation that never camps.
-    if (player.stamina <= 12_000) player.stamina = 0;
+    if (player.stamina <= PLAYER_MOVEMENT_STAMINA_GATE) player.stamina = 0;
   } else {
     const projectRecovery = completedProject === "cache" ? 6_000 : completedProject === "clinic" ? 3_000 : 0;
     const recovery = (bracing ? 7_200 : 2_400) + projectRecovery;
@@ -944,7 +965,10 @@ function deriveContextualPace(
   priorTileIndex: number,
   control: PlayerControl,
 ): TravelPace {
-  if ((control.moveX === 0 && control.moveY === 0) || player.stamina <= 12_000) return "rest";
+  if (
+    (control.moveX === 0 && control.moveY === 0)
+    || player.stamina <= PLAYER_MOVEMENT_STAMINA_GATE
+  ) return "rest";
   const prior = world.terrain.tiles[priorTileIndex];
   if (!prior) return "steady";
   const targetX = clamp(prior.x + control.moveX, 0, world.terrain.width - 1);

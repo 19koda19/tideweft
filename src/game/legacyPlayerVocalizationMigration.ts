@@ -389,6 +389,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "fish-crow-alarm-call":
     case "human-danger-warning":
     case "keeper-secure-store-response":
+    case "need-rest-after-exertion":
       return [];
   }
 }
@@ -407,6 +408,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "fish-crow-alarm-call": return 6;
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
+    case "need-rest-after-exertion": return 8;
   }
 }
 

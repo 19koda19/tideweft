@@ -92,6 +92,11 @@ interface TestGameSaveEnvelope {
     readonly intervalStartFacingMilliRadians?: number;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly { readonly sampleOrdinal: number }[];
+    readonly playerStepStateSamples?: readonly ({
+      readonly sampleOrdinal: number;
+      readonly staminaAfter: number;
+      readonly modeAfter: string;
+    } | null)[];
     readonly actorVocalizationSamples?: readonly unknown[];
     readonly situatedExpressionAdmissions?: unknown;
     readonly situatedExpressionCausalAuthority?: unknown;
@@ -185,7 +190,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   }, 30_000);
 
-  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v41", async () => {
+  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v42", async () => {
     const fixture = perceptionFixture("runtime perception v38 forward read");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -194,10 +199,12 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(41);
+    expect(decoded.version).toBe(42);
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v7Carry
     } = currentCarry;
     const { integrity: _currentIntegrity, ...currentBase } = decoded;
@@ -220,8 +227,8 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(41);
-    expect(savedEnvelope(repository).version).toBe(41);
+    expect(repository.snapshot().payloadVersion).toBe(42);
+    expect(savedEnvelope(repository).version).toBe(42);
     resumed.destroy();
   }, 30_000);
 
@@ -236,6 +243,8 @@ describe("runtime existing-human perception path", () => {
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v7Carry
     } = currentPerceptionCarry(decoded);
     const { integrity: _integrity, ...currentBase } = decoded;
@@ -257,11 +266,11 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(41);
+    expect(repository.snapshot().payloadVersion).toBe(42);
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 41,
+      version: 42,
       perceptionCarry: {
-        version: 9,
+        version: 10,
         animalContactAcousticCarry: { version: 1, records: [] },
       },
     });
@@ -309,9 +318,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 41,
+      version: 42,
       perceptionCarry: {
-        version: 9,
+        version: 10,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
@@ -327,6 +336,13 @@ describe("runtime existing-human perception path", () => {
     });
     expect(pending.perceptionCarry?.playerSenseSamples.map(({ sampleOrdinal }) => sampleOrdinal))
       .toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(pending.perceptionCarry?.playerStepStateSamples?.map((sample) => (
+      sample?.sampleOrdinal ?? null
+    ))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(pending.perceptionCarry?.playerStepStateSamples?.at(-1)).toMatchObject({
+      staminaAfter: pending.player.stamina,
+      modeAfter: pending.player.mode,
+    });
     interrupted.destroy();
 
     advancePlayerSteps(reference, 1);
@@ -346,6 +362,7 @@ describe("runtime existing-human perception path", () => {
     expect(savedEnvelope(interruptedRepository).perceptionCarry).toMatchObject({
       playerStepsSinceWorldTick: 0,
       playerSenseSamples: [],
+      playerStepStateSamples: [],
       nextPlayerSenseSampleOrdinal: 0,
     });
     resumed.destroy();
@@ -367,6 +384,8 @@ describe("runtime existing-human perception path", () => {
       animalContactAcousticCarry: _futureAnimalContactCarry,
       intervalStartFacingMilliRadians: _futureIntervalStartFacing,
       intervalStartPosition: _futureIntervalStartPosition,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
       situatedExpressionAdmissions: _futureAdmissions,
       situatedExpressionCausalAuthority: _futureCausalAuthority,
       situatedExpressionChannels: _futureExpressionChannels,
@@ -393,13 +412,14 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 41,
+      version: 42,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 9,
+        version: 10,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
+        playerStepStateSamples: [null, null, null],
         nextPlayerSenseSampleOrdinal: 3,
         actorVocalizationSamples: [],
         situatedExpressionAdmissions: {
@@ -416,7 +436,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v41", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v42", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -433,12 +453,13 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 41,
+      version: 42,
       perceptionCarry: {
-        version: 9,
+        version: 10,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: 0,
         playerStepsSinceWorldTick: 3,
+        playerStepStateSamples: [null, null, null],
         nextPlayerSenseSampleOrdinal: 3,
         actorVocalizationSamples: [{
           expressionEventId: legacy.eventId,
@@ -483,7 +504,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v34 carry-v3 schema to v41 without replay", async () => {
+  it("migrates the exact sealed v34 carry-v3 schema to v42 without replay", async () => {
     const fixture = perceptionFixture("runtime perception v34 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -495,6 +516,8 @@ describe("runtime existing-human perception path", () => {
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v3Carry
     } = currentPerceptionCarry(decoded);
     const { integrity: _integrity, ...currentBase } = decoded;
@@ -519,10 +542,11 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 41,
+      version: 42,
       perceptionCarry: {
-        version: 9,
+        version: 10,
         playerStepsSinceWorldTick: 3,
+        playerStepStateSamples: [null, null, null],
         nextPlayerSenseSampleOrdinal: 3,
       },
     });
@@ -611,6 +635,8 @@ describe("runtime existing-human perception path", () => {
     }
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v3Carry
     } = carry;
     const { integrity: _integrity, ...currentBase } = decoded;
@@ -794,13 +820,14 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 41,
+      version: 42,
       perceptionCarry: {
-        version: 9,
+        version: 10,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,
         playerSenseSamples: [],
+        playerStepStateSamples: [],
         actorVocalizationSamples: [],
         situatedExpressionAdmissions: { version: 1, records: [] },
         situatedExpressionCausalAuthority: { version: 1, records: [] },
@@ -825,6 +852,57 @@ describe("runtime existing-human perception path", () => {
       label: "a discontinuous next ordinal",
       tamper(envelope: Record<string, unknown>) {
         currentPerceptionCarry(envelope).nextPlayerSenseSampleOrdinal = 2;
+      },
+    },
+    {
+      label: "a missing current step-state trajectory",
+      tamper(envelope: Record<string, unknown>) {
+        delete currentPerceptionCarry(envelope).playerStepStateSamples;
+      },
+    },
+    {
+      label: "a missing current step-state anchor",
+      tamper(envelope: Record<string, unknown>) {
+        delete currentPerceptionCarry(envelope).playerStepStateAnchor;
+      },
+    },
+    {
+      label: "a step-state anchor detached from its current prefix",
+      tamper(envelope: Record<string, unknown>) {
+        const anchor = currentPerceptionCarry(envelope).playerStepStateAnchor;
+        if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)) {
+          throw new Error("fixture carry omitted its step-state anchor");
+        }
+        (anchor as Record<string, unknown>).sampleOrdinal = 2;
+      },
+    },
+    {
+      label: "a shortened current step-state trajectory",
+      tamper(envelope: Record<string, unknown>) {
+        const samples = currentPerceptionCarry(envelope).playerStepStateSamples;
+        if (!Array.isArray(samples)) throw new Error("fixture carry omitted step state");
+        samples.pop();
+      },
+    },
+    {
+      label: "a non-prefix unavailable step-state hole",
+      tamper(envelope: Record<string, unknown>) {
+        const samples = currentPerceptionCarry(envelope).playerStepStateSamples;
+        if (!Array.isArray(samples) || samples.length < 3) {
+          throw new Error("fixture carry omitted enough step state");
+        }
+        samples[1] = null;
+      },
+    },
+    {
+      label: "a step-state ordinal detached from its sensory sample",
+      tamper(envelope: Record<string, unknown>) {
+        const samples = currentPerceptionCarry(envelope).playerStepStateSamples;
+        const first = Array.isArray(samples) ? samples[0] : null;
+        if (!first || typeof first !== "object" || Array.isArray(first)) {
+          throw new Error("fixture carry omitted its first step state");
+        }
+        (first as Record<string, unknown>).sampleOrdinal = 2;
       },
     },
     {
@@ -928,6 +1006,7 @@ describe("runtime existing-human perception path", () => {
     expect(savedEnvelope(repository).perceptionCarry).toMatchObject({
       playerStepsSinceWorldTick: 0,
       playerSenseSamples: [],
+      playerStepStateSamples: [],
       nextPlayerSenseSampleOrdinal: 0,
     });
     runtime.destroy();
@@ -1053,6 +1132,8 @@ function replaceWithLegacyV33Envelope(
     animalContactAcousticCarry: _currentAnimalContactCarry,
     intervalStartFacingMilliRadians: _currentIntervalStartFacing,
     intervalStartPosition: _currentIntervalStartPosition,
+    playerStepStateAnchor: _currentPlayerStepStateAnchor,
+    playerStepStateSamples: _currentPlayerStepStateSamples,
     situatedExpressionAdmissions: _currentAdmissions,
     situatedExpressionCausalAuthority: _currentCausalAuthority,
     situatedExpressionChannels: _currentChannels,

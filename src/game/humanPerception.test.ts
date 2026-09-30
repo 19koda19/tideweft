@@ -380,6 +380,33 @@ describe("existing-human sensory bridge", () => {
       .some(({ channel }) => channel === "hearing")).toBe(false);
   });
 
+  it("lets a nearby restrained effort murmur carry only when the acoustic world permits it", () => {
+    const calm = fixture("nearby effort can be heard", { facing: "west" });
+    const masked = fixture("storm water masks nearby effort", {
+      facing: "west",
+      turbulentWater: true,
+      storm: true,
+    });
+    const effort = supplementalSoundSample(
+      "dry-exhaustion-effort",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      LOCAL_PLAYER_SUBJECT_ID,
+      { soundLoudness: 360_000, soundRangeUnits: 8_000 },
+    );
+
+    expect(observationsFor(calm, [], 1, [effort])).toContainEqual(
+      expect.objectContaining({
+        channel: "hearing",
+        perceivedClass: "human-vocalization",
+        identification: "anonymous",
+        subjectId: null,
+      }),
+    );
+    expect(observationsFor(masked, [], 1, [effort])
+      .some(({ id }) => id.includes(effort.id))).toBe(false);
+  });
+
   it("hears an authenticated physical-world sound anonymously without inventing sight", () => {
     const current = fixture("physical contact remains an acoustic fact", { facing: "east" });
     const rustle = physicalSoundSample(

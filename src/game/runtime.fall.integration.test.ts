@@ -61,6 +61,7 @@ import type { TraversalFeedbackState } from "./traversalFeedback";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
+import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
 import type { WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
@@ -75,7 +76,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 41;
+  readonly version: 42;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -85,11 +86,13 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 9;
+    readonly version: 10;
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly humanPerception.PlayerSenseSample[];
+    readonly playerStepStateSamples: readonly (PlayerStepStateSample | null)[];
+    readonly playerStepStateAnchor: PlayerStepStateAnchor;
     readonly actorVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
     readonly animalContactAcousticCarry: unknown;
     readonly situatedExpressionChannels: SituatedExpressionChannelBank;
@@ -183,10 +186,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 41
-    || record.payloadVersion !== 41
+    || envelope.version !== 42
+    || record.payloadVersion !== 42
   ) {
-    throw new Error("fixture did not produce a current v41 regional session save");
+    throw new Error("fixture did not produce a current v42 regional session save");
   }
   return envelope;
 }
@@ -207,7 +210,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 41,
+    payloadVersion: 42,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -512,6 +515,105 @@ function relocateToRidgeAtZeroStability(
   };
 }
 
+function relocateForDryExhaustion(
+  envelope: CurrentGameSaveEnvelope,
+  waterDepth = 0,
+): CurrentGameSaveEnvelope {
+  const relocated = relocateToRidgeAtZeroStability(envelope);
+  const world = deserializeWorld(relocated.envelope.world);
+  const startIndex = relocated.corner.y * world.terrain.width + relocated.corner.x;
+  const destinationIndex = startIndex + 1;
+  const meadowTemplate = world.terrain.tiles.find(({ terrain }) => terrain === "meadow");
+  const start = world.terrain.tiles[startIndex];
+  const destination = world.terrain.tiles[destinationIndex];
+  if (!meadowTemplate || !start || !destination) {
+    throw new Error("dry-exhaustion fixture lost its meadow crossing");
+  }
+  for (const tile of [start, destination]) {
+    tile.elevation = world.tide.level - waterDepth;
+    tile.moisture = 0;
+    tile.roughness = 0;
+    tile.terrain = "meadow";
+    tile.baseTravelCost = meadowTemplate.baseTravelCost;
+  }
+  world.weather = {
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+    nextChangeTick: world.meta.completedTick + 10_000,
+  };
+
+  const player = structuredClone(relocated.envelope.player);
+  player.velocityX = 0;
+  player.velocityY = 0;
+  player.stamina = 12_500;
+  player.stability = FIXED_POINT;
+  player.stabilityTrend = "steady";
+  player.stabilityHint = "Stable on sound footing";
+  player.pace = "steady";
+  player.mode = "foot";
+  player.sweepTicksRemaining = 0;
+  player.sweepTotalTicks = 0;
+  player.sweepPath = [];
+  player.sweepSupport = null;
+  player.timeAction = null;
+
+  const regionalTravel = restorePlayerRegionalTravel(
+    world.meta.rootSeed,
+    player,
+    relocated.envelope.regionalTravel,
+  );
+  if (regionalTravel === null) {
+    throw new Error("dry-exhaustion fixture lost its regional travel authority");
+  }
+  const capturedTravel = capturePlayerRegionalTravel(regionalTravel, player);
+  const regionalTravelText = serializePlayerRegionalTravel(capturedTravel);
+  const spatial = createRegionalWorldView(
+    createWorldView(world),
+    capturedTravel.window,
+    {
+      discovered: player.discovered,
+      depthSoundings: player.depthSoundings,
+    },
+  );
+  const intervalStartPosition = playerWorldPositionInRegionalWindow(
+    capturedTravel.window,
+    player,
+  );
+  if (intervalStartPosition === null) {
+    throw new Error("dry-exhaustion fixture has no canonical player position");
+  }
+
+  return {
+    ...relocated.envelope,
+    world: serializeWorld(world),
+    player,
+    regionalTravel: regionalTravelText,
+    perceptionCarry: {
+      ...relocated.envelope.perceptionCarry,
+      intervalStartPosition,
+      intervalStartFacingMilliRadians: player.facingMilliRadians,
+      playerStepStateAnchor: {
+        version: 1,
+        sampleOrdinal: relocated.envelope.perceptionCarry.playerStepsSinceWorldTick,
+        stamina: player.stamina,
+        mode: player.mode,
+      },
+    },
+    regionalEcology: rebaseFixtureRegionalEcology(
+      relocated.envelope.regionalEcology,
+      world.meta.rootSeed,
+      spatial,
+    ),
+    traversalFeedback: {
+      ...relocated.envelope.traversalFeedback,
+      incident: null,
+      lastAudibleIncidentId: null,
+    },
+  };
+}
+
 async function createCurrentFixture(
   repository: MemoryRepository,
   seed: string,
@@ -636,6 +738,345 @@ describe("production terrain fall and physical cargo", () => {
     rejected.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
+  it("turns one committed dry exhaustion boundary into conserved effort expression without replay", async () => {
+    const repository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(repository);
+    bootstrap.dispatchUI({
+      type: "new-world",
+      seed: "dry exhaustion expression",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await bootstrap.save();
+    bootstrap.destroy();
+    replaceEnvelope(
+      repository,
+      relocateForDryExhaustion(decodeCurrent(repository.snapshot())),
+    );
+
+    soundscapePlay.mockClear();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+
+    expect(runtime.getUIView().player.stamina).toBe(0);
+    const expression = runtime.getRenderView().expressions?.find(({ sourceActorId }) =>
+      sourceActorId === "player:local");
+    expect(expression).toMatchObject({
+      sourceActorId: "player:local",
+      sourceKind: "player",
+      speakerLabel: "You",
+      tone: "strained",
+    });
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      id: expression?.id,
+      presentationKind: "speech",
+      speakerLabel: "You",
+      tone: "strained",
+      assertive: false,
+    });
+    expect(incidentCueCalls("vocalization-strained")).toBe(1);
+
+    // The committed step remains authoritative after ordinary idle recovery
+    // changes the current player state while the utterance is active.
+    advancePlayerSteps(runtime, 2);
+    expect(runtime.getUIView().player.stamina).toBe(0.0144);
+    expect(runtime.getRenderView().expressions?.find(({ sourceActorId }) =>
+      sourceActorId === "player:local")).toMatchObject({ id: expression?.id });
+
+    await runtime.save();
+    const exhausted = decodeCurrent(repository.snapshot());
+    expect(exhausted.perceptionCarry).toMatchObject({
+      version: 10,
+      playerStepsSinceWorldTick: 3,
+      situatedExpressionAdmissions: {
+        version: 1,
+        records: [{
+          kind: "player-exhaustion",
+          sourceActorId: "player:local",
+          committedWorldTick: deserializeWorld(exhausted.world).meta.completedTick,
+          admittedAtPlayerStepPhase: 1,
+          acceptedDistanceUnits: expect.any(Number),
+          resolution: "dry-exhaustion-camp",
+          sampleOrdinal: 0,
+        }],
+      },
+      situatedExpressionCausalAuthority: {
+        version: 1,
+        records: [expect.objectContaining({
+          eventId: expression?.id,
+          sourceActorId: "player:local",
+          admittedAtPlayerStepPhase: 1,
+          sampleOrdinal: 0,
+        })],
+      },
+      situatedExpressionChannels: {
+        version: 1,
+        channels: [{
+          sourceActorId: "player:local",
+          state: {
+            active: expect.objectContaining({
+              eventId: expression?.id,
+              meaning: "need-rest-after-exertion",
+              family: "condition",
+              tone: "strained",
+              volume: "murmur",
+              knowledgeBasis: "self-felt-exhaustion",
+              audioAcknowledged: true,
+            }),
+          },
+          reception: expect.objectContaining({
+            eventId: expression?.id,
+            sourceActorId: "player:local",
+            kind: "self",
+          }),
+        }],
+      },
+      actorVocalizationSamples: [expect.objectContaining({
+        expressionEventId: expression?.id,
+        sourceActorId: "player:local",
+        soundLoudness: 360_000,
+        soundRangeUnits: 8_000,
+        soundClass: "human-vocalization",
+        soundInterrupt: "none",
+      })],
+    });
+    expect(exhausted.perceptionCarry.playerStepStateSamples[0]).toMatchObject({
+      version: 1,
+      sampleOrdinal: 0,
+      staminaBefore: 12_500,
+      staminaAfter: 0,
+      modeBefore: "foot",
+      modeAfter: "camp",
+      acceptedDistanceUnits: expect.any(Number),
+      moved: true,
+      exhausted: true,
+      rescued: false,
+      becameSwept: false,
+      traversalIncidentKind: null,
+      startingWaterDepth: 0,
+      endingWaterDepth: 0,
+    });
+    expect(exhausted.perceptionCarry.playerStepStateAnchor).toEqual({
+      version: 1,
+      sampleOrdinal: 0,
+      stamina: 12_500,
+      mode: "foot",
+    });
+    expect(exhausted.perceptionCarry.playerStepStateSamples.slice(1)).toEqual([
+      expect.objectContaining({ sampleOrdinal: 1, staminaBefore: 0, staminaAfter: 7_200 }),
+      expect.objectContaining({ sampleOrdinal: 2, staminaBefore: 7_200, staminaAfter: 14_400 }),
+    ]);
+    expect(exhausted.player).toMatchObject({ stamina: 14_400, mode: "foot" });
+    runtime.destroy();
+
+    soundscapePlay.mockClear();
+    scheduledFrame = undefined;
+    const reloaded = await createTideweftRuntime(repository);
+    expect(incidentCueCalls("vocalization-strained")).toBe(0);
+    expect(reloaded.getRenderView().expressions?.find(({ sourceActorId }) =>
+      sourceActorId === "player:local")).toMatchObject({ id: expression?.id });
+    await reloaded.save();
+    const roundTripped = decodeCurrent(repository.snapshot());
+    expect(roundTripped.perceptionCarry.situatedExpressionAdmissions)
+      .toEqual(exhausted.perceptionCarry.situatedExpressionAdmissions);
+    expect(roundTripped.perceptionCarry.actorVocalizationSamples)
+      .toEqual(exhausted.perceptionCarry.actorVocalizationSamples);
+    reloaded.destroy();
+  }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it("rejects a resealed movement sample whose dry physical evidence contradicts the world", async () => {
+    const repository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(repository);
+    bootstrap.dispatchUI({
+      type: "new-world",
+      seed: "dry exhaustion admission tamper",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await bootstrap.save();
+    bootstrap.destroy();
+    replaceEnvelope(
+      repository,
+      relocateForDryExhaustion(decodeCurrent(repository.snapshot())),
+    );
+
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await runtime.save();
+    runtime.destroy();
+
+    const tampered = structuredClone(decodeCurrent(repository.snapshot()));
+    const stepState = tampered.perceptionCarry.playerStepStateSamples[0];
+    if (stepState === null || stepState === undefined) {
+      throw new Error("effort tamper fixture omitted its movement-owned step state");
+    }
+    const mutableStepState = stepState as { startingWaterDepth: number };
+    mutableStepState.startingWaterDepth = stepState.startingWaterDepth === 0 ? 1 : 0;
+    replaceEnvelope(repository, tampered);
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it("cannot transplant coherent exhaustion speech onto an ordinary dry footstep", async () => {
+    const bootstrapRepository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(bootstrapRepository);
+    bootstrap.dispatchUI({
+      type: "new-world",
+      seed: "dry exhaustion coordinated forgery",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await bootstrap.save();
+    bootstrap.destroy();
+
+    const exhaustedStart = relocateForDryExhaustion(
+      decodeCurrent(bootstrapRepository.snapshot()),
+    );
+    replaceEnvelope(bootstrapRepository, exhaustedStart);
+    const exhaustedRepository = new MemoryRepository(bootstrapRepository.snapshot());
+    const ordinaryRepository = new MemoryRepository(bootstrapRepository.snapshot());
+    replaceEnvelope(ordinaryRepository, {
+      ...exhaustedStart,
+      player: {
+        ...exhaustedStart.player,
+        // This remains inside the exhaustion predicate's maximum-spend
+        // envelope, but a cheap dry meadow step lawfully leaves reserve.
+        stamina: 18_000,
+      },
+      perceptionCarry: {
+        ...exhaustedStart.perceptionCarry,
+        playerStepStateAnchor: {
+          ...exhaustedStart.perceptionCarry.playerStepStateAnchor,
+          stamina: 18_000,
+        },
+      },
+    });
+
+    scheduledFrame = undefined;
+    const exhaustedRuntime = await createTideweftRuntime(exhaustedRepository);
+    exhaustedRuntime.dispatchUI({ type: "resume-world" });
+    exhaustedRuntime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(exhaustedRuntime, 1);
+    exhaustedRuntime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await exhaustedRuntime.save();
+    exhaustedRuntime.destroy();
+
+    scheduledFrame = undefined;
+    const ordinaryRuntime = await createTideweftRuntime(ordinaryRepository);
+    ordinaryRuntime.dispatchUI({ type: "resume-world" });
+    ordinaryRuntime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(ordinaryRuntime, 1);
+    ordinaryRuntime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await ordinaryRuntime.save();
+    ordinaryRuntime.destroy();
+
+    const exhausted = decodeCurrent(exhaustedRepository.snapshot());
+    const ordinary = decodeCurrent(ordinaryRepository.snapshot());
+    expect(ordinary.perceptionCarry.playerSenseSamples)
+      .toEqual(exhausted.perceptionCarry.playerSenseSamples);
+    expect(ordinary.perceptionCarry.playerStepStateSamples[0]).toMatchObject({
+      staminaBefore: 18_000,
+      staminaAfter: expect.any(Number),
+      modeAfter: "foot",
+      moved: true,
+      exhausted: false,
+      traversalIncidentKind: null,
+    });
+    expect(ordinary.perceptionCarry.playerStepStateSamples[0]?.staminaAfter)
+      .toBeGreaterThan(0);
+    expect(exhausted.perceptionCarry.situatedExpressionAdmissions.records)
+      .toEqual([expect.objectContaining({ kind: "player-exhaustion" })]);
+    expect(ordinary.perceptionCarry.situatedExpressionAdmissions.records).toEqual([]);
+
+    const forged = structuredClone(ordinary);
+    const forgedCarry = forged.perceptionCarry as unknown as {
+      situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+      situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
+      situatedExpressionChannels: SituatedExpressionChannelBank;
+      actorVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
+      playerStepStateSamples: readonly (PlayerStepStateSample | null)[];
+    };
+    forgedCarry.situatedExpressionAdmissions = structuredClone(
+      exhausted.perceptionCarry.situatedExpressionAdmissions,
+    );
+    forgedCarry.situatedExpressionCausalAuthority = structuredClone(
+      exhausted.perceptionCarry.situatedExpressionCausalAuthority,
+    );
+    forgedCarry.situatedExpressionChannels = structuredClone(
+      exhausted.perceptionCarry.situatedExpressionChannels,
+    );
+    forgedCarry.actorVocalizationSamples = structuredClone(
+      exhausted.perceptionCarry.actorVocalizationSamples,
+    );
+    forgedCarry.playerStepStateSamples = structuredClone(
+      exhausted.perceptionCarry.playerStepStateSamples,
+    );
+    // Coordinate the visible final state with the transplanted exhausted
+    // trajectory too. Reauthentication must reject the unexplained 18,000 to
+    // 12,500 predecessor gap itself, not merely an ordinary final-player tail.
+    forged.player.stamina = 0;
+    forged.player.mode = "camp";
+    forged.player.pace = "rest";
+    replaceEnvelope(exhaustedRepository, forged);
+
+    scheduledFrame = undefined;
+    const rejected = await createTideweftRuntime(exhaustedRepository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, process.env.CI === "true" ? 120_000 : 45_000);
+
+  it("keeps stationary and wading exhaustion outside the dry-effort voice gate", async () => {
+    for (const scenario of ["already-zero", "wading"] as const) {
+      const repository = new MemoryRepository();
+      const bootstrap = await createTideweftRuntime(repository);
+      bootstrap.dispatchUI({
+        type: "new-world",
+        seed: `dry exhaustion negative ${scenario}`,
+        posture: "gale",
+        sessionShape: "wander",
+      });
+      await bootstrap.save();
+      bootstrap.destroy();
+      const relocated = relocateForDryExhaustion(
+        decodeCurrent(repository.snapshot()),
+        scenario === "wading" ? 40_000 : 0,
+      );
+      replaceEnvelope(repository, scenario === "already-zero"
+        ? {
+            ...relocated,
+            player: { ...relocated.player, stamina: 0 },
+          }
+        : relocated);
+
+      soundscapePlay.mockClear();
+      scheduledFrame = undefined;
+      const runtime = await createTideweftRuntime(repository);
+      runtime.dispatchUI({ type: "resume-world" });
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+      advancePlayerSteps(runtime, 1);
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      expect(runtime.getRenderView().expressions?.some(({ sourceActorId }) =>
+        sourceActorId === "player:local")).toBe(false);
+      expect(incidentCueCalls("vocalization-strained")).toBe(0);
+      await runtime.save();
+      const savedCarry = decodeCurrent(repository.snapshot()).perceptionCarry;
+      expect(savedCarry.playerStepStateSamples).toHaveLength(1);
+      expect(savedCarry.playerStepStateSamples[0]).not.toBeNull();
+      expect(savedCarry.situatedExpressionAdmissions.records.some(({ kind }) =>
+        kind === "player-exhaustion")).toBe(false);
+      runtime.destroy();
+    }
+  }, process.env.CI === "true" ? 90_000 : 30_000);
+
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
     const fixture = await createCurrentFixture(
@@ -710,7 +1151,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 41,
+      version: 42,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -727,6 +1168,8 @@ describe("production terrain fall and physical cargo", () => {
       "intervalStartPosition",
       "nextPlayerSenseSampleOrdinal",
       "playerSenseSamples",
+      "playerStepStateAnchor",
+      "playerStepStateSamples",
       "playerStepsSinceWorldTick",
       "situatedExpressionAdmissions",
       "situatedExpressionCausalAuthority",
@@ -734,7 +1177,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 9,
+      version: 10,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,

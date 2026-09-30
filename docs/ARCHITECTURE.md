@@ -121,7 +121,13 @@ Living Voice** is next.
 The current unpublished Directive 04_2 source begins with one event-driven
 situated-expression owner. A player traversal adapter can submit a committed
 stumble, near-fall, important-cargo impact, physical parcel separation, or
-causally proven recovery. The first porter-work adapter can submit one
+causally proven recovery. A separate effort adapter may submit one restrained
+self-felt murmur only when an accepted dry-ground movement step commits
+positive stamina exactly to zero. Idle and recovery steps, water or rescue,
+already-zero stamina, and a same-step traversal incident fail closed. The
+accepted event uses the same source-bound channel, acoustic sample, self
+receipt, and presentation arbitration as other situated expression. The first
+porter-work adapter can submit one
 resident porter's committed departure only after the simulation proves that
 the same persistent human physically took custody of a heavy Promise load and
 entered the contract route. Light cargo, attempted work, and old ledger events
@@ -424,16 +430,45 @@ reply, never reconstructs speech for an already-secured store, and preserves
 the physical closure unchanged. Every current-shape v34-v40 reader applies a
 cumulative semantic fence: a resealed historical carry cannot smuggle the v41
 keeper meaning, knowledge basis, admission, channel, or sample through the
-still-version-1 nested expression schemas. Current v41 reload reauthenticates
-the retained closure transaction, store and keeper identity, source evidence,
-recorded listener pose, lawful visibility/range/hearing outcome, sample, receipt,
-and bounded memory without replaying acknowledged audio.
+still-version-1 nested expression schemas. The v41 format encoded the retained
+closure transaction, store and keeper identity, source evidence, recorded
+listener pose, lawful visibility/range/hearing outcome, sample, receipt, and
+bounded memory without replaying acknowledged audio.
+The dry-exhaustion effort candidate advances the unpublished writer to outer
+v42 and bounded perception carry v10. Its admission binds the committed
+player-step phase, exact source position, actual movement distance, and narrow
+dry-exhaustion resolution. Independently, every new fixed movement step appends
+one generic movement-owned state sample aligned with its sensory sample:
+before/after stamina and mode, committed distance, outcome flags, incident kind,
+and endpoint water contact. A separate anchor records stamina and mode before
+the first real sample. Load chains every later sample's pre-state to that
+anchor and its predecessor, then binds the final mode and non-increasing
+between-step stamina frontier to the saved player. The only current action
+outside a fixed player step that changes stamina is gathering, which can spend
+reserve but cannot mint it or change locomotion mode. The expression callback
+cannot author or replace that physical trajectory. A dry-exhaustion admission
+must additionally continue the exact preceding movement-owned state (or its
+exact suffix anchor), so an otherwise lawful downward gathering gap cannot be
+used as causal evidence for the murmur. Load also aligns the state
+sample with the before/after positions, derived distance, world tiles, and
+exact phase-N footstep before it accepts the murmur. Supported v1-v40 intervals
+migrate with a contiguous `null` prefix for unavailable historical step state;
+their first new current sample receives an exact post-migration anchor. Only
+new current steps append real samples, and `null` can never authorize
+exhaustion. Later lawful idle recovery may change current stamina while the
+still-active utterance remains valid. Current reload preserves pending sound and bounded cooldown without
+replaying acknowledged audio. Outer v41 is intentionally retired as an
+incompatible pre-1.0 development format rather than migrated: it is recognized,
+left untouched, and requires a clean current save. Supported pre-v41 migration
+readers remain available. Their semantic fences reject later exhaustion
+meaning, family, knowledge basis, admission, channel, and sample.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
 velocity, and final player pose. Player traversal/recovery speech must also
-match a separately retained current-interval causal-authority receipt created
-by the physical transaction. Porter departure receipts exist only at phase
+match its separately retained current-interval causal-authority record; effort
+must additionally match the independently retained movement-owned step-state
+trajectory described above. Porter departure receipts exist only at phase
 zero and must reproduce that exact anchored listener pose. A lawfully heard,
 strong guardian warning or fish-crow alarm interrupts WAIT or REST/SLEEP before
 source visibility is classified. Dog reception replays from physical acoustics
@@ -2540,11 +2575,14 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through versions 33–41 and the bounded perception carry through version
-9; the current source writer emits outer version 41. Its authenticated v1–v40
+session through version 42 and the bounded perception carry through version 10;
+the current source writer emits outer version 42. Outer v41 is explicitly
+retired under the pre-1.0 policy: load recognizes the incompatible development
+record, leaves it untouched, and directs development to a clean current save
+rather than attempting partial deserialization. Supported pre-v41 migration
 readers remain implemented and tested where retained, but before official 1.0
 that implementation fact is not a permanent promise to preserve every internal
-development format. Current-v41 roundtrip and all conservation, determinism,
+development format. Current-v42 roundtrip and all conservation, determinism,
 integrity, and no-overwrite laws remain mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,

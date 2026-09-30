@@ -228,6 +228,8 @@ function eventMeaningMatchesAdmission(
       return meaning === traversalMeaning(record.causalClass);
     case "player-fall-recovery":
       return meaning === "relief-after-cargo-recovery";
+    case "player-exhaustion":
+      return meaning === "need-rest-after-exertion";
     case "porter-heavy-departure":
       return meaning === "porter-heavy-load";
     case "guardian-dog-warning":
@@ -252,6 +254,14 @@ function eventMatchesAdmission(
   record: SituatedExpressionAdmissionRecord,
 ): boolean {
   if (!eventMeaningMatchesAdmission(event.meaning, record)) return false;
+  if (record.kind === "player-exhaustion") {
+    return event.family === "condition"
+      && event.tone === "strained"
+      && event.volume === "murmur"
+      && event.knowledgeBasis === "self-felt-exhaustion"
+      && event.priority === 260_000
+      && event.salience === 440_000;
+  }
   return (record.kind !== "core-wildlife-fish-crow-alarm"
     && record.kind !== "human-danger-warning")
     || (
@@ -267,6 +277,15 @@ function sampleAcousticsMatchAdmission(
   sample: SupplementalSoundSample,
   record: SituatedExpressionAdmissionRecord,
 ): boolean {
+  if (record.kind === "player-exhaustion") {
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "need-rest-after-exertion",
+      volume: "murmur",
+    });
+    return sample.soundLoudness === acoustics.loudness
+      && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundInterrupt === "none";
+  }
   if (
     record.kind !== "core-wildlife-fish-crow-alarm"
     && record.kind !== "human-danger-warning"
@@ -293,6 +312,7 @@ function admissionDurationSteps(
         case "cargo-separation": return 14;
       }
     case "player-fall-recovery": return 9;
+    case "player-exhaustion": return 8;
     case "porter-heavy-departure": return 8;
     case "guardian-dog-warning": return 6;
     case "guardian-dog-defensive-growl": return 8;
@@ -318,6 +338,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "fish-crow-alarm-call": return 6;
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
+    case "need-rest-after-exertion": return 8;
   }
 }
 
@@ -327,6 +348,7 @@ function admissionMeaning(
   switch (record.kind) {
     case "player-traversal": return traversalMeaning(record.causalClass);
     case "player-fall-recovery": return "relief-after-cargo-recovery";
+    case "player-exhaustion": return "need-rest-after-exertion";
     case "porter-heavy-departure": return "porter-heavy-load";
     case "guardian-dog-warning": return "guardian-dog-warning";
     case "guardian-dog-defensive-growl": return "guardian-dog-defensive-growl";

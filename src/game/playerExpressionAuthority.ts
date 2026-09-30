@@ -31,6 +31,7 @@ import {
 } from "./traversalFeedback";
 import { createRegionCoord } from "../sim/regions";
 import { createWorldPosition } from "./worldPosition";
+import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 
 export interface PlayerExpressionAuthority {
   readonly traversalFeedback: TraversalFeedbackState;
@@ -185,6 +186,7 @@ export function playerExpressionEventMatchesAdmission(
     || admission.triggerEventId !== event.triggerEventId
     || (admission.kind !== "player-traversal"
       && admission.kind !== "player-fall-recovery"
+      && admission.kind !== "player-exhaustion"
       && admission.kind !== "legacy-v33-player")
   ) return false;
   if (admission.kind === "legacy-v33-player") {
@@ -231,6 +233,7 @@ export function playerExpressionMemoryMatchesAdmission(
     || admission.triggerEventId !== memory.triggerEventId
     || (admission.kind !== "player-traversal"
       && admission.kind !== "player-fall-recovery"
+      && admission.kind !== "player-exhaustion"
       && admission.kind !== "legacy-v33-player")
   ) return false;
   if (admission.kind === "legacy-v33-player") {
@@ -259,7 +262,8 @@ export function playerExpressionAdmissionSoundPolicy(
     admission === null
     || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
     || (admission.kind !== "player-traversal"
-      && admission.kind !== "player-fall-recovery")
+      && admission.kind !== "player-fall-recovery"
+      && admission.kind !== "player-exhaustion")
   ) return null;
   const policy = policyForAdmission(admission, authority, 0);
   return policy === null
@@ -274,11 +278,22 @@ export function playerExpressionAdmissionSoundPolicy(
 
 function policyForAdmission(
   admission: Extract<SituatedExpressionAdmissionRecord, {
-    readonly kind: "player-traversal" | "player-fall-recovery";
+    readonly kind: "player-traversal" | "player-fall-recovery" | "player-exhaustion";
   }>,
   authority: PlayerExpressionAuthority,
   candidateVariantSeed: number,
 ): PlayerExpressionPolicy | null {
+  if (admission.kind === "player-exhaustion") {
+    const policy = playerEffortExpressionPolicy(admission.sourceActorId, {
+      committedWorldTick: admission.committedWorldTick,
+      admittedAtPlayerStepPhase: admission.admittedAtPlayerStepPhase,
+      acceptedDistanceUnits: admission.acceptedDistanceUnits,
+      resolution: admission.resolution,
+    });
+    return policy === null || admission.triggerEventId !== policy.triggerEventId
+      ? null
+      : policy;
+  }
   const traversalFeedback = canonicalTraversalFeedback(authority.traversalFeedback);
   if (traversalFeedback === null) return null;
   if (admission.kind === "player-fall-recovery") {
@@ -503,6 +518,7 @@ function policyFor(
     case "fish-crow-alarm-call":
     case "human-danger-warning":
     case "keeper-secure-store-response":
+    case "need-rest-after-exertion":
       return null;
   }
 }

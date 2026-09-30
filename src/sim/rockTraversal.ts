@@ -256,7 +256,8 @@ const OUTCROP_Y_PURPOSE = 3;
 const OUTCROP_RADIUS_PURPOSE = 4;
 const OUTCROP_DETAIL_PURPOSE = 5;
 const RISK_LIMIT = 950;
-const COST_LIMIT = 6_000;
+/** Greatest canonical rock-crossing travel multiplier admitted by this owner. */
+export const ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE = 6_000;
 
 const TERRAIN_KINDS: ReadonlySet<string> = new Set<TerrainKind>([
   "deep-water",
@@ -533,7 +534,7 @@ function candidateAt(
   );
   const travelCostPermille = clampPermille(
     SEVERITY_BASE_COST[severity] + Math.trunc(slope / 1_000),
-    COST_LIMIT,
+    ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE,
   );
   return {
     id: tile.tileIndex + 1,
@@ -828,7 +829,7 @@ function rockByTile(field: RockField): Map<number, RockObstacle> {
       && (raw.fallRiskPermille as number) <= RISK_LIMIT
       && Number.isSafeInteger(raw.travelCostPermille)
       && (raw.travelCostPermille as number) >= 1_000
-      && (raw.travelCostPermille as number) <= COST_LIMIT;
+      && (raw.travelCostPermille as number) <= ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE;
     const obstacle: RockObstacle = obstacleValid
       ? raw as unknown as RockObstacle
       : {
@@ -841,7 +842,7 @@ function rockByTile(field: RockField): Map<number, RockObstacle> {
         walkingBlocked: true,
         highRisk: true,
         fallRiskPermille: RISK_LIMIT,
-        travelCostPermille: COST_LIMIT,
+        travelCostPermille: ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE,
       };
     const previous = result.get(obstacle.tileIndex);
     if (previous === undefined || obstacle.id < previous.id) result.set(obstacle.tileIndex, obstacle);
@@ -1200,7 +1201,13 @@ export function queryRockCrossing(
     0,
   );
   const baseTravelCostPermille = obstacles.reduce(
-    (maximum, obstacle) => Math.max(maximum, clampPermille(obstacle.travelCostPermille, COST_LIMIT)),
+    (maximum, obstacle) => Math.max(
+      maximum,
+      clampPermille(
+        obstacle.travelCostPermille,
+        ROCK_CROSSING_MAX_TRAVEL_COST_PERMILLE,
+      ),
+    ),
     1_000,
   );
   const baseHighRisk = obstacles.some((obstacle) => obstacle.highRisk) || baseFallRiskPermille >= 350;

@@ -333,6 +333,32 @@ describe("runtime field-resource integration", () => {
     runtime.destroy();
   });
 
+  it("roundtrips a lawful between-step gather stamina spend without breaking step authority", async () => {
+    const world = createWorld("the gathered reed stays between footsteps", "calm");
+    const catalog = runtimeCatalog(world);
+    const node = catalog.nodes.find((candidate) => candidate.capacityUnits >= 3);
+    if (!node) throw new Error("fixture needs a harvestable resource");
+    const player = createPlayer(createWorldView(world));
+    placePlayerOnNode(player, node);
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+
+    advancePlayerSteps(runtime, 1);
+    const beforeGather = runtime.getUIView().player.stamina;
+    runtime.dispatchRenderer({ type: "interact" });
+    expect(runtime.getUIView().player.stamina).toBeLessThan(beforeGather);
+    advancePlayerSteps(runtime, 1);
+    await runtime.save();
+    runtime.destroy();
+
+    scheduledFrame = undefined;
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(stackQuantity(reloaded, node.material)).toBe(1);
+    reloaded.destroy();
+  });
+
   it("routes a mobile resource target and gathers only after reaching its exact patch", async () => {
     const { world, node, startTile } = dryResourceRouteFixture("the fingertip follows sunfiber");
     const player = createPlayer(createWorldView(world));
@@ -472,7 +498,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(41);
+    expect(saved.version).toBe(42);
     expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
@@ -665,7 +691,7 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(41);
+    expect(migrated.version).toBe(42);
     expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,

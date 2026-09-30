@@ -10,6 +10,7 @@ import {
 } from "./looseCargo";
 import { createPlayer } from "./player";
 import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
+import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 import {
   commitPhysicalCargoState,
   createPhysicalCargoStateFromPlayer,
@@ -37,6 +38,7 @@ import {
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
+  createPlayerExhaustionExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionAdmissionRecord,
   type PlayerTraversalExpressionCausalClass,
@@ -264,6 +266,8 @@ function policy(
     case "human-danger-warning":
     case "keeper-secure-store-response":
       throw new Error("Other human expressions are not player authority");
+    case "need-rest-after-exertion":
+      throw new Error("Effort speech uses exact exhaustion admission authority");
   }
 }
 
@@ -369,6 +373,34 @@ function traversalAdmission(
   });
   if (record === null) throw new Error("Expression fixture omitted its causal admission");
   return record;
+}
+
+function exhaustionFixture() {
+  const evidence = {
+    committedWorldTick: 73,
+    admittedAtPlayerStepPhase: 3,
+    acceptedDistanceUnits: 105,
+    resolution: "dry-exhaustion-camp" as const,
+  };
+  const policyValue = playerEffortExpressionPolicy("player:local", evidence);
+  if (policyValue === null) throw new Error("Expected effort policy fixture");
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "player:local",
+    position: POSITION,
+    ...policyValue,
+  });
+  if (!reduction.accepted || reduction.event === null) {
+    throw new Error("Expected effort event fixture");
+  }
+  const admission = createPlayerExhaustionExpressionAdmissionRecord({
+    sourceActorId: "player:local",
+    triggerEventId: policyValue.triggerEventId,
+    sampleOrdinal: 0,
+    ...evidence,
+  });
+  if (admission === null) throw new Error("Expected effort admission fixture");
+  return { event: reduction.event, admission } as const;
 }
 
 describe("player situated-expression authority", () => {
@@ -597,6 +629,40 @@ describe("player situated-expression authority", () => {
         evidence,
       )).toBe(true);
     }
+  });
+
+  it("reauthenticates dry effort only from its exact exhaustion admission", () => {
+    const { event, admission } = exhaustionFixture();
+    const evidence = authority(noIncidentFeedback(), emptyPhysicalCargo());
+    expect(playerExpressionEventMatchesAdmission(event, admission, evidence)).toBe(true);
+    expect(playerExpressionMemoryMatchesAdmission(
+      memoryFor(event, 3),
+      admission,
+      evidence,
+    )).toBe(true);
+    expect(playerExpressionAdmissionSoundPolicy(admission, evidence)).toEqual({
+      volume: "murmur",
+      interrupt: "none",
+    });
+    expect(situatedExpressionAcoustics("murmur")).toEqual({
+      loudness: 360_000,
+      rangeUnits: 8_000,
+    });
+
+    for (const forged of [
+      { ...event, meaning: "steady-after-stumble" as const },
+      { ...event, family: "footing" as const },
+      { ...event, knowledgeBasis: "self-felt-stumble" as const },
+      { ...event, priority: event.priority + 1 },
+      { ...event, variantSeed: event.variantSeed + 1 },
+      { ...event, durationSteps: event.durationSteps + 1 },
+    ]) {
+      expect(playerExpressionEventMatchesAdmission(forged, admission, evidence)).toBe(false);
+    }
+    expect(playerExpressionEventMatchesAdmission(event, {
+      ...admission,
+      acceptedDistanceUnits: admission.acceptedDistanceUnits + 1,
+    }, evidence)).toBe(false);
   });
 
   it("rejects a self-consistent event or memory whose causal class was swapped", () => {

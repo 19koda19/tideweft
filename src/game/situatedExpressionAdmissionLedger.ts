@@ -9,6 +9,10 @@ import {
 } from "./worldPosition";
 import { SERIOUS_FALL_HAZARD } from "./fallRisk";
 import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
+import {
+  playerEffortExpressionPolicy,
+  type PlayerEffortExpressionEvidence,
+} from "./playerEffortExpression";
 
 /** Bounded causal evidence retained for one player-perception interval. */
 export const SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION = 1 as const;
@@ -19,6 +23,7 @@ export const SITUATED_EXPRESSION_ADMISSION_MAX_SEPARATED_ENTITY_IDS = 64 as cons
 export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "player-traversal",
   "player-fall-recovery",
+  "player-exhaustion",
   "porter-heavy-departure",
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
@@ -95,6 +100,11 @@ export interface PlayerFallRecoveryExpressionAdmissionRecord
   readonly kind: "player-fall-recovery";
   readonly recoveryEventId: string;
   readonly recoveredEntityId: string;
+}
+
+export interface PlayerExhaustionExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase, PlayerEffortExpressionEvidence {
+  readonly kind: "player-exhaustion";
 }
 
 export interface PorterHeavyDepartureExpressionAdmissionRecord
@@ -178,6 +188,7 @@ export interface LegacyV33PlayerExpressionAdmissionRecord
 export type SituatedExpressionAdmissionRecord =
   | PlayerTraversalExpressionAdmissionRecord
   | PlayerFallRecoveryExpressionAdmissionRecord
+  | PlayerExhaustionExpressionAdmissionRecord
   | PorterHeavyDepartureExpressionAdmissionRecord
   | GuardianDogWarningExpressionAdmissionRecord
   | GuardianDogDefensiveGrowlExpressionAdmissionRecord
@@ -211,6 +222,9 @@ export interface PlayerFallRecoveryExpressionAdmissionInput
   readonly recoveryEventId: string;
   readonly recoveredEntityId: string;
 }
+
+export interface PlayerExhaustionExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase, PlayerEffortExpressionEvidence {}
 
 export interface PorterHeavyDepartureExpressionAdmissionInput
   extends SituatedExpressionAdmissionInputBase {
@@ -342,6 +356,35 @@ export function createPlayerFallRecoveryExpressionAdmissionRecord(
     recoveryEventId: value.recoveryEventId,
     recoveredEntityId: value.recoveredEntityId,
   }) as PlayerFallRecoveryExpressionAdmissionRecord | null;
+}
+
+/** Creates one effort admission from an exact committed dry exhaustion step. */
+export function createPlayerExhaustionExpressionAdmissionRecord(
+  input: PlayerExhaustionExpressionAdmissionInput,
+): PlayerExhaustionExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedDistanceUnits",
+    "admittedAtPlayerStepPhase",
+    "committedWorldTick",
+    "resolution",
+    "sampleOrdinal",
+    "sourceActorId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "player-exhaustion",
+    committedWorldTick: value.committedWorldTick,
+    acceptedDistanceUnits: value.acceptedDistanceUnits,
+    resolution: value.resolution,
+  }) as PlayerExhaustionExpressionAdmissionRecord | null;
 }
 
 /** Creates one porter departure admission with the exact player receipt context. */
@@ -599,6 +642,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
   switch (value.kind) {
     case "player-traversal": return canonicalTraversalRecord(value);
     case "player-fall-recovery": return canonicalRecoveryRecord(value);
+    case "player-exhaustion": return canonicalExhaustionRecord(value);
     case "porter-heavy-departure": return canonicalPorterRecord(value);
     case "guardian-dog-warning": return canonicalGuardianDogRecord(value);
     case "guardian-dog-defensive-growl": return canonicalGuardianDogGrowlRecord(value);
@@ -769,6 +813,43 @@ function canonicalRecoveryRecord(
     kind: "player-fall-recovery",
     recoveryEventId: value.recoveryEventId,
     recoveredEntityId: value.recoveredEntityId,
+  });
+}
+
+function canonicalExhaustionRecord(
+  value: Readonly<Record<string, unknown>>,
+): PlayerExhaustionExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedDistanceUnits",
+    "admittedAtPlayerStepPhase",
+    "committedWorldTick",
+    "eventId",
+    "kind",
+    "resolution",
+    "sampleOrdinal",
+    "sourceActorId",
+    "triggerEventId",
+    "version",
+  ]) || value.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID) return null;
+  const evidence = {
+    committedWorldTick: value.committedWorldTick,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    acceptedDistanceUnits: value.acceptedDistanceUnits,
+    resolution: value.resolution,
+  } as PlayerEffortExpressionEvidence;
+  const policy = playerEffortExpressionPolicy(value.sourceActorId, evidence);
+  if (policy === null || value.triggerEventId !== policy.triggerEventId) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+    triggerEventId: policy.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: evidence.admittedAtPlayerStepPhase,
+    kind: "player-exhaustion",
+    committedWorldTick: evidence.committedWorldTick,
+    acceptedDistanceUnits: evidence.acceptedDistanceUnits,
+    resolution: "dry-exhaustion-camp",
   });
 }
 
