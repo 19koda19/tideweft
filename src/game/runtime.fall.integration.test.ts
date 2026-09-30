@@ -76,7 +76,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 43;
+  readonly version: 44;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -86,9 +86,10 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 11;
+    readonly version: 12;
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
+    readonly intervalStartWasSleeping: boolean;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly humanPerception.PlayerSenseSample[];
     readonly playerStepStateSamples: readonly (PlayerStepStateSample | null)[];
@@ -186,10 +187,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 43
-    || record.payloadVersion !== 43
+    || envelope.version !== 44
+    || record.payloadVersion !== 44
   ) {
-    throw new Error("fixture did not produce a current v43 regional session save");
+    throw new Error("fixture did not produce a current v44 regional session save");
   }
   return envelope;
 }
@@ -210,7 +211,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 43,
+    payloadVersion: 44,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -789,7 +790,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const exhausted = decodeCurrent(repository.snapshot());
     expect(exhausted.perceptionCarry).toMatchObject({
-      version: 11,
+      version: 12,
       playerStepsSinceWorldTick: 3,
       situatedExpressionAdmissions: {
         version: 1,
@@ -1151,7 +1152,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 43,
+      version: 44,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -1166,6 +1167,7 @@ describe("production terrain fall and physical cargo", () => {
       "animalContactAcousticCarry",
       "intervalStartFacingMilliRadians",
       "intervalStartPosition",
+      "intervalStartWasSleeping",
       "nextPlayerSenseSampleOrdinal",
       "playerSenseSamples",
       "playerStepStateAnchor",
@@ -1177,7 +1179,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 11,
+      version: 12,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,

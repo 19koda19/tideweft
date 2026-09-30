@@ -15,10 +15,12 @@ import {
 import * as humanPerception from "./humanPerception";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer } from "./player";
+import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import type {
   PorterHeavyDepartureExpressionAdmissionRecord,
+  ResidentWeatherHoldExpressionAdmissionRecord,
   SituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
@@ -75,6 +77,7 @@ interface CurrentEnvelope {
   readonly perceptionCarry: {
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
+    readonly intervalStartWasSleeping: boolean;
     readonly actorVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
     readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
     readonly situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
@@ -89,6 +92,8 @@ interface WorkingPeopleFixture {
   readonly record: SaveRecord;
   readonly residentId: number;
 }
+
+interface WeatherHoldFixture extends WorkingPeopleFixture {}
 
 let scheduledFrame: ((now: number) => void) | undefined;
 let nextFrameTime = 100;
@@ -125,6 +130,10 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
 
 function strainedCueCount(): number {
   return soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-strained").length;
+}
+
+function steadyCueCount(): number {
+  return soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady").length;
 }
 
 function decodeCurrent(repository: MemoryRepository): CurrentEnvelope {
@@ -259,7 +268,203 @@ function workingPeopleFixture(
   };
 }
 
+/**
+ * Saves one porter already travelling under clear weather. The runtime owns
+ * the next severe-weather step, so only its newly committed shelter event may
+ * become Living Voice speech.
+ */
+function weatherHoldFixture(seed: string): WeatherHoldFixture {
+  const world = createWorld(seed, "standard");
+  const contract = world.contracts.find(({ status }) => status === "offered");
+  if (!contract) throw new Error("weather-hold fixture needs an offered Promise");
+  const origin = world.settlements.find(({ id }) => id === contract.originSettlementId);
+  const resident = world.residents.find((candidate) => (
+    candidate.activeContractId === null
+    && candidate.location.kind === "settlement"
+    && candidate.location.settlementId === contract.originSettlementId
+  ));
+  if (!origin || !resident) throw new Error("weather-hold fixture needs an origin porter");
+  world.weather = {
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+    nextChangeTick: world.meta.completedTick + 1_000,
+  };
+  for (const route of world.routes) {
+    route.traceStrength = Math.max(route.traceStrength, STRAND_AUTOMATION_THRESHOLD);
+    route.condition = Math.max(route.condition, 180_000);
+  }
+  stepWorld(world, [{
+    id: "weather-hold-runtime-accept",
+    type: "accept-contract",
+    carrier: "resident",
+    contractId: contract.id,
+    residentId: resident.id,
+  }]);
+  stepWorld(world);
+  if (
+    contract.status !== "in-transit"
+    || resident.location.kind !== "route"
+    || resident.condition.sheltering
+  ) {
+    throw new Error("weather-hold fixture porter did not depart under clear weather");
+  }
+  world.weather = {
+    kind: "storm",
+    intensity: 950_000,
+    windX: 500_000,
+    windY: -500_000,
+    nextChangeTick: world.meta.completedTick + 1_000,
+  };
+
+  const view = createWorldView(world);
+  const player = createPlayer(view, origin.id);
+  const eventPlacement = resolveResidentWorldPlacement(view, resident);
+  if (
+    eventPlacement === null
+    || eventPlacement.position.region.x !== 0
+    || eventPlacement.position.region.y !== 0
+  ) {
+    throw new Error("weather-hold fixture needs a compatibility-region porter");
+  }
+  player.x = eventPlacement.position.localX;
+  player.y = eventPlacement.position.localY;
+  player.previousX = player.x;
+  player.previousY = player.y;
+  const session = createSessionState(seed, "hearth");
+  session.titleVisible = false;
+  session.paused = false;
+  session.hasSave = true;
+  const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
+  const envelope = {
+    format: "tideweft-session",
+    version: 1,
+    world: serializeWorld(world),
+    player: legacyPlayer,
+    session,
+  };
+  return {
+    actorId: resident.identity.stableId,
+    contractId: contract.id,
+    hiddenName: resident.name,
+    residentId: resident.id,
+    record: {
+      slotId: "autosave",
+      label: "Resident weather-hold runtime fixture",
+      seed,
+      updatedAt: 1,
+      playTicks: world.meta.completedTick,
+      settlementCount: world.settlements.length,
+      connectedCount: 0,
+      worldJson: JSON.stringify(envelope),
+    },
+  };
+}
+
 describe("runtime Working People heavy-porter expression", () => {
+  it("voices one committed storm hold, persists its event locus, and never replays audio", async () => {
+    const fixture = weatherHoldFixture("runtime resident weather hold voice");
+    const repository = new MemoryRepository(fixture.record);
+    const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    const runtime = await createTideweftRuntime(repository);
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(runtime, 10);
+    const weatherHoldExpression = (runtime.getRenderView().expressions ?? [])
+      .find(({ sourceActorId, text }) => (
+        sourceActorId === fixture.actorId && text === "We'll hold here."
+      ));
+    expect(weatherHoldExpression).toMatchObject({
+      sourceKind: "human",
+      speakerLabel: "Unknown porter",
+      tone: "restrained",
+    });
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      id: weatherHoldExpression?.id,
+      text: "We'll hold here.",
+      speakerLabel: "Unknown porter",
+      tone: "restrained",
+    });
+    expect(steadyCueCount()).toBe(1);
+    await runtime.save();
+    const committed = decodeCurrent(repository);
+    const committedWorld = deserializeWorld(committed.world);
+    const shelterEvents = committedWorld.events.filter((event) => (
+      event.type === "resident-sheltered" && event.subjectId === fixture.residentId
+    ));
+    expect(shelterEvents).toHaveLength(1);
+    const residentChannel = committed.perceptionCarry.situatedExpressionChannels.channels
+      .find(({ sourceActorId }) => sourceActorId === fixture.actorId);
+    expect(residentChannel?.state.active).toMatchObject({
+      sourceActorId: fixture.actorId,
+      meaning: "resident-weather-hold",
+      tone: "restrained",
+      audioAcknowledged: true,
+    });
+    const admission = committed.perceptionCarry.situatedExpressionAdmissions.records.find(
+      (candidate): candidate is ResidentWeatherHoldExpressionAdmissionRecord => (
+        candidate.kind === "resident-weather-hold"
+      ),
+    );
+    if (
+      admission === undefined
+      || residentChannel === undefined
+      || residentChannel.state.active === null
+    ) {
+      throw new Error("saved weather hold lost its shared Living Voice trajectory");
+    }
+    expect(admission).toMatchObject({
+      sourceActorId: fixture.actorId,
+      contractId: fixture.contractId,
+      shelteredAtTick: committedWorld.meta.completedTick,
+      eventRouteId: shelterEvents[0]?.data.eventRouteId,
+      eventRouteProgress: shelterEvents[0]?.data.eventRouteProgress,
+      admittedAtPlayerStepPhase: 0,
+    });
+    expect(committed.perceptionCarry.intervalStartPosition).toEqual(admission.listenerPosition);
+    expect(committed.perceptionCarry.intervalStartWasSleeping)
+      .toBe(admission.listenerWasSleepingAtAdmission);
+    expect(committed.perceptionCarry.actorVocalizationSamples).toEqual([
+      expect.objectContaining({
+        expressionEventId: admission.eventId,
+        sourceActorId: fixture.actorId,
+        position: residentChannel.state.active?.position,
+        soundClass: "human-vocalization",
+        soundInterrupt: "none",
+      }),
+    ]);
+    expect(runtime.getRenderView().porters.some(({ speech }) => (
+      speech === "Holding here until this eases."
+    ))).toBe(false);
+    const cueCountBeforeReload = steadyCueCount();
+    runtime.destroy();
+
+    perceptionSpy.mockClear();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(steadyCueCount()).toBe(cueCountBeforeReload);
+    advancePlayerSteps(resumed, 10);
+    const matchingIntervals = perceptionSpy.mock.calls
+      .map(([input]) => input.supplementalSoundSamples ?? [])
+      .filter((samples) => samples.some(({ expressionEventId }) => (
+        expressionEventId === admission.eventId
+      )));
+    expect(matchingIntervals).toHaveLength(1);
+    expect(matchingIntervals[0]).toContainEqual(expect.objectContaining({
+      sourceActorId: fixture.actorId,
+      expressionEventId: admission.eventId,
+    }));
+    expect(steadyCueCount()).toBe(cueCountBeforeReload);
+    await resumed.save();
+    const after = decodeCurrent(repository);
+    expect(deserializeWorld(after.world).events.filter((event) => (
+      event.type === "resident-sheltered" && event.subjectId === fixture.residentId
+    ))).toHaveLength(1);
+    resumed.destroy();
+  });
+
   it("presents, persists, and perceives one nearby heavy departure without replaying audio", async () => {
     const fixture = workingPeopleFixture("runtime heavy porter voice", {
       heavy: true,

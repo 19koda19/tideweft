@@ -20,13 +20,14 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 43;
+  readonly version: 44;
   readonly world: string;
   readonly session: GameSessionState;
   readonly perceptionCarry: {
-    readonly version: 11;
+    readonly version: 12;
     readonly intervalStartPosition: unknown;
     readonly intervalStartFacingMilliRadians: number;
+    readonly intervalStartWasSleeping: boolean;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly unknown[];
     readonly actorVocalizationSamples: readonly unknown[];
@@ -151,9 +152,9 @@ function advanceOrdinaryElapsedTime(
 
 function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
-  expect(record.payloadVersion).toBe(43);
+  expect(record.payloadVersion).toBe(44);
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(43);
+  expect(envelope.version).toBe(44);
   expect(Object.keys(envelope).sort()).toEqual(CURRENT_ENVELOPE_KEYS);
   const { integrity, ...unsealed } = envelope;
   expect(integrity).toBe(gameSaveEnvelopeIntegrity(unsealed));

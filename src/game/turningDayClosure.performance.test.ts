@@ -109,7 +109,7 @@ const UTF8_ENCODER = new TextEncoder();
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 43;
+  readonly version: 44;
   readonly world: string;
   readonly regionalEcology: string;
   readonly integrity: string;
@@ -307,8 +307,8 @@ describe("Turning Day bounded multi-day closure budget", () => {
     const elapsedCpuMs = (elapsedCpu.user + elapsedCpu.system) / 1_000;
 
     assertWorldInvariants(world);
-    expect(currentRecord.payloadVersion).toBe(43);
-    expect(envelope.version).toBe(43);
+    expect(currentRecord.payloadVersion).toBe(44);
+    expect(envelope.version).toBe(44);
     expect(currentRecord.worldJson.length).toBeLessThan(SAVE_WORLD_JSON_MAX_CHARACTERS);
     expect(serializedBytes(envelope.regionalEcology))
       .toBeLessThan(REGIONAL_ECOLOGY_STATE_V6_MAX_SERIALIZED_BYTES);
@@ -431,7 +431,7 @@ function legacyRecordAtProductionTick(): SaveRecord {
 function decodeCurrentEnvelope(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(43);
+  expect(envelope.version).toBe(44);
   expect(typeof envelope.world).toBe("string");
   expect(typeof envelope.regionalEcology).toBe("string");
   const { integrity, ...unsealed } = envelope;

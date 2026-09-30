@@ -22,6 +22,7 @@ import {
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   createResidentIntroductionExpressionAdmissionRecord,
+  createResidentWeatherHoldExpressionAdmissionRecord,
   createSettlementKeeperStoreResponseExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
   type GuardianDogShelterWhineExpressionAdmissionInput,
@@ -499,6 +500,89 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       hiddenIntroducedFacts: ["name", "occupation", "home"],
+    })).toBeNull();
+  });
+
+  it("binds a resident weather hold to its route locus and exact event-time receipt law", () => {
+    const input = {
+      sourceActorId: "H-resident-weather-hold-admission",
+      triggerEventId: "sim-event:resident-sheltered:18:5",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      contractId: 7,
+      shelteredAtTick: 915,
+      eventRouteId: 4,
+      eventRouteProgress: 450_000,
+      listenerPosition: POSITION,
+      listenerFacingMilliRadians: 1_571,
+      listenerWasSleepingAtAdmission: false,
+      receptionKind: "heard-visible",
+      hearingCertainty: 790_000,
+    } as const;
+    const canonical = createResidentWeatherHoldExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "resident-weather-hold",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(Object.isFrozen(canonical?.listenerPosition)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+
+    expect(createResidentWeatherHoldExpressionAdmissionRecord({
+      ...input,
+      receptionKind: "heard-unseen",
+    })).toMatchObject({
+      receptionKind: "heard-unseen",
+      hearingCertainty: 790_000,
+    });
+    expect(createResidentWeatherHoldExpressionAdmissionRecord({
+      ...input,
+      receptionKind: null,
+      hearingCertainty: null,
+    })).toMatchObject({ receptionKind: null, hearingCertainty: null });
+    expect(createResidentWeatherHoldExpressionAdmissionRecord({
+      ...input,
+      listenerWasSleepingAtAdmission: true,
+      receptionKind: null,
+      hearingCertainty: null,
+    })).toMatchObject({
+      listenerWasSleepingAtAdmission: true,
+      receptionKind: null,
+      hearingCertainty: null,
+    });
+
+    for (const mutation of [
+      { sourceActorId: PLAYER_ID },
+      { admittedAtPlayerStepPhase: 1 },
+      { contractId: 0 },
+      { shelteredAtTick: -0 },
+      { eventRouteId: 0 },
+      { eventRouteProgress: 1_000_001 },
+      { listenerFacingMilliRadians: 0.5 },
+      { receptionKind: null, hearingCertainty: 790_000 },
+      { receptionKind: "heard-visible", hearingCertainty: null },
+      { listenerWasSleepingAtAdmission: true },
+    ] as const) {
+      expect(createResidentWeatherHoldExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      })).toBeNull();
+    }
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      receptionKind: "self",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenWeatherCause: "storm",
     })).toBeNull();
   });
 

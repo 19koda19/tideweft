@@ -403,12 +403,13 @@ export function projectSituatedExpressionSource(
   if (matches.length !== 1) return null;
   const resident = matches[0];
   if (resident === undefined) return null;
-  // A retained introduction stays anchored to its authenticated event-time
-  // contact point even if the porter starts moving before its brief readable
-  // lifetime ends. Every other human expression still requires the source's
-  // current physical placement.
+  // Retained introductions and weather holds stay anchored to their
+  // authenticated event-time contact points even if the porter starts moving
+  // before the brief readable lifetime ends. Every other human expression
+  // still requires the source's current physical placement.
   if (
     event.meaning !== "resident-introduction"
+    && event.meaning !== "resident-weather-hold"
     && projectResidentWorldPosition(spatialWorld, resident, 1) === null
   ) {
     return null;
@@ -740,7 +741,6 @@ function porterStateSpeech(resident: ResidentState, tick: number, selected: bool
     case "unaware": break;
   }
   if (restState === "resting") return selected ? "Taking a rest." : undefined;
-  if (resident.condition.sheltering) return "Holding here until this eases.";
   if (resident.condition.coldStress >= 720_000) return "This cold bites.";
   if (resident.condition.wetness >= 700_000) return "Soaked through.";
   if (resident.condition.exhaustion >= 720_000) return "Need a moment.";

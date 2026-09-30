@@ -178,6 +178,14 @@ export function canonicalizeSituatedExpressionTrajectory(
           || channel.reception.receivedAtTick !== latest.introducedAtTick
           || channel.reception.certainty !== latest.hearingCertainty)
       ) return null;
+      if (
+        latest.kind === "resident-weather-hold"
+        && (latest.receptionKind === null
+          ? channel.reception !== null
+          : channel.reception?.kind !== latest.receptionKind
+            || channel.reception.receivedAtTick !== latest.shelteredAtTick
+            || channel.reception.certainty !== latest.hearingCertainty)
+      ) return null;
     }
   }
 
@@ -252,6 +260,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "keeper-secure-store-response";
     case "resident-introduction":
       return meaning === "resident-introduction";
+    case "resident-weather-hold":
+      return meaning === "resident-weather-hold";
     case "legacy-v33-player":
       return isLegacyV33PlayerMeaning(meaning);
   }
@@ -277,6 +287,14 @@ function eventMatchesAdmission(
       && event.knowledgeBasis === "self-committed-introduction"
       && event.priority === 650_000
       && event.salience === 780_000;
+  }
+  if (record.kind === "resident-weather-hold") {
+    return event.family === "condition"
+      && event.tone === "restrained"
+      && event.volume === "spoken"
+      && event.knowledgeBasis === "self-weather-distress"
+      && event.priority === 300_000
+      && event.salience === 520_000;
   }
   return (record.kind !== "core-wildlife-fish-crow-alarm"
     && record.kind !== "human-danger-warning")
@@ -305,6 +323,15 @@ function sampleAcousticsMatchAdmission(
   if (record.kind === "resident-introduction") {
     const acoustics = situatedExpressionAcoustics({
       meaning: "resident-introduction",
+      volume: "spoken",
+    });
+    return sample.soundLoudness === acoustics.loudness
+      && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundInterrupt === "none";
+  }
+  if (record.kind === "resident-weather-hold") {
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "resident-weather-hold",
       volume: "spoken",
     });
     return sample.soundLoudness === acoustics.loudness
@@ -346,6 +373,7 @@ function admissionDurationSteps(
     case "human-danger-warning": return 6;
     case "settlement-keeper-store-response": return 12;
     case "resident-introduction": return 56;
+    case "resident-weather-hold": return 12;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -366,6 +394,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
     case "resident-introduction": return 56;
+    case "resident-weather-hold": return 12;
   }
 }
 
@@ -384,6 +413,7 @@ function admissionMeaning(
     case "human-danger-warning": return "human-danger-warning";
     case "settlement-keeper-store-response": return "keeper-secure-store-response";
     case "resident-introduction": return "resident-introduction";
+    case "resident-weather-hold": return "resident-weather-hold";
     case "legacy-v33-player": return "steady-after-stumble";
   }
 }

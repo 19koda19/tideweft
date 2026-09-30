@@ -391,6 +391,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "keeper-secure-store-response":
     case "need-rest-after-exertion":
     case "resident-introduction":
+    case "resident-weather-hold":
       return [];
   }
 }
@@ -411,6 +412,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
     case "resident-introduction": return 56;
+    case "resident-weather-hold": return 12;
   }
 }
 

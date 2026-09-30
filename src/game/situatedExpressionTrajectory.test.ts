@@ -24,6 +24,7 @@ import {
   createPlayerExhaustionExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
   createResidentIntroductionExpressionAdmissionRecord,
+  createResidentWeatherHoldExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
@@ -55,6 +56,7 @@ const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
+const WEATHER_HOLD_RESIDENT_ID = "H-expression-trajectory-weather-hold";
 const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
 
 interface Fixture {
@@ -194,6 +196,24 @@ function residentIntroductionIntent(triggerEventId: string): SituatedExpressionI
     salience: 780_000,
     variantSeed: 173,
     durationSteps: 56,
+  };
+}
+
+function residentWeatherHoldIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: WEATHER_HOLD_RESIDENT_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "resident-weather-hold",
+    family: "condition",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 520_000,
+    variantSeed: 191,
+    durationSteps: 12,
   };
 }
 
@@ -591,6 +611,76 @@ function residentIntroductionFixture(): Fixture {
   });
   if (canonicalBank === null || reception === null || record === null) {
     throw new Error("fixture resident introduction trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [residentIntroductionSample(admitted.event, 0)],
+  };
+}
+
+function residentWeatherHoldFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const shelteredAtTick = 40;
+  const hearingCertainty = receptionKind === "none" ? null : 760_000;
+  const triggerEventId = "sim-event:resident-sheltered:18:5";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    residentWeatherHoldIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture resident weather hold expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          shelteredAtTick,
+          hearingCertainty ?? 0,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          shelteredAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 3, maximum: 7 },
+            certainty: (hearingCertainty ?? 0) / 1_000_000,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture resident weather-hold reception was not canonical");
+  }
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{
+      sourceActorId: WEATHER_HOLD_RESIDENT_ID,
+      state: current,
+      reception,
+    }],
+  });
+  const record = createResidentWeatherHoldExpressionAdmissionRecord({
+    sourceActorId: WEATHER_HOLD_RESIDENT_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    contractId: 7,
+    shelteredAtTick,
+    eventRouteId: 4,
+    eventRouteProgress: 450_000,
+    listenerPosition: POSITION,
+    listenerFacingMilliRadians: 0,
+    listenerWasSleepingAtAdmission: false,
+    receptionKind: receptionKind === "none" ? null : receptionKind,
+    hearingCertainty,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture resident weather-hold trajectory was not canonical");
   }
   return {
     bank: canonicalBank,
@@ -1082,6 +1172,115 @@ describe("situated-expression admission trajectory", () => {
         bankValue,
         ledgerValue,
         fixture.phase,
+        samplesValue,
+      )).toBe(false);
+    }
+  });
+
+  it("binds resident weather holds to nullable event-time receipts and exact spoken semantics", () => {
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = residentWeatherHoldFixture(receptionKind);
+      const canonical = canonicalizeSituatedExpressionTrajectory(
+        fixture.bank,
+        fixture.ledger,
+        fixture.phase,
+        fixture.samples,
+      );
+
+      expect(canonical, receptionKind).not.toBeNull();
+      expect(canonical?.bank.channels[0]).toMatchObject({
+        sourceActorId: WEATHER_HOLD_RESIDENT_ID,
+        reception: receptionKind === "none"
+          ? null
+          : {
+              kind: receptionKind,
+              receivedAtTick: 40,
+              certainty: 760_000,
+            },
+        state: {
+          completedSteps: 3,
+          active: {
+            meaning: "resident-weather-hold",
+            family: "condition",
+            tone: "restrained",
+            volume: "spoken",
+            knowledgeBasis: "self-weather-distress",
+            priority: 300_000,
+            salience: 520_000,
+            durationSteps: 12,
+            remainingSteps: 9,
+            audioAcknowledged: true,
+          },
+          recent: [{
+            meaning: "resident-weather-hold",
+            family: "condition",
+            priority: 300_000,
+            meaningCooldownRemainingSteps: 33,
+            familyCooldownRemainingSteps: 9,
+          }],
+        },
+      });
+      expect(canonical?.supplementalSoundSamples[0]).toMatchObject({
+        soundLoudness: 620_000,
+        soundRangeUnits: 18_000,
+        soundClass: "human-vocalization",
+        soundInterrupt: "none",
+        sourceActorId: WEATHER_HOLD_RESIDENT_ID,
+      });
+    }
+  });
+
+  it("rejects weather-hold receipt, lifetime, acoustic, and semantic tampering", () => {
+    const none = residentWeatherHoldFixture("none");
+    const visible = residentWeatherHoldFixture("heard-visible");
+    const unseen = residentWeatherHoldFixture("heard-unseen");
+
+    expect(situatedExpressionTrajectoryIsCanonical(
+      visible.bank, unseen.ledger, visible.phase, visible.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      unseen.bank, visible.ledger, unseen.phase, unseen.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      none.bank, visible.ledger, none.phase, none.samples,
+    )).toBe(false);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      visible.bank, none.ledger, visible.phase, visible.samples,
+    )).toBe(false);
+
+    const changedHearing = mutable(visible.ledger);
+    const admission = changedHearing.records[0];
+    if (admission?.kind !== "resident-weather-hold") {
+      throw new Error("fixture lost resident-weather-hold admission");
+    }
+    if (admission.hearingCertainty === null) {
+      throw new Error("visible fixture lost hearing certainty");
+    }
+    admission.hearingCertainty -= 1;
+    expect(canonicalizeSituatedExpressionAdmissionLedger(changedHearing)).not.toBeNull();
+
+    const resetDuration = mutable(visible.bank);
+    resetDuration.channels[0]!.state.active!.durationSteps += 1;
+    resetDuration.channels[0]!.state.active!.remainingSteps += 1;
+    expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
+
+    const rewrittenSemantics = mutable(visible.bank);
+    rewrittenSemantics.channels[0]!.state.active!.salience -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(rewrittenSemantics)).not.toBeNull();
+
+    const changedAcoustics = mutable(visible.samples);
+    changedAcoustics[0]!.soundRangeUnits -= 1;
+
+    for (const [bankValue, ledgerValue, samplesValue] of [
+      [visible.bank, changedHearing, visible.samples],
+      [resetDuration, visible.ledger, visible.samples],
+      [rewrittenSemantics, visible.ledger, visible.samples],
+      [visible.bank, visible.ledger, changedAcoustics],
+    ] as const) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        bankValue,
+        ledgerValue,
+        visible.phase,
         samplesValue,
       )).toBe(false);
     }

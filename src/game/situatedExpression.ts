@@ -27,6 +27,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "keeper-secure-store-response",
   "need-rest-after-exertion",
   "resident-introduction",
+  "resident-weather-hold",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -335,6 +336,16 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 80,
     familyCooldownSteps: 24,
   }),
+  "resident-weather-hold": Object.freeze({
+    family: "condition",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
+      "self-weather-distress",
+    ]),
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["spoken"]),
+    meaningCooldownSteps: 36,
+    familyCooldownSteps: 12,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -458,6 +469,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
       // and home from the authenticated resident and fact grant. This neutral
       // fallback keeps the semantic event valid without storing mutable prose.
       text: "Let me introduce myself.",
+    }),
+  ]),
+  "resident-weather-hold": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.resident-weather-hold.0",
+      text: "We'll hold here.",
     }),
   ]),
 });

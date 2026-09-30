@@ -236,6 +236,11 @@ import {
   restoreResidentIntroductionPresentationLeasesFromCarry,
 } from "./residentIntroductionAdmissionAuthority";
 import {
+  prepareResidentWeatherHoldEventTimeReceipt,
+  residentWeatherHoldAdmissionMatchesWorld,
+  residentWeatherHoldReceptionMatchesEventTime,
+} from "./residentWeatherHoldAdmissionAuthority";
+import {
   settlementKeeperStoreResponseAdmissionMatchesWorld,
   settlementKeeperStoreResponseReceptionMatchesEventTime,
 } from "./settlementKeeperStoreResponseAdmissionAuthority";
@@ -504,6 +509,12 @@ import {
   residentIntroductionExpressionIntent,
   residentIntroductionExpressionMemoryMatchesWorld,
 } from "./residentIntroductionExpression";
+import {
+  residentWeatherHoldExpressionEventForTrigger,
+  residentWeatherHoldExpressionEventMatchesWorld,
+  residentWeatherHoldExpressionIntent,
+  residentWeatherHoldExpressionMemoryMatchesWorld,
+} from "./residentWeatherHoldExpression";
 import {
   settlementKeeperStoreResponseExpressionEventForTrigger,
   settlementKeeperStoreResponseExpressionEventMatchesWorld,
@@ -1071,6 +1082,7 @@ function recentMeaningAcousticTuples(
     case "guardian-dog-defensive-growl":
     case "keeper-secure-store-response":
     case "resident-introduction":
+    case "resident-weather-hold":
       return [{ volume: "spoken", interrupt: "none" }];
     case "protect-important-cargo":
       return [
@@ -1091,8 +1103,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** Current outer save whose situated-expression union owns resident introduction. */
+/** Current outer save whose situated-expression union owns resident weather holds. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** Retired pre-1.0 save whose closed expression union first owned introductions. */
+const RESIDENT_INTRODUCTION_GAME_SAVE_VERSION = 43;
 const PLAYER_EXHAUSTION_GAME_SAVE_VERSION = 42;
 /** First save whose pending perception carry owns physical animal contact. */
 const ANIMAL_CONTACT_GAME_SAVE_VERSION = 40;
@@ -1140,7 +1154,7 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 11 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 12 as const;
 const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
@@ -1169,6 +1183,7 @@ const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   0,
   41,
   PLAYER_EXHAUSTION_GAME_SAVE_VERSION,
+  RESIDENT_INTRODUCTION_GAME_SAVE_VERSION,
 ]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
@@ -1275,6 +1290,8 @@ interface PlayerPerceptionCarry {
   /** Exact player pose at phase zero; it anchors every later sample and porter receipt. */
   readonly intervalStartPosition: WorldPosition;
   readonly intervalStartFacingMilliRadians: number;
+  /** Whether the courier was sleeping at the same phase-zero sensory anchor. */
+  readonly intervalStartWasSleeping: boolean;
   readonly playerStepsSinceWorldTick: number;
   readonly playerSenseSamples: readonly PlayerSenseSample[];
   /** Parallel movement facts; null marks unsupported pre-v42 interval history. */
@@ -10470,6 +10487,9 @@ export async function createTideweftRuntime(
   let playerPerceptionIntervalStartFacingMilliRadians =
     resumed?.perceptionCarry.intervalStartFacingMilliRadians
       ?? player.facingMilliRadians;
+  let playerPerceptionIntervalStartWasSleeping =
+    resumed?.perceptionCarry.intervalStartWasSleeping
+      ?? player.timeAction?.kind === "sleep";
   // Voice is a second acoustic fact beside impact/footsteps. It remains a
   // separate bounded channel, but persists with the unfinished perception
   // interval so interruption cannot change authoritative human hearing.
@@ -12287,6 +12307,7 @@ export async function createTideweftRuntime(
     }
     playerPerceptionIntervalStartPosition = intervalStart;
     playerPerceptionIntervalStartFacingMilliRadians = player.facingMilliRadians;
+    playerPerceptionIntervalStartWasSleeping = player.timeAction?.kind === "sleep";
   }
 
   /**
@@ -14325,9 +14346,67 @@ export async function createTideweftRuntime(
           if (wasRecovering) playerRecoveryDisturbedThisStep = true;
         }
       }
-      for (const event of [...economyView.events]
+      const newEconomyEvents = [...economyView.events]
         .filter(({ sequence }) => sequence >= firstNewWorldEventSequence)
-        .sort((left, right) => left.sequence - right.sequence)) {
+        .sort((left, right) => left.sequence - right.sequence);
+      // The simulation owns the transition into weather shelter. Living Voice
+      // consumes that one committed event rather than polling the continuing
+      // `sheltering` flag, so a hold is voiced once at its historical route
+      // locus and still exists as world sound when the player cannot hear it.
+      for (const event of newEconomyEvents) {
+        const intent = residentWeatherHoldExpressionIntent({ world: economyView, event });
+        if (intent === null) continue;
+        const preview = residentWeatherHoldExpressionEventForTrigger(
+          economyView,
+          intent.triggerEventId,
+        );
+        if (preview === null) {
+          throw new Error("Resident weather hold lost its committed expression authority");
+        }
+        const prepared = prepareResidentWeatherHoldEventTimeReceipt({
+          economyWorld: economyView,
+          spatialWorld: worldView,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          listenerWasSleepingAtIntervalStart: playerPerceptionIntervalStartWasSleeping,
+          event: preview,
+          sampleOrdinal: actorVocalizationSamples.length,
+        });
+        if (prepared === null) continue;
+        const unseenContact = prepared.reception?.kind === "heard-unseen"
+          ? situatedExpressionReceptionAudibleContact(prepared.reception)
+          : null;
+        if (prepared.reception?.kind === "heard-unseen" && unseenContact === null) {
+          throw new Error("Resident weather hold lost its anonymous acoustic receipt");
+        }
+        const reception = prepared.reception === null
+          ? { kind: "none" as const }
+          : prepared.reception.kind === "heard-visible"
+            ? {
+                kind: "heard-visible" as const,
+                certainty: prepared.reception.certainty,
+              }
+            : {
+                kind: "heard-unseen" as const,
+                contact: unseenContact!,
+              };
+        const admitted = acceptSituatedExpression(
+          intent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            sampleOrdinal === prepared.admission.sampleOrdinal
+            && stableStringify(acceptedEvent) === stableStringify(preview)
+              ? prepared.admission
+              : null
+          ),
+        );
+        // The ordered first locally admitted transition owns this bounded
+        // onset opportunity. A source-local conflict cannot silence a later
+        // independent resident, while dense storms still cannot create a wall
+        // of porter text.
+        if (admitted) break;
+      }
+      for (const event of newEconomyEvents) {
         const intent = workingPeopleExpressionIntent({ world: economyView, event });
         if (intent === null) continue;
         const audible = playerExpressionAudibility(intent);
@@ -18076,6 +18155,7 @@ export async function createTideweftRuntime(
       version: PLAYER_PERCEPTION_CARRY_VERSION,
       intervalStartPosition: playerPerceptionIntervalStartPosition,
       intervalStartFacingMilliRadians: playerPerceptionIntervalStartFacingMilliRadians,
+      intervalStartWasSleeping: playerPerceptionIntervalStartWasSleeping,
       playerStepsSinceWorldTick,
       playerSenseSamples,
       playerStepStateSamples,
@@ -18841,6 +18921,7 @@ function emptyPlayerPerceptionCarry(): PlayerPerceptionCarry {
     version: PLAYER_PERCEPTION_CARRY_VERSION,
     intervalStartPosition: EMPTY_PERCEPTION_INTERVAL_POSITION,
     intervalStartFacingMilliRadians: 0,
+    intervalStartWasSleeping: false,
     playerStepsSinceWorldTick: 0,
     playerSenseSamples: Object.freeze([]),
     playerStepStateSamples: Object.freeze([]),
@@ -18872,7 +18953,12 @@ function canonicalPlayerPerceptionCarry(
     | typeof HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
     | typeof ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
-  semanticSchema: "resident-introduction" | "keeper-response" | "human-warning" | "fish-crow" = "human-warning",
+  semanticSchema:
+    | "resident-weather-hold"
+    | "resident-introduction"
+    | "keeper-response"
+    | "human-warning"
+    | "fish-crow" = "human-warning",
 ): PlayerPerceptionCarry | null {
   if (
     value === null
@@ -18893,6 +18979,7 @@ function canonicalPlayerPerceptionCarry(
         "animalContactAcousticCarry",
         "intervalStartFacingMilliRadians",
         "intervalStartPosition",
+        "intervalStartWasSleeping",
         "nextPlayerSenseSampleOrdinal",
         "playerSenseSamples",
         "playerStepStateAnchor",
@@ -18957,6 +19044,7 @@ function canonicalPlayerPerceptionCarry(
   const rawStepStates = record.playerStepStateSamples;
   const currentIntervalStartPosition = record.intervalStartPosition;
   const currentIntervalStartFacing = record.intervalStartFacingMilliRadians;
+  const currentIntervalStartWasSleeping = record.intervalStartWasSleeping;
   if (
     record.version !== expectedVersion
     || !Number.isSafeInteger(completedWorldTick)
@@ -18970,7 +19058,11 @@ function canonicalPlayerPerceptionCarry(
     || rawSamples.length !== phase
     || rawSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
     || (expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
-      && (!Array.isArray(rawStepStates) || rawStepStates.length !== phase))
+      && (
+        !Array.isArray(rawStepStates)
+        || rawStepStates.length !== phase
+        || typeof currentIntervalStartWasSleeping !== "boolean"
+      ))
     || (hasCurrentShape
       && (!isWorldPosition(currentIntervalStartPosition)
         || typeof currentIntervalStartFacing !== "number"
@@ -19210,10 +19302,14 @@ function canonicalPlayerPerceptionCarry(
   const intervalStartFacingMilliRadians = hasCurrentShape
     ? currentIntervalStartFacing as number
     : 0;
+  const intervalStartWasSleeping = expectedVersion === PLAYER_PERCEPTION_CARRY_VERSION
+    ? currentIntervalStartWasSleeping as boolean
+    : false;
   return Object.freeze({
     version: PLAYER_PERCEPTION_CARRY_VERSION,
     intervalStartPosition,
     intervalStartFacingMilliRadians,
+    intervalStartWasSleeping,
     playerStepsSinceWorldTick: phase as number,
     playerSenseSamples: Object.freeze(samples),
     playerStepStateSamples: Object.freeze(stepStateSamples),
@@ -19388,23 +19484,27 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
     kind !== "settlement-keeper-store-response"
     && kind !== "player-exhaustion"
     && kind !== "resident-introduction"
+    && kind !== "resident-weather-hold"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning, family }) => (
       meaning !== "keeper-secure-store-response"
       && meaning !== "need-rest-after-exertion"
       && meaning !== "resident-introduction"
+      && meaning !== "resident-weather-hold"
       && family !== "condition"
       && family !== "social"
     )) && (active === null || (
       active.meaning !== "keeper-secure-store-response"
       && active.meaning !== "need-rest-after-exertion"
       && active.meaning !== "resident-introduction"
+      && active.meaning !== "resident-weather-hold"
       && active.family !== "condition"
       && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
       && active.knowledgeBasis !== "self-felt-exhaustion"
       && active.knowledgeBasis !== "self-committed-introduction"
+      && active.knowledgeBasis !== "self-weather-distress"
     ));
   });
 }
@@ -19964,6 +20064,29 @@ function playerPerceptionCarryMatchesPosition(
           admission,
         });
     }
+    if (admission.kind === "resident-weather-hold") {
+      const event = residentWeatherHoldExpressionEventForTrigger(
+        economy,
+        admission.triggerEventId,
+      );
+      return event !== null
+        && stableStringify(admission.listenerPosition)
+          === stableStringify(carry.intervalStartPosition)
+        && admission.listenerFacingMilliRadians
+          === carry.intervalStartFacingMilliRadians
+        && admission.listenerWasSleepingAtAdmission
+          === carry.intervalStartWasSleeping
+        && vocalizationSampleMatchesActiveEvent(sample, event)
+        && residentWeatherHoldAdmissionMatchesWorld({
+          economyWorld: economy,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          listenerWasSleepingAtIntervalStart: carry.intervalStartWasSleeping,
+          event,
+          admission,
+        });
+    }
     if (admission.kind !== "porter-heavy-departure") return false;
     const event = workingPeopleExpressionEventForTrigger(
       economy,
@@ -20260,6 +20383,35 @@ function situatedExpressionChannelsMatchWorld(
         ? null
         : { admission, event };
     };
+    const weatherHoldAuthorityFor = (
+      triggerEventId: string,
+    ): Readonly<{
+      admission: Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "resident-weather-hold" }
+      >;
+      event: SituatedExpressionEvent;
+    }> | null => {
+      const weatherHoldAdmissions = admissions.filter((candidate): candidate is Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "resident-weather-hold" }
+      > => (
+        candidate.kind === "resident-weather-hold"
+        && candidate.triggerEventId === triggerEventId
+      ));
+      const admission = weatherHoldAdmissions[0];
+      const event = admission === undefined
+        ? null
+        : residentWeatherHoldExpressionEventForTrigger(
+            economy,
+            admission.triggerEventId,
+          );
+      return weatherHoldAdmissions.length !== 1
+        || admission === undefined
+        || event === null
+        ? null
+        : { admission, event };
+    };
     if (!channel.state.recent.every((memory) => {
       if (memory.meaning === "human-danger-warning") {
         const warning = warningAuthorityFor(memory.triggerEventId);
@@ -20279,11 +20431,17 @@ function situatedExpressionChannelsMatchWorld(
         return introduction !== null
           && residentIntroductionExpressionMemoryMatchesWorld(economy, memory);
       }
+      if (memory.meaning === "resident-weather-hold") {
+        const weatherHold = weatherHoldAuthorityFor(memory.triggerEventId);
+        return weatherHold !== null
+          && residentWeatherHoldExpressionMemoryMatchesWorld(economy, memory);
+      }
       return workingPeopleExpressionMemoryMatchesWorld(economy, memory);
     })) return false;
     if (active !== null) {
       if (
         active.meaning !== "resident-introduction"
+        && active.meaning !== "resident-weather-hold"
         && !residentSourcePositionMatches(economy, channel.sourceActorId, active.position)
       ) {
         return false;
@@ -20342,6 +20500,28 @@ function situatedExpressionChannelsMatchWorld(
             reception: channel.reception,
           })
         ) return false;
+      } else if (active.meaning === "resident-weather-hold") {
+        const weatherHold = weatherHoldAuthorityFor(active.triggerEventId);
+        if (
+          weatherHold === null
+          || stableStringify(weatherHold.admission.listenerPosition)
+            !== stableStringify(carry.intervalStartPosition)
+          || weatherHold.admission.listenerFacingMilliRadians
+            !== carry.intervalStartFacingMilliRadians
+          || weatherHold.admission.listenerWasSleepingAtAdmission
+            !== carry.intervalStartWasSleeping
+          || !residentWeatherHoldExpressionEventMatchesWorld(economy, active)
+          || !residentWeatherHoldReceptionMatchesEventTime({
+            economyWorld: economy,
+            spatialWorld,
+            window: regionalTravel.window,
+            playerTemplate: player,
+            listenerWasSleepingAtIntervalStart: carry.intervalStartWasSleeping,
+            event: active,
+            admission: weatherHold.admission,
+            reception: channel.reception,
+          })
+        ) return false;
       } else if (!workingPeopleExpressionEventMatchesWorld(economy, active)) {
         return false;
       }
@@ -20387,6 +20567,28 @@ function situatedExpressionChannelsMatchWorld(
           playerTemplate: player,
           event,
           admission,
+          });
+      }
+      if (admission.kind === "resident-weather-hold") {
+        const event = residentWeatherHoldExpressionEventForTrigger(
+          economy,
+          admission.triggerEventId,
+        );
+        return event !== null
+          && stableStringify(admission.listenerPosition)
+            === stableStringify(carry.intervalStartPosition)
+          && admission.listenerFacingMilliRadians
+            === carry.intervalStartFacingMilliRadians
+          && admission.listenerWasSleepingAtAdmission
+            === carry.intervalStartWasSleeping
+          && residentWeatherHoldAdmissionMatchesWorld({
+            economyWorld: economy,
+            spatialWorld,
+            window: regionalTravel.window,
+            playerTemplate: player,
+            listenerWasSleepingAtIntervalStart: carry.intervalStartWasSleeping,
+            event,
+            admission,
           });
       }
       if (admission.kind !== "porter-heavy-departure") return false;
@@ -22204,7 +22406,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           decoded.perceptionCarry,
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
-          "resident-introduction",
+          "resident-weather-hold",
         )
       : decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(

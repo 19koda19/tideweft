@@ -179,6 +179,20 @@ deterministically re-derives only its unexpired, audio-acknowledged presentation
 remainder from the authenticated event, semantic memory, admission, and
 event-time reception already in perception carry.
 
+The first event-owned resident condition seam consumes one exact committed
+`resident-sheltered` transition. One restrained weather-hold utterance is
+eligible only while the same persistent human, active resident-carried
+in-transit contract, conserved cargo, severe-weather event and
+`weather-shelter` memory, and event-time route/progress locus reauthenticate.
+The retained event position remains where the hold began if the resident later
+moves. Continuing `condition.sheltering` is not a speech trigger. Event-time
+hearing may yield a visible receipt, an anonymous heard-unseen receipt, or no
+player receipt under masking or sleep; all three preserve the source-bound
+world sound and its one bounded nearby-human hearing opportunity. Perception
+carry retains the phase-zero listener pose and sleeping bit independently of
+later recovery state, so save/load validates the historical receipt without
+replaying audio or text.
+
 Expression ownership is now isolated by source actor in a deterministically
 ordered bank capped at sixteen retained channels. One source actor's active line
 or cooldown cannot suppress another's. The accessible caption surface selects
@@ -310,8 +324,8 @@ authenticated player receipt, except the explicitly bounded legacy
 current-visibility resident state-speech adapter: it joins world-label
 collision layout only and cannot become an acoustic DOM caption until each
 remaining interaction seam gains event-time sound authority. The storekeeper's
-committed closure response and resident introduction no longer use this
-adapter. The presenter—not
+committed closure response, resident introduction, and resident weather-hold
+response no longer use this adapter. The presenter—not
 producer domains—owns category style, category-specific lifetime,
 source/contact anchoring, bounded
 deterministic lanes, collision checks, salience/priority, per-source queues,
@@ -499,9 +513,9 @@ incompatible pre-1.0 development format rather than migrated: it is recognized,
 left untouched, and requires a clean current save. Supported pre-v41 migration
 readers remain available. Their semantic fences reject later exhaustion
 meaning, family, knowledge basis, admission, channel, and sample.
-The resident-introduction candidate advances the unpublished writer to outer
-v43 and bounded perception carry v11. Its admission binds the exact committed
-introduction event and command, persistent resident and home, acquaintance
+The preceding 3G resident-introduction candidate advanced the unpublished
+writer to outer v43 and bounded perception carry v11. Its admission binds the
+exact committed introduction event and command, persistent resident and home, acquaintance
 tick, event-time listener pose, conversation-range direct sight, and positive
 hearing certainty. The pose and facing must equal the carry's independent
 phase-zero anchor. The saved semantic event contains no introduced identity
@@ -512,9 +526,14 @@ ephemeral; if same-source priority hid it, reload derives only its unexpired
 audio-acknowledged remainder from those authenticated roots. Outer v42 is
 intentionally retired beside v41 as a pre-1.0 development format rather than
 receiving another internal migration chain.
-The current carry also records the exact segmented player position and facing
-at phase zero. Load replays every retained fixed step against the movement
-owner's exact displacement ceiling, movement salience, facing changes, final
+The 3H weather-hold candidate advances that boundary to outer v44 and bounded
+perception carry v12. It adds the exact event-owned resident shelter trajectory
+and retains whether the listener was sleeping at phase zero; v43 is now
+intentionally retired beside v41 and v42 under the same pre-1.0 policy.
+The current carry also records the exact segmented player position, facing,
+and sleeping state at phase zero. Load replays every retained fixed step
+against the movement owner's exact displacement ceiling, movement salience,
+facing changes, final
 velocity, and final player pose. Player traversal/recovery speech must also
 match its separately retained current-interval causal-authority record; effort
 must additionally match the independently retained movement-owned step-state
@@ -1207,7 +1226,7 @@ isolated service menus or unconditional markers into generated regions.
 
 `src/sim/npcIdentity.ts` generates the current human slice from root seed, signed origin region, immutable settlement origin key, immutable actor ordinal, and origin role. A person's stable ID and display identity deliberately exclude the monotonic runtime entity ID and current household-array position. Generation-v1 freezes 226 normalized given names and 206 normalized family names behind deterministic golden tests; later dictionary changes require a new generation version, while already persisted people retain their exact identity. Curated temperament pairs avoid simple contradictions, while occupation-shaped gear and skills, age, height, build, appearance, and one or two background facts provide bounded variation.
 
-The simulation persists four separate layers: immutable identity, dynamic condition, player knowledge, and actor perception. Traveling humans accumulate wetness, cold pressure, and exhaustion from live weather, gear, and relevant skills. Event-caused emotion can delay an assigned route through a weather hold; the hold is not yet physical shelter pathfinding. `observe-resident` moves a stranger only to recognized. `greet-resident` requires the exact prior observation tick and records one bounded memory before revealing only name, occupation, and home. Numeric entity IDs and raw need, skill, temperament, emotion, belief, confidence, or search coordinates never enter ordinary ABOUT copy.
+The simulation persists four separate layers: immutable identity, dynamic condition, player knowledge, and actor perception. Traveling humans accumulate wetness, cold pressure, and exhaustion from live weather, gear, and relevant skills. Event-caused emotion can delay an assigned route through a weather hold; the hold is not yet physical shelter pathfinding. Entering that hold emits one retained `resident-sheltered` transition that Living Voice may consume, while the continuing shelter condition cannot synthesize later speech. `observe-resident` moves a stranger only to recognized. `greet-resident` requires the exact prior observation tick and records one bounded memory before revealing only name, occupation, and home. Numeric entity IDs and raw need, skill, temperament, emotion, belief, confidence, or search coordinates never enter ordinary ABOUT copy.
 
 `src/sim/actorPerception.ts` owns a deterministic fixed-point cognition kernel. Accepted vision and hearing observations become canonically ordered, decaying beliefs; a capped top-four attention set, bounded suspicion states, at most 24 active beliefs, and at most 16 salient memories prevent an actor from processing unbounded stimuli. Anonymous sound never carries an actor identity or exact source point. Only an identified visual observation can establish the courier's exact last-known area. Losing that sight starts a deterministic, expiring scan around the saved area; a new lawful visual contact reacquires the courier, while expiry returns the person to ordinary activity. The simulation advances every resident exactly once each world tick and prepares every next state before committing any of them, so malformed or partial observation frames cannot selectively teach one actor or half-advance the population.
 
@@ -2625,14 +2644,17 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 43 and the bounded perception carry through version 11;
-the current source writer emits outer version 43. Outer v41 and v42 are
-explicitly retired under the pre-1.0 policy: load recognizes either
+session through version 44 and the bounded perception carry through version 12;
+the current source writer emits outer version 44. The preceding v43/carry-v11
+boundary introduced authenticated first-resident speech; v44/carry-v12 adds
+event-owned resident weather-hold speech and retains the phase-zero listener
+sleep state beside pose for exact reception reauthentication. Outer v41 through v43 are
+explicitly retired under the pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v43 roundtrip
+promise to preserve every internal development format. Current-v44 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 

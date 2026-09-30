@@ -117,6 +117,32 @@ function canonicalExpression(
   return advanced.active;
 }
 
+function canonicalResidentWeatherHoldExpression(
+  sourceActorId: string,
+  position = createWorldPosition(SIGNED_REGION, 25_250, 44_500),
+): SituatedExpressionEvent {
+  const intent: SituatedExpressionIntent = {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId: `sim-event:resident-sheltered:42:${sourceActorId}`,
+    position,
+    meaning: "resident-weather-hold",
+    family: "condition",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 520_000,
+    variantSeed: 42,
+    durationSteps: 12,
+  };
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Weather-hold expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalPhysicalAcousticEvent(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId = "traversal:projection:physical",
@@ -490,6 +516,61 @@ describe("situated expression game projection", () => {
       text: speech,
       position: visiblePorter.position,
     }));
+  });
+
+  it("does not manufacture weather-hold speech from continuing shelter state", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) => (
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    ));
+    if (resident === undefined) throw new Error("fixture needs an in-window porter");
+    const placement = projectResidentWorldPosition(world, resident, 1);
+    if (placement === null) throw new Error("fixture porter lost its projected position");
+    resident.condition.sheltering = true;
+    player.x = Math.floor(placement.position.x * TILE_UNITS);
+    player.y = Math.floor(placement.position.y * TILE_UNITS);
+    player.previousX = player.x;
+    player.previousY = player.y;
+
+    const view = projectGameView(world, player, {
+      selectedResidentId: resident.id,
+    });
+    const visiblePorter = view.porters.find(({ id }) => Number(id) === resident.id);
+    expect(visiblePorter?.conditionLabels).toContain("Holding for weather");
+    expect(visiblePorter?.speech).not.toBe("Holding here until this eases.");
+    expect(view.acousticText?.some(({ text }) => (
+      text === "Holding here until this eases."
+    ))).toBe(false);
+  });
+
+  it("keeps admitted weather-hold text at its event locus after the resident moves away", () => {
+    const { compatibility, player, world } = projectionFixture(SIGNED_REGION);
+    const resident = compatibility.residents[0];
+    if (resident === undefined) throw new Error("fixture needs a resident source");
+    expect(projectResidentWorldPosition(world, resident, 1)).toBeNull();
+    const expression = canonicalResidentWeatherHoldExpression(
+      resident.identity.stableId,
+    );
+    const reception = heardVisibleReception(expression);
+    const session = createSessionState(world.seedText);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressions).toContainEqual(expect.objectContaining({
+      id: expression.eventId,
+      sourceActorId: resident.identity.stableId,
+      text: "We'll hold here.",
+      position: { x: 894, y: 1_644 },
+    }));
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressionCaption).toMatchObject({
+      id: expression.eventId,
+      text: "We'll hold here.",
+    });
   });
 
   it("withholds exact physical sound anchors for unheard, unseen, or mismatched receipts", () => {

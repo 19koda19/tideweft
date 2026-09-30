@@ -96,6 +96,16 @@ preserve its readable configured lifetime without replaying actor cognition or
 audio. Current-schema reload may re-derive only an unexpired acknowledged
 presentation remainder from the already-authenticated perception carry; it
 does not persist a floating label or create a second sound.
+One route-weather transition now follows the same event-owned rule. When an
+active resident porter legitimately enters a severe-weather hold, the exact
+committed `resident-sheltered` event may produce one restrained “We'll hold
+here.” at its historical route position. The human, in-transit carried
+Promise, conserved cargo, weather-shelter memory, and route locus must all
+still agree. Remaining sheltered does not repeat the line. A nearby player may
+receive visible speech, an anonymous heard-unseen cue, or nothing under
+weather, distance, occlusion, or sleep; the world sound and lawful nearby-human
+hearing do not depend on whether player text appears. Save/load retains the
+phase-zero listener pose and sleeping state, but never replays the spoken cue.
 Salience, semantic cooldowns, priority, and causal event identity prevent
 chatter spam; the same accepted event always chooses the same authored wording.
 Ordinary routine speech expires rather than bloating the save. Pending sound
@@ -189,8 +199,9 @@ per-actor channel bank prevents one speaker's cooldown from
 silencing another actor. All active expression channels and directly rendered
 remaining legacy resident state speech now enter the shared
 world-label budget: at most four labels globally and one per source. The
-secured-store response and resident introduction are receipt-backed and no
-longer use that compatibility adapter. The accessible caption surface keeps
+secured-store response, resident introduction, and resident weather-hold
+response are receipt-backed and no longer use that compatibility adapter. The
+accessible caption surface keeps
 one highest-priority receipt-backed cue; remaining legacy state speech is not promoted to an
 auditory caption merely because its currently visible actor can share the
 collision layout. The physical footing/cargo cause remains in

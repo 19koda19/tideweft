@@ -30,14 +30,15 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 43;
+  readonly version: 44;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
   readonly perceptionCarry: {
-    readonly version: 11;
+    readonly version: 12;
     readonly intervalStartPosition: unknown;
     readonly intervalStartFacingMilliRadians: number;
+    readonly intervalStartWasSleeping: boolean;
     readonly playerStepsSinceWorldTick: number;
     readonly playerSenseSamples: readonly unknown[];
     readonly actorVocalizationSamples: readonly unknown[];
@@ -145,9 +146,9 @@ function advanceRecoveryFrames(runtime: TideweftRuntime, count: number): void {
 
 function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
-  expect(record.payloadVersion).toBe(43);
+  expect(record.payloadVersion).toBe(44);
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(43);
+  expect(envelope.version).toBe(44);
   expect(Object.keys(envelope).sort()).toEqual(CURRENT_ENVELOPE_KEYS);
   const { integrity, ...unsealed } = envelope;
   expect(integrity).toBe(gameSaveEnvelopeIntegrity(unsealed));
@@ -377,6 +378,7 @@ describe("runtime player REST/SLEEP authority", () => {
       delete carry.actorVocalizationSamples;
       delete carry.intervalStartFacingMilliRadians;
       delete carry.intervalStartPosition;
+      delete carry.intervalStartWasSleeping;
       delete carry.playerStepStateSamples;
       delete carry.playerStepStateAnchor;
       delete carry.situatedExpressionAdmissions;
@@ -459,6 +461,7 @@ describe("runtime player REST/SLEEP authority", () => {
       totalSteps: 20,
       completedSteps: 10,
     });
+    expect(partial.perceptionCarry.intervalStartWasSleeping).toBe(true);
     sleeping.destroy();
 
     const reloadedRepository = new MemoryRepository(partialRecord);
@@ -471,8 +474,9 @@ describe("runtime player REST/SLEEP authority", () => {
       interactLabel: "Wake to interact",
     });
     await reloaded.save();
-    expect(decodeCurrent(reloadedRepository.snapshot()).player.timeAction)
-      .toEqual(partial.player.timeAction);
+    const unchangedSleep = decodeCurrent(reloadedRepository.snapshot());
+    expect(unchangedSleep.player.timeAction).toEqual(partial.player.timeAction);
+    expect(unchangedSleep.perceptionCarry.intervalStartWasSleeping).toBe(true);
 
     advanceRecoveryFrames(reloaded, 1);
     expect(reloaded.getUIView().clock).toMatchObject({
@@ -493,6 +497,7 @@ describe("runtime player REST/SLEEP authority", () => {
     expect(completedTick(dawn)).toBe(WORLD_TICKS_PER_DAY + WORLD_DAWN_START_TICK);
     expect(playerStepPhase(dawn)).toBe(0);
     expect(dawn.player.timeAction).toBeNull();
+    expect(dawn.perceptionCarry.intervalStartWasSleeping).toBe(true);
     reloaded.destroy();
   });
 });

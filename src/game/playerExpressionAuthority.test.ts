@@ -266,6 +266,7 @@ function policy(
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "resident-introduction":
+    case "resident-weather-hold":
       throw new Error("Other human expressions are not player authority");
     case "need-rest-after-exertion":
       throw new Error("Effort speech uses exact exhaustion admission authority");

@@ -1,3 +1,4 @@
+import { FIXED_POINT } from "../sim/types";
 import {
   situatedExpressionEventIdForTrigger,
 } from "./situatedExpression";
@@ -32,6 +33,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "human-danger-warning",
   "settlement-keeper-store-response",
   "resident-introduction",
+  "resident-weather-hold",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -195,6 +197,30 @@ export interface ResidentIntroductionExpressionAdmissionRecord
   readonly hearingCertainty: number;
 }
 
+export type ResidentWeatherHoldReceptionKind =
+  | "heard-visible"
+  | "heard-unseen"
+  | null;
+
+export interface ResidentWeatherHoldExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "resident-weather-hold";
+  /** Exact in-transit Promise whose carrier entered weather shelter. */
+  readonly contractId: number;
+  readonly shelteredAtTick: number;
+  /** Event-time route locus; later travel cannot rewrite where this happened. */
+  readonly eventRouteId: number;
+  readonly eventRouteProgress: number;
+  /** Recorded event-time listener pose, never present-time player authority. */
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  /** Sleep suppresses only the player's receipt, not the world expression. */
+  readonly listenerWasSleepingAtAdmission: boolean;
+  /** Null means the committed expression was not heard by the player. */
+  readonly receptionKind: ResidentWeatherHoldReceptionKind;
+  readonly hearingCertainty: number | null;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -212,6 +238,7 @@ export type SituatedExpressionAdmissionRecord =
   | HumanDangerWarningExpressionAdmissionRecord
   | SettlementKeeperStoreResponseExpressionAdmissionRecord
   | ResidentIntroductionExpressionAdmissionRecord
+  | ResidentWeatherHoldExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -304,6 +331,19 @@ export interface ResidentIntroductionExpressionAdmissionInput
   readonly listenerPosition: WorldPosition;
   readonly listenerFacingMilliRadians: number;
   readonly hearingCertainty: number;
+}
+
+export interface ResidentWeatherHoldExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly contractId: number;
+  readonly shelteredAtTick: number;
+  readonly eventRouteId: number;
+  readonly eventRouteProgress: number;
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  readonly listenerWasSleepingAtAdmission: boolean;
+  readonly receptionKind: ResidentWeatherHoldReceptionKind;
+  readonly hearingCertainty: number | null;
 }
 
 export type LegacyV33PlayerExpressionAdmissionInput = SituatedExpressionAdmissionInputBase;
@@ -669,6 +709,47 @@ export function createResidentIntroductionExpressionAdmissionRecord(
   }) as ResidentIntroductionExpressionAdmissionRecord | null;
 }
 
+/** Creates one exact resident weather hold with its event-time player receipt. */
+export function createResidentWeatherHoldExpressionAdmissionRecord(
+  input: ResidentWeatherHoldExpressionAdmissionInput,
+): ResidentWeatherHoldExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "contractId",
+    "eventRouteId",
+    "eventRouteProgress",
+    "hearingCertainty",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "listenerWasSleepingAtAdmission",
+    "receptionKind",
+    "sampleOrdinal",
+    "shelteredAtTick",
+    "sourceActorId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "resident-weather-hold",
+    contractId: value.contractId,
+    shelteredAtTick: value.shelteredAtTick,
+    eventRouteId: value.eventRouteId,
+    eventRouteProgress: value.eventRouteProgress,
+    listenerPosition: value.listenerPosition,
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    listenerWasSleepingAtAdmission: value.listenerWasSleepingAtAdmission,
+    receptionKind: value.receptionKind,
+    hearingCertainty: value.hearingCertainty,
+  }) as ResidentWeatherHoldExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -712,6 +793,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
     case "settlement-keeper-store-response": return canonicalSettlementKeeperStoreResponseRecord(value);
     case "resident-introduction": return canonicalResidentIntroductionRecord(value);
+    case "resident-weather-hold": return canonicalResidentWeatherHoldRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -1233,6 +1315,70 @@ function canonicalResidentIntroductionRecord(
   });
 }
 
+function canonicalResidentWeatherHoldRecord(
+  value: Readonly<Record<string, unknown>>,
+): ResidentWeatherHoldExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "contractId",
+    "eventId",
+    "eventRouteId",
+    "eventRouteProgress",
+    "hearingCertainty",
+    "kind",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "listenerWasSleepingAtAdmission",
+    "receptionKind",
+    "sampleOrdinal",
+    "shelteredAtTick",
+    "sourceActorId",
+    "triggerEventId",
+    "version",
+  ])) return null;
+  const receptionPairValid = value.listenerWasSleepingAtAdmission === true
+    ? value.receptionKind === null && value.hearingCertainty === null
+    : value.receptionKind === null
+      ? value.hearingCertainty === null
+      : (value.receptionKind === "heard-visible" || value.receptionKind === "heard-unseen")
+        && positiveBoundedUnit(value.hearingCertainty);
+  if (
+    value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.kind !== "resident-weather-hold"
+    || value.admittedAtPlayerStepPhase !== 0
+    || !positiveSafeInteger(value.contractId)
+    || !nonnegativeSafeInteger(value.shelteredAtTick)
+    || !positiveSafeInteger(value.eventRouteId)
+    || !boundedInteger(value.eventRouteProgress, 0, FIXED_POINT)
+    || !isWorldPosition(value.listenerPosition)
+    || !canonicalSafeInteger(value.listenerFacingMilliRadians)
+    || typeof value.listenerWasSleepingAtAdmission !== "boolean"
+    || !receptionPairValid
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: 0,
+    kind: "resident-weather-hold",
+    contractId: value.contractId,
+    shelteredAtTick: value.shelteredAtTick,
+    eventRouteId: value.eventRouteId,
+    eventRouteProgress: value.eventRouteProgress,
+    listenerPosition: createWorldPosition(
+      value.listenerPosition.region,
+      value.listenerPosition.localX,
+      value.listenerPosition.localY,
+    ),
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    listenerWasSleepingAtAdmission: value.listenerWasSleepingAtAdmission,
+    receptionKind: value.receptionKind as ResidentWeatherHoldReceptionKind,
+    hearingCertainty: value.hearingCertainty as number | null,
+  });
+}
+
 function canonicalLegacyRecord(
   value: Readonly<Record<string, unknown>>,
 ): LegacyV33PlayerExpressionAdmissionRecord | null {
@@ -1318,6 +1464,10 @@ function canonicalSafeInteger(value: unknown): value is number {
 
 function nonnegativeSafeInteger(value: unknown): value is number {
   return canonicalSafeInteger(value) && value >= 0;
+}
+
+function positiveSafeInteger(value: unknown): value is number {
+  return nonnegativeSafeInteger(value) && value > 0;
 }
 
 function boundedInteger(value: unknown, minimum: number, maximum: number): value is number {

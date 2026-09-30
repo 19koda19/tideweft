@@ -520,6 +520,7 @@ function policyFor(
     case "keeper-secure-store-response":
     case "need-rest-after-exertion":
     case "resident-introduction":
+    case "resident-weather-hold":
       return null;
   }
 }
