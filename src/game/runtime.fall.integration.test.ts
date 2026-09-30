@@ -76,7 +76,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 42;
+  readonly version: 43;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -86,7 +86,7 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: {
-    readonly version: 10;
+    readonly version: 11;
     readonly intervalStartPosition: WorldPosition;
     readonly intervalStartFacingMilliRadians: number;
     readonly playerStepsSinceWorldTick: number;
@@ -186,10 +186,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 42
-    || record.payloadVersion !== 42
+    || envelope.version !== 43
+    || record.payloadVersion !== 43
   ) {
-    throw new Error("fixture did not produce a current v42 regional session save");
+    throw new Error("fixture did not produce a current v43 regional session save");
   }
   return envelope;
 }
@@ -210,7 +210,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 42,
+    payloadVersion: 43,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -789,7 +789,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const exhausted = decodeCurrent(repository.snapshot());
     expect(exhausted.perceptionCarry).toMatchObject({
-      version: 10,
+      version: 11,
       playerStepsSinceWorldTick: 3,
       situatedExpressionAdmissions: {
         version: 1,
@@ -1151,7 +1151,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 42,
+      version: 43,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
@@ -1177,7 +1177,7 @@ describe("production terrain fall and physical cargo", () => {
       "version",
     ]);
     expect(fallenSave.perceptionCarry).toMatchObject({
-      version: 10,
+      version: 11,
       intervalStartPosition: expect.any(Object),
       intervalStartFacingMilliRadians: expect.any(Number),
       playerStepsSinceWorldTick: 1,
@@ -1286,14 +1286,18 @@ describe("production terrain fall and physical cargo", () => {
 
     // The player line remains visible through the presentation that closes its
     // exact ten-step perception interval. The world receives distinct physical
-    // impact and vocalization samples, then retires the interval-owned channel;
-    // speech cannot leak into the next interval merely because its display
-    // duration was longer.
+    // impact and vocalization samples, then retires the interval-owned channel.
+    // Its presentation-only remainder stays readable without reopening actor
+    // hearing or replaying audio; the later relief line proves an ordinary
+    // same-source replacement still retires that stale remainder.
     advancePlayerSteps(runtime, 8);
     expect(playerExpression(runtime, "alarmed").id).toBe(cargoLossExpression.id);
     advancePlayerSteps(runtime, 1);
-    expect(runtime.getRenderView().expressions).toEqual([]);
-    expect(runtime.getUIView().expressionCaption).toBeUndefined();
+    expect(playerExpression(runtime, "alarmed")).toMatchObject({
+      id: cargoLossExpression.id,
+      progress: 10 / 14,
+    });
+    expect(runtime.getUIView().expressionCaption?.id).toBe(cargoLossExpression.id);
     expect((runtime.getRenderView().looseCargo ?? []).some((parcel) =>
       parcelIds.includes(parcel.id) && parcel.recovery === "reachable")).toBe(true);
     const perceptionInput = humanPerceptionSpy.mock.calls

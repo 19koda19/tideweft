@@ -83,6 +83,7 @@ import {
   projectSituatedExpression,
   type SituatedExpressionEvent,
 } from "./situatedExpression";
+import { projectResidentIntroductionExpression } from "./residentIntroductionExpression";
 import {
   situatedExpressionReceptionMatchesActiveEvent,
   type SituatedExpressionReception,
@@ -401,7 +402,15 @@ export function projectSituatedExpressionSource(
   );
   if (matches.length !== 1) return null;
   const resident = matches[0];
-  if (resident === undefined || projectResidentWorldPosition(spatialWorld, resident, 1) === null) {
+  if (resident === undefined) return null;
+  // A retained introduction stays anchored to its authenticated event-time
+  // contact point even if the porter starts moving before its brief readable
+  // lifetime ends. Every other human expression still requires the source's
+  // current physical placement.
+  if (
+    event.meaning !== "resident-introduction"
+    && projectResidentWorldPosition(spatialWorld, resident, 1) === null
+  ) {
     return null;
   }
   return Object.freeze({
@@ -426,6 +435,10 @@ function projectSituatedExpressionView(
   // Anonymous hearing never becomes an exact world-space callout.
   if (reception?.kind === "heard-unseen") return Object.freeze([]);
   const realization = projectSituatedExpression(event);
+  const economyWorld = regionalCompatibilityWorldForWorld(world) ?? world;
+  const introduction = event.meaning === "resident-introduction"
+    ? projectResidentIntroductionExpression(economyWorld, event)
+    : null;
   const source = projectSituatedExpressionSource(
     world,
     event,
@@ -435,7 +448,12 @@ function projectSituatedExpressionView(
     coreWildlifeExpressionSources,
   );
   const window = regionalWindowForWorld(world);
-  if (realization === null || source === null || window === null) return Object.freeze([]);
+  if (
+    realization === null
+    || source === null
+    || window === null
+    || (event.meaning === "resident-introduction" && introduction === null)
+  ) return Object.freeze([]);
   try {
     const origin = globalTileToRegion(window.origin.x, window.origin.y);
     const frame = createSpatialFrame(
@@ -456,7 +474,7 @@ function projectSituatedExpressionView(
       sourceActorId: event.sourceActorId,
       sourceKind: source.sourceKind,
       speakerLabel: source.speakerLabel,
-      text: realization.text,
+      text: introduction?.text ?? realization.text,
       position: Object.freeze({
         x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
         y: point.y / WORLD_POSITION_UNITS_PER_TILE * tileSize,

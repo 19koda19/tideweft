@@ -390,6 +390,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "need-rest-after-exertion":
+    case "resident-introduction":
       return [];
   }
 }
@@ -409,6 +410,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
+    case "resident-introduction": return 56;
   }
 }
 

@@ -23,6 +23,7 @@ import {
   createHumanDangerWarningExpressionAdmissionRecord,
   createPlayerExhaustionExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
+  createResidentIntroductionExpressionAdmissionRecord,
   type SituatedExpressionAdmissionLedger,
   type SituatedExpressionAdmissionRecord,
 } from "./situatedExpressionAdmissionLedger";
@@ -53,6 +54,7 @@ const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
+const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
 const POSITION = createWorldPosition(createRegionCoord(3, -2), 17_000, 9_000);
 
 interface Fixture {
@@ -177,6 +179,24 @@ function humanWarningIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function residentIntroductionIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: INTRODUCING_RESIDENT_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "resident-introduction",
+    family: "social",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-committed-introduction",
+    priority: 650_000,
+    salience: 780_000,
+    variantSeed: 173,
+    durationSteps: 56,
+  };
+}
+
 function accept(
   state: SituatedExpressionState,
   candidate: SituatedExpressionIntent,
@@ -276,6 +296,25 @@ function animalSample(
     sourceActorId: event.sourceActorId,
   });
   if (result === null) throw new Error("fixture dog sound was not canonical");
+  return result;
+}
+
+function residentIntroductionSample(
+  event: SituatedExpressionEvent,
+  ordinal: number,
+): SupplementalSoundSample {
+  const acoustics = situatedExpressionAcoustics(event);
+  const result = createSupplementalSoundSample({
+    id: `av-40-${ordinal}`,
+    expressionEventId: event.eventId,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: situatedExpressionSoundClass(event),
+    soundInterrupt: "none",
+    sourceActorId: event.sourceActorId,
+  });
+  if (result === null) throw new Error("fixture resident introduction sound was not canonical");
   return result;
 }
 
@@ -508,6 +547,56 @@ function humanWarningFixture(
     ledger: ledger([record]),
     phase,
     samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function residentIntroductionFixture(): Fixture {
+  const phase = 3;
+  const introducedAtTick = 40;
+  const hearingCertainty = 810_000;
+  const triggerEventId = "sim-event:resident-introduced:17:4";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    residentIntroductionIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture resident introduction expired unexpectedly");
+  }
+  const reception = createHeardVisibleSituatedExpressionReception(
+    current.active,
+    introducedAtTick,
+    hearingCertainty,
+    true,
+  );
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{
+      sourceActorId: INTRODUCING_RESIDENT_ID,
+      state: current,
+      reception,
+    }],
+  });
+  const record = createResidentIntroductionExpressionAdmissionRecord({
+    sourceActorId: INTRODUCING_RESIDENT_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    commandId: "greet-expression-trajectory-introduction",
+    introducedAtTick,
+    homeSettlementId: 3,
+    listenerPosition: POSITION,
+    listenerFacingMilliRadians: 0,
+    hearingCertainty,
+  });
+  if (canonicalBank === null || reception === null || record === null) {
+    throw new Error("fixture resident introduction trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [residentIntroductionSample(admitted.event, 0)],
   };
 }
 
@@ -908,6 +997,94 @@ describe("situated-expression admission trajectory", () => {
       exact.phase,
       exact.samples,
     )).toBe(false);
+  });
+
+  it("binds a resident introduction to its exact receipt, spoken acoustics, semantics, and lifetime", () => {
+    const fixture = residentIntroductionFixture();
+    const canonical = canonicalizeSituatedExpressionTrajectory(
+      fixture.bank,
+      fixture.ledger,
+      fixture.phase,
+      fixture.samples,
+    );
+
+    expect(canonical).not.toBeNull();
+    expect(canonical?.bank.channels[0]).toMatchObject({
+      sourceActorId: INTRODUCING_RESIDENT_ID,
+      reception: {
+        kind: "heard-visible",
+        receivedAtTick: 40,
+        certainty: 810_000,
+      },
+      state: {
+        completedSteps: 3,
+        active: {
+          meaning: "resident-introduction",
+          family: "social",
+          tone: "restrained",
+          volume: "spoken",
+          knowledgeBasis: "self-committed-introduction",
+          priority: 650_000,
+          salience: 780_000,
+          durationSteps: 56,
+          remainingSteps: 53,
+          audioAcknowledged: true,
+        },
+        recent: [{
+          meaning: "resident-introduction",
+          family: "social",
+          priority: 650_000,
+          meaningCooldownRemainingSteps: 77,
+          familyCooldownRemainingSteps: 21,
+        }],
+      },
+    });
+    expect(canonical?.supplementalSoundSamples[0]).toMatchObject({
+      soundLoudness: 620_000,
+      soundRangeUnits: 18_000,
+      soundClass: "human-vocalization",
+      soundInterrupt: "none",
+      sourceActorId: INTRODUCING_RESIDENT_ID,
+    });
+  });
+
+  it("rejects resident-introduction receipt, lifetime, acoustic, and semantic tampering", () => {
+    const fixture = residentIntroductionFixture();
+
+    const changedHearing = mutable(fixture.ledger);
+    const admission = changedHearing.records[0];
+    if (admission?.kind !== "resident-introduction") {
+      throw new Error("fixture lost resident-introduction admission");
+    }
+    admission.hearingCertainty -= 1;
+    expect(canonicalizeSituatedExpressionAdmissionLedger(changedHearing)).not.toBeNull();
+
+    const resetDuration = mutable(fixture.bank);
+    resetDuration.channels[0]!.state.active!.durationSteps += 1;
+    resetDuration.channels[0]!.state.active!.remainingSteps += 1;
+    expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
+
+    const rewrittenSemantics = mutable(fixture.bank);
+    rewrittenSemantics.channels[0]!.state.active!.priority -= 1;
+    rewrittenSemantics.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(rewrittenSemantics)).not.toBeNull();
+
+    const changedAcoustics = mutable(fixture.samples);
+    changedAcoustics[0]!.soundLoudness -= 1;
+
+    for (const [bankValue, ledgerValue, samplesValue] of [
+      [fixture.bank, changedHearing, fixture.samples],
+      [resetDuration, fixture.ledger, fixture.samples],
+      [rewrittenSemantics, fixture.ledger, fixture.samples],
+      [fixture.bank, fixture.ledger, changedAcoustics],
+    ] as const) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        bankValue,
+        ledgerValue,
+        fixture.phase,
+        samplesValue,
+      )).toBe(false);
+    }
   });
 
   it("derives legacy-v33 lifetime from bound memory and rejects later erasure or reset", () => {

@@ -190,7 +190,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   }, 30_000);
 
-  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v42", async () => {
+  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v43", async () => {
     const fixture = perceptionFixture("runtime perception v38 forward read");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -199,7 +199,7 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(42);
+    expect(decoded.version).toBe(43);
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
@@ -227,8 +227,8 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(42);
-    expect(savedEnvelope(repository).version).toBe(42);
+    expect(repository.snapshot().payloadVersion).toBe(43);
+    expect(savedEnvelope(repository).version).toBe(43);
     resumed.destroy();
   }, 30_000);
 
@@ -266,11 +266,11 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(42);
+    expect(repository.snapshot().payloadVersion).toBe(43);
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 42,
+      version: 43,
       perceptionCarry: {
-        version: 10,
+        version: 11,
         animalContactAcousticCarry: { version: 1, records: [] },
       },
     });
@@ -318,9 +318,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 42,
+      version: 43,
       perceptionCarry: {
-        version: 10,
+        version: 11,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
@@ -412,10 +412,10 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 42,
+      version: 43,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 10,
+        version: 11,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
@@ -436,7 +436,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v42", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v43", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -453,9 +453,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 42,
+      version: 43,
       perceptionCarry: {
-        version: 10,
+        version: 11,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: 0,
         playerStepsSinceWorldTick: 3,
@@ -504,7 +504,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v34 carry-v3 schema to v42 without replay", async () => {
+  it("migrates the exact sealed v34 carry-v3 schema to v43 without replay", async () => {
     const fixture = perceptionFixture("runtime perception v34 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -542,9 +542,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 42,
+      version: 43,
       perceptionCarry: {
-        version: 10,
+        version: 11,
         playerStepsSinceWorldTick: 3,
         playerStepStateSamples: [null, null, null],
         nextPlayerSenseSampleOrdinal: 3,
@@ -820,9 +820,9 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 42,
+      version: 43,
       perceptionCarry: {
-        version: 10,
+        version: 11,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,

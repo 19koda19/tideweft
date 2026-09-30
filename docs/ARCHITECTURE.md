@@ -150,6 +150,35 @@ without player presentation. Other listeners receive only an ordinary acoustic
 fact, not semantic knowledge that the store was secured. Already-secured
 historical state cannot synthesize retroactive speech.
 
+The ordinary first-greeting seam now follows the same law. One exact retained
+`resident-introduced` event, accepted `GREET` command, persistent human body,
+home membership, acquaintance tick, fact grant, and `met-player` memory
+authorize the response as one transaction. While `GREET` is pending, ordinary
+manual and automatic travel are held at the interaction boundary. At the next
+world boundary the runtime advances a disposable simulation candidate, derives
+direct sight, conversation range, weather-masked hearing, channel capacity,
+admission, and sound-sample authority from that candidate's exact event, and
+adopts its acquaintance facts only when the complete heard-visible trajectory
+can commit. A masked, displaced, or capacity-refused candidate is discarded;
+the real world advances without `GREET`, and the resident remains recognized.
+The committed introduction also captures its exact event-time route locus or
+settlement plus stable presentation ordinal. Retained text therefore remains
+at the place where the sound happened even if the resident begins travelling
+before its configured lifetime ends. The durable acoustic event carries no name,
+occupation, home name, or English sentence; the player-facing line is resolved
+from those reauthenticated facts only at projection. Its recorded phase-zero
+listener pose must equal the independent perception-carry anchor and replay
+direct sight, conversation range, and positive hearing certainty. Nearby
+humans receive only anonymous `human-vocalization`, and an already acquainted
+resident never gains retroactive introduction speech. The one admitted sound
+crosses NPC hearing once; a bounded ephemeral presentation lease may retain its
+configured readable lifetime after that hearing interval closes without
+replaying audio or cognition. The label itself is not saved. If current-schema
+save/load interrupts the lease behind newer same-source speech, runtime
+deterministically re-derives only its unexpired, audio-acknowledged presentation
+remainder from the authenticated event, semantic memory, admission, and
+event-time reception already in perception carry.
+
 Expression ownership is now isolated by source actor in a deterministically
 ordered bank capped at sixteen retained channels. One source actor's active line
 or cooldown cannot suppress another's. The accessible caption surface selects
@@ -278,10 +307,11 @@ One renderer-neutral acoustic presentation candidate family covers speech,
 animal calls, human/animal nonverbal sounds, physical contact, object/cargo
 impact, and eligible environmental sound. Every candidate is derived from an
 authenticated player receipt, except the explicitly bounded legacy
-current-visibility resident greeting/state-speech adapter: it joins world-label
+current-visibility resident state-speech adapter: it joins world-label
 collision layout only and cannot become an acoustic DOM caption until each
 remaining interaction seam gains event-time sound authority. The storekeeper's
-committed closure response no longer uses this adapter. The presenter—not
+committed closure response and resident introduction no longer use this
+adapter. The presenter—not
 producer domains—owns category style, category-specific lifetime,
 source/contact anchoring, bounded
 deterministic lanes, collision checks, salience/priority, per-source queues,
@@ -292,7 +322,7 @@ contact. Routine steps, continuous wading, and repetitive work normally remain
 audio/animation only.
 
 Chart and Relief now consume the same combined active-expression, directly
-visible remaining legacy resident greeting/state speech, and eligible
+visible remaining legacy resident state speech, and eligible
 physical-acoustic candidate list.
 One shared renderer-neutral layout ranks by priority, salience, and stable
 identity, admits at most four labels globally and one per source, tries the same
@@ -469,6 +499,19 @@ incompatible pre-1.0 development format rather than migrated: it is recognized,
 left untouched, and requires a clean current save. Supported pre-v41 migration
 readers remain available. Their semantic fences reject later exhaustion
 meaning, family, knowledge basis, admission, channel, and sample.
+The resident-introduction candidate advances the unpublished writer to outer
+v43 and bounded perception carry v11. Its admission binds the exact committed
+introduction event and command, persistent resident and home, acquaintance
+tick, event-time listener pose, conversation-range direct sight, and positive
+hearing certainty. The pose and facing must equal the carry's independent
+phase-zero anchor. The saved semantic event contains no introduced identity
+prose; projection derives the familiar name/occupation/home line only after
+reauthenticating current facts. Current reload preserves the semantic event,
+admission, memory, and one hearing sample without replaying audio. The label is
+ephemeral; if same-source priority hid it, reload derives only its unexpired
+audio-acknowledged remainder from those authenticated roots. Outer v42 is
+intentionally retired beside v41 as a pre-1.0 development format rather than
+receiving another internal migration chain.
 The current carry also records the exact segmented player position and facing
 at phase zero. Load replays every retained fixed step against the movement
 owner's exact displacement ceiling, movement salience, facing changes, final
@@ -2582,15 +2625,16 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 42 and the bounded perception carry through version 10;
-the current source writer emits outer version 42. Outer v41 is explicitly
-retired under the pre-1.0 policy: load recognizes the incompatible development
-record, leaves it untouched, and directs development to a clean current save
-rather than attempting partial deserialization. Supported pre-v41 migration
-readers remain implemented and tested where retained, but before official 1.0
-that implementation fact is not a permanent promise to preserve every internal
-development format. Current-v42 roundtrip and all conservation, determinism,
-integrity, and no-overwrite laws remain mandatory.
+session through version 43 and the bounded perception carry through version 11;
+the current source writer emits outer version 43. Outer v41 and v42 are
+explicitly retired under the pre-1.0 policy: load recognizes either
+incompatible development record, leaves it untouched, and directs development
+to a clean current save rather than attempting partial deserialization.
+Supported pre-v41 migration readers remain implemented and tested where
+retained, but before official 1.0 that implementation fact is not a permanent
+promise to preserve every internal development format. Current-v43 roundtrip
+and all conservation, determinism, integrity, and no-overwrite laws remain
+mandatory.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

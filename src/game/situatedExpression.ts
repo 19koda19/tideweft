@@ -26,6 +26,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "human-danger-warning",
   "keeper-secure-store-response",
   "need-rest-after-exertion",
+  "resident-introduction",
 ] as const);
 export type SituatedExpressionMeaning = (typeof SITUATED_EXPRESSION_MEANINGS)[number];
 
@@ -36,6 +37,7 @@ export const SITUATED_EXPRESSION_FAMILIES = Object.freeze([
   "animal-signal",
   "warning",
   "condition",
+  "social",
 ] as const);
 export type SituatedExpressionFamily = (typeof SITUATED_EXPRESSION_FAMILIES)[number];
 
@@ -66,6 +68,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-weather-distress",
   "self-committed-store-closure",
   "self-felt-exhaustion",
+  "self-committed-introduction",
 ] as const);
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
@@ -322,6 +325,16 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 36,
     familyCooldownSteps: 12,
   }),
+  "resident-introduction": Object.freeze({
+    family: "social",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
+      "self-committed-introduction",
+    ]),
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["spoken"]),
+    meaningCooldownSteps: 80,
+    familyCooldownSteps: 24,
+  }),
 });
 
 /** Returns the fixed cooldown origin used to authenticate bounded recent memory. */
@@ -436,6 +449,15 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.need-rest-after-exertion.2",
       text: "Catch my breath.",
+    }),
+  ]),
+  "resident-introduction": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.resident-introduction.0",
+      // Runtime presentation resolves the exact introduced name, occupation,
+      // and home from the authenticated resident and fact grant. This neutral
+      // fallback keeps the semantic event valid without storing mutable prose.
+      text: "Let me introduce myself.",
     }),
   ]),
 });

@@ -172,12 +172,20 @@ import {
   canonicalizeSituatedExpressionChannelBank,
   closeSituatedExpressionChannelBankInterval,
   createSituatedExpressionChannelBank,
-  listActiveSituatedExpressionChannelPairs,
   reduceSituatedExpressionChannelBank,
   type ActiveSituatedExpressionChannelPair,
   type SituatedExpressionChannelBank,
   type SituatedExpressionChannelBankIntervalSnapshot,
 } from "./situatedExpressionChannelBank";
+import {
+  activeSituatedExpressionPresentationPairs,
+  advanceSituatedExpressionPresentationLeases,
+  createSituatedExpressionPresentationLeases,
+  discardSituatedExpressionPresentationLeasesForSource,
+  putSituatedExpressionPresentationLease,
+  retainClosingSituatedExpressionPresentations,
+  type SituatedExpressionPresentationLeases,
+} from "./situatedExpressionPresentationLease";
 import {
   playerFallCargoRecoveryExpressionIntent,
   playerTraversalExpressionIntent,
@@ -221,6 +229,12 @@ import {
   situatedExpressionSoundClass,
 } from "./situatedExpressionAcoustics";
 import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
+import {
+  prepareResidentIntroductionEventTimeReceipt,
+  residentIntroductionAdmissionMatchesWorld,
+  residentIntroductionReceptionMatchesEventTime,
+  restoreResidentIntroductionPresentationLeasesFromCarry,
+} from "./residentIntroductionAdmissionAuthority";
 import {
   settlementKeeperStoreResponseAdmissionMatchesWorld,
   settlementKeeperStoreResponseReceptionMatchesEventTime,
@@ -484,6 +498,12 @@ import {
   workingPeopleExpressionIntent,
   workingPeopleExpressionMemoryMatchesWorld,
 } from "./workingPeopleExpression";
+import {
+  residentIntroductionExpressionEventForTrigger,
+  residentIntroductionExpressionEventMatchesWorld,
+  residentIntroductionExpressionIntent,
+  residentIntroductionExpressionMemoryMatchesWorld,
+} from "./residentIntroductionExpression";
 import {
   settlementKeeperStoreResponseExpressionEventForTrigger,
   settlementKeeperStoreResponseExpressionEventMatchesWorld,
@@ -1050,6 +1070,7 @@ function recentMeaningAcousticTuples(
     case "porter-heavy-load":
     case "guardian-dog-defensive-growl":
     case "keeper-secure-store-response":
+    case "resident-introduction":
       return [{ volume: "spoken", interrupt: "none" }];
     case "protect-important-cargo":
       return [
@@ -1070,8 +1091,9 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** First save whose situated-expression union owns dry-exhaustion effort. */
+/** Current outer save whose situated-expression union owns resident introduction. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+const PLAYER_EXHAUSTION_GAME_SAVE_VERSION = 42;
 /** First save whose pending perception carry owns physical animal contact. */
 const ANIMAL_CONTACT_GAME_SAVE_VERSION = 40;
 /** First save whose closed situated-expression union persists human danger warnings. */
@@ -1118,7 +1140,7 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 10 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 11 as const;
 const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
@@ -1134,13 +1156,20 @@ const TERRAIN_PREFETCH_TILE_BUDGET = 1_024;
 const TERRAIN_PREFETCH_MAX_JOBS = 9;
 const FIELD_RESOURCE_GAME_SAVE_VERSION = 2;
 const LEGACY_GAME_SAVE_VERSION = 1;
+const RESIDENT_INTRODUCTION_PRESENTATION_PROTECTION = new Set<SituatedExpressionMeaning>([
+  "resident-introduction",
+]);
 /**
  * Development schemas are resettable only after an explicit retirement
  * decision. Schema zero represents the pre-versioned internal fixture; an
  * arbitrary unknown number must remain corrupt rather than becoming a reset
  * authorization by accident.
  */
-const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([0, 41]);
+const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
+  0,
+  41,
+  PLAYER_EXHAUSTION_GAME_SAVE_VERSION,
+]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
   FIELD_RESOURCE_GAME_SAVE_VERSION,
@@ -1268,6 +1297,19 @@ interface CommittedTraversalExpressionContext {
   readonly separationEventId: string | null;
   /** Stable physical lot that actually absorbed the committed shock. */
   readonly cargoAcousticSourceId: string | null;
+}
+
+interface PreparedResidentIntroductionTransaction {
+  readonly residentId: number;
+  readonly commandId: string;
+  /** Exact channel state against which the candidate was reserved. */
+  readonly channelBankBefore: string;
+  readonly channelBankAfter: SituatedExpressionChannelBank;
+  readonly admission: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "resident-introduction" }
+  >;
+  readonly sample: SupplementalSoundSample;
 }
 
 export interface TideweftRuntime {
@@ -1426,7 +1468,7 @@ function worldAcousticSoundCue(event: WorldAcousticEvent): SoundCue {
   }
 }
 
-interface CommittedWorldAcousticAudioCue {
+interface CommittedAudioCue {
   readonly cue: SoundCue;
   readonly volume: number;
   readonly variantSeed: number;
@@ -10246,6 +10288,11 @@ export async function createTideweftRuntime(
   let situatedExpressionChannels: SituatedExpressionChannelBank =
     resumed?.perceptionCarry.situatedExpressionChannels
       ?? createSituatedExpressionChannelBank();
+  // Presentation leases are deliberately ephemeral. They let configured text
+  // lifetimes outlive the one hearing interval that carried the sound without
+  // replaying audio/NPC hearing or turning labels into save authority.
+  let situatedExpressionPresentationLeases: SituatedExpressionPresentationLeases =
+    createSituatedExpressionPresentationLeases();
   let situatedExpressionAdmissions: SituatedExpressionAdmissionLedger =
     resumed?.perceptionCarry.situatedExpressionAdmissions
       ?? createSituatedExpressionAdmissionLedger();
@@ -10469,6 +10516,11 @@ export async function createTideweftRuntime(
   let selectedWildlifeEvidenceTarget: WildlifeEvidenceTargetUIView | null = null;
   let pendingResidentObservation: { residentId: number; commandId: string } | null = null;
   let pendingResidentGreeting: { residentId: number; commandId: string } | null = null;
+  // This never crosses save/load. It is prepared and consumed atomically
+  // inside one world-boundary step after a disposable candidate proves that
+  // acquaintance, hearing, and the shared expression channel can all commit.
+  let preparedResidentIntroduction: PreparedResidentIntroductionTransaction | null = null;
+  let residentIntroductionSavePending = false;
   let eventObservationCursor = 0;
   const residentSpeech = new Map<number, { text: string; untilSessionMs: number }>();
   // Autosave cadence is elapsed play time, not distance from the civil epoch.
@@ -10689,6 +10741,8 @@ export async function createTideweftRuntime(
     session.campaignCelebrated = Boolean(session.campaignCelebrated);
     session.continueSummary = continueSummary(economyView, player);
     lastAutosaveTick = world.meta.completedTick;
+    situatedExpressionPresentationLeases =
+      restoreResidentIntroductionPresentationLeases();
     beginSession();
     announce(session, "Welcome back to the estuary. Nothing changed while you were away.");
     refreshViews();
@@ -11676,6 +11730,9 @@ export async function createTideweftRuntime(
     if (pendingPlayerWait !== null || player.timeAction !== null) {
       return { moveX: 0, moveY: 0, brace: false };
     }
+    if (pendingResidentGreeting !== null) {
+      return { moveX: 0, moveY: 0, brace: false };
+    }
     if (player.mode === "swept") {
       if (manualControl.moveX || manualControl.moveY) return manualControl;
       if (adriftTapControl && adriftTapTicksRemaining > 0) {
@@ -11920,14 +11977,15 @@ export async function createTideweftRuntime(
       === VISIBILITY_DIRECT;
   }
 
-  function createSituatedVocalizationSample(
+  function createSituatedVocalizationSampleForTick(
     event: SituatedExpressionEvent,
     sampleOrdinal: number,
+    completedTick: number,
   ): SupplementalSoundSample {
     const acoustics = expressionAcoustics(event);
     const sample = createSupplementalSoundSample({
       expressionEventId: event.eventId,
-      id: `av-${world.meta.completedTick}-${sampleOrdinal}`,
+      id: `av-${completedTick}-${sampleOrdinal}`,
       position: event.position,
       soundLoudness: acoustics.loudness,
       soundRangeUnits: acoustics.rangeUnits,
@@ -11939,20 +11997,58 @@ export async function createTideweftRuntime(
     return sample;
   }
 
+  function createSituatedVocalizationSample(
+    event: SituatedExpressionEvent,
+    sampleOrdinal: number,
+  ): SupplementalSoundSample {
+    return createSituatedVocalizationSampleForTick(
+      event,
+      sampleOrdinal,
+      world.meta.completedTick,
+    );
+  }
+
   function activeSituatedExpressionPairs(): readonly ActiveSituatedExpressionChannelPair[] {
-    const pairs = listActiveSituatedExpressionChannelPairs(situatedExpressionChannels);
+    const pairs = activeSituatedExpressionPresentationPairs(
+      situatedExpressionChannels,
+      situatedExpressionPresentationLeases,
+    );
     if (pairs === null) {
       throw new Error("Situated expression channel bank failed validation");
     }
-    return Object.freeze([...pairs].sort((left, right) => (
-      right.event.priority - left.event.priority
-      || right.event.salience - left.event.salience
-      || left.event.eventId.localeCompare(right.event.eventId)
-    )));
+    return pairs;
   }
 
   function activeSituatedExpressionPair(): ActiveSituatedExpressionChannelPair | null {
     return activeSituatedExpressionPairs()[0] ?? null;
+  }
+
+  /**
+   * Rebuild a presentation-only introduction remainder from authenticated
+   * current-schema carry. The durable world event, semantic memory, admission,
+   * and event-time receipt are authority; no audio cursor or NPC observation is
+   * reopened. This keeps a same-source interruption from turning save/reload
+   * into permanent loss of the resident's first personalized line.
+   */
+  function restoreResidentIntroductionPresentationLeases():
+  SituatedExpressionPresentationLeases {
+    if (playerPerceptionIntervalStartPosition === null) {
+      throw new Error("Resident introduction presentation carry has no listener anchor");
+    }
+    const restored = restoreResidentIntroductionPresentationLeasesFromCarry({
+      economyWorld: economyView,
+      spatialWorld: worldView,
+      window: regionalTravel.window,
+      playerTemplate: player,
+      intervalStartPosition: playerPerceptionIntervalStartPosition,
+      intervalStartFacingMilliRadians: playerPerceptionIntervalStartFacingMilliRadians,
+      channels: situatedExpressionChannels,
+      admissions: situatedExpressionAdmissions,
+    });
+    if (restored === null) {
+      throw new Error("Resident introduction presentation carry lost its authority");
+    }
+    return restored;
   }
 
   function acceptSituatedExpression(
@@ -12046,6 +12142,12 @@ export async function createTideweftRuntime(
       }
       const sample = createSituatedVocalizationSample(reduction.event, sampleOrdinal);
       situatedExpressionChannels = reduction.bank;
+      situatedExpressionPresentationLeases =
+        discardSituatedExpressionPresentationLeasesForSource(
+          situatedExpressionPresentationLeases,
+          reduction.event.sourceActorId,
+          RESIDENT_INTRODUCTION_PRESENTATION_PROTECTION,
+        );
       situatedExpressionAdmissions = nextAdmissions;
       situatedExpressionCausalAuthority = nextCausalAuthority;
       actorVocalizationSamples.push(sample);
@@ -12054,7 +12156,13 @@ export async function createTideweftRuntime(
     return false;
   }
 
-  function playPendingSituatedExpression(): void {
+  /**
+   * Acknowledge pending player reception and return its external audio work.
+   * Callers inside the fail-closed fixed step must release these cues only
+   * after the entire tick commits; UI transactions may release them after
+   * their own authoritative roots have committed.
+   */
+  function acknowledgePendingSituatedExpression(): readonly CommittedAudioCue[] {
     const acknowledged = acknowledgeSituatedExpressionChannelBank(
       situatedExpressionChannels,
     );
@@ -12062,7 +12170,7 @@ export async function createTideweftRuntime(
       throw new Error("Situated expression channel acknowledgement failed validation");
     }
     situatedExpressionChannels = acknowledged.bank;
-    for (const { event, reception } of acknowledged.acknowledgements) {
+    return Object.freeze(acknowledged.acknowledgements.map(({ event, reception }) => {
       let pan = 0;
       if (reception.kind === "heard-visible") {
         const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -12091,7 +12199,13 @@ export async function createTideweftRuntime(
           : 0.42;
       const intensity = baseIntensity * (0.35 + reception.certainty / FIXED_POINT * 0.65);
       const cue: SituatedVocalizationCue = `vocalization-${event.vocalization}`;
-      soundscape.play(cue, intensity, event.variantSeed, pan);
+      return Object.freeze({ cue, volume: intensity, variantSeed: event.variantSeed, pan });
+    }));
+  }
+
+  function releaseCommittedAudio(cues: readonly CommittedAudioCue[]): void {
+    for (const audio of cues) {
+      soundscape.play(audio.cue, audio.volume, audio.variantSeed, audio.pan);
     }
   }
 
@@ -12173,6 +12287,143 @@ export async function createTideweftRuntime(
     }
     playerPerceptionIntervalStartPosition = intervalStart;
     playerPerceptionIntervalStartFacingMilliRadians = player.facingMilliRadians;
+  }
+
+  /**
+   * GREET is a rare cross-root transaction. The simulation first advances a
+   * disposable candidate so it remains the sole owner of acquaintance facts.
+   * We adopt that candidate only when its exact introduction is directly seen,
+   * heard through current masking, and reservable in Living Voice's bounded
+   * channel/sample/admission budgets. A physical refusal advances the real
+   * world without GREET and leaves the resident merely recognized.
+   */
+  function stepWorldWithPreparedResidentIntroduction(
+    perceptionFrame: ResidentPerceptionFrame,
+  ): WorldState {
+    preparedResidentIntroduction = null;
+    const pending = pendingResidentGreeting;
+    if (pending === null) return stepWorld(world, commandQueue, perceptionFrame);
+
+    const candidate = stepWorld(structuredClone(world), commandQueue, perceptionFrame);
+    const rejected = candidate.events.some((event) => (
+      event.type === "command-rejected"
+      && event.data.commandId === pending.commandId
+    ));
+    if (rejected) return candidate;
+
+    const introductions = candidate.events.filter((event) => (
+      event.type === "resident-introduced"
+      && event.subjectId === pending.residentId
+      && event.data.commandId === pending.commandId
+    ));
+    const introduced = introductions[0];
+    const candidateEconomy = createWorldView(candidate);
+    const intent = introduced === undefined
+      ? null
+      : residentIntroductionExpressionIntent({
+          world: candidateEconomy,
+          event: introduced,
+        });
+    const candidateSpatial = intent === null
+      ? null
+      : createRegionalWorldView(
+          candidateEconomy,
+          regionalTravel.window,
+          { discovered: player.discovered, depthSoundings: player.depthSoundings },
+          { immutable: true },
+        );
+    const receipts: NonNullable<
+      ReturnType<typeof prepareResidentIntroductionEventTimeReceipt>
+    >[] = [];
+    const channelBankBefore = stableStringify(situatedExpressionChannels);
+    const closingSnapshot = captureSituatedExpressionChannelBankIntervalSnapshot(
+      situatedExpressionChannels,
+    );
+    const reduction = intent === null || candidateSpatial === null
+      ? null
+      : reduceSituatedExpressionChannelBank(
+          situatedExpressionChannels,
+          intent,
+          (event: SituatedExpressionEvent) => {
+            const preparedReceipt = prepareResidentIntroductionEventTimeReceipt({
+              economyWorld: candidateEconomy,
+              spatialWorld: candidateSpatial,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              event,
+              sampleOrdinal: 0,
+            });
+            if (preparedReceipt !== null) receipts.push(preparedReceipt);
+            return preparedReceipt?.reception ?? null;
+          },
+        );
+    const receipt = receipts.length === 1 ? receipts[0]! : null;
+    const preparedLedger = receipt === null
+      ? null
+      : appendSituatedExpressionAdmissionRecord(
+          createSituatedExpressionAdmissionLedger(),
+          receipt.admission,
+        );
+    const sample = reduction?.accepted === true && reduction.event !== null
+      ? createSituatedVocalizationSampleForTick(
+          reduction.event,
+          0,
+          candidate.meta.completedTick,
+        )
+      : null;
+    const acknowledgedCandidate = reduction?.bank === null
+      || reduction?.bank === undefined
+      ? null
+      : acknowledgeSituatedExpressionChannelBank(reduction.bank).bank;
+    const postClosureBank = acknowledgedCandidate === null
+      || closingSnapshot === null
+      ? null
+      : closeSituatedExpressionChannelBankInterval(
+          acknowledgedCandidate,
+          closingSnapshot,
+        );
+    const trajectory = postClosureBank === null
+      || preparedLedger === null
+      || sample === null
+      ? null
+      : canonicalizeSituatedExpressionTrajectory(
+          postClosureBank,
+          preparedLedger,
+          0,
+          [sample],
+        );
+    if (
+      introductions.length === 1
+      && introduced !== undefined
+      && reduction?.accepted === true
+      && reduction.bank !== null
+      && reduction.event !== null
+      && receipt !== null
+      && sample !== null
+      && receipt.admission.eventId === reduction.event.eventId
+      && trajectory !== null
+    ) {
+      preparedResidentIntroduction = Object.freeze({
+        residentId: pending.residentId,
+        commandId: pending.commandId,
+        channelBankBefore,
+        channelBankAfter: reduction.bank,
+        admission: receipt.admission,
+        sample,
+      });
+      return candidate;
+    }
+
+    const commandsWithoutGreeting = commandQueue.filter(({ id }) => id !== pending.commandId);
+    pendingResidentGreeting = null;
+    manualControl = { moveX: 0, moveY: 0, brace: false };
+    announce(
+      session,
+      "The introduction does not carry clearly enough to become known. Move closer or wait for quieter conditions.",
+      true,
+    );
+    soundscape.play("warning", 0.28);
+    return stepWorld(world, commandsWithoutGreeting, perceptionFrame);
   }
 
   function mirrorPhysicalCargoToPlayer(): void {
@@ -12393,12 +12644,15 @@ export async function createTideweftRuntime(
     if (job.complete) terrainPrefetchJobs.shift();
   }
 
-  function tick(present = true): readonly CommittedWorldAcousticAudioCue[] {
+  function tick(present = true): readonly CommittedAudioCue[] {
     if (session.paused || session.titleVisible || session.quietHourVisible) {
       return Object.freeze([]);
     }
     activeWorldAcousticPresentations = advanceWorldAcousticPresentations(
       activeWorldAcousticPresentations,
+    );
+    situatedExpressionPresentationLeases = advanceSituatedExpressionPresentationLeases(
+      situatedExpressionPresentationLeases,
     );
     const advancedExpressionChannels = advanceSituatedExpressionChannelBank(
       situatedExpressionChannels,
@@ -12525,7 +12779,7 @@ export async function createTideweftRuntime(
     }
     const traversalExpressionContext = applyPlayerStepToPhysicalCargo(result, incidentPosition);
     const stepAcousticEvents: WorldAcousticEvent[] = [];
-    const deferredWorldAcousticAudio: CommittedWorldAcousticAudioCue[] = [];
+    const deferredWorldAcousticAudio: CommittedAudioCue[] = [];
     let stepAcousticEvent: WorldAcousticEvent | null = null;
     if (result.traversalIncident !== null && incidentWorldPosition !== null) {
       stepAcousticEvent = traversalIncidentAcousticEvent({
@@ -13019,7 +13273,7 @@ export async function createTideweftRuntime(
         observations: porterWorldObservations,
       });
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
-      world = stepWorld(world, commandQueue, perceptionFrame);
+      world = stepWorldWithPreparedResidentIntroduction(perceptionFrame);
       // The preceding frame consumed the prior interval exactly once. New
       // contacts committed below become the next interval's carry.
       animalContactAcousticCarry = createAnimalContactAcousticCarry();
@@ -13923,6 +14177,10 @@ export async function createTideweftRuntime(
         elapsedWeather,
       );
       rebuildRegionalWorldView();
+      // A prepared GREET owns sample ordinal zero in the fresh interval. This
+      // commits its already-proven cross-root transaction before unrelated
+      // warnings or animal calls can consume the bounded voice budget.
+      reconcileResidentInteractions(deferredWorldAcousticAudio);
       const humanDangerWarning = selectHumanDangerWarningExpression(economyView);
       if (humanDangerWarning !== null) {
         const audible = playerExpressionAudibility(humanDangerWarning.intent);
@@ -14640,9 +14898,8 @@ export async function createTideweftRuntime(
         if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
       }
     }
-    playPendingSituatedExpression();
+    deferredWorldAcousticAudio.push(...acknowledgePendingSituatedExpression());
     if (worldAdvanced) {
-      reconcileResidentInteractions();
       reconcileContract();
       checkCampaignResolution();
     }
@@ -14708,6 +14965,16 @@ export async function createTideweftRuntime(
     }
     if (present) refreshRuntimePresentation();
     if (closingSituatedExpressionInterval !== null) {
+      const retainedPresentations = retainClosingSituatedExpressionPresentations(
+        situatedExpressionPresentationLeases,
+        situatedExpressionChannels,
+        closingSituatedExpressionInterval,
+        RESIDENT_INTRODUCTION_PRESENTATION_PROTECTION,
+      );
+      if (retainedPresentations === null) {
+        throw new Error("Situated expression presentation lease failed validation");
+      }
+      situatedExpressionPresentationLeases = retainedPresentations;
       const closed = closeSituatedExpressionChannelBankInterval(
         situatedExpressionChannels,
         closingSituatedExpressionInterval,
@@ -14962,7 +15229,7 @@ export async function createTideweftRuntime(
     }
   }
 
-  function reconcileResidentInteractions(): void {
+  function reconcileResidentInteractions(deferredAudio: CommittedAudioCue[]): void {
     if (pendingResidentObservation !== null) {
       const resident = economyView.residents.find(
         (candidate) => candidate.id === pendingResidentObservation?.residentId,
@@ -14978,18 +15245,90 @@ export async function createTideweftRuntime(
       const resident = economyView.residents.find((candidate) => candidate.id === pending.residentId);
       const rejected = rejectionFor([pending.commandId]);
       if (resident?.playerKnowledge.level === "acquainted") {
-        const home = economyView.settlements.find(
-          (settlement) => settlement.id === resident.homeSettlementId,
-        )?.name ?? "the estuary";
-        residentSpeech.set(resident.id, {
-          text: `${resident.name}. ${titleCaseWord(resident.role)}, out of ${home}.`,
-          untilSessionMs: session.sessionPlayMilliseconds + 5_600,
+        const prepared = preparedResidentIntroduction;
+        const introductions = economyView.events.filter((event) => (
+          event.type === "resident-introduced"
+          && event.subjectId === resident.id
+          && event.data.commandId === pending.commandId
+        ));
+        const introduction = introductions[0];
+        const expression = prepared === null
+          ? null
+          : residentIntroductionExpressionEventForTrigger(
+              economyView,
+              prepared.admission.triggerEventId,
+            );
+        const channel = prepared?.channelBankAfter.channels.find(({ sourceActorId }) => (
+          sourceActorId === prepared.admission.sourceActorId
+        ));
+        const nextAdmissions = prepared === null
+          ? null
+          : appendSituatedExpressionAdmissionRecord(
+              situatedExpressionAdmissions,
+              prepared.admission,
+            );
+        if (
+          prepared === null
+          || prepared.residentId !== resident.id
+          || prepared.commandId !== pending.commandId
+          || introductions.length !== 1
+          || introduction === undefined
+          || introduction.tick !== world.meta.completedTick
+          || expression === null
+          || channel?.state.active?.eventId !== prepared.admission.eventId
+          || channel.reception === null
+          || prepared.sample.expressionEventId !== prepared.admission.eventId
+          || prepared.admission.sampleOrdinal !== 0
+          || prepared.admission.admittedAtPlayerStepPhase !== 0
+          || stableStringify(prepared.admission.listenerPosition)
+            !== stableStringify(playerPerceptionIntervalStartPosition)
+          || prepared.admission.listenerFacingMilliRadians
+            !== playerPerceptionIntervalStartFacingMilliRadians
+          || stableStringify(situatedExpressionChannels) !== prepared.channelBankBefore
+          || situatedExpressionAdmissions.records.length !== 0
+          || actorVocalizationSamples.length !== 0
+          || nextAdmissions === null
+          || !residentIntroductionAdmissionMatchesWorld({
+              economyWorld: economyView,
+              spatialWorld: worldView,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              event: expression,
+              admission: prepared.admission,
+            })
+          || !residentIntroductionReceptionMatchesEventTime({
+              economyWorld: economyView,
+              spatialWorld: worldView,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              event: expression,
+              admission: prepared.admission,
+              reception: channel.reception,
+            })
+        ) {
+          throw new Error("Committed resident introduction lost its causal acoustic authority");
+        }
+        situatedExpressionChannels = prepared.channelBankAfter;
+        const introductionPair: ActiveSituatedExpressionChannelPair = Object.freeze({
+          sourceActorId: prepared.admission.sourceActorId,
+          event: channel.state.active,
+          reception: channel.reception,
         });
+        situatedExpressionPresentationLeases = putSituatedExpressionPresentationLease(
+          situatedExpressionPresentationLeases,
+          introductionPair,
+        );
+        situatedExpressionAdmissions = nextAdmissions;
+        actorVocalizationSamples.push(prepared.sample);
         pendingResidentGreeting = null;
-        soundscape.play("ui", 0.6);
-        saveInBackground();
+        preparedResidentIntroduction = null;
+        manualControl = { moveX: 0, moveY: 0, brace: false };
+        deferredAudio.push(...acknowledgePendingSituatedExpression());
+        residentIntroductionSavePending = true;
       } else if (rejected || !resident) {
         pendingResidentGreeting = null;
+        preparedResidentIntroduction = null;
+        manualControl = { moveX: 0, moveY: 0, brace: false };
         if (rejected) {
           announce(session, `That greeting did not become part of the world: ${rejected}.`, true);
           soundscape.play("warning", 0.28);
@@ -15236,6 +15575,10 @@ export async function createTideweftRuntime(
       return;
     }
 
+    stopAutomaticLivingActorRoute();
+    manualControl = { moveX: 0, moveY: 0, brace: false };
+    adriftTapControl = null;
+    adriftTapTicksRemaining = 0;
     const greetingCommandId = commandId("greet-resident");
     queue({
       id: greetingCommandId,
@@ -16290,6 +16633,7 @@ export async function createTideweftRuntime(
     clearPlayerPerceptionInterval();
     animalContactAcousticCarry = createAnimalContactAcousticCarry();
     activeWorldAcousticPresentations = Object.freeze([]);
+    situatedExpressionPresentationLeases = createSituatedExpressionPresentationLeases();
     terrainPrefetchJobs = [];
     autopilotPath = [];
     adriftTapControl = null;
@@ -16313,6 +16657,8 @@ export async function createTideweftRuntime(
     selectedWildlifeEvidenceTarget = null;
     pendingResidentObservation = null;
     pendingResidentGreeting = null;
+    preparedResidentIntroduction = null;
+    residentIntroductionSavePending = false;
     residentSpeech.clear();
     lastAutosaveTick = world.meta.completedTick;
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
@@ -16573,7 +16919,7 @@ export async function createTideweftRuntime(
           recoveredEntityId: parcelId,
         })
       ));
-      playPendingSituatedExpression();
+      releaseCommittedAudio(acknowledgePendingSituatedExpression());
     }
     return true;
   }
@@ -16993,7 +17339,9 @@ export async function createTideweftRuntime(
     // Authoritative closure and expression roots commit before optional
     // presentation/audio is released. A presentation failure must never leave
     // a spoken secured-store response attached to an open store.
-    if (responseAdmitted) playPendingSituatedExpression();
+    if (responseAdmitted) {
+      releaseCommittedAudio(acknowledgePendingSituatedExpression());
+    }
     session.sessionChanges.push("You warned a visible store keeper, who secured the physical food stock.");
     if (session.sessionChanges.length > 32) session.sessionChanges.splice(0, 8);
     announce(
@@ -17972,6 +18320,7 @@ export async function createTideweftRuntime(
       fieldResourceEcology: structuredClone(fieldResourceEcology),
       traversalFeedback: structuredClone(traversalFeedback),
       activeWorldAcousticPresentations,
+      situatedExpressionPresentationLeases,
       situatedExpressionChannels,
       situatedExpressionAdmissions,
       situatedExpressionCausalAuthority,
@@ -18002,6 +18351,7 @@ export async function createTideweftRuntime(
       eventObservationCursor,
       pendingResidentObservation: structuredClone(pendingResidentObservation),
       pendingResidentGreeting: structuredClone(pendingResidentGreeting),
+      residentIntroductionSavePending,
       residentSpeech: new Map(residentSpeech),
       autopilotPath: [...autopilotPath],
       pendingPlayerWait: structuredClone(pendingPlayerWait),
@@ -18014,9 +18364,17 @@ export async function createTideweftRuntime(
         runtimePerformanceNow(),
       );
     }
-    let committedWorldAcousticAudio: readonly CommittedWorldAcousticAudioCue[];
+    let committedWorldAcousticAudio: readonly CommittedAudioCue[];
     try {
       committedWorldAcousticAudio = tick(present);
+      // The introduction snapshot is captured only after every fallible tick
+      // operation, including presentation and interval closure, has returned.
+      // A rejected tick can therefore neither persist acquaintance nor leak a
+      // save assembled from roots that memory subsequently rolls back.
+      if (residentIntroductionSavePending) {
+        residentIntroductionSavePending = false;
+        saveInBackground();
+      }
     } catch (error) {
       if (priorWorld) {
         world = priorWorld;
@@ -18039,6 +18397,7 @@ export async function createTideweftRuntime(
       fieldResourceEcology = prior.fieldResourceEcology;
       traversalFeedback = prior.traversalFeedback;
       activeWorldAcousticPresentations = prior.activeWorldAcousticPresentations;
+      situatedExpressionPresentationLeases = prior.situatedExpressionPresentationLeases;
       situatedExpressionChannels = prior.situatedExpressionChannels;
       situatedExpressionAdmissions = prior.situatedExpressionAdmissions;
       situatedExpressionCausalAuthority = prior.situatedExpressionCausalAuthority;
@@ -18070,6 +18429,8 @@ export async function createTideweftRuntime(
       eventObservationCursor = prior.eventObservationCursor;
       pendingResidentObservation = prior.pendingResidentObservation;
       pendingResidentGreeting = prior.pendingResidentGreeting;
+      preparedResidentIntroduction = null;
+      residentIntroductionSavePending = prior.residentIntroductionSavePending;
       residentSpeech.clear();
       for (const [residentId, speech] of prior.residentSpeech) {
         residentSpeech.set(residentId, speech);
@@ -18109,9 +18470,7 @@ export async function createTideweftRuntime(
     // the fallible authoritative tick has returned successfully. A fail-closed
     // rollback can restore the event/text queue, but cannot unplay an escaped
     // sound.
-    for (const audio of committedWorldAcousticAudio) {
-      soundscape.play(audio.cue, audio.volume, audio.variantSeed, audio.pan);
-    }
+    releaseCommittedAudio(committedWorldAcousticAudio);
     return true;
   }
 
@@ -18513,7 +18872,7 @@ function canonicalPlayerPerceptionCarry(
     | typeof HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION
     | typeof ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION
     | typeof PLAYER_PERCEPTION_CARRY_VERSION,
-  semanticSchema: "keeper-response" | "human-warning" | "fish-crow" = "human-warning",
+  semanticSchema: "resident-introduction" | "keeper-response" | "human-warning" | "fish-crow" = "human-warning",
 ): PlayerPerceptionCarry | null {
   if (
     value === null
@@ -19016,9 +19375,10 @@ function perceptionCarryUsesOnlyFishCrowSemantics(
 
 /**
  * Cumulative semantic fence for every supported current-shape carry before
- * outer v42. Nested expression schemas intentionally retain version 1, so
- * every v34-v40 reader rejects both the keeper reply introduced in retired
- * development v41 and the effort semantic introduced by v42/carry-v10.
+ * outer v43. Nested expression schemas intentionally retain version 1, so
+ * every v34-v40 reader rejects the keeper reply introduced in retired v41,
+ * the effort semantic introduced in retired v42/carry-v10, and the resident
+ * introduction introduced by v43/carry-v11.
  */
 function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
   bank: SituatedExpressionChannelBank,
@@ -19027,18 +19387,24 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
   return admissions.records.every(({ kind }) => (
     kind !== "settlement-keeper-store-response"
     && kind !== "player-exhaustion"
+    && kind !== "resident-introduction"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning, family }) => (
       meaning !== "keeper-secure-store-response"
       && meaning !== "need-rest-after-exertion"
+      && meaning !== "resident-introduction"
       && family !== "condition"
+      && family !== "social"
     )) && (active === null || (
       active.meaning !== "keeper-secure-store-response"
       && active.meaning !== "need-rest-after-exertion"
+      && active.meaning !== "resident-introduction"
       && active.family !== "condition"
+      && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
       && active.knowledgeBasis !== "self-felt-exhaustion"
+      && active.knowledgeBasis !== "self-committed-introduction"
     ));
   });
 }
@@ -19566,6 +19932,10 @@ function playerPerceptionCarryMatchesPosition(
         admission.triggerEventId,
       );
       return event !== null
+        && stableStringify(admission.listenerPosition)
+          === stableStringify(carry.intervalStartPosition)
+        && admission.listenerFacingMilliRadians
+          === carry.intervalStartFacingMilliRadians
         && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
         && vocalizationSampleMatchesActiveEvent(sample, event)
         && settlementKeeperStoreResponseAdmissionMatchesWorld({
@@ -19574,6 +19944,22 @@ function playerPerceptionCarryMatchesPosition(
           window: regionalTravel.window,
           playerTemplate: player,
           settlement,
+          event,
+          admission,
+        });
+    }
+    if (admission.kind === "resident-introduction") {
+      const event = residentIntroductionExpressionEventForTrigger(
+        economy,
+        admission.triggerEventId,
+      );
+      return event !== null
+        && vocalizationSampleMatchesActiveEvent(sample, event)
+        && residentIntroductionAdmissionMatchesWorld({
+          economyWorld: economy,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
           event,
           admission,
         });
@@ -19845,6 +20231,35 @@ function situatedExpressionChannelsMatchWorld(
         ? null
         : { admission, authority: { world: economy, settlement } };
     };
+    const introductionAuthorityFor = (
+      triggerEventId: string,
+    ): Readonly<{
+      admission: Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "resident-introduction" }
+      >;
+      event: SituatedExpressionEvent;
+    }> | null => {
+      const introductionAdmissions = admissions.filter((candidate): candidate is Extract<
+        SituatedExpressionAdmissionRecord,
+        { readonly kind: "resident-introduction" }
+      > => (
+        candidate.kind === "resident-introduction"
+        && candidate.triggerEventId === triggerEventId
+      ));
+      const admission = introductionAdmissions[0];
+      const event = admission === undefined
+        ? null
+        : residentIntroductionExpressionEventForTrigger(
+            economy,
+            admission.triggerEventId,
+          );
+      return introductionAdmissions.length !== 1
+        || admission === undefined
+        || event === null
+        ? null
+        : { admission, event };
+    };
     if (!channel.state.recent.every((memory) => {
       if (memory.meaning === "human-danger-warning") {
         const warning = warningAuthorityFor(memory.triggerEventId);
@@ -19859,10 +20274,18 @@ function situatedExpressionChannelsMatchWorld(
             memory,
           );
       }
+      if (memory.meaning === "resident-introduction") {
+        const introduction = introductionAuthorityFor(memory.triggerEventId);
+        return introduction !== null
+          && residentIntroductionExpressionMemoryMatchesWorld(economy, memory);
+      }
       return workingPeopleExpressionMemoryMatchesWorld(economy, memory);
     })) return false;
     if (active !== null) {
-      if (!residentSourcePositionMatches(economy, channel.sourceActorId, active.position)) {
+      if (
+        active.meaning !== "resident-introduction"
+        && !residentSourcePositionMatches(economy, channel.sourceActorId, active.position)
+      ) {
         return false;
       }
       if (active.meaning === "human-danger-warning") {
@@ -19900,6 +20323,25 @@ function situatedExpressionChannelsMatchWorld(
             reception: channel.reception,
           })
         ) return false;
+      } else if (active.meaning === "resident-introduction") {
+        const introduction = introductionAuthorityFor(active.triggerEventId);
+        if (
+          introduction === null
+          || stableStringify(introduction.admission.listenerPosition)
+            !== stableStringify(carry.intervalStartPosition)
+          || introduction.admission.listenerFacingMilliRadians
+            !== carry.intervalStartFacingMilliRadians
+          || !residentIntroductionExpressionEventMatchesWorld(economy, active)
+          || !residentIntroductionReceptionMatchesEventTime({
+            economyWorld: economy,
+            spatialWorld,
+            window: regionalTravel.window,
+            playerTemplate: player,
+            event: active,
+            admission: introduction.admission,
+            reception: channel.reception,
+          })
+        ) return false;
       } else if (!workingPeopleExpressionEventMatchesWorld(economy, active)) {
         return false;
       }
@@ -19927,6 +20369,25 @@ function situatedExpressionChannelsMatchWorld(
           event,
           admission,
         });
+      }
+      if (admission.kind === "resident-introduction") {
+        const event = residentIntroductionExpressionEventForTrigger(
+          economy,
+          admission.triggerEventId,
+        );
+        return event !== null
+          && stableStringify(admission.listenerPosition)
+            === stableStringify(carry.intervalStartPosition)
+          && admission.listenerFacingMilliRadians
+            === carry.intervalStartFacingMilliRadians
+          && residentIntroductionAdmissionMatchesWorld({
+          economyWorld: economy,
+          spatialWorld,
+          window: regionalTravel.window,
+          playerTemplate: player,
+          event,
+          admission,
+          });
       }
       if (admission.kind !== "porter-heavy-departure") return false;
       const event = workingPeopleExpressionEventForTrigger(
@@ -21743,7 +22204,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
           decoded.perceptionCarry,
           world.meta.completedTick,
           PLAYER_PERCEPTION_CARRY_VERSION,
-          "keeper-response",
+          "resident-introduction",
         )
       : decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         ? canonicalPlayerPerceptionCarry(

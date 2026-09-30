@@ -519,6 +519,7 @@ function policyFor(
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "need-rest-after-exertion":
+    case "resident-introduction":
       return null;
   }
 }

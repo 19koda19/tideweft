@@ -31,6 +31,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "core-wildlife-fish-crow-alarm",
   "human-danger-warning",
   "settlement-keeper-store-response",
+  "resident-introduction",
   "legacy-v33-player",
 ] as const);
 export type SituatedExpressionAdmissionKind =
@@ -180,6 +181,20 @@ export interface SettlementKeeperStoreResponseExpressionAdmissionRecord
   readonly hearingCertainty: number | null;
 }
 
+export interface ResidentIntroductionExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "resident-introduction";
+  /** Exact accepted GREET command recorded by the simulation event. */
+  readonly commandId: string;
+  readonly introducedAtTick: number;
+  readonly homeSettlementId: number;
+  /** Recorded event-time listener pose, never present-time player authority. */
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  /** A committed acquaintance always has a heard-and-visible player receipt. */
+  readonly hearingCertainty: number;
+}
+
 export interface LegacyV33PlayerExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "legacy-v33-player";
@@ -196,6 +211,7 @@ export type SituatedExpressionAdmissionRecord =
   | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   | HumanDangerWarningExpressionAdmissionRecord
   | SettlementKeeperStoreResponseExpressionAdmissionRecord
+  | ResidentIntroductionExpressionAdmissionRecord
   | LegacyV33PlayerExpressionAdmissionRecord;
 
 interface SituatedExpressionAdmissionInputBase {
@@ -278,6 +294,16 @@ export interface SettlementKeeperStoreResponseExpressionAdmissionInput
   readonly listenerPosition: WorldPosition;
   readonly listenerFacingMilliRadians: number;
   readonly hearingCertainty: number | null;
+}
+
+export interface ResidentIntroductionExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly commandId: string;
+  readonly introducedAtTick: number;
+  readonly homeSettlementId: number;
+  readonly listenerPosition: WorldPosition;
+  readonly listenerFacingMilliRadians: number;
+  readonly hearingCertainty: number;
 }
 
 export type LegacyV33PlayerExpressionAdmissionInput = SituatedExpressionAdmissionInputBase;
@@ -608,6 +634,41 @@ export function createSettlementKeeperStoreResponseExpressionAdmissionRecord(
   }) as SettlementKeeperStoreResponseExpressionAdmissionRecord | null;
 }
 
+/** Creates one exact resident introduction with its event-time player receipt. */
+export function createResidentIntroductionExpressionAdmissionRecord(
+  input: ResidentIntroductionExpressionAdmissionInput,
+): ResidentIntroductionExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "commandId",
+    "hearingCertainty",
+    "homeSettlementId",
+    "introducedAtTick",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "sampleOrdinal",
+    "sourceActorId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "resident-introduction",
+    commandId: value.commandId,
+    introducedAtTick: value.introducedAtTick,
+    homeSettlementId: value.homeSettlementId,
+    listenerPosition: value.listenerPosition,
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    hearingCertainty: value.hearingCertainty,
+  }) as ResidentIntroductionExpressionAdmissionRecord | null;
+}
+
 /** Creates bounded compatibility evidence for one uniquely migrated v33 player line. */
 export function createLegacyV33PlayerExpressionAdmissionRecord(
   input: LegacyV33PlayerExpressionAdmissionInput,
@@ -650,6 +711,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
     case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
     case "settlement-keeper-store-response": return canonicalSettlementKeeperStoreResponseRecord(value);
+    case "resident-introduction": return canonicalResidentIntroductionRecord(value);
     case "legacy-v33-player": return canonicalLegacyRecord(value);
     default: return null;
   }
@@ -1112,6 +1174,55 @@ function canonicalSettlementKeeperStoreResponseRecord(
     closureTransactionId: value.closureTransactionId,
     sourceEvidenceId: value.sourceEvidenceId,
     respondedAtTick: value.respondedAtTick,
+    listenerPosition: createWorldPosition(
+      value.listenerPosition.region,
+      value.listenerPosition.localX,
+      value.listenerPosition.localY,
+    ),
+    listenerFacingMilliRadians: value.listenerFacingMilliRadians,
+    hearingCertainty: value.hearingCertainty,
+  });
+}
+
+function canonicalResidentIntroductionRecord(
+  value: Readonly<Record<string, unknown>>,
+): ResidentIntroductionExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "admittedAtPlayerStepPhase",
+    "commandId",
+    "eventId",
+    "hearingCertainty",
+    "homeSettlementId",
+    "introducedAtTick",
+    "kind",
+    "listenerFacingMilliRadians",
+    "listenerPosition",
+    "sampleOrdinal",
+    "sourceActorId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.kind !== "resident-introduction"
+    || value.admittedAtPlayerStepPhase !== 0
+    || !validId(value.commandId)
+    || !nonnegativeSafeInteger(value.introducedAtTick)
+    || !nonnegativeSafeInteger(value.homeSettlementId)
+    || !isWorldPosition(value.listenerPosition)
+    || !canonicalSafeInteger(value.listenerFacingMilliRadians)
+    || !positiveBoundedUnit(value.hearingCertainty)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: 0,
+    kind: "resident-introduction",
+    commandId: value.commandId,
+    introducedAtTick: value.introducedAtTick,
+    homeSettlementId: value.homeSettlementId,
     listenerPosition: createWorldPosition(
       value.listenerPosition.region,
       value.listenerPosition.localX,

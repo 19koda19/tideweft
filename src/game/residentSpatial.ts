@@ -3,6 +3,7 @@ import {
   FIXED_POINT,
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  type ResidentLocation,
   type ResidentState,
   type WorldView,
 } from "../sim/types";
@@ -57,6 +58,32 @@ export function resolveResidentWorldPlacement(
   return resident.location.kind === "route"
     ? resolveResidentRouteWorldPlacement(economy, resident)
     : resolveResidentSettlementWorldPlacement(economy, resident);
+}
+
+/**
+ * Resolve an immutable event-time resident locus after the actor has moved.
+ * Settlement placement needs the ordinal captured with the event because the
+ * live ordinal is intentionally derived from the currently present group.
+ */
+export function resolveResidentWorldPlacementAtEventLocation(
+  economy: WorldView,
+  resident: ResidentState,
+  location: ResidentLocation,
+  settlementOrdinal: number | null,
+): ResidentWorldPlacement | null {
+  const eventResident = { ...resident, location };
+  if (location.kind === "route") {
+    return settlementOrdinal === null
+      ? resolveResidentRouteWorldPlacement(economy, eventResident)
+      : null;
+  }
+  return Number.isSafeInteger(settlementOrdinal) && (settlementOrdinal ?? -1) >= 0
+    ? resolveResidentSettlementWorldPlacement(
+        economy,
+        eventResident,
+        settlementOrdinal ?? -1,
+      )
+    : null;
 }
 
 /** Resolve only a route location, failing closed on malformed or nonlocal paths. */
@@ -208,6 +235,7 @@ export function playerWorldPositionInRegionalWindow(
 function resolveResidentSettlementWorldPlacement(
   economy: WorldView,
   resident: ResidentState,
+  eventOrdinal: number | null = null,
 ): ResidentWorldPlacement | null {
   if (resident.location.kind !== "settlement") return null;
   const location = resident.location;
@@ -223,7 +251,7 @@ function resolveResidentSettlementWorldPlacement(
       && candidate.location.settlementId === settlement.id
     )
     .sort(compareResidentIdentity);
-  const ordinal = presentResidents.findIndex((candidate) =>
+  const ordinal = eventOrdinal ?? presentResidents.findIndex((candidate) =>
     candidate.id === resident.id
     && candidate.identity.stableId === resident.identity.stableId
   );

@@ -172,6 +172,12 @@ export function canonicalizeSituatedExpressionTrajectory(
             || channel.reception.receivedAtTick !== latest.respondedAtTick
             || channel.reception.certainty !== latest.hearingCertainty)
       ) return null;
+      if (
+        latest.kind === "resident-introduction"
+        && (channel.reception?.kind !== "heard-visible"
+          || channel.reception.receivedAtTick !== latest.introducedAtTick
+          || channel.reception.certainty !== latest.hearingCertainty)
+      ) return null;
     }
   }
 
@@ -244,6 +250,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "human-danger-warning";
     case "settlement-keeper-store-response":
       return meaning === "keeper-secure-store-response";
+    case "resident-introduction":
+      return meaning === "resident-introduction";
     case "legacy-v33-player":
       return isLegacyV33PlayerMeaning(meaning);
   }
@@ -261,6 +269,14 @@ function eventMatchesAdmission(
       && event.knowledgeBasis === "self-felt-exhaustion"
       && event.priority === 260_000
       && event.salience === 440_000;
+  }
+  if (record.kind === "resident-introduction") {
+    return event.family === "social"
+      && event.tone === "restrained"
+      && event.volume === "spoken"
+      && event.knowledgeBasis === "self-committed-introduction"
+      && event.priority === 650_000
+      && event.salience === 780_000;
   }
   return (record.kind !== "core-wildlife-fish-crow-alarm"
     && record.kind !== "human-danger-warning")
@@ -281,6 +297,15 @@ function sampleAcousticsMatchAdmission(
     const acoustics = situatedExpressionAcoustics({
       meaning: "need-rest-after-exertion",
       volume: "murmur",
+    });
+    return sample.soundLoudness === acoustics.loudness
+      && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundInterrupt === "none";
+  }
+  if (record.kind === "resident-introduction") {
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "resident-introduction",
+      volume: "spoken",
     });
     return sample.soundLoudness === acoustics.loudness
       && sample.soundRangeUnits === acoustics.rangeUnits
@@ -320,6 +345,7 @@ function admissionDurationSteps(
     case "core-wildlife-fish-crow-alarm": return 6;
     case "human-danger-warning": return 6;
     case "settlement-keeper-store-response": return 12;
+    case "resident-introduction": return 56;
     case "legacy-v33-player": return expressionDurationSteps(memory.meaning);
   }
 }
@@ -339,6 +365,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
+    case "resident-introduction": return 56;
   }
 }
 
@@ -356,6 +383,7 @@ function admissionMeaning(
     case "core-wildlife-fish-crow-alarm": return "fish-crow-alarm-call";
     case "human-danger-warning": return "human-danger-warning";
     case "settlement-keeper-store-response": return "keeper-secure-store-response";
+    case "resident-introduction": return "resident-introduction";
     case "legacy-v33-player": return "steady-after-stumble";
   }
 }

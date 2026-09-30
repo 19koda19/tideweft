@@ -771,8 +771,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 42 || current.version !== 42) {
-    throw new Error("runtime fixture is not a current v42 save");
+  if (record.payloadVersion !== 43 || current.version !== 43) {
+    throw new Error("runtime fixture is not a current v43 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1810,7 +1810,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 42) throw new Error("fixture is not a current save");
+  if (current.version !== 43) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1840,7 +1840,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 42) throw new Error("fixture is not a current save");
+  if (current.version !== 43) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1870,7 +1870,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 42 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 43 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1924,7 +1924,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 42
+    current.version !== 43
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2785,8 +2785,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(42);
-    expect(envelope.version).toBe(42);
+    expect(record.payloadVersion).toBe(43);
+    expect(envelope.version).toBe(43);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -2892,7 +2892,7 @@ describe("runtime settlement ecology integration", () => {
         }>;
       };
     };
-    expect(carry.version).toBe(10);
+    expect(carry.version).toBe(11);
     expect(carry.situatedExpressionAdmissions.records).toEqual([
       expect.objectContaining({
         kind: "settlement-keeper-store-response",
@@ -3003,9 +3003,9 @@ describe("runtime settlement ecology integration", () => {
     ))).toBe(false);
     await migrated.save();
     const migratedEnvelope = savedEnvelope(honestRepository);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedEnvelope.perceptionCarry).toMatchObject({
-      version: 10,
+      version: 11,
       actorVocalizationSamples: [],
       situatedExpressionAdmissions: { records: [] },
       situatedExpressionChannels: { channels: [] },
@@ -3089,8 +3089,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -3177,8 +3177,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3351,8 +3351,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3507,8 +3507,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3623,8 +3623,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -4008,7 +4008,7 @@ describe("runtime settlement ecology integration", () => {
     // duplicate the persisted sample/admission/channel.
     const { integrity: _currentIntegrity, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
-    expect(committedCarry.version).toBe(10);
+    expect(committedCarry.version).toBe(11);
     const {
       animalContactAcousticCarry: _currentAnimalContactCarry,
       playerStepStateAnchor: _currentPlayerStepStateAnchor,
@@ -4036,10 +4036,10 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(42);
+    expect(migratedWarningEnvelope.version).toBe(43);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
       ...v7CommittedCarry,
-      version: 10,
+      version: 11,
       playerStepStateSamples: Array.from(
         { length: Number(v7CommittedCarry.playerStepsSinceWorldTick) },
         () => null,
@@ -5159,11 +5159,11 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedGrowlRecord = v36GrowlRepository.snapshot();
     const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(42);
-    expect(migratedGrowlEnvelope.version).toBe(42);
+    expect(migratedGrowlRecord.payloadVersion).toBe(43);
+    expect(migratedGrowlEnvelope.version).toBe(43);
     expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
       ...v7GrowlCarry,
-      version: 10,
+      version: 11,
       playerStepStateSamples: Array.from(
         { length: Number(v7GrowlCarry["playerStepsSinceWorldTick"]) },
         () => null,
@@ -5889,7 +5889,7 @@ describe("runtime settlement ecology integration", () => {
     // v37/carry-v6 already owned shelter whines. Its exact nonempty interval
     // migrates by version alone without replaying acknowledged audio or
     // duplicating any retained sample, admission, channel, or reception.
-    expect(whineCarry.version).toBe(10);
+    expect(whineCarry.version).toBe(11);
     const v37Base = {
       ...whineFields,
       version: 37,
@@ -5912,11 +5912,11 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWhineRecord = v37WhineRepository.snapshot();
     const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(42);
-    expect(migratedWhineEnvelope.version).toBe(42);
+    expect(migratedWhineRecord.payloadVersion).toBe(43);
+    expect(migratedWhineEnvelope.version).toBe(43);
     expect(migratedWhineEnvelope.perceptionCarry).toEqual({
       ...v7WhineCarry,
-      version: 10,
+      version: 11,
       playerStepStateSamples: Array.from(
         { length: Number(v7WhineCarry["playerStepsSinceWorldTick"]) },
         () => null,

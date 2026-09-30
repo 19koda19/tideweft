@@ -73,6 +73,29 @@ hearing outcome authorize one restrained response through the same expression,
 audio, caption, and world-label path. Presentation can be suppressed and sound
 can be masked without reopening the store; an already-secured historical store
 does not acquire retroactive dialogue.
+The first direct resident greeting now consumes the same persistent event that
+grants acquaintance, but only as an atomic heard-visible transaction. Pending
+GREET holds ordinary movement until the next world boundary. A disposable
+simulation candidate must prove the exact event, direct sight, conversation
+range, weather-masked hearing, shared-channel capacity, admission, and sound
+sample before its acquaintance facts are adopted. If the introduction cannot
+be heard or admitted, the candidate is discarded and the resident remains
+recognized. The accepted command, resident body, home, introduction tick, fact
+grant, and `met-player` memory then authorize one restrained spoken response.
+Name, occupation, home name, and English prose are not copied into
+the durable sound event: the familiar introduction line is derived from
+reauthenticated player-known facts at presentation. The event-time listener
+pose must match the independent phase-zero carry anchor and still prove direct
+sight, conversation range, and positive hearing certainty. Nearby people can
+hear only an anonymous human voice; they do not gain
+the introduced identity facts through sound alone, and old acquaintances do
+not speak retroactively after load. Its source remains the exact event-time
+route position or settlement placement even if the resident moves afterward.
+The sound enters hearing once while a bounded ephemeral presentation lease can
+preserve its readable configured lifetime without replaying actor cognition or
+audio. Current-schema reload may re-derive only an unexpired acknowledged
+presentation remainder from the already-authenticated perception carry; it
+does not persist a floating label or create a second sound.
 Salience, semantic cooldowns, priority, and causal event identity prevent
 chatter spam; the same accepted event always chooses the same authored wording.
 Ordinary routine speech expires rather than bloating the save. Pending sound
@@ -164,11 +187,11 @@ exists. An unseen animal call may instead use only an uncertainty-bounded
 directional caption and never gains an actor-anchored world callout. A bounded
 per-actor channel bank prevents one speaker's cooldown from
 silencing another actor. All active expression channels and directly rendered
-remaining legacy resident greeting/state speech now enter the shared
+remaining legacy resident state speech now enter the shared
 world-label budget: at most four labels globally and one per source. The
-secured-store response is receipt-backed and no longer uses that compatibility
-adapter. The accessible caption surface keeps one highest-priority
-receipt-backed cue; remaining legacy interaction speech is not promoted to an
+secured-store response and resident introduction are receipt-backed and no
+longer use that compatibility adapter. The accessible caption surface keeps
+one highest-priority receipt-backed cue; remaining legacy state speech is not promoted to an
 auditory caption merely because its currently visible actor can share the
 collision layout. The physical footing/cargo cause remains in
 EVENTS where the player directly experienced or observed it; eligible sound
@@ -244,7 +267,7 @@ stamina gap cannot be relabeled as the cause of the murmur.
 It does not fire from idle or recovery, water or rescue,
 already-zero stamina, or a step with a competing traversal incident.
 
-Active Living Voice channels, remaining legacy visible resident greeting/state
+Active Living Voice channels, remaining legacy visible resident state
 speech, animal calls, and eligible physical candidates enter one Chart/Relief
 layout with
 deterministic source-relative lanes, collision suppression, a four-label global

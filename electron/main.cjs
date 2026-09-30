@@ -29,7 +29,7 @@ const SMOKE_WORLD_SEED = 'phase ten glass ebb';
 const SMOKE_WORLD_NAME = 'The Phase Ten Glass Ebb Estuary';
 const SMOKE_EXPECTED_RELEASE_VERSION = '0.3.3-alpha.60';
 const SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION = 51;
-const SMOKE_EXPECTED_SAVE_VERSION = 42;
+const SMOKE_EXPECTED_SAVE_VERSION = 43;
 const smokeRegionalTileIndex = (compatibilityTileIndex, offsetX, offsetY) => {
   const x = compatibilityTileIndex % SMOKE_COMPATIBILITY_COLUMNS;
   const y = Math.floor(compatibilityTileIndex / SMOKE_COMPATIBILITY_COLUMNS);
@@ -2187,7 +2187,7 @@ async function installSmokeTideHarpFixture(contents) {
     const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
     const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 10,
+      version: 11,
       intervalStartPosition: {
         region: { x: playerRegionX, y: playerRegionY },
         localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},
@@ -2529,7 +2529,7 @@ async function installSmokeAdriftFixture(contents) {
     const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
     const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 10,
+      version: 11,
       intervalStartPosition: {
         region: { x: playerRegionX, y: playerRegionY },
         localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},

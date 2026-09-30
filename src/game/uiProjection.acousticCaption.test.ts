@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorld, createWorldView } from "../sim/public";
+import { createWorld, createWorldView, stepWorld } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import {
   createRegionalCartography,
@@ -19,7 +19,11 @@ import {
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
 } from "./situatedExpression";
-import { createSelfSituatedExpressionReception } from "./situatedExpressionReception";
+import {
+  createHeardUnseenSituatedExpressionReception,
+  createSelfSituatedExpressionReception,
+} from "./situatedExpressionReception";
+import { residentIntroductionExpressionIntent } from "./residentIntroductionExpression";
 import { projectUIView } from "./uiProjection";
 import {
   createHeardUnseenWorldAcousticReception,
@@ -70,9 +74,12 @@ function fixture() {
   );
   return {
     compatibility,
+    knowledge,
     player,
     session: createSessionState(world.seedText),
     sourcePosition,
+    state,
+    window,
     world,
   };
 }
@@ -210,6 +217,58 @@ describe("UI acoustic-caption arbitration", () => {
       physicalSoundKind: "scrape",
       directionLabel: "east",
     });
+  });
+
+  it("never projects personalized introduction facts through heard-unseen reception", () => {
+    const context = fixture();
+    const resident = context.state.residents[0];
+    if (resident === undefined) throw new Error("introduction caption fixture needs a resident");
+    stepWorld(context.state, [{
+      id: "observe-introduction-caption-source",
+      type: "observe-resident",
+      residentId: resident.id,
+    }]);
+    const observedTick = resident.playerKnowledge.firstObservedTick;
+    if (observedTick === null) throw new Error("introduction caption source was not observed");
+    stepWorld(context.state, [{
+      id: "greet-introduction-caption-source",
+      type: "greet-resident",
+      residentId: resident.id,
+      observedTick,
+    }]);
+    const trigger = context.state.events.find((event) => (
+      event.type === "resident-introduced" && event.subjectId === resident.id
+    ));
+    const economy = createWorldView(context.state);
+    const intent = trigger === undefined
+      ? null
+      : residentIntroductionExpressionIntent({ world: economy, event: trigger });
+    const reduced = intent === null
+      ? null
+      : reduceSituatedExpression(createSituatedExpressionState(), intent);
+    const event = reduced?.event ?? null;
+    if (event === null) throw new Error("introduction caption expression was rejected");
+    const reception = createHeardUnseenSituatedExpressionReception(
+      event,
+      context.state.meta.completedTick,
+      {
+        bearing: { centerRadians: 0.2, uncertaintyRadians: 0.4 },
+        distanceBand: { minimum: 2_000, maximum: 12_000 },
+        certainty: 0.62,
+      },
+    );
+    if (reception === null) throw new Error("heard-unseen introduction receipt was rejected");
+    const world = createRegionalWorldView(economy, context.window, context.knowledge);
+    const view = projectUIView(world, context.player, context.session, {
+      economyWorld: economy,
+      situatedExpression: event,
+      situatedExpressionReception: reception,
+    });
+
+    expect(view.expressionCaption).toBeUndefined();
+    const projectedCaption = JSON.stringify(view.expressionCaption ?? null);
+    expect(projectedCaption).not.toContain(resident.name);
+    expect(projectedCaption).not.toContain(resident.role);
   });
 
   it("keeps a critical warning over a more salient but lower-priority scrape", () => {

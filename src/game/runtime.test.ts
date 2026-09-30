@@ -46,6 +46,9 @@ import {
   wayknotContextAt,
   type PlayerState,
 } from "./player";
+import * as humanPerception from "./humanPerception";
+import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
+import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
@@ -404,7 +407,7 @@ function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
   return legacyPlayer as PlayerState;
 }
 
-/** Current carry v2-v10 has state that v5-v32 never owned. */
+/** Current carry v2-v11 has state that v5-v32 never owned. */
 function legacyPlayerPerceptionCarry(value: unknown): unknown {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("current fixture omitted its perception carry");
@@ -420,7 +423,8 @@ function legacyPlayerPerceptionCarry(value: unknown): unknown {
       && current.version !== 7
       && current.version !== 8
       && current.version !== 9
-      && current.version !== 10)
+      && current.version !== 10
+      && current.version !== 11)
     || !Number.isSafeInteger(current.playerStepsSinceWorldTick)
     || !Array.isArray(current.playerSenseSamples)
     || !Number.isSafeInteger(current.nextPlayerSenseSampleOrdinal)
@@ -462,7 +466,7 @@ function exactV24CoreFromV29(
     regional.settlementHome.patch.derivation.kind !== "settlement-home-v1"
   )
     throw new Error(
-      "fixture requires a canonical current v42 regional ecology save",
+      "fixture requires a canonical current v43 regional ecology save",
     );
   const world = deserializeWorld(envelope.world);
   const habitat = regional.settlementHome.patch.derivation.habitat;
@@ -729,7 +733,7 @@ function rebaseFixtureRegionalEcology(
   );
 }
 
-/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v42 save. */
+/** Reconstructs the exact Alpha-23 v16/v7 prefix from a current v43 save. */
 function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   record: SaveRecord;
   ecology: CoreEcologyAggregatePatchState;
@@ -737,8 +741,8 @@ function domesticYardSaveAsTidalWebV16(record: SaveRecord): Readonly<{
   const envelope = decodeGameSave(record);
   const current = exactV24CoreFromV29(envelope);
   if (
-    envelope.version !== 42 ||
-    record.payloadVersion !== 42 ||
+    envelope.version !== 43 ||
+    record.payloadVersion !== 43 ||
     (current.derivation.kind !== "habitat-v11" &&
       current.derivation.kind !== "legacy-fixed-v1-with-habitat-v11")
   )
@@ -1234,8 +1238,13 @@ function alphaWorldSaveText(world: WorldState): string {
 }
 
 describe("perpetual new worlds", () => {
-  it("opens a directly selected resident ABOUT and completes GREET without pausing play", async () => {
-    const runtime = await createTideweftRuntime(new MemoryRepository());
+  it("voices one committed GREET through Living Voice and reloads it without replay", async () => {
+    const perceptionSpy = vi.spyOn(
+      humanPerception,
+      "collectExistingHumanObservations",
+    );
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({
       type: "new-world",
       seed: "resident interaction runtime",
@@ -1268,12 +1277,16 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().selectedResident?.knowledgeLabel).toBe(
       "Recognized",
     );
+    soundscapePlay.mockClear();
     runtime.dispatchUI({
       type: "resident",
       action: "greet",
       residentId: porter.id,
     });
+    const greetingPosition = structuredClone(runtime.getRenderView().player.position);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(runtime, 10);
+    expect(runtime.getRenderView().player.position).toEqual(greetingPosition);
 
     expect(runtime.getUIView().selectedResident).toMatchObject({
       id: porter.id,
@@ -1281,6 +1294,331 @@ describe("perpetual new worlds", () => {
     });
     expect(runtime.getUIView().selectedResident?.actionLabel).toBeUndefined();
     expect(runtime.getRenderView().paused).toBe(false);
+    const introductionLabel = runtime.getRenderView().acousticText?.find((label) => (
+      label.acousticKind === "speech"
+      && label.sourceKind === "human"
+      && label.text.includes(", out of ")
+    ));
+    expect(introductionLabel).toMatchObject({
+      acousticKind: "speech",
+      sourceKind: "human",
+      speakerLabel: runtime.getUIView().selectedResident?.heading,
+      priority: 650_000,
+      salience: 780_000,
+    });
+    if (introductionLabel?.acousticKind !== "speech") {
+      throw new Error("resident introduction omitted its situated speech label");
+    }
+    expect(introductionLabel.text.startsWith(
+      `${introductionLabel.speakerLabel}. `,
+    )).toBe(true);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      id: introductionLabel.id,
+      presentationKind: "speech",
+      speakerLabel: introductionLabel.speakerLabel,
+      text: introductionLabel.text,
+    });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "ui")).toHaveLength(0);
+
+    await runtime.save();
+    const saved = decodeGameSave(repository.snapshot());
+    const carry = saved.perceptionCarry as {
+      readonly version: number;
+      readonly actorVocalizationSamples: ReadonlyArray<{
+        readonly expressionEventId: string;
+        readonly soundClass: string;
+      }>;
+      readonly situatedExpressionAdmissions: {
+        readonly records: ReadonlyArray<{
+          readonly eventId: string;
+          readonly kind: string;
+          readonly commandId?: string;
+          readonly sourceActorId: string;
+        }>;
+      };
+    };
+    expect(saved.version).toBe(43);
+    expect(carry.version).toBe(11);
+    const introductionAdmission = carry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "resident-introduction",
+    );
+    expect(introductionAdmission).toMatchObject({
+      eventId: introductionLabel?.id,
+      kind: "resident-introduction",
+    });
+    expect(carry.actorVocalizationSamples).toContainEqual(expect.objectContaining({
+      expressionEventId: introductionLabel?.id,
+      soundClass: "human-vocalization",
+    }));
+    runtime.destroy();
+
+    const tamperedRecord = repository.snapshot();
+    const tamperedEnvelope = decodeGameSave(tamperedRecord);
+    const tamperedCarry = tamperedEnvelope.perceptionCarry as {
+      situatedExpressionAdmissions: {
+        records: Array<Record<string, unknown>>;
+      };
+    };
+    const tamperedAdmission = tamperedCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "resident-introduction",
+    );
+    if (tamperedAdmission === undefined) {
+      throw new Error("resident introduction tamper fixture omitted its admission");
+    }
+    tamperedAdmission.commandId = "forged-resident-introduction-command";
+    resealGameSave(tamperedEnvelope);
+    tamperedRecord.worldJson = JSON.stringify(tamperedEnvelope);
+    const tamperedRepository = new MemoryRepository(tamperedRecord);
+    const rejected = await createTideweftRuntime(tamperedRepository);
+    expect(rejected.getUIView().title.visible).toBe(true);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().announcement?.message).toContain("could not be read");
+    expect(tamperedRepository.snapshot()).toEqual(tamperedRecord);
+    rejected.destroy();
+
+    const poseTamperedRecord = repository.snapshot();
+    const poseTamperedEnvelope = decodeGameSave(poseTamperedRecord);
+    const poseTamperedCarry = poseTamperedEnvelope.perceptionCarry as {
+      situatedExpressionAdmissions: {
+        records: Array<Record<string, unknown>>;
+      };
+    };
+    const poseTamperedAdmission = poseTamperedCarry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "resident-introduction",
+    );
+    const pose = poseTamperedAdmission?.listenerPosition as Record<string, unknown> | undefined;
+    if (poseTamperedAdmission === undefined || pose === undefined) {
+      throw new Error("resident introduction pose fixture omitted its admission anchor");
+    }
+    pose.localX = Number(pose.localX) + 1;
+    resealGameSave(poseTamperedEnvelope);
+    poseTamperedRecord.worldJson = JSON.stringify(poseTamperedEnvelope);
+    const poseTamperedRepository = new MemoryRepository(poseTamperedRecord);
+    const poseRejected = await createTideweftRuntime(poseTamperedRepository);
+    expect(poseRejected.getUIView().title.visible).toBe(true);
+    expect(poseRejected.getUIView().title.hasSave).toBe(false);
+    expect(poseTamperedRepository.snapshot()).toEqual(poseTamperedRecord);
+    poseRejected.destroy();
+
+    soundscapePlay.mockClear();
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getRenderView().acousticText).toContainEqual(expect.objectContaining({
+      id: introductionLabel?.id,
+      text: introductionLabel?.text,
+      sourceKind: "human",
+    }));
+    expect(reloaded.getUIView().expressionCaption).toMatchObject({
+      id: introductionLabel.id,
+      presentationKind: "speech",
+      speakerLabel: introductionLabel.speakerLabel,
+      text: introductionLabel.text,
+    });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(0);
+    perceptionSpy.mockClear();
+    advancePlayerSteps(reloaded, 10);
+    const matchingIntervals = perceptionSpy.mock.calls
+      .map(([input]) => input.supplementalSoundSamples ?? [])
+      .filter((samples) => samples.some(({ expressionEventId }) => (
+        expressionEventId === introductionLabel?.id
+      )));
+    expect(matchingIntervals).toHaveLength(1);
+    expect(matchingIntervals[0]).toContainEqual(expect.objectContaining({
+      expressionEventId: introductionLabel?.id,
+      sourceActorId: introductionAdmission?.sourceActorId,
+      soundClass: "human-vocalization",
+    }));
+    advancePlayerSteps(reloaded, 1);
+    expect(reloaded.getRenderView().acousticText).toContainEqual(expect.objectContaining({
+      id: introductionLabel.id,
+      text: introductionLabel.text,
+    }));
+    reloaded.destroy();
+  });
+
+  it("rejects resident-introduction semantics smuggled through a sealed outer-v40 carry-v8", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "resident introduction v40 semantic fence",
+      posture: "journey",
+      sessionShape: "wander",
+    });
+    const porter = runtime.getRenderView().porters[0];
+    if (porter === undefined) throw new Error("v40 semantic-fence fixture needs a resident");
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "porter",
+      id: porter.id,
+      point: porter.position,
+    });
+    advancePlayerSteps(runtime, 10);
+    runtime.dispatchUI({ type: "resident", action: "greet", residentId: porter.id });
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    runtime.destroy();
+
+    const currentRecord = repository.snapshot();
+    const current = decodeGameSave(currentRecord);
+    const carry = structuredClone(current.perceptionCarry) as {
+      version: number;
+      playerStepStateAnchor?: unknown;
+      playerStepStateSamples?: unknown;
+      actorVocalizationSamples: Array<{ expressionEventId: string }>;
+      situatedExpressionAdmissions: {
+        records: Array<{ eventId: string; kind: string }>;
+      };
+      situatedExpressionChannels: {
+        channels: Array<{ state: { active: { meaning: string } | null } }>;
+      };
+    };
+    const admission = carry.situatedExpressionAdmissions.records.find(
+      ({ kind }) => kind === "resident-introduction",
+    );
+    expect(admission).toBeDefined();
+    expect(carry.actorVocalizationSamples).toContainEqual(expect.objectContaining({
+      expressionEventId: admission?.eventId,
+    }));
+    expect(carry.situatedExpressionChannels.channels).toContainEqual(
+      expect.objectContaining({
+        state: expect.objectContaining({
+          active: expect.objectContaining({ meaning: "resident-introduction" }),
+        }),
+      }),
+    );
+
+    const {
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
+      ...v8Carry
+    } = carry;
+    const { integrity: _currentIntegrity, ...currentFields } = current;
+    const forgedV40Base = {
+      ...currentFields,
+      version: 40,
+      perceptionCarry: { ...v8Carry, version: 8 },
+    };
+    const forgedRecord: SaveRecord = {
+      ...currentRecord,
+      payloadVersion: 40,
+      updatedAt: currentRecord.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...forgedV40Base,
+        integrity: gameSaveEnvelopeIntegrity(forgedV40Base),
+      }),
+    };
+    const rejectedRepository = new MemoryRepository(forgedRecord);
+    const rejected = await createTideweftRuntime(rejectedRepository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(rejectedRepository.snapshot()).toEqual(forgedRecord);
+    rejected.destroy();
+  }, 60_000);
+
+  it("keeps a resident recognized when the candidate introduction is not heard", async () => {
+    const receipt = vi.spyOn(
+      residentIntroductionAuthority,
+      "prepareResidentIntroductionEventTimeReceipt",
+    ).mockReturnValue(null);
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "masked resident introduction remains unknown",
+      posture: "journey",
+      sessionShape: "wander",
+    });
+    const porter = runtime.getRenderView().porters[0];
+    if (porter === undefined) throw new Error("masked introduction fixture needs a resident");
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "porter",
+      id: porter.id,
+      point: porter.position,
+    });
+    advancePlayerSteps(runtime, 10);
+    runtime.dispatchUI({
+      type: "resident",
+      action: "greet",
+      residentId: porter.id,
+    });
+    advancePlayerSteps(runtime, 10);
+
+    expect(receipt).toHaveBeenCalled();
+    expect(runtime.getUIView().selectedResident).toMatchObject({
+      id: porter.id,
+      knowledgeLabel: "Recognized",
+      actionLabel: "GREET",
+    });
+    expect(runtime.getRenderView().acousticText?.some(({ text }) => (
+      text.includes(", out of ")
+    ))).toBe(false);
+    await runtime.save();
+    const savedWorld = deserializeWorld(decodeGameSave(repository.snapshot()).world);
+    const savedResident = savedWorld.residents.find(({ id }) => String(id) === porter.id);
+    expect(savedResident?.playerKnowledge).toMatchObject({
+      level: "recognized",
+      introducedTick: null,
+      facts: [],
+    });
+    expect(savedWorld.events.some(({ type }) => type === "resident-introduced")).toBe(false);
+    runtime.destroy();
+  });
+
+  it("rolls back introduction facts, save, and vocal audio when later interval closure fails", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "resident introduction post-commit rollback",
+      posture: "journey",
+      sessionShape: "wander",
+    });
+    const porter = runtime.getRenderView().porters[0];
+    if (porter === undefined) throw new Error("rollback fixture needs a resident");
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "porter",
+      id: porter.id,
+      point: porter.position,
+    });
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const recognizedSave = repository.snapshot();
+    const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
+    let closureCalls = 0;
+    vi.spyOn(
+      situatedExpressionChannelBank,
+      "closeSituatedExpressionChannelBankInterval",
+    ).mockImplementation((...args) => {
+      closureCalls += 1;
+      return closureCalls === 2 ? null : close(...args);
+    });
+    soundscapePlay.mockClear();
+
+    runtime.dispatchUI({
+      type: "resident",
+      action: "greet",
+      residentId: porter.id,
+    });
+    advancePlayerSteps(runtime, 10);
+    await Promise.resolve();
+
+    expect(closureCalls).toBeGreaterThanOrEqual(2);
+    expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(0);
+    expect(repository.snapshot()).toEqual(recognizedSave);
+    const persisted = deserializeWorld(decodeGameSave(repository.snapshot()).world);
+    const resident = persisted.residents.find(({ id }) => String(id) === porter.id);
+    expect(resident?.playerKnowledge).toMatchObject({
+      level: "recognized",
+      introducedTick: null,
+      facts: [],
+    });
+    expect(persisted.events.some(({ type }) => type === "resident-introduced")).toBe(false);
     runtime.destroy();
   });
 
@@ -1332,8 +1670,8 @@ describe("perpetual new worlds", () => {
 
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
-    expect(currentRecord.payloadVersion).toBe(42);
-    expect(currentEnvelope.version).toBe(42);
+    expect(currentRecord.payloadVersion).toBe(43);
+    expect(currentEnvelope.version).toBe(43);
     const currentRegional = deserializeRegionalEcologyStateV6(
       currentEnvelope.regionalEcology,
     );
@@ -1385,8 +1723,8 @@ describe("perpetual new worlds", () => {
     }
     const migratedActors = migratedRegional.base.base.base.base.base.settlementHome.patch
       .populations.flatMap(({ members }) => members.map(({ actor }) => actor));
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedEnvelope.regionalEcology).toBe(exactV30Child);
     expect(
       migratedActors.every((actor) => !Object.hasOwn(actor, "circadian")),
@@ -1406,8 +1744,8 @@ describe("perpetual new worlds", () => {
     await reloaded.save();
     const reloadedRecord = repository.snapshot();
     const reloadedEnvelope = decodeGameSave(reloadedRecord);
-    expect(reloadedRecord.payloadVersion).toBe(42);
-    expect(reloadedEnvelope.version).toBe(42);
+    expect(reloadedRecord.payloadVersion).toBe(43);
+    expect(reloadedEnvelope.version).toBe(43);
     expect(reloadedEnvelope.regionalEcology).toBe(exactV30Child);
     reloaded.destroy();
   }, 30_000);
@@ -1429,8 +1767,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(42);
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstRecord.payloadVersion).toBe(43);
+    expect(firstEnvelope.version).toBe(43);
     expect(deserializeWorld(firstEnvelope.world).meta.completedTick).toBe(
       WORLD_NEW_GAME_START_TICK + 1,
     );
@@ -1481,8 +1819,8 @@ describe("perpetual new worlds", () => {
     const reloadedRegionalV5 = deserializeCurrentRegionalEcologyV5(
       reloadedEnvelope.regionalEcology,
     );
-    expect(reloadedRecord.payloadVersion).toBe(42);
-    expect(reloadedEnvelope.version).toBe(42);
+    expect(reloadedRecord.payloadVersion).toBe(43);
+    expect(reloadedEnvelope.version).toBe(43);
     expect(reloadedEnvelope.regionalEcology).toBe(firstRegionalText);
     expect(
       reloadedRegionalV5?.base.base.polarShoreActiveResidents
@@ -1511,7 +1849,7 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegional).not.toBeNull();
     expect(firstRegional?.polarConsumerActiveResidents).toHaveLength(1);
     const firstPatch = firstRegional!.polarConsumerActiveResidents[0]!.patch;
@@ -1561,8 +1899,8 @@ describe("perpetual new worlds", () => {
       firstEnvelope.regionalEcology,
     );
     const firstWorld = deserializeWorld(firstEnvelope.world);
-    expect(firstRecord.payloadVersion).toBe(42);
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstRecord.payloadVersion).toBe(43);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegional).not.toBeNull();
     expect(firstWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK + 1);
     expect(firstRegional?.updatedAtTick).toBe(firstWorld.meta.completedTick);
@@ -1602,7 +1940,7 @@ describe("perpetual new worlds", () => {
     reloaded.destroy();
   }, 30_000);
 
-  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v42 breadth root once`, async () => {
+  it(`${ALPHA38_MARSH_CHANNEL_WEB_RUNTIME_V30_OWNER_INTENT} adopts an epoch-one outer-v43 breadth root once`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBeGreaterThan(1);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1618,7 +1956,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v42 breadth fixture is invalid");
+    if (current === null) throw new Error("current v43 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const activeRegions = current.base.base.base.base.base.activeRegions;
     const oldRoot = createPristineRegionalBreadthEcologyRoot({
@@ -1655,8 +1993,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(42);
-    expect(adoptedEnvelope.version).toBe(42);
+    expect(adoptedRecord.payloadVersion).toBe(43);
+    expect(adoptedEnvelope.version).toBe(43);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(
       CORE_ECOLOGY_BREADTH_CURRENT_EPOCH,
     );
@@ -1673,7 +2011,7 @@ describe("perpetual new worlds", () => {
     replayRuntime.destroy();
   }, 30_000);
 
-  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v42 breadth root once`, async () => {
+  it(`${ALPHA39_SALTMARSH_SMALL_WORLDS_RUNTIME_V30_OWNER_INTENT} appends epoch three to an exact epoch-two outer-v43 breadth root once`, async () => {
     expect(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH).toBe(3);
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
@@ -1689,7 +2027,7 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const current = deserializeRegionalEcologyStateV6(currentEnvelope.regionalEcology);
-    if (current === null) throw new Error("current v42 breadth fixture is invalid");
+    if (current === null) throw new Error("current v43 breadth fixture is invalid");
     const world = deserializeWorld(currentEnvelope.world);
     const binding = {
       rootSeed: world.meta.rootSeed,
@@ -1739,8 +2077,8 @@ describe("perpetual new worlds", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = decodeGameSave(adoptedRecord);
     const adopted = deserializeRegionalEcologyStateV6(adoptedEnvelope.regionalEcology);
-    expect(adoptedRecord.payloadVersion).toBe(42);
-    expect(adoptedEnvelope.version).toBe(42);
+    expect(adoptedRecord.payloadVersion).toBe(43);
+    expect(adoptedEnvelope.version).toBe(43);
     expect(adopted?.breadthRoot.activeThroughEpoch).toBe(3);
     expect(stableStringify(adopted?.breadthRoot.activations.slice(0, 2))).toBe(
       exactActivationPrefix,
@@ -1977,75 +2315,78 @@ describe("perpetual new worlds", () => {
     resumed.destroy();
   });
 
-  it("explicitly replaces the retired v41 development schema without partially loading it", async () => {
-    const oldWorld = createWorld("unsupported development save", "calm");
-    const incompatible = runtimeSaveRecord(
-      oldWorld,
-      createPlayer(createWorldView(oldWorld)),
-      createSessionState(oldWorld.meta.seedText, "hearth"),
-      "Unsupported development save",
-    );
-    const incompatibleEnvelope = decodeGameSave(incompatible);
-    incompatibleEnvelope.version = 41;
-    incompatible.payloadVersion = 41;
-    incompatible.saveGeneration = 6;
-    incompatible.worldJson = JSON.stringify(incompatibleEnvelope);
-    const repository = new VersionedMemoryRepository(incompatible);
+  it.each([41, 42])(
+    "explicitly replaces the retired v%i development schema without partially loading it",
+    async (retiredSchemaVersion) => {
+      const oldWorld = createWorld("unsupported development save", "calm");
+      const incompatible = runtimeSaveRecord(
+        oldWorld,
+        createPlayer(createWorldView(oldWorld)),
+        createSessionState(oldWorld.meta.seedText, "hearth"),
+        "Unsupported development save",
+      );
+      const incompatibleEnvelope = decodeGameSave(incompatible);
+      incompatibleEnvelope.version = retiredSchemaVersion;
+      incompatible.payloadVersion = retiredSchemaVersion;
+      incompatible.saveGeneration = 6;
+      incompatible.worldJson = JSON.stringify(incompatibleEnvelope);
+      const repository = new VersionedMemoryRepository(incompatible);
 
-    const runtime = await createTideweftRuntime(repository);
-    expect(runtime.getUIView().title.visible).toBe(true);
-    expect(runtime.getUIView().title.requiresSeed).toBe(true);
-    expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
-    expect(runtime.getUIView().saveWarning).toMatchObject({
-      message: "PRE-1.0 SAVE INCOMPATIBLE",
-      detail: expect.stringContaining("No legacy fields were guessed or partially loaded"),
-    });
-    expect(runtime.getUIView().announcement?.message).toContain(
-      "development schema 41 is intentionally unsupported",
-    );
-    await expect(runtime.save()).rejects.toThrow(
-      "non-empty seed before replacing the incompatible pre-1.0 development save",
-    );
-    expect(repository.snapshot()).toEqual(incompatible);
+      const runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().title.visible).toBe(true);
+      expect(runtime.getUIView().title.requiresSeed).toBe(true);
+      expect(runtime.getUIView().title.worldCreationBlocked).toBeUndefined();
+      expect(runtime.getUIView().saveWarning).toMatchObject({
+        message: "PRE-1.0 SAVE INCOMPATIBLE",
+        detail: expect.stringContaining("No legacy fields were guessed or partially loaded"),
+      });
+      expect(runtime.getUIView().announcement?.message).toContain(
+        `development schema ${retiredSchemaVersion} is intentionally unsupported`,
+      );
+      await expect(runtime.save()).rejects.toThrow(
+        "non-empty seed before replacing the incompatible pre-1.0 development save",
+      );
+      expect(repository.snapshot()).toEqual(incompatible);
 
-    runtime.dispatchUI({
-      type: "new-world",
-      seed: "   ",
-      posture: "gale",
-      sessionShape: "wander",
-    });
-    expect(runtime.getUIView().announcement?.message).toContain(
-      "incompatible pre-1.0 development save is unchanged",
-    );
-    expect(repository.snapshot()).toEqual(incompatible);
+      runtime.dispatchUI({
+        type: "new-world",
+        seed: "   ",
+        posture: "gale",
+        sessionShape: "wander",
+      });
+      expect(runtime.getUIView().announcement?.message).toContain(
+        "incompatible pre-1.0 development save is unchanged",
+      );
+      expect(repository.snapshot()).toEqual(incompatible);
 
-    runtime.dispatchUI({
-      type: "new-world",
-      seed: "fresh development schema",
-      posture: "gale",
-      sessionShape: "wander",
-    });
-    await runtime.save();
-    const replacement = repository.snapshot();
-    expect(replacement).toMatchObject({
-      payloadVersion: CURRENT_GAME_SAVE_VERSION,
-      saveGeneration: 7,
-    });
-    expect(decodeGameSave(replacement).version).toBe(CURRENT_GAME_SAVE_VERSION);
-    expect(
-      deserializeWorld(decodeGameSave(replacement).world).meta.seedText,
-    ).toBe("fresh development schema");
-    expect(runtime.getUIView().saveWarning).toBeUndefined();
-    expect(runtime.getUIView().announcement?.message).toContain(
-      "new current-schema estuary is durable",
-    );
-    runtime.destroy();
+      runtime.dispatchUI({
+        type: "new-world",
+        seed: "fresh development schema",
+        posture: "gale",
+        sessionShape: "wander",
+      });
+      await runtime.save();
+      const replacement = repository.snapshot();
+      expect(replacement).toMatchObject({
+        payloadVersion: CURRENT_GAME_SAVE_VERSION,
+        saveGeneration: 7,
+      });
+      expect(decodeGameSave(replacement).version).toBe(CURRENT_GAME_SAVE_VERSION);
+      expect(
+        deserializeWorld(decodeGameSave(replacement).world).meta.seedText,
+      ).toBe("fresh development schema");
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().announcement?.message).toContain(
+        "new current-schema estuary is durable",
+      );
+      runtime.destroy();
 
-    const resumed = await createTideweftRuntime(repository);
-    expect(resumed.getUIView().worldName).toContain("Fresh Development Schema");
-    expect(resumed.getUIView().saveWarning).toBeUndefined();
-    resumed.destroy();
-  });
+      const resumed = await createTideweftRuntime(repository);
+      expect(resumed.getUIView().worldName).toContain("Fresh Development Schema");
+      expect(resumed.getUIView().saveWarning).toBeUndefined();
+      resumed.destroy();
+    },
+  );
 
   it.each([
     [
@@ -2991,7 +3332,7 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
-  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v42 breadth wrapper`, async () => {
+  it(`${ALPHA36_POLAR_CONSUMER_RUNTIME_V29_OWNER_INTENT} adopts an exact outer-v28 ecology child once beneath the current v43 breadth wrapper`, async () => {
     const repository = new MemoryRepository();
     const setup = await createTideweftRuntime(repository);
     await setup.save();
@@ -3032,8 +3373,8 @@ describe("perpetual new worlds", () => {
     const firstRegional = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(42);
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstRecord.payloadVersion).toBe(43);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV4(firstRegional?.base)).toBe(
       exactV28Child,
@@ -3095,8 +3436,8 @@ describe("perpetual new worlds", () => {
     const migratedRegional = deserializeRegionalEcologyStateV6(
       migratedEnvelope.regionalEcology,
     );
-    expect(migratedRecord.payloadVersion).toBe(42);
-    expect(migratedEnvelope.version).toBe(42);
+    expect(migratedRecord.payloadVersion).toBe(43);
+    expect(migratedEnvelope.version).toBe(43);
     expect(migratedRegional).not.toBeNull();
     expect(serializeRegionalEcologyStateV5(migratedRegional?.base)).toBe(exactV29Child);
     expect(migratedRegional?.adoption).toMatchObject({
@@ -3158,8 +3499,8 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstRecord.payloadVersion).toBe(42);
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstRecord.payloadVersion).toBe(43);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV3(firstRegionalV5?.base.base)).toBe(
       exactV27Child,
@@ -3221,7 +3562,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyStateV2(firstRegionalV5?.base.base.base)).toBe(
       exactV26Child,
@@ -3285,7 +3626,7 @@ describe("perpetual new worlds", () => {
     const firstRegionalV5 = deserializeCurrentRegionalEcologyV5(
       firstEnvelope.regionalEcology,
     );
-    expect(firstEnvelope.version).toBe(42);
+    expect(firstEnvelope.version).toBe(43);
     expect(firstRegionalV5).not.toBeNull();
     expect(serializeRegionalEcologyState(firstRegionalV5?.base.base.base.base)).toBe(
       exactV25Child,
@@ -3321,8 +3662,8 @@ describe("perpetual new worlds", () => {
     const currentRecord = repository.snapshot();
     const currentEnvelope = decodeGameSave(currentRecord);
     const currentEcology = exactV24CoreFromV29(currentEnvelope);
-    expect(currentEnvelope.version).toBe(42);
-    expect(currentRecord.payloadVersion).toBe(42);
+    expect(currentEnvelope.version).toBe(43);
+    expect(currentRecord.payloadVersion).toBe(43);
     expect(currentEcology?.derivation.kind).toBe("habitat-v11");
     if (currentEcology?.derivation.kind !== "habitat-v11") {
       throw new Error("fixture did not create current regional-upland ecology");
@@ -3400,8 +3741,8 @@ describe("perpetual new worlds", () => {
     );
     const migratedEcology =
       migratedRegionalEcology?.base.base.base.base.root.legacyCohort?.sourcePatch ?? null;
-    expect(migratedEnvelope.version).toBe(42);
-    expect(migratedRecord.payloadVersion).toBe(42);
+    expect(migratedEnvelope.version).toBe(43);
+    expect(migratedRecord.payloadVersion).toBe(43);
     expect(migratedEcology?.derivation.kind).toBe("habitat-v11");
     if (migratedEcology?.derivation.kind !== "habitat-v11") {
       throw new Error(
@@ -3905,7 +4246,7 @@ describe("runtime clarity guards", () => {
     // at high tide so the next movement beat can lose live footing.
     const preparedRecord = repository.snapshot();
     const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(42);
+    expect(prepared.version).toBe(43);
     expect(
       prepared.physicalCargo?.expectedManifest.entries.length,
     ).toBeGreaterThan(0);
@@ -4145,8 +4486,8 @@ describe("runtime clarity guards", () => {
     if (!durableCargo || !durableTraversal) {
       throw new Error("current ADRIFT save omitted authoritative sidecars");
     }
-    expect(durable.version).toBe(42);
-    expect(durableRecord.payloadVersion).toBe(42);
+    expect(durable.version).toBe(43);
+    expect(durableRecord.payloadVersion).toBe(43);
     expect(durable.player.mode).toBe("swept");
     expect(durable.player.sweepSupport).toBeNull();
     expect(durableTraversal.incident?.kind).toBe("sweep");

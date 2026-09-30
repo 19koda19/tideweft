@@ -198,6 +198,7 @@ function greetResident(
       commandId,
       knowledgeLevel: resident.playerKnowledge.level,
       homeSettlementId: resident.homeSettlementId,
+      ...residentExactEventLocus(world, resident),
     });
   }
   return null;
@@ -1068,6 +1069,53 @@ function residentRouteEventLocus(resident: ResidentState): Record<string, SimEve
         eventRouteProgress: resident.location.progress,
       }
     : {};
+}
+
+/**
+ * Persist the exact simulation-owned place of an interaction whose acoustic
+ * consequence may outlive this tick. A resident can begin route work before a
+ * retained introduction finishes presenting, so later position is not valid
+ * evidence for the earlier sound source.
+ */
+function residentExactEventLocus(
+  world: WorldState,
+  resident: ResidentState,
+): Record<string, SimEventDatum> {
+  return resident.location.kind === "route"
+    ? {
+        eventLocationKind: "route",
+        eventSettlementId: null,
+        eventSettlementOrdinal: null,
+        eventRouteId: resident.location.routeId,
+        eventRouteProgress: resident.location.progress,
+      }
+    : {
+        eventLocationKind: "settlement",
+        eventSettlementId: resident.location.settlementId,
+        eventSettlementOrdinal: residentSettlementEventOrdinal(world, resident),
+        eventRouteId: null,
+        eventRouteProgress: null,
+      };
+}
+
+function residentSettlementEventOrdinal(
+  world: WorldState,
+  resident: ResidentState,
+): number {
+  if (resident.location.kind !== "settlement") {
+    throw new Error("Route resident has no settlement event ordinal");
+  }
+  const settlementId = resident.location.settlementId;
+  const present = world.residents.filter(({ location }) => (
+    location.kind === "settlement" && location.settlementId === settlementId
+  )).sort((left, right) => (
+    compareText(left.identity.stableId, right.identity.stableId) || left.id - right.id
+  ));
+  const ordinal = present.findIndex(({ id, identity }) => (
+    id === resident.id && identity.stableId === resident.identity.stableId
+  ));
+  if (ordinal < 0) throw new Error("Resident event locus lost its present actor");
+  return ordinal;
 }
 
 function residentShelterThreshold(resident: ResidentState): number {

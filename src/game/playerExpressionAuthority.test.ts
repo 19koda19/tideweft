@@ -265,6 +265,7 @@ function policy(
     case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
     case "human-danger-warning":
     case "keeper-secure-store-response":
+    case "resident-introduction":
       throw new Error("Other human expressions are not player authority");
     case "need-rest-after-exertion":
       throw new Error("Effort speech uses exact exhaustion admission authority");

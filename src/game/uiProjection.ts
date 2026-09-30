@@ -115,6 +115,7 @@ import {
   projectSituatedExpression,
   type SituatedExpressionEvent,
 } from "./situatedExpression";
+import { projectResidentIntroductionExpression } from "./residentIntroductionExpression";
 import {
   situatedExpressionReceptionMatchesActiveEvent,
   situatedExpressionReceptionAudibleContact,
@@ -453,9 +454,19 @@ export function projectUIView(
       options.situatedExpressionReception ?? null,
       situatedExpressionEvent,
     );
-  const situatedExpression = !receivedSituatedExpression
+  const residentIntroduction = receivedSituatedExpression
+    && situatedExpressionEvent?.meaning === "resident-introduction"
+    && options.situatedExpressionReception?.kind === "heard-visible"
+    ? projectResidentIntroductionExpression(economy, situatedExpressionEvent)
+    : null;
+  const projectedSituatedExpression = !receivedSituatedExpression
     ? null
     : projectSituatedExpression(situatedExpressionEvent);
+  const situatedExpression = projectedSituatedExpression === null
+    || (situatedExpressionEvent?.meaning === "resident-introduction"
+      && residentIntroduction === null)
+    ? null
+    : projectedSituatedExpression;
   const situatedExpressionSource = !receivedSituatedExpression
     ? null
     : projectSituatedExpressionSource(
@@ -478,7 +489,7 @@ export function projectUIView(
     : semanticAnimalCallKind;
   const presentedExpressionText = presentedAnimalCallKind === "bird-call"
     ? "CALL! CALL!"
-    : situatedExpression?.text;
+    : residentIntroduction?.text ?? situatedExpression?.text;
   const expressionCaptionCandidate: AcousticCaptionCandidate | null =
     situatedExpression !== null
       && situatedExpressionSource !== null

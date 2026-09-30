@@ -21,6 +21,7 @@ import {
   createPlayerFallRecoveryExpressionAdmissionRecord,
   createPlayerTraversalExpressionAdmissionRecord,
   createPorterHeavyDepartureExpressionAdmissionRecord,
+  createResidentIntroductionExpressionAdmissionRecord,
   createSettlementKeeperStoreResponseExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
   type GuardianDogShelterWhineExpressionAdmissionInput,
@@ -445,6 +446,59 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       hiddenStoreContents: "fresh-produce",
+    })).toBeNull();
+  });
+
+  it("binds a resident introduction to exact command, home, tick, and event-time hearing evidence", () => {
+    const input = {
+      sourceActorId: "H-resident-introduction-admission",
+      triggerEventId: "sim-event:resident-introduced:17:4",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      commandId: "greet-resident-introduction-admission",
+      introducedAtTick: 914,
+      homeSettlementId: 3,
+      listenerPosition: POSITION,
+      listenerFacingMilliRadians: 1_571,
+      hearingCertainty: 810_000,
+    } as const;
+    const canonical = createResidentIntroductionExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "resident-introduction",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(Object.isFrozen(canonical?.listenerPosition)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      structuredClone(canonical),
+    )).toEqual(canonical);
+    for (const mutation of [
+      { sourceActorId: PLAYER_ID },
+      { commandId: " padded-command " },
+      { introducedAtTick: -0 },
+      { homeSettlementId: -0 },
+      { listenerFacingMilliRadians: 0.5 },
+      { hearingCertainty: 0 },
+      { admittedAtPlayerStepPhase: 1 },
+    ]) {
+      expect(createResidentIntroductionExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      })).toBeNull();
+    }
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hearingCertainty: null,
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenIntroducedFacts: ["name", "occupation", "home"],
     })).toBeNull();
   });
 

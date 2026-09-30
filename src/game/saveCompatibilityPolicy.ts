@@ -3,7 +3,7 @@ import { HAS_OFFICIAL_STABLE_RELEASE } from "../content/patchNotes";
 export const OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION = "1.0.0" as const;
 
 /** The one outer `tideweft-session` schema emitted by this source tree. */
-export const CURRENT_GAME_SAVE_VERSION = 42 as const;
+export const CURRENT_GAME_SAVE_VERSION = 43 as const;
 
 /**
  * Set to the outer game-save schema shipped by the first official stable
