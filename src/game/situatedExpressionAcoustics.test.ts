@@ -14,7 +14,19 @@ describe("situated expression acoustics", () => {
       .toBe("animal-call");
     expect(situatedExpressionSoundClass("fish-crow-alarm-call"))
       .toBe("animal-alarm");
+    expect(situatedExpressionSoundClass("deer-alarm-call"))
+      .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("porter-heavy-load")).toBe("human-vocalization");
+  });
+
+  it("keeps the deer snort on core ecology's strong-alarm envelope", () => {
+    expect(situatedExpressionAcoustics({
+      meaning: "deer-alarm-call",
+      volume: "shout",
+    })).toEqual({
+      loudness: 1_000_000,
+      rangeUnits: 9_100,
+    });
   });
 
   it("keeps a fish-crow call on the existing core-alarm human acoustic envelope", () => {

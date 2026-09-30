@@ -23,6 +23,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
   "fish-crow-alarm-call",
+  "deer-alarm-call",
   "human-danger-warning",
   "keeper-secure-store-response",
   "need-rest-after-exertion",
@@ -83,7 +84,8 @@ export type SituatedExpressionVocalization =
   | "dog-warning-bark"
   | "dog-defensive-growl"
   | "dog-shelter-whine"
-  | "fish-crow-alarm";
+  | "fish-crow-alarm"
+  | "deer-alarm-snort";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -295,6 +297,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "deer-alarm-call": Object.freeze({
+    family: "animal-signal",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["shout"]),
+    vocalization: "deer-alarm-snort",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
   "human-danger-warning": Object.freeze({
     family: "warning",
     knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
@@ -430,6 +441,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.fish-crow-alarm-call.0",
       text: "KRAA! KRAA!",
+    }),
+  ]),
+  "deer-alarm-call": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.deer-alarm-call.0",
+      text: "SNORT!",
     }),
   ]),
   "human-danger-warning": Object.freeze([
@@ -1044,7 +1061,8 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "dog-warning-bark"
     || value === "dog-defensive-growl"
     || value === "dog-shelter-whine"
-    || value === "fish-crow-alarm";
+    || value === "fish-crow-alarm"
+    || value === "deer-alarm-snort";
 }
 
 function validId(value: unknown): value is string {

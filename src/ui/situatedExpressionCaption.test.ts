@@ -238,6 +238,30 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toContain("KRAA");
   });
 
+  it("presents a visible deer snort without naming an unseen source", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:deer:alarm",
+      speakerLabel: "Deer",
+      text: "SNORT!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      animalCallKind: "deer-call",
+      assertive: true,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[A deer snorts sharply.]");
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "expression:animal:hidden-alarm",
+      speakerLabel: "An animal",
+      animalCallKind: "animal-call",
+      directionLabel: "west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[An animal snorts somewhere west.]");
+    expect(JSON.stringify(unseen)).not.toContain("deer");
+  });
+
   it("does not infer an animal call kind from authored prose", () => {
     const unclassified: SituatedExpressionCaptionUIView = {
       id: "expression:animal:unclassified",

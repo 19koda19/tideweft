@@ -397,8 +397,8 @@ A fourth narrow signal consumes the existing core-wildlife fish-crow alarm
 rather than adding a bird-specific timer or second ecology event. Eligibility
 requires one materialized fish crow in the bounded active regional projections
 whose owning source, stable identity, post-commit final position, current tick,
-new alarm intent, exact event, identified direct-vision aerial-predator belief,
-and retained causal memory agree. The presentation sidecar derives from those
+new alarm intent, exact event, attended alarm-causing belief and threshold, and
+retained causal memory agree. The presentation sidecar derives from those
 same active roots, is sorted and duplicate-checked, and cannot exceed the global
 24-materialized-actor cap. Predator identity never leaves ecology authority;
 the source observation ID remains only bounded causal admission evidence and
@@ -414,6 +414,19 @@ player playback for that event, and the legacy direct crow cue is suppressed.
 Exact visible-source authentication permits an actor-anchored call; heard-unseen
 projection has no world callout and exposes only an uncertainty-bounded generic
 bird direction.
+
+A fifth narrow signal adapts the existing core-deer alarm through the same
+species-aware admission instead of creating a deer-only sound path. The owning
+ecology root must prove the materialized actor, exact committed alarm and final
+locus, retained memory, and the same lawful core alarm-belief policy and
+threshold that produced the event.
+Living Voice realizes that one event as `SNORT!` and
+`vocalization-deer-alarm-snort`, owns its single human/player acoustic sample,
+and leaves wildlife/dog propagation with core ecology. A heard-visible receipt
+may identify and anchor the deer; heard-unseen presentation remains a generic
+directional animal sound with no predator identity or hidden source position.
+The call uses the shared strong-alarm interruption rule and never restores the
+legacy direct player alarm cue beside the admitted sample.
 
 The first human-to-human warning consumes that hearing result instead of
 inventing a dialogue trigger. One linear, ownership-indexed selector examines
@@ -530,6 +543,16 @@ The 3H weather-hold candidate advances that boundary to outer v44 and bounded
 perception carry v12. It adds the exact event-owned resident shelter trajectory
 and retains whether the listener was sleeping at phase zero; v43 is now
 intentionally retired beside v41 and v42 under the same pre-1.0 policy.
+The current species-aware wildlife-alarm candidate advances the writer to outer
+v45 and perception carry v13. Its shared `core-wildlife-alarm` admission supports
+fish crow and deer while reauthenticating the exact ecology owner, actor, event,
+observation, retained locus and memory, expression channel, and sound sample.
+Supported v38-v40 legacy fish-crow admissions retain their original identified
+direct-vision aerial-predator semantic fence; the broader shared alarm-belief
+policy belongs only to the current species-aware record.
+Outer v44 is intentionally retired rather than migrated under the same pre-1.0
+policy. Current reload preserves valid authority without replaying acknowledged
+audio, hearing, interruption, or ephemeral text.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
@@ -539,8 +562,8 @@ match its separately retained current-interval causal-authority record; effort
 must additionally match the independently retained movement-owned step-state
 trajectory described above. Porter departure receipts exist only at phase
 zero and must reproduce that exact anchored listener pose. A lawfully heard,
-strong guardian warning or fish-crow alarm interrupts WAIT or REST/SLEEP before
-source visibility is classified. Dog reception replays from physical acoustics
+strong guardian warning or supported core-wildlife alarm interrupts WAIT or
+REST/SLEEP before source visibility is classified. Dog reception replays from physical acoustics
 and line of sight; the growl's admission-owned event-time sleep gate prevents a
 later recovery transition from rewriting whether the player heard it.
 A dog outside the current presentation window remains a lawful world source:
@@ -2130,7 +2153,7 @@ When the habitat assemblage contains a bear, the runtime seeds one exact loose d
 
 Chart and Relief project the same direct-detail individual wildlife set and use species plus stable ID for selection. Current addressable wildlife receives distinct color-independent low-cost forms and the ordinary wildlife choices: **WAIT AND WATCH**, **ROUTE AROUND THIS SPOT**, and **LEAVE**. Flocks retain presentation under the same direct-detail gate; each visible representative renders and hit-tests once, and a bounded visible-flock summary never manufactures decorative copies or extra targets. Alpha38 adds shared structural forms and current activity poses for greater yellowlegs, belted kingfisher, and double-crested cormorant in both views. Alpha39 adds the same shared presentation contract for the group-atomic seaside-sparrow flock and solitary diamondback terrapin, plus anonymous mosquito and periwinkle evidence. An aerial, diving, perching, or amphibious-margin pose is presentation of bounded authoritative activity state, not a continuously simulated 3D flight body or feeding outcome. At uncertain clarity, ABOUT remains generic and never exposes a private target, exact trait, aggregate count, or stable ID. Aggregate surface, schooling, burrow, and feeding evidence remains non-addressable; cat/rabbit/fox/wolf tracks remain non-targetable, and the current later additions produce no persistent track evidence. Mouse/touch and Chart/Relief share the same projection, reduced motion preserves the same facts, and loss of sight clears the ephemeral target.
 
-`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The frog chorus is different: current rain raises the activity of an extant frog area, but that same rain contributes ambient masking when the shared hearing evaluator decides whether the player can hear it. At most the strongest lawful source produces one stereo cue and a species-anonymous caption such as `[chorus nearby — east]`. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. Aggregate identity, exact coordinates, and hidden population remain undisclosed. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in either the Alpha 17 release or the current unpublished Living Voice candidate. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
+`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The same candidate adapts the existing core-deer alarm through a short synthesized `vocalization-deer-alarm-snort`; it does not invent a second alarm or player-only ecology path. The frog chorus is different: current rain raises the activity of an extant frog area, but that same rain contributes ambient masking when the shared hearing evaluator decides whether the player can hear it. At most the strongest lawful source produces one stereo cue and a species-anonymous caption such as `[chorus nearby — east]`. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. Aggregate identity, exact coordinates, and hidden population remain undisclosed. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in either the Alpha 17 release or the current unpublished Living Voice candidate. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
 
 ## First settlement-store ecology composition
 
@@ -2644,17 +2667,19 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 44 and the bounded perception carry through version 12;
-the current source writer emits outer version 44. The preceding v43/carry-v11
-boundary introduced authenticated first-resident speech; v44/carry-v12 adds
-event-owned resident weather-hold speech and retains the phase-zero listener
-sleep state beside pose for exact reception reauthentication. Outer v41 through v43 are
-explicitly retired under the pre-1.0 policy: load recognizes any such
+session through version 45 and the bounded perception carry through version 13;
+the current source writer emits outer version 45. The preceding v43/carry-v11
+boundary introduced authenticated first-resident speech; v44/carry-v12 added
+event-owned resident weather-hold speech and retained the phase-zero listener
+sleep state beside pose for exact reception reauthentication. Current
+v45/carry-v13 adds the species-aware fish-crow/deer alarm admission and deer
+semantic trajectory. Outer v41 through v44 are explicitly retired under the
+pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v44 roundtrip
+promise to preserve every internal development format. Current-v45 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 

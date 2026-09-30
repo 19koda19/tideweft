@@ -11,6 +11,7 @@ import {
   appendSituatedExpressionAdmissionRecord,
   canonicalizeSituatedExpressionAdmissionLedger,
   canonicalizeSituatedExpressionAdmissionRecord,
+  createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
@@ -331,6 +332,44 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       hiddenPredatorId: "HARRIER-secret",
+    })).toBeNull();
+  });
+
+  it("binds current wildlife alarms to an explicit supported source species", () => {
+    const input = {
+      sourceActorId: "D-deer-admission",
+      triggerEventId: "D-deer-admission:e:pc:alarm",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceSpecies: "deer" as const,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:large-predator:1",
+      acceptedAtTick: 912,
+    };
+    const canonical = createCoreWildlifeAlarmExpressionAdmissionRecord(input);
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "core-wildlife-alarm",
+      ...input,
+    });
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(canonical)))
+      .toEqual(canonical);
+    expect(createCoreWildlifeAlarmExpressionAdmissionRecord({
+      ...input,
+      sourceSpecies: "fish-crow",
+    })).toMatchObject({ sourceSpecies: "fish-crow" });
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      sourceSpecies: "elk",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      sourceSpecies: "fish-crow",
+      hiddenThreatId: "BEAR-secret",
     })).toBeNull();
   });
 

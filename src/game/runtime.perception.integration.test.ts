@@ -30,6 +30,7 @@ import {
 } from "./situatedExpressionChannelBank";
 import {
   appendSituatedExpressionAdmissionRecord,
+  createCoreWildlifeAlarmExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
@@ -190,7 +191,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   }, 30_000);
 
-  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v44", async () => {
+  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v45", async () => {
     const fixture = perceptionFixture("runtime perception v38 forward read");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -199,7 +200,7 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(44);
+    expect(decoded.version).toBe(45);
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
@@ -228,8 +229,8 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(44);
-    expect(savedEnvelope(repository).version).toBe(44);
+    expect(repository.snapshot().payloadVersion).toBe(45);
+    expect(savedEnvelope(repository).version).toBe(45);
     resumed.destroy();
   }, 30_000);
 
@@ -268,11 +269,11 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(44);
+    expect(repository.snapshot().payloadVersion).toBe(45);
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 44,
+      version: 45,
       perceptionCarry: {
-        version: 12,
+        version: 13,
         animalContactAcousticCarry: { version: 1, records: [] },
       },
     });
@@ -320,9 +321,9 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 44,
+      version: 45,
       perceptionCarry: {
-        version: 12,
+        version: 13,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 9,
@@ -415,10 +416,10 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 44,
+      version: 45,
       player: { timeAction: null },
       perceptionCarry: {
-        version: 12,
+        version: 13,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 3,
@@ -439,7 +440,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v44", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v45", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -456,9 +457,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 44,
+      version: 45,
       perceptionCarry: {
-        version: 12,
+        version: 13,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: 0,
         playerStepsSinceWorldTick: 3,
@@ -507,7 +508,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v34 carry-v3 schema to v44 without replay", async () => {
+  it("migrates the exact sealed v34 carry-v3 schema to v45 without replay", async () => {
     const fixture = perceptionFixture("runtime perception v34 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -546,9 +547,9 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 44,
+      version: 45,
       perceptionCarry: {
-        version: 12,
+        version: 13,
         playerStepsSinceWorldTick: 3,
         playerStepStateSamples: [null, null, null],
         nextPlayerSenseSampleOrdinal: 3,
@@ -668,6 +669,109 @@ describe("runtime existing-human perception path", () => {
 
     const rejected = await createTideweftRuntime(repository);
     expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+  }, 60_000);
+
+  it("rejects deer-alarm semantics smuggled through a resealed v40 carry-v8", async () => {
+    const fixture = perceptionFixture("runtime perception v40 deer semantic fence");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const carry = currentPerceptionCarry(decoded);
+    const position = carry.intervalStartPosition as WorldPosition;
+    const completedTick = deserializeWorld(String(decoded.world)).meta.completedTick;
+    const sourceActorId = "wildlife:deer:v40-smuggle";
+    const triggerEventId = "wildlife:deer:v40-smuggle:alarm";
+    const reduced = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      {
+        version: SITUATED_EXPRESSION_VERSION,
+        sourceActorId,
+        triggerEventId,
+        position,
+        meaning: "deer-alarm-call",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "shout",
+        knowledgeBasis: "self-perceived-threat",
+        priority: 760_000,
+        salience: 760_000,
+        variantSeed: 40,
+        durationSteps: 6,
+      },
+      null,
+    );
+    const acknowledged = acknowledgeSituatedExpressionChannelBank(reduced.bank);
+    const event = reduced.event;
+    const admission = createCoreWildlifeAlarmExpressionAdmissionRecord({
+      sourceActorId,
+      triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceSpecies: "deer",
+      sourceOwnerKey: "regional-owner:v40-smuggle",
+      sourceObservationId: "observation:v40-smuggle",
+      acceptedAtTick: completedTick,
+    });
+    const admissions = admission === null
+      ? null
+      : appendSituatedExpressionAdmissionRecord(
+          createSituatedExpressionAdmissionLedger(),
+          admission,
+        );
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "deer-alarm-call",
+      volume: "shout",
+    });
+    const sample = event === null ? null : createSupplementalSoundSample({
+      expressionEventId: event.eventId,
+      id: `av-${completedTick}-0`,
+      position,
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+      soundClass: "animal-alarm",
+      soundInterrupt: "strong",
+      sourceActorId,
+    });
+    if (acknowledged.bank === null || event === null || admissions === null || sample === null) {
+      throw new Error("v40 semantic-fence fixture could not build a canonical deer trajectory");
+    }
+    const {
+      intervalStartWasSleeping: _futureIntervalStartWasSleeping,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
+      ...v8Carry
+    } = carry;
+    const { integrity: _integrity, ...currentBase } = decoded;
+    const v40Base = {
+      ...currentBase,
+      version: 40,
+      perceptionCarry: {
+        ...v8Carry,
+        version: 8,
+        actorVocalizationSamples: [sample],
+        situatedExpressionAdmissions: admissions,
+        situatedExpressionChannels: acknowledged.bank,
+      },
+    };
+    const smuggledRecord = {
+      ...current,
+      payloadVersion: 40,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v40Base,
+        integrity: gameSaveEnvelopeIntegrity(v40Base),
+      }),
+    };
+    repository.replace(smuggledRecord);
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(repository.snapshot()).toEqual(smuggledRecord);
     rejected.destroy();
   }, 60_000);
 
@@ -825,9 +929,9 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 44,
+      version: 45,
       perceptionCarry: {
-        version: 12,
+        version: 13,
         intervalStartPosition: expect.any(Object),
         intervalStartFacingMilliRadians: expect.any(Number),
         playerStepsSinceWorldTick: 0,

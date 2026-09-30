@@ -7,6 +7,7 @@ import {
   CORE_WILDLIFE_EVENT_VERSION,
   canonicalizeCoreWildlifeActorState,
   coreWildlifeAlarmEventLocus,
+  coreWildlifeBeliefCanTriggerAlarm,
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
@@ -23,7 +24,7 @@ import {
 } from "./situatedExpression";
 import { createWorldPosition, isWorldPosition } from "./worldPosition";
 
-export interface FishCrowAlarmExpressionInput {
+export interface CoreWildlifeAlarmExpressionInput {
   /** Exact post-commit actor root carrying the retained alarm-event locus. */
   readonly actor: CoreWildlifeActorState;
   /**
@@ -35,30 +36,88 @@ export interface FishCrowAlarmExpressionInput {
   readonly world: CoreEcologyAggregatePatchState;
 }
 
-interface FishCrowAlarmEvidence {
+/** Compatibility name retained for the first live core-wildlife signal. */
+export type FishCrowAlarmExpressionInput = CoreWildlifeAlarmExpressionInput;
+/** The canonical marsh habitat uses the `deer` species key. */
+export type DeerAlarmExpressionInput = CoreWildlifeAlarmExpressionInput;
+
+type ExpressiveAlarmSpecies = "fish-crow" | "deer";
+
+interface CoreWildlifeAlarmExpressionProfile {
+  readonly species: ExpressiveAlarmSpecies;
+  readonly meaning: SituatedExpressionIntent["meaning"];
+  readonly variantDomain: string;
+}
+
+interface CoreWildlifeAlarmEvidence {
   readonly actor: CoreWildlifeActorState;
+  readonly belief: CoreWildlifeActorState["perception"]["beliefs"][number];
   readonly event: CoreWildlifeCausalEvent;
   readonly confidence: number;
   readonly salience: number;
+  readonly profile: CoreWildlifeAlarmExpressionProfile;
+}
+
+const ALARM_EXPRESSION_PROFILE_BY_SPECIES: Readonly<
+  Record<ExpressiveAlarmSpecies, CoreWildlifeAlarmExpressionProfile>
+> = Object.freeze({
+  "fish-crow": Object.freeze({
+    species: "fish-crow",
+    meaning: "fish-crow-alarm-call",
+    variantDomain: "fish-crow-alarm-expression:v1",
+  }),
+  deer: Object.freeze({
+    species: "deer",
+    meaning: "deer-alarm-call",
+    variantDomain: "deer-alarm-expression:v1",
+  }),
+});
+
+/**
+ * Adapts a supported core-wildlife alarm into a semantic animal signal.
+ *
+ * Species select only authored expression semantics. Ecology remains the
+ * authority for why the alarm happened, its exact source, and its event locus.
+ */
+export function coreWildlifeAlarmExpressionIntent(
+  inputValue: CoreWildlifeAlarmExpressionInput,
+): SituatedExpressionIntent | null {
+  return alarmExpressionIntent(inputValue, null, false);
 }
 
 /**
- * Adapts one freshly committed fish-crow alarm authority into semantic intent.
+ * Replays the first fish-crow Living Voice contract for supported legacy saves.
  *
  * The ecology owner must agree on the exact actor, tick, retained event locus,
- * event, and direct aerial-predator perception. The predator identity and
- * causal observation remain inside ecology authority: neither enters the
- * expression intent, its deterministic variant seed, nor its realization.
+ * event, and its identified direct-vision aerial-predator belief. Current
+ * production uses the species-aware adapter above and the shared lawful alarm
+ * policy; this narrow entry keeps v38-v40 records from gaining later semantics.
  */
 export function fishCrowAlarmExpressionIntent(
   inputValue: FishCrowAlarmExpressionInput,
 ): SituatedExpressionIntent | null {
-  const evidence = fishCrowAlarmEvidence(inputValue);
+  return alarmExpressionIntent(inputValue, "fish-crow", true);
+}
+
+/** Adapts one freshly committed canonical deer alarm into a semantic snort. */
+export function deerAlarmExpressionIntent(
+  inputValue: DeerAlarmExpressionInput,
+): SituatedExpressionIntent | null {
+  return alarmExpressionIntent(inputValue, "deer", false);
+}
+
+function alarmExpressionIntent(
+  inputValue: CoreWildlifeAlarmExpressionInput,
+  expectedSpecies: ExpressiveAlarmSpecies | null,
+  requireLegacyFishCrowEvidence: boolean,
+): SituatedExpressionIntent | null {
+  const evidence = coreWildlifeAlarmEvidence(inputValue, expectedSpecies);
   if (evidence === null) return null;
-  const { actor, event } = evidence;
+  if (requireLegacyFishCrowEvidence && !isLegacyFishCrowAlarmEvidence(evidence)) return null;
+  const { actor, event, profile } = evidence;
   const triggerEventId = event.eventId;
   const variantSeed = Number.parseInt(hashCanonical({
-    domain: "fish-crow-alarm-expression:v1",
+    domain: profile.variantDomain,
     sourceActorId: actor.identity.stableId,
     triggerEventId,
   }).slice(0, 8), 16) >>> 0;
@@ -68,7 +127,7 @@ export function fishCrowAlarmExpressionIntent(
     sourceActorId: actor.identity.stableId,
     triggerEventId,
     position: event.position,
-    meaning: "fish-crow-alarm-call",
+    meaning: profile.meaning,
     family: "animal-signal",
     tone: "alarmed",
     volume: "shout",
@@ -85,8 +144,38 @@ export function fishCrowAlarmExpressionEventMatchesWorld(
   input: FishCrowAlarmExpressionInput,
   expression: SituatedExpressionEvent,
 ): boolean {
+  return alarmExpressionEventMatchesWorld(input, expression, "fish-crow", true);
+}
+
+/** Reauthenticates one retained deer alarm event from its exact ecology roots. */
+export function deerAlarmExpressionEventMatchesWorld(
+  input: DeerAlarmExpressionInput,
+  expression: SituatedExpressionEvent,
+): boolean {
+  return alarmExpressionEventMatchesWorld(input, expression, "deer", false);
+}
+
+/** Reauthenticates a supported retained wildlife alarm from exact ecology roots. */
+export function coreWildlifeAlarmExpressionEventMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  expression: SituatedExpressionEvent,
+): boolean {
+  return alarmExpressionEventMatchesWorld(input, expression, null, false);
+}
+
+function alarmExpressionEventMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  expression: SituatedExpressionEvent,
+  expectedSpecies: ExpressiveAlarmSpecies | null,
+  requireLegacyFishCrowEvidence: boolean,
+): boolean {
   if (projectSituatedExpression(expression) === null) return false;
-  const derived = deriveFishCrowAlarmExpression(input, expression.triggerEventId);
+  const derived = deriveCoreWildlifeAlarmExpression(
+    input,
+    expression.triggerEventId,
+    expectedSpecies,
+    requireLegacyFishCrowEvidence,
+  );
   return derived !== null
     && stableStringify(immutableExpressionFields(expression))
       === stableStringify(immutableExpressionFields(derived.event));
@@ -97,6 +186,31 @@ export function fishCrowAlarmExpressionMemoryMatchesWorld(
   input: FishCrowAlarmExpressionInput,
   memory: SituatedExpressionMemory,
 ): boolean {
+  return alarmExpressionMemoryMatchesWorld(input, memory, "fish-crow", true);
+}
+
+/** Reauthenticates bounded deer-alarm cooldown memory from the same roots. */
+export function deerAlarmExpressionMemoryMatchesWorld(
+  input: DeerAlarmExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  return alarmExpressionMemoryMatchesWorld(input, memory, "deer", false);
+}
+
+/** Reauthenticates bounded supported-alarm cooldown memory from exact roots. */
+export function coreWildlifeAlarmExpressionMemoryMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  return alarmExpressionMemoryMatchesWorld(input, memory, null, false);
+}
+
+function alarmExpressionMemoryMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  memory: SituatedExpressionMemory,
+  expectedSpecies: ExpressiveAlarmSpecies | null,
+  requireLegacyFishCrowEvidence: boolean,
+): boolean {
   const canonicalState = canonicalizeSituatedExpressionState({
     version: SITUATED_EXPRESSION_VERSION,
     completedSteps: 0,
@@ -105,9 +219,11 @@ export function fishCrowAlarmExpressionMemoryMatchesWorld(
   });
   const canonicalMemory = canonicalState?.recent[0];
   if (canonicalMemory === undefined) return false;
-  const derived = deriveFishCrowAlarmExpression(
+  const derived = deriveCoreWildlifeAlarmExpression(
     input,
     canonicalMemory.triggerEventId,
+    expectedSpecies,
+    requireLegacyFishCrowEvidence,
   );
   if (derived === null) return false;
   if (
@@ -136,17 +252,39 @@ export function fishCrowAlarmExpressionEventForTrigger(
   input: FishCrowAlarmExpressionInput,
   triggerEventId: string,
 ): SituatedExpressionEvent | null {
-  return deriveFishCrowAlarmExpression(input, triggerEventId)?.event ?? null;
+  return deriveCoreWildlifeAlarmExpression(input, triggerEventId, "fish-crow", true)?.event ?? null;
 }
 
-function deriveFishCrowAlarmExpression(
-  input: FishCrowAlarmExpressionInput,
+/** Re-derives one exact deer alarm for trajectory/save authentication. */
+export function deerAlarmExpressionEventForTrigger(
+  input: DeerAlarmExpressionInput,
   triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return deriveCoreWildlifeAlarmExpression(input, triggerEventId, "deer", false)?.event ?? null;
+}
+
+/** Re-derives one supported alarm for trajectory/save authentication. */
+export function coreWildlifeAlarmExpressionEventForTrigger(
+  input: CoreWildlifeAlarmExpressionInput,
+  triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return deriveCoreWildlifeAlarmExpression(input, triggerEventId, null, false)?.event ?? null;
+}
+
+function deriveCoreWildlifeAlarmExpression(
+  input: CoreWildlifeAlarmExpressionInput,
+  triggerEventId: string,
+  expectedSpecies: ExpressiveAlarmSpecies | null,
+  requireLegacyFishCrowEvidence: boolean,
 ): Readonly<{
   event: SituatedExpressionEvent;
   memory: SituatedExpressionMemory;
 }> | null {
-  const intent = fishCrowAlarmExpressionIntent(input);
+  const intent = alarmExpressionIntent(
+    input,
+    expectedSpecies,
+    requireLegacyFishCrowEvidence,
+  );
   if (intent === null || intent.triggerEventId !== triggerEventId) return null;
   const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
   const memory = reduction.state?.recent[0];
@@ -154,18 +292,20 @@ function deriveFishCrowAlarmExpression(
   return Object.freeze({ event: reduction.event, memory });
 }
 
-function fishCrowAlarmEvidence(
-  inputValue: FishCrowAlarmExpressionInput,
-): FishCrowAlarmEvidence | null {
+function coreWildlifeAlarmEvidence(
+  inputValue: CoreWildlifeAlarmExpressionInput,
+  expectedSpecies: ExpressiveAlarmSpecies | null,
+): CoreWildlifeAlarmEvidence | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["actor", "event", "world"])) return null;
   const actor = canonicalizeCoreWildlifeActorState(input.actor);
   const world = canonicalizeCoreEcologyAggregatePatch(input.world);
+  if (actor === null || world === null) return null;
+  const profile = expressiveAlarmProfile(actor.identity.species);
   if (
-    actor === null
-    || world === null
-    || actor.identity.species !== "fish-crow"
-    || actor.address.species !== "fish-crow"
+    profile === null
+    || (expectedSpecies !== null && profile.species !== expectedSpecies)
+    || actor.address.species !== profile.species
   ) return null;
 
   const ownedMembers = world.populations.flatMap(({ members }) => members).filter(
@@ -179,7 +319,7 @@ function fishCrowAlarmEvidence(
     || stableStringify(owned.actor) !== stableStringify(actor)
   ) return null;
 
-  const event = canonicalFishCrowAlarmEvent(input.event, actor);
+  const event = canonicalCoreWildlifeAlarmEvent(input.event, actor, profile);
   if (
     event === null
     || situatedExpressionEventIdForTrigger(actor.identity.stableId, event.eventId) === null
@@ -202,11 +342,7 @@ function fishCrowAlarmEvidence(
     beliefs.length !== 1
     || belief === undefined
     || belief.lastObservedTick !== event.atTick
-    || belief.channel !== "vision"
-    || belief.perceivedClass !== "aerial-predator"
-    || belief.identification !== "identified"
-    || belief.subjectId === null
-    || belief.area.radiusUnits !== 0
+    || !coreWildlifeBeliefCanTriggerAlarm(actor, belief)
     || !actor.perception.attentionKeys.includes(belief.key)
   ) return null;
 
@@ -216,7 +352,7 @@ function fishCrowAlarmEvidence(
     committedMemories.length !== 1
     || memory === undefined
     || memory.kind !== "alarm"
-    || memory.referenceId !== belief.subjectId
+    || memory.referenceId !== (belief.subjectId ?? belief.sourceObservationId)
     || memory.observationId !== event.observationId
     || memory.atTick !== event.atTick
     || memory.eventPosition === undefined
@@ -225,15 +361,29 @@ function fishCrowAlarmEvidence(
 
   return Object.freeze({
     actor,
+    belief,
     event,
     confidence: belief.confidence,
     salience: belief.salience,
+    profile,
   });
 }
 
-function canonicalFishCrowAlarmEvent(
+/** Exact semantic fence retained for the supported v38 fish-crow record kind. */
+function isLegacyFishCrowAlarmEvidence(evidence: CoreWildlifeAlarmEvidence): boolean {
+  const { belief, profile } = evidence;
+  return profile.species === "fish-crow"
+    && belief.channel === "vision"
+    && belief.perceivedClass === "aerial-predator"
+    && belief.identification === "identified"
+    && belief.subjectId !== null
+    && belief.area.radiusUnits === 0;
+}
+
+function canonicalCoreWildlifeAlarmEvent(
   value: unknown,
   actor: CoreWildlifeActorState,
+  profile: CoreWildlifeAlarmExpressionProfile,
 ): CoreWildlifeCausalEvent | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "actorId",
@@ -250,7 +400,7 @@ function canonicalFishCrowAlarmEvent(
   if (
     value.version !== CORE_WILDLIFE_EVENT_VERSION
     || value.kind !== "alarm"
-    || value.species !== "fish-crow"
+    || value.species !== profile.species
     || value.actorId !== actor.identity.stableId
     || !nonnegativeSafeInteger(value.atTick)
     || !validId(value.eventId)
@@ -267,7 +417,7 @@ function canonicalFishCrowAlarmEvent(
     eventId: expectedEventId,
     atTick: value.atTick,
     actorId: actor.identity.stableId,
-    species: "fish-crow" as const,
+    species: profile.species,
     kind: "alarm" as const,
     causeReferenceId: actor.intent.cause.referenceId,
     observationId: actor.intent.focusObservationId,
@@ -279,6 +429,15 @@ function canonicalFishCrowAlarmEvent(
     ),
   });
   return stableStringify(value) === stableStringify(expected) ? expected : null;
+}
+
+function expressiveAlarmProfile(
+  species: CoreWildlifeActorState["identity"]["species"],
+): CoreWildlifeAlarmExpressionProfile | null {
+  if (species === "fish-crow" || species === "deer") {
+    return ALARM_EXPRESSION_PROFILE_BY_SPECIES[species];
+  }
+  return null;
 }
 
 function immutableExpressionFields(

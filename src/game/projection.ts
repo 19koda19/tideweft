@@ -310,7 +310,7 @@ export interface CoreWildlifeExpressionSource {
 }
 
 export type GuardianDogCallKind = "bark" | "growl" | "whine";
-export type AnimalCallKind = GuardianDogCallKind | "fish-crow-call";
+export type AnimalCallKind = GuardianDogCallKind | "fish-crow-call" | "deer-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
 export function guardianDogCallKind(
@@ -328,6 +328,8 @@ export function animalCallKind(
 ): AnimalCallKind | null {
   return meaning === "fish-crow-alarm-call"
     ? "fish-crow-call"
+    : meaning === "deer-alarm-call"
+      ? "deer-call"
     : guardianDogCallKind(meaning);
 }
 
@@ -370,9 +372,15 @@ export function projectSituatedExpressionSource(
     });
   }
 
-  if (event.meaning === "fish-crow-alarm-call") {
+  if (
+    event.meaning === "fish-crow-alarm-call"
+    || event.meaning === "deer-alarm-call"
+  ) {
     if (reception?.kind === "heard-unseen") {
-      return Object.freeze({ sourceKind: "animal", speakerLabel: "A bird" });
+      return Object.freeze({
+        sourceKind: "animal",
+        speakerLabel: event.meaning === "fish-crow-alarm-call" ? "A bird" : "An animal",
+      });
     }
     if (
       reception?.kind !== "heard-visible"
@@ -386,10 +394,13 @@ export function projectSituatedExpressionSource(
     if (
       matches.length !== 1
       || source === undefined
-      || source.species !== "fish-crow"
+      || source.species !== (event.meaning === "fish-crow-alarm-call" ? "fish-crow" : "deer")
       || !sameWorldPosition(source.position, event.position)
     ) return null;
-    return Object.freeze({ sourceKind: "animal", speakerLabel: "Fish crow" });
+    return Object.freeze({
+      sourceKind: "animal",
+      speakerLabel: event.meaning === "fish-crow-alarm-call" ? "Fish crow" : "Deer",
+    });
   }
 
   if (reception?.kind === "heard-unseen") {

@@ -211,7 +211,10 @@ import {
 } from "./worldPosition";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
-import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
+import type {
+  CoreWildlifeAlarmExpressionAdmissionRecord,
+  SituatedExpressionAdmissionLedger,
+} from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import {
@@ -247,14 +250,14 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 44;
+  readonly version: 45;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly perceptionCarry: CurrentPerceptionCarry;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v44 envelopes never carry this field. */
+  /** Historical fixtures only; current v45 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -266,7 +269,7 @@ interface CurrentEnvelope {
 }
 
 interface CurrentPerceptionCarry {
-  readonly version: 12;
+  readonly version: 13;
   readonly intervalStartPosition: unknown;
   readonly intervalStartFacingMilliRadians: number;
   readonly intervalStartWasSleeping: boolean;
@@ -557,7 +560,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(44);
+    expect(adoptedRecord.payloadVersion).toBe(45);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -621,7 +624,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(44);
+    expect(adoptedRecord.payloadVersion).toBe(45);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -732,7 +735,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(44);
+    expect(repository.snapshot().payloadVersion).toBe(45);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -848,7 +851,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(44);
+    expect(v13Record.payloadVersion).toBe(45);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v10Envelope.player));
@@ -929,7 +932,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(44);
+    expect(v13Record.payloadVersion).toBe(45);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v11Envelope.player));
@@ -1027,7 +1030,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(44);
+    expect(v13Record.payloadVersion).toBe(45);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v12Envelope.player));
@@ -1114,7 +1117,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(44);
+    expect(adoptedRecord.payloadVersion).toBe(45);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v13Envelope.player));
@@ -1184,7 +1187,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(44);
+    expect(adoptedRecord.payloadVersion).toBe(45);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v14Envelope.player));
@@ -1597,7 +1600,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(44);
+    expect(before.version).toBe(45);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -3158,18 +3161,119 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
-  it("plays and captions only event-time alarm hearing, including an unseen caller", async () => {
-    const { runtime, alarmActorId } = await createAlarmRuntime(-8);
+  it("admits one source-bound deer snort through shared audio/caption authority and reloads without replay", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
       .toBe(false);
     soundscapePlay.mockClear();
 
     advancePlayerSteps(runtime, 10);
 
-    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toHaveLength(1);
-    expect(runtime.getUIView().announcement?.message).toBe("ANIMAL ALARM — source unclear.");
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort",
+    )).toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "SNORT!",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      assertive: true,
+    });
+    expect(runtime.getUIView().announcement?.message)
+      .not.toBe("ANIMAL ALARM — source unclear.");
+
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(saved.world);
+    const savedCore = requiredCore(saved);
+    const savedDeer = requiredCoreActor(savedCore, alarmActorId);
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "deer"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Deer voice fixture omitted its admission");
+    expect(admission).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "deer",
+      sourceActorId: alarmActorId,
+      sourceOwnerKey: savedCore.patchKey,
+      admittedAtPlayerStepPhase: 0,
+      acceptedAtTick: savedWorld.meta.completedTick,
+    });
+    const sample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    if (sample === undefined) throw new Error("Deer voice fixture omitted its sound sample");
+    const deerAcoustics = situatedExpressionAcoustics({
+      meaning: "deer-alarm-call",
+      volume: "shout",
+    });
+    expect(sample).toMatchObject({
+      expressionEventId: admission.eventId,
+      sourceActorId: alarmActorId,
+      position: savedDeer.address.position,
+      soundClass: "animal-alarm",
+      soundInterrupt: "strong",
+      soundLoudness: deerAcoustics.loudness,
+      soundRangeUnits: deerAcoustics.rangeUnits,
+    });
+    expect(savedDeer).toMatchObject({
+      updatedAtTick: admission.acceptedAtTick,
+      intent: {
+        kind: "alarm",
+        cause: { kind: "perception", referenceId: admission.sourceObservationId },
+        focusObservationId: admission.sourceObservationId,
+      },
+    });
+    expect(savedDeer.memories).toContainEqual(expect.objectContaining({
+      eventId: admission.triggerEventId,
+      kind: "alarm",
+      observationId: admission.sourceObservationId,
+      atTick: admission.acceptedAtTick,
+      eventPosition: savedDeer.address.position,
+    }));
+    const channel = saved.perceptionCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === alarmActorId,
+    );
+    expect(channel?.state.active).toMatchObject({
+      eventId: admission.eventId,
+      triggerEventId: admission.triggerEventId,
+      position: savedDeer.address.position,
+      meaning: "deer-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      vocalization: "deer-alarm-snort",
+      priority: 760_000,
+      durationSteps: 6,
+      audioAcknowledged: true,
+    });
+    expect(channel?.reception).toMatchObject({
+      eventId: admission.eventId,
+      sourceActorId: alarmActorId,
+      receivedAtTick: admission.acceptedAtTick,
+      kind: "heard-unseen",
+      directVisualReceipt: false,
+    });
+    const durableCarry = stableStringify(saved.perceptionCarry);
     runtime.destroy();
-  }, 45_000);
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort",
+    )).toEqual([]);
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    resumed.destroy();
+    scheduledFrame = undefined;
+  }, 120_000);
 
   it("interrupts WAIT at the committed boundary of a lawfully heard strong alarm", async () => {
     const { runtime, repository } = await createAlarmRuntime(-8);
@@ -3181,9 +3285,18 @@ describe("runtime core-ecology vertical slice", () => {
     expect(runtime.getUIView().controls?.waitActive).toBe(true);
     advanceWaitFrames(runtime, 10);
 
-    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort",
+    ))
       .toHaveLength(1);
-    expect(runtime.getUIView().announcement?.message).toBe("ANIMAL ALARM — source unclear.");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "SNORT!",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      assertive: true,
+    });
     expect(runtime.getUIView().controls).toMatchObject({
       waitActive: false,
       waitLabel: "Wait 10 min",
@@ -3199,6 +3312,28 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it("anchors an in-range deer snort only when the source is directly visible", async () => {
+    const { runtime, alarmActorId } = await createAlarmRuntime(-4);
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
+      .toBe(true);
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(runtime, 10);
+
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort",
+    )).toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "Deer",
+      text: "SNORT!",
+      presentationKind: "animal-call",
+      animalCallKind: "deer-call",
+      assertive: true,
+    });
+    runtime.destroy();
+  }, 45_000);
+
   it("does not turn direct visual alarm knowledge into out-of-range audio", async () => {
     const { runtime, alarmActorId } = await createAlarmRuntime(9);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
@@ -3207,8 +3342,28 @@ describe("runtime core-ecology vertical slice", () => {
 
     advancePlayerSteps(runtime, 10);
 
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort",
+    )).toEqual([]);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
-    expect(runtime.getUIView().announcement?.message).not.toBe("ANIMAL ALARM — source unclear.");
+    expect(runtime.getUIView().expressionCaption?.text).not.toBe("SNORT!");
+    runtime.destroy();
+  }, 45_000);
+
+  it("retains the generic event-time fallback for an alarm Living Voice does not claim", async () => {
+    const { runtime } = await createAlarmRuntime(-8, "gull");
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(runtime, 10);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-deer-alarm-snort"
+        || cue === "vocalization-fish-crow-alarm",
+    )).toEqual([]);
+    expect(runtime.getUIView().announcement?.message)
+      .toBe("ANIMAL ALARM — source unclear.");
     runtime.destroy();
   }, 45_000);
 
@@ -3250,12 +3405,17 @@ describe("runtime core-ecology vertical slice", () => {
     ));
     if (savedCrow === undefined) throw new Error("Fish-crow voice fixture lost its source actor");
     const fishAdmissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
-      (record) => record.kind === "core-wildlife-fish-crow-alarm",
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "fish-crow"
+      ),
     );
     expect(fishAdmissions).toHaveLength(1);
     const admission = fishAdmissions[0];
     if (admission === undefined) throw new Error("Fish-crow voice fixture omitted its admission");
     expect(admission).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "fish-crow",
       sourceActorId: crowActorId,
       sourceOwnerKey: savedCore.patchKey,
       admittedAtPlayerStepPhase: 0,
@@ -3318,6 +3478,86 @@ describe("runtime core-ecology vertical slice", () => {
       kind: "heard-visible",
       directVisualReceipt: true,
     });
+
+    const legacyV38RecordFor = (envelope: CurrentEnvelope): SaveRecord => {
+      const carry = envelope.perceptionCarry;
+      const legacyRecords = carry.situatedExpressionAdmissions.records.map((candidate) => {
+        if (
+          candidate.kind !== "core-wildlife-alarm"
+          || candidate.sourceSpecies !== "fish-crow"
+        ) return candidate;
+        const { sourceSpecies: _futureSourceSpecies, ...legacy } = candidate;
+        return { ...legacy, kind: "core-wildlife-fish-crow-alarm" as const };
+      });
+      const {
+        animalContactAcousticCarry: _futureAnimalContactCarry,
+        intervalStartWasSleeping: _futureIntervalStartWasSleeping,
+        playerStepStateAnchor: _futurePlayerStepStateAnchor,
+        playerStepStateSamples: _futurePlayerStepStateSamples,
+        ...v7Carry
+      } = carry;
+      const { integrity: _futureIntegrity, ...v38Envelope } = envelope;
+      const v38Base = {
+        ...v38Envelope,
+        version: 38,
+        perceptionCarry: {
+          ...v7Carry,
+          version: 7,
+          situatedExpressionAdmissions: {
+            ...carry.situatedExpressionAdmissions,
+            records: legacyRecords,
+          },
+        },
+      };
+      return {
+        ...validFishRecord,
+        payloadVersion: 38,
+        updatedAt: validFishRecord.updatedAt + 1,
+        worldJson: JSON.stringify({
+          ...v38Base,
+          integrity: gameSaveEnvelopeIntegrity(v38Base),
+        }),
+      };
+    };
+
+    // Supported v38 records retain the exact direct-vision aerial-predator
+    // semantic that first authored this legacy admission kind.
+    const legacyV38Repository = new MemoryRepository(legacyV38RecordFor(saved));
+    const cueCountBeforeLegacyLoad = soundscapePlay.mock.calls.length;
+    const resumedLegacyV38 = await createTideweftRuntime(legacyV38Repository);
+    expect(resumedLegacyV38.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls).toHaveLength(cueCountBeforeLegacyLoad);
+    resumedLegacyV38.destroy();
+    scheduledFrame = undefined;
+
+    // Current alarms lawfully accept a broader shared threat vocabulary, but
+    // resealing one of those later semantics as a v38 record must fail closed.
+    const broadenedCrow = canonicalizeCoreWildlifeActorState({
+      ...savedCrow,
+      perception: {
+        ...savedCrow.perception,
+        beliefs: savedCrow.perception.beliefs.map((belief) => (
+          belief.sourceObservationId === admission.sourceObservationId
+            ? { ...belief, perceivedClass: "large-predator" }
+            : belief
+        )),
+      },
+    });
+    if (broadenedCrow === null) {
+      throw new Error("Fish-crow legacy semantic-fence fixture became malformed");
+    }
+    const broadenedEnvelope = resealedCurrentEnvelopeWithCorePatch(
+      saved,
+      replaceCoreEcologyAggregatePatchActor(savedCore, broadenedCrow),
+    );
+    const smuggledV38Record = legacyV38RecordFor(broadenedEnvelope);
+    const smuggledV38Repository = new MemoryRepository(smuggledV38Record);
+    const rejectedSmuggledV38 = await createTideweftRuntime(smuggledV38Repository);
+    expect(rejectedSmuggledV38.getUIView().saveWarning?.message)
+      .toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(smuggledV38Repository.snapshot()).toEqual(smuggledV38Record);
+    rejectedSmuggledV38.destroy();
+    scheduledFrame = undefined;
 
     // Core ecology consumes the retained T alarm on T+1. Wildlife and the
     // working guardian receive one anonymous final-address fact, while the
@@ -3461,7 +3701,10 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "crow-nasal-double-call"))
       .toEqual([]);
     expect(propagated.perceptionCarry.situatedExpressionAdmissions.records.filter(
-      (record) => record.kind === "core-wildlife-fish-crow-alarm",
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "fish-crow"
+      ),
     )).toEqual([]);
     expect(propagated.perceptionCarry.actorVocalizationSamples.filter(
       ({ expressionEventId }) => expressionEventId === admission.eventId,
@@ -3575,7 +3818,8 @@ describe("runtime core-ecology vertical slice", () => {
       situatedExpressionAdmissions: {
         ...validEnvelope.perceptionCarry.situatedExpressionAdmissions,
         records: validEnvelope.perceptionCarry.situatedExpressionAdmissions.records.map(
-          (candidate) => candidate.kind === "core-wildlife-fish-crow-alarm"
+          (candidate) => candidate.kind === "core-wildlife-alarm"
+            && candidate.sourceSpecies === "fish-crow"
             && candidate.eventId === admission.eventId
             ? {
                 ...candidate,
@@ -3772,7 +4016,7 @@ describe("runtime core-ecology vertical slice", () => {
     )?.eventPosition).toBeUndefined();
 
     // Strip the fish-crow presentation interval so rejection below can only
-    // come from current-v44 ecology custody, not admission/sample reauth.
+    // come from current-v45 ecology custody, not admission/sample reauth.
     const ecologyOnlyCarry: CurrentPerceptionCarry = {
       ...validEnvelope.perceptionCarry,
       actorVocalizationSamples: [],
@@ -3798,7 +4042,7 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
 
     // The same authenticated no-locus V6 shape is legitimate under outer v37.
-    // It adopts the durable stored body address once, saves as v44, and never
+    // It adopts the durable stored body address once, saves as v45, and never
     // replays a Living Voice cue on either migration load or current reload.
     expect(serializedMissingLocusRegional).not.toContain('"eventPosition":');
     const { integrity: _missingLocusIntegrity, ...missingLocusFields } = missingLocusEnvelope;
@@ -3831,7 +4075,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const upgradedLocusRecord = repository.snapshot();
     const upgradedLocusEnvelope = requiredEnvelope(repository);
-    expect(upgradedLocusRecord.payloadVersion).toBe(44);
+    expect(upgradedLocusRecord.payloadVersion).toBe(45);
     const upgradedLocusCrow = requiredCoreActor(
       requiredCore(upgradedLocusEnvelope),
       crowActorId,
@@ -3884,7 +4128,7 @@ describe("runtime core-ecology vertical slice", () => {
       .toBe("LOCAL AUTOSAVE UNREADABLE");
     rejectedV37Fish.destroy();
     scheduledFrame = undefined;
-  }, 90_000);
+  }, 120_000);
 
   it("does not let an earlier inaudible fish-crow alarm suppress a later audible flockmate", async () => {
     const {
@@ -3902,7 +4146,10 @@ describe("runtime core-ecology vertical slice", () => {
     await runtime.save();
     const saved = requiredEnvelope(repository);
     const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records
-      .filter((record) => record.kind === "core-wildlife-fish-crow-alarm")
+      .filter((record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "fish-crow"
+      ))
       .sort((left, right) => left.triggerEventId.localeCompare(right.triggerEventId));
     expect(admissions).toHaveLength(2);
     const earlier = admissions[0];
@@ -3914,6 +4161,14 @@ describe("runtime core-ecology vertical slice", () => {
       earlier.sourceActorId,
       later.sourceActorId,
     ]);
+    expect(earlier).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "fish-crow",
+    });
+    expect(later).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "fish-crow",
+    });
     expect(earlier.sampleOrdinal).toBeLessThan(later.sampleOrdinal);
     const listenerPosition = saved.perceptionCarry.intervalStartPosition;
     const earlierSample = saved.perceptionCarry.actorVocalizationSamples[earlier.sampleOrdinal];
@@ -4215,7 +4470,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(44);
+    expect(repository.snapshot().payloadVersion).toBe(45);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4346,7 +4601,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(44);
+    expect(repository.snapshot().payloadVersion).toBe(45);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4387,7 +4642,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(stableStringify(adoptedEnvelope.perceptionCarry))
       .toBe(stableStringify({
         ...alpha30Base.perceptionCarry,
-        version: 12,
+        version: 13,
         intervalStartPosition: currentEnvelope.perceptionCarry.intervalStartPosition,
         intervalStartFacingMilliRadians:
           currentEnvelope.perceptionCarry.intervalStartFacingMilliRadians,
@@ -5299,7 +5554,10 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 });
 
-async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
+async function createAlarmRuntime(
+  offsetTiles: -8 | -4 | 9,
+  sourceSpecies: "deer" | "gull" = "deer",
+): Promise<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   alarmActorId: string;
@@ -5318,18 +5576,20 @@ async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
   const world = deserializeWorld(envelope.world);
   makeWorldDryAndClear(world);
   const player = structuredClone(envelope.player);
-  player.facingMilliRadians = 0;
+  player.facingMilliRadians = offsetTiles === -4
+    ? Math.round(Math.PI * 1_000)
+    : 0;
   const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
   if (regional === null) throw new Error("alarm fixture could not restore its regional frame");
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null) throw new Error("alarm fixture could not locate its player");
   const sourcePatch = requiredCore(envelope);
   const sourceAlarmActor = sourcePatch.populations
-    .find(({ species }) => species === "deer")?.members[0]?.actor;
+    .find(({ species }) => species === sourceSpecies)?.members[0]?.actor;
   const sourceBear = sourcePatch.populations
     .find(({ species }) => species === "black-bear")?.members[0]?.actor;
   if (sourceAlarmActor === undefined || sourceBear === undefined) {
-    throw new Error("alarm fixture lost its deer or bear");
+    throw new Error(`alarm fixture lost its ${sourceSpecies} or bear`);
   }
   const adoptedEnvelope = resealedEnvelope(envelope, {
     coreEcology: serializeCoreEcologyAggregatePatch(promoteFixtureActors(sourcePatch, [
@@ -5384,7 +5644,7 @@ async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
     if (actor.identity.stableId === alarmActor.identity.stableId
       || actor.identity.stableId === bear.identity.stableId) continue;
     const isAlarmMate = alarmGroupMemberIds.has(actor.identity.stableId);
-    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+    const moved = repositionCoreWildlifeActor(actor, {
       atTick: patch.updatedAtTick,
       position: isAlarmMate
         ? translateWorldPosition(
@@ -5398,7 +5658,26 @@ async function createAlarmRuntime(offsetTiles: -8 | 9): Promise<{
             20 * WORLD_POSITION_UNITS_PER_TILE,
           ),
       heading: actor.address.heading,
-    }));
+    });
+    const preparedActor = actor.identity.species !== alarmActor.identity.species
+      ? moved
+      : canonicalizeCoreWildlifeActorState({
+          ...moved,
+          // This fixture owns one alarm source. Other canonical herd members
+          // retain a lawful recent alarm memory so the nearby bear cannot mint
+          // an unrelated second Living Voice admission in the same interval.
+          memories: [...moved.memories, {
+            eventId: `${moved.identity.stableId}:fixture-recent-alarm`,
+            kind: "alarm",
+            referenceId: bear.identity.stableId,
+            observationId: null,
+            atTick: patch.updatedAtTick,
+          }],
+        });
+    if (preparedActor === null) {
+      throw new Error("Alarm fixture could not retain group-mate cooldown");
+    }
+    patch = replaceCoreEcologyAggregatePatchActor(patch, preparedActor);
     if (isAlarmMate) alarmMateOrdinal += 1;
   }
   patch = reconcileFixtureGroupAnchors(patch);
@@ -6326,10 +6605,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 44
+    || value.version !== 45
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v44 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v45 envelope");
   }
   return value;
 }
@@ -6506,7 +6785,7 @@ function stripFixtureAlarmEventPositionsForV24(
 /**
  * Gives an untouched compatibility cohort its real durable owner before a
  * gameplay fixture mutates it. Historical migration runs exactly once; every
- * later edit targets the resulting current v44 active resident.
+ * later edit targets the resulting current v45 active resident.
  */
 async function adoptUntouchedFixtureCoreAsCurrent(
   repository: MemoryRepository,
@@ -6561,8 +6840,8 @@ function resealedCurrentEnvelopeWithCorePatch(
     | "world"
   >> = {},
 ): CurrentEnvelope {
-  if ((envelope as Readonly<{ version: number }>).version !== 44) {
-    throw new Error("current ecology fixture requires a v44 envelope");
+  if ((envelope as Readonly<{ version: number }>).version !== 45) {
+    throw new Error("current ecology fixture requires a v45 envelope");
   }
   const state = requiredRegionalEcologyV6(envelope);
   const v5 = state.base;
@@ -6811,9 +7090,10 @@ function legacyPerceptionCarry(
       && record.version !== 9
       && record.version !== 10
       && record.version !== 11
-      && record.version !== 12)
+      && record.version !== 12
+      && record.version !== 13)
     || stableStringify(keys) !== stableStringify(
-      record.version === 12
+      record.version === 12 || record.version === 13
         ? latestStepStateKeys
         : record.version === 10 || record.version === 11
           ? currentStepStateKeys
@@ -7556,7 +7836,7 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
   if (
-    version === 44
+    version === 45
     || version === 40
     || version === 39
     || version === 38

@@ -23,6 +23,7 @@ const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
   "fish-crow-alarm-call",
+  "deer-alarm-call",
 ]);
 
 const ANIMAL_CALL_MEANINGS = new Set<SituatedExpressionMeaning>([
@@ -52,13 +53,18 @@ export function situatedExpressionAcoustics(
     | Pick<SituatedExpressionIntent, "meaning" | "volume">,
 ): SituatedExpressionAcoustics {
   const volume = typeof value === "string" ? value : value.volume;
-  if (typeof value !== "string" && value.meaning === "fish-crow-alarm-call") {
+  if (
+    typeof value !== "string"
+    && (value.meaning === "fish-crow-alarm-call" || value.meaning === "deer-alarm-call")
+  ) {
     // Core ecology already owns this physical signal. Supplemental samples
     // reach humans only, so bake the same human hearing sensitivity into the
     // range instead of letting generic Living Voice shout range create a
     // second, much larger acoustic world.
     return Object.freeze({
-      loudness: coreEcologyAlarmSignalProfile("fish-crow").sourceLoudness,
+      loudness: coreEcologyAlarmSignalProfile(
+        value.meaning === "fish-crow-alarm-call" ? "fish-crow" : "deer",
+      ).sourceLoudness,
       rangeUnits: Math.floor(
         CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS
           * livingActorSenseProfile("human").hearingSensitivity

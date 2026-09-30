@@ -79,6 +79,7 @@ describe("situated vocalization cues", () => {
       "vocalization-dog-defensive-growl",
       "vocalization-dog-shelter-whine",
       "vocalization-fish-crow-alarm",
+      "vocalization-deer-alarm-snort",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -178,6 +179,14 @@ describe("situated vocalization cues", () => {
     const variantSeed = 0xc4a;
     expect(situatedVocalizationPattern("fish-crow-alarm", variantSeed))
       .toEqual(ecologyVoicePattern("crow-nasal-double-call", variantSeed));
+  });
+
+  it("gives the deer alarm a short grounded snort distinct from the crow", () => {
+    const snort = situatedVocalizationPattern("deer-alarm-snort", 0xd33);
+    expect(snort).toHaveLength(2);
+    expect(snort).not.toEqual(situatedVocalizationPattern("fish-crow-alarm", 0xd33));
+    expect(Math.max(...snort.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.2);
   });
 });
 

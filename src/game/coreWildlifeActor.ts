@@ -6,6 +6,7 @@ import {
   createActorPerceptionState,
   queryActorAttention,
   stepActorPerception,
+  type ActorBelief,
   type ActorObservation,
   type ActorPerceptionState,
   type AgedActorBelief,
@@ -357,7 +358,7 @@ export interface AdvanceCoreWildlifeActorCoarseInput {
 
 const UTF8_ENCODER = new TextEncoder();
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/u;
-const THREAT_CLASSES = new Set([
+export const CORE_WILDLIFE_ALARM_THREAT_CLASSES = Object.freeze([
   "threat",
   "predator",
   "large-predator",
@@ -366,6 +367,7 @@ const THREAT_CLASSES = new Set([
   "hostile-human",
   "danger-sound",
 ]);
+const THREAT_CLASSES = new Set<string>(CORE_WILDLIFE_ALARM_THREAT_CLASSES);
 const HUMAN_CLASSES = new Set(["human", "porter", "unknown-human", "human-voice"]);
 const ALARM_CLASSES = new Set(["alarm-call", "animal-alarm", "herd-alarm"]);
 const COMPETITOR_CLASSES = new Set(["food-competitor", "competitor"]);
@@ -376,6 +378,12 @@ const WAKE_CLASSES = new Set([
   ...ALARM_CLASSES,
   ...RAIN_CLASSES,
 ]);
+
+/** Shared semantic gate for the beliefs that may lawfully originate an alarm. */
+export function coreWildlifePerceivedClassCanTriggerAlarm(perceivedClass: string): boolean {
+  return THREAT_CLASSES.has(perceivedClass);
+}
+
 const FOOD_SOURCES = new Set<string>([
   "natural-forage",
   "physical-item",
@@ -1244,9 +1252,8 @@ function decide(
 
   const threatReference = threat?.sourceObservationId ?? null;
   const threatMemoryReference = threat?.subjectId ?? threat?.sourceObservationId ?? null;
-  const alarmReady = profile.roles.includes("alarm-source")
-    && threat !== null
-    && effectiveThreat >= profile.behavior.alarmThreshold
+  const alarmReady = threat !== null
+    && coreWildlifeBeliefCanTriggerAlarm(state, threat)
     && threatMemoryReference !== null
     && !recentMemory(state, "alarm", threatMemoryReference, step.tick, 4);
   if (alarmReady && step.accessibility.alarm) {
@@ -1653,16 +1660,31 @@ function selectStronger(
   return left.sourceObservationId <= right.sourceObservationId ? left : right;
 }
 
-function beliefStrength(belief: AgedActorBelief | null): number {
+function beliefStrength(belief: ActorBelief | null): number {
   return belief === null ? 0 : Math.floor((belief.confidence + belief.salience) / 2);
 }
 
-function pressureFor(state: CoreWildlifeActorState, belief: AgedActorBelief | null): number {
+function pressureFor(state: CoreWildlifeActorState, belief: ActorBelief | null): number {
   if (belief === null) return 0;
   const base = beliefStrength(belief);
   const vigilance = Math.floor(state.identity.traits.vigilance / 5);
   const boldness = Math.floor(state.identity.traits.boldness / 4);
   return clampScaled(base + vigilance - boldness);
+}
+
+/**
+ * One shared authority boundary for beliefs that can originate an alarm.
+ * Expression adapters consume this rule rather than maintaining a narrower,
+ * species-specific copy of core cognition policy.
+ */
+export function coreWildlifeBeliefCanTriggerAlarm(
+  state: CoreWildlifeActorState,
+  belief: ActorBelief,
+): boolean {
+  const profile = getCoreWildlifeProfile(state.identity.species);
+  return profile.roles.includes("alarm-source")
+    && coreWildlifePerceivedClassCanTriggerAlarm(belief.perceivedClass)
+    && pressureFor(state, belief) >= profile.behavior.alarmThreshold;
 }
 
 function recentMemory(

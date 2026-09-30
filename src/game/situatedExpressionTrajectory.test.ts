@@ -18,6 +18,7 @@ import {
 } from "./situatedExpression";
 import {
   canonicalizeSituatedExpressionAdmissionLedger,
+  createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
@@ -54,6 +55,7 @@ const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
+const DEER_ID = "D-expression-trajectory-deer";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
 const WEATHER_HOLD_RESIDENT_ID = "H-expression-trajectory-weather-hold";
@@ -160,6 +162,15 @@ function fishCrowIntent(triggerEventId: string): SituatedExpressionIntent {
     salience: 840_000,
     variantSeed: 127,
     durationSteps: 6,
+  };
+}
+
+function deerIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowIntent(triggerEventId),
+    sourceActorId: DEER_ID,
+    meaning: "deer-alarm-call",
+    variantSeed: 128,
   };
 }
 
@@ -506,6 +517,46 @@ function fishCrowFixture(
   }
   return {
     bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function deerAlarmFixture(): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "core-wildlife:alarm:deer:trajectory";
+  const admitted = accept(createSituatedExpressionState(), deerIntent(triggerEventId));
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture deer expression expired unexpectedly");
+  }
+  const reception = createHeardVisibleSituatedExpressionReception(
+    current.active,
+    acceptedAtTick,
+    760_000,
+    true,
+  );
+  const bank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: DEER_ID, state: current, reception }],
+  });
+  const record = createCoreWildlifeAlarmExpressionAdmissionRecord({
+    sourceActorId: DEER_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceSpecies: "deer",
+    sourceOwnerKey: "regional-ecology:trajectory-test",
+    sourceObservationId: "observation:large-predator:trajectory-test",
+    acceptedAtTick,
+  });
+  if (bank === null || record === null || reception === null) {
+    throw new Error("fixture deer trajectory was not canonical");
+  }
+  return {
+    bank,
     ledger: ledger([record]),
     phase,
     samples: [animalSample(admitted.event, 0)],
@@ -1055,6 +1106,31 @@ describe("situated-expression admission trajectory", () => {
     expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
     expect(situatedExpressionTrajectoryIsCanonical(
       resetDuration, exact.ledger, exact.phase, exact.samples,
+    )).toBe(false);
+  });
+
+  it("binds a deer alarm to the shared species-aware admission and acoustics", () => {
+    const fixture = deerAlarmFixture();
+    expect(accepts(fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      meaning: "deer-alarm-call",
+      vocalization: "deer-alarm-snort",
+      priority: 760_000,
+    });
+    expect(fixture.ledger.records[0]).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "deer",
+    });
+    const forged = mutable(fixture.ledger);
+    if (forged.records[0]?.kind !== "core-wildlife-alarm") {
+      throw new Error("fixture lost species-aware deer admission");
+    }
+    forged.records[0].sourceSpecies = "fish-crow";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank,
+      forged,
+      fixture.phase,
+      fixture.samples,
     )).toBe(false);
   });
 

@@ -138,6 +138,15 @@ function fishCrowAlarmIntent(
   };
 }
 
+function deerAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowAlarmIntent(triggerEventId),
+    sourceActorId: "DEER-expression-test",
+    meaning: "deer-alarm-call",
+    variantSeed: 611,
+  };
+}
+
 function keeperStoreResponseIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     version: SITUATED_EXPRESSION_VERSION,
@@ -463,6 +472,27 @@ describe("generic situated-expression kernel", () => {
         event: null,
       });
     }
+  });
+
+  it("registers the deer alarm through the same animal-signal policy", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      deerAlarmIntent("DEER-expression-test:e:1:alarm"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "deer-alarm-call",
+        family: "animal-signal",
+        vocalization: "deer-alarm-snort",
+      },
+    });
+    if (reduction.event === null) throw new Error("Deer alarm was not accepted");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "SNORT!",
+      realizationKey: "situated-expression.en.v1.deer-alarm-call.0",
+      vocalization: "deer-alarm-snort",
+    });
   });
 
   it("keeps heavy-work chatter bounded and every restrained authored line reachable", () => {

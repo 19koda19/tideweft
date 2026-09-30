@@ -480,8 +480,10 @@ export interface SituatedExpressionCaptionUIView {
     | "bark"
     | "growl"
     | "whine"
+    | "animal-call"
     | "bird-call"
-    | "fish-crow-call";
+    | "fish-crow-call"
+    | "deer-call";
   /** Structured physical semantics; never inferred from localized text. */
   readonly physicalSoundKind?: PhysicalAcousticTextView["semanticFamily"];
   readonly directionLabel?:

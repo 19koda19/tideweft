@@ -163,8 +163,8 @@ repertoire.
 The first core-wildlife extension consumes the fish crow's existing committed
 alarm rather than adding a second bird behavior. One currently materialized
 fish crow gives `KRAA! KRAA!` only when its regional owner, stable actor,
-post-commit final position, same-tick alarm event, identified direct-vision
-aerial-predator belief, alarm intent, and retained causal memory agree. Predator
+post-commit final position, same-tick alarm event, attended alarm-causing belief,
+alarm threshold, alarm intent, and retained causal memory agree. Threat
 identity never enters the call or its deterministic variation. The call reuses
 the existing crow double-call sound and core-alarm hearing profile: core ecology
 continues to carry the alarm to wildlife and dogs, while one source-bound Living
@@ -180,9 +180,20 @@ example `[A bird calls somewhere north-east.]`. An unheard call has no player
 presentation; that absence does not erase the world event or lawful non-player
 hearing.
 
-That same anonymous alarm may become ordinary human knowledge before it becomes
-speech. At most one deterministic nearby resident who has a fresh, strongly
-attended direct predator sighting or anonymous animal-alarm belief may issue a
+The same source-honest boundary now covers one deer alarm without inventing a
+parallel animal-caption system. A materialized deer may give one restrained
+`SNORT!` only when its owning ecology root proves the fresh committed alarm,
+the exact final locus and memory, and the same attended belief and threshold
+that core wildlife lawfully used to originate the alarm. A heard-visible receipt may present
+`[A deer snorts sharply.]`; heard-unseen presentation remains a generic,
+directional animal sound, and an unheard alarm produces no player cue. The
+sound never discloses the predator or a hidden deer position, and Living Voice
+suppresses the former direct player alarm playback so one ecology event is not
+heard twice.
+
+Either anonymous core-wildlife alarm may become ordinary human knowledge before
+it becomes speech. At most one deterministic nearby resident who has a fresh,
+strongly attended direct predator sighting or anonymous animal-alarm belief may issue a
 short shouted warning from their actual position. The warning retains the exact
 source observation that caused it, enters the same hearing and expression
 channels, can be heard anonymously by other residents, and cannot recursively

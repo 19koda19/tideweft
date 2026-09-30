@@ -200,7 +200,7 @@ import {
 } from "./playerExpressionAuthority";
 import {
   appendSituatedExpressionAdmissionRecord,
-  createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
+  createCoreWildlifeAlarmExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
@@ -269,11 +269,14 @@ import {
   type GuardianDogShelterWhineExpressionInput,
 } from "./dogSignalExpression";
 import {
+  coreWildlifeAlarmExpressionEventForTrigger,
+  coreWildlifeAlarmExpressionEventMatchesWorld,
+  coreWildlifeAlarmExpressionIntent,
+  coreWildlifeAlarmExpressionMemoryMatchesWorld,
   fishCrowAlarmExpressionEventForTrigger,
   fishCrowAlarmExpressionEventMatchesWorld,
-  fishCrowAlarmExpressionIntent,
   fishCrowAlarmExpressionMemoryMatchesWorld,
-  type FishCrowAlarmExpressionInput,
+  type CoreWildlifeAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
 import {
   humanDangerWarningExpressionCandidate,
@@ -1092,6 +1095,7 @@ function recentMeaningAcousticTuples(
     case "alarm-at-cargo-loss":
     case "guardian-dog-warning":
     case "fish-crow-alarm-call":
+    case "deer-alarm-call":
     case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
@@ -1103,8 +1107,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** Current outer save whose situated-expression union owns resident weather holds. */
+/** Current outer save whose situated-expression union owns species-aware wildlife alarms. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** Retired pre-1.0 save whose closed expression union first owned weather holds. */
+const RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION = 44;
 /** Retired pre-1.0 save whose closed expression union first owned introductions. */
 const RESIDENT_INTRODUCTION_GAME_SAVE_VERSION = 43;
 const PLAYER_EXHAUSTION_GAME_SAVE_VERSION = 42;
@@ -1154,7 +1160,7 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 12 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 13 as const;
 const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
@@ -1184,6 +1190,7 @@ const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   41,
   PLAYER_EXHAUSTION_GAME_SAVE_VERSION,
   RESIDENT_INTRODUCTION_GAME_SAVE_VERSION,
+  RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION,
 ]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
@@ -2241,7 +2248,7 @@ function runtimeRegionalEcologyProjectedSources(
 }
 
 /**
- * Bounded presentation sidecar for directly visible fish-crow calls. It is a
+ * Bounded presentation sidecar for directly visible expressive wildlife calls. It is a
  * projection of the already admitted materialized set, never a second wildlife
  * materializer or a source of simulation authority.
  */
@@ -2252,16 +2259,16 @@ function runtimeCoreWildlifeExpressionSources(
   const sources: CoreWildlifeExpressionSource[] = [];
   for (const { patch } of runtimeRegionalEcologyProjectedSources(projection)) {
     for (const population of patch.populations) {
-      if (population.species !== "fish-crow") continue;
+      if (population.species !== "fish-crow" && population.species !== "deer") continue;
       for (const { actor, materialization } of population.members) {
         if (materialization !== "materialized") continue;
         if (seenActorIds.has(actor.identity.stableId)) {
-          throw new Error("Fish-crow expression projection found duplicate actor custody");
+          throw new Error("Wildlife expression projection found duplicate actor custody");
         }
         seenActorIds.add(actor.identity.stableId);
         sources.push(Object.freeze({
           actorId: actor.identity.stableId,
-          species: "fish-crow",
+          species: population.species,
           position: actor.address.position,
         }));
       }
@@ -2269,7 +2276,7 @@ function runtimeCoreWildlifeExpressionSources(
   }
   sources.sort((left, right) => compareText(left.actorId, right.actorId));
   if (sources.length > CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS) {
-    throw new Error("Fish-crow expression projection exceeded materialization authority");
+    throw new Error("Wildlife expression projection exceeded materialization authority");
   }
   return Object.freeze(sources);
 }
@@ -6666,19 +6673,20 @@ function runtimeCoreAlarmEventAt(
  * bounded alarm memory keeps that locus stable across save/load and any later
  * body relocation.
  */
-function runtimeFishCrowAlarmExpressionAuthority(
+function runtimeCoreWildlifeAlarmExpressionAuthority(
   patch: CoreEcologyAggregatePatchState,
   input: Readonly<{
     actorId: string;
     triggerEventId: string;
     sourceObservationId: string;
     acceptedAtTick: number;
+    sourceSpecies: "fish-crow" | "deer";
   }>,
-): FishCrowAlarmExpressionInput | null {
+): CoreWildlifeAlarmExpressionInput | null {
   const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
   if (
     actor === null
-    || actor.identity.species !== "fish-crow"
+    || actor.identity.species !== input.sourceSpecies
     || actor.updatedAtTick !== input.acceptedAtTick
   ) return null;
   const retainedLocus = coreWildlifeAlarmEventLocus(actor, input.triggerEventId);
@@ -6695,24 +6703,69 @@ function runtimeFishCrowAlarmExpressionAuthority(
   return Object.freeze({ actor, event, world: patch });
 }
 
-function runtimeRegionalFishCrowAlarmExpressionAuthority(
+type RuntimeCoreWildlifeAlarmAdmission = Extract<
+  SituatedExpressionAdmissionRecord,
+  {
+    readonly kind:
+      | "core-wildlife-fish-crow-alarm"
+      | "core-wildlife-alarm";
+  }
+>;
+
+function coreWildlifeAlarmExpressionEventForAdmission(
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+  authority: CoreWildlifeAlarmExpressionInput,
+  triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return admission.kind === "core-wildlife-fish-crow-alarm"
+    ? fishCrowAlarmExpressionEventForTrigger(authority, triggerEventId)
+    : coreWildlifeAlarmExpressionEventForTrigger(authority, triggerEventId);
+}
+
+function coreWildlifeAlarmExpressionMatchesAdmission(
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+  authority: CoreWildlifeAlarmExpressionInput,
+  event: SituatedExpressionEvent,
+): boolean {
+  return admission.kind === "core-wildlife-fish-crow-alarm"
+    ? fishCrowAlarmExpressionEventMatchesWorld(authority, event)
+    : coreWildlifeAlarmExpressionEventMatchesWorld(authority, event);
+}
+
+function coreWildlifeAlarmMemoryMatchesAdmission(
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+  authority: CoreWildlifeAlarmExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  return admission.kind === "core-wildlife-fish-crow-alarm"
+    ? fishCrowAlarmExpressionMemoryMatchesWorld(authority, memory)
+    : coreWildlifeAlarmExpressionMemoryMatchesWorld(authority, memory);
+}
+
+function coreWildlifeAlarmAdmissionSpecies(
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+): "fish-crow" | "deer" {
+  return admission.kind === "core-wildlife-fish-crow-alarm"
+    ? "fish-crow"
+    : admission.sourceSpecies;
+}
+
+function runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
   projection: RegionalEcologyStateV6ActiveProjection,
-  admission: Extract<
-    SituatedExpressionAdmissionRecord,
-    { readonly kind: "core-wildlife-fish-crow-alarm" }
-  >,
-): FishCrowAlarmExpressionInput | null {
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+): CoreWildlifeAlarmExpressionInput | null {
   const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
     ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
   );
   const source = sources[0];
   return sources.length !== 1 || source === undefined
     ? null
-    : runtimeFishCrowAlarmExpressionAuthority(source.patch, {
+    : runtimeCoreWildlifeAlarmExpressionAuthority(source.patch, {
         actorId: admission.sourceActorId,
         triggerEventId: admission.triggerEventId,
         sourceObservationId: admission.sourceObservationId,
         acceptedAtTick: admission.acceptedAtTick,
+        sourceSpecies: coreWildlifeAlarmAdmissionSpecies(admission),
       });
 }
 
@@ -11885,6 +11938,7 @@ export async function createTideweftRuntime(
       playerIsSleeping()
       && expression.meaning !== "guardian-dog-warning"
       && expression.meaning !== "fish-crow-alarm-call"
+      && expression.meaning !== "deer-alarm-call"
       && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -11924,13 +11978,19 @@ export async function createTideweftRuntime(
   function playerDirectlyObservesExpressionSource(
     expression: Pick<SituatedExpressionIntent, "meaning" | "position" | "sourceActorId">,
   ): boolean {
-    if (expression.meaning === "fish-crow-alarm-call") {
+    if (
+      expression.meaning === "fish-crow-alarm-call"
+      || expression.meaning === "deer-alarm-call"
+    ) {
+      const expectedSpecies = expression.meaning === "fish-crow-alarm-call"
+        ? "fish-crow"
+        : "deer";
       const matchingActors = runtimeRegionalEcologyProjectedSources(
         projectActiveRegionalEcology(),
       ).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
         .filter(({ actor, materialization }) => (
           materialization === "materialized"
-          && actor.identity.species === "fish-crow"
+          && actor.identity.species === expectedSpecies
           && actor.identity.stableId === expression.sourceActorId
           && stableStringify(actor.address.position) === stableStringify(expression.position)
         ));
@@ -11943,7 +12003,7 @@ export async function createTideweftRuntime(
               height: worldView.terrain.height,
             },
           },
-          // Like the existing strong guardian warning, a heard crow alarm
+          // Like the existing strong guardian warning, a heard wildlife alarm
           // wakes before source classification. Replaying awake perception is
           // derivable from world state and avoids persisting an unattestable
           // pre-interruption sleep bit.
@@ -13145,16 +13205,19 @@ export async function createTideweftRuntime(
       )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
       for (const alarm of coreAlarms) {
         const matchingAdmissions = situatedExpressionAdmissions.records.filter(
-          (admission) => admission.kind === "core-wildlife-fish-crow-alarm"
+          (admission) => (
+            admission.kind === "core-wildlife-fish-crow-alarm"
+            || admission.kind === "core-wildlife-alarm"
+          )
             && admission.triggerEventId === alarm.eventId
             && admission.sourceActorId === alarm.actorId,
-        );
-        const fishCrowAdmission = matchingAdmissions[0];
-        const fishCrowAuthority = matchingAdmissions.length === 1
-          && fishCrowAdmission?.kind === "core-wildlife-fish-crow-alarm"
-          ? runtimeRegionalFishCrowAlarmExpressionAuthority(
+        ) as readonly RuntimeCoreWildlifeAlarmAdmission[];
+        const wildlifeAlarmAdmission = matchingAdmissions[0];
+        const wildlifeAlarmAuthority = matchingAdmissions.length === 1
+          && wildlifeAlarmAdmission !== undefined
+          ? runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
               regionalEcologyProjectionForStep,
-              fishCrowAdmission,
+              wildlifeAlarmAdmission,
             )
           : null;
         const rawPropagated = propagateCoreEcologyAlarmObservationBatches(
@@ -13164,18 +13227,19 @@ export async function createTideweftRuntime(
         if (rawPropagated === null) {
           throw new Error("Core ecology alarm perception could not be resolved");
         }
-        const retainedSample = fishCrowAdmission === undefined
+        const retainedSample = wildlifeAlarmAdmission === undefined
           ? undefined
-          : actorVocalizationSamples[fishCrowAdmission.sampleOrdinal];
-        const humanHearingOwnedByExpression = fishCrowAdmission !== undefined
-          && fishCrowAuthority !== null
-          && fishCrowAuthority.event.eventId === alarm.eventId
-          && sameRuntimeWorldPosition(fishCrowAuthority.event.position, alarm.position)
-          && retainedSample?.expressionEventId === fishCrowAdmission.eventId
-          && retainedSample.sourceActorId === fishCrowAdmission.sourceActorId
-          && fishCrowAlarmExpressionEventForTrigger(
-            fishCrowAuthority,
-            fishCrowAdmission.triggerEventId,
+          : actorVocalizationSamples[wildlifeAlarmAdmission.sampleOrdinal];
+        const humanHearingOwnedByExpression = wildlifeAlarmAdmission !== undefined
+          && wildlifeAlarmAuthority !== null
+          && wildlifeAlarmAuthority.event.eventId === alarm.eventId
+          && sameRuntimeWorldPosition(wildlifeAlarmAuthority.event.position, alarm.position)
+          && retainedSample?.expressionEventId === wildlifeAlarmAdmission.eventId
+          && retainedSample.sourceActorId === wildlifeAlarmAdmission.sourceActorId
+          && coreWildlifeAlarmExpressionEventForAdmission(
+            wildlifeAlarmAdmission,
+            wildlifeAlarmAuthority,
+            wildlifeAlarmAdmission.triggerEventId,
           ) !== null;
         // The core path remains authoritative for wildlife and dogs. Once the
         // same event has an admitted Living Voice sample, that sample owns the
@@ -13814,11 +13878,6 @@ export async function createTideweftRuntime(
           if (
             event.kind !== "alarm"
             || !localMaterializedCoreActorIdSet.has(event.actorId)
-            // Fish-crow raw events authenticate cognition freshness only. Its
-            // final committed position and immediate player hearing are owned
-            // by the post-commit Living Voice adapter below; the shared core
-            // propagation resumes from that retained event on the next tick.
-            || event.species === "fish-crow"
           ) continue;
           const eventActorAuthority = coreEcologyAggregatePatchActor(
             eventAuthorityPatch,
@@ -13843,14 +13902,14 @@ export async function createTideweftRuntime(
           }));
         }
       }
-      const playerEventTimeAlarmObservations = playerEventTimeAlarmObservationsByEvent
-        .flatMap(({ observations }) => observations);
-      const canonicalPlayerEventTimeAlarms = canonicalizeActorObservations(
-        playerEventTimeAlarmObservations,
-      );
-      if (canonicalPlayerEventTimeAlarms.length !== playerEventTimeAlarmObservations.length) {
-        throw new Error("Core ecology event-time player hearing could not be canonicalized");
-      }
+      const canonicalPlayerEventTimeAlarmsByEvent = playerEventTimeAlarmObservationsByEvent
+        .map(({ eventId, observations }) => {
+          const canonical = canonicalizeActorObservations(observations);
+          if (canonical.length !== observations.length) {
+            throw new Error("Core ecology event-time player hearing could not be canonicalized");
+          }
+          return Object.freeze({ eventId, observations: canonical });
+        });
       const resolvedRegionalResources = resolveRuntimeRegionalCoreResourceClaims(
         coreSteps.map(({ sourceKey, result: sourceStep, validateAcceptedPatch }) => ({
           sourceKey,
@@ -14462,23 +14521,40 @@ export async function createTideweftRuntime(
         throw new Error("Core ecology event observation frame could not be authenticated");
       }
       const allCoreStepEvents = coreSteps.flatMap(({ result }) => result.events);
-      let unadmittedFishCrowAlarmAudibleToPlayer = false;
-      const fishCrowAlarmCandidates = coreSteps.flatMap(({ sourceKey, result }) => (
+      // A successfully derived semantic intent claims the player/human leg of
+      // this physical alarm even when bounded channel admission suppresses its
+      // presentation. Only genuinely unclaimed alarms may retain the legacy
+      // generic ecology fallback below.
+      const claimedExpressiveAlarmEventIds = new Set<string>();
+      const expressiveAlarmCandidates = coreSteps.flatMap(({ sourceKey, result }) => (
         result.events
-          .filter((event) => event.species === "fish-crow" && event.kind === "alarm")
+          .filter((event) => (
+            (event.species === "fish-crow" || event.species === "deer")
+            && event.kind === "alarm"
+          ))
           .map((event) => ({ event, sourceKey }))
       )).sort((left, right) => (
         compareText(left.event.eventId, right.event.eventId)
         || compareText(left.sourceKey, right.sourceKey)
       ));
-      for (const candidate of fishCrowAlarmCandidates) {
+      for (const candidate of expressiveAlarmCandidates) {
         const patch = finalRegionalPatches.get(candidate.sourceKey);
-        if (patch === undefined || candidate.event.observationId === null) continue;
-        const authority = runtimeFishCrowAlarmExpressionAuthority(patch, {
+        const sourceSpecies = candidate.event.species === "fish-crow"
+          ? "fish-crow" as const
+          : candidate.event.species === "deer"
+            ? "deer" as const
+            : null;
+        if (
+          patch === undefined
+          || candidate.event.observationId === null
+          || sourceSpecies === null
+        ) continue;
+        const authority = runtimeCoreWildlifeAlarmExpressionAuthority(patch, {
           actorId: candidate.event.actorId,
           triggerEventId: candidate.event.eventId,
           sourceObservationId: candidate.event.observationId,
           acceptedAtTick: candidate.event.atTick,
+          sourceSpecies,
         });
         if (
           authority === null
@@ -14486,8 +14562,9 @@ export async function createTideweftRuntime(
           || authority.event.observationId !== candidate.event.observationId
           || authority.event.atTick !== candidate.event.atTick
         ) continue;
-        const intent = fishCrowAlarmExpressionIntent(authority);
+        const intent = coreWildlifeAlarmExpressionIntent(authority);
         if (intent === null) continue;
+        claimedExpressiveAlarmEventIds.add(candidate.event.eventId);
         const audible = playerExpressionAudibility(intent);
         const lawfullyAudible = audible !== null && audible.contact !== null;
         const reception = !lawfullyAudible || audible === null || audible.contact === null
@@ -14495,15 +14572,16 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
-        const admitted = acceptSituatedExpression(
+        acceptSituatedExpression(
           intent,
           reception,
           (acceptedEvent, sampleOrdinal) => (
-            createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord({
+            createCoreWildlifeAlarmExpressionAdmissionRecord({
               sourceActorId: acceptedEvent.sourceActorId,
               triggerEventId: acceptedEvent.triggerEventId,
               sampleOrdinal,
               admittedAtPlayerStepPhase: 0,
+              sourceSpecies,
               sourceOwnerKey: candidate.sourceKey,
               sourceObservationId: candidate.event.observationId!,
               acceptedAtTick: candidate.event.atTick,
@@ -14513,7 +14591,6 @@ export async function createTideweftRuntime(
         if (lawfullyAudible) {
           playerWaitDisturbedThisStep = true;
           playerRecoveryDisturbedThisStep = true;
-          if (!admitted) unadmittedFishCrowAlarmAudibleToPlayer = true;
         }
       }
       const {
@@ -14603,12 +14680,14 @@ export async function createTideweftRuntime(
       const witnessedCoreBeforeById = new Map(witnessedCoreBeforeMortality.map((animal) => (
         [animal.actorId, animal] as const
       )));
-      const lawfullyHeardAlarm = unadmittedFishCrowAlarmAudibleToPlayer
-        || canonicalPlayerEventTimeAlarms.some((observation) => (
-          observation.channel === "hearing"
-          && observation.perceivedClass === "animal-alarm"
-        ));
-      const lawfullyHeardStrongAlarm = canonicalPlayerEventTimeAlarms
+      const unclaimedPlayerEventTimeAlarms = canonicalPlayerEventTimeAlarmsByEvent
+        .filter(({ eventId }) => !claimedExpressiveAlarmEventIds.has(eventId))
+        .flatMap(({ observations }) => observations);
+      const lawfullyHeardAlarm = unclaimedPlayerEventTimeAlarms.some((observation) => (
+        observation.channel === "hearing"
+        && observation.perceivedClass === "animal-alarm"
+      ));
+      const lawfullyHeardStrongAlarm = unclaimedPlayerEventTimeAlarms
         .some((observation) => (
           observation.channel === "hearing"
           && observation.perceivedClass === "animal-alarm"
@@ -19474,7 +19553,8 @@ function perceptionCarryUsesOnlyFishCrowSemantics(
  * outer v43. Nested expression schemas intentionally retain version 1, so
  * every v34-v40 reader rejects the keeper reply introduced in retired v41,
  * the effort semantic introduced in retired v42/carry-v10, and the resident
- * introduction introduced by v43/carry-v11.
+ * introduction introduced by v43/carry-v11, the weather hold introduced by
+ * v44/carry-v12, and current species-aware wildlife alarms.
  */
 function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
   bank: SituatedExpressionChannelBank,
@@ -19485,6 +19565,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
     && kind !== "player-exhaustion"
     && kind !== "resident-introduction"
     && kind !== "resident-weather-hold"
+    && kind !== "core-wildlife-alarm"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning, family }) => (
@@ -19492,6 +19573,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "need-rest-after-exertion"
       && meaning !== "resident-introduction"
       && meaning !== "resident-weather-hold"
+      && meaning !== "deer-alarm-call"
       && family !== "condition"
       && family !== "social"
     )) && (active === null || (
@@ -19499,12 +19581,13 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "need-rest-after-exertion"
       && active.meaning !== "resident-introduction"
       && active.meaning !== "resident-weather-hold"
+      && active.meaning !== "deer-alarm-call"
       && active.family !== "condition"
       && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
       && active.knowledgeBasis !== "self-felt-exhaustion"
       && active.knowledgeBasis !== "self-committed-introduction"
-      && active.knowledgeBasis !== "self-weather-distress"
+      && active.vocalization !== "deer-alarm-snort"
     ));
   });
 }
@@ -19947,19 +20030,23 @@ function playerPerceptionCarryMatchesPosition(
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
     }
-    if (admission.kind === "core-wildlife-fish-crow-alarm") {
-      const authority = runtimeRegionalFishCrowAlarmExpressionAuthority(
+    if (
+      admission.kind === "core-wildlife-fish-crow-alarm"
+      || admission.kind === "core-wildlife-alarm"
+    ) {
+      const authority = runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
         regionalProjection,
         admission,
       );
       const event = authority === null
         ? null
-        : fishCrowAlarmExpressionEventForTrigger(
+        : coreWildlifeAlarmExpressionEventForAdmission(
+            admission,
             authority,
             admission.triggerEventId,
           );
       const admissionMatches = authority !== null
-        && coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
+        && coreWildlifeAlarmAdmissionMatchesWorld(
           admission,
           authority,
           economy.completedTick,
@@ -19972,7 +20059,7 @@ function playerPerceptionCarryMatchesPosition(
         || !admissionMatches
         || !sampleMatches
       ) return false;
-      const eventTimeReception = fishCrowAlarmReceptionAtEventTime({
+      const eventTimeReception = coreWildlifeAlarmReceptionAtEventTime({
         carry,
         spatialWorld,
         window: regionalTravel.window,
@@ -20156,49 +20243,62 @@ function situatedExpressionChannelsMatchWorld(
         );
       });
     }
-    const fishCrowAdmissions = admissions.filter((candidate) => (
+    const wildlifeAlarmAdmissions = admissions.filter((candidate) => (
       candidate.kind === "core-wildlife-fish-crow-alarm"
-    ));
-    if (fishCrowAdmissions.length > 0) {
-      if (fishCrowAdmissions.length !== admissions.length) return false;
-      const authorityFor = (
+      || candidate.kind === "core-wildlife-alarm"
+    )) as readonly CoreWildlifeAlarmAdmission[];
+    if (wildlifeAlarmAdmissions.length > 0) {
+      if (wildlifeAlarmAdmissions.length !== admissions.length) return false;
+      const admissionFor = (
         triggerEventId: string,
-      ): FishCrowAlarmExpressionInput | null => {
-        const matching = fishCrowAdmissions.filter((candidate) => (
+      ): CoreWildlifeAlarmAdmission | null => {
+        const matching = wildlifeAlarmAdmissions.filter((candidate) => (
           candidate.triggerEventId === triggerEventId
         ));
-        const admission = matching[0];
-        return matching.length !== 1 || admission === undefined
+        return matching.length === 1 ? matching[0] ?? null : null;
+      };
+      const authorityFor = (
+        triggerEventId: string,
+      ): CoreWildlifeAlarmExpressionInput | null => {
+        const admission = admissionFor(triggerEventId);
+        return admission === null
           ? null
-          : runtimeRegionalFishCrowAlarmExpressionAuthority(
+          : runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
               regionalProjection,
               admission,
             );
       };
       if (!channel.state.recent.every((memory) => {
-        if (memory.meaning !== "fish-crow-alarm-call") return false;
         const authority = authorityFor(memory.triggerEventId);
+        const admission = admissionFor(memory.triggerEventId);
         return authority !== null
-          && fishCrowAlarmExpressionMemoryMatchesWorld(authority, memory);
+          && admission !== null
+          && coreWildlifeAlarmMemoryMatchesAdmission(admission, authority, memory);
       })) return false;
       if (active !== null) {
         const authority = authorityFor(active.triggerEventId);
+        const admission = admissionFor(active.triggerEventId);
         if (
           authority === null
-          || !fishCrowAlarmExpressionEventMatchesWorld(authority, active)
+          || admission === null
+          || !coreWildlifeAlarmExpressionMatchesAdmission(
+            admission,
+            authority,
+            active,
+          )
         ) return false;
       }
-      return fishCrowAdmissions.every((admission) => {
+      return wildlifeAlarmAdmissions.every((admission) => {
         const authority = authorityFor(admission.triggerEventId);
         return authority !== null
-          && coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
+          && coreWildlifeAlarmAdmissionMatchesWorld(
             admission,
             authority,
             economy.completedTick,
           )
           && (active?.eventId !== admission.eventId || (
             active !== null
-            && fishCrowAlarmReceptionMatchesEventTime({
+            && coreWildlifeAlarmReceptionMatchesEventTime({
               carry,
               spatialWorld,
               window: regionalTravel.window,
@@ -20977,22 +21077,21 @@ function guardianDogShelterWhineAdmissionMatchesWorld(
     && activity.perceivedArea === null;
 }
 
-type CoreWildlifeFishCrowAlarmAdmission = Extract<
-  SituatedExpressionAdmissionRecord,
-  { readonly kind: "core-wildlife-fish-crow-alarm" }
->;
+type CoreWildlifeAlarmAdmission = RuntimeCoreWildlifeAlarmAdmission;
 
-function coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
-  admission: CoreWildlifeFishCrowAlarmAdmission,
-  authority: FishCrowAlarmExpressionInput,
+function coreWildlifeAlarmAdmissionMatchesWorld(
+  admission: CoreWildlifeAlarmAdmission,
+  authority: CoreWildlifeAlarmExpressionInput,
   completedTick: number,
 ): boolean {
-  const event = fishCrowAlarmExpressionEventForTrigger(
+  const event = coreWildlifeAlarmExpressionEventForAdmission(
+    admission,
     authority,
     admission.triggerEventId,
   );
   return event !== null
     && admission.sourceActorId === authority.actor.identity.stableId
+    && coreWildlifeAlarmAdmissionSpecies(admission) === authority.actor.identity.species
     && admission.sourceActorId === authority.event.actorId
     && admission.triggerEventId === authority.event.eventId
     && admission.sourceObservationId === authority.event.observationId
@@ -21008,27 +21107,27 @@ function coreWildlifeFishCrowAlarmAdmissionMatchesWorld(
       ));
 }
 
-interface FishCrowAlarmReceptionAuthorityInput {
+interface CoreWildlifeAlarmReceptionAuthorityInput {
   readonly carry: PlayerPerceptionCarry;
   readonly spatialWorld: WorldView;
   readonly window: RegionalPlayerTravelState["window"];
   readonly playerTemplate: PlayerState;
   readonly event: SituatedExpressionEvent;
-  readonly admission: CoreWildlifeFishCrowAlarmAdmission;
+  readonly admission: CoreWildlifeAlarmAdmission;
   readonly reception: SituatedExpressionReception | null;
 }
 
-function fishCrowAlarmReceptionMatchesEventTime(
-  input: FishCrowAlarmReceptionAuthorityInput,
+function coreWildlifeAlarmReceptionMatchesEventTime(
+  input: CoreWildlifeAlarmReceptionAuthorityInput,
 ): boolean {
-  const expected = fishCrowAlarmReceptionAtEventTime(input);
+  const expected = coreWildlifeAlarmReceptionAtEventTime(input);
   return expected !== null
     && stableStringify(expected.reception) === stableStringify(input.reception);
 }
 
-/** Replays the post-commit crow call through the same bounded human acoustics. */
-function fishCrowAlarmReceptionAtEventTime(
-  input: Omit<FishCrowAlarmReceptionAuthorityInput, "reception">,
+/** Replays a post-commit wildlife alarm through the same bounded human acoustics. */
+function coreWildlifeAlarmReceptionAtEventTime(
+  input: Omit<CoreWildlifeAlarmReceptionAuthorityInput, "reception">,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -21043,7 +21142,9 @@ function fishCrowAlarmReceptionAtEventTime(
     || event.eventId !== admission.eventId
     || event.sourceActorId !== admission.sourceActorId
     || event.triggerEventId !== admission.triggerEventId
-    || event.meaning !== "fish-crow-alarm-call"
+    || event.meaning !== (coreWildlifeAlarmAdmissionSpecies(admission) === "fish-crow"
+      ? "fish-crow-alarm-call"
+      : "deer-alarm-call")
   ) return null;
   const listenerPoint = perceptionIntervalPointInWindow(
     window,
@@ -21090,7 +21191,7 @@ function fishCrowAlarmReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
-  // A physically heard strong crow alarm wakes before source classification,
+  // A physically heard strong wildlife alarm wakes before source classification,
   // matching the established warning-bark contract. This is reproducible from
   // the saved event-time pose without trusting mutable receipt metadata.
   const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {

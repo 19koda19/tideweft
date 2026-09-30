@@ -278,6 +278,32 @@ function canonicalFishCrowAlarm(
   return reduced.state.active;
 }
 
+function canonicalDeerAlarm(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "DEER-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "deer-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 820_000,
+    variantSeed: 0xd33,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Deer expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalHumanDangerWarning(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -325,6 +351,14 @@ function fishCrowSource(
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "fish-crow",
+    position: event.position,
+  });
+}
+
+function deerSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "deer",
     position: event.position,
   });
 }
@@ -1168,5 +1202,56 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toContain(String(expression.position.localX));
     expect(JSON.stringify(caption)).not.toContain("fish-crow");
     expect(JSON.stringify(caption)).not.toContain("KRAA");
+  });
+
+  it("anchors a visible deer snort and anonymizes the same heard-unseen call", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalDeerAlarm(
+      wildlifePositionInWindow(window),
+      "deer-signal:alarm",
+    );
+    const visible = heardVisibleReception(expression);
+    const sources = [deerSource(expression)];
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressions).toEqual([expect.objectContaining({
+      speakerLabel: "Deer",
+      text: "SNORT!",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Deer",
+      text: "SNORT!",
+      presentationKind: "animal-call",
+      animalCallKind: "deer-call",
+    });
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI / 2, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Hidden deer reception fixture was rejected");
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "SNORT!",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      directionLabel: "south",
+    });
+    expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
+    expect(JSON.stringify(caption)).not.toContain("DEER-living-voice");
   });
 });

@@ -16,11 +16,19 @@ import {
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
+  coreWildlifeAlarmExpressionEventForTrigger,
+  coreWildlifeAlarmExpressionEventMatchesWorld,
+  coreWildlifeAlarmExpressionIntent,
+  coreWildlifeAlarmExpressionMemoryMatchesWorld,
+  deerAlarmExpressionEventForTrigger,
+  deerAlarmExpressionEventMatchesWorld,
+  deerAlarmExpressionIntent,
+  deerAlarmExpressionMemoryMatchesWorld,
   fishCrowAlarmExpressionEventForTrigger,
   fishCrowAlarmExpressionEventMatchesWorld,
   fishCrowAlarmExpressionIntent,
   fishCrowAlarmExpressionMemoryMatchesWorld,
-  type FishCrowAlarmExpressionInput,
+  type CoreWildlifeAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
 import {
   CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
@@ -44,19 +52,30 @@ const ORIGIN = createRegionCoord(-9, 14);
 const SEED = seedFromText("living voice authenticated fish crow alarm");
 const PREDATOR_ID = "HARRIER-living-voice-test";
 const OBSERVATION_ID = "OBS-fish-crow-sees-harrier";
+const DEER_PREDATOR_ID = "BEAR-living-voice-test";
+const DEER_OBSERVATION_ID = "OBS-deer-sees-bear";
 
 interface AlarmFixture {
-  readonly input: FishCrowAlarmExpressionInput;
+  readonly input: CoreWildlifeAlarmExpressionInput;
   readonly initialWorld: CoreEcologyAggregatePatchState;
-  readonly rawEvent: FishCrowAlarmExpressionInput["event"];
+  readonly rawEvent: CoreWildlifeAlarmExpressionInput["event"];
 }
 
 function alarmFixture(
-  species: Extract<CoreWildlifeSpecies, "fish-crow" | "gull"> = "fish-crow",
+  species: Extract<CoreWildlifeSpecies, "fish-crow" | "deer" | "gull"> = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
     ? OBSERVATION_ID
-    : "OBS-gull-sees-harrier",
+    : species === "deer"
+      ? DEER_OBSERVATION_ID
+      : "OBS-gull-sees-harrier",
+  perceivedThreatClass = species === "deer" ? "large-predator" : "aerial-predator",
+  perception: Readonly<{
+    channel?: "vision" | "hearing";
+    identification?: "anonymous" | "classified" | "identified";
+    radiusUnits?: number;
+    subjectId?: string | null;
+  }> = {},
 ): AlarmFixture {
   const position = createWorldPosition(ORIGIN, 23_000, 31_000);
   const population: CoreEcologyPopulationInput = {
@@ -81,19 +100,19 @@ function alarmFixture(
     id: observationId,
     observerId: source.identity.stableId,
     observedAtTick: 1,
-    channel: "vision",
-    perceivedClass: "aerial-predator",
-    subjectId: predatorId,
+    channel: perception.channel ?? "vision",
+    perceivedClass: perceivedThreatClass,
+    subjectId: perception.subjectId === undefined ? predatorId : perception.subjectId,
     area: {
       center: translateWorldPosition(position, 1_000, 0),
-      radiusUnits: 0,
+      radiusUnits: perception.radiusUnits ?? 0,
     },
     confidence: ACTOR_PERCEPTION_SCALE,
     salience: 920_000,
-    identification: "identified",
+    identification: perception.identification ?? "identified",
     interrupt: "strong",
   });
-  if (observation === null) throw new Error("Fish-crow alarm observation was invalid");
+  if (observation === null) throw new Error(`${species} alarm observation was invalid`);
   const stepped = stepCoreEcologyAggregatePatch(initialWorld, {
     tick: 1,
     actorSteps: [{
@@ -103,7 +122,7 @@ function alarmFixture(
       accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
     }],
   });
-  if (stepped === null) throw new Error("Fish-crow alarm world step failed");
+  if (stepped === null) throw new Error(`${species} alarm world step failed`);
   const committedActor = sourceActor(stepped.patch);
   const rawEvent = stepped.events.find(({ actorId, kind }) => (
     actorId === committedActor.identity.stableId && kind === "alarm"
@@ -174,6 +193,50 @@ describe("core-wildlife signal expression", () => {
     });
   });
 
+  it("derives a source-bound canonical deer alarm as one restrained semantic snort", () => {
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "deer",
+      DEER_PREDATOR_ID,
+      DEER_OBSERVATION_ID,
+    );
+    const first = deerAlarmExpressionIntent(input);
+    const second = coreWildlifeAlarmExpressionIntent(structuredClone(input));
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      position: input.actor.address.position,
+      meaning: "deer-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 920_000,
+      durationSteps: 6,
+    });
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(input.event.position).not.toEqual(sourceActor(initialWorld).address.position);
+    expect(deerAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+    expect(fishCrowAlarmExpressionIntent(input)).toBeNull();
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), first);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "deer-alarm-call",
+        vocalization: "deer-alarm-snort",
+      },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "SNORT!",
+      realizationKey: "situated-expression.en.v1.deer-alarm-call.0",
+      vocalization: "deer-alarm-snort",
+    });
+  });
+
   it("keeps the perceived predator identity and causal observation out of expression output", () => {
     const { input } = alarmFixture();
     const intent = fishCrowAlarmExpressionIntent(input);
@@ -221,6 +284,30 @@ describe("core-wildlife signal expression", () => {
     })).toBe(false);
   });
 
+  it("reauthenticates deer alarm expression authority through shared and species APIs", () => {
+    const { input } = alarmFixture("deer", DEER_PREDATOR_ID, DEER_OBSERVATION_ID);
+    const intent = deerAlarmExpressionIntent(input);
+    if (intent === null) throw new Error("Deer alarm intent was not derived");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (!reduction.accepted || reduction.event === null || reduction.state === null) {
+      throw new Error("Deer alarm expression was not accepted");
+    }
+    const advanced = advanceSituatedExpression(reduction.state, intent.durationSteps);
+    const memory = advanced?.recent[0];
+    if (memory === undefined) throw new Error("Deer alarm cooldown was not retained");
+
+    expect(deerAlarmExpressionEventForTrigger(input, intent.triggerEventId))
+      .toEqual(reduction.event);
+    expect(coreWildlifeAlarmExpressionEventForTrigger(input, intent.triggerEventId))
+      .toEqual(reduction.event);
+    expect(deerAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(true);
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(true);
+    expect(deerAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(true);
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(true);
+    expect(fishCrowAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(false);
+    expect(fishCrowAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(false);
+  });
+
   it("fails closed on forged identity, tick, cause, position, or event shape", () => {
     const { input } = alarmFixture();
     const forgedEvents = [
@@ -243,9 +330,13 @@ describe("core-wildlife signal expression", () => {
 
   it("fails closed for a valid alarm from the wrong species or a mismatched actor root", () => {
     const crow = alarmFixture();
+    const deer = alarmFixture("deer", DEER_PREDATOR_ID, DEER_OBSERVATION_ID);
     const gull = alarmFixture("gull");
 
     expect(fishCrowAlarmExpressionIntent(gull.input)).toBeNull();
+    expect(coreWildlifeAlarmExpressionIntent(gull.input)).toBeNull();
+    expect(deerAlarmExpressionIntent(crow.input)).toBeNull();
+    expect(fishCrowAlarmExpressionIntent(deer.input)).toBeNull();
     expect(fishCrowAlarmExpressionIntent({
       ...crow.input,
       event: { ...crow.input.event, species: "gull" },
@@ -254,6 +345,66 @@ describe("core-wildlife signal expression", () => {
       ...crow.input,
       actor: gull.input.actor,
     })).toBeNull();
+  });
+
+  it("uses the shared core alarm policy instead of a species-local threat allowlist", () => {
+    const aerialThreat = alarmFixture(
+      "deer",
+      "EAGLE-living-voice-test",
+      "OBS-deer-sees-eagle",
+      "aerial-predator",
+    );
+    expect(deerAlarmExpressionIntent(aerialThreat.input)).toMatchObject({
+      meaning: "deer-alarm-call",
+      knowledgeBasis: "self-perceived-threat",
+    });
+    expect(coreWildlifeAlarmExpressionIntent(aerialThreat.input))
+      .toEqual(deerAlarmExpressionIntent(aerialThreat.input));
+
+    const heardDanger = alarmFixture(
+      "deer",
+      "ANONYMOUS-danger-sound",
+      "OBS-deer-hears-danger",
+      "danger-sound",
+      {
+        channel: "hearing",
+        identification: "anonymous",
+        radiusUnits: 3_000,
+        subjectId: null,
+      },
+    );
+    expect(deerAlarmExpressionIntent(heardDanger.input)).toMatchObject({
+      meaning: "deer-alarm-call",
+      knowledgeBasis: "self-perceived-threat",
+    });
+
+    const heardCrowDanger = alarmFixture(
+      "fish-crow",
+      "ANONYMOUS-crow-danger-sound",
+      "OBS-crow-hears-danger",
+      "danger-sound",
+      {
+        channel: "hearing",
+        identification: "anonymous",
+        radiusUnits: 3_000,
+        subjectId: null,
+      },
+    );
+    const currentCrowIntent = coreWildlifeAlarmExpressionIntent(heardCrowDanger.input);
+    expect(currentCrowIntent).toMatchObject({
+      meaning: "fish-crow-alarm-call",
+      knowledgeBasis: "self-perceived-threat",
+    });
+    if (currentCrowIntent === null) throw new Error("Current crow policy rejected lawful alarm");
+    expect(fishCrowAlarmExpressionIntent(heardCrowDanger.input)).toBeNull();
+    expect(fishCrowAlarmExpressionEventForTrigger(
+      heardCrowDanger.input,
+      currentCrowIntent.triggerEventId,
+    )).toBeNull();
+    expect(coreWildlifeAlarmExpressionEventForTrigger(
+      heardCrowDanger.input,
+      currentCrowIntent.triggerEventId,
+    )).not.toBeNull();
   });
 
   it("fails closed after the source world advances or loses the committed alarm memory", () => {
