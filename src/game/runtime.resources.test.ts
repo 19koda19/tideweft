@@ -35,11 +35,12 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
 import type { PhysicalCargoState } from "./physicalCargoState";
 
+const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
   spatialPanForBearing: () => 0,
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(...args: unknown[]): void { soundscapePlay(...args); }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -61,6 +62,17 @@ interface PersistedGameSaveEnvelope {
   readonly session: GameSessionState;
   readonly fieldResources: FieldResourceEcologyState;
   readonly physicalCargo?: PhysicalCargoState;
+  readonly perceptionCarry?: {
+    readonly version: number;
+    readonly playerStepsSinceWorldTick: number;
+    readonly playerSenseSamples: readonly {
+      readonly sampleOrdinal: number;
+      readonly soundClass: string;
+      readonly soundInterrupt: string;
+      readonly soundLoudness: number;
+      readonly soundRangeUnits: number;
+    }[];
+  };
   readonly regionalTravel?: string;
   readonly settlementEcology?: string;
   readonly integrity?: string;
@@ -97,6 +109,7 @@ let scheduledFrame: ((now: number) => void) | undefined;
 
 beforeEach(() => {
   scheduledFrame = undefined;
+  soundscapePlay.mockClear();
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
     scheduledFrame = callback;
     return 1;
@@ -588,6 +601,132 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(resumed, "stormlichen")).toBe(0);
     expect(stackQuantity(resumed, "pitchmoss")).toBe(0);
     resumed.destroy();
+  });
+
+  it("carries one physical ridge-cleat break through shared acoustics and current-save reload", async () => {
+    const world = createWorld("the ridge hears one cleat crack", "calm");
+    const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
+    const start = world.terrain.tiles.find((tile) => (
+      tile.x > 1
+      && tile.x + 1 < world.terrain.width
+      && tile.y > 1
+      && tile.y + 1 < world.terrain.height
+      && !occupied.has(tile.index)
+      && !occupied.has(tile.index + 1)
+    ));
+    const ridge = start === undefined ? undefined : world.terrain.tiles[start.index + 1];
+    if (!start || !ridge || ridge.x !== start.x + 1 || ridge.y !== start.y) {
+      throw new Error("fixture could not find an interior ridge approach");
+    }
+    for (const tile of [start, ridge]) {
+      tile.elevation = FIXED_POINT;
+      tile.moisture = 0;
+      tile.roughness = 0;
+      tile.baseTravelCost = 100;
+      tile.terrain = tile.index === ridge.index ? "ridge" : "meadow";
+    }
+    world.weather = {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: world.meta.completedTick + 10_000,
+    };
+    const player = createPlayer(createWorldView(world));
+    placePlayerOnTile(player, start);
+    player.x = start.x * TILE_UNITS + TILE_UNITS - 1;
+    player.previousX = player.x;
+    player.discovered[start.index] = FIXED_POINT;
+    player.discovered[ridge.index] = FIXED_POINT;
+    player.depthSoundings[start.index] = FIXED_POINT;
+    player.depthSoundings[ridge.index] = FIXED_POINT;
+    player.craftingInventory = createCraftingInventory(
+      player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT,
+      {},
+      [{ id: 61, kind: "ridge-cleats", condition: 8_000 }],
+    );
+    player.nextCraftedGearId = 62;
+    const repository = new MemoryRepository(v2SaveRecord(world, player));
+
+    // First establish the exact current-schema physical lot. The acoustic
+    // assertion below begins only after a clean current-v42 reload.
+    const bootstrap = await createTideweftRuntime(repository);
+    expect(bootstrap.getUIView().saveWarning).toBeUndefined();
+    await bootstrap.save();
+    bootstrap.destroy();
+    const before = decodeGameSave(repository.snapshot());
+    expect(before.version).toBe(42);
+    const sourceLot = before.physicalCargo?.carrier.lots.find(({ payload }) => (
+      payload.kind === "gear"
+      && payload.gearId === 61
+      && payload.gearKind === "ridge-cleats"
+    ));
+    if (!sourceLot) throw new Error("current fixture lost its physical ridge-cleat lot");
+    expect(sourceLot.materialState.condition).toBe(8_000);
+
+    scheduledFrame = undefined;
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    soundscapePlay.mockClear();
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+
+    expect(runtime.getUIView().kit?.gearRows.find(({ id }) => id === "61"))
+      .toMatchObject({ lotId: sourceLot.id, condition: 0 });
+    expect(runtime.getRenderView().acousticText).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        acousticKind: "physical",
+        sourceId: "gear:61",
+        sourceKind: "tool",
+        text: "crack",
+        semanticFamily: "crack",
+      }),
+    ]));
+    const crackLabel = runtime.getRenderView().acousticText?.find((label) => (
+      "sourceId" in label && label.sourceId === "gear:61"
+    ));
+    if (!crackLabel) throw new Error("ridge-cleat break lost its acoustic label");
+    const crackAudioCalls = soundscapePlay.mock.calls.filter(([cue, volume]) => (
+      cue === "impact" && volume === 0.62
+    ));
+    expect(crackAudioCalls).toEqual([["impact", 0.62, expect.any(Number), 0]]);
+
+    await runtime.save();
+    const saved = decodeGameSave(repository.snapshot());
+    expect(saved.version).toBe(42);
+    expect(saved.player.craftingInventory.gear.find(({ id }) => id === 61)?.condition).toBe(0);
+    expect(saved.physicalCargo?.carrier.lots.find(({ id }) => id === sourceLot.id))
+      .toMatchObject({
+        id: sourceLot.id,
+        payload: { kind: "gear", gearId: 61, gearKind: "ridge-cleats" },
+        materialState: { condition: 0 },
+      });
+    expect(saved.perceptionCarry).toMatchObject({
+      version: 10,
+      playerStepsSinceWorldTick: 1,
+      playerSenseSamples: [{
+        sampleOrdinal: 0,
+        soundClass: "physical-crack",
+        soundInterrupt: "none",
+        soundLoudness: 620_000,
+        soundRangeUnits: 16 * TILE_UNITS,
+      }],
+    });
+    runtime.destroy();
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const reloaded = await createTideweftRuntime(repository);
+    reloaded.dispatchUI({ type: "resume-world" });
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(reloaded.getUIView().kit?.gearRows.find(({ id }) => id === "61"))
+      .toMatchObject({ lotId: sourceLot.id, condition: 0 });
+    expect(reloaded.getRenderView().acousticText?.some(({ id }) => (
+      id === crackLabel.id
+    ))).toBe(false);
+    expect(soundscapePlay.mock.calls.some(([cue]) => cue === "impact")).toBe(false);
+    reloaded.destroy();
   });
 
   it("blocks durable gear identity exhaustion before consuming ingredients", async () => {

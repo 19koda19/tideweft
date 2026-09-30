@@ -459,6 +459,7 @@ import {
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
   animalContactAcousticEvent,
+  carriedGearBreakAcousticEvent,
   cargoImpactAcousticEvent,
   createWorldAcousticEvent,
   traversalIncidentAcousticEvent,
@@ -12187,6 +12188,15 @@ export async function createTideweftRuntime(
     let carrier = physicalCargo.carrier;
     let changed = false;
     let expressionContext: CommittedTraversalExpressionContext | null = null;
+    const gearServiceReceiptById = result.gearServiceWearReceipts.length === 0
+      ? null
+      : new Map(result.gearServiceWearReceipts.map((receipt) => [receipt.gearId, receipt]));
+    if (
+      gearServiceReceiptById !== null
+      && gearServiceReceiptById.size !== result.gearServiceWearReceipts.length
+    ) {
+      throw new Error("Carried gear received duplicate service receipts in one step");
+    }
     for (const pressure of result.cargoConditionPressures ?? []) {
       for (const lot of carrier.lots.filter((candidate) =>
         candidate.payload.kind === "promise"
@@ -12207,11 +12217,30 @@ export async function createTideweftRuntime(
       if (!lot || lot.payload.kind !== "gear") {
         throw new Error(`Physical gear #${gear.id} vanished during service wear`);
       }
-      if (lot.materialState.condition === gear.condition) continue;
+      const receipt = gearServiceReceiptById?.get(gear.id);
+      if (lot.materialState.condition === gear.condition) {
+        if (receipt !== undefined) {
+          throw new Error(`Physical gear #${gear.id} has wear without a condition change`);
+        }
+        continue;
+      }
+      if (
+        receipt === undefined
+        || receipt.kind !== gear.kind
+        || receipt.conditionBefore !== lot.materialState.condition
+        || receipt.conditionAfter !== gear.condition
+        || receipt.conditionSpent !== receipt.conditionBefore - receipt.conditionAfter
+      ) {
+        throw new Error(`Physical gear #${gear.id} lost its exact service receipt`);
+      }
       const mutation = setLooseCargoGearCondition(carrier, gear.id, gear.condition);
       if (!mutation.ok) throw new Error(`Physical gear wear failed: ${mutation.reason}`);
       carrier = mutation.carrier;
+      gearServiceReceiptById?.delete(gear.id);
       changed = true;
+    }
+    if (gearServiceReceiptById !== null && gearServiceReceiptById.size !== 0) {
+      throw new Error("Carried-gear service receipt lost its physical item");
     }
     if (changed) {
       physicalCargo = commitPhysicalCargoState(
@@ -12542,6 +12571,30 @@ export async function createTideweftRuntime(
     if (stepAcousticEvent !== null) {
       stepAcousticEvents.push(stepAcousticEvent);
     }
+    const playerStepWorldPosition = playerWorldPositionInRegionalWindow(
+      regionalTravel.window,
+      player,
+    );
+    if (playerStepWorldPosition === null) {
+      throw new Error("Committed player step has no canonical acoustic position");
+    }
+    for (const receipt of result.gearServiceWearReceipts) {
+      const gearBreakEvent = carriedGearBreakAcousticEvent({
+        receipt,
+        sourcePosition: playerStepWorldPosition,
+        occurredAtTick: world.meta.completedTick,
+      });
+      if (receipt.conditionAfter === 0 && receipt.conditionBefore > 0) {
+        if (receipt.kind === "ridge-cleats" && receipt.benefit === "ridge-grip") {
+          if (gearBreakEvent === null) {
+            throw new Error("Committed ridge-cleat break could not enter shared acoustics");
+          }
+          stepAcousticEvents.push(gearBreakEvent);
+        }
+      } else if (gearBreakEvent !== null) {
+        throw new Error("Ordinary carried-gear wear fabricated a break acoustic event");
+      }
+    }
     if (
       traversalExpressionContext?.cargoAcousticSourceId !== null
       && traversalExpressionContext?.cargoAcousticSourceId !== undefined
@@ -12573,6 +12626,7 @@ export async function createTideweftRuntime(
       const reception = acousticEvent.sourceId === LOCAL_PLAYER_LIVING_ACTOR_ID
         ? createSelfWorldAcousticReception(acousticEvent)
         : acousticEvent.domain === "object-contact"
+          || acousticEvent.domain === "tool-material"
           ? createDirectContactWorldAcousticReception(acousticEvent)
           : createHeardVisibleWorldAcousticReception(acousticEvent);
       if (reception === null) throw new Error("Local physical sound lost reception authority");

@@ -29,6 +29,7 @@ import { surfaceCurrentDirection } from "./currentDirection";
 import {
   createCraftingInventory,
   inventoryLoadMilli,
+  type CraftedGearKind,
   type CraftingInventory,
 } from "./crafting";
 import {
@@ -222,6 +223,22 @@ export interface PlayerStepResult {
     readonly contractId: number;
     readonly conditionLoss: number;
   }[];
+  /** Exact committed carried-gear service transactions caused by this step. */
+  readonly gearServiceWearReceipts: readonly GearServiceWearReceipt[];
+}
+
+/**
+ * Runtime-facing proof that one named carried-gear benefit spent condition.
+ * The gear domain owns this cause; acoustic/expression layers may consume the
+ * receipt but may not infer wear by diffing presentation state.
+ */
+export interface GearServiceWearReceipt {
+  readonly gearId: number;
+  readonly kind: CraftedGearKind;
+  readonly benefit: GearBenefitId;
+  readonly conditionBefore: number;
+  readonly conditionAfter: number;
+  readonly conditionSpent: number;
 }
 
 const PACE_SPEED: Record<TravelPace, number> = {
@@ -336,6 +353,7 @@ export function stepPlayer(
   const fallEvaluations: FallRiskEvaluation[] = [];
   let footing: FootingEvaluation | null = null;
   const footingEvaluations: FootingEvaluation[] = [];
+  const gearServiceWearReceipts: GearServiceWearReceipt[] = [];
   const priorVelocityX = player.velocityX;
   const priorVelocityY = player.velocityY;
   const staminaDepletedAtStepStart = player.stamina === 0;
@@ -375,6 +393,7 @@ export function stepPlayer(
       fallEvaluations,
       footing,
       footingEvaluations,
+      gearServiceWearReceipts: Object.freeze(gearServiceWearReceipts),
     };
   }
 
@@ -857,20 +876,24 @@ export function stepPlayer(
     const entered = world.terrain.tiles[currentTileIndex];
     if (entered) {
       if (entered.terrain === "marsh" || entered.terrain === "tidal-flat") {
-        serviceCarriedGear(player, { marsh: true }, "marsh-footing");
+        const receipt = serviceCarriedGear(player, { marsh: true }, "marsh-footing");
+        if (receipt !== null) gearServiceWearReceipts.push(receipt);
       }
       if (Math.max(waterDepth, entered.waterDepth) > 40_000) {
-        serviceCarriedGear(player, { wet: true }, "wet-buoyancy");
+        const receipt = serviceCarriedGear(player, { wet: true }, "wet-buoyancy");
+        if (receipt !== null) gearServiceWearReceipts.push(receipt);
       }
       if (entered.terrain === "ridge") {
-        serviceCarriedGear(player, { rock: true }, "ridge-grip");
+        const receipt = serviceCarriedGear(player, { rock: true }, "ridge-grip");
+        if (receipt !== null) gearServiceWearReceipts.push(receipt);
       }
       if (acceptedWeatherExposure) {
-        serviceCarriedGear(
+        const receipt = serviceCarriedGear(
           player,
           { exposure: true, gust: world.weather.windX !== 0 || world.weather.windY !== 0 },
           "weather-shelter",
         );
+        if (receipt !== null) gearServiceWearReceipts.push(receipt);
       }
     }
   }
@@ -956,6 +979,7 @@ export function stepPlayer(
     footing,
     footingEvaluations,
     cargoConditionPressures,
+    gearServiceWearReceipts: Object.freeze(gearServiceWearReceipts),
   };
 }
 
@@ -1405,9 +1429,28 @@ function serviceCarriedGear(
   player: PlayerState,
   context: GearEffectContext,
   benefit: GearBenefitId,
-): void {
+): GearServiceWearReceipt | null {
+  const inventoryBefore = player.craftingInventory;
   const result = applyGearServiceWear(player.craftingInventory, context, benefit);
-  if (result.ok) player.craftingInventory = result.inventory;
+  if (!result.ok || result.gear === null) return null;
+  const before = inventoryBefore.gear.find(({ id }) => id === result.gear?.id);
+  if (
+    before === undefined
+    || before.kind !== result.gear.kind
+    || before.condition - result.gear.condition !== result.conditionSpent
+    || result.conditionSpent <= 0
+  ) {
+    throw new Error("Carried-gear service returned a non-causal wear receipt");
+  }
+  player.craftingInventory = result.inventory;
+  return Object.freeze({
+    gearId: result.gear.id,
+    kind: result.gear.kind,
+    benefit: result.benefit,
+    conditionBefore: before.condition,
+    conditionAfter: result.gear.condition,
+    conditionSpent: result.conditionSpent,
+  });
 }
 
 /** Authoritative terrain context shared by placement, movement, and routing. */
@@ -1764,6 +1807,7 @@ function stepSweptPlayer(
       sweepCause: null,
       sweepSupport: support,
       settlementId: harborId,
+      gearServiceWearReceipts: Object.freeze([]),
     };
   }
 
@@ -1782,6 +1826,7 @@ function stepSweptPlayer(
     sweepCause: null,
     sweepSupport: support,
     settlementId: null,
+    gearServiceWearReceipts: Object.freeze([]),
   };
 }
 

@@ -209,7 +209,7 @@ lanes, category priority, same-source repetition control, and suppression so a
 warning stays readable and no busy settlement becomes a wall of words. Future
 multi-source grouping must use this presenter rather than a parallel path.
 
-Current implementation remains intentionally partial, but three representative
+Current implementation remains intentionally partial, but four representative
 physical seams are live in the local candidate. An accepted stumble, fall,
 water slip, or current sweep becomes one structured event—without reading its
 legacy display sentence—and that same event drives audio semantics, a bounded
@@ -219,10 +219,15 @@ may emit a separate source-bound `clatter`, `thud`, or `splash` from the same
 conserved lot. Actual movement of the existing dogs also derives a body/surface
 contact event from distance, body size, gait, and terrain; water and vegetation
 can therefore sound differently from ordinary dry ground without making every
-step visible text. Dog contact also reaches the next bounded living-actor
-perception frame even when the courier cannot hear it and no caption is
-admitted. Eligible nearby humans and the other eligible full-simulation
-in-window dog receive
+step visible text. The first live tool/material seam is an exact carried
+ridge-cleat break: only condition actually spent while supplying ridge grip can
+take the stable physical lot from positive condition to zero and produce one
+restrained `crack`. Routine wear stays quiet; the break uses the same shared
+audio, direct-contact text, and nearby-human sound-sample path as other physical
+events, and reload does not replay its transient label. Dog contact also reaches
+the next bounded living-actor perception frame even when the courier cannot hear
+it and no caption is admitted. Eligible nearby humans and the other eligible
+full-simulation in-window dog receive
 only anonymous, weather- and range-limited sound knowledge through a shared
 source-ID-excluding evaluator; the dog applies its registered hearing
 sensitivity and may notice ordinary contact without treating it as a danger
@@ -257,11 +262,12 @@ is strong enough, the accessible surface may instead show only the coarse
 audible word and direction. Ambient-water syllables are
 still renderer-owned legacy presentation. The old ADRIFT syllable fallback is
 suppressed whenever a production view supplies the shared `acousticText`
-projection, but remains available to legacy views that omit it. Cargo impact
-and representative dog-body contact are live, including bounded human and
-dog-to-dog hearing of that contact; broader animal bodies, arbitrary
-object/foliage contacts, broad cross-species physical-sound consumers,
-tool/material work, violence, and vessel producers remain incomplete. Future
+projection, but remains available to legacy views that omit it. Cargo impact,
+the ridge-cleat break, and representative dog-body contact are live, including
+bounded human and dog-to-dog hearing where their current listener paths apply;
+broader animal bodies, arbitrary object/foliage contacts, broad cross-species
+physical-sound consumers, repeated work and other tool/material actions,
+violence, and vessel producers remain incomplete. Future
 Work of Hands, Weight
 of Violence, Long Crossing, traversal equipment, tools, and vehicles inherit
 this acoustic world; none receives a separate crafting, combat, or boat

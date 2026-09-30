@@ -6,6 +6,8 @@ import {
   type FallRiskCauseCode,
 } from "./fallRisk";
 import type { TraversalIncident } from "./traversalFeedback";
+import { GEAR_SERVICE_WEAR } from "./gearEffects";
+import type { GearServiceWearReceipt } from "./player";
 import {
   createWorldPosition,
   isWorldPosition,
@@ -174,6 +176,12 @@ export interface AnimalContactAcousticEventInput {
   readonly bodySize: "small" | "medium" | "large";
   readonly movement: "slow" | "ordinary" | "fast";
   readonly surfaceMaterial: AcousticMaterialClass;
+}
+
+export interface CarriedGearBreakAcousticEventInput {
+  readonly receipt: GearServiceWearReceipt;
+  readonly sourcePosition: WorldPosition;
+  readonly occurredAtTick: number;
 }
 
 interface TraversalAcousticSemantics {
@@ -435,6 +443,59 @@ export function animalContactAcousticEvent(
     repetitionKey: `animal-contact:${input.sourceId}:${input.surfaceMaterial}:${semanticFamily}`,
     textualEligibility: visibleText ? "salience-gated" : "audio-only",
     accessibilityRelevance: visibleText ? "informative" : "routine",
+    variantSeed,
+  });
+}
+
+/**
+ * Representative live tool/material bridge for a ridge cleat that actually
+ * reaches zero condition while supplying ridge grip. Ordinary wear remains
+ * quiet; the committed gear transaction, not animation, owns this event.
+ */
+export function carriedGearBreakAcousticEvent(
+  input: CarriedGearBreakAcousticEventInput,
+): WorldAcousticEvent | null {
+  const { receipt } = input;
+  if (
+    !receipt
+    || !positiveSafeInteger(receipt.gearId)
+    || receipt.kind !== "ridge-cleats"
+    || receipt.benefit !== "ridge-grip"
+    || !positiveSafeInteger(receipt.conditionBefore)
+    || receipt.conditionBefore > GEAR_SERVICE_WEAR["ridge-cleats"]
+    || receipt.conditionAfter !== 0
+    || receipt.conditionSpent !== receipt.conditionBefore
+  ) return null;
+  const triggerEventId = `gear-service-break:${hashCanonical({
+    benefit: receipt.benefit,
+    conditionBefore: receipt.conditionBefore,
+    gearId: receipt.gearId,
+    kind: receipt.kind,
+    occurredAtTick: input.occurredAtTick,
+  })}`;
+  const variantSeed = Number.parseInt(
+    hashCanonical({ source: `gear:${receipt.gearId}`, triggerEventId }).slice(0, 8),
+    16,
+  ) >>> 0;
+  return createWorldAcousticEvent({
+    triggerEventId,
+    domain: "tool-material",
+    sourceId: `gear:${receipt.gearId}`,
+    sourceCategory: "tool",
+    sourcePosition: input.sourcePosition,
+    occurredAtTick: input.occurredAtTick,
+    action: "break",
+    sourceMaterial: "mixed",
+    surfaceMaterial: "stone",
+    semanticFamily: "crack",
+    intensity: 620_000,
+    rangeUnits: 16 * WORLD_POSITION_UNITS_PER_TILE,
+    durationSteps: 3,
+    priority: 600_000,
+    salience: 760_000,
+    repetitionKey: `gear-break:${receipt.gearId}`,
+    textualEligibility: "salience-gated",
+    accessibilityRelevance: "informative",
     variantSeed,
   });
 }

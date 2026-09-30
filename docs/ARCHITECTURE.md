@@ -194,13 +194,13 @@ player step.
 Directive 04_2 establishes the durable acoustic boundary for physical as well
 as vocal sound. The domain that commits an action owns why it happened and the
 facts it may disclose: traversal owns a slip, cargo owns a load shift, ecology
-owns animal behavior, and future material, violence, and vessel domains own
-their corresponding contacts. Those domains emit or adapt one source-bound
-acoustic event with stable identity, event-time segmented position, semantic
-action/source family, bounded intensity/reach/duration, material and surface
-classes where relevant, and a repetition key. Producer adapters may use bounded
-body classes to derive those event semantics without retaining unnecessary
-anatomy on the shared event. The acoustic layer propagates
+owns animal behavior, gear owns service wear, and future material, violence,
+and vessel domains own their corresponding contacts. Those domains emit or
+adapt one source-bound acoustic event with stable identity, event-time segmented
+position, semantic action/source family, bounded intensity/reach/duration,
+material and surface classes where relevant, and a repetition key. Producer
+adapters may use bounded body classes to derive those event semantics without
+retaining unnecessary anatomy on the shared event. The acoustic layer propagates
 that event through the current environment and derives listener-specific
 receipts. Living Voice owns vocal semantics and the restrained optional textual
 expression of both vocal and embodied sounds; it does not take over the causal
@@ -218,7 +218,7 @@ hearing, or alter audio timing. Other actors receive only the acoustic fact
 their own perception admitted, so a `thud` behind a wall cannot disclose who
 dropped which object.
 
-Three representative physical bridges are now live in the local candidate.
+Four representative physical bridges are now live in the local candidate.
 Every newly accepted stumble, fall, water slip, or current sweep adapts its
 committed incident into one immutable structured acoustic event without parsing
 the incident's legacy free-form label. That event's semantic family, intensity,
@@ -226,8 +226,14 @@ reach, interrupt strength, and deterministic variant drive the existing audio
 cue, the bounded player physical-sound sample heard by eligible nearby NPCs,
 and an optional acoustic-text candidate. A committed cargo shock may emit a
 second object-contact event bound to the same conserved lot and the traversal
-owner's bounded contact-surface classification. Actual movement of the existing
-BIO0 and settlement-working dogs may
+owner's bounded contact-surface classification. When carried ridge cleats spend
+their final condition while actually supplying ridge grip, movement returns an
+exact stable-gear-ID wear receipt. Runtime cross-checks that receipt against the
+conserved physical lot before admitting one `tool-material` break event; the
+resulting `crack` shares audio, direct-contact text, and the bounded player
+sound sample rather than being inferred from a UI condition bar. Ordinary wear
+remains quiet, and the transient label cannot replay after reload. Actual
+movement of the existing BIO0 and settlement-working dogs may
 emit one body/surface event derived from their before/after positions, terrain,
 and bounded body-size/gait semantics; the player receives it only through ordinary
 event-time hearing and sight/localization. That same dog-contact event enters a
@@ -247,7 +253,8 @@ retained locomotion receipt, so exact historical-path authentication remains
 future work. A regional-frame rebase deterministically retires only contacts
 whose source can no longer reach this bounded living-actor bridge. The
 optional player label remains transient and cannot replay after reload. The
-owning traversal, cargo, and ecology domains keep every physical consequence.
+owning traversal, cargo, gear, and ecology domains keep every physical
+consequence.
 External audio for these structured embodied-contact events is released only
 after the fallible fixed-step transaction commits, so fail-closed rollback
 cannot leak and then replay a rejected contact while the event itself retains
@@ -259,10 +266,10 @@ Production views suppress the old renderer-created ADRIFT syllables whenever
 the shared `acousticText` projection is present; their fallback remains only for
 legacy views and tests that omit the field. Ambient-water syllables still lack
 the structured event/receipt boundary. Broad non-dog animal contact, arbitrary
-object and foliage contact, tool/material work, violence, vessel producers,
-and coarse/cross-frame physical hearing remain incomplete. A heard-unseen
-physical event still receives no exact world anchor or source identity; its
-lawful receipt may now feed only a coarse
+object and foliage contact, broader tool/material work, violence, vessel
+producers, and coarse/cross-frame physical hearing remain incomplete. A
+heard-unseen physical event still receives no exact world anchor or source
+identity; its lawful receipt may now feed only a coarse
 directional accessible caption.
 
 #### Shared acoustic-text presentation arbitration

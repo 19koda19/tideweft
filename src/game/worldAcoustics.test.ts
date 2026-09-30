@@ -6,6 +6,7 @@ import { createWorldPosition } from "./worldPosition";
 import {
   acousticVariantIndex,
   animalContactAcousticEvent,
+  carriedGearBreakAcousticEvent,
   cargoImpactAcousticEvent,
   createWorldAcousticEvent,
   traversalIncidentAcousticEvent,
@@ -214,6 +215,58 @@ describe("structured world acoustics", () => {
       surfaceMaterial: "water",
     })).toMatchObject({ semanticFamily: "splash" });
     expect(cargoImpactAcousticEvent({ ...base, cargoShock: 0 })).toBeNull();
+  });
+
+  it("derives one tool/material crack only from an exact committed ridge-cleat break", () => {
+    const receipt = {
+      gearId: 61,
+      kind: "ridge-cleats" as const,
+      benefit: "ridge-grip" as const,
+      conditionBefore: 8_000,
+      conditionAfter: 0,
+      conditionSpent: 8_000,
+    };
+    const first = carriedGearBreakAcousticEvent({
+      receipt,
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+    });
+    const second = carriedGearBreakAcousticEvent({
+      receipt,
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+    });
+
+    expect(first).toEqual(second);
+    expect(first).toMatchObject({
+      domain: "tool-material",
+      sourceId: "gear:61",
+      sourceCategory: "tool",
+      action: "break",
+      sourceMaterial: "mixed",
+      surfaceMaterial: "stone",
+      semanticFamily: "crack",
+      soundClass: "physical-crack",
+      force: "moderate",
+      interrupt: "none",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "informative",
+    });
+    expect(carriedGearBreakAcousticEvent({
+      receipt: { ...receipt, conditionAfter: 1 },
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+    })).toBeNull();
+    expect(carriedGearBreakAcousticEvent({
+      receipt: { ...receipt, kind: "marsh-wraps", benefit: "marsh-footing" },
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+    })).toBeNull();
+    expect(carriedGearBreakAcousticEvent({
+      receipt: { ...receipt, conditionBefore: 12_001, conditionSpent: 12_001 },
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+    })).toBeNull();
   });
 
   it("varies animal contact by body, movement, and physical surface", () => {

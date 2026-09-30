@@ -208,6 +208,32 @@ describe("crafted carried gear in player movement", () => {
     expect(conditionOf(equipped, 61)).toBe(conditionAfterEntry);
   });
 
+  it("returns an exact stable-ID service receipt when ridge cleats break on entry", () => {
+    const world = controlledWorld((tiles, width) => {
+      setTerrainPair(tiles, width, "ridge");
+    });
+    const equipped = createPlayer(world);
+    placePlayer(equipped, 950);
+    equipped.craftingInventory = inventoryWithGear([
+      { id: 61, kind: "ridge-cleats", condition: 8_000 },
+    ]);
+
+    const entry = stepPlayer(equipped, world, MOVE_RIGHT);
+
+    expect(entry.enteredTile).toBe(TEST_Y * world.terrain.width + TEST_X + 1);
+    expect(entry.gearServiceWearReceipts).toEqual([{
+      gearId: 61,
+      kind: "ridge-cleats",
+      benefit: "ridge-grip",
+      conditionBefore: 8_000,
+      conditionAfter: 0,
+      conditionSpent: 8_000,
+    }]);
+    expect(conditionOf(equipped, 61)).toBe(0);
+    expect(Object.isFrozen(entry.gearServiceWearReceipts)).toBe(true);
+    expect(stepPlayer(equipped, world, MOVE_RIGHT).gearServiceWearReceipts).toEqual([]);
+  });
+
   it("lets a crafted weather cape soften gust stress and wear 6k only on exposed entry", () => {
     const world = controlledWorld(undefined, {
       kind: "storm",

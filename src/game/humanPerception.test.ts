@@ -433,6 +433,38 @@ describe("existing-human sensory bridge", () => {
     expect(observations.some(({ channel }) => channel === "vision")).toBe(false);
   });
 
+  it("hears a carried-tool crack from the bounded player sample without learning the tool", () => {
+    const current = fixture("a broken cleat carries as sound, not inventory knowledge", {
+      facing: "east",
+    });
+    const crack = createPlayerSenseSample({
+      id: "player-gear-break",
+      sampleOrdinal: 0,
+      position: worldPoint(OBSERVER_X + 3, OBSERVER_Y),
+      movementSalience: FIXED_POINT,
+      lightVisibility: 0,
+      soundLoudness: 620_000,
+      soundRangeUnits: 16_000,
+      soundClass: "physical-crack",
+      soundInterrupt: "none",
+    });
+    if (crack === null) throw new Error("gear-break player sample must be valid");
+
+    const observations = observationsFor(current, [crack], 1);
+    const heard = observations.find(({ perceivedClass }) => (
+      perceivedClass === "physical-crack"
+    ));
+
+    expect(heard).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "physical-crack",
+      identification: "anonymous",
+      subjectId: null,
+    });
+    expect(heard).not.toHaveProperty("sourceActorId");
+    expect(heard).not.toHaveProperty("gearId");
+  });
+
   it("suppresses a physical source's own contact while another resident hears it", () => {
     const current = fixture("a body does not separately hear its own contact", { facing: "east" });
     const listener = current.state.residents.find(({ id }) => id !== current.resident.id);
