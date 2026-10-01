@@ -262,6 +262,40 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toContain("deer");
   });
 
+  it("presents a visible rabbit thump while keeping unseen hearing species-anonymous", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:marsh-rabbit:alarm",
+      speakerLabel: "Marsh rabbit",
+      text: "thump",
+      tone: "restrained",
+      presentationKind: "embodied-signal",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[thump]");
+
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "expression:animal:hidden-thump",
+      speakerLabel: "An animal",
+      directionLabel: "south-west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[thump somewhere south-west.]");
+    expect(situatedExpressionCaptionCopy({
+      ...unseen,
+      directionLabel: "direction unclear",
+    })).toBe("[thump; direction unclear.]");
+    expect(situatedExpressionCaptionCopy({
+      ...unseen,
+      directionLabel: "all around",
+    })).toBe("[thump; all around.]");
+    expect(JSON.stringify(unseen)).not.toContain("rabbit");
+    expect(JSON.stringify(unseen)).not.toContain("threat");
+    expect(JSON.stringify(unseen)).not.toContain("sourceActorId");
+    expect(JSON.stringify(unseen)).not.toContain("position");
+  });
+
   it("does not infer an animal call kind from authored prose", () => {
     const unclassified: SituatedExpressionCaptionUIView = {
       id: "expression:animal:unclassified",
@@ -278,7 +312,10 @@ describe("situated expression caption", () => {
     expect(uiSource).toContain('createElement("p", "situated-expression-caption")');
     expect(uiSource).toContain("expressionCaption.hidden = true");
     expect(uiSource).toContain("situatedExpressionCaptionVisibleText(caption)");
+    expect(uiSource).toContain('caption.presentationKind !== "embodied-signal"');
     expect(uiSource).toContain('caption.presentationKind !== "physical"');
+    expect(styles).toContain('.relief-world-label[data-acoustic-kind="embodied-signal"]');
+    expect(styles).toContain("text-transform: lowercase");
     expect(uiSource).not.toContain("expression-transcript");
     const captionRule = styles.match(/\.situated-expression-caption \{([\s\S]*?)\n\}/u)?.[1] ?? "";
     expect(captionRule).toContain("pointer-events: none");

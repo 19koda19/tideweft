@@ -1596,6 +1596,7 @@ export function createTideweftReliefRenderer(
         node.dataset.selected = "false";
         node.dataset.placement = centerY < placed.candidate.anchor.y ? "above" : "below";
         node.dataset.tone = acousticText.acousticKind === "physical"
+          || acousticText.acousticKind === "embodied-signal"
           ? "incident"
           : "expression";
         node.dataset.acousticKind = acousticText.acousticKind;

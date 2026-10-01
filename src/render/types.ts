@@ -237,7 +237,7 @@ export interface PlayerIncidentView {
  * bounded callout budget and never infer additional dialogue.
  */
 export interface SituatedExpressionView {
-  readonly acousticKind: "speech" | "animal-call";
+  readonly acousticKind: "speech" | "animal-call" | "embodied-signal";
   readonly id: string;
   readonly sourceActorId: string;
   readonly sourceKind: "player" | "human" | "animal" | "supernatural";

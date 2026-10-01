@@ -2239,6 +2239,20 @@ describe("Relief situated expression presentation", () => {
           tone: "alarmed",
           variantSeed: 37,
         },
+        {
+          acousticKind: "embodied-signal",
+          id: "rabbit-foot-thump",
+          sourceActorId: "animal:rabbit",
+          sourceKind: "animal",
+          speakerLabel: "Marsh rabbit",
+          text: "thump",
+          position: { x: 48, y: 48 },
+          progress: 0.2,
+          priority: 8,
+          salience: 6,
+          tone: "restrained",
+          variantSeed: 17,
+        },
       ],
     };
     const harness = renderHarness(current);
@@ -2260,6 +2274,10 @@ describe("Relief situated expression presentation", () => {
     expect(layer?.children.some((child) =>
       child.dataset.tone === "porter-emotion" && !child.removed)).toBe(false);
 
+    const embodiedSignal = current.acousticText?.find(({ acousticKind }) => (
+      acousticKind === "embodied-signal"
+    ));
+    if (!embodiedSignal) throw new Error("expected embodied acoustic signal fixture");
     const physicalAcousticText = current.acousticText?.find(({ acousticKind }) => (
       acousticKind === "physical"
     ));
@@ -2278,11 +2296,27 @@ describe("Relief situated expression presentation", () => {
       tone: "incident",
     });
 
+    current = { ...current, acousticText: [embodiedSignal] };
+    harness.setView(current);
+    harness.draw();
+    const embodied = layer?.children.find((child) => (
+      child.textContent === "thump" && !child.removed
+    ));
+    if (!embodied) throw new Error("expected embodied Relief acoustic label");
+    expect(embodied.dataset).toMatchObject({
+      acousticKind: "embodied-signal",
+      expressionTone: "restrained",
+      sourceKind: "animal",
+      tone: "incident",
+    });
+    expect(embodied.dataset).not.toHaveProperty("semanticFamily");
+
     current = { ...current, acousticText: [] };
     harness.setView(current);
     harness.draw();
     expect(selected.removed).toBe(true);
     expect(physical.removed).toBe(true);
+    expect(embodied.removed).toBe(true);
     expect(layer?.children.some((child) =>
       child.textContent === "LEGACY RELIEF EXPRESSION" && !child.removed)).toBe(false);
     expect(layer?.children.some((child) =>

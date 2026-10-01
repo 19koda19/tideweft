@@ -89,8 +89,10 @@ interface AcousticSample {
 }
 
 /**
- * One bounded, source-authenticated hearing-only actor vocalization. Source
- * position informs propagation only and never grants observers identity.
+ * One bounded, source-authenticated hearing-only actor expression sound.
+ * Most current records are vocal, while embodied communicative signals may
+ * reuse the same exact expression trajectory. Source position informs
+ * propagation only and never grants observers identity.
  */
 export interface SupplementalSoundSample extends AcousticSample {
   readonly sourceActorId: string;

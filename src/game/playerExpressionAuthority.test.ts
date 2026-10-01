@@ -35,6 +35,7 @@ import {
   type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
+  createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createLegacyV33PlayerExpressionAdmissionRecord,
@@ -264,6 +265,7 @@ function policy(
     case "guardian-dog-shelter-whine": throw new Error("Dog calls are not player authority");
     case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
     case "deer-alarm-call": throw new Error("Deer calls are not player authority");
+    case "marsh-rabbit-alarm-thump": throw new Error("Rabbit calls are not player authority");
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "resident-introduction":
@@ -333,6 +335,28 @@ function fishCrowEvent(sourceActorId: string): SituatedExpressionEvent {
   });
   if (!reduction.accepted || reduction.event === null) {
     throw new Error(`Fish-crow fixture was rejected: ${reduction.reason}`);
+  }
+  return reduction.event;
+}
+
+function marshRabbitEvent(sourceActorId: string): SituatedExpressionEvent {
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId: "core-wildlife:marsh-rabbit-alarm:authority",
+    position: POSITION,
+    meaning: "marsh-rabbit-alarm-thump",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "murmur",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 840_000,
+    variantSeed: 127,
+    durationSteps: 6,
+  });
+  if (!reduction.accepted || reduction.event === null) {
+    throw new Error(`Marsh-rabbit fixture was rejected: ${reduction.reason}`);
   }
   return reduction.event;
 }
@@ -750,7 +774,7 @@ describe("player situated-expression authority", () => {
     expect(playerExpressionAdmissionSoundPolicy(admission, evidence)).toBeNull();
   });
 
-  it("rejects fish-crow semantics and admissions from player-only authority", () => {
+  it("rejects wildlife-alarm semantics and admissions from player-only authority", () => {
     const evidence = authority(noIncidentFeedback(), emptyPhysicalCargo());
     const forgedPlayerEvent = fishCrowEvent("player:local");
     const forgedPlayerMemory = memoryFor(forgedPlayerEvent, 2);
@@ -794,5 +818,35 @@ describe("player situated-expression authority", () => {
       evidence,
     )).toBe(false);
     expect(playerExpressionAdmissionSoundPolicy(crowAdmission, evidence)).toBeNull();
+
+    const rabbitEvent = marshRabbitEvent("M-player-authority-marsh-rabbit");
+    const rabbitAdmission = createCoreWildlifeAlarmExpressionAdmissionRecord({
+      sourceActorId: rabbitEvent.sourceActorId,
+      triggerEventId: rabbitEvent.triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceSpecies: "marsh-rabbit",
+      sourceOwnerKey: "regional-ecology:player-authority-test",
+      sourceObservationId: "observation:ground-predator:player-authority-test",
+      acceptedAtTick: 72,
+    });
+    if (rabbitAdmission === null) throw new Error("Expected marsh-rabbit admission fixture");
+
+    expect(playerExpressionEventMatchesAuthority(rabbitEvent, evidence)).toBe(false);
+    expect(playerExpressionMemoryMatchesAuthority(
+      memoryFor(rabbitEvent, 2),
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionEventMatchesAdmission(
+      rabbitEvent,
+      rabbitAdmission,
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionMemoryMatchesAdmission(
+      memoryFor(rabbitEvent, 2),
+      rabbitAdmission,
+      evidence,
+    )).toBe(false);
+    expect(playerExpressionAdmissionSoundPolicy(rabbitAdmission, evidence)).toBeNull();
   });
 });

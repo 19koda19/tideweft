@@ -446,8 +446,37 @@ directional animal sound with no predator identity or hidden source position.
 The call uses the shared strong-alarm interruption rule and never restores the
 legacy direct player alarm cue beside the admitted sample.
 
-The first human-to-human warning consumes that hearing result instead of
-inventing a dialogue trigger. One linear, ownership-indexed selector examines
+A sixth narrow signal adapts the marsh rabbit's existing ecology-owned alarm
+as embodied contact rather than pretending that every animal warning is a
+carrying vocal call. The exact materialized rabbit, committed alarm, final
+locus, retained memory, and attended threshold-passing belief still authorize
+the event. Living Voice may realize that event as one soft `thump` and the
+existing `rabbit-thump` synthesis, but human listeners receive anonymous
+`physical-thud` knowledge with no interruption strength. A visible, lawfully
+heard rabbit may anchor the restrained embodied cue; heard-unseen presentation
+retains only the sound and uncertain direction, and a sleeping or otherwise
+inaudible listener receives no cue. The rabbit's alarm meaning remains ecology
+authority for wildlife and dogs. It does not become human `animal-alarm`
+knowledge, a danger-warning trigger, or permission to disclose the predator.
+
+The physical rabbit cue is not conditional on optional expression-text
+capacity. If the bounded situated-expression sample/admission budget is full,
+the committed ecology event may still release its one direct `rabbit-thump`
+audio cue and enter ordinary human hearing as `physical-thud`; it simply gains
+no expression channel or caption. When an expression sample is admitted, that
+sample owns the same one playback, so saturation and admission cannot duplicate
+audio. The serialized names `actorVocalizationSamples` and nested
+`vocalization` remain legacy transport names for the shared situated-expression
+carrier; consumers use acoustic class and event semantics rather than infer
+that every retained sample is a voice. Expression cooldown may coalesce or
+suppress repeated visible `thump` text, but it cannot erase a distinct newly
+committed physical event from lawful actor hearing or its one player-audio
+opportunity.
+
+The first human-to-human warning consumes lawful perception instead of
+inventing a dialogue trigger; a strong fish-crow/deer alarm may supply its
+hearing cause, while the rabbit's physical thump may not. One linear,
+ownership-indexed selector examines
 current resident perception and admits at most one deterministic source whose
 fresh attended belief is either an identified direct-vision large predator or
 an anonymous strong animal alarm. Its shouted warning retains the exact source
@@ -561,16 +590,24 @@ The 3H weather-hold candidate advances that boundary to outer v44 and bounded
 perception carry v12. It adds the exact event-owned resident shelter trajectory
 and retains whether the listener was sleeping at phase zero; v43 is now
 intentionally retired beside v41 and v42 under the same pre-1.0 policy.
-The current species-aware wildlife-alarm candidate advances the writer to outer
-v45 and perception carry v13. Its shared `core-wildlife-alarm` admission supports
-fish crow and deer while reauthenticating the exact ecology owner, actor, event,
-observation, retained locus and memory, expression channel, and sound sample.
+The preceding species-aware wildlife-alarm candidate advanced the writer to
+outer v45 and perception carry v13. Its shared `core-wildlife-alarm` admission
+supports fish crow and deer while reauthenticating the exact ecology owner,
+actor, event, observation, retained locus and memory, expression channel, and
+sound sample.
 Supported v38-v40 legacy fish-crow admissions retain their original identified
 direct-vision aerial-predator semantic fence; the broader shared alarm-belief
-policy belongs only to the current species-aware record.
-Outer v44 is intentionally retired rather than migrated under the same pre-1.0
-policy. Current reload preserves valid authority without replaying acknowledged
-audio, hearing, interruption, or ephemeral text.
+policy belongs only to the species-aware record.
+The current rabbit embodied-signal candidate advances the writer to outer v46
+and perception carry v14. It extends that admission to marsh rabbit while
+binding the rabbit-specific murmur volume, `physical-thud` human sound class,
+explicit non-interrupting semantics, and optional embodied-text presentation.
+Outer v45 is intentionally retired beside v41-v44 rather than migrated under
+the pre-1.0 policy. Current reload reauthenticates the ecology owner, actor,
+alarm, causal observation, locus, memory, admission, channel, and sound sample
+without replaying acknowledged audio, hearing, interruption, or ephemeral
+text. A retained phase-zero sleeping state canonically yields no player receipt
+rather than manufacturing a post-load thump.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
@@ -580,8 +617,10 @@ match its separately retained current-interval causal-authority record; effort
 must additionally match the independently retained movement-owned step-state
 trajectory described above. Porter departure receipts exist only at phase
 zero and must reproduce that exact anchored listener pose. A lawfully heard,
-strong guardian warning or supported core-wildlife alarm interrupts WAIT or
-REST/SLEEP before source visibility is classified. Dog reception replays from physical acoustics
+strong guardian warning, fish-crow alarm, or deer alarm interrupts WAIT or
+REST/SLEEP before source visibility is classified. The rabbit foot-thump has
+explicit `none` interruption authority and leaves authentic WAIT/REST active.
+Dog reception replays from physical acoustics
 and line of sight; the growl's admission-owned event-time sleep gate prevents a
 later recovery transition from rewriting whether the player heard it.
 A dog outside the current presentation window remains a lawful world source:
@@ -619,15 +658,18 @@ one. Warning barks reauthenticate
 the perception-caused investigation and retained task observation; defensive
 growls reauthenticate the freshly entered perception-caused retreat, matching
 `defer-to-actor` transaction, exact current threat belief, and event-time sleep
-hearing gate. Fish-crow sources must resolve uniquely through the retained
-regional owner to the same materialized actor, final position, same-tick alarm
-event, identified direct-vision aerial-predator belief, and retained alarm
-memory; reception replays from the event-time listener pose, existing alarm
-acoustics, waking perception, and exact visible-source authority. Admission and
-sound capacity are atomic, so a ninth
-candidate stays silent instead of creating unconserved knowledge. Resealed
-remote, acoustically altered, temporally reset, or causally forged
-vocalizations fail before becoming NPC knowledge.
+hearing gate. Supported core-wildlife sources must resolve uniquely through the
+retained regional owner to the same materialized actor, final position,
+same-tick alarm event, species-valid causal belief, and retained alarm memory;
+reception replays from the event-time listener pose, the species acoustic
+profile, waking perception, and exact visible-source authority. Ordinary
+admitted expression keeps sound capacity atomic, so a ninth candidate stays
+silent instead of creating unconserved knowledge. The rabbit's ecology-owned
+fallback is the narrow exception: presentation saturation preserves one
+physical audio/hearing event but creates no expression channel, sample,
+caption, or hidden alarm knowledge. Resealed remote, acoustically altered,
+temporally reset, or causally forged expression samples fail before becoming
+NPC knowledge.
 
 The source bank is also bounded by the exact perception interval. Save/reload
 may preserve an active line, an expired line's pending sound, and its cooldown
@@ -2685,19 +2727,21 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 45 and the bounded perception carry through version 13;
-the current source writer emits outer version 45. The preceding v43/carry-v11
+session through version 46 and the bounded perception carry through version 14;
+the current source writer emits outer version 46. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
-v45/carry-v13 adds the species-aware fish-crow/deer alarm admission and deer
-semantic trajectory. Outer v41 through v44 are explicitly retired under the
-pre-1.0 policy: load recognizes any such
+v45/carry-v13 added the species-aware fish-crow/deer alarm admission and deer
+semantic trajectory. Current v46/carry-v14 adds the marsh-rabbit embodied
+alarm-thump trajectory, its physical human-listener semantics, and explicit
+non-interrupting authority. Outer v41 through v45 are explicitly retired under
+the pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v45 roundtrip
+promise to preserve every internal development format. Current-v46 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "../game/coreWildlifeSignalExpression";
 import type { PlayerBalanceView, SituatedExpressionView } from "./types";
 import {
   acousticTextCalloutSize,
@@ -168,6 +169,25 @@ describe("situated expression callout budget", () => {
       expression("finite", -100),
     ])?.id).toBe("finite");
     expect(selectSituatedExpression([])).toBeUndefined();
+  });
+
+  it("keeps even the quietest current speech ahead of a soft rabbit foot-thump", () => {
+    const speech = expression("quiet-speech", 180_000, "Easy now.");
+    const introduction = expression("resident-introduction", 650_000, "I'm Mara.");
+    const thump: SituatedExpressionView = {
+      ...expression(
+        "rabbit-thump",
+        MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
+        "thump",
+      ),
+      acousticKind: "embodied-signal",
+      sourceActorId: "RABBIT:nearby",
+      sourceKind: "animal",
+    };
+
+    expect(MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY).toBeLessThan(speech.priority);
+    expect(selectSituatedExpression([thump, speech])?.id).toBe(speech.id);
+    expect(selectSituatedExpression([thump, introduction])?.id).toBe(introduction.id);
   });
 });
 

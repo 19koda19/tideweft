@@ -31,9 +31,11 @@ import {
 } from "./situatedExpressionAdmissionLedger";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
+import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "./coreWildlifeSignalExpression";
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
+  situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 import {
   canonicalizeSituatedExpressionChannelBank,
@@ -56,6 +58,7 @@ const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const DEER_ID = "D-expression-trajectory-deer";
+const MARSH_RABBIT_ID = "M-expression-trajectory-marsh-rabbit";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
 const WEATHER_HOLD_RESIDENT_ID = "H-expression-trajectory-weather-hold";
@@ -171,6 +174,17 @@ function deerIntent(triggerEventId: string): SituatedExpressionIntent {
     sourceActorId: DEER_ID,
     meaning: "deer-alarm-call",
     variantSeed: 128,
+  };
+}
+
+function marshRabbitIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowIntent(triggerEventId),
+    sourceActorId: MARSH_RABBIT_ID,
+    meaning: "marsh-rabbit-alarm-thump",
+    volume: "murmur",
+    priority: MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
+    variantSeed: 129,
   };
 }
 
@@ -323,7 +337,7 @@ function animalSample(
     soundLoudness: acoustics.loudness,
     soundRangeUnits: acoustics.rangeUnits,
     soundClass: situatedExpressionSoundClass(event),
-    soundInterrupt: "strong",
+    soundInterrupt: situatedExpressionSoundInterrupt(event),
     sourceActorId: event.sourceActorId,
   });
   if (result === null) throw new Error("fixture dog sound was not canonical");
@@ -554,6 +568,49 @@ function deerAlarmFixture(): Fixture {
   });
   if (bank === null || record === null || reception === null) {
     throw new Error("fixture deer trajectory was not canonical");
+  }
+  return {
+    bank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function marshRabbitAlarmFixture(): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "core-wildlife:alarm:marsh-rabbit:trajectory";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    marshRabbitIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture marsh-rabbit expression expired unexpectedly");
+  }
+  const reception = createHeardVisibleSituatedExpressionReception(
+    current.active,
+    acceptedAtTick,
+    760_000,
+    true,
+  );
+  const bank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: MARSH_RABBIT_ID, state: current, reception }],
+  });
+  const record = createCoreWildlifeAlarmExpressionAdmissionRecord({
+    sourceActorId: MARSH_RABBIT_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceSpecies: "marsh-rabbit",
+    sourceOwnerKey: "regional-ecology:trajectory-test",
+    sourceObservationId: "observation:ground-predator:trajectory-test",
+    acceptedAtTick,
+  });
+  if (bank === null || record === null || reception === null) {
+    throw new Error("fixture marsh-rabbit trajectory was not canonical");
   }
   return {
     bank,
@@ -1131,6 +1188,49 @@ describe("situated-expression admission trajectory", () => {
       forged,
       fixture.phase,
       fixture.samples,
+    )).toBe(false);
+
+  });
+
+  it("binds a marsh-rabbit alarm thump to the shared species-aware admission", () => {
+    const fixture = marshRabbitAlarmFixture();
+    expect(accepts(fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      meaning: "marsh-rabbit-alarm-thump",
+      priority: MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
+      tone: "alarmed",
+      volume: "murmur",
+      durationSteps: 6,
+      remainingSteps: 3,
+    });
+    expect(fixture.ledger.records[0]).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "marsh-rabbit",
+    });
+    expect(fixture.samples[0]).toMatchObject({
+      soundClass: "physical-thud",
+      soundInterrupt: "none",
+    });
+
+    const forged = mutable(fixture.ledger);
+    if (forged.records[0]?.kind !== "core-wildlife-alarm") {
+      throw new Error("fixture lost species-aware marsh-rabbit admission");
+    }
+    forged.records[0].sourceSpecies = "deer";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank,
+      forged,
+      fixture.phase,
+      fixture.samples,
+    )).toBe(false);
+
+    const promotedInterrupt = mutable(fixture.samples);
+    promotedInterrupt[0]!.soundInterrupt = "strong";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank,
+      fixture.ledger,
+      fixture.phase,
+      promotedInterrupt,
     )).toBe(false);
   });
 

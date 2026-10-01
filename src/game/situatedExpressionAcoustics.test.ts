@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
+  situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 
 describe("situated expression acoustics", () => {
@@ -16,6 +17,8 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("deer-alarm-call"))
       .toBe("animal-alarm");
+    expect(situatedExpressionSoundClass("marsh-rabbit-alarm-thump"))
+      .toBe("physical-thud");
     expect(situatedExpressionSoundClass("porter-heavy-load")).toBe("human-vocalization");
   });
 
@@ -41,6 +44,34 @@ describe("situated expression acoustics", () => {
       meaning: "fish-crow-alarm-call",
       volume: "shout",
     }).rangeUnits).toBeLessThan(situatedExpressionAcoustics("shout").rangeUnits);
+  });
+
+  it("keeps the marsh-rabbit thump on core ecology's soft small-prey envelope", () => {
+    const thump = situatedExpressionAcoustics({
+      meaning: "marsh-rabbit-alarm-thump",
+      volume: "murmur",
+    });
+    expect(thump).toEqual({
+      loudness: 420_000,
+      rangeUnits: 9_100,
+    });
+    expect(thump.loudness).toBeLessThan(situatedExpressionAcoustics({
+      meaning: "deer-alarm-call",
+      volume: "shout",
+    }).loudness);
+  });
+
+  it("keeps semantic alarm tone separate from the rabbit thump's soft interruption policy", () => {
+    expect(situatedExpressionSoundInterrupt({
+      meaning: "marsh-rabbit-alarm-thump",
+      tone: "alarmed",
+      volume: "murmur",
+    })).toBe("none");
+    expect(situatedExpressionSoundInterrupt({
+      meaning: "deer-alarm-call",
+      tone: "alarmed",
+      volume: "shout",
+    })).toBe("strong");
   });
 
   it("makes the spoken defensive growl quieter and shorter-ranged than a warning shout", () => {

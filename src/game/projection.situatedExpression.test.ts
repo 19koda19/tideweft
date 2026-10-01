@@ -53,6 +53,7 @@ import {
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
+import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "./coreWildlifeSignalExpression";
 
 const SIGNED_REGION = createRegionCoord(-7, -12);
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
@@ -304,6 +305,32 @@ function canonicalDeerAlarm(
   return reduced.state.active;
 }
 
+function canonicalMarshRabbitAlarm(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "RABBIT-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "marsh-rabbit-alarm-thump",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "murmur",
+    knowledgeBasis: "self-perceived-threat",
+    priority: MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
+    salience: 760_000,
+    variantSeed: 0xab17,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Marsh-rabbit expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalHumanDangerWarning(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -359,6 +386,14 @@ function deerSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSourc
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "deer",
+    position: event.position,
+  });
+}
+
+function marshRabbitSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "marsh-rabbit",
     position: event.position,
   });
 }
@@ -1113,6 +1148,7 @@ describe("situated expression game projection", () => {
       situatedExpressionReception: reception,
       coreWildlifeExpressionSources,
     }).expressions).toEqual([expect.objectContaining({
+      acousticKind: "animal-call",
       sourceActorId: expression.sourceActorId,
       sourceKind: "animal",
       speakerLabel: "Fish crow",
@@ -1253,5 +1289,116 @@ describe("situated expression game projection", () => {
     });
     expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
     expect(JSON.stringify(caption)).not.toContain("DEER-living-voice");
+  });
+
+  it("anchors a visible marsh-rabbit thump only to its authenticated body", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalMarshRabbitAlarm(
+      wildlifePositionInWindow(window),
+      "marsh-rabbit-signal:visible-alarm",
+    );
+    const reception = heardVisibleReception(expression);
+    const source = marshRabbitSource(expression);
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources: [source],
+    }).expressions).toEqual([expect.objectContaining({
+      acousticKind: "embodied-signal",
+      sourceActorId: expression.sourceActorId,
+      sourceKind: "animal",
+      speakerLabel: "Marsh rabbit",
+      text: "thump",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "restrained",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources: [source],
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Marsh rabbit",
+      text: "thump",
+      presentationKind: "embodied-signal",
+      tone: "restrained",
+      assertive: false,
+    });
+
+    const forgedSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
+      [],
+      [{ ...source, species: "deer" }],
+      [{
+        ...source,
+        position: createWorldPosition(
+          source.position.region,
+          source.position.localX + 1,
+          source.position.localY,
+        ),
+      }],
+      [source, { ...source }],
+    ];
+    for (const coreWildlifeExpressionSources of forgedSources) {
+      expect(projectGameView(world, player, {
+        situatedExpression: expression,
+        situatedExpressionReception: reception,
+        coreWildlifeExpressionSources,
+      }).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        situatedExpression: expression,
+        situatedExpressionReception: reception,
+        coreWildlifeExpressionSources,
+      }).expressionCaption).toBeUndefined();
+    }
+  });
+
+  it("keeps a heard-unseen marsh-rabbit thump directional but species-anonymous", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalMarshRabbitAlarm(
+      wildlifePositionInWindow(window),
+      "marsh-rabbit-signal:hidden-alarm",
+    );
+    const reception = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI * 0.75, uncertaintyRadians: Math.PI / 50 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.72,
+    });
+    if (reception === null) throw new Error("Hidden marsh-rabbit reception fixture was rejected");
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      coreWildlifeExpressionSources: [marshRabbitSource(expression)],
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "thump",
+      presentationKind: "embodied-signal",
+      directionLabel: "south-west",
+      assertive: false,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
+    expect(JSON.stringify(caption)).not.toContain(String(expression.position.localX));
+    expect(JSON.stringify(caption)).not.toContain(String(expression.position.localY));
+    expect(JSON.stringify(caption)).not.toContain("marsh-rabbit");
+    expect(JSON.stringify(caption)).not.toContain("threat");
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+    }).expressions).toEqual([]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+    }).expressionCaption).toBeUndefined();
   });
 });

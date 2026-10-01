@@ -517,6 +517,7 @@ function policyFor(
     case "guardian-dog-shelter-whine":
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
+    case "marsh-rabbit-alarm-thump":
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "need-rest-after-exertion":

@@ -147,6 +147,16 @@ function deerAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowAlarmIntent(triggerEventId),
+    sourceActorId: "RABBIT-expression-test",
+    meaning: "marsh-rabbit-alarm-thump",
+    volume: "murmur",
+    variantSeed: 612,
+  };
+}
+
 function keeperStoreResponseIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     version: SITUATED_EXPRESSION_VERSION,
@@ -493,6 +503,33 @@ describe("generic situated-expression kernel", () => {
       realizationKey: "situated-expression.en.v1.deer-alarm-call.0",
       vocalization: "deer-alarm-snort",
     });
+  });
+
+  it("registers the marsh-rabbit foot-thump without promoting it to a shout", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      marshRabbitAlarmIntent("RABBIT-expression-test:e:1:alarm"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "marsh-rabbit-alarm-thump",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "murmur",
+        vocalization: "marsh-rabbit-alarm-thump",
+      },
+    });
+    if (reduction.event === null) throw new Error("Marsh-rabbit alarm was not accepted");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "thump",
+      realizationKey: "situated-expression.en.v1.marsh-rabbit-alarm-thump.0",
+      vocalization: "marsh-rabbit-alarm-thump",
+    });
+    expect(reduceSituatedExpression(createSituatedExpressionState(), {
+      ...marshRabbitAlarmIntent("RABBIT-expression-test:e:2:alarm"),
+      volume: "shout",
+    })).toMatchObject({ accepted: false, reason: "invalid-intent" });
   });
 
   it("keeps heavy-work chatter bounded and every restrained authored line reachable", () => {

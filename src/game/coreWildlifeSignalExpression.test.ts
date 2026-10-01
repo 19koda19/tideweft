@@ -20,6 +20,7 @@ import {
   coreWildlifeAlarmExpressionEventMatchesWorld,
   coreWildlifeAlarmExpressionIntent,
   coreWildlifeAlarmExpressionMemoryMatchesWorld,
+  MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
   deerAlarmExpressionEventForTrigger,
   deerAlarmExpressionEventMatchesWorld,
   deerAlarmExpressionIntent,
@@ -28,6 +29,10 @@ import {
   fishCrowAlarmExpressionEventMatchesWorld,
   fishCrowAlarmExpressionIntent,
   fishCrowAlarmExpressionMemoryMatchesWorld,
+  marshRabbitAlarmExpressionEventForTrigger,
+  marshRabbitAlarmExpressionEventMatchesWorld,
+  marshRabbitAlarmExpressionIntent,
+  marshRabbitAlarmExpressionMemoryMatchesWorld,
   type CoreWildlifeAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
 import {
@@ -54,6 +59,8 @@ const PREDATOR_ID = "HARRIER-living-voice-test";
 const OBSERVATION_ID = "OBS-fish-crow-sees-harrier";
 const DEER_PREDATOR_ID = "BEAR-living-voice-test";
 const DEER_OBSERVATION_ID = "OBS-deer-sees-bear";
+const RABBIT_PREDATOR_ID = "FOX-living-voice-test";
+const RABBIT_OBSERVATION_ID = "OBS-marsh-rabbit-sees-fox";
 
 interface AlarmFixture {
   readonly input: CoreWildlifeAlarmExpressionInput;
@@ -62,14 +69,23 @@ interface AlarmFixture {
 }
 
 function alarmFixture(
-  species: Extract<CoreWildlifeSpecies, "fish-crow" | "deer" | "gull"> = "fish-crow",
+  species: Extract<
+    CoreWildlifeSpecies,
+    "fish-crow" | "deer" | "marsh-rabbit" | "gull"
+  > = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
     ? OBSERVATION_ID
     : species === "deer"
       ? DEER_OBSERVATION_ID
-      : "OBS-gull-sees-harrier",
-  perceivedThreatClass = species === "deer" ? "large-predator" : "aerial-predator",
+      : species === "marsh-rabbit"
+        ? RABBIT_OBSERVATION_ID
+        : "OBS-gull-sees-harrier",
+  perceivedThreatClass = species === "deer"
+    ? "large-predator"
+    : species === "marsh-rabbit"
+      ? "predator"
+      : "aerial-predator",
   perception: Readonly<{
     channel?: "vision" | "hearing";
     identification?: "anonymous" | "classified" | "identified";
@@ -237,6 +253,80 @@ describe("core-wildlife signal expression", () => {
     });
   });
 
+  it("derives a soft marsh-rabbit alarm as one authenticated foot-thump", () => {
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "marsh-rabbit",
+      RABBIT_PREDATOR_ID,
+      RABBIT_OBSERVATION_ID,
+    );
+    const first = marshRabbitAlarmExpressionIntent(input);
+    const second = coreWildlifeAlarmExpressionIntent(structuredClone(input));
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      position: input.actor.address.position,
+      meaning: "marsh-rabbit-alarm-thump",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "murmur",
+      knowledgeBasis: "self-perceived-threat",
+      priority: MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
+      salience: 920_000,
+      durationSteps: 6,
+    });
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(input.event.position).not.toEqual(sourceActor(initialWorld).address.position);
+    expect(marshRabbitAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+    expect(fishCrowAlarmExpressionIntent(input)).toBeNull();
+    expect(deerAlarmExpressionIntent(input)).toBeNull();
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), first);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "marsh-rabbit-alarm-thump",
+        vocalization: "marsh-rabbit-alarm-thump",
+      },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "thump",
+      realizationKey: "situated-expression.en.v1.marsh-rabbit-alarm-thump.0",
+      vocalization: "marsh-rabbit-alarm-thump",
+    });
+  });
+
+  it("does not let expression repetition policy erase a distinct committed rabbit thump", () => {
+    const { input } = alarmFixture(
+      "marsh-rabbit",
+      RABBIT_PREDATOR_ID,
+      RABBIT_OBSERVATION_ID,
+    );
+    const actor = canonicalizeCoreWildlifeActorState({
+      ...input.actor,
+      memories: [...input.actor.memories, {
+        eventId: `${input.actor.identity.stableId}:e:0:alarm`,
+        kind: "alarm",
+        referenceId: RABBIT_PREDATOR_ID,
+        observationId: null,
+        atTick: 0,
+      }],
+    });
+    if (actor === null) throw new Error("Rabbit repeat fixture was not canonical");
+    const world = replaceCoreEcologyAggregatePatchActor(input.world, actor);
+
+    expect(marshRabbitAlarmExpressionIntent({
+      actor,
+      event: input.event,
+      world,
+    })).toMatchObject({
+      triggerEventId: input.event.eventId,
+      meaning: "marsh-rabbit-alarm-thump",
+    });
+  });
+
   it("keeps the perceived predator identity and causal observation out of expression output", () => {
     const { input } = alarmFixture();
     const intent = fishCrowAlarmExpressionIntent(input);
@@ -308,6 +398,34 @@ describe("core-wildlife signal expression", () => {
     expect(fishCrowAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(false);
   });
 
+  it("reauthenticates marsh-rabbit alarm authority without broadening legacy crow fences", () => {
+    const { input } = alarmFixture(
+      "marsh-rabbit",
+      RABBIT_PREDATOR_ID,
+      RABBIT_OBSERVATION_ID,
+    );
+    const intent = marshRabbitAlarmExpressionIntent(input);
+    if (intent === null) throw new Error("Marsh-rabbit alarm intent was not derived");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (!reduction.accepted || reduction.event === null || reduction.state === null) {
+      throw new Error("Marsh-rabbit alarm expression was not accepted");
+    }
+    const advanced = advanceSituatedExpression(reduction.state, intent.durationSteps);
+    const memory = advanced?.recent[0];
+    if (memory === undefined) throw new Error("Marsh-rabbit alarm cooldown was not retained");
+
+    expect(marshRabbitAlarmExpressionEventForTrigger(input, intent.triggerEventId))
+      .toEqual(reduction.event);
+    expect(coreWildlifeAlarmExpressionEventForTrigger(input, intent.triggerEventId))
+      .toEqual(reduction.event);
+    expect(marshRabbitAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(true);
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(true);
+    expect(marshRabbitAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(true);
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(true);
+    expect(fishCrowAlarmExpressionEventMatchesWorld(input, reduction.event)).toBe(false);
+    expect(fishCrowAlarmExpressionMemoryMatchesWorld(input, memory)).toBe(false);
+  });
+
   it("fails closed on forged identity, tick, cause, position, or event shape", () => {
     const { input } = alarmFixture();
     const forgedEvents = [
@@ -331,11 +449,18 @@ describe("core-wildlife signal expression", () => {
   it("fails closed for a valid alarm from the wrong species or a mismatched actor root", () => {
     const crow = alarmFixture();
     const deer = alarmFixture("deer", DEER_PREDATOR_ID, DEER_OBSERVATION_ID);
+    const rabbit = alarmFixture(
+      "marsh-rabbit",
+      RABBIT_PREDATOR_ID,
+      RABBIT_OBSERVATION_ID,
+    );
     const gull = alarmFixture("gull");
 
     expect(fishCrowAlarmExpressionIntent(gull.input)).toBeNull();
     expect(coreWildlifeAlarmExpressionIntent(gull.input)).toBeNull();
     expect(deerAlarmExpressionIntent(crow.input)).toBeNull();
+    expect(marshRabbitAlarmExpressionIntent(crow.input)).toBeNull();
+    expect(deerAlarmExpressionIntent(rabbit.input)).toBeNull();
     expect(fishCrowAlarmExpressionIntent(deer.input)).toBeNull();
     expect(fishCrowAlarmExpressionIntent({
       ...crow.input,

@@ -121,6 +121,7 @@ import {
   situatedExpressionReceptionAudibleContact,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
+import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
 import type { DogActorRosterState } from "./dogActorRoster";
 import { audibleContactDirection } from "./audibleContactPresentation";
 import { eventSettlementLocusIds } from "./eventObservation";
@@ -490,6 +491,7 @@ export function projectUIView(
         ? "animal-call" as const
         : semanticAnimalCallKind
     : semanticAnimalCallKind;
+  const embodiedSignal = situatedExpressionEvent?.meaning === "marsh-rabbit-alarm-thump";
   const presentedExpressionText = presentedAnimalCallKind === "bird-call"
     ? "CALL! CALL!"
     : residentIntroduction?.text ?? situatedExpression?.text;
@@ -502,16 +504,19 @@ export function projectUIView(
           id: situatedExpressionEvent.eventId,
           speakerLabel: situatedExpressionSource.speakerLabel,
           text: presentedExpressionText ?? situatedExpression.text,
-          tone: situatedExpressionEvent.tone,
-          presentationKind: presentedAnimalCallKind === null ? "speech" : "animal-call",
+          tone: embodiedSignal ? "restrained" : situatedExpressionEvent.tone,
+          presentationKind: embodiedSignal
+            ? "embodied-signal"
+            : presentedAnimalCallKind === null
+              ? "speech"
+              : "animal-call",
           ...(presentedAnimalCallKind === null
             ? {}
             : { animalCallKind: presentedAnimalCallKind }),
           ...(situatedExpressionContact === null
             ? {}
             : { directionLabel: audibleContactDirection(situatedExpressionContact) }),
-          assertive: situatedExpressionEvent.tone === "alarmed"
-            || situatedExpressionEvent.volume === "shout",
+          assertive: situatedExpressionSoundInterrupt(situatedExpressionEvent) === "strong",
         },
         priority: situatedExpressionEvent.priority,
         salience: situatedExpressionEvent.salience,

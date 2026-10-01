@@ -162,7 +162,10 @@ export interface CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   readonly acceptedAtTick: number;
 }
 
-export type CoreWildlifeAlarmExpressionSpecies = "fish-crow" | "deer";
+export type CoreWildlifeAlarmExpressionSpecies =
+  | "fish-crow"
+  | "deer"
+  | "marsh-rabbit";
 
 /**
  * Current species-aware alarm admission. The legacy fish-crow-only record
@@ -1257,7 +1260,9 @@ function canonicalCoreWildlifeAlarmRecord(
     || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
     || value.admittedAtPlayerStepPhase !== 0
     || value.kind !== "core-wildlife-alarm"
-    || (value.sourceSpecies !== "fish-crow" && value.sourceSpecies !== "deer")
+    || (value.sourceSpecies !== "fish-crow"
+      && value.sourceSpecies !== "deer"
+      && value.sourceSpecies !== "marsh-rabbit")
     || !validId(value.sourceOwnerKey)
     || !validId(value.sourceObservationId)
     || !nonnegativeSafeInteger(value.acceptedAtTick)

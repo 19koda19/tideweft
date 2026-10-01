@@ -191,11 +191,33 @@ sound never discloses the predator or a hidden deer position, and Living Voice
 suppresses the former direct player alarm playback so one ecology event is not
 heard twice.
 
-Either anonymous core-wildlife alarm may become ordinary human knowledge before
-it becomes speech. At most one deterministic nearby resident who has a fresh,
-strongly attended direct predator sighting or anonymous animal-alarm belief may issue a
-short shouted warning from their actual position. The warning retains the exact
-source observation that caused it, enters the same hearing and expression
+The marsh rabbit now uses the same causal roots but not the same human meaning.
+When a materialized rabbit commits its existing alarm from an attended,
+threshold-passing threat belief, Living Voice may express the physical warning
+gesture as one soft `thump`. A visible and lawfully heard rabbit can carry a
+restrained source-associated cue; a heard-unseen cue remains only a directional
+physical sound, and an unheard or sleeping player gets nothing. Wildlife and
+dogs may still respond to the ecology-owned alarm, but nearby humans hear an
+anonymous `physical-thud`, not an automatically decoded danger signal. The
+thump is nonassertive, does not interrupt WAIT or REST, does not trigger a human
+warning, and never reveals the predator.
+
+Optional text capacity does not decide whether the physical event happened. If
+the bounded expression presenter is full, the rabbit still produces one
+ordinary `rabbit-thump` audio cue and lawful physical hearing; no expression
+channel or caption is created. If admitted, the shared Living Voice sample owns
+that same one playback rather than duplicating the older ecology cue. Reload
+reauthenticates current authority but does not replay the incidental sound or
+its transient `thump` text. Repetition control may keep successive text
+restrained, but every distinct ecology-committed thump remains an audible world
+event for lawful listeners.
+
+Either anonymous strong fish-crow or deer alarm may become ordinary human
+knowledge before it becomes speech. At most one deterministic nearby resident
+who has a fresh, strongly attended direct predator sighting or anonymous
+animal-alarm belief may issue a short shouted warning from their actual
+position. The warning retains the exact source observation that caused it,
+enters the same hearing and expression
 channels, can be heard anonymously by other residents, and cannot recursively
 make every listener repeat the warning. A stale belief, a reported fact without
 the required perception, or an already-heard human danger sound does not create
@@ -278,6 +300,14 @@ source-ID-excluding evaluator; the dog applies its registered hearing
 sensitivity and may notice ordinary contact without treating it as a danger
 alarm. Broader species, coarse, and cross-frame response to physical contact
 remain incomplete.
+
+One non-dog animal signal now also proves that the same acoustic language can
+represent embodied communication without calling it speech. The marsh-rabbit
+alarm thump derives from the animal's real ecology event, exact body, committed
+action, and locus; it appears as restrained `thump` text only after lawful player
+hearing and localization. Humans retain only physical-sound knowledge and no
+strong interruption. This does not make arbitrary rabbit locomotion, broad
+non-dog animal contact, or the remaining species repertoires complete.
 
 The player's sparse dry-exhaustion murmur is the vocal consequence of a
 committed movement-and-stamina transition, not a footstep caption. It uses the

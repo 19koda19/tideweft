@@ -310,7 +310,10 @@ export interface CoreWildlifeExpressionSource {
 }
 
 export type GuardianDogCallKind = "bark" | "growl" | "whine";
-export type AnimalCallKind = GuardianDogCallKind | "fish-crow-call" | "deer-call";
+export type AnimalCallKind =
+  | GuardianDogCallKind
+  | "fish-crow-call"
+  | "deer-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
 export function guardianDogCallKind(
@@ -330,7 +333,7 @@ export function animalCallKind(
     ? "fish-crow-call"
     : meaning === "deer-alarm-call"
       ? "deer-call"
-    : guardianDogCallKind(meaning);
+      : guardianDogCallKind(meaning);
 }
 
 /**
@@ -375,6 +378,7 @@ export function projectSituatedExpressionSource(
   if (
     event.meaning === "fish-crow-alarm-call"
     || event.meaning === "deer-alarm-call"
+    || event.meaning === "marsh-rabbit-alarm-thump"
   ) {
     if (reception?.kind === "heard-unseen") {
       return Object.freeze({
@@ -391,15 +395,24 @@ export function projectSituatedExpressionSource(
       actorId === event.sourceActorId
     ));
     const source = matches[0];
+    const expectedSpecies = event.meaning === "fish-crow-alarm-call"
+      ? "fish-crow"
+      : event.meaning === "deer-alarm-call"
+        ? "deer"
+        : "marsh-rabbit";
     if (
       matches.length !== 1
       || source === undefined
-      || source.species !== (event.meaning === "fish-crow-alarm-call" ? "fish-crow" : "deer")
+      || source.species !== expectedSpecies
       || !sameWorldPosition(source.position, event.position)
     ) return null;
     return Object.freeze({
       sourceKind: "animal",
-      speakerLabel: event.meaning === "fish-crow-alarm-call" ? "Fish crow" : "Deer",
+      speakerLabel: event.meaning === "fish-crow-alarm-call"
+        ? "Fish crow"
+        : event.meaning === "deer-alarm-call"
+          ? "Deer"
+          : "Marsh rabbit",
     });
   }
 
@@ -480,8 +493,13 @@ function projectSituatedExpressionView(
     const point = worldPositionToSpatialFrame(frame, event.position);
     if (point === null) return Object.freeze([]);
     const callKind = animalCallKind(event.meaning);
+    const embodiedSignal = event.meaning === "marsh-rabbit-alarm-thump";
     return Object.freeze([Object.freeze({
-      acousticKind: callKind === null ? "speech" as const : "animal-call" as const,
+      acousticKind: embodiedSignal
+        ? "embodied-signal" as const
+        : callKind === null
+          ? "speech" as const
+          : "animal-call" as const,
       id: event.eventId,
       sourceActorId: event.sourceActorId,
       sourceKind: source.sourceKind,
@@ -494,7 +512,7 @@ function projectSituatedExpressionView(
       progress: 1 - event.remainingSteps / Math.max(1, event.durationSteps),
       priority: event.priority,
       salience: event.salience,
-      tone: event.tone,
+      tone: embodiedSignal ? "restrained" as const : event.tone,
       variantSeed: event.variantSeed,
     })]);
   } catch {

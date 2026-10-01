@@ -250,14 +250,14 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 45;
+  readonly version: 46;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly perceptionCarry: CurrentPerceptionCarry;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v45 envelopes never carry this field. */
+  /** Historical fixtures only; current v46 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -269,7 +269,7 @@ interface CurrentEnvelope {
 }
 
 interface CurrentPerceptionCarry {
-  readonly version: 13;
+  readonly version: 14;
   readonly intervalStartPosition: unknown;
   readonly intervalStartFacingMilliRadians: number;
   readonly intervalStartWasSleeping: boolean;
@@ -560,7 +560,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(45);
+    expect(adoptedRecord.payloadVersion).toBe(46);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -624,7 +624,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(45);
+    expect(adoptedRecord.payloadVersion).toBe(46);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -735,7 +735,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(45);
+    expect(repository.snapshot().payloadVersion).toBe(46);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -851,7 +851,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(45);
+    expect(v13Record.payloadVersion).toBe(46);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v10Envelope.player));
@@ -932,7 +932,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(45);
+    expect(v13Record.payloadVersion).toBe(46);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v11Envelope.player));
@@ -1030,7 +1030,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(45);
+    expect(v13Record.payloadVersion).toBe(46);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v12Envelope.player));
@@ -1117,7 +1117,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(45);
+    expect(adoptedRecord.payloadVersion).toBe(46);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v13Envelope.player));
@@ -1187,7 +1187,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(45);
+    expect(adoptedRecord.payloadVersion).toBe(46);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v14Envelope.player));
@@ -1600,7 +1600,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(45);
+    expect(before.version).toBe(46);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -3350,6 +3350,395 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it("admits one soft marsh-rabbit thump without interrupting WAIT and round-trips without replay", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(
+      -4,
+      "marsh-rabbit",
+    );
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
+      .toBe(true);
+    soundscapePlay.mockClear();
+
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 10);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-marsh-rabbit-alarm-thump",
+    )).toEqual([]);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "Marsh rabbit",
+      text: "thump",
+      presentationKind: "embodied-signal",
+      assertive: false,
+    });
+    expect(Object.hasOwn(
+      runtime.getUIView().expressionCaption ?? {},
+      "animalCallKind",
+    )).toBe(false);
+    expect(runtime.getUIView().announcement?.message)
+      .not.toBe("ANIMAL ALARM — source unclear.");
+    expect(runtime.getUIView().controls).toMatchObject({
+      waitActive: true,
+      waitLabel: "Cancel · 9 min",
+    });
+
+    await runtime.save();
+    const validRecord = repository.snapshot();
+    const saved = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(saved.world);
+    const savedCore = requiredCore(saved);
+    const savedRabbit = requiredCoreActor(savedCore, alarmActorId);
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "marsh-rabbit"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Rabbit voice fixture omitted its admission");
+    expect(admission).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "marsh-rabbit",
+      sourceActorId: alarmActorId,
+      sourceOwnerKey: savedCore.patchKey,
+      admittedAtPlayerStepPhase: 0,
+      acceptedAtTick: savedWorld.meta.completedTick,
+    });
+    const sample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    if (sample === undefined) throw new Error("Rabbit voice fixture omitted its sound sample");
+    const rabbitAcoustics = situatedExpressionAcoustics({
+      meaning: "marsh-rabbit-alarm-thump",
+      volume: "murmur",
+    });
+    expect(rabbitAcoustics).toEqual({ loudness: 420_000, rangeUnits: 9_100 });
+    expect(sample).toMatchObject({
+      expressionEventId: admission.eventId,
+      sourceActorId: alarmActorId,
+      position: savedRabbit.address.position,
+      soundClass: "physical-thud",
+      soundInterrupt: "none",
+      soundLoudness: rabbitAcoustics.loudness,
+      soundRangeUnits: rabbitAcoustics.rangeUnits,
+    });
+    expect(savedRabbit).toMatchObject({
+      updatedAtTick: admission.acceptedAtTick,
+      intent: {
+        kind: "alarm",
+        cause: { kind: "perception", referenceId: admission.sourceObservationId },
+        focusObservationId: admission.sourceObservationId,
+      },
+    });
+    expect(savedRabbit.memories).toContainEqual(expect.objectContaining({
+      eventId: admission.triggerEventId,
+      kind: "alarm",
+      observationId: admission.sourceObservationId,
+      atTick: admission.acceptedAtTick,
+      eventPosition: savedRabbit.address.position,
+    }));
+    const channel = saved.perceptionCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === alarmActorId,
+    );
+    expect(channel?.state.active).toMatchObject({
+      eventId: admission.eventId,
+      triggerEventId: admission.triggerEventId,
+      position: savedRabbit.address.position,
+      meaning: "marsh-rabbit-alarm-thump",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "murmur",
+      knowledgeBasis: "self-perceived-threat",
+      vocalization: "marsh-rabbit-alarm-thump",
+      priority: 160_000,
+      durationSteps: 6,
+      audioAcknowledged: true,
+    });
+    expect(channel?.reception).toMatchObject({
+      eventId: admission.eventId,
+      sourceActorId: alarmActorId,
+      receivedAtTick: admission.acceptedAtTick,
+      kind: "heard-visible",
+      directVisualReceipt: true,
+    });
+    const durableCarry = stableStringify(saved.perceptionCarry);
+    runtime.destroy();
+    scheduledFrame = undefined;
+
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump")).toEqual([]);
+    expect(resumed.getUIView().expressionCaption).toBeUndefined();
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    advancePlayerSteps(resumed, 10);
+    // Reload did not replay the tick-T event. The ecology actor lawfully
+    // commits a distinct tick-(T+1) thump for a changed threat observation;
+    // its physical audio remains real even while expression cooldown keeps
+    // the optional text suppressed.
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+      .toHaveLength(1);
+    expect(resumed.getUIView().expressionCaption?.text).not.toBe("thump");
+    await resumed.save();
+    const propagatedAdmittedEnvelope = requiredEnvelope(repository);
+    const propagatedAdmittedWorld = deserializeWorld(propagatedAdmittedEnvelope.world);
+    const propagatedRabbit = requiredCoreActor(
+      requiredCore(propagatedAdmittedEnvelope),
+      alarmActorId,
+    );
+    expect(propagatedRabbit.memories.some((memory) => (
+      memory.kind === "alarm"
+      && memory.atTick === propagatedAdmittedWorld.meta.completedTick
+      && memory.eventId !== admission.triggerEventId
+    ))).toBe(true);
+    const admittedHumanThuds = propagatedAdmittedWorld.residents.flatMap((resident) => {
+      const physicalThuds = resident.perception.beliefs.filter((belief) => (
+        belief.channel === "hearing"
+        && belief.lastObservedTick === propagatedAdmittedWorld.meta.completedTick
+        && belief.perceivedClass === "physical-thud"
+      ));
+      expect(physicalThuds.length).toBeLessThanOrEqual(1);
+      expect(physicalThuds.every(({ sourceObservationId }) => (
+        sourceObservationId.includes("-av-")
+        && !sourceObservationId.includes("-rth-")
+      ))).toBe(true);
+      expect(resident.perception.beliefs.some((belief) => (
+        belief.channel === "hearing"
+        && belief.lastObservedTick === propagatedAdmittedWorld.meta.completedTick
+        && belief.perceivedClass === "animal-alarm"
+      ))).toBe(false);
+      return physicalThuds;
+    });
+    expect(admittedHumanThuds.length).toBeGreaterThanOrEqual(2);
+    resumed.destroy();
+    scheduledFrame = undefined;
+
+    const sleepingCarry: CurrentPerceptionCarry = {
+      ...saved.perceptionCarry,
+      intervalStartWasSleeping: true,
+      situatedExpressionChannels: {
+        ...saved.perceptionCarry.situatedExpressionChannels,
+        channels: saved.perceptionCarry.situatedExpressionChannels.channels.map(
+          (candidate) => candidate.sourceActorId === alarmActorId
+            ? { ...candidate, reception: null }
+            : candidate,
+        ),
+      },
+    };
+    const sleepingRepository = new MemoryRepository(recordWithEnvelope(
+      validRecord,
+      resealedEnvelope(saved, { perceptionCarry: sleepingCarry }),
+    ));
+    soundscapePlay.mockClear();
+    const sleepingReload = await createTideweftRuntime(sleepingRepository);
+    expect(sleepingReload.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump")).toEqual([]);
+    expect(sleepingReload.getUIView().expressionCaption).toBeUndefined();
+    await sleepingReload.save();
+    const sleepingRoundTrip = requiredEnvelope(sleepingRepository);
+    expect(sleepingRoundTrip.perceptionCarry.intervalStartWasSleeping).toBe(true);
+    expect(sleepingRoundTrip.perceptionCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === alarmActorId,
+    )?.reception).toBeNull();
+    sleepingReload.destroy();
+    scheduledFrame = undefined;
+
+    const wrongSpeciesCarry: CurrentPerceptionCarry = {
+      ...saved.perceptionCarry,
+      situatedExpressionAdmissions: {
+        ...saved.perceptionCarry.situatedExpressionAdmissions,
+        records: saved.perceptionCarry.situatedExpressionAdmissions.records.map(
+          (candidate) => candidate.kind === "core-wildlife-alarm"
+            && candidate.eventId === admission.eventId
+            ? { ...candidate, sourceSpecies: "deer" as const }
+            : candidate,
+        ),
+      },
+    };
+    const tamperedRepository = new MemoryRepository(recordWithEnvelope(
+      validRecord,
+      resealedEnvelope(saved, { perceptionCarry: wrongSpeciesCarry }),
+    ));
+    const rejected = await createTideweftRuntime(tamperedRepository);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejected.destroy();
+    scheduledFrame = undefined;
+  }, 120_000);
+
+  it("keeps a heard rabbit thump physical and singular when expression capacity is saturated", async () => {
+    vi.resetModules();
+    const fallbackHumanObserverFrames: string[][] = [];
+    const fallbackPhysicalSampleCounts: number[] = [];
+    vi.doMock("./humanPerception", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./humanPerception")>();
+      return {
+        ...actual,
+        // A zero-sized test budget is already full before the rabbit candidate.
+        // Production retains its ordinary bounded capacity.
+        HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+        collectExistingHumanObservations: (
+          input: Parameters<typeof actual.collectExistingHumanObservations>[0],
+        ) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          const rabbitPhysicalSamples = (input.physicalSoundSamples ?? []).filter((sample) => (
+            sample.soundClass === "physical-thud"
+            && sample.acousticEventId.startsWith("rabbit-thump:v1:")
+          ));
+          if (rabbitPhysicalSamples.length > 0) {
+            fallbackPhysicalSampleCounts.push(input.physicalSoundSamples?.length ?? 0);
+            fallbackHumanObserverFrames.push(batches.flatMap((batch) => (
+              batch.observations.some((observation) => (
+                observation.channel === "hearing"
+                && observation.perceivedClass === "physical-thud"
+              ))
+                ? [batch.observerId]
+                : []
+            )).sort());
+          }
+          return batches;
+        },
+      };
+    });
+    let runtime: TideweftRuntime | null = null;
+    try {
+      const saturatedRuntimeModule = await import("./runtime");
+      const fixture = await createAlarmRuntime(
+        -4,
+        "marsh-rabbit",
+        saturatedRuntimeModule.createTideweftRuntime,
+      );
+      runtime = fixture.runtime;
+      soundscapePlay.mockClear();
+
+      advancePlayerSteps(runtime, 10);
+
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+        .toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => (
+        cue === "wildlife-alarm"
+        || cue === "vocalization-marsh-rabbit-alarm-thump"
+      ))).toEqual([]);
+      expect(runtime.getUIView().expressionCaption?.text).not.toBe("thump");
+
+      await runtime.save();
+      const saved = requiredEnvelope(fixture.repository);
+      const savedWorld = deserializeWorld(saved.world);
+      const savedRabbit = requiredCoreActor(requiredCore(saved), fixture.alarmActorId);
+      const rabbitAlarmMemory = savedRabbit.memories.find((memory) => (
+        memory.kind === "alarm"
+        && memory.atTick === savedWorld.meta.completedTick
+        && memory.eventPosition !== undefined
+      ));
+      if (rabbitAlarmMemory?.eventPosition === undefined) {
+        throw new Error("Saturated rabbit fixture lost its retained event locus");
+      }
+      expect(saved.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        (record) => record.kind === "core-wildlife-alarm"
+          && record.sourceSpecies === "marsh-rabbit",
+      )).toEqual([]);
+      expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(
+        ({ sourceActorId }) => sourceActorId === fixture.alarmActorId,
+      )).toBe(false);
+
+      // The T alarm is retained by ecology, not an ephemeral caption. Reload
+      // before T+1 must neither replay player presentation nor erase the later
+      // bounded resident-hearing consequence.
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await saturatedRuntimeModule.createTideweftRuntime(fixture.repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().expressionCaption).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump")).toEqual([]);
+
+      advancePlayerSteps(runtime, 10);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+        .toHaveLength(1);
+      expect(runtime.getUIView().expressionCaption?.text).not.toBe("thump");
+      await runtime.save();
+      const propagatedEnvelope = requiredEnvelope(fixture.repository);
+      const propagatedWorld = deserializeWorld(propagatedEnvelope.world);
+      const propagatedRabbit = requiredCoreActor(
+        requiredCore(propagatedEnvelope),
+        fixture.alarmActorId,
+      );
+      expect(propagatedRabbit.memories.some((memory) => (
+        memory.kind === "alarm"
+        && memory.atTick === propagatedWorld.meta.completedTick
+        && memory.eventId !== rabbitAlarmMemory.eventId
+      ))).toBe(true);
+      const freshHumanHearingByResident = propagatedWorld.residents.flatMap((resident) => {
+        const matching = resident.perception.beliefs.filter((belief) => (
+          belief.channel === "hearing"
+          && belief.lastObservedTick === propagatedWorld.meta.completedTick
+          && (belief.perceivedClass === "physical-thud"
+            || belief.perceivedClass === "animal-alarm")
+        ));
+        expect(matching.filter(({ perceivedClass }) => (
+          perceivedClass === "physical-thud"
+        ))).toHaveLength(matching.length > 0 ? 1 : 0);
+        expect(matching.filter(({ perceivedClass }) => (
+          perceivedClass === "animal-alarm"
+        ))).toEqual([]);
+        expect(matching.every(({ identification, subjectId }) => (
+          identification === "anonymous" && subjectId === null
+        ))).toBe(true);
+        return matching.length > 0 ? [resident.identity.stableId] : [];
+      }).sort();
+      expect(fallbackHumanObserverFrames).toHaveLength(1);
+      expect(fallbackHumanObserverFrames[0]?.length).toBeGreaterThanOrEqual(2);
+      expect(freshHumanHearingByResident).toEqual(fallbackHumanObserverFrames[0]);
+      expect(fallbackPhysicalSampleCounts).toHaveLength(1);
+      expect(fallbackPhysicalSampleCounts[0]).toBeLessThanOrEqual(8);
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+      vi.doUnmock("./humanPerception");
+      vi.resetModules();
+    }
+  }, 120_000);
+
+  it("keeps an authentic REST active through a non-interrupting rabbit thump", async () => {
+    const { runtime } = await createAlarmRuntime(-4, "marsh-rabbit");
+    expect(runtime.getUIView().controls).toMatchObject({
+      canRecover: true,
+      recoveryActive: false,
+      recoveryKind: "rest",
+    });
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    expect(runtime.getUIView().controls).toMatchObject({
+      recoveryActive: true,
+      recoveryKind: "rest",
+    });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    soundscapePlay.mockClear();
+
+    // Active recovery consumes one bounded ten-step fixed simulation batch.
+    advanceWaitFrames(runtime, 1);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
+      .toHaveLength(1);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      text: "thump",
+      presentationKind: "embodied-signal",
+      assertive: false,
+    });
+    expect(runtime.getUIView().controls).toMatchObject({
+      recoveryActive: true,
+      recoveryKind: "rest",
+    });
+    expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+    runtime.destroy();
+    scheduledFrame = undefined;
+  }, 45_000);
+
   it("retains the generic event-time fallback for an alarm Living Voice does not claim", async () => {
     const { runtime } = await createAlarmRuntime(-8, "gull");
     soundscapePlay.mockClear();
@@ -4016,7 +4405,7 @@ describe("runtime core-ecology vertical slice", () => {
     )?.eventPosition).toBeUndefined();
 
     // Strip the fish-crow presentation interval so rejection below can only
-    // come from current-v45 ecology custody, not admission/sample reauth.
+    // come from current-v46 ecology custody, not admission/sample reauth.
     const ecologyOnlyCarry: CurrentPerceptionCarry = {
       ...validEnvelope.perceptionCarry,
       actorVocalizationSamples: [],
@@ -4042,7 +4431,7 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
 
     // The same authenticated no-locus V6 shape is legitimate under outer v37.
-    // It adopts the durable stored body address once, saves as v45, and never
+    // It adopts the durable stored body address once, saves as v46, and never
     // replays a Living Voice cue on either migration load or current reload.
     expect(serializedMissingLocusRegional).not.toContain('"eventPosition":');
     const { integrity: _missingLocusIntegrity, ...missingLocusFields } = missingLocusEnvelope;
@@ -4075,7 +4464,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const upgradedLocusRecord = repository.snapshot();
     const upgradedLocusEnvelope = requiredEnvelope(repository);
-    expect(upgradedLocusRecord.payloadVersion).toBe(45);
+    expect(upgradedLocusRecord.payloadVersion).toBe(46);
     const upgradedLocusCrow = requiredCoreActor(
       requiredCore(upgradedLocusEnvelope),
       crowActorId,
@@ -4234,7 +4623,7 @@ describe("runtime core-ecology vertical slice", () => {
     player.facingMilliRadians = direction > 0 ? 0 : Math.round(Math.PI * 1_000);
     const rabbitPosition = translateWorldPosition(
       playerPosition,
-      direction * 6 * WORLD_POSITION_UNITS_PER_TILE,
+      direction * 2 * WORLD_POSITION_UNITS_PER_TILE,
       -2 * WORLD_POSITION_UNITS_PER_TILE,
     );
     const foxPosition = translateWorldPosition(
@@ -4258,6 +4647,10 @@ describe("runtime core-ecology vertical slice", () => {
       ])),
     });
     let patch = requiredActiveLegacyCore(adoptedEnvelope);
+    patch = setCoreEcologyAggregatePatchMaterializedActors(patch, {
+      atTick: patch.updatedAtTick,
+      actorIds: [sourceRabbit.identity.stableId, sourceFox.identity.stableId],
+    });
     const rabbit = coreActors(patch).find(({ identity }) => (
       identity.stableId === sourceRabbit.identity.stableId
     ));
@@ -4317,10 +4710,18 @@ describe("runtime core-ecology vertical slice", () => {
     advancePlayerSteps(runtime, 10);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
       .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-marsh-rabbit-alarm-thump",
+    )).toHaveLength(0);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
-    expect(runtime.getUIView().announcement?.message)
-      .toBe("[soft thump nearby] [brief yip nearby]");
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "Marsh rabbit",
+      text: "thump",
+      presentationKind: "embodied-signal",
+      assertive: false,
+    });
+    expect(runtime.getUIView().announcement?.message).not.toContain("soft thump");
 
     await runtime.save();
     const after = requiredEnvelope(repository);
@@ -4355,6 +4756,9 @@ describe("runtime core-ecology vertical slice", () => {
     expect(requiredEnvelope(repository).regionalEcology).toBe(durableCore);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
       .toHaveLength(0);
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-marsh-rabbit-alarm-thump",
+    )).toHaveLength(0);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(0);
     resumed.destroy();
@@ -4470,7 +4874,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(45);
+    expect(repository.snapshot().payloadVersion).toBe(46);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4601,7 +5005,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(45);
+    expect(repository.snapshot().payloadVersion).toBe(46);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -4642,7 +5046,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(stableStringify(adoptedEnvelope.perceptionCarry))
       .toBe(stableStringify({
         ...alpha30Base.perceptionCarry,
-        version: 13,
+        version: 14,
         intervalStartPosition: currentEnvelope.perceptionCarry.intervalStartPosition,
         intervalStartFacingMilliRadians:
           currentEnvelope.perceptionCarry.intervalStartFacingMilliRadians,
@@ -4841,6 +5245,17 @@ describe("runtime core-ecology vertical slice", () => {
         {
           world: serializeWorld(sourceWorld),
           player,
+          // This fixture deliberately rewrites the ecology source between
+          // stages. Drop its derived voice trajectory in the same synthetic
+          // transaction so a prior rabbit thump is not left bound to an actor
+          // locus the fixture just replaced.
+          perceptionCarry: {
+            ...sourceEnvelope.perceptionCarry,
+            actorVocalizationSamples: [],
+            situatedExpressionAdmissions: { version: 1, records: [] },
+            situatedExpressionCausalAuthority: { version: 1, records: [] },
+            situatedExpressionChannels: { version: 1, channels: [] },
+          },
         },
       );
       const record = repository.snapshot();
@@ -5556,17 +5971,21 @@ describe("runtime core-ecology vertical slice", () => {
 
 async function createAlarmRuntime(
   offsetTiles: -8 | -4 | 9,
-  sourceSpecies: "deer" | "gull" = "deer",
+  sourceSpecies: "deer" | "marsh-rabbit" | "gull" = "deer",
+  runtimeFactory: (repository: SaveRepository) => Promise<TideweftRuntime> =
+    createTideweftRuntime,
 ): Promise<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   alarmActorId: string;
 }> {
   const repository = new MemoryRepository();
-  const initial = await createTideweftRuntime(repository);
+  const initial = await runtimeFactory(repository);
   initial.dispatchUI({
     type: "new-world",
-    seed: "wildlife alarm crossing",
+    seed: sourceSpecies === "marsh-rabbit"
+      ? "marsh-edge-runtime-cue-1"
+      : "wildlife alarm crossing",
     posture: "gale",
     sessionShape: "wander",
   });
@@ -5576,6 +5995,7 @@ async function createAlarmRuntime(
   const world = deserializeWorld(envelope.world);
   makeWorldDryAndClear(world);
   const player = structuredClone(envelope.player);
+  if (sourceSpecies === "marsh-rabbit") player.stamina = 800_000;
   player.facingMilliRadians = offsetTiles === -4
     ? Math.round(Math.PI * 1_000)
     : 0;
@@ -5583,50 +6003,79 @@ async function createAlarmRuntime(
   if (regional === null) throw new Error("alarm fixture could not restore its regional frame");
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null) throw new Error("alarm fixture could not locate its player");
+  const rabbitDirection: -1 | 1 = playerPosition.localX < REGION_WIDTH_UNITS / 2 ? 1 : -1;
+  if (sourceSpecies === "marsh-rabbit") {
+    player.facingMilliRadians = rabbitDirection > 0 ? 0 : Math.round(Math.PI * 1_000);
+  }
   const sourcePatch = requiredCore(envelope);
   const sourceAlarmActor = sourcePatch.populations
     .find(({ species }) => species === sourceSpecies)?.members[0]?.actor;
-  const sourceBear = sourcePatch.populations
-    .find(({ species }) => species === "black-bear")?.members[0]?.actor;
-  if (sourceAlarmActor === undefined || sourceBear === undefined) {
-    throw new Error(`alarm fixture lost its ${sourceSpecies} or bear`);
+  const threatSpecies = sourceSpecies === "marsh-rabbit" ? "marsh-fox" : "black-bear";
+  const sourceThreat = sourcePatch.populations
+    .find(({ species }) => species === threatSpecies)?.members[0]?.actor;
+  if (sourceAlarmActor === undefined || sourceThreat === undefined) {
+    throw new Error(`alarm fixture lost its ${sourceSpecies} or ${threatSpecies}`);
   }
   const adoptedEnvelope = resealedEnvelope(envelope, {
     coreEcology: serializeCoreEcologyAggregatePatch(promoteFixtureActors(sourcePatch, [
       sourceAlarmActor.identity.stableId,
-      sourceBear.identity.stableId,
+      sourceThreat.identity.stableId,
     ])),
   });
   let patch = requiredActiveLegacyCore(adoptedEnvelope);
+  patch = setCoreEcologyAggregatePatchMaterializedActors(patch, {
+    atTick: patch.updatedAtTick,
+    actorIds: [
+      sourceAlarmActor.identity.stableId,
+      sourceThreat.identity.stableId,
+    ],
+  });
   const alarmActor = coreActors(patch).find(({ identity }) => (
     identity.stableId === sourceAlarmActor.identity.stableId
   ));
-  const bear = coreActors(patch).find(({ identity }) => (
-    identity.stableId === sourceBear.identity.stableId
+  const threat = coreActors(patch).find(({ identity }) => (
+    identity.stableId === sourceThreat.identity.stableId
   ));
-  if (alarmActor === undefined || bear === undefined) {
+  if (alarmActor === undefined || threat === undefined) {
     throw new Error("v25 adoption lost the promoted alarm fixture actors");
   }
   const alarmPosition = translateWorldPosition(
     playerPosition,
-    offsetTiles * WORLD_POSITION_UNITS_PER_TILE,
-    0,
+    (sourceSpecies === "marsh-rabbit" ? rabbitDirection * 2 : offsetTiles)
+      * WORLD_POSITION_UNITS_PER_TILE,
+    sourceSpecies === "marsh-rabbit" ? -2 * WORLD_POSITION_UNITS_PER_TILE : 0,
   );
-  const bearPosition = translateWorldPosition(
-    alarmPosition,
-    (offsetTiles < 0 ? 1 : -1) * WORLD_POSITION_UNITS_PER_TILE,
-    0,
+  const threatPosition = translateWorldPosition(
+    sourceSpecies === "marsh-rabbit" ? playerPosition : alarmPosition,
+    sourceSpecies === "marsh-rabbit"
+      ? rabbitDirection * 2 * WORLD_POSITION_UNITS_PER_TILE
+      : (offsetTiles < 0 ? 1 : -1) * WORLD_POSITION_UNITS_PER_TILE,
+    sourceSpecies === "marsh-rabbit" ? 2 * WORLD_POSITION_UNITS_PER_TILE : 0,
   );
   patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(alarmActor, {
     atTick: patch.updatedAtTick,
     position: alarmPosition,
-    heading: offsetTiles < 0 ? 0 : 500_000,
+    heading: sourceSpecies === "marsh-rabbit"
+      ? 250_000
+      : offsetTiles < 0 ? 0 : 500_000,
   }));
-  patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(bear, {
+  const positionedThreat = repositionCoreWildlifeActor(threat, {
     atTick: patch.updatedAtTick,
-    position: bearPosition,
-    heading: offsetTiles < 0 ? 500_000 : 0,
-  }));
+    position: threatPosition,
+    heading: sourceSpecies === "marsh-rabbit"
+      ? 750_000
+      : offsetTiles < 0 ? 500_000 : 0,
+  });
+  patch = replaceCoreEcologyAggregatePatchActor(
+    patch,
+    sourceSpecies === "marsh-rabbit"
+      ? replaceCoreWildlifeActorPhysiology(positionedThreat, {
+          atTick: patch.updatedAtTick,
+          needs: { ...positionedThreat.needs, hunger: 1_000_000 },
+          condition: positionedThreat.condition,
+        })
+      : positionedThreat,
+  );
   const alarmGroup = patch.groups.groups.find(({ identity, memberOrdinals }) => (
     identity.species === alarmActor.identity.species
     && identity.populationKey === alarmActor.identity.populationKey
@@ -5642,11 +6091,18 @@ async function createAlarmRuntime(
   let alarmMateOrdinal = 0;
   for (const actor of coreActors(patch)) {
     if (actor.identity.stableId === alarmActor.identity.stableId
-      || actor.identity.stableId === bear.identity.stableId) continue;
+      || actor.identity.stableId === threat.identity.stableId) continue;
     const isAlarmMate = alarmGroupMemberIds.has(actor.identity.stableId);
     const moved = repositionCoreWildlifeActor(actor, {
       atTick: patch.updatedAtTick,
-      position: isAlarmMate
+      position: sourceSpecies === "marsh-rabbit"
+        ? translateWorldPosition(
+            playerPosition,
+            -rabbitDirection * (20 + actor.identity.populationOrdinal)
+              * WORLD_POSITION_UNITS_PER_TILE,
+            (actor.identity.populationOrdinal % 5 - 2) * WORLD_POSITION_UNITS_PER_TILE,
+          )
+        : isAlarmMate
         ? translateWorldPosition(
             alarmPosition,
             0,
@@ -5669,7 +6125,7 @@ async function createAlarmRuntime(
           memories: [...moved.memories, {
             eventId: `${moved.identity.stableId}:fixture-recent-alarm`,
             kind: "alarm",
-            referenceId: bear.identity.stableId,
+            referenceId: threat.identity.stableId,
             observationId: null,
             atTick: patch.updatedAtTick,
           }],
@@ -5689,8 +6145,8 @@ async function createAlarmRuntime(
   await repository.save(recordWithEnvelope(record, nextEnvelope));
   initial.destroy();
   scheduledFrame = undefined;
-  const runtime = await createTideweftRuntime(repository);
-  await runtime.save();
+  const runtime = await runtimeFactory(repository);
+  if (sourceSpecies !== "marsh-rabbit") await runtime.save();
   return { runtime, repository, alarmActorId: alarmActor.identity.stableId };
 }
 
@@ -6605,10 +7061,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 45
+    || value.version !== 46
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v45 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v46 envelope");
   }
   return value;
 }
@@ -6785,7 +7241,7 @@ function stripFixtureAlarmEventPositionsForV24(
 /**
  * Gives an untouched compatibility cohort its real durable owner before a
  * gameplay fixture mutates it. Historical migration runs exactly once; every
- * later edit targets the resulting current v45 active resident.
+ * later edit targets the resulting current v46 active resident.
  */
 async function adoptUntouchedFixtureCoreAsCurrent(
   repository: MemoryRepository,
@@ -6840,8 +7296,8 @@ function resealedCurrentEnvelopeWithCorePatch(
     | "world"
   >> = {},
 ): CurrentEnvelope {
-  if ((envelope as Readonly<{ version: number }>).version !== 45) {
-    throw new Error("current ecology fixture requires a v45 envelope");
+  if ((envelope as Readonly<{ version: number }>).version !== 46) {
+    throw new Error("current ecology fixture requires a v46 envelope");
   }
   const state = requiredRegionalEcologyV6(envelope);
   const v5 = state.base;
@@ -7091,9 +7547,10 @@ function legacyPerceptionCarry(
       && record.version !== 10
       && record.version !== 11
       && record.version !== 12
-      && record.version !== 13)
+      && record.version !== 13
+      && record.version !== 14)
     || stableStringify(keys) !== stableStringify(
-      record.version === 12 || record.version === 13
+      record.version === 12 || record.version === 13 || record.version === 14
         ? latestStepStateKeys
         : record.version === 10 || record.version === 11
           ? currentStepStateKeys
@@ -7836,7 +8293,8 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
   if (
-    version === 45
+    version === 46
+    || version === 45
     || version === 40
     || version === 39
     || version === 38

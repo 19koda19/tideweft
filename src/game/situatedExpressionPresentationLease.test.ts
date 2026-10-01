@@ -21,6 +21,7 @@ import {
 import {
   activeSituatedExpressionPresentationPairs,
   advanceSituatedExpressionPresentationLeases,
+  captureReloadedIncidentalExpressionEventIds,
   createSituatedExpressionPresentationLeases,
   discardSituatedExpressionPresentationLeasesForSource,
   putSituatedExpressionPresentationLease,
@@ -60,6 +61,24 @@ function receive(event: SituatedExpressionEvent) {
   return createHeardVisibleSituatedExpressionReception(event, 90, 850_000, true);
 }
 
+function rabbitThumpIntent(): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "RABBIT-same-seed-p0",
+    triggerEventId: "RABBIT-same-seed-p0:e:1:alarm",
+    position: POSITION,
+    meaning: "marsh-rabbit-alarm-thump",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "murmur",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 160_000,
+    salience: 520_000,
+    variantSeed: 41,
+    durationSteps: 6,
+  };
+}
+
 function accept(
   bank: SituatedExpressionChannelBank,
   nextIntent: SituatedExpressionIntent,
@@ -77,6 +96,37 @@ function accept(
 }
 
 describe("situated-expression presentation leases", () => {
+  it("releases reload-only thump suppression for a deterministic same-seed world replacement", () => {
+    const reloaded = accept(
+      createSituatedExpressionChannelBank(),
+      rabbitThumpIntent(),
+    );
+    const reloadedEventIds = captureReloadedIncidentalExpressionEventIds(
+      reloaded.bank,
+    );
+    expect(reloadedEventIds).toEqual(new Set([reloaded.pair.event.eventId]));
+
+    const replacement = accept(
+      createSituatedExpressionChannelBank(),
+      rabbitThumpIntent(),
+    );
+    expect(replacement.pair.event.eventId).toBe(reloaded.pair.event.eventId);
+    expect(activeSituatedExpressionPresentationPairs(
+      replacement.bank,
+      createSituatedExpressionPresentationLeases(),
+    )?.filter(({ event }) => !reloadedEventIds.has(event.eventId))).toEqual([]);
+
+    // `new-world` owns this generation boundary in the runtime. Once it
+    // clears the reload-only set, the legitimate new physical event captions.
+    reloadedEventIds.clear();
+    expect(activeSituatedExpressionPresentationPairs(
+      replacement.bank,
+      createSituatedExpressionPresentationLeases(),
+    )?.filter(({ event }) => !reloadedEventIds.has(event.eventId)).map(
+      ({ event }) => event.eventId,
+    )).toEqual([replacement.pair.event.eventId]);
+  });
+
   it("preserves a guaranteed introduction through same-source priority and interval closure", () => {
     const introduction = accept(
       createSituatedExpressionChannelBank(),

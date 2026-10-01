@@ -180,6 +180,7 @@ import {
 import {
   activeSituatedExpressionPresentationPairs,
   advanceSituatedExpressionPresentationLeases,
+  captureReloadedIncidentalExpressionEventIds,
   createSituatedExpressionPresentationLeases,
   discardSituatedExpressionPresentationLeasesForSource,
   putSituatedExpressionPresentationLease,
@@ -227,6 +228,7 @@ import {
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
+  situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
 import {
@@ -448,11 +450,13 @@ import {
   regionalWorldCenter,
 } from "./regionalWorldView";
 import {
+  HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
   HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
   LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
   collectExistingHumanObservations,
+  createPhysicalSoundSample,
   createPlayerSenseSample,
   createSupplementalSoundSample,
   type PlayerSenseSample,
@@ -1023,12 +1027,6 @@ const PLAYER_TIME_ACTION_MAX_STEPS_PER_FRAME = PLAYER_TIME_ACTION_STEPS_PER_WORL
 const PLAYER_WAIT_MINUTES = 10;
 const PLAYER_WAIT_TOTAL_STEPS = PLAYER_WAIT_MINUTES * PLAYER_STEPS_PER_WORLD_TICK;
 
-function situatedExpressionSoundInterrupt(
-  event: Pick<SituatedExpressionEvent, "tone" | "volume">,
-): SupplementalSoundSample["soundInterrupt"] {
-  return event.tone === "alarmed" || event.volume === "shout" ? "strong" : "none";
-}
-
 function situatedExpressionEventIdForMemory(memory: SituatedExpressionMemory): string {
   return `situated-expression:event:v${SITUATED_EXPRESSION_VERSION}:${hashCanonical({
     sourceActorId: memory.sourceActorId,
@@ -1078,6 +1076,7 @@ function recentMeaningAcousticTuples(
     case "steady-after-stumble":
     case "guardian-dog-shelter-whine":
     case "need-rest-after-exertion":
+    case "marsh-rabbit-alarm-thump":
       return [{ volume: "murmur", interrupt: "none" }];
     case "relief-after-near-fall":
     case "relief-after-cargo-recovery":
@@ -1107,8 +1106,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** Current outer save whose situated-expression union owns species-aware wildlife alarms. */
+/** Current outer save whose situated-expression union owns the rabbit alarm thump. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** Retired pre-1.0 save whose closed expression union first owned deer alarms. */
+const DEER_ALARM_GAME_SAVE_VERSION = 45;
 /** Retired pre-1.0 save whose closed expression union first owned weather holds. */
 const RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION = 44;
 /** Retired pre-1.0 save whose closed expression union first owned introductions. */
@@ -1160,7 +1161,7 @@ const BIO0_GAME_SAVE_VERSION = 6;
 const PLAYER_PERCEPTION_GAME_SAVE_VERSION = 5;
 const REGIONAL_GAME_SAVE_VERSION = 4;
 const PHYSICAL_CARGO_GAME_SAVE_VERSION = 3;
-const PLAYER_PERCEPTION_CARRY_VERSION = 13 as const;
+const PLAYER_PERCEPTION_CARRY_VERSION = 14 as const;
 const ANIMAL_CONTACT_PERCEPTION_CARRY_VERSION = 8 as const;
 const HUMAN_DANGER_WARNING_PERCEPTION_CARRY_VERSION = 7 as const;
 const GUARDIAN_DOG_SHELTER_WHINE_PERCEPTION_CARRY_VERSION = 6 as const;
@@ -1191,6 +1192,7 @@ const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   PLAYER_EXHAUSTION_GAME_SAVE_VERSION,
   RESIDENT_INTRODUCTION_GAME_SAVE_VERSION,
   RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION,
+  DEER_ALARM_GAME_SAVE_VERSION,
 ]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
@@ -1305,6 +1307,10 @@ interface PlayerPerceptionCarry {
   readonly playerStepStateSamples: readonly (PlayerStepStateSample | null)[];
   /** State immediately before the first non-null movement fact. */
   readonly playerStepStateAnchor: PlayerStepStateAnchor | null;
+  /**
+   * Legacy serialized name for bounded actor-expression sound samples. It may
+   * carry an authenticated embodied communicative signal as well as a voice.
+   */
   readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
   /** Committed contact facts waiting for the next bounded living-actor hearing interval. */
   readonly animalContactAcousticCarry: AnimalContactAcousticCarry;
@@ -2259,7 +2265,11 @@ function runtimeCoreWildlifeExpressionSources(
   const sources: CoreWildlifeExpressionSource[] = [];
   for (const { patch } of runtimeRegionalEcologyProjectedSources(projection)) {
     for (const population of patch.populations) {
-      if (population.species !== "fish-crow" && population.species !== "deer") continue;
+      if (
+        population.species !== "fish-crow"
+        && population.species !== "deer"
+        && population.species !== "marsh-rabbit"
+      ) continue;
       for (const { actor, materialization } of population.members) {
         if (materialization !== "materialized") continue;
         if (seenActorIds.has(actor.identity.stableId)) {
@@ -6680,7 +6690,7 @@ function runtimeCoreWildlifeAlarmExpressionAuthority(
     triggerEventId: string;
     sourceObservationId: string;
     acceptedAtTick: number;
-    sourceSpecies: "fish-crow" | "deer";
+    sourceSpecies: "fish-crow" | "deer" | "marsh-rabbit";
   }>,
 ): CoreWildlifeAlarmExpressionInput | null {
   const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
@@ -6744,10 +6754,91 @@ function coreWildlifeAlarmMemoryMatchesAdmission(
 
 function coreWildlifeAlarmAdmissionSpecies(
   admission: RuntimeCoreWildlifeAlarmAdmission,
-): "fish-crow" | "deer" {
+): "fish-crow" | "deer" | "marsh-rabbit" {
   return admission.kind === "core-wildlife-fish-crow-alarm"
     ? "fish-crow"
     : admission.sourceSpecies;
+}
+
+/**
+ * A rabbit foot-thump remains an ecological alarm for wildlife, but humans
+ * hear only a physical impact unless another lawful knowledge path teaches
+ * them more. This conversion is independent of expression/text admission so
+ * a saturated presentation channel cannot change NPC knowledge.
+ */
+function rabbitAlarmBatchesForHumanHearing(
+  batches: readonly CoreEcologyObservationBatch[],
+  humanObserverIds: ReadonlySet<string>,
+): readonly CoreEcologyObservationBatch[] | null {
+  const converted: CoreEcologyObservationBatch[] = [];
+  for (const batch of batches) {
+    if (!humanObserverIds.has(batch.observerId)) {
+      converted.push(batch);
+      continue;
+    }
+    const observations: ActorObservation[] = [];
+    for (const observation of batch.observations) {
+      if (
+        observation.channel !== "hearing"
+        || observation.perceivedClass !== "animal-alarm"
+      ) {
+        observations.push(observation);
+        continue;
+      }
+      const physical = createActorObservation({
+        id: observation.id,
+        observerId: observation.observerId,
+        observedAtTick: observation.observedAtTick,
+        channel: "hearing",
+        perceivedClass: "physical-thud",
+        subjectId: null,
+        area: observation.area,
+        confidence: observation.confidence,
+        salience: observation.salience,
+        identification: "anonymous",
+        interrupt: "none",
+      });
+      if (physical === null) return null;
+      observations.push(physical);
+    }
+    const canonical = canonicalizeActorObservations(observations);
+    if (canonical.length !== observations.length) return null;
+    converted.push(Object.freeze({
+      observerId: batch.observerId,
+      observations: canonical,
+    }));
+  }
+  return Object.freeze(converted);
+}
+
+/**
+ * Reprojects a retained rabbit foot-thump into the shared physical-hearing
+ * seam. The ecology event remains the authority; this bounded transient is
+ * rebuilt after reload and never creates audio, text, or species knowledge.
+ */
+function rabbitAlarmPhysicalSoundSample(
+  event: CoreWildlifeCausalEvent,
+): PhysicalSoundSample | null {
+  if (event.kind !== "alarm" || event.species !== "marsh-rabbit") return null;
+  const acoustics = situatedExpressionAcoustics({
+    meaning: "marsh-rabbit-alarm-thump",
+    volume: "murmur",
+  });
+  const eventHash = hashCanonical({
+    domain: "marsh-rabbit-physical-thump:v1",
+    eventId: event.eventId,
+    sourceActorId: event.actorId,
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: `rabbit-thump:v1:${eventHash}`,
+    id: `rth-${eventHash}`,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: "physical-thud",
+    soundInterrupt: "none",
+    sourceActorId: event.actorId,
+  });
 }
 
 function runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
@@ -10358,6 +10449,21 @@ export async function createTideweftRuntime(
   let situatedExpressionChannels: SituatedExpressionChannelBank =
     resumed?.perceptionCarry.situatedExpressionChannels
       ?? createSituatedExpressionChannelBank();
+  // An embodied impact word is ephemeral presentation, even when its exact
+  // semantic event remains in the unfinished hearing interval for cognition
+  // and save validation. Remember only the bounded active IDs present at
+  // bootstrap so reload cannot paint an old thump as if it just happened;
+  // later events use distinct causal IDs and remain presentable normally.
+  const reloadedIncidentalExpressionEventIds = resumed === null
+    ? new Set<string>()
+    : captureReloadedIncidentalExpressionEventIds(situatedExpressionChannels);
+  // Player audio/presentation is an event-time opportunity, not a delayed
+  // consumer of the next actor-hearing interval. The loaded tick frontier
+  // reconstructs that consumed boundary without adding ephemeral
+  // subtitle/audio state to the save. Exact duplicate IDs within one bounded
+  // world-advance batch are rejected at the event seam below; distinct later
+  // event IDs are never suppressed by expression cooldown.
+  let loadedIncidentalAcousticThroughTick = resumed?.world.meta.completedTick ?? null;
   // Presentation leases are deliberately ephemeral. They let configured text
   // lifetimes outlive the one hearing interval that carried the sound without
   // replaying audio/NPC hearing or turning labels into save authority.
@@ -11981,10 +12087,13 @@ export async function createTideweftRuntime(
     if (
       expression.meaning === "fish-crow-alarm-call"
       || expression.meaning === "deer-alarm-call"
+      || expression.meaning === "marsh-rabbit-alarm-thump"
     ) {
       const expectedSpecies = expression.meaning === "fish-crow-alarm-call"
         ? "fish-crow"
-        : "deer";
+        : expression.meaning === "deer-alarm-call"
+          ? "deer"
+          : "marsh-rabbit";
       const matchingActors = runtimeRegionalEcologyProjectedSources(
         projectActiveRegionalEcology(),
       ).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
@@ -12057,7 +12166,7 @@ export async function createTideweftRuntime(
       === VISIBILITY_DIRECT;
   }
 
-  function createSituatedVocalizationSampleForTick(
+  function createSituatedExpressionSoundSampleForTick(
     event: SituatedExpressionEvent,
     sampleOrdinal: number,
     completedTick: number,
@@ -12073,15 +12182,15 @@ export async function createTideweftRuntime(
       soundInterrupt: situatedExpressionSoundInterrupt(event),
       sourceActorId: event.sourceActorId,
     });
-    if (sample === null) throw new Error("Situated vocalization sample failed validation");
+    if (sample === null) throw new Error("Situated expression sound sample failed validation");
     return sample;
   }
 
-  function createSituatedVocalizationSample(
+  function createSituatedExpressionSoundSample(
     event: SituatedExpressionEvent,
     sampleOrdinal: number,
   ): SupplementalSoundSample {
-    return createSituatedVocalizationSampleForTick(
+    return createSituatedExpressionSoundSampleForTick(
       event,
       sampleOrdinal,
       world.meta.completedTick,
@@ -12096,7 +12205,9 @@ export async function createTideweftRuntime(
     if (pairs === null) {
       throw new Error("Situated expression channel bank failed validation");
     }
-    return pairs;
+    return Object.freeze(pairs.filter(({ event }) => (
+      !reloadedIncidentalExpressionEventIds.has(event.eventId)
+    )));
   }
 
   function activeSituatedExpressionPair(): ActiveSituatedExpressionChannelPair | null {
@@ -12220,7 +12331,7 @@ export async function createTideweftRuntime(
       if (admission === null || nextAdmissions === null) {
         throw new Error("Situated expression causal admission failed validation");
       }
-      const sample = createSituatedVocalizationSample(reduction.event, sampleOrdinal);
+      const sample = createSituatedExpressionSoundSample(reduction.event, sampleOrdinal);
       situatedExpressionChannels = reduction.bank;
       situatedExpressionPresentationLeases =
         discardSituatedExpressionPresentationLeasesForSource(
@@ -12278,7 +12389,9 @@ export async function createTideweftRuntime(
           ? 0.68
           : 0.42;
       const intensity = baseIntensity * (0.35 + reception.certainty / FIXED_POINT * 0.65);
-      const cue: SituatedVocalizationCue = `vocalization-${event.vocalization}`;
+      const cue: SoundCue = event.meaning === "marsh-rabbit-alarm-thump"
+        ? "rabbit-thump"
+        : `vocalization-${event.vocalization}` as SituatedVocalizationCue;
       return Object.freeze({ cue, volume: intensity, variantSeed: event.variantSeed, pan });
     }));
   }
@@ -12446,7 +12559,7 @@ export async function createTideweftRuntime(
           receipt.admission,
         );
     const sample = reduction?.accepted === true && reduction.event !== null
-      ? createSituatedVocalizationSampleForTick(
+      ? createSituatedExpressionSoundSampleForTick(
           reduction.event,
           0,
           candidate.meta.completedTick,
@@ -13200,9 +13313,18 @@ export async function createTideweftRuntime(
         throw new Error("Root-wide core ecology aggregate activity perception could not be resolved");
       }
       const coreAlarmObservationBatches: Array<readonly CoreEcologyObservationBatch[]> = [];
+      const humanCoreAlarmObserverIds = new Set(corePerceptionFrame.participants.flatMap(
+        ({ address }) => address.species === "human" ? [address.actorId] : [],
+      ));
       const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
         runtimeCoreAlarmEvents(patch)
       )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
+      const preparedCoreAlarms: Array<Readonly<{
+        readonly alarm: CoreWildlifeCausalEvent;
+        readonly humanSemanticBatches: readonly CoreEcologyObservationBatch[];
+        readonly humanHearingOwnedByExpression: boolean;
+        readonly rabbitPhysicalFallback: PhysicalSoundSample | null;
+      }>> = [];
       for (const alarm of coreAlarms) {
         const matchingAdmissions = situatedExpressionAdmissions.records.filter(
           (admission) => (
@@ -13227,6 +13349,15 @@ export async function createTideweftRuntime(
         if (rawPropagated === null) {
           throw new Error("Core ecology alarm perception could not be resolved");
         }
+        const humanSemanticBatches = alarm.species === "marsh-rabbit"
+          ? rabbitAlarmBatchesForHumanHearing(
+              rawPropagated,
+              humanCoreAlarmObserverIds,
+            )
+          : rawPropagated;
+        if (humanSemanticBatches === null) {
+          throw new Error("Rabbit alarm could not enter knowledge-honest human hearing");
+        }
         const retainedSample = wildlifeAlarmAdmission === undefined
           ? undefined
           : actorVocalizationSamples[wildlifeAlarmAdmission.sampleOrdinal];
@@ -13241,16 +13372,62 @@ export async function createTideweftRuntime(
             wildlifeAlarmAuthority,
             wildlifeAlarmAdmission.triggerEventId,
           ) !== null;
-        // The core path remains authoritative for wildlife and dogs. Once the
-        // same event has an admitted Living Voice sample, that sample owns the
-        // human hearing leg so porter/player cognition cannot receive it twice.
-        const propagated = humanHearingOwnedByExpression
-          ? rawPropagated.filter(({ observerId }) => (
-              observerId !== priorPorter.address.actorId
-              && observerId !== playerAddress.actorId
-            ))
-          : rawPropagated;
-        coreAlarmObservationBatches.push(propagated);
+        const rabbitPhysicalFallback = alarm.species === "marsh-rabbit"
+          && !humanHearingOwnedByExpression
+          ? rabbitAlarmPhysicalSoundSample(alarm)
+          : null;
+        if (
+          alarm.species === "marsh-rabbit"
+          && !humanHearingOwnedByExpression
+          && rabbitPhysicalFallback === null
+        ) {
+          throw new Error("Rabbit alarm could not enter shared physical hearing");
+        }
+        preparedCoreAlarms.push(Object.freeze({
+          alarm,
+          humanSemanticBatches,
+          humanHearingOwnedByExpression,
+          rabbitPhysicalFallback,
+        }));
+      }
+      // Expression admission and acoustic hearing have independent budgets.
+      // Retained rabbit alarms take the bounded human physical-hearing slots
+      // before routine contact carry, so a full caption/sample ledger cannot
+      // make the world acoustically silent. Dogs keep the original contact
+      // list and continue to receive rabbit meaning through core ecology. A
+      // distinct freshly committed thump is never dropped by expression
+      // cooldown; repetition policy may coalesce only optional presentation.
+      const selectedRabbitPhysicalFallbacks = preparedCoreAlarms
+        .flatMap(({ alarm, rabbitPhysicalFallback }) => (
+          rabbitPhysicalFallback === null ? [] : [{ alarm, sample: rabbitPhysicalFallback }]
+        ))
+        .sort((left, right) => compareText(left.alarm.eventId, right.alarm.eventId))
+        .slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES);
+      const selectedRabbitPhysicalFallbackEventIds = new Set(
+        selectedRabbitPhysicalFallbacks.map(({ alarm }) => alarm.eventId),
+      );
+      const humanPhysicalSoundSamples = Object.freeze([
+        ...selectedRabbitPhysicalFallbacks.map(({ sample }) => sample),
+        ...physicalSoundSamples,
+      ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
+      for (const prepared of preparedCoreAlarms) {
+        const fallbackOwnsResidentHearing = selectedRabbitPhysicalFallbackEventIds.has(
+          prepared.alarm.eventId,
+        );
+        // The core path remains authoritative for wildlife and dogs. An
+        // admitted Living Voice sample owns every human leg. A selected
+        // physical fallback owns resident hearing (including the porter),
+        // while the separate player/event-time core leg remains intact.
+        const excludedHumanObserverIds = prepared.humanHearingOwnedByExpression
+          ? humanCoreAlarmObserverIds
+          : fallbackOwnsResidentHearing
+            ? new Set([priorPorter.address.actorId])
+            : null;
+        coreAlarmObservationBatches.push(excludedHumanObserverIds === null
+          ? prepared.humanSemanticBatches
+          : prepared.humanSemanticBatches.filter(({ observerId }) => (
+              !excludedHumanObserverIds.has(observerId)
+            )));
       }
       const dogPhysicalAcousticObservationBatches =
         collectDogPhysicalAcousticObservationBatches({
@@ -13353,7 +13530,7 @@ export async function createTideweftRuntime(
       ) {
         throw new Error("Porter world observations could not be canonicalized");
       }
-      const perceptionFrame = residentPerceptionFrame(targetTick, physicalSoundSamples, {
+      const perceptionFrame = residentPerceptionFrame(targetTick, humanPhysicalSoundSamples, {
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
       });
@@ -13873,6 +14050,7 @@ export async function createTideweftRuntime(
         readonly eventId: string;
         readonly observations: readonly ActorObservation[];
       }>> = [];
+      const playerEventTimeHumanObserverIds = new Set([playerAddress.actorId]);
       for (const { result, eventAuthorityPatch } of coreSteps) {
         for (const event of result.events) {
           if (
@@ -13890,9 +14068,19 @@ export async function createTideweftRuntime(
                 corePerceptionFrame,
                 eventActorAuthority,
               );
-          const heardByPlayer = propagated === null
+          const humanSemanticBatches = event.species === "marsh-rabbit"
+            && propagated !== null
+            ? rabbitAlarmBatchesForHumanHearing(
+                propagated,
+                playerEventTimeHumanObserverIds,
+              )
+            : propagated;
+          const heardByPlayer = humanSemanticBatches === null
             ? null
-            : mergeRuntimeCoreObservationBatches(playerAddress.actorId, [propagated]);
+            : mergeRuntimeCoreObservationBatches(
+                playerAddress.actorId,
+                [humanSemanticBatches],
+              );
           if (heardByPlayer === null) {
             throw new Error("Core ecology event-time player hearing could not be resolved");
           }
@@ -14526,13 +14714,26 @@ export async function createTideweftRuntime(
       // presentation. Only genuinely unclaimed alarms may retain the legacy
       // generic ecology fallback below.
       const claimedExpressiveAlarmEventIds = new Set<string>();
-      const expressiveAlarmCandidates = coreSteps.flatMap(({ sourceKey, result }) => (
+      // Scope exact-event deduplication to this already-bounded ecology result
+      // batch. Retained events are rejected by their patch freshness frontier,
+      // while a load frontier rejects events consumed by the saved world. This
+      // avoids an append-only process-lifetime receipt set.
+      const processedRabbitAlarmPlayerEventIds = new Set<string>();
+      const expressiveAlarmCandidates = coreSteps.flatMap(({ sourceKey, beforePatch, result }) => (
         result.events
           .filter((event) => (
-            (event.species === "fish-crow" || event.species === "deer")
+            (
+              event.species === "fish-crow"
+              || event.species === "deer"
+              || event.species === "marsh-rabbit"
+            )
             && event.kind === "alarm"
           ))
-          .map((event) => ({ event, sourceKey }))
+          .map((event) => ({
+            event,
+            sourceKey,
+            beforePatchUpdatedAtTick: beforePatch.updatedAtTick,
+          }))
       )).sort((left, right) => (
         compareText(left.event.eventId, right.event.eventId)
         || compareText(left.sourceKey, right.sourceKey)
@@ -14543,6 +14744,8 @@ export async function createTideweftRuntime(
           ? "fish-crow" as const
           : candidate.event.species === "deer"
             ? "deer" as const
+            : candidate.event.species === "marsh-rabbit"
+              ? "marsh-rabbit" as const
             : null;
         if (
           patch === undefined
@@ -14565,6 +14768,23 @@ export async function createTideweftRuntime(
         const intent = coreWildlifeAlarmExpressionIntent(authority);
         if (intent === null) continue;
         claimedExpressiveAlarmEventIds.add(candidate.event.eventId);
+        if (sourceSpecies === "marsh-rabbit") {
+          if (
+            processedRabbitAlarmPlayerEventIds.has(candidate.event.eventId)
+            || (
+              loadedIncidentalAcousticThroughTick !== null
+              && candidate.event.atTick <= loadedIncidentalAcousticThroughTick
+            )
+          ) continue;
+          processedRabbitAlarmPlayerEventIds.add(candidate.event.eventId);
+        }
+        // Some ecology steps retain the current alarm event while the actor's
+        // alarm intent remains active. Claim its semantics so the generic
+        // fallback stays suppressed, but only an event newer than this source
+        // patch's pre-step frontier may emit audio, interrupt time actions, or
+        // seek a new presentation admission. Expression cooldown never decides
+        // whether a distinct committed physical event reached the world.
+        if (candidate.event.atTick <= candidate.beforePatchUpdatedAtTick) continue;
         const audible = playerExpressionAudibility(intent);
         const lawfullyAudible = audible !== null && audible.contact !== null;
         const reception = !lawfullyAudible || audible === null || audible.contact === null
@@ -14572,7 +14792,7 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
-        acceptSituatedExpression(
+        const expressionAdmitted = acceptSituatedExpression(
           intent,
           reception,
           (acceptedEvent, sampleOrdinal) => (
@@ -14588,7 +14808,28 @@ export async function createTideweftRuntime(
             })
           ),
         );
-        if (lawfullyAudible) {
+        // Channel/caption capacity may suppress the optional retained
+        // expression, but it cannot make an otherwise-heard physical thump
+        // cease to exist. Successful admission releases this cue through the
+        // ordinary acknowledgement path; only the rejected rabbit signal uses
+        // this exact event-time audio fallback.
+        if (
+          sourceSpecies === "marsh-rabbit"
+          && lawfullyAudible
+          && audible !== null
+          && !expressionAdmitted
+        ) {
+          deferredWorldAcousticAudio.push(Object.freeze({
+            cue: "rabbit-thump",
+            volume: 0.42 * (0.35 + audible.certainty / FIXED_POINT * 0.65),
+            variantSeed: intent.variantSeed,
+            pan: audible.pan,
+          }));
+        }
+        if (
+          lawfullyAudible
+          && situatedExpressionSoundInterrupt(intent) === "strong"
+        ) {
           playerWaitDisturbedThisStep = true;
           playerRecoveryDisturbedThisStep = true;
         }
@@ -14810,16 +15051,6 @@ export async function createTideweftRuntime(
             && before !== null
             && before.intent.kind !== event.kind;
         });
-      const witnessedRabbitThump = allCoreStepEvents
-        .filter((event) => event.species === "marsh-rabbit" && event.kind === "alarm")
-        .slice()
-        .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
-        .find((event) => {
-          const before = coreActorBeforeStep(event.actorId);
-          return directlyWitnessedCoreEventIds.has(event.eventId)
-            && before !== null
-            && before.intent.kind !== event.kind;
-        });
       const witnessedFoxYip = allCoreStepEvents
         .filter((event) => event.species === "marsh-fox" && event.kind === "pursue")
         .slice()
@@ -14831,7 +15062,7 @@ export async function createTideweftRuntime(
             && before.intent.kind !== event.kind;
         });
       const ecologyCues: Array<Readonly<{
-        cue: "rat-rustle" | "cat-call" | "rabbit-thump" | "fox-yip"
+        cue: "rat-rustle" | "cat-call" | "fox-yip"
           | "frog-chorus" | "wildlife-alarm";
         volume: number;
         variantSeed: number;
@@ -14854,14 +15085,6 @@ export async function createTideweftRuntime(
           caption: "CAT CALL — nearby and in view.",
         }));
       }
-      if (witnessedRabbitThump !== undefined) {
-        ecologyCues.push(Object.freeze({
-          cue: "rabbit-thump",
-          volume: 0.34,
-          variantSeed: witnessedRabbitThump.atTick,
-          caption: "[soft thump nearby]",
-        }));
-      }
       if (witnessedFoxYip !== undefined) {
         ecologyCues.push(Object.freeze({
           cue: "fox-yip",
@@ -14870,10 +15093,7 @@ export async function createTideweftRuntime(
           caption: "[brief yip nearby]",
         }));
       }
-      if (
-        lawfullyHeardAlarm
-        && witnessedRabbitThump === undefined
-      ) {
+      if (lawfullyHeardAlarm) {
         ecologyCues.push(Object.freeze({
           cue: "wildlife-alarm",
           volume: 0.44,
@@ -16757,6 +16977,13 @@ export async function createTideweftRuntime(
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
     situatedExpressionChannels = createSituatedExpressionChannelBank();
+    // Reload-only suppression belongs to the replaced save generation. A
+    // confirmed new world may deterministically reuse the same seed, actor,
+    // tick, and causal event ID; retaining the old IDs would hide a legitimate
+    // new embodied cue even though every authoritative expression root below
+    // has been reset.
+    reloadedIncidentalExpressionEventIds.clear();
+    loadedIncidentalAcousticThroughTick = null;
     situatedExpressionAdmissions = createSituatedExpressionAdmissionLedger();
     situatedExpressionCausalAuthority = createSituatedExpressionCausalAuthorityLedger();
     const promise = economyView.contracts.find((contract) => contract.status === "offered");
@@ -19574,6 +19801,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "resident-introduction"
       && meaning !== "resident-weather-hold"
       && meaning !== "deer-alarm-call"
+      && meaning !== "marsh-rabbit-alarm-thump"
       && family !== "condition"
       && family !== "social"
     )) && (active === null || (
@@ -19582,12 +19810,14 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "resident-introduction"
       && active.meaning !== "resident-weather-hold"
       && active.meaning !== "deer-alarm-call"
+      && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.family !== "condition"
       && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
       && active.knowledgeBasis !== "self-felt-exhaustion"
       && active.knowledgeBasis !== "self-committed-introduction"
       && active.vocalization !== "deer-alarm-snort"
+      && active.vocalization !== "marsh-rabbit-alarm-thump"
     ));
   });
 }
@@ -20070,6 +20300,7 @@ function playerPerceptionCarryMatchesPosition(
       return eventTimeReception !== null
         && !(
           eventTimeReception.audible
+          && situatedExpressionSoundInterrupt(event) === "strong"
           && player.timeAction !== null
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
@@ -21144,8 +21375,21 @@ function coreWildlifeAlarmReceptionAtEventTime(
     || event.triggerEventId !== admission.triggerEventId
     || event.meaning !== (coreWildlifeAlarmAdmissionSpecies(admission) === "fish-crow"
       ? "fish-crow-alarm-call"
-      : "deer-alarm-call")
+      : coreWildlifeAlarmAdmissionSpecies(admission) === "deer"
+        ? "deer-alarm-call"
+        : "marsh-rabbit-alarm-thump")
   ) return null;
+  // Unlike the carrying fish-crow and deer alarms, core ecology classifies a
+  // rabbit foot-thump as a local, non-interrupting signal. Admission therefore
+  // leaves a sleeping courier asleep and records no player receipt. Recreate
+  // that exact event-time gate before evaluating otherwise-audible contact so
+  // current-schema reload cannot invent hearing that never occurred.
+  if (
+    coreWildlifeAlarmAdmissionSpecies(admission) === "marsh-rabbit"
+    && carry.intervalStartWasSleeping
+  ) {
+    return Object.freeze({ audible: false, reception: null });
+  }
   const listenerPoint = perceptionIntervalPointInWindow(
     window,
     carry.intervalStartPosition,
@@ -21191,9 +21435,9 @@ function coreWildlifeAlarmReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
-  // A physically heard strong wildlife alarm wakes before source classification,
-  // matching the established warning-bark contract. This is reproducible from
-  // the saved event-time pose without trusting mutable receipt metadata.
+  // Visibility is replayed from the event-time pose. Strong calls may have
+  // already woken the courier; the rabbit's local thump never does, so its
+  // sleeping interval receives no player receipt before reaching this path.
   const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
     window: {
       origin: window.origin,

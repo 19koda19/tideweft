@@ -511,7 +511,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(45);
+    expect(saved.version).toBe(46);
     expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
@@ -649,13 +649,13 @@ describe("runtime field-resource integration", () => {
     const repository = new MemoryRepository(v2SaveRecord(world, player));
 
     // First establish the exact current-schema physical lot. The acoustic
-    // assertion below begins only after a clean current-v45 reload.
+    // assertion below begins only after a clean current-v46 reload.
     const bootstrap = await createTideweftRuntime(repository);
     expect(bootstrap.getUIView().saveWarning).toBeUndefined();
     await bootstrap.save();
     bootstrap.destroy();
     const before = decodeGameSave(repository.snapshot());
-    expect(before.version).toBe(45);
+    expect(before.version).toBe(46);
     const sourceLot = before.physicalCargo?.carrier.lots.find(({ payload }) => (
       payload.kind === "gear"
       && payload.gearId === 61
@@ -694,7 +694,7 @@ describe("runtime field-resource integration", () => {
 
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(45);
+    expect(saved.version).toBe(46);
     expect(saved.player.craftingInventory.gear.find(({ id }) => id === 61)?.condition).toBe(0);
     expect(saved.physicalCargo?.carrier.lots.find(({ id }) => id === sourceLot.id))
       .toMatchObject({
@@ -703,7 +703,7 @@ describe("runtime field-resource integration", () => {
         materialState: { condition: 0 },
       });
     expect(saved.perceptionCarry).toMatchObject({
-      version: 13,
+      version: 14,
       playerStepsSinceWorldTick: 1,
       playerSenseSamples: [{
         sampleOrdinal: 0,
@@ -830,7 +830,7 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(45);
+    expect(migrated.version).toBe(46);
     expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,

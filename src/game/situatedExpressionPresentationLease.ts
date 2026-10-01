@@ -20,6 +20,22 @@ SituatedExpressionPresentationLeases {
 }
 
 /**
+ * Capture only reload-carried embodied labels that must not repaint as fresh
+ * presentation. The mutable set is an ephemeral runtime-generation guard: a
+ * confirmed authoritative world replacement clears it, so a same-seed world
+ * may lawfully reuse the same deterministic event identity.
+ */
+export function captureReloadedIncidentalExpressionEventIds(
+  bank: SituatedExpressionChannelBank,
+): Set<string> {
+  return new Set(bank.channels.flatMap(({ state }) => (
+    state.active?.meaning === "marsh-rabbit-alarm-thump"
+      ? [state.active.eventId]
+      : []
+  )));
+}
+
+/**
  * Combine current sound authority with older presentation-only leases. A live
  * source always wins its one source lane; an old lease can become visible
  * after that higher-priority utterance ends, but never duplicates it.

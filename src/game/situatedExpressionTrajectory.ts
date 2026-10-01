@@ -21,8 +21,10 @@ import {
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
+  situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
+import { coreWildlifeAlarmExpressionPriority } from "./coreWildlifeSignalExpression";
 
 /** One reauthenticated pending expression interval, safe for a save owner to retain. */
 export interface SituatedExpressionTrajectory {
@@ -221,9 +223,10 @@ function memoryMatchesAdmission(
     memory.sourceActorId !== record.sourceActorId
     || memory.triggerEventId !== record.triggerEventId
     || !eventMeaningMatchesAdmission(memory.meaning, record)
-    || ((record.kind === "core-wildlife-fish-crow-alarm"
-      || record.kind === "core-wildlife-alarm")
-      && memory.priority !== 760_000)
+    || (record.kind === "core-wildlife-fish-crow-alarm"
+      && memory.priority !== coreWildlifeAlarmExpressionPriority("fish-crow"))
+    || (record.kind === "core-wildlife-alarm"
+      && memory.priority !== coreWildlifeAlarmExpressionPriority(record.sourceSpecies))
     || (record.kind === "human-danger-warning"
       && memory.priority !== HUMAN_DANGER_WARNING_PRIORITY)
   ) return false;
@@ -300,16 +303,22 @@ function eventMatchesAdmission(
       && event.priority === 300_000
       && event.salience === 520_000;
   }
-  return (record.kind !== "core-wildlife-fish-crow-alarm"
-    && record.kind !== "core-wildlife-alarm"
-    && record.kind !== "human-danger-warning")
-    || (
-      event.priority === (record.kind === "human-danger-warning"
-        ? HUMAN_DANGER_WARNING_PRIORITY
-        : 760_000)
+  if (record.kind === "core-wildlife-fish-crow-alarm") {
+    return event.priority === coreWildlifeAlarmExpressionPriority("fish-crow")
       && event.tone === "alarmed"
-      && event.volume === "shout"
-    );
+      && event.volume === "shout";
+  }
+  if (record.kind === "core-wildlife-alarm") {
+    return event.priority === coreWildlifeAlarmExpressionPriority(record.sourceSpecies)
+      && event.tone === "alarmed"
+      && event.volume === coreWildlifeAlarmVolume(record.sourceSpecies);
+  }
+  if (record.kind === "human-danger-warning") {
+    return event.priority === HUMAN_DANGER_WARNING_PRIORITY
+      && event.tone === "alarmed"
+      && event.volume === "shout";
+  }
+  return true;
 }
 
 function sampleAcousticsMatchAdmission(
@@ -353,10 +362,17 @@ function sampleAcousticsMatchAdmission(
     : record.kind === "core-wildlife-alarm"
       ? coreWildlifeAlarmMeaning(record.sourceSpecies)
       : "human-danger-warning";
-  const acoustics = situatedExpressionAcoustics({ meaning, volume: "shout" });
+  const volume = record.kind === "core-wildlife-alarm"
+    ? coreWildlifeAlarmVolume(record.sourceSpecies)
+    : "shout";
+  const acoustics = situatedExpressionAcoustics({ meaning, volume });
   return sample.soundLoudness === acoustics.loudness
     && sample.soundRangeUnits === acoustics.rangeUnits
-    && sample.soundInterrupt === "strong";
+    && sample.soundInterrupt === situatedExpressionSoundInterrupt({
+      meaning,
+      tone: "alarmed",
+      volume,
+    });
 }
 
 function admissionDurationSteps(
@@ -400,6 +416,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "guardian-dog-shelter-whine": return 8;
     case "fish-crow-alarm-call": return 6;
     case "deer-alarm-call": return 6;
+    case "marsh-rabbit-alarm-thump": return 6;
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
@@ -435,7 +452,20 @@ function coreWildlifeAlarmMeaning(
     { readonly kind: "core-wildlife-alarm" }
   >["sourceSpecies"],
 ): SituatedExpressionMemory["meaning"] {
-  return species === "fish-crow" ? "fish-crow-alarm-call" : "deer-alarm-call";
+  switch (species) {
+    case "fish-crow": return "fish-crow-alarm-call";
+    case "deer": return "deer-alarm-call";
+    case "marsh-rabbit": return "marsh-rabbit-alarm-thump";
+  }
+}
+
+function coreWildlifeAlarmVolume(
+  species: Extract<
+    SituatedExpressionAdmissionRecord,
+    { readonly kind: "core-wildlife-alarm" }
+  >["sourceSpecies"],
+): "murmur" | "shout" {
+  return species === "marsh-rabbit" ? "murmur" : "shout";
 }
 
 function isLegacyV33PlayerMeaning(

@@ -508,7 +508,8 @@ button:disabled {
   white-space: pre-line;
 }
 
-.relief-world-label[data-acoustic-kind="physical"] {
+.relief-world-label[data-acoustic-kind="physical"],
+.relief-world-label[data-acoustic-kind="embodied-signal"] {
   font-style: italic;
   font-weight: 560;
   letter-spacing: 0.025em;

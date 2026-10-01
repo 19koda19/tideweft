@@ -5379,7 +5379,12 @@ export function createTideweftRenderer(
         p.rectMode(p.CENTER);
         for (const placed of layout.placements) {
           const acousticText = placed.candidate.acousticText;
-          p.textStyle(acousticText.acousticKind === "physical" ? p.ITALIC : p.BOLD);
+          p.textStyle(
+            acousticText.acousticKind === "physical"
+              || acousticText.acousticKind === "embodied-signal"
+              ? p.ITALIC
+              : p.BOLD,
+          );
           usedLabelPositions.add(`acoustic-text-${acousticText.id}`);
           const presentation = situatedExpressionPresentation(acousticText.tone);
           const centerX = placed.rect.x + placed.rect.width / 2;

@@ -7,6 +7,7 @@ import { coreEcologyAlarmSignalProfile } from "./coreEcology";
 import { CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS } from "./coreEcologyPerception";
 import { livingActorSenseProfile } from "./livingActorSenses";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
+import type { AcousticInterrupt } from "./worldAcoustics";
 
 export interface SituatedExpressionAcoustics {
   readonly loudness: number;
@@ -17,7 +18,8 @@ export type SituatedExpressionSoundClass =
   | "human-vocalization"
   | "danger-sound"
   | "animal-alarm"
-  | "animal-call";
+  | "animal-call"
+  | "physical-thud";
 
 const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
   "guardian-dog-warning",
@@ -36,9 +38,27 @@ export function situatedExpressionSoundClass(
 ): SituatedExpressionSoundClass {
   const meaning = typeof value === "string" ? value : value.meaning;
   if (meaning === "human-danger-warning") return "danger-sound";
+  // The rabbit's alarm is meaningful to ecology, but a human receives the
+  // body/ground sound itself rather than magically decoding its intent.
+  if (meaning === "marsh-rabbit-alarm-thump") return "physical-thud";
   if (ANIMAL_ALARM_MEANINGS.has(meaning)) return "animal-alarm";
   if (ANIMAL_CALL_MEANINGS.has(meaning)) return "animal-call";
   return "human-vocalization";
+}
+
+/**
+ * One semantic urgency owner for simulation interruption and accessible-caption
+ * priority. Alarmed tone alone is not sufficient: a rabbit's local foot-thump
+ * communicates danger without becoming a wake-up or screen-reader interruption.
+ */
+export function situatedExpressionSoundInterrupt(
+  value: Pick<SituatedExpressionEvent, "meaning" | "tone" | "volume">
+    | Pick<SituatedExpressionIntent, "meaning" | "tone" | "volume">,
+): AcousticInterrupt {
+  if (value.meaning === "marsh-rabbit-alarm-thump") {
+    return coreEcologyAlarmSignalProfile("marsh-rabbit").interrupt;
+  }
+  return value.tone === "alarmed" || value.volume === "shout" ? "strong" : "none";
 }
 
 /**
@@ -55,7 +75,11 @@ export function situatedExpressionAcoustics(
   const volume = typeof value === "string" ? value : value.volume;
   if (
     typeof value !== "string"
-    && (value.meaning === "fish-crow-alarm-call" || value.meaning === "deer-alarm-call")
+    && (
+      value.meaning === "fish-crow-alarm-call"
+      || value.meaning === "deer-alarm-call"
+      || value.meaning === "marsh-rabbit-alarm-thump"
+    )
   ) {
     // Core ecology already owns this physical signal. Supplemental samples
     // reach humans only, so bake the same human hearing sensitivity into the
@@ -63,7 +87,11 @@ export function situatedExpressionAcoustics(
     // second, much larger acoustic world.
     return Object.freeze({
       loudness: coreEcologyAlarmSignalProfile(
-        value.meaning === "fish-crow-alarm-call" ? "fish-crow" : "deer",
+        value.meaning === "fish-crow-alarm-call"
+          ? "fish-crow"
+          : value.meaning === "deer-alarm-call"
+            ? "deer"
+            : "marsh-rabbit",
       ).sourceLoudness,
       rangeUnits: Math.floor(
         CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS

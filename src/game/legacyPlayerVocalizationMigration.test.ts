@@ -255,6 +255,19 @@ describe("legacy v33 player-vocalization migration", () => {
     });
     expect(migrateLegacyV33PlayerVocalizations(fishCrow.state, [], 108, 0)).toBeNull();
 
+    const marshRabbit = accept(createSituatedExpressionState(), {
+      ...baseIntent("legacy:future-marsh-rabbit"),
+      meaning: "marsh-rabbit-alarm-thump",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "murmur",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 840_000,
+      durationSteps: 6,
+    });
+    expect(migrateLegacyV33PlayerVocalizations(marshRabbit.state, [], 108, 0)).toBeNull();
+
     const player = accept(createSituatedExpressionState(), stumble("legacy:bad-id"));
     expect(migrateLegacyV33PlayerVocalizations(
       player.state,

@@ -24,6 +24,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-shelter-whine",
   "fish-crow-alarm-call",
   "deer-alarm-call",
+  "marsh-rabbit-alarm-thump",
   "human-danger-warning",
   "keeper-secure-store-response",
   "need-rest-after-exertion",
@@ -75,7 +76,11 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
 export type SituatedExpressionKnowledgeBasis =
   (typeof SITUATED_EXPRESSION_KNOWLEDGE_BASES)[number];
 
-/** Renderer/audio-neutral contour; no consumer needs to inspect English prose. */
+/**
+ * Renderer/audio-neutral acoustic realization key. The historical type name
+ * remains serialized, but a realization may be vocal or an embodied signal;
+ * consumers never infer either from English prose.
+ */
 export type SituatedExpressionVocalization =
   | "steady"
   | "strained"
@@ -85,7 +90,8 @@ export type SituatedExpressionVocalization =
   | "dog-defensive-growl"
   | "dog-shelter-whine"
   | "fish-crow-alarm"
-  | "deer-alarm-snort";
+  | "deer-alarm-snort"
+  | "marsh-rabbit-alarm-thump";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -306,6 +312,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "marsh-rabbit-alarm-thump": Object.freeze({
+    family: "animal-signal",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["murmur"]),
+    vocalization: "marsh-rabbit-alarm-thump",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
   "human-danger-warning": Object.freeze({
     family: "warning",
     knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
@@ -447,6 +462,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.deer-alarm-call.0",
       text: "SNORT!",
+    }),
+  ]),
+  "marsh-rabbit-alarm-thump": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.marsh-rabbit-alarm-thump.0",
+      text: "thump",
     }),
   ]),
   "human-danger-warning": Object.freeze([
@@ -1062,7 +1083,8 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "dog-defensive-growl"
     || value === "dog-shelter-whine"
     || value === "fish-crow-alarm"
-    || value === "deer-alarm-snort";
+    || value === "deer-alarm-snort"
+    || value === "marsh-rabbit-alarm-thump";
 }
 
 function validId(value: unknown): value is string {

@@ -43,8 +43,13 @@ export function shouldResetAcousticCaptionAnnouncementLedger(
 
 /** Shared visible wording for the bounded expression-caption surface. */
 export function situatedExpressionCaptionVisibleText(caption: Caption): string {
-  if (caption.presentationKind === "physical") {
-    const sound = caption.physicalSoundKind === undefined ? "sound" : caption.text;
+  if (
+    caption.presentationKind === "physical"
+    || caption.presentationKind === "embodied-signal"
+  ) {
+    const sound = caption.presentationKind === "embodied-signal"
+      ? caption.text
+      : caption.physicalSoundKind === undefined ? "sound" : caption.text;
     return caption.directionLabel === undefined
       ? `[${sound}]`
       : `[${sound} · ${caption.directionLabel}]`;
@@ -56,8 +61,13 @@ export function situatedExpressionCaptionVisibleText(caption: Caption): string {
 
 /** Shared visible and live-region wording for one situated expression. */
 export function situatedExpressionCaptionCopy(caption: Caption): string {
-  if (caption.presentationKind === "physical") {
-    const sound = caption.physicalSoundKind === undefined ? "sound" : caption.text;
+  if (
+    caption.presentationKind === "physical"
+    || caption.presentationKind === "embodied-signal"
+  ) {
+    const sound = caption.presentationKind === "embodied-signal"
+      ? caption.text
+      : caption.physicalSoundKind === undefined ? "sound" : caption.text;
     if (caption.directionLabel === undefined) return `[${sound}]`;
     if (caption.directionLabel === "all around") return `[${sound}; all around.]`;
     if (caption.directionLabel === "direction unclear") return `[${sound}; direction unclear.]`;
@@ -72,9 +82,9 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
           ? "A deer"
           : caption.animalCallKind === "animal-call"
             ? "An animal"
-        : caption.speakerLabel === "Familiar dog"
-          ? "The familiar dog"
-          : "A dog";
+            : caption.speakerLabel === "Familiar dog"
+              ? "The familiar dog"
+              : "A dog";
     const call = caption.animalCallKind === "whine"
       ? { visible: "whines softly", directional: "whines" }
       : caption.animalCallKind === "growl"
@@ -86,7 +96,7 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
           : caption.animalCallKind === "deer-call"
             || caption.animalCallKind === "animal-call"
             ? { visible: "snorts sharply", directional: "snorts" }
-        : { visible: "calls", directional: "calls" };
+            : { visible: "calls", directional: "calls" };
     if (caption.directionLabel === undefined) return `[${subject} ${call.visible}.]`;
     if (caption.directionLabel === "all around") {
       return `[${subject} ${call.directional}; the sound seems all around.]`;
