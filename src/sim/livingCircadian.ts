@@ -30,6 +30,8 @@ export const LIVING_CIRCADIAN_PROFILE_IDS = Object.freeze([
 ] as const);
 export type LivingCircadianProfileId = (typeof LIVING_CIRCADIAN_PROFILE_IDS)[number];
 
+// Vocabulary is not implementation evidence. Each non-clock driver still
+// requires an owning runtime adapter and a lawful current signal.
 export const LIVING_CIRCADIAN_DRIVERS = Object.freeze([
   "clock",
   "tide",

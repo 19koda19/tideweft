@@ -1324,6 +1324,10 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
     for (const resident of residents) {
       const hungerGrowth = Math.trunc((34_000 * pressure) / FIXED_POINT);
       resident.needs.food = clampInteger(resident.needs.food + hungerGrowth - (foodServed ? 68_000 : 0) - (waterServed ? 8_000 : 0));
+      // Supported pre-Turning-Day residents may lack the optional receipt and
+      // retain the old clock-only recovery rule. Current residents bind to the
+      // physical settlement-rest contract; this is compatibility, not a model
+      // for new daily-life content.
       const restDelta = residentHasCircadianBinding(resident)
         ? residentCircadianRestIsRestorative(world, resident) ? -52_000 : 24_000
         : isRestPeriod ? -52_000 : 24_000;
@@ -1349,6 +1353,9 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
     resident.needs.food = clampInteger(
       resident.needs.food + Math.trunc((34_000 * pressure) / FIXED_POINT),
     );
+    // Preserve the same explicit legacy exception while a supported old
+    // resident is still travelling unbound. New/current bound residents cannot
+    // recover a rest need merely because the clock says night.
     const restDelta = residentHasCircadianBinding(resident)
       ? 24_000
       : isRestPeriod ? -18_000 : 24_000;

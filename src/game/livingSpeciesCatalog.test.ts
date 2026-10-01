@@ -451,6 +451,45 @@ describe("Living Weft species module catalog", () => {
     }
   });
 
+  it("publishes the bounded resident routine without rewriting pre-Turning-Day catalogs", () => {
+    expect(livingSpeciesModule("human")?.activity.circadian).toEqual({
+      status: "active",
+      ownerId: "game:resident-circadian:v1",
+      rhythm: "diurnal",
+      cadenceTicks: 1,
+      phaseBias: 0,
+    });
+    // The one working dog's kennel routine is role-specific. It does not make
+    // independent or future companion dogs species-wide circadian actors.
+    expect(livingSpeciesModule("domestic-dog")?.activity.circadian).toEqual({
+      status: "unimplemented",
+      ownerId: null,
+      rhythm: "unspecified",
+      cadenceTicks: 0,
+      phaseBias: 0,
+    });
+
+    for (const catalog of [
+      LIVING_SPECIES_ALPHA32_CATALOG,
+      LIVING_SPECIES_ALPHA33_CATALOG,
+      LIVING_SPECIES_ALPHA34_CATALOG,
+      LIVING_SPECIES_ALPHA35_CATALOG,
+      LIVING_SPECIES_ALPHA36_CATALOG,
+      LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG,
+      LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG,
+      LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
+    ]) {
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "human")
+        ?.activity.circadian).toEqual({
+          status: "unimplemented",
+          ownerId: null,
+          rhythm: "unspecified",
+          cadenceTicks: 0,
+          phaseBias: 0,
+        });
+    }
+  });
+
   it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
     for (const species of ["deer", "gull", "black-bear"] as const) {
       const module = livingSpeciesModule(species);
@@ -2838,7 +2877,8 @@ describe("Living Weft species module catalog", () => {
         extremeRegions: true,
       });
       expect(module.activity.circadian.status).toBe(
-        coreEcologySpeciesHasRuntimeCapability(module.speciesId, "diurnal-activity")
+        module.speciesId === "human"
+          || coreEcologySpeciesHasRuntimeCapability(module.speciesId, "diurnal-activity")
           || coreEcologySpeciesHasRuntimeCapability(module.speciesId, "circadian-activity")
           ? "active"
           : "unimplemented",

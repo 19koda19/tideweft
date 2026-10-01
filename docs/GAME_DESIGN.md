@@ -1429,6 +1429,17 @@ artifact; and the runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
 is active in the local unpublished candidate.
 
+The audited current Turning Day boundary is deliberately narrower than “every
+actor has a daily life.” Its live play is the shared clock/light, player time
+actions, bounded rest/activity for forty-two current residents, one working
+dog and seventeen addressable wildlife profiles. A settlement rest refuge is
+not a rendered house or bed; resident occupations are not work shifts; animal
+foraging posture is not proof of conserved feeding; and the remaining wildlife,
+independent dog, future companion, camps, interiors, fatigue/health/dreams,
+seasons and general nocturnal soundscape retain their later owners. The current
+human catalog advertises the enacted resident routine, while authenticated
+pre-Turning-Day catalogs preserve their former no-routine declaration.
+
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
 Individual coarse simulation remains intentionally modest. It ages needs and condition, decays perception with no observations, and honors only the remainder of an already-committed intent before returning to neutral observation. It cannot invent sensing, movement, a resource claim, or a new decision while unloaded. Full/coarse/full transitions preserve every representative identity and reconcile materialized positions with persistent group anchors rather than respawning a different herd or flock.

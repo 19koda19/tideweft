@@ -1137,7 +1137,8 @@ const WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION = 34;
 /** First save with the player-facing situated-expression carry (player voices only). */
 const PLAYER_EXPRESSION_GAME_SAVE_VERSION = 33;
 const PLAYER_RECOVERY_GAME_SAVE_VERSION = 32;
-const TURNING_DAY_GAME_SAVE_VERSION = 31;
+/** First outer save whose residents/animals may persist circadian receipts. */
+const CIRCADIAN_RECEIPT_GAME_SAVE_VERSION = 31;
 const REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION = 30;
 const REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION = 29;
 const REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION = 28;
@@ -1230,7 +1231,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION,
   REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION,
   REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION,
-  TURNING_DAY_GAME_SAVE_VERSION,
+  CIRCADIAN_RECEIPT_GAME_SAVE_VERSION,
   PLAYER_RECOVERY_GAME_SAVE_VERSION,
   PLAYER_EXPRESSION_GAME_SAVE_VERSION,
   WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION,
@@ -21909,7 +21910,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
-        || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
+        || decoded.version === CIRCADIAN_RECEIPT_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V5_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V4_GAME_SAVE_VERSION
@@ -22239,7 +22240,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
       || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
-      || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
+      || decoded.version === CIRCADIAN_RECEIPT_GAME_SAVE_VERSION
       || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
     )
       ? (() => {
@@ -22273,7 +22274,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || decoded.version === WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_EXPRESSION_GAME_SAVE_VERSION
         || decoded.version === PLAYER_RECOVERY_GAME_SAVE_VERSION
-        || decoded.version === TURNING_DAY_GAME_SAVE_VERSION
+        || decoded.version === CIRCADIAN_RECEIPT_GAME_SAVE_VERSION
         || decoded.version === REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION
       )
       && persistedRegionalEcologyV6 === null

@@ -839,8 +839,10 @@ lower authority while retaining the higher routine projection and action
 logic. Together they project AWAKE, RESTING, ASLEEP, and STARTLED from the one
 world clock, a stable identity-derived phase offset, an authenticated rest
 destination, lawful current disturbance, and explicit priority inputs. Each
-profile also projects a stable bounded next-evaluation hint; runtime scheduling
-does not yet consume that hint. Their four reusable policies are day-active,
+profile also projects a stable bounded next-evaluation hint. That hint does not
+skip or schedule general resident/wildlife projection; only the bounded
+working-dog neutral-intent adapter currently carries it into the dog's existing
+`nextThinkTick` gate. Their four reusable policies are day-active,
 night-active, twilight-active, and adaptive-active; orthogonal driver
 vocabulary is clock, tide, weather, and opportunity. A policy owns a fixed-
 point wake-sensitivity threshold rather than making every nearby observation
@@ -1282,6 +1284,35 @@ cache-bypassed production files matched the exact 4,377,380-byte tested web
 artifact; and its runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
 is active in the local unpublished candidate.
+
+### Turning Day audited current boundary
+
+The released result is a bounded circadian composition, not a complete daily-
+life simulation. `LIVE` means one saved clock; outdoor phase/light shared by
+perception and both views; player WAIT/REST/SLEEP through ordinary fixed steps;
+neutral settlement-rest physiology for the forty-two current humans; one
+kennel-bound settlement working dog; and the seventeen existing addressable
+wildlife activity profiles. Human occupation labels do not create shifts,
+commutes, shop hours, physical homes or production. The other wildlife
+profiles, aggregate animals, independent dog, future companion, camp/bed
+sleep, fatigue/health/dream effects, feeding, seasons and hibernation do not
+become live merely because the shared vocabulary can represent them.
+
+An occupied settlement is currently an authenticated reciprocal rest refuge.
+That is an intentional geometric abstraction, not a claim that a room, bed or
+interior exists. Supported pre-Turning-Day residents without the optional
+receipt retain their historical clock-only recovery rule until lawful current
+adoption; that compatibility exception is not the contract for new actors.
+Production cover transmission remains fully open, and only completed-beacon
+`settlement-lamp` records currently produce local outdoor light. Accepted
+fire, lantern, other-light and non-clock driver values are integration
+vocabulary until a real owner emits them.
+
+Turning Day supplies Living Voice with honest clock phase, physical light,
+posture and lawful interruption/perception inputs. It does not itself produce
+night insect density, meaningful negative-evidence silence, quieter night
+masking, time-aware chatter or additional animal calls. Those bridges remain
+`SPECIFIED` until environment, ecology or actor owners create real causes.
 
 ## Authoritative tick
 

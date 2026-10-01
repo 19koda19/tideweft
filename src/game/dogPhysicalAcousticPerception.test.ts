@@ -5,6 +5,7 @@ import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT } from "../sim/types";
 import { hashCanonical } from "../sim/util";
+import { WORLD_DAY_START_TICK, WORLD_NIGHT_START_TICK } from "../sim/worldTime";
 import { createDogActorState } from "./dogActor";
 import {
   DOG_PHYSICAL_ACOUSTIC_MAX_LISTENERS,
@@ -208,5 +209,43 @@ describe("dog physical-acoustic perception bridge", () => {
       window,
       targetTick,
     })?.[0]?.observations).toEqual([]);
+  });
+
+  it("does not invent a quiet-night hearing bonus without a physical soundscape source", () => {
+    const state = createWorld("dog acoustic day phase is not ambient masking", "standard");
+    state.weather = {
+      ...state.weather,
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+    };
+    state.tide = { ...state.tide, level: 0 };
+    const economy = createWorldView(state);
+    const window = createRegionalTerrainWindow(
+      state.meta.rootSeed,
+      createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed }),
+      { x: 0, y: 0 },
+    );
+    const world = createRegionalWorldView(
+      economy,
+      window,
+      projectRegionalCartographyWindow(
+        createRegionalCartography(state.meta.rootSeed),
+        window,
+      ),
+    );
+    for (const tile of world.terrain.tiles) {
+      tile.terrain = "meadow";
+      tile.elevation = 0;
+      tile.roughness = 0;
+      tile.waterDepth = 0;
+    }
+    const listenerTileIndex = 30 * world.terrain.width + 30;
+
+    expect(ambientNoiseAt({ ...world, completedTick: WORLD_DAY_START_TICK }, listenerTileIndex))
+      .toBe(0);
+    expect(ambientNoiseAt({ ...world, completedTick: WORLD_NIGHT_START_TICK }, listenerTileIndex))
+      .toBe(0);
   });
 });

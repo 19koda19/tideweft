@@ -166,7 +166,7 @@ describe("Turning Day bounded multi-day closure budget", () => {
     const currentRecord = await createCurrentProductionRecord();
     const envelope = decodeCurrentEnvelope(currentRecord);
     const productionV6 = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
-    if (productionV6 === null) throw new Error("Current V34 save lost its V6 ecology root");
+    if (productionV6 === null) throw new Error("Current save lost its V6 ecology root");
     expect(serializeRegionalEcologyStateV6(productionV6)).toBe(envelope.regionalEcology);
     expect(productionV6.updatedAtTick).toBe(PRODUCTION_FIXTURE_TICK);
     const productionWorld = deserializeWorld(envelope.world);
@@ -359,7 +359,7 @@ describe("Turning Day bounded multi-day closure budget", () => {
       ownerId: TURNING_DAY_MULTI_DAY_BUDGET_OWNER_INTENT,
       days: SOAK_DAYS,
       ticks: SOAK_TICKS,
-      v34EnvelopeBytes: serializedBytes(currentRecord.worldJson),
+      currentEnvelopeBytes: serializedBytes(currentRecord.worldJson),
       v6EcologyBytes: serializedBytes(envelope.regionalEcology),
       v6SourceKey: productionRoutine.sourceKey,
       v6SourceKind: productionRoutine.sourceKind,

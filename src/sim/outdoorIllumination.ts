@@ -17,6 +17,10 @@ export const OUTDOOR_ILLUMINATION_VERSION = 1 as const;
 export const MAX_OUTDOOR_LOCAL_LIGHT_SOURCES = 16 as const;
 export const MAX_OUTDOOR_LOCAL_LIGHT_RADIUS_TILES = 64 as const;
 
+// Shared vocabulary reserves future physical sources without promoting them to
+// live gameplay. Production currently derives only completed-beacon
+// `settlement-lamp` records; fire, carried lanterns, and other sources still
+// require their own authoritative producers.
 export const OUTDOOR_LOCAL_LIGHT_KINDS = [
   "settlement-lamp",
   "fire",

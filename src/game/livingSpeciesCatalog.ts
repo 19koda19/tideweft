@@ -1095,6 +1095,13 @@ const noCircadianSchedule = (): LivingSpeciesCircadianContract => ({
   cadenceTicks: 0,
   phaseBias: 0,
 });
+const currentResidentCircadianSchedule = (): LivingSpeciesCircadianContract => ({
+  status: "active",
+  ownerId: "game:resident-circadian:v1",
+  rhythm: "diurnal",
+  cadenceTicks: 1,
+  phaseBias: 0,
+});
 const noSound = (): LivingSpeciesSoundContract => ({
   implementation: "unimplemented",
   ownerId: null,
@@ -5214,7 +5221,7 @@ const CURRENT_MODULE_INPUTS: readonly LivingSpeciesModule[] = [
       decisionModel: "individual",
       decisionCadenceTicks: 1,
       offscreenModel: "individual",
-      circadian: noCircadianSchedule(),
+      circadian: currentResidentCircadianSchedule(),
     },
     social: {
       implementation: "active",
@@ -5458,6 +5465,9 @@ const CURRENT_MODULE_INPUTS: readonly LivingSpeciesModule[] = [
       decisionModel: "individual",
       decisionCadenceTicks: 4,
       offscreenModel: "none",
+      // Only the one settlement working-dog role currently owns an enacted
+      // kennel routine. The species-wide dog profile must not promote that
+      // bounded role adapter into independent or companion-dog daily life.
       circadian: noCircadianSchedule(),
     },
     social: {
@@ -5737,6 +5747,9 @@ const HISTORICAL_PRE_VOICE_HEARING_SPECIES: ReadonlySet<string> = new Set([
   "domestic-dog",
   "human",
 ]);
+const HISTORICAL_PRE_TURNING_DAY_CIRCADIAN_SPECIES: ReadonlySet<string> = new Set([
+  "human",
+]);
 
 /**
  * Released catalog children authenticate their original declarations. Current
@@ -5751,9 +5764,13 @@ function historicalReleaseCompatibilityModule(
   const coreWildlifeSpecies = CORE_WILDLIFE_SPECIES.includes(
     module.speciesId as CoreWildlifeSpecies,
   );
-  const historicalCircadian = coreWildlifeSpecies
-    ? legacyBoundedCircadian(module.speciesId as CoreWildlifeSpecies)
-    : module.activity.circadian;
+  const historicalCircadian = HISTORICAL_PRE_TURNING_DAY_CIRCADIAN_SPECIES.has(
+    module.speciesId,
+  )
+    ? noCircadianSchedule()
+    : coreWildlifeSpecies
+      ? legacyBoundedCircadian(module.speciesId as CoreWildlifeSpecies)
+      : module.activity.circadian;
   const historicalActivityOwnerId = coreWildlifeSpecies && module.speciesId === "marsh-rabbit"
     ? "game:core-wildlife-actor:v1"
     : module.activity.ownerId;

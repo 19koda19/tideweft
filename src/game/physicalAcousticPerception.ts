@@ -201,7 +201,11 @@ export function evaluatePhysicalAcousticListener(
     : Object.freeze({ kind: "heard", contact, observation });
 }
 
-/** Shared listener-local rain/current masking used by every acoustic consumer. */
+/**
+ * Shared listener-local rain/current masking used by every acoustic consumer.
+ * Day phase alone is not a magic "quiet night" modifier: a future nocturnal
+ * soundscape must contribute real environment/ecology-owned acoustic sources.
+ */
 export function ambientNoiseAt(world: WorldView, listenerTileIndex: number): number | null {
   const listener = world.terrain.tiles[listenerTileIndex];
   if (!validTerrainTile(listener, listenerTileIndex, world.terrain.width)) return null;
