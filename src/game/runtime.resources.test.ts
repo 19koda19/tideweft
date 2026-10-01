@@ -667,13 +667,25 @@ describe("runtime field-resource integration", () => {
     scheduledFrame = undefined;
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({ type: "resume-world" });
+    expect(runtime.getUIView().kit?.gearRows.find(({ id }) => id === "61"))
+      .toMatchObject({
+        lotId: sourceLot.id,
+        condition: 0.008,
+        location: "carried",
+        locationLabel: "Carried in PACK · ACTIVE WHEN APPLICABLE",
+      });
     soundscapePlay.mockClear();
     runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(runtime, 1);
     runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
 
     expect(runtime.getUIView().kit?.gearRows.find(({ id }) => id === "61"))
-      .toMatchObject({ lotId: sourceLot.id, condition: 0 });
+      .toMatchObject({
+        lotId: sourceLot.id,
+        condition: 0,
+        location: "carried",
+        locationLabel: "Carried in PACK · BROKEN · NO BENEFIT",
+      });
     expect(runtime.getRenderView().acousticText).toEqual(expect.arrayContaining([
       expect.objectContaining({
         acousticKind: "physical",
@@ -721,7 +733,12 @@ describe("runtime field-resource integration", () => {
     reloaded.dispatchUI({ type: "resume-world" });
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     expect(reloaded.getUIView().kit?.gearRows.find(({ id }) => id === "61"))
-      .toMatchObject({ lotId: sourceLot.id, condition: 0 });
+      .toMatchObject({
+        lotId: sourceLot.id,
+        condition: 0,
+        location: "carried",
+        locationLabel: "Carried in PACK · BROKEN · NO BENEFIT",
+      });
     expect(reloaded.getRenderView().acousticText?.some(({ id }) => (
       id === crackLabel.id
     ))).toBe(false);

@@ -9,9 +9,9 @@ import {
 /**
  * Pure carried-gear resolver.
  *
- * Positive-condition gear is auto-equipped. Queries never mutate or spend
- * durability; callers explicitly apply one named service event only after its
- * benefit was actually used by authoritative gameplay.
+ * Positive-condition carried gear is eligible for contextual effects. Queries
+ * never mutate or spend durability; callers explicitly apply one named service
+ * event only after its benefit was actually used by authoritative gameplay.
  */
 
 export const PASSIVE_GEAR_KINDS = [

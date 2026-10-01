@@ -25,6 +25,7 @@ export const KIT_REPAIR_CONDITION_GAIN = 250_000 as const;
 export type KitTabId = "pack" | "make" | "mend";
 export type KitStackTier = "raw" | "component";
 export type KitStackLocation = "pack" | "locker";
+/** Production currently projects carried/deployed gear; equipped/locker are reserved integrations. */
 export type KitGearLocation = "carried" | "equipped" | "locker" | "deployed";
 
 /** Physical Promise/report load shown separately inside the combined pack. */

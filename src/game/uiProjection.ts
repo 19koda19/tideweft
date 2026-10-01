@@ -983,7 +983,7 @@ function projectKit(
       label: `${definition.label} #${gear.id}`,
       detail: gearPurpose(gear.kind),
       location: "carried" as const,
-      locationLabel: "Carried in PACK",
+      locationLabel: carriedGearStatusLabel(gear.kind, gear.condition),
       loadMilli: definition.loadMilli,
       condition: gear.condition / FIXED_POINT,
       conditionLabel: conditionBand(gear.condition),
@@ -1199,6 +1199,17 @@ function gearPurpose(kind: string): string {
     case "wind-knot": return "STAGED CRAFTED SPARE · the inherited core knots remain deployable.";
     default: return "Durable field adaptation.";
   }
+}
+
+function carriedGearStatusLabel(kind: string, condition: number): string {
+  const live = kind === "float-sash"
+    || kind === "marsh-wraps"
+    || kind === "ridge-cleats"
+    || kind === "weather-cape";
+  if (!live) return "Carried in PACK · EFFECT STAGED";
+  return condition <= 0
+    ? "Carried in PACK · BROKEN · NO BENEFIT"
+    : "Carried in PACK · ACTIVE WHEN APPLICABLE";
 }
 
 function projectFieldReadout(

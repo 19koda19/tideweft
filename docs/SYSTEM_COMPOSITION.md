@@ -198,7 +198,7 @@ recipes, or pair-specific scripts.
 | --- | --- | --- | --- | --- | --- |
 | Compatibility-region field node | conserved raw material | player PACK | LIVE | STRONG | Gathering leaves a living reserve and records sparse depletion. Sources outside the compatibility region remain incomplete. |
 | Raw field material | prepared component | gear recipes and repair | LIVE | STRONG | Six components consume exact stacks through an atomic DAG. |
-| Components / raw materials | stable gear item | traversal benefit, carrying, wear, MEND, dismantle | PARTIAL | MODERATE | Four wearables have live physical benefits; seven catalog outputs are physical but gameplay-staged. |
+| Components / raw materials | stable carried gear item | contextual traversal benefit, wear, MEND, dismantle | PARTIAL | MODERATE | Four positive-condition wearables auto-apply while carried through one deterministic winner per benefit channel; seven catalog outputs are physical but gameplay-staged. Manual equipped state and a separate gear tab are not live. |
 | Gear use | condition loss | MEND, replacement, lossy dismantle | LIVE | STRONG | Wear occurs only when a benefit resolves. Repair and salvage conserve exact inputs/outputs. |
 | Living plant | biomass / physical part | current material catalog | SPECIFIED | NONE | Present resource nodes are abstractions, not living plants. Botany must reconcile rather than duplicate their stock. |
 | Settlement recipe clock | abstract food/water/reed/medicine/parts | settlement inventory ledger | LIVE | MODERATE | Production is deterministic and ledgered, but some inputs are abstract or empty and no worker owns the act. |
@@ -228,7 +228,7 @@ recipes, or pair-specific scripts.
 | --- | --- | --- | --- | --- | --- | --- |
 | Nine field materials | deterministic compatibility-region nodes | direct use or six components | MAKE, MEND, four live and seven staged gear kinds | none | node regrowth only | PARTIAL |
 | Prepared components | player MAKE | atomic recipe DAG | gear construction, repair, dismantle ancestry | none | none | LIVE |
-| Crafted gear | player MAKE | use, condition, repair, dismantle | four live travel effects; exact ridge-cleat break can produce one shared acoustic consequence | no market or NPC material use; nearby humans may hear only the anonymous break | none | PARTIAL |
+| Crafted gear | player MAKE | carried auto-use, condition, repair, dismantle | four live travel effects; exact ridge-cleat break can produce one shared acoustic consequence | no market or NPC material use; nearby humans may hear only the anonymous break | same stable item remains carried or loose; no separate equipped copy | PARTIAL |
 | Physical provisions | bounded initial/store lots | direct finite consumption | dogs, rats, livestock, selected wildlife | no ordinary producer/trade path | consumed units leave the lot | PARTIAL |
 | Rabbit-body resource | exact mortality transaction | finite claims/feeding | six scavenger/predator profiles | no human processing | finite remains; no live decay caller | LIVE |
 | Animal-derived material | no runtime source | future body processing | no runtime consumer | none | retained carcass required | SPECIFIED |
@@ -245,7 +245,7 @@ and physical outputs without a currently active final gameplay verb.
 | --- | --- | --- | --- | --- | --- | --- |
 | Player Promise parcel | settlement pickup | delivery, drop, recovery | condition changes physically | no sale | stable physical identity | LIVE |
 | Autonomous porter cargo | settlement assignment | route delivery | weather/tide affect condition | aggregate resident custody; no nearby parcel projection | conserved contract quantity / manifests | PARTIAL |
-| Four live wearables | gather + MAKE | terrain/weather adaptation | wear + MEND + dismantle | none | stable item ID | LIVE |
+| Four live wearables | gather + MAKE | auto-apply while carried to relevant terrain/weather | wear + MEND + dismantle | none | stable item ID; no equipped-state duplicate | LIVE |
 | Seven staged gear kinds | gather + MAKE | advertised verb not live | MEND + dismantle | none | stable item ID | PARTIAL |
 | Six inherited Wayknots | starting field kit | deploy/reclaim/traversal/Harp | condition and anti-refresh | no sale/NPC use | stable identity | LIVE |
 | Civic field-tool rewards | completed project | traversal effect | limited enum state | none | saved unlock rather than stable physical identity | BYPASS |

@@ -472,6 +472,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("COMBINED LOAD");
     expect(copy).toContain("PACK, MAKE, and MEND");
     expect(copy).toContain("does not pause");
+    expect(copy).toContain("no separate equipment tab");
+    expect(copy).toContain("Positive-condition copies apply automatically while carried");
+    expect(copy).toContain("PACK labels live, broken, and staged gear explicitly");
     expect(copy).toContain("up to 25% condition");
     expect(copy).toContain("DISMANTLE is deliberately lossy");
     expect(tutorialControlById("kit-key")).toMatchObject({ input: "I", audience: "desktop" });

@@ -4,7 +4,7 @@
 
 This document began as the implementation contract for the gathering and crafting expansion. It is deliberately more exact than a feature wish list: identifiers, units, state ownership, migration behavior, anti-exploit rules, and exit tests were specified before the runtime began depending on them. The rollout ledger near the end now distinguishes what has crossed into authoritative play from the remaining contracts.
 
-The current source candidate contains deterministic gatherable resource nodes, a shared material/transport pack, recipes, durable condition, repairs, dismantling, and the anywhere PACK / MAKE / MEND KIT surface. Four wearable adaptations already affect authoritative travel: Marsh wraps, Float sash, Ridge cleats, and Weather cape. The six inherited Wayknots now retain wear across reclaim and redeployment, spend condition on those actions, and require a short setting period. Harbor lockers, crafted-Wayknot deployment, playable ladders and rock walls, Pannier capacity, cargo shroud/liner effects, and assisted-use Wayknot wear remain staged. Those boundaries are stated explicitly in KIT and the field manual rather than implied to be hidden mechanics.
+The current source candidate contains deterministic gatherable resource nodes, a shared material/transport pack, recipes, durable condition, repairs, dismantling, and the anywhere PACK / MAKE / MEND KIT surface. Four wearable adaptations already affect authoritative travel: Marsh wraps, Float sash, Ridge cleats, and Weather cape. Current positive-condition copies apply automatically while carried; there is no separate equipment tab, equip command, or saved equipped location. PACK exposes their identity, condition, and live/staged/broken status, while MEND owns repair and dismantling. The six inherited Wayknots now retain wear across reclaim and redeployment, spend condition on those actions, and require a short setting period. Harbor lockers, explicit equipped-state selection, crafted-Wayknot deployment, playable ladders and rock walls, Pannier capacity, cargo shroud/liner effects, and assisted-use Wayknot wear remain staged. Those boundaries are stated explicitly in KIT and the field manual rather than implied to be hidden mechanics.
 
 Existing live systems remain authoritative while this work lands:
 
@@ -157,11 +157,11 @@ The v2 pack has a base capacity of `18_000` milli-load. Older Alpha v2 records c
 
 Processing can shed water, loose bark, stone dust, and offcuts, so a recipe's output load need not equal its ingredients' carried load. That reduction is explicit recipe data and can never depend on inventory order. Deployed objects are no longer physically in the pack; reclaiming one requires enough free load for that exact item. The six migrated starter Wayknots remain dedicated field-kit pieces and do not suddenly consume promise capacity. This compatibility exception is explicit and cannot be used by newly crafted items.
 
-`packLoadMilli` is a pure sum over cargo, report, material stacks, component stacks, and carried/equipped adaptation instances. It must always be less than or equal to `packCapacityMilli`. The HUD continues to show a compact Cargo vital; KIT exposes the exact breakdown.
+`packLoadMilli` is a pure sum over cargo, report, material stacks, component stacks, and carried adaptation instances. It must always be less than or equal to `packCapacityMilli`. The HUD continues to show a compact Cargo vital; KIT exposes the exact breakdown. A later explicit equipped state must still count the same physical item exactly once.
 
-### Harbor material lockers
+### Future contract — Harbor material lockers
 
-Every harbor owns a local locker keyed by settlement ID. A locker can hold raw materials, components, and undeployed adaptations with non-negative integer counts or stable item IDs. It does not hold active Promise cargo or a signed report.
+Harbor lockers are not live. When this contract is implemented, each harbor owns a local locker keyed by settlement ID. A locker can hold raw materials, components, and undeployed adaptations with non-negative integer counts or stable item IDs. It does not hold active Promise cargo or a signed report.
 
 - Depositing and withdrawing require the player to stand at that harbor's exact interaction tile.
 - A locker cannot be read or spent remotely. The KIT may name known remote contents as an aged local record, using the same truthfulness discipline as settlement knowledge.
@@ -195,7 +195,7 @@ Components stack by ID and are not individually conditioned. Their explicit outp
 
 ### Adaptations
 
-Adaptation instances have stable monotonically allocated IDs, `condition` in `0..1_000_000`, and one location: carried, equipped, locker, or deployed. Load is derived from the canonical gear kind rather than trusted from a saved item. An item cannot occupy two locations, and an allocated ID is never reused.
+Adaptation instances have stable monotonically allocated IDs and `condition` in `0..1_000_000`. Current crafted adaptations are either carried by the conserved PACK carrier or exist as the same loose physical item after a drop; inherited Wayknots additionally support their established deployed state. Explicit equipped and locker locations are future contracts, not current state. Load is derived from the canonical gear kind rather than trusted from a saved item. An item cannot occupy two custody/location states, and an allocated ID is never reused.
 
 | Recipe ID | Adaptation | Inputs | Initial load | Specific benefit |
 | --- | --- | --- | ---: | --- |
@@ -211,7 +211,7 @@ Adaptation instances have stable monotonically allocated IDs, `condition` in `0.
 | `gear/tide-anchor` | Tide anchor | 1 Bladderkelp + 1 Braided cord + 2 Stone fittings | 5,000 | Supplies the existing anchor effect around sounded deep water |
 | `gear/wind-knot` | Wind knot | 1 Braided cord + 2 Stormweaves | 350 | Supplies the existing knot effect on exposed ground |
 
-Only one item per wearable slot can apply: feet, water, body, cargo-wrap, cargo-liner, and pack. Ladders and crafted Wayknots are deployables. Benefits combine through named bounded channels, not by multiplying duplicate copies. The UI shows the baseline hazard, each applied aid, and the final cost or risk before the player commits when that forecast is available.
+Current gear has no manual wearable-slot selection. Every positive-condition carried copy is eligible in context, and each named benefit channel chooses at most one deterministic winner, breaking equal eligibility by lowest stable item ID; duplicate copies never multiply. Feet, water, body, cargo-wrap, cargo-liner, and pack remain useful future equipment categories when a real consumer requires explicit selection. Ladders and crafted Wayknots are staged deployables. The UI shows each item's current live/staged/broken status and, when a forecast is available, the baseline hazard, applied aid, and final cost or risk before the player commits.
 
 The first runtime integration uses these target modifiers; `1_000` permille is neutral and smaller cost/risk multipliers are beneficial:
 
@@ -231,7 +231,7 @@ This structure follows a useful economy lesson described by CD Projekt Red: reci
 
 ### Condition, use, and repairs
 
-Condition is visible as a number and text band: sound `750_001..1_000_000`, worn `350_001..750_000`, frail `1..350_000`, broken `0`. An adaptation loses condition only when its named benefit actually changes a resolved cost, exposure, force, or fall risk. Merely walking while equipped causes no wear.
+Condition is visible as a number and text band: sound `750_001..1_000_000`, worn `350_001..750_000`, frail `1..350_000`, broken `0`. An adaptation loses condition only when its named benefit actually changes a resolved cost, exposure, force, or fall risk. Merely carrying an item—or, once explicit selection exists, equipping it—causes no wear.
 
 The four live traversal wearables already resolve their gameplay effects and service wear through runtime-owned data. Staged shroud, liner, and pannier integrations must use the same rule: one qualifying tile-entry event selects the strongest eligible instance per benefit channel, breaking ties by lowest stable item ID. The initial service cadence is:
 
@@ -262,7 +262,7 @@ A repair command requests a positive fixed-point condition gain. The real restor
 | Tide anchor | 2 Shellstone + 1 Braided cord |
 | Wind knot | 2 Stormlichen + 1 Cordreed |
 
-Repair is available from anywhere through KIT when the inputs are in the pack, the player is not swept, and the target is carried or equipped. A deployed aid must be reclaimed before mending. The preview shows real restoration and the exact proportional quote; failure consumes nothing.
+Repair is available from anywhere through KIT when the inputs and current target are carried in PACK and the player is not swept. A deployed aid must be reclaimed before mending. Future explicit equipped items must remain repairable through the same stable identity rather than being copied into another inventory. The preview shows real restoration and the exact proportional quote; failure consumes nothing.
 
 ### Lossy dismantling
 
@@ -345,7 +345,7 @@ The player can always inspect a ladder's endpoints, span, setting time, conditio
 
 ## KIT interface
 
-KIT is the single inventory, make, equip, store, and mend surface. It is available anywhere, but opening it does not pause world time or bypass location rules.
+KIT is the single inventory, make, inspect, drop/recover, and mend surface. It is available anywhere, but opening it does not pause world time or bypass location rules. Current live wearable effects apply automatically from carried positive-condition gear. Explicit equip/unequip and locker operations remain future extensions of this same surface, not hidden current tabs.
 
 ### Mobile
 
@@ -353,11 +353,11 @@ The compact action dock uses the slot freed by the hidden Title button for a 44 
 
 The mobile surface is a safe-area sheet below the four-vital strip and above the touch dock. It has one independently scrolling content region and three sticky, touch-sized tabs:
 
-- **PACK** — active Promise/report, load breakdown, raw materials, components, equipped gear, carried gear, and the current harbor locker when centered on a harbor;
+- **PACK** — active Promise/report, load breakdown, raw materials, components, and carried gear with explicit live/staged/broken status; future equipped and local-locker states join this same view when their transactions exist;
 - **MAKE** — stable-key recipe rows with output, purpose, inputs owned/needed, output load, and one exact disabled reason;
 - **MEND** — worn items ordered by condition then stable ID, showing current condition, restored amount, repair inputs, and location blockers.
 
-The close control, tabs, recipe actions, equip actions, and locker transfers meet the 44 CSS-pixel target. Focus stays inside the open sheet, returns to KIT on close, and status announcements use the existing live region. The design follows the W3C guidance for [enhanced target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced) and the [modal dialog interaction pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/), while preserving TIDEWEFT's non-pausing field behavior.
+The close control, tabs, recipe actions, current gear/drop actions, and future equip or locker transfers meet the 44 CSS-pixel target. Focus stays inside the open sheet, returns to KIT on close, and status announcements use the existing live region. The design follows the W3C guidance for [enhanced target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced) and the [modal dialog interaction pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/), while preserving TIDEWEFT's non-pausing field behavior.
 
 ### Desktop
 
@@ -369,7 +369,7 @@ KIT actions are commands, not direct DOM mutations. Every row has a stable recip
 
 - missing named input and quantity;
 - insufficient pack space;
-- item already equipped or deployed;
+- item deployed, or—when explicit equipment exists—already equipped;
 - wrong harbor for a locker operation;
 - player swept or in recovery;
 - item at full condition;
@@ -407,7 +407,7 @@ The implementation is not complete until all of these hold:
 5. Every successful craft consumes its declared inputs once, creates its declared output once, retains one exact recursive raw-cost vector, and uses its explicit catalog load. Failed transactions conserve all inputs and outputs.
 6. Promise cargo and settlement inventory remain in their existing conserved ledger. Gathering, lockers, repairs, and salvage cannot mint, spend, or disguise them; pristine salvage is strictly lossy against construction after recursive raw expansion.
 7. One adaptation ID has exactly one location. One Wayknot ID has its canonical kind. No two deployed aids occupy an illegal shared space.
-8. Wear is caused only by a resolved benefit or an explicit placement/reclaim action, never by frame rate, menu time, renderer choice, save/load, or merely being equipped.
+8. Wear is caused only by a resolved benefit or an explicit placement/reclaim action, never by frame rate, menu time, renderer choice, save/load, or merely being carried or later equipped.
 9. Reclaim preserves identity and damage and restores no stamina, stability, Loom, cargo condition, materials, trust, or time.
 10. Broken or setting aids cannot silently participate in pointer routing, automatic movement, Waychords, or Tide Harps.
 11. Regeneration uses completed world ticks only. Reloading the same tick is state-equivalent; closing the game produces no ecology change.
@@ -430,15 +430,15 @@ than automatically after every slice.
 - Keep gathering disabled until hidden-information and save tests pass.
 - Exit: multi-seed determinism and bootstrap soak, order-independence, discovery masking, bounded batch counts, and no change to replay RNG vectors.
 
-### Slice B — Pack, gathering, lockers, and KIT
+### Slice B — Pack, gathering, KIT, and reserved lockers
 
-- Land save-envelope v2 migration, milli-load accounting, raw material stacks, atomic gathering, harbor lockers, and PACK/MAKE/MEND shell.
+- Land save-envelope v2 migration, milli-load accounting, raw material stacks, atomic gathering, and the PACK/MAKE/MEND shell. Harbor-locker behavior remains the future contract above until its physical transaction and save fields ship.
 - MAKE may initially show components as `coming next`; it must not display enabled controls that dispatch nowhere.
 - Exit: v1 migration fixtures, reload equivalence, no-offline-growth tests, capacity/conservation properties, 360 × 640 and short-landscape sheet smoke, keyboard/focus checks, and a complete tutorial update.
 
 ### Slice C — Components and wearable adaptations
 
-- Enable the recipe DAG, stable adaptation IDs, equip slots, condition, benefit-qualified wear, proportional repairs, lossy dismantling, and causal cargo/terrain readouts.
+- Enable the recipe DAG, stable adaptation IDs, carried auto-application channels, condition, benefit-qualified wear, proportional repairs, lossy dismantling, and causal cargo/terrain readouts. Explicit equip slots remain with the later physical-capacity/equipment owner.
 - Exit: atomic recipe property tests, permutation invariance, exact load projection and raw-cost ancestry, lossy-salvage proofs, duplicate-benefit tie breaking, wear/no-wear matrices, repair caps, and long-run soak without negative stock or condition.
 
 ### Slice D — Wayknot v2 and ladders

@@ -888,8 +888,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
     iconText: "09",
     title: "Pack, make, and mend in one KIT",
     shortTitle: "KIT",
-    summary: "KIT combines entrusted transport, field finds, prepared components, and durable gear under one exact load limit. PACK, MAKE, and MEND are tabs of the same non-pausing surface.",
-    keywords: ["kit", "inventory", "pack", "load", "capacity", "locker", "make", "craft", "recipe", "mend", "repair", "condition", "durability", "dismantle"],
+    summary: "KIT combines entrusted transport, field finds, prepared components, and durable gear under one exact load limit. PACK, MAKE, and MEND are tabs of the same non-pausing surface; there is no separate equipment tab in the current carried-gear model.",
+    keywords: ["kit", "inventory", "pack", "load", "capacity", "locker", "make", "craft", "recipe", "mend", "repair", "condition", "durability", "dismantle", "gear", "wearable", "equipment", "equip"],
     controlIds: ["kit-key", "make-key", "kit-button", "kit-tabs"],
     steps: [
       {
@@ -903,7 +903,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "kit-pack",
         audience: "all",
         title: "PACK reconciles every carried weight",
-        body: "COMBINED LOAD is the exact sum of Promise cargo and signed reports under Transport plus carried materials, components, and gear under Finds + gear. Every row shows exact thousandth-load values. This build carries those stacks in PACK; harbor locker storage is staged and is not a hidden remote inventory.",
+        body: "COMBINED LOAD is the exact sum of Promise cargo and signed reports under Transport plus carried materials, components, and gear. Every row shows exact thousandth-load values. Crafted gear appears under Field gear in PACK and under MEND for repair; harbor locker storage is staged and is not a hidden remote inventory.",
       },
       {
         id: "kit-make",
@@ -922,7 +922,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         id: "kit-live-adaptations",
         audience: "all",
         title: "Four carried adaptations work in the field now",
-        body: "Marsh wraps help soft ground, a Float sash helps water, Ridge cleats help rough ridges, and a Weather cape helps exposed travel. Their assistance wears condition per aided tile. Other craftable gear remains durable inventory while its matching traversal or cargo system is staged; MAKE does not claim an effect that is not connected yet.",
+        body: "Marsh wraps help soft ground, a Float sash helps water, Ridge cleats help rough ridges, and a Weather cape helps exposed travel. Positive-condition copies apply automatically while carried—there is no current equip/unequip command—and their assistance wears condition only when it actually helps. PACK labels live, broken, and staged gear explicitly. Other craftable gear remains durable inventory while its matching traversal or cargo system is staged.",
       },
     ],
     callouts: [

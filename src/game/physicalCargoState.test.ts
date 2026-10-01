@@ -1143,7 +1143,12 @@ describe("physical cargo save state", () => {
       expect.objectContaining({ lotId: "crafting-stack:cordreed", quantity: 2, canDrop: true }),
     ]));
     expect(kit?.gearRows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ lotId: "gear:7", canDrop: true }),
+      expect.objectContaining({
+        lotId: "gear:7",
+        canDrop: true,
+        location: "carried",
+        locationLabel: "Carried in PACK · EFFECT STAGED",
+      }),
     ]));
   });
 

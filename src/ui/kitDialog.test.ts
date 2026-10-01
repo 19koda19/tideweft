@@ -97,6 +97,7 @@ describe("KIT dialog presentation contract", () => {
   it("keeps one ordered PACK / MAKE / MEND tablist with stable ARIA targets", () => {
     expect(KIT_TABS.map((tab) => tab.id)).toEqual(["pack", "make", "mend"]);
     expect(KIT_TABS.map((tab) => tab.label)).toEqual(["PACK", "MAKE", "MEND"]);
+    expect(KIT_TABS[0].description).toContain("live wearable effects apply automatically");
     expect(KIT_DIALOG_ID).toBe("tideweft-kit");
     expect(KIT_DIALOG_PANEL_ID).toBe("tideweft-kit-panel");
     expect(KIT_DIALOG_SCROLL_REGION_ID).toBe("tideweft-kit-scroll-region");

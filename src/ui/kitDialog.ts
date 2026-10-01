@@ -27,7 +27,11 @@ export const EMPTY_KIT_POINTER_SEQUENCE: KitPointerSequence = Object.freeze({
 });
 
 export const KIT_TABS = [
-  { id: "pack", label: "PACK", description: "Carried cargo, finds, components, and durable gear" },
+  {
+    id: "pack",
+    label: "PACK",
+    description: "Carried cargo, finds, components, and field gear; live wearable effects apply automatically",
+  },
   { id: "make", label: "MAKE", description: "Recipes with exact ingredients and results" },
   { id: "mend", label: "MEND", description: "Repair or dismantle durable field gear" },
 ] as const satisfies readonly {
@@ -579,9 +583,15 @@ function renderPack(
   for (const row of packStacks) findsBody.append(stackRow(row, dispatch));
   target.append(finds);
 
-  const [gear, gearBody] = section("Durable gear", `${view.gearRows.length} known items`);
+  const [gear, gearBody] = section(
+    "Field gear",
+    `${view.gearRows.length} known items · live wearable effects auto-apply`,
+  );
   if (view.gearRows.length === 0) {
-    gearBody.append(emptyState("No crafted adaptations", "MAKE shows every recipe and its exact blocker."));
+    gearBody.append(emptyState(
+      "No crafted adaptations",
+      "MAKE shows every recipe and its exact blocker. Current live wearable effects apply automatically while carried; staged recipes say so.",
+    ));
   }
   for (const row of view.gearRows) gearBody.append(gearSummary(row, dispatch));
   target.append(gear);
