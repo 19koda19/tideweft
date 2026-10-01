@@ -11,6 +11,7 @@ test-results/
 .env
 .env.*
 !.env.example
+/.repository-context.local.json
 
 # Local product roadmaps and implementation ledgers. Player-facing release
 # truth belongs in README.md, CHANGELOG.md, the tutorial, and in-game notes.

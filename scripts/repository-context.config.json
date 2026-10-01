@@ -1,0 +1,350 @@
+{
+  "schemaVersion": 1,
+  "toolVersion": "1.0.0",
+  "outputDirectory": "artifacts/repository-context",
+  "eligibleRoots": [
+    ".github/",
+    "docs/",
+    "electron/",
+    "scripts/",
+    "src/"
+  ],
+  "eligibleFiles": [
+    ".gitignore",
+    "CHANGELOG.md",
+    "README.md",
+    "forge.config.cjs",
+    "index.html",
+    "package-lock.json",
+    "package.json",
+    "tsconfig.json",
+    "vite.config.ts"
+  ],
+  "eligibleExtensions": [
+    ".cjs",
+    ".css",
+    ".html",
+    ".js",
+    ".json",
+    ".md",
+    ".mjs",
+    ".ts",
+    ".tsx",
+    ".yaml",
+    ".yml"
+  ],
+  "excludedPrefixes": [
+    "artifacts/",
+    "coverage/",
+    "dist-electron/",
+    "dist/",
+    "node_modules/",
+    "playwright-report/",
+    "release/",
+    "test-results/"
+  ],
+  "mandatoryPublicReferences": [
+    {
+      "path": "docs/REPOSITORY_CONTEXT.md",
+      "reason": "navigation workflow and authority boundary"
+    }
+  ],
+  "domainRoutes": [
+    {
+      "id": "living-voice-acoustics",
+      "aliases": [
+        "acoustic",
+        "animal call",
+        "caption",
+        "hearing",
+        "living voice",
+        "marsh fox",
+        "onomatopoeia",
+        "pursuit",
+        "speech",
+        "tool sound",
+        "voice",
+        "vessel sound",
+        "violence sound",
+        "world sound"
+      ],
+      "purpose": "Find the current expression, acoustic-event, hearing, and bounded presentation owners.",
+      "canonicalSources": [
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "locatorType": "heading",
+          "locator": "Living Voice: situated-expression foundation"
+        },
+        {
+          "path": "docs/GAME_DESIGN.md",
+          "locatorType": "heading",
+          "locator": "Embodied sound and visible acoustics"
+        },
+        {
+          "path": "docs/SYSTEM_INHERITANCE.md",
+          "locatorType": "heading",
+          "locator": "Expression, acoustic world, and information"
+        },
+        {
+          "path": "docs/SYSTEM_COMPOSITION.md",
+          "locatorType": "heading",
+          "locator": "Actors, ecology, perception, and expression"
+        }
+      ],
+      "implementationEntries": [
+        "src/game/coreWildlifePursuitExpression.ts",
+        "src/game/situatedExpressionAcoustics.ts",
+        "src/game/worldAcoustics.ts",
+        "src/game/humanPerception.ts",
+        "src/game/physicalAcousticPerception.ts",
+        "src/game/worldAcousticPresentation.ts",
+        "src/game/worldAcousticPresentationQueue.ts",
+        "src/game/situatedExpression.ts",
+        "src/game/situatedExpressionAdmissionLedger.ts",
+        "src/game/situatedExpressionCausalAuthority.ts",
+        "src/game/situatedExpressionReception.ts",
+        "src/game/situatedExpressionTrajectory.ts",
+        "src/audio/soundscape.ts",
+        "src/ui/situatedExpressionCaption.ts"
+      ],
+      "tests": [
+        "src/game/coreWildlifePursuitExpression.test.ts",
+        "src/game/situatedExpressionAcoustics.test.ts",
+        "src/game/worldAcoustics.test.ts",
+        "src/game/humanPerception.test.ts",
+        "src/game/physicalAcousticPerception.test.ts",
+        "src/game/worldAcousticPresentation.test.ts",
+        "src/game/worldAcousticPresentationQueue.test.ts",
+        "src/game/situatedExpression.test.ts",
+        "src/game/situatedExpressionReception.test.ts",
+        "src/ui/situatedExpressionCaption.test.ts"
+      ],
+      "validationCommands": [
+        "npx vitest run src/game/coreWildlifePursuitExpression.test.ts src/game/situatedExpressionAcoustics.test.ts",
+        "npm run typecheck"
+      ],
+      "relatedContracts": [
+        "living-voice-event-pipeline"
+      ]
+    },
+    {
+      "id": "persistence-save-lifecycle",
+      "aliases": [
+        "current schema",
+        "migration",
+        "persistence",
+        "restore",
+        "save",
+        "save compatibility",
+        "serialization"
+      ],
+      "purpose": "Find the current save lifecycle, current-schema conservation, and persistence adapters.",
+      "canonicalSources": [
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "locatorType": "heading",
+          "locator": "Save contract"
+        },
+        {
+          "path": "docs/SYSTEM_INHERITANCE.md",
+          "locatorType": "contract-id",
+          "locator": "save-migration"
+        },
+        {
+          "path": "docs/SYSTEM_COMPOSITION.md",
+          "locatorType": "heading",
+          "locator": "Performance, persistence, and authority gate"
+        }
+      ],
+      "implementationEntries": [
+        "src/game/saveCompatibilityPolicy.ts",
+        "src/platform/persistence.ts",
+        "src/sim/persistence.ts",
+        "src/game/runtime.ts"
+      ],
+      "tests": [
+        "src/game/saveCompatibilityPolicy.test.ts",
+        "src/platform/persistence.test.ts",
+        "src/sim/actorPerception.persistence.test.ts",
+        "src/sim/residentCircadian.persistence.test.ts"
+      ],
+      "validationCommands": [
+        "npx vitest run src/game/saveCompatibilityPolicy.test.ts src/platform/persistence.test.ts",
+        "npm run typecheck"
+      ],
+      "relatedContracts": [
+        "save-compatibility-lifecycle"
+      ]
+    }
+  ],
+  "reviewedSummaries": [
+    {
+      "id": "living-voice-event-pipeline",
+      "kind": "reviewed-contract-summary",
+      "declaredStatus": "PARTIAL",
+      "source": {
+        "path": "docs/ARCHITECTURE.md",
+        "locatorType": "heading",
+        "locator": "Embodied acoustic event and receipt pipeline"
+      },
+      "reviewedSourceFingerprint": "27c8d0023741f8cc76da755ae34d6f4fd354cf5387fa9f09648919dc41a91e1c",
+      "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
+      "preconditions": [
+        "A causal domain has committed the action or experience that produced the sound."
+      ],
+      "inputs": [
+        "stable event identity",
+        "source and event-time position",
+        "semantic source/action family",
+        "bounded intensity, reach, duration, and repetition key"
+      ],
+      "outputs": [
+        "environmentally propagated acoustic event",
+        "listener-specific hearing receipt",
+        "optional bounded audio, caption, and world-label presentation"
+      ],
+      "invariants": [
+        "The causal domain owns why the sound happened; presentation never creates the event.",
+        "Heard-unseen receipts do not reveal exact source identity or position.",
+        "Presentation suppression cannot erase lawful hearing or committed audio.",
+        "Consumed ephemeral sound presentation does not replay after save/load."
+      ],
+      "prohibitions": [
+        "No animation- or caption-authored authoritative sound.",
+        "No independent domain-specific floating-sound-text system."
+      ],
+      "exceptions": [
+        "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable."
+      ],
+      "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
+      "evidence": [
+        "src/game/worldAcoustics.test.ts",
+        "src/game/physicalAcousticPerception.test.ts",
+        "src/game/worldAcousticPresentation.test.ts"
+      ],
+      "relatedContracts": []
+    },
+    {
+      "id": "save-compatibility-lifecycle",
+      "kind": "reviewed-contract-summary",
+      "declaredStatus": "LIVE",
+      "source": {
+        "path": "docs/ARCHITECTURE.md",
+        "locatorType": "heading",
+        "locator": "Compatibility lifecycle"
+      },
+      "reviewedSourceFingerprint": "27c8d0023741f8cc76da755ae34d6f4fd354cf5387fa9f09648919dc41a91e1c",
+      "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
+      "preconditions": [
+        "Every save carries explicit schema and generator identity sufficient for fail-closed validation."
+      ],
+      "inputs": [
+        "release identity",
+        "outer save schema version",
+        "subsystem schema versions",
+        "world generator version"
+      ],
+      "outputs": [
+        "validated current-schema load",
+        "explicit incompatible-development-save rejection",
+        "deterministic supported migration after the official stable 1.0 baseline"
+      ],
+      "invariants": [
+        "Current-schema state, identity, custody, knowledge, and cross-system consequences round-trip without duplication, reroll, or loss.",
+        "Official stable 1.0 permanently latches strict forward compatibility for supported player saves.",
+        "Migration failure cannot half-commit over the original stored record."
+      ],
+      "prohibitions": [
+        "No best-effort partial legacy load or silent reset.",
+        "No prerelease or later development build may disable a latched 1.0 compatibility promise."
+      ],
+      "exceptions": [
+        "Before official stable 1.0, an obsolete internal development schema may be explicitly retired when a safe migration is not worth its cost."
+      ],
+      "owner": "docs/ARCHITECTURE.md#compatibility-lifecycle",
+      "evidence": [
+        "src/game/saveCompatibilityPolicy.test.ts",
+        "src/platform/persistence.test.ts"
+      ],
+      "relatedContracts": []
+    }
+  ],
+  "benchmarks": [
+    {
+      "id": "voice-owner-and-tests",
+      "query": "marsh fox pursuit acoustic voice hearing caption",
+      "requiredPaths": [
+        "docs/ARCHITECTURE.md",
+        "src/game/coreWildlifePursuitExpression.ts",
+        "src/game/coreWildlifePursuitExpression.test.ts",
+        "src/game/situatedExpressionAcoustics.ts",
+        "src/game/situatedExpressionAcoustics.test.ts"
+      ],
+      "requiredRecordIds": [
+        "living-voice-event-pipeline"
+      ],
+      "requiredReads": [
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "heading": "Audited implementation frontier"
+        },
+        {
+          "path": "src/game/coreWildlifePursuitExpression.ts"
+        },
+        {
+          "path": "src/game/coreWildlifePursuitExpression.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "save-policy-owner-and-tests",
+      "query": "official stable 1.0 save compatibility current schema migration persistence",
+      "requiredPaths": [
+        "docs/ARCHITECTURE.md",
+        "src/game/saveCompatibilityPolicy.ts",
+        "src/game/saveCompatibilityPolicy.test.ts",
+        "src/platform/persistence.ts"
+      ],
+      "requiredRecordIds": [
+        "save-compatibility-lifecycle"
+      ],
+      "requiredReads": [
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "heading": "Compatibility lifecycle"
+        },
+        {
+          "path": "src/game/saveCompatibilityPolicy.ts"
+        },
+        {
+          "path": "src/game/saveCompatibilityPolicy.test.ts"
+        }
+      ]
+    },
+    {
+      "id": "shared-acoustic-consumers",
+      "query": "embodied acoustics future tool violence vessel consumer contract",
+      "requiredPaths": [
+        "docs/SYSTEM_INHERITANCE.md",
+        "docs/SYSTEM_COMPOSITION.md",
+        "src/game/worldAcoustics.ts",
+        "src/game/worldAcoustics.test.ts"
+      ],
+      "requiredRecordIds": [
+        "living-voice-event-pipeline"
+      ],
+      "requiredReads": [
+        {
+          "path": "docs/SYSTEM_INHERITANCE.md",
+          "heading": "Expression, acoustic world, and information"
+        },
+        {
+          "path": "src/game/worldAcoustics.ts"
+        },
+        {
+          "path": "src/game/worldAcoustics.test.ts"
+        }
+      ]
+    }
+  ]
+}
