@@ -166,17 +166,18 @@ The shared schema is deliberately broader than the current set of producers.
 In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
-the rabbit thump, and the aggregate frog chorus are live representative paths.
+the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
+physical rustle are live representative paths.
 The former direct-detail resident state-line adapter has been retired. Ongoing
 suspicion, posture, observable exposure, contract, and selected-resident state
 remain legible through non-acoustic quick labels, emotion marks, condition
 labels, and ABOUT; projection cadence or selection can no longer manufacture
 an utterance. Hunger remains authoritative but deliberately gains no inferred
 utterance or hidden-need UI until an honest observable or expressive owner
-exists. Existing rat rustle, domestic-cat call, marsh-fox yip, and generic
-wildlife-alarm fallback cues still use the legacy audio/session-announcement
-path. Those animal cues remain `BYPASS` seams to migrate during Living Voice,
-not proof that broad animal Voice is complete.
+exists. Existing domestic-cat call, marsh-fox yip, and generic wildlife-alarm
+fallback cues still use the legacy audio/session-announcement path. Those
+animal cues remain `BYPASS` seams to migrate during Living Voice, not proof
+that broad animal Voice is complete.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
 vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;
@@ -342,16 +343,30 @@ direction supported by the heard contact. Because an aggregate has no
 addressable visible actor, it receives no fabricated Chart/Relief world anchor.
 The chorus no longer enters the legacy ecology session announcement or an
 independent direct-sound presentation path. Candidate/sample banks remain
-bounded, and only the strongest lawful player chorus is presented in an
-interval; presentation capacity cannot erase the event or already-admitted
-actor hearing.
+bounded; each selected lawful cue retains its audio and listener receipt while
+the shared presenter may suppress or arbitrate optional simultaneous text.
+Presentation capacity cannot erase the event or already-admitted actor hearing.
 Player audio, caption, and their presentation receipt are not serialized and do
 not replay on load. The existing next-interval actor-hearing boundary may receive
 an admitted cadence sample only by deterministic re-derivation from the current
 ecology patch, never by restoring a hidden event or playback queue. A later
 cadence likewise produces a new event only from current ecology state.
 
-Four representative physical bridges are now live in the local candidate.
+The same aggregate boundary now consumes one existing brown-rat redistribution
+without pretending a visible sign is a visible or audible rat. The committed
+population disturbance, its paired destination evidence, and the destination
+anchor authenticate one anonymous `animal-contact` / `physical-rustle` event.
+Its source and repetition identity are opaque, its exact surface remains
+`mixed` because aggregate ecology does not own terrain-contact detail, and its
+interruption is explicitly `none`. Ordinary range, wind, listener-local
+masking, and species hearing decide receipt. A lawful player receipt is always
+heard-unseen and directional, even when physical rat evidence is visible; it
+releases the existing restrained rustle synthesis and shared acoustic caption
+without a session announcement or exact world anchor. The persisted
+disturbance can be re-derived for the next bounded human/dog hearing interval,
+while ephemeral player audio/text do not replay after load.
+
+Five representative physical bridges are now live in the local candidate.
 Every newly accepted stumble, fall, water slip, or current sweep adapts its
 committed incident into one immutable structured acoustic event without parsing
 the incident's legacy free-form label. That event's semantic family, intensity,
@@ -398,8 +413,8 @@ These are representative producers, not false whole-world completion.
 Production views suppress the old renderer-created ADRIFT syllables whenever
 the shared `acousticText` projection is present; their fallback remains only for
 legacy views and tests that omit the field. Ambient-water syllables still lack
-the structured event/receipt boundary. Broad non-dog animal contact, arbitrary
-object and foliage contact, broader tool/material work, violence, vessel
+the structured event/receipt boundary. Broad addressable non-dog animal
+contact, arbitrary object and foliage contact, broader tool/material work, violence, vessel
 producers, and coarse/cross-frame physical hearing remain incomplete. A
 heard-unseen physical event still receives no exact world anchor or source
 identity; its lawful receipt may now feed only a coarse

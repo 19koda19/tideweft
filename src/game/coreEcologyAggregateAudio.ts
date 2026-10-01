@@ -35,6 +35,7 @@ export const CORE_ECOLOGY_CHORUS_CADENCE_TICKS = 24 as const;
 export const CORE_ECOLOGY_CHORUS_MIN_ACTIVITY = 180_000 as const;
 export const CORE_ECOLOGY_FROG_CHORUS_RANGE_UNITS =
   32 * WORLD_POSITION_UNITS_PER_TILE;
+export const CORE_ECOLOGY_AGGREGATE_HEARD_CUE_BUDGET = 4 as const;
 
 const CORE_ECOLOGY_CHORUS_DURATION_STEPS = 8;
 
@@ -42,6 +43,9 @@ export interface CoreEcologyAggregateChorusEventFrameInput {
   readonly patch: CoreEcologyAggregatePatchState;
   readonly tick: number;
 }
+
+export type CoreEcologyAggregateAcousticEventFrameInput =
+  CoreEcologyAggregateChorusEventFrameInput;
 
 export interface CoreEcologyAggregateAudioFrameInput {
   readonly patch: CoreEcologyAggregatePatchState;
@@ -78,9 +82,41 @@ interface HeardCandidate {
 export function deriveCoreEcologyAggregateChorusEvents(
   value: unknown,
 ): readonly WorldAcousticEvent[] | null {
-  const input = canonicalChorusEventInput(value);
+  const input = canonicalEventInput(value);
   if (input === null) return null;
   return deriveCanonicalChorusEvents(input);
+}
+
+/**
+ * Derives the current bounded aggregate acoustic frame. Vocal activity and
+ * physical redistribution remain distinct committed causes, but listeners may
+ * consume both through one world-sound boundary.
+ */
+export function deriveCoreEcologyAggregateAcousticEvents(
+  value: unknown,
+): readonly WorldAcousticEvent[] | null {
+  const input = canonicalEventInput(value);
+  if (input === null) return null;
+  const chorus = deriveCanonicalChorusEvents(input);
+  const contact = deriveCanonicalContactEvents(input);
+  if (chorus === null || contact === null) return null;
+  return Object.freeze([...chorus, ...contact].sort((left, right) => (
+    right.priority - left.priority
+    || right.salience - left.salience
+    || compareText(left.eventId, right.eventId)
+  )));
+}
+
+/**
+ * Re-authenticates physical brown-rat redistribution from the persisted
+ * disturbance/evidence pair. The aggregate stays an anonymous population;
+ * this never manufactures a rat actor or turns visible evidence into sound.
+ */
+export function deriveCoreEcologyAggregateContactEvents(
+  value: unknown,
+): readonly WorldAcousticEvent[] | null {
+  const input = canonicalEventInput(value);
+  return input === null ? null : deriveCanonicalContactEvents(input);
 }
 
 function deriveCanonicalChorusEvents(
@@ -175,11 +211,35 @@ export function coreEcologyAggregateChorusSoundSample(
   });
 }
 
+/** Shared bounded hearing stimulus for any authenticated aggregate sound. */
+export function coreEcologyAggregateSoundSample(
+  event: WorldAcousticEvent,
+): PhysicalSoundSample | null {
+  const chorus = coreEcologyAggregateChorusSoundSample(event);
+  if (chorus !== null) return chorus;
+  if (!isAggregateRatContactEvent(event)) return null;
+  const sampleHash = hashCanonical({
+    eventId: event.eventId,
+    purpose: "aggregate-contact-sample:v1",
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: event.eventId,
+    id: `aggregate-contact-${sampleHash.slice(0, 32)}`,
+    position: event.sourcePosition,
+    soundLoudness: event.intensity,
+    soundRangeUnits: event.rangeUnits,
+    soundClass: event.soundClass,
+    soundInterrupt: event.interrupt,
+    sourceId: event.sourceId,
+  });
+}
+
 /**
- * Projects ecology-owned chorus events through ordinary player hearing. Source
- * truth is derived first and stays independent of this listener. The result
- * never creates a frog actor, reveals an aggregate ID, or emits a cue merely
- * because a population exists somewhere in the loaded region.
+ * Projects ecology-owned aggregate sounds through ordinary player hearing.
+ * Source truth is derived first and stays independent of this listener. The
+ * result never creates an aggregate animal actor, reveals an aggregate ID, or
+ * emits a cue merely because a population exists somewhere in the loaded
+ * region.
  */
 export function projectCoreEcologyAggregateHeardCues(
   value: unknown,
@@ -188,22 +248,27 @@ export function projectCoreEcologyAggregateHeardCues(
   if (input === null) return null;
   const player = livingActorAddressInRegionalWindow(input.player, input.window);
   if (player === null) return Object.freeze([]);
-  const events = deriveCanonicalChorusEvents({
+  const chorus = deriveCanonicalChorusEvents({
     patch: input.patch,
     tick: input.tick,
   });
-  if (events === null) return null;
+  const contact = deriveCanonicalContactEvents({
+    patch: input.patch,
+    tick: input.tick,
+  });
+  if (chorus === null || contact === null) return null;
+  const events = [...chorus, ...contact];
   if (events.length === 0) return Object.freeze([]);
   const ambientNoise = ambientNoiseAt(input.world, player.tileIndex);
   if (ambientNoise === null) return null;
   const hearing = livingActorSenseProfile(input.player.species).hearingSensitivity;
   const candidates: HeardCandidate[] = [];
   for (const event of events) {
-    const sample = coreEcologyAggregateChorusSoundSample(event);
+    const sample = coreEcologyAggregateSoundSample(event);
     if (sample === null) return null;
     const effectiveRangeUnits = Math.trunc(event.rangeUnits * hearing / FIXED_POINT);
     const reception = evaluatePhysicalAcousticListener({
-      observationId: `aggregate-chorus-hearing:${hashCanonical({
+      observationId: `aggregate-acoustic-hearing:${hashCanonical({
         eventId: event.eventId,
         observerId: input.player.actorId,
         tick: input.tick,
@@ -234,17 +299,18 @@ export function projectCoreEcologyAggregateHeardCues(
     }));
   }
   candidates.sort((left, right) => (
-    right.cue.contact.certainty - left.cue.contact.certainty
+    right.cue.event.priority - left.cue.event.priority
+    || right.cue.event.salience - left.cue.event.salience
+    || right.cue.contact.certainty - left.cue.contact.certainty
     || left.cue.contact.distanceBand.maximum - right.cue.contact.distanceBand.maximum
     || compareText(left.cue.event.eventId, right.cue.event.eventId)
   ));
-  const selected = candidates[0];
-  return selected === undefined
-    ? Object.freeze([])
-    : Object.freeze([selected.cue]);
+  return Object.freeze(candidates
+    .slice(0, CORE_ECOLOGY_AGGREGATE_HEARD_CUE_BUDGET)
+    .map(({ cue }) => cue));
 }
 
-function canonicalChorusEventInput(
+function canonicalEventInput(
   value: unknown,
 ): CoreEcologyAggregateChorusEventFrameInput | null {
   if (!plainRecord(value) || !exactKeys(value, ["patch", "tick"])) return null;
@@ -255,6 +321,97 @@ function canonicalChorusEventInput(
     || patch.updatedAtTick !== value.tick
   ) return null;
   return Object.freeze({ patch, tick: value.tick });
+}
+
+function deriveCanonicalContactEvents(
+  input: CoreEcologyAggregateAcousticEventFrameInput,
+): readonly WorldAcousticEvent[] | null {
+  const events: WorldAcousticEvent[] = [];
+  for (const population of input.patch.aggregatePopulations) {
+    if (population.species !== "brown-rat") continue;
+    const disturbances = population.disturbances
+      .filter(({ atTick }) => atTick === input.tick)
+      .slice()
+      .sort((left, right) => left.disturbanceOrdinal - right.disturbanceOrdinal);
+    for (const disturbance of disturbances) {
+      const evidenceOrdinal = population.anchors.length + disturbance.disturbanceOrdinal;
+      const evidence = population.evidence.find((candidate) => (
+        candidate.evidenceOrdinal === evidenceOrdinal
+      ));
+      const destination = population.anchors.find(({ anchorOrdinal }) => (
+        anchorOrdinal === disturbance.toAnchorOrdinal
+      ));
+      if (
+        evidence === undefined
+        || destination === undefined
+        || evidence.createdAtTick !== disturbance.atTick
+        || evidence.causeKind !== disturbance.causeKind
+        || evidence.causeReferenceId !== disturbance.causeReferenceId
+        || evidence.strength !== disturbance.pressure
+        || disturbance.displacedUnits !== 1
+        || evidence.position.region.x !== destination.position.region.x
+        || evidence.position.region.y !== destination.position.region.y
+        || evidence.position.localX !== destination.position.localX
+        || evidence.position.localY !== destination.position.localY
+      ) return null;
+      const sourceHash = hashCanonical({
+        aggregateId: population.aggregateId,
+        purpose: "aggregate-contact-source:v1",
+      });
+      const triggerHash = hashCanonical({
+        aggregateId: population.aggregateId,
+        disturbanceId: disturbance.disturbanceId,
+        evidenceId: evidence.evidenceId,
+        purpose: "aggregate-contact-event:v1",
+      });
+      const variantSeed = Number.parseInt(hashCanonical({
+        disturbanceId: disturbance.disturbanceId,
+        evidenceId: evidence.evidenceId,
+        purpose: "aggregate-contact-presentation:v1",
+      }).slice(0, 8), 16) >>> 0;
+      const event = createWorldAcousticEvent({
+        triggerEventId: `ecology-contact:${triggerHash}`,
+        domain: "animal-contact",
+        sourceId: `ecology-aggregate-source:${sourceHash}`,
+        sourceCategory: "animal",
+        sourcePosition: evidence.position,
+        occurredAtTick: disturbance.atTick,
+        action: "brush",
+        sourceMaterial: "body",
+        // Aggregate settlement-shadow state proves contact and movement, but
+        // does not own exact terrain material at the destination anchor.
+        surfaceMaterial: "mixed",
+        semanticFamily: "rustle",
+        intensity: 620_000,
+        rangeUnits: 20 * WORLD_POSITION_UNITS_PER_TILE,
+        durationSteps: 5,
+        priority: 540_000,
+        salience: 780_000,
+        repetitionKey: `ecology-contact-repeat:${sourceHash}`,
+        textualEligibility: "salience-gated",
+        accessibilityRelevance: "informative",
+        variantSeed,
+      });
+      if (event === null || !isAggregateRatContactEvent(event)) return null;
+      events.push(event);
+    }
+  }
+  events.sort((left, right) => compareText(left.eventId, right.eventId));
+  return Object.freeze(events);
+}
+
+function isAggregateRatContactEvent(event: WorldAcousticEvent): boolean {
+  return event.domain === "animal-contact"
+    && event.sourceCategory === "animal"
+    && event.action === "brush"
+    && event.sourceMaterial === "body"
+    && event.surfaceMaterial === "mixed"
+    && event.semanticFamily === "rustle"
+    && event.soundClass === "physical-rustle"
+    && event.interrupt === "none"
+    && event.triggerEventId.startsWith("ecology-contact:")
+    && event.sourceId.startsWith("ecology-aggregate-source:")
+    && event.repetitionKey.startsWith("ecology-contact-repeat:");
 }
 
 function qualifyingFrogChorus(

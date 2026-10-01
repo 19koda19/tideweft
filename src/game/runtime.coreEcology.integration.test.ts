@@ -3141,7 +3141,7 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   });
 
-  it("sounds and captions rat displacement only when its new sign is directly perceived", async () => {
+  it("routes rat displacement through shared hearing, audio, and acoustic presentation", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);
     runtime.dispatchUI({
@@ -3152,12 +3152,32 @@ describe("runtime core-ecology vertical slice", () => {
     });
     expect(runtime.getRenderView().aggregateWildlifeEvidence?.length).toBeGreaterThan(0);
     soundscapePlay.mockClear();
+    let sharedRustleCaption:
+      ReturnType<TideweftRuntime["getUIView"]>["expressionCaption"];
+    let legacyRatAnnouncement = false;
 
-    advancePlayerSteps(runtime, 80);
+    advancePlayerSteps(runtime, 80, () => {
+      const view = runtime.getUIView();
+      if (view.expressionCaption?.physicalSoundKind === "rustle") {
+        sharedRustleCaption = view.expressionCaption;
+      }
+      if (view.announcement?.message.includes("beside the signs you can see")) {
+        legacyRatAnnouncement = true;
+      }
+    });
 
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rat-rustle")).toHaveLength(1);
-    expect(runtime.getUIView().announcement?.message)
-      .toContain("SMALL RUSTLE — beside the signs you can see.");
+    expect(sharedRustleCaption).toMatchObject({
+      speakerLabel: "Sound",
+      text: "rustle",
+      presentationKind: "physical",
+      physicalSoundKind: "rustle",
+      assertive: false,
+    });
+    expect(JSON.stringify(sharedRustleCaption)).not.toMatch(
+      /rat|aggregate|evidence|sourceId/iu,
+    );
+    expect(legacyRatAnnouncement).toBe(false);
     runtime.destroy();
   }, 45_000);
 
@@ -9003,13 +9023,18 @@ function consumptionHistory(state: PhysicalCargoState) {
   )));
 }
 
-function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
+function advancePlayerSteps(
+  runtime: TideweftRuntime,
+  count: number,
+  afterFrame?: () => void,
+): void {
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
     if (!callback) throw new Error("runtime did not schedule its next frame");
     scheduledFrame = undefined;
     callback(nextFrameTime);
+    afterFrame?.();
     nextFrameTime += 100;
   }
   runtime.stop();

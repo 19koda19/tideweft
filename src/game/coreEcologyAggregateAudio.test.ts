@@ -13,7 +13,9 @@ import {
 } from "./coreEcology";
 import {
   CORE_ECOLOGY_CHORUS_MIN_ACTIVITY,
+  coreEcologyAggregateSoundSample,
   coreEcologyAggregateChorusSoundSample,
+  deriveCoreEcologyAggregateContactEvents,
   deriveCoreEcologyAggregateChorusEvents,
   projectCoreEcologyAggregateHeardCues,
 } from "./coreEcologyAggregateAudio";
@@ -38,6 +40,147 @@ import {
 const ORIGIN = createRegionCoord(-17, 23);
 
 describe("aggregate ecology heard cues", () => {
+  it("derives one anonymous physical rustle from a committed rat redistribution", () => {
+    const current = ratFixture(0, 1);
+    const first = deriveCoreEcologyAggregateContactEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+    const replay = deriveCoreEcologyAggregateContactEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+
+    expect(first).toEqual(replay);
+    expect(first).toHaveLength(1);
+    expect(first?.[0]).toMatchObject({
+      domain: "animal-contact",
+      sourceCategory: "animal",
+      sourcePosition: current.evidence.position,
+      occurredAtTick: current.tick,
+      action: "brush",
+      sourceMaterial: "body",
+      surfaceMaterial: "mixed",
+      semanticFamily: "rustle",
+      soundClass: "physical-rustle",
+      interrupt: "none",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "informative",
+    });
+    expect(first?.[0]?.sourceId).toMatch(/^ecology-aggregate-source:/u);
+    expect(first?.[0]?.sourceId).not.toContain(current.population.aggregateId);
+    expect(first?.[0]).not.toHaveProperty("actorId");
+    expect(JSON.stringify(first)).not.toContain(current.population.aggregateId);
+    expect(JSON.stringify(first)).not.toContain(current.evidence.evidenceId);
+    expect(JSON.stringify(first)).not.toContain(current.disturbance.causeReferenceId);
+
+    const sample = first?.[0] === undefined
+      ? null
+      : coreEcologyAggregateSoundSample(first[0]);
+    expect(sample).toMatchObject({
+      acousticEventId: first?.[0]?.eventId,
+      position: current.evidence.position,
+      soundClass: "physical-rustle",
+      soundInterrupt: "none",
+      sourceId: first?.[0]?.sourceId,
+    });
+    expect(sample).not.toHaveProperty("sourceActorId");
+  });
+
+  it("fails a forged or incomplete rat disturbance/evidence pair closed", () => {
+    const current = ratFixture(0, 1);
+    const forged = structuredClone(current.patch);
+    const population = forged.aggregatePopulations.find(({ species }) => (
+      species === "brown-rat"
+    ));
+    const evidence = population?.evidence.find(({ evidenceOrdinal }) => (
+      evidenceOrdinal === current.evidence.evidenceOrdinal
+    ));
+    if (evidence === undefined) throw new Error("Rat forgery fixture lost its evidence");
+    (evidence as { strength: number }).strength += 1;
+
+    expect(deriveCoreEcologyAggregateContactEvents({
+      patch: forged,
+      tick: current.tick,
+    })).toBeNull();
+    expect(deriveCoreEcologyAggregateContactEvents({
+      patch: current.beforePatch,
+      tick: current.tick,
+    })).toEqual([]);
+    expect(deriveCoreEcologyAggregateContactEvents({
+      patch: current.patch,
+      tick: current.tick + 1,
+    })).toBeNull();
+  });
+
+  it("keeps aggregate rat repetition stable while distinct movements keep distinct identity", () => {
+    const current = ratFixture(0, 1);
+    const first = deriveCoreEcologyAggregateContactEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+    const population = current.patch.aggregatePopulations.find(({ species }) => (
+      species === "brown-rat"
+    ));
+    const from = population?.anchors.find(({ anchorOrdinal }) => (
+      anchorOrdinal === current.disturbance.toAnchorOrdinal
+    ));
+    const to = population?.anchors.find(({ anchorOrdinal }) => (
+      anchorOrdinal === current.disturbance.fromAnchorOrdinal
+    ));
+    if (population === undefined || from === undefined || to === undefined) {
+      throw new Error("Rat replay fixture lost its anchors");
+    }
+    const movedAgain = displaceCoreEcologyAggregatePopulation(current.patch, {
+      aggregateId: population.aggregateId,
+      atTick: 1,
+      causeKind: "human-disturbance",
+      causeReferenceId: "test:aggregate-rat-contact-second",
+      fromAnchorOrdinal: from.anchorOrdinal,
+      toAnchorOrdinal: to.anchorOrdinal,
+      populationUnits: 1,
+      pressure: 720_000,
+    });
+    if (movedAgain === null) throw new Error("Rat replay fixture could not move twice");
+    const later = deriveCoreEcologyAggregateContactEvents({
+      patch: movedAgain.patch,
+      tick: 1,
+    });
+
+    expect(first).toHaveLength(1);
+    expect(later).toHaveLength(1);
+    expect(later?.[0]?.sourceId).toBe(first?.[0]?.sourceId);
+    expect(later?.[0]?.repetitionKey).toBe(first?.[0]?.repetitionKey);
+    expect(later?.[0]?.eventId).not.toBe(first?.[0]?.eventId);
+    expect(later?.[0]?.triggerEventId).not.toBe(first?.[0]?.triggerEventId);
+  });
+
+  it("hears rat contact by range and masking rather than visible evidence", () => {
+    const nearby = ratFixture(0, 1);
+    const heard = projectCoreEcologyAggregateHeardCues(aggregateAudioInput(nearby));
+    const rustle = heard?.find(({ event }) => event.semanticFamily === "rustle");
+
+    expect(rustle).toMatchObject({
+      event: {
+        domain: "animal-contact",
+        semanticFamily: "rustle",
+      },
+      observation: {
+        observerId: nearby.player.actorId,
+        channel: "hearing",
+        perceivedClass: "physical-rustle",
+        subjectId: null,
+        identification: "anonymous",
+        interrupt: "none",
+      },
+    });
+    expect(rustle?.observation).not.toHaveProperty("sourceId");
+    expect(rustle?.observation).not.toHaveProperty("sourcePosition");
+    expect(JSON.stringify(rustle)).not.toContain(nearby.population.aggregateId);
+    expect(projectCoreEcologyAggregateHeardCues(aggregateAudioInput(ratFixture(0, 20)))
+      ?.some(({ event }) => event.semanticFamily === "rustle")).toBe(false);
+  });
+
   it("derives one exact ecology-owned group event at the deterministic representative anchor", () => {
     const current = fixture("rain", 900_000, 0, 1);
     const frogs = current.patch.aggregatePopulations.find(({ species }) => (
@@ -352,6 +495,91 @@ function fixture(
     persistence: "promoted",
   });
   return { patch, player, tick, window, world };
+}
+
+function ratFixture(tick: number, playerDistanceTiles: number) {
+  const current = fixture("clear", 0, tick, 1);
+  const population = current.patch.aggregatePopulations.find(({ species }) => (
+    species === "brown-rat"
+  ));
+  const from = population?.anchors.find(({ populationUnits }) => populationUnits > 0);
+  const to = population?.anchors.find(({ anchorOrdinal }) => (
+    anchorOrdinal !== from?.anchorOrdinal
+  ));
+  if (population === undefined || from === undefined || to === undefined) {
+    throw new Error("Aggregate audio fixture requires a movable rat unit");
+  }
+  const moved = displaceCoreEcologyAggregatePopulation(current.patch, {
+    aggregateId: population.aggregateId,
+    atTick: tick,
+    causeKind: "human-disturbance",
+    causeReferenceId: "test:aggregate-rat-contact",
+    fromAnchorOrdinal: from.anchorOrdinal,
+    toAnchorOrdinal: to.anchorOrdinal,
+    populationUnits: 1,
+    pressure: 720_000,
+  });
+  if (moved === null) throw new Error("Aggregate audio fixture could not move its rat unit");
+  const state = createWorld("settlement shadows interaction", "standard");
+  state.meta.completedTick = tick;
+  state.weather = {
+    ...state.weather,
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+  };
+  const window = createRegionalTerrainWindow(
+    state.meta.rootSeed,
+    createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed, center: ORIGIN }),
+    regionalFrameOriginAtAddress({
+      region: moved.evidence.position.region,
+      localX: Math.floor(moved.evidence.position.localX / WORLD_POSITION_UNITS_PER_TILE),
+      localY: Math.floor(moved.evidence.position.localY / WORLD_POSITION_UNITS_PER_TILE),
+    }),
+  );
+  const world = createRegionalWorldView(
+    createWorldView(state),
+    window,
+    projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), window),
+  );
+  const player = createLivingActorAddress({
+    actorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+    species: "human",
+    position: translateWorldPosition(
+      moved.evidence.position,
+      -playerDistanceTiles * WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    ),
+    persistence: "promoted",
+  });
+  return {
+    ...current,
+    beforePatch: current.patch,
+    patch: moved.patch,
+    player,
+    window,
+    world,
+    population,
+    evidence: moved.evidence,
+    disturbance: moved.disturbance,
+  };
+}
+
+function aggregateAudioInput(input: Readonly<{
+  patch: ReturnType<typeof createCoreEcologyAggregatePatch>;
+  player: ReturnType<typeof createLivingActorAddress>;
+  tick: number;
+  window: ReturnType<typeof createRegionalTerrainWindow>;
+  world: ReturnType<typeof createRegionalWorldView>;
+}>) {
+  return {
+    patch: input.patch,
+    player: input.player,
+    tick: input.tick,
+    window: input.window,
+    world: input.world,
+  };
 }
 
 function individualInputs(
