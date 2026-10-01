@@ -764,6 +764,7 @@ export interface LivingSpeciesCircadianContract {
   readonly status: LivingSpeciesCircadianStatus;
   readonly ownerId: string | null;
   readonly rhythm: LivingSpeciesCircadianRhythm;
+  /** Declarative cadence mirror; not itself a runtime scheduler. */
   readonly cadenceTicks: number;
   /** Fixed-point phase bias, used only by an active schedule owner. */
   readonly phaseBias: number;
@@ -773,6 +774,7 @@ export interface LivingSpeciesActivityContract {
   readonly implementation: LivingSpeciesImplementation;
   readonly ownerId: string | null;
   readonly decisionModel: LivingSpeciesDecisionModel;
+  /** Declarative/profile cadence; a production owner must choose whether to schedule from it. */
   readonly decisionCadenceTicks: number;
   readonly offscreenModel: LivingSpeciesOffscreenModel;
   readonly circadian: LivingSpeciesCircadianContract;

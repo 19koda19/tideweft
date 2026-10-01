@@ -1402,10 +1402,13 @@ override neutral rest.
 The closure evidence deliberately trusts shared abstractions rather than
 authoring a species-by-species script. It proves exact authoritative WAIT
 cadence at distinct animation-frame rates, automatic interruption by one
-lawfully heard alarm at its committed boundary, three production-backed days of
-resident and wildlife routine projection with daily persistence and bounded
-save growth, and one real activity-bound Alpine golden eagle through
-dematerialization/rematerialization.
+lawfully heard alarm at its committed boundary, and a three-day direct
+production-owner harness for resident and wildlife routine projection with
+daily persistence and bounded save growth. That harness starts from a
+runtime-adopted synthetic v1-shaped record rather than archived v1 bytes, omits
+the working dog from its timed loop, and carries one real activity-bound Alpine
+golden eagle through dematerialization/rematerialization. Separate runtime
+integration owns the working-dog evidence.
 The packaged field holds Title and Quiet Hour time still and exercises real
 REST through desktop Chart/Relief plus mobile portrait/landscape Relief. This
 is a representative regression/liveness floor, not low-end certification or a
@@ -1441,6 +1444,9 @@ independent dog, future companion, camps, interiors, fatigue/health/dreams,
 seasons and general nocturnal soundscape retain their later owners. The current
 human catalog advertises the enacted resident routine, while authenticated
 pre-Turning-Day catalogs preserve their former no-routine declaration.
+The snowy egret's tide/opportunity response and the black duck's rain/storm
+response are real bounded non-clock examples; they do not imply that every
+declared driver, species, occupation or soundscape consequence is enacted.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 

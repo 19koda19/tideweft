@@ -377,7 +377,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("Outer save version 32");
+    expect(copy).toContain("latest LIVE_VERIFIED Alpha 60 baseline uses outer save version 32");
     expect(copy).toContain("RegionalEcologyStateV6");
     expect(copy).toContain("sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once into version 30");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
@@ -450,8 +450,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedBoundary?.body).not.toContain("player sleep/wait");
     expect(plannedBoundary?.body).not.toContain("player WAIT");
     expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
-    expect(plannedBoundary?.body).toContain("Breathing Room is the active authorized directive");
-    expect(plannedBoundary?.body).toContain("Living Voice follows it");
+    expect(plannedBoundary?.body).toContain("Breathing Room is complete");
+    expect(plannedBoundary?.body).toContain("Living Voice is the active local development directive");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -797,7 +797,8 @@ describe("TIDEWEFT field-manual content", () => {
   it("teaches the v6 breadth wrapper without rewriting the exact v5 ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("Outer save version 32 is current while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
+    expect(copy).toContain("latest LIVE_VERIFIED Alpha 60 baseline uses outer save version 32 while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
+    expect(copy).toContain("Later unpublished pre-1.0 source may use a newer explicitly versioned development schema");
     expect(copy).toContain("Version 32 adds only the nullable player time-action receipt");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
     expect(copy).toContain("complete V5 base, Alpine, polar-shore, cold-shore, and polar-consumer lineage");

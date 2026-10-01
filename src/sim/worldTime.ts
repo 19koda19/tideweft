@@ -35,7 +35,7 @@ export interface WorldTimeProjection {
   readonly phaseProgress: number;
   /** Fixed-point progress through the complete day. */
   readonly cycleProgress: number;
-  /** Dawn-to-night solar path; null during night. */
+  /** Reserved dawn-to-night astronomy path; current rendering uses cycle/light authority. */
   readonly solarProgress: number | null;
   /** Authoritative open-sky illumination before weather, cover, or local lights. */
   readonly illumination: number;

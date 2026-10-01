@@ -1267,9 +1267,11 @@ rest.
 Closure is proven through shared owners and representative integration rather
 than an N-squared species matrix: exact WAIT cadence from the same saved state
 under distinct animation-frame rates, real alarm-driven interruption at one
-committed tick, a three-day production routine soak with daily serialization
-and bounded growth, and one representative golden eagle retaining stable actor
-identity through source dematerialization/rematerialization. The packaged
+committed tick, a three-day direct production-owner routine harness with daily
+serialization and bounded growth, and one representative golden eagle retaining
+stable actor identity through source dematerialization/rematerialization. This
+harness begins from a runtime-adopted synthetic v1-shaped record; it is neither
+an archived v1 fixture nor a whole-runtime/working-dog soak. The packaged
 harness holds the Title and Quiet Hour clocks still, performs real REST on
 validated footing, and exercises desktop Chart/Relief plus mobile
 portrait/landscape Relief controls. Packaged mobile coverage is Relief only;
@@ -1319,8 +1321,29 @@ receipt retain their historical clock-only recovery rule until lawful current
 adoption; that compatibility exception is not the contract for new actors.
 Production cover transmission remains fully open, and only completed-beacon
 `settlement-lamp` records currently produce local outdoor light. Accepted
-fire, lantern, other-light and non-clock driver values are integration
-vocabulary until a real owner emits them.
+fire, lantern and other-light values are integration vocabulary until a real
+owner emits them. Non-clock routine drivers are narrower rather than absent:
+the snowy egret consumes authenticated tide/opportunity input, and the American
+black duck consumes qualifying rain plus dangerous-storm refuge. Broader
+species/driver adoption remains deferred.
+
+`nextEvaluationTick` is a deterministic cadence hint, not a universal runtime
+scheduler. The settlement working dog currently carries that hint into its
+`nextThinkTick`; neutral resident and wildlife routines still project on every
+applicable authoritative tick. Any later cadence optimization must preserve
+immediate invalidation by perception, weather, tide, needs and work. Likewise,
+`physical-contact` and `authoritative-local-hazard` are reserved disturbance
+vocabulary until their physical/health owners emit authenticated facts. The
+keeper `presentationIntent` summary and `solarProgress` projection are
+diagnostic/reserved values; current presentation consumes persisted posture and
+the renderer consumes day-cycle/light authority instead.
+
+The three-day Turning Day budget test remains valuable but is not a whole-game
+runtime or archived-save soak. It uses the runtime to adopt and save a
+synthetic v1-shaped record, then advances the real resident/ecology owners
+directly for 4,320 ticks; the working dog is covered by separate integration
+evidence. Future full-runtime or historical-fixture claims need their own
+explicit witness.
 
 Turning Day supplies Living Voice with honest clock phase, physical light,
 posture and lawful interruption/perception inputs. It does not itself produce

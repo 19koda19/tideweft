@@ -37,8 +37,10 @@ export const SETTLEMENT_KEEPER_CIRCADIAN_POLICY =
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY;
 
 /**
- * A presentation-only summary. It intentionally exposes neither the schedule,
- * wake threshold, phase offset, nor opaque rest-destination identity.
+ * A diagnostic presentation summary with no current runtime/UI consumer.
+ * Player-facing posture is derived from persisted resident state instead. It
+ * intentionally exposes neither the schedule, wake threshold, phase offset,
+ * nor opaque rest-destination identity.
  */
 export type SettlementKeeperCircadianPresentationIntent =
   | "watch"

@@ -160,8 +160,8 @@ class MemoryRepository implements SaveRepository {
   }
 }
 
-describe("Turning Day bounded multi-day closure budget", () => {
-  it(`${TURNING_DAY_MULTI_DAY_BUDGET_OWNER_INTENT} keeps production routines and saves bounded`, async () => {
+describe("Turning Day direct production-owner multi-day budget", () => {
+  it(`${TURNING_DAY_MULTI_DAY_BUDGET_OWNER_INTENT} keeps direct routine owners and saves bounded`, async () => {
     const fixtureStartedAt = performance.now();
     const currentRecord = await createCurrentProductionRecord();
     const envelope = decodeCurrentEnvelope(currentRecord);
@@ -392,7 +392,9 @@ describe("Turning Day bounded multi-day closure budget", () => {
 });
 
 async function createCurrentProductionRecord(): Promise<SaveRecord> {
-  const repository = new MemoryRepository(legacyRecordAtProductionTick());
+  // Runtime adoption/save is real, but the timed loop above deliberately calls
+  // production owners directly. This is not a whole-runtime or archival-v1 soak.
+  const repository = new MemoryRepository(syntheticV1ShapedRecordAtProductionTick());
   const runtime = await createTideweftRuntime(repository);
   await runtime.save();
   const record = repository.snapshot();
@@ -400,7 +402,7 @@ async function createCurrentProductionRecord(): Promise<SaveRecord> {
   return record;
 }
 
-function legacyRecordAtProductionTick(): SaveRecord {
+function syntheticV1ShapedRecordAtProductionTick(): SaveRecord {
   const seed = "rain chorus bounded diurnal activity owner";
   const world = createWorld(seed, "wild");
   runTicks(world, PRODUCTION_FIXTURE_TICK - world.meta.completedTick);

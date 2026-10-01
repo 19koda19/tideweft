@@ -68,6 +68,7 @@ export interface LivingCircadianDriverSignal {
 }
 
 export interface LivingCircadianDisturbance {
+  /** Only lawful-perception currently has production callers; the other sources are reserved. */
   readonly source: "lawful-perception" | "physical-contact" | "authoritative-local-hazard";
   readonly referenceId: string;
   readonly observedAtTick: number;
@@ -130,7 +131,11 @@ export interface LivingCircadianProjection {
   readonly action: LivingCircadianAction;
   readonly transitionCause: LivingCircadianTransitionCause;
   readonly causeReferenceId: string | null;
-  /** Transient stable-ID cadence hint; it need not be added to a save schema. */
+  /**
+   * Transient stable-ID cadence hint; it need not be added to a save schema.
+   * Only the working-dog adapter currently schedules from it. Other callers
+   * still project every applicable authoritative tick.
+   */
   readonly nextEvaluationTick: number;
 }
 

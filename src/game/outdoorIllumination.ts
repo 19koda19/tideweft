@@ -224,6 +224,9 @@ export function outdoorIlluminationCacheKey(
  * Builds and caches one bounded row-major physical-light field. The expensive
  * lamp rays are evaluated only when a physical input represented by the cache
  * key changes, rather than once per render frame or once per consumer.
+ * This is the current production path. Future cover or source kinds must join
+ * this field and its cache key/index; exercising the generic point evaluator
+ * alone does not make them live.
  */
 export function buildOutdoorIlluminationField(
   world: WorldView,

@@ -90,7 +90,7 @@ describe("universal living circadian kernel", () => {
     expect(active?.clockPreference).toBe("active");
   });
 
-  it("derives stable identity variation and staggered cadence without save state", () => {
+  it("derives stable identity variation and distinct cadence hints without save state", () => {
     const first = project({
       subjectId: "ACTOR-stable",
       atTick: 720,
