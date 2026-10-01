@@ -332,6 +332,32 @@ function canonicalMarshRabbitAlarm(
   return reduced.state.active;
 }
 
+function canonicalDomesticCatRainDistress(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "CAT-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "domestic-cat-rain-distress-call",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 520_000,
+    variantSeed: 0xca7,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Domestic-cat expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalHumanDangerWarning(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -395,6 +421,14 @@ function marshRabbitSource(event: SituatedExpressionEvent): CoreWildlifeExpressi
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "marsh-rabbit",
+    position: event.position,
+  });
+}
+
+function domesticCatSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "domestic-cat",
     position: event.position,
   });
 }
@@ -1356,6 +1390,61 @@ describe("situated expression game projection", () => {
     });
     expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
     expect(JSON.stringify(caption)).not.toContain("DEER-living-voice");
+  });
+
+  it("anchors a visible cat weather call while hiding its unseen identity and cause", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalDomesticCatRainDistress(
+      wildlifePositionInWindow(window),
+      "CAT-living-voice-projection:e:16:retreat",
+    );
+    const visible = heardVisibleReception(expression);
+    const sources = [domesticCatSource(expression)];
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressions).toEqual([expect.objectContaining({
+      acousticKind: "animal-call",
+      sourceActorId: expression.sourceActorId,
+      sourceKind: "animal",
+      speakerLabel: "Domestic cat",
+      text: "MRROW.",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Domestic cat",
+      text: "MRROW.",
+      presentationKind: "animal-call",
+      animalCallKind: "cat-call",
+    });
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Hidden cat reception fixture was rejected");
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "CALL.",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      directionLabel: "west",
+    });
+    const serializedCaption = JSON.stringify(caption);
+    expect(serializedCaption).not.toContain(expression.sourceActorId);
+    expect(serializedCaption).not.toMatch(/cat|MRROW|weather|retreat/iu);
   });
 
   it("anchors a visible marsh-rabbit thump only to its authenticated body", () => {

@@ -489,11 +489,16 @@ export function projectUIView(
       ? "bird-call" as const
       : semanticAnimalCallKind === "deer-call"
         ? "animal-call" as const
+        : semanticAnimalCallKind === "cat-call"
+          ? "animal-call" as const
         : semanticAnimalCallKind
     : semanticAnimalCallKind;
   const embodiedSignal = situatedExpressionEvent?.meaning === "marsh-rabbit-alarm-thump";
   const presentedExpressionText = presentedAnimalCallKind === "bird-call"
     ? "CALL! CALL!"
+    : options.situatedExpressionReception?.kind === "heard-unseen"
+      && semanticAnimalCallKind === "cat-call"
+      ? "CALL."
     : residentIntroduction?.text ?? situatedExpression?.text;
   const expressionCaptionCandidate: AcousticCaptionCandidate | null =
     situatedExpression !== null

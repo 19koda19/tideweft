@@ -213,6 +213,7 @@ import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
 import type {
   CoreWildlifeAlarmExpressionAdmissionRecord,
+  CoreWildlifeWeatherDistressExpressionAdmissionRecord,
   SituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
@@ -3181,6 +3182,158 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it("voices one fresh rain-caused cat retreat through shared authority and reloads without replay", async () => {
+    const { runtime, repository, catActorId } = await createCatWeatherRuntime("rain-distress");
+    soundscapePlay.mockClear();
+    let sharedCatCaption:
+      ReturnType<TideweftRuntime["getUIView"]>["expressionCaption"];
+    let legacyCatAnnouncement = false;
+
+    advancePlayerSteps(runtime, 10, () => {
+      const view = runtime.getUIView();
+      if (view.expressionCaption?.animalCallKind === "cat-call") {
+        sharedCatCaption = view.expressionCaption;
+      }
+      if (view.announcement?.message === "CAT CALL — nearby and in view.") {
+        legacyCatAnnouncement = true;
+      }
+    });
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toHaveLength(1);
+    expect(sharedCatCaption).toMatchObject({
+      speakerLabel: "Domestic cat",
+      text: "MRROW.",
+      presentationKind: "animal-call",
+      animalCallKind: "cat-call",
+      assertive: false,
+    });
+    expect(legacyCatAnnouncement).toBe(false);
+
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(saved.world);
+    const savedCore = requiredRegionalCoreOwner(saved, catActorId);
+    const savedCat = requiredCoreActor(savedCore, catActorId);
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifeWeatherDistressExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-weather-distress"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Cat weather voice fixture omitted admission");
+    expect(admission).toMatchObject({
+      kind: "core-wildlife-weather-distress",
+      sourceActorId: catActorId,
+      sourceOwnerKey: savedCore.patchKey,
+      admittedAtPlayerStepPhase: 0,
+      acceptedAtTick: savedWorld.meta.completedTick,
+    });
+    const rainMemory = savedCat.memories.find(({ eventId }) => (
+      eventId === admission.triggerEventId
+    ));
+    expect(rainMemory).toMatchObject({
+      kind: "weather",
+      referenceId: "weather:rain",
+      observationId: admission.sourceObservationId,
+      atTick: admission.acceptedAtTick,
+      environmentalEvidence: {
+        kind: "wet-tracks",
+        createdAtTick: admission.acceptedAtTick,
+        itemConsumption: "none",
+        disclosure: "direct-observation-required",
+      },
+    });
+    if (rainMemory?.environmentalEvidence === undefined) {
+      throw new Error("Cat weather voice fixture omitted its wet-track event locus");
+    }
+    expect(saved.perceptionCarry.actorVocalizationSamples.filter((candidate) => (
+      candidate.sourceActorId === catActorId
+      && candidate.expressionEventId === admission.eventId
+    ))).toHaveLength(1);
+    const sample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "domestic-cat-rain-distress-call",
+      volume: "murmur",
+    });
+    expect(sample).toMatchObject({
+      expressionEventId: admission.eventId,
+      sourceActorId: catActorId,
+      position: rainMemory.environmentalEvidence.position,
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+    });
+    expect(savedCat).toMatchObject({
+      updatedAtTick: admission.acceptedAtTick,
+      intent: {
+        kind: "retreat",
+        cause: { kind: "perception", referenceId: admission.sourceObservationId },
+        focusObservationId: admission.sourceObservationId,
+      },
+    });
+    const channel = saved.perceptionCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === catActorId,
+    );
+    expect(channel?.state.active).toMatchObject({
+      eventId: admission.eventId,
+      triggerEventId: admission.triggerEventId,
+      position: rainMemory.environmentalEvidence.position,
+      meaning: "domestic-cat-rain-distress-call",
+      family: "animal-signal",
+      tone: "restrained",
+      volume: "murmur",
+      knowledgeBasis: "self-weather-distress",
+      vocalization: "domestic-cat-rain-distress",
+      priority: 300_000,
+      durationSteps: 6,
+      audioAcknowledged: true,
+    });
+    expect(channel?.reception).toMatchObject({
+      eventId: admission.eventId,
+      sourceActorId: catActorId,
+      receivedAtTick: admission.acceptedAtTick,
+      kind: "heard-visible",
+      directVisualReceipt: true,
+    });
+    const durableCarry = stableStringify(saved.perceptionCarry);
+    runtime.destroy();
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(resumed.getUIView().expressionCaption?.animalCallKind).not.toBe("cat-call");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    resumed.destroy();
+    scheduledFrame = undefined;
+
+    const ordinary = await createCatWeatherRuntime("non-rain-control");
+    soundscapePlay.mockClear();
+    legacyCatAnnouncement = false;
+    advancePlayerSteps(ordinary.runtime, 10, () => {
+      if (ordinary.runtime.getUIView().announcement?.message
+        === "CAT CALL — nearby and in view.") legacyCatAnnouncement = true;
+    });
+    await ordinary.runtime.save();
+    const ordinaryCat = requiredCoreActor(
+      requiredRegionalCoreOwner(requiredEnvelope(ordinary.repository), ordinary.catActorId),
+      ordinary.catActorId,
+    );
+    expect(["retreat", "rest"]).toContain(ordinaryCat.intent.kind);
+    expect(ordinaryCat.intent.kind).not.toBe("observe");
+    expect(ordinaryCat.memories.some(({ kind, referenceId }) => (
+      kind === "weather" && referenceId === "weather:rain"
+    ))).toBe(false);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+    expect(ordinary.runtime.getUIView().expressionCaption?.animalCallKind).not.toBe("cat-call");
+    expect(legacyCatAnnouncement).toBe(false);
+    ordinary.runtime.destroy();
+  }, 120_000);
+
   it("admits one source-bound deer snort through shared audio/caption authority and reloads without replay", async () => {
     const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
@@ -5988,6 +6141,145 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 });
+
+async function createCatWeatherRuntime(
+  mode: "rain-distress" | "non-rain-control",
+): Promise<Readonly<{
+  runtime: TideweftRuntime;
+  repository: MemoryRepository;
+  catActorId: string;
+}>> {
+  const repository = new MemoryRepository();
+  const initial = await createTideweftRuntime(repository);
+  initial.dispatchUI({
+    type: "new-world",
+    seed: "settlement shadows",
+    posture: "gale",
+    sessionShape: "wander",
+  });
+  await initial.save();
+  const fresh = requiredEnvelope(repository);
+  const sourceCatId = requiredCore(fresh).populations.find(
+    ({ species }) => species === "domestic-cat",
+  )?.members[0]?.actor.identity.stableId;
+  if (sourceCatId === undefined) throw new Error("Cat weather fixture omitted its source");
+  const envelope = await adoptUntouchedFixtureCoreAsCurrent(
+    repository,
+    initial,
+    fresh,
+    () => [sourceCatId],
+  );
+  const record = repository.snapshot();
+  const world = deserializeWorld(envelope.world);
+  makeWorldDryAndClear(world);
+  world.weather.kind = mode === "rain-distress" ? "rain" : "clear";
+  world.weather.intensity = mode === "rain-distress" ? 1_000_000 : 0;
+  world.weather.windX = 0;
+  world.weather.windY = 0;
+  world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+  const player = structuredClone(envelope.player);
+  player.facingMilliRadians = 0;
+  const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
+  if (regional === null) throw new Error("Cat weather fixture could not restore its frame");
+  const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
+  if (playerPosition === null) throw new Error("Cat weather fixture could not locate its player");
+
+  let patch = requiredRegionalCoreOwner(envelope, sourceCatId);
+  patch = setCoreEcologyAggregatePatchMaterializedActors(patch, {
+    atTick: patch.updatedAtTick,
+    actorIds: [sourceCatId],
+  });
+  const sourceCat = requiredCoreActor(patch, sourceCatId);
+  const positionedCat = repositionCoreWildlifeActor(sourceCat, {
+    atTick: patch.updatedAtTick,
+    // The player sees the cat ahead; the cat faces away so the player cannot
+    // supplant rain as this fixture's causal observation.
+    position: translateWorldPosition(
+      playerPosition,
+      WORLD_POSITION_UNITS_PER_TILE,
+      0,
+    ),
+    heading: 0,
+  });
+  const { circadian: _circadian, ...catWithoutCircadian } = positionedCat;
+  const preparedCat = canonicalizeCoreWildlifeActorState({
+    ...catWithoutCircadian,
+    needs: {
+      hunger: 0,
+      safety: 0,
+      rest: mode === "non-rain-control" ? 1_000_000 : 0,
+    },
+    condition: { health: 1_000_000, exhaustion: 0, stress: 0 },
+    perception: createActorPerceptionState(sourceCatId, patch.updatedAtTick),
+    intent: {
+      kind: "observe",
+      cause: { kind: "condition", referenceId: "condition:fixture-neutral" },
+      focusObservationId: null,
+      resourceReference: null,
+      enteredAtTick: patch.updatedAtTick,
+      expiresAtTick: null,
+    },
+    memories: [],
+  });
+  if (preparedCat === null) throw new Error("Cat weather fixture could not reset its source");
+  patch = replaceCoreEcologyAggregatePatchActor(patch, preparedCat);
+  let displacedCatOrdinal = 0;
+  for (const actor of coreActors(patch)) {
+    if (
+      actor.identity.species !== "domestic-cat"
+      || actor.identity.stableId === sourceCatId
+    ) continue;
+    patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
+      atTick: patch.updatedAtTick,
+      position: translateWorldPosition(
+        playerPosition,
+        (100 + displacedCatOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+        20 * WORLD_POSITION_UNITS_PER_TILE,
+      ),
+      heading: actor.address.heading,
+    }));
+    displacedCatOrdinal += 1;
+  }
+  patch = reconcileFixtureGroupAnchors(patch);
+  let prepared = resealedCurrentEnvelopeWithCorePatch(envelope, patch, {
+    world: serializeWorld(world),
+    player,
+  });
+  for (const source of [
+    requiredRegionalEcology(envelope).settlementHome,
+    ...requiredRegionalEcology(envelope).activeResidents,
+  ]) {
+    if (source.patch.patchKey === patch.patchKey) continue;
+    const materializedNonCats = source.patch.populations.flatMap(({ species, members }) => (
+      members.flatMap(({ actor, materialization }) => (
+        materialization === "materialized" && species !== "domestic-cat"
+          ? [actor.identity.stableId]
+          : []
+      ))
+    ));
+    const hasMaterializedCat = source.patch.populations.some(({ species, members }) => (
+      species === "domestic-cat"
+      && members.some(({ materialization }) => materialization === "materialized")
+    ));
+    if (!hasMaterializedCat) continue;
+    prepared = resealedCurrentEnvelopeWithCorePatch(
+      prepared,
+      setCoreEcologyAggregatePatchMaterializedActors(source.patch, {
+        atTick: source.patch.updatedAtTick,
+        actorIds: materializedNonCats,
+      }),
+    );
+  }
+  await repository.save(recordWithEnvelope(record, prepared));
+  scheduledFrame = undefined;
+  const runtime = await createTideweftRuntime(repository);
+  if (runtime.getUIView().saveWarning !== undefined) {
+    throw new Error(`Cat weather fixture rejected: ${stableStringify(
+      runtime.getUIView().saveWarning,
+    )}`);
+  }
+  return Object.freeze({ runtime, repository, catActorId: sourceCatId });
+}
 
 async function createAlarmRuntime(
   offsetTiles: -8 | -4 | 9,
@@ -8955,6 +9247,20 @@ function addFixtureForageProvision(
 
 function coreActors(state: CoreEcologyAggregatePatchState): readonly CoreWildlifeActorState[] {
   return state.populations.flatMap(({ members }) => members.map(({ actor }) => actor));
+}
+
+function requiredRegionalCoreOwner(
+  envelope: CurrentEnvelope,
+  actorId: string,
+): CoreEcologyAggregatePatchState {
+  const regional = requiredRegionalEcology(envelope);
+  const owners = [regional.settlementHome, ...regional.activeResidents].filter(({ patch }) => (
+    coreActors(patch).some(({ identity }) => identity.stableId === actorId)
+  ));
+  if (owners.length !== 1 || owners[0] === undefined) {
+    throw new Error(`Fixture expected one active regional owner for ${actorId}`);
+  }
+  return owners[0].patch;
 }
 
 function regionalCoreActors(state: RegionalEcologyStateV1): readonly CoreWildlifeActorState[] {

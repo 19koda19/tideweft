@@ -13,6 +13,7 @@ import {
   canonicalizeSituatedExpressionAdmissionRecord,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
+  createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
@@ -36,6 +37,7 @@ import { createWorldPosition } from "./worldPosition";
 const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-porter-admission";
 const GUARDIAN_DOG_ID = "D-guardian-admission";
+const DOMESTIC_CAT_ID = "CAT-v1-expression-admission";
 const POSITION = createWorldPosition(createRegionCoord(-4, 11), 17_000, 29_000);
 
 function traversalInput(
@@ -163,6 +165,15 @@ describe("situated-expression admission ledger", () => {
       sourceObservationId: "observation:aerial-predator:1",
       acceptedAtTick: 912,
     });
+    const catRainDistress = createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+      sourceActorId: DOMESTIC_CAT_ID,
+      triggerEventId: "core-wildlife:weather-distress:cat:1",
+      sampleOrdinal: 7,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:rain-distress:1",
+      acceptedAtTick: 912,
+    });
     const humanWarning = createHumanDangerWarningExpressionAdmissionRecord({
       sourceActorId: "H-human-warning-admission",
       triggerEventId: "human-warning:observation:1",
@@ -200,6 +211,7 @@ describe("situated-expression admission ledger", () => {
       guardianGrowl,
       guardianWhine,
       crowAlarm,
+      catRainDistress,
       humanWarning,
       effort,
       legacy,
@@ -212,6 +224,7 @@ describe("situated-expression admission ledger", () => {
       "guardian-dog-defensive-growl",
       "guardian-dog-shelter-whine",
       "core-wildlife-fish-crow-alarm",
+      "core-wildlife-weather-distress",
       "human-danger-warning",
       "player-exhaustion",
       "legacy-v33-player",
@@ -224,6 +237,7 @@ describe("situated-expression admission ledger", () => {
       guardianGrowl,
       guardianWhine,
       crowAlarm,
+      catRainDistress,
       humanWarning,
       effort,
       legacy,
@@ -375,6 +389,60 @@ describe("situated-expression admission ledger", () => {
       sourceSpecies: "fish-crow",
       hiddenThreatId: "BEAR-secret",
     })).toBeNull();
+  });
+
+  it("binds domestic-cat rain distress to exact phase-zero ecology evidence", () => {
+    const input = {
+      sourceActorId: DOMESTIC_CAT_ID,
+      triggerEventId: "core-wildlife:weather-distress:cat:2",
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:rain-distress:2",
+      acceptedAtTick: 913,
+    } as const;
+    const canonical = createCoreWildlifeWeatherDistressExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "core-wildlife-weather-distress",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(canonical)))
+      .toEqual(canonical);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(
+      rawLedger([structuredClone(canonical)]),
+    )?.records).toEqual([canonical]);
+
+    for (const mutation of [
+      { sourceActorId: PLAYER_ID },
+      { sourceActorId: "FOX-v1-not-a-cat" },
+      { admittedAtPlayerStepPhase: 1 },
+      { sourceOwnerKey: " padded " },
+      { sourceObservationId: "" },
+      { acceptedAtTick: -0 },
+    ] as const) {
+      expect(createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      })).toBeNull();
+    }
+    expect(createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+      ...input,
+      hiddenRainIntensity: 900_000,
+    } as never)).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      hiddenWeatherCause: "heavy-rain",
+    })).toBeNull();
+    const missingObservation = { ...canonical } as Record<string, unknown>;
+    delete missingObservation.sourceObservationId;
+    expect(canonicalizeSituatedExpressionAdmissionRecord(missingObservation)).toBeNull();
   });
 
   it("binds a human danger warning to one exact non-player observation and rejects ledger tampering", () => {

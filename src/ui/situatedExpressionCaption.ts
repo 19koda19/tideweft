@@ -90,6 +90,8 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
         ? "A bird"
         : caption.animalCallKind === "deer-call"
           ? "A deer"
+          : caption.animalCallKind === "cat-call"
+            ? caption.directionLabel === undefined ? "A cat" : "An animal"
           : caption.animalCallKind === "animal-call"
             ? "An animal"
             : caption.speakerLabel === "Familiar dog"
@@ -103,9 +105,12 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
         ? { visible: "barks sharply", directional: "barks" }
         : caption.animalCallKind === "fish-crow-call"
           ? { visible: "calls sharply", directional: "calls" }
+          : caption.animalCallKind === "cat-call"
+            ? { visible: "calls plaintively", directional: "calls" }
           : caption.animalCallKind === "deer-call"
-            || caption.animalCallKind === "animal-call"
             ? { visible: "snorts sharply", directional: "snorts" }
+          : caption.animalCallKind === "animal-call"
+            ? { visible: "calls", directional: "calls" }
             : { visible: "calls", directional: "calls" };
     if (caption.directionLabel === undefined) return `[${subject} ${call.visible}.]`;
     if (caption.directionLabel === "all around") {

@@ -20,6 +20,7 @@ import {
   canonicalizeSituatedExpressionAdmissionLedger,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
+  createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
   createPlayerExhaustionExpressionAdmissionRecord,
@@ -59,6 +60,7 @@ const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const DEER_ID = "D-expression-trajectory-deer";
 const MARSH_RABBIT_ID = "M-expression-trajectory-marsh-rabbit";
+const DOMESTIC_CAT_ID = "CAT-v1-expression-trajectory";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
 const WEATHER_HOLD_RESIDENT_ID = "H-expression-trajectory-weather-hold";
@@ -185,6 +187,26 @@ function marshRabbitIntent(triggerEventId: string): SituatedExpressionIntent {
     volume: "murmur",
     priority: MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY,
     variantSeed: 129,
+  };
+}
+
+function domesticCatRainDistressIntent(
+  triggerEventId: string,
+): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: DOMESTIC_CAT_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "domestic-cat-rain-distress-call",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 610_000,
+    variantSeed: 139,
+    durationSteps: 6,
   };
 }
 
@@ -614,6 +636,65 @@ function marshRabbitAlarmFixture(): Fixture {
   }
   return {
     bank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function domesticCatRainDistressFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = "core-wildlife:weather-distress:cat:trajectory";
+  const admitted = accept(
+    createSituatedExpressionState(),
+    domesticCatRainDistressIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture domestic-cat expression expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          740_000,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 2, maximum: 6 },
+            certainty: 0.74,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture domestic-cat reception was not canonical");
+  }
+  const canonicalBank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: DOMESTIC_CAT_ID, state: current, reception }],
+  });
+  const record = createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+    sourceActorId: DOMESTIC_CAT_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceOwnerKey: "regional-ecology:trajectory-test",
+    sourceObservationId: "observation:rain-distress:trajectory-test",
+    acceptedAtTick,
+  });
+  if (canonicalBank === null || record === null) {
+    throw new Error("fixture domestic-cat trajectory was not canonical");
+  }
+  return {
+    bank: canonicalBank,
     ledger: ledger([record]),
     phase,
     samples: [animalSample(admitted.event, 0)],
@@ -1232,6 +1313,104 @@ describe("situated-expression admission trajectory", () => {
       fixture.phase,
       promotedInterrupt,
     )).toBe(false);
+  });
+
+  it("binds domestic-cat rain distress to restrained noninterrupting acoustics", () => {
+    const expectedAcoustics = situatedExpressionAcoustics({
+      meaning: "domestic-cat-rain-distress-call",
+      volume: "murmur",
+    });
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = domesticCatRainDistressFixture(receptionKind);
+      expect(accepts(fixture), receptionKind).toBe(true);
+      expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+        meaning: "domestic-cat-rain-distress-call",
+        vocalization: "domestic-cat-rain-distress",
+        family: "animal-signal",
+        tone: "restrained",
+        volume: "murmur",
+        knowledgeBasis: "self-weather-distress",
+        priority: 300_000,
+        salience: 610_000,
+        durationSteps: 6,
+        remainingSteps: 3,
+      });
+      expect(fixture.ledger.records[0]).toMatchObject({
+        kind: "core-wildlife-weather-distress",
+        sourceActorId: DOMESTIC_CAT_ID,
+        sourceOwnerKey: "regional-ecology:trajectory-test",
+        sourceObservationId: "observation:rain-distress:trajectory-test",
+        acceptedAtTick: 40,
+      });
+      expect(fixture.samples[0]).toMatchObject({
+        sourceActorId: DOMESTIC_CAT_ID,
+        soundLoudness: expectedAcoustics.loudness,
+        soundRangeUnits: expectedAcoustics.rangeUnits,
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+      });
+      expect(fixture.bank.channels[0]?.reception?.kind ?? "none").toBe(receptionKind);
+
+      const floorSalience = mutable(fixture.bank);
+      floorSalience.channels[0]!.state.active!.salience = 360_000;
+      expect(canonicalizeSituatedExpressionChannelBank(floorSalience)).not.toBeNull();
+      expect(situatedExpressionTrajectoryIsCanonical(
+        floorSalience,
+        fixture.ledger,
+        fixture.phase,
+        fixture.samples,
+      )).toBe(true);
+    }
+  });
+
+  it("rejects cat distress semantic, lifetime, receipt, and acoustic tampering", () => {
+    const worldOnly = domesticCatRainDistressFixture("none");
+    const received = domesticCatRainDistressFixture("heard-visible");
+
+    const wrongPriority = mutable(worldOnly.bank);
+    wrongPriority.channels[0]!.state.active!.priority -= 1;
+    wrongPriority.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(wrongPriority)).not.toBeNull();
+
+    const wrongTone = mutable(worldOnly.bank);
+    wrongTone.channels[0]!.state.active!.tone = "alarmed";
+    expect(canonicalizeSituatedExpressionChannelBank(wrongTone)).toBeNull();
+
+    const impossibleSalience = mutable(worldOnly.bank);
+    impossibleSalience.channels[0]!.state.active!.salience = 359_999;
+    expect(canonicalizeSituatedExpressionChannelBank(impossibleSalience)).not.toBeNull();
+
+    const resetDuration = mutable(worldOnly.bank);
+    resetDuration.channels[0]!.state.active!.durationSteps += 1;
+    resetDuration.channels[0]!.state.active!.remainingSteps += 1;
+    expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
+
+    const changedAcoustics = mutable(worldOnly.samples);
+    changedAcoustics[0]!.soundRangeUnits -= 1;
+    const promotedInterrupt = mutable(worldOnly.samples);
+    promotedInterrupt[0]!.soundInterrupt = "strong";
+
+    const mistimedReceipt = mutable(received.bank);
+    if (mistimedReceipt.channels[0]!.reception?.kind !== "heard-visible") {
+      throw new Error("fixture lost domestic-cat reception");
+    }
+    mistimedReceipt.channels[0]!.reception.receivedAtTick += 1;
+
+    for (const [bankValue, ledgerValue, samplesValue] of [
+      [wrongPriority, worldOnly.ledger, worldOnly.samples],
+      [impossibleSalience, worldOnly.ledger, worldOnly.samples],
+      [resetDuration, worldOnly.ledger, worldOnly.samples],
+      [worldOnly.bank, worldOnly.ledger, changedAcoustics],
+      [worldOnly.bank, worldOnly.ledger, promotedInterrupt],
+      [mistimedReceipt, received.ledger, received.samples],
+    ] as const) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        bankValue,
+        ledgerValue,
+        worldOnly.phase,
+        samplesValue,
+      )).toBe(false);
+    }
   });
 
   it("binds human warnings to critical priority and non-recursive danger acoustics", () => {

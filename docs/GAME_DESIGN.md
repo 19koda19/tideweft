@@ -254,10 +254,13 @@ does not yet add general NPC conversation or a broad animal-expression system.
 The current unpublished status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
 signals, fish-crow/deer calls, the rabbit thump, and the frog chorus are live in
-the candidate. Renderer-polled resident state lines have been removed; the
-existing visible-event rat/cat/fox and generic wildlife-alarm fallback cues
-remain compatibility bypasses that do not prove world-event acoustics,
-listener receipt, or knowledge transfer. Future tool,
+the candidate. The aggregate rat rustle and one exact domestic-cat rain-distress
+call are also live through the shared acoustic path; the cat representative
+requires a freshly committed rain-caused retreat plus matching rain memory and
+wet-track evidence, not merely a visible intent transition. Renderer-polled
+resident state lines have been removed; the existing visible-event fox and
+generic wildlife-alarm fallback cues remain compatibility bypasses that do not
+prove world-event acoustics, listener receipt, or knowledge transfer. Future tool,
 violence, and vessel examples are contract fixtures only. General conversation,
 rumors, multilingual comprehension, animated gesture, most animal repertoires,
 and expressions for work that does not yet exist remain specified or deferred;
@@ -1103,7 +1106,13 @@ evaluator supplies its anonymous human/dog hearing and player heard-unseen
 receipt. Attenuated stereo pan and the accessible **chorus** caption derive from
 the same uncertainty; the caption names a cardinal direction only when that
 contact supports one and never becomes an actor-anchored world callout. The
-northern harrier,
+narrow domestic-cat representative likewise replaces the old visible-transition
+cue: exact live rain perception must produce a fresh retreat, matching weather
+memory, and wet-track locus before the shared Voice path can realize restrained
+`MRROW.` audio/text. Visible lawful hearing may identify the cat; heard-unseen
+presentation remains animal-generic and directional, and reload cannot replay
+the acknowledged cue. This does not make ordinary cat transitions or a general
+cat repertoire audible. The northern harrier,
 snowy egret,
 American black duck, North American river otter, wild boar, elk, gray wolf,
 cougar, and brown bear have no fabricated calls. Wild boar, elk, and gray wolf

@@ -22,6 +22,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "guardian-dog-warning",
   "guardian-dog-defensive-growl",
   "guardian-dog-shelter-whine",
+  "domestic-cat-rain-distress-call",
   "fish-crow-alarm-call",
   "deer-alarm-call",
   "marsh-rabbit-alarm-thump",
@@ -89,6 +90,7 @@ export type SituatedExpressionVocalization =
   | "dog-warning-bark"
   | "dog-defensive-growl"
   | "dog-shelter-whine"
+  | "domestic-cat-rain-distress"
   | "fish-crow-alarm"
   | "deer-alarm-snort"
   | "marsh-rabbit-alarm-thump";
@@ -294,6 +296,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "domestic-cat-rain-distress-call": Object.freeze({
+    family: "animal-signal",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-weather-distress"]),
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["murmur"]),
+    vocalization: "domestic-cat-rain-distress",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
   "fish-crow-alarm-call": Object.freeze({
     family: "animal-signal",
     knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
@@ -450,6 +461,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.guardian-dog-shelter-whine.0",
       text: "WHINE...",
+    }),
+  ]),
+  "domestic-cat-rain-distress-call": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.domestic-cat-rain-distress-call.0",
+      text: "MRROW.",
     }),
   ]),
   "fish-crow-alarm-call": Object.freeze([
@@ -1082,6 +1099,7 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "dog-warning-bark"
     || value === "dog-defensive-growl"
     || value === "dog-shelter-whine"
+    || value === "domestic-cat-rain-distress"
     || value === "fish-crow-alarm"
     || value === "deer-alarm-snort"
     || value === "marsh-rabbit-alarm-thump";

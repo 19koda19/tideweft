@@ -31,6 +31,7 @@ import {
 import {
   appendSituatedExpressionAdmissionRecord,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
+  createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createSituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
@@ -739,6 +740,108 @@ describe("runtime existing-human perception path", () => {
     });
     if (acknowledged.bank === null || event === null || admissions === null || sample === null) {
       throw new Error("v40 semantic-fence fixture could not build a canonical deer trajectory");
+    }
+    const {
+      intervalStartWasSleeping: _futureIntervalStartWasSleeping,
+      playerStepStateAnchor: _futurePlayerStepStateAnchor,
+      playerStepStateSamples: _futurePlayerStepStateSamples,
+      ...v8Carry
+    } = carry;
+    const { integrity: _integrity, ...currentBase } = decoded;
+    const v40Base = {
+      ...currentBase,
+      version: 40,
+      perceptionCarry: {
+        ...v8Carry,
+        version: 8,
+        actorVocalizationSamples: [sample],
+        situatedExpressionAdmissions: admissions,
+        situatedExpressionChannels: acknowledged.bank,
+      },
+    };
+    const smuggledRecord = {
+      ...current,
+      payloadVersion: 40,
+      updatedAt: current.updatedAt + 1,
+      worldJson: JSON.stringify({
+        ...v40Base,
+        integrity: gameSaveEnvelopeIntegrity(v40Base),
+      }),
+    };
+    repository.replace(smuggledRecord);
+
+    const rejected = await createTideweftRuntime(repository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(repository.snapshot()).toEqual(smuggledRecord);
+    rejected.destroy();
+  }, 60_000);
+
+  it("rejects domestic-cat weather-distress semantics smuggled through a resealed v40 carry-v8", async () => {
+    const fixture = perceptionFixture("runtime perception v40 cat semantic fence");
+    const repository = new MemoryRepository(fixture.record);
+    const setup = await createTideweftRuntime(repository);
+    await setup.save();
+    setup.destroy();
+
+    const current = repository.snapshot();
+    const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
+    const carry = currentPerceptionCarry(decoded);
+    const position = carry.intervalStartPosition as WorldPosition;
+    const completedTick = deserializeWorld(String(decoded.world)).meta.completedTick;
+    const sourceActorId = "CAT-living-voice-v40-smuggle";
+    const triggerEventId = "CAT-living-voice-v40-smuggle:e:1:retreat";
+    const reduced = reduceSituatedExpressionChannelBank(
+      createSituatedExpressionChannelBank(),
+      {
+        version: SITUATED_EXPRESSION_VERSION,
+        sourceActorId,
+        triggerEventId,
+        position,
+        meaning: "domestic-cat-rain-distress-call",
+        family: "animal-signal",
+        tone: "restrained",
+        volume: "murmur",
+        knowledgeBasis: "self-weather-distress",
+        priority: 300_000,
+        salience: 520_000,
+        variantSeed: 40,
+        durationSteps: 6,
+      },
+      null,
+    );
+    const acknowledged = acknowledgeSituatedExpressionChannelBank(reduced.bank);
+    const event = reduced.event;
+    const admission = createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+      sourceActorId,
+      triggerEventId,
+      sampleOrdinal: 0,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-owner:v40-cat-smuggle",
+      sourceObservationId: "observation:v40-cat-smuggle",
+      acceptedAtTick: completedTick,
+    });
+    const admissions = admission === null
+      ? null
+      : appendSituatedExpressionAdmissionRecord(
+          createSituatedExpressionAdmissionLedger(),
+          admission,
+        );
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "domestic-cat-rain-distress-call",
+      volume: "murmur",
+    });
+    const sample = event === null ? null : createSupplementalSoundSample({
+      expressionEventId: event.eventId,
+      id: `av-${completedTick}-0`,
+      position,
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      sourceActorId,
+    });
+    if (acknowledged.bank === null || event === null || admissions === null || sample === null) {
+      throw new Error("v40 semantic-fence fixture could not build a canonical cat trajectory");
     }
     const {
       intervalStartWasSleeping: _futureIntervalStartWasSleeping,

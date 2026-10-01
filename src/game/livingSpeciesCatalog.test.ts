@@ -422,6 +422,16 @@ describe("Living Weft species module catalog", () => {
         communicationSignals: ["deer-alarm-snort"],
       },
     });
+    expect(livingSpeciesModule("domestic-cat")).toMatchObject({
+      social: { communicationChannels: ["hearing"] },
+      sound: {
+        implementation: "active",
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["domestic-cat-rain-distress"],
+        communicationSignals: ["domestic-cat-rain-distress"],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+      },
+    });
 
     const releasedCatalogs = [
       LIVING_SPECIES_ALPHA32_CATALOG,
@@ -448,6 +458,17 @@ describe("Living Weft species module catalog", () => {
         expect(catalog.modules.find((module) => module.speciesId === speciesId)
           ?.social.communicationChannels).toEqual([]);
       }
+      const releasedCat = catalog.modules.find((module) => (
+        module.speciesId === "domestic-cat"
+      ));
+      expect(releasedCat?.social.communicationChannels).toEqual([]);
+      expect(releasedCat?.sound).toEqual({
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["cat-call"],
+        communicationSignals: [],
+        accessibilityCues: ["direct-observation-caption"],
+      });
     }
   });
 
@@ -1393,10 +1414,10 @@ describe("Living Weft species module catalog", () => {
       },
       sound: {
         implementation: "active",
-        ownerId: "audio:soundscape:v1",
-        repertoire: ["cat-call"],
-        communicationSignals: [],
-        accessibilityCues: ["direct-observation-caption"],
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["domestic-cat-rain-distress"],
+        communicationSignals: ["domestic-cat-rain-distress"],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
       },
       cognition: {
         implementation: "active",
@@ -2969,6 +2990,7 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "domestic-cat"
           || module.speciesId === "wild-boar"
           || module.speciesId === "elk"
           || module.speciesId === "gray-wolf"

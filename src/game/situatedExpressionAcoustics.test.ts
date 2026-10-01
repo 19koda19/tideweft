@@ -16,6 +16,8 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("guardian-dog-shelter-whine"))
       .toBe("animal-call");
+    expect(situatedExpressionSoundClass("domestic-cat-rain-distress-call"))
+      .toBe("animal-call");
     expect(situatedExpressionSoundClass("fish-crow-alarm-call"))
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("deer-alarm-call"))
@@ -75,6 +77,11 @@ describe("situated expression acoustics", () => {
       tone: "alarmed",
       volume: "shout",
     })).toBe("strong");
+    expect(situatedExpressionSoundInterrupt({
+      meaning: "domestic-cat-rain-distress-call",
+      tone: "restrained",
+      volume: "murmur",
+    })).toBe("none");
   });
 
   it("makes the spoken defensive growl quieter and shorter-ranged than a warning shout", () => {
@@ -89,6 +96,16 @@ describe("situated expression acoustics", () => {
     const growl = situatedExpressionAcoustics("spoken");
     expect(whine.loudness).toBeLessThan(growl.loudness);
     expect(whine.rangeUnits).toBeLessThan(growl.rangeUnits);
+  });
+
+  it("keeps the restrained cat rain call on the bounded murmur envelope", () => {
+    expect(situatedExpressionAcoustics({
+      meaning: "domestic-cat-rain-distress-call",
+      volume: "murmur",
+    })).toEqual({
+      loudness: 360_000,
+      rangeUnits: 8_000,
+    });
   });
 
   it("derives one listener-safe fact only from the secured-store meaning", () => {

@@ -79,6 +79,24 @@ function rabbitThumpIntent(): SituatedExpressionIntent {
   };
 }
 
+function catRainDistressIntent(): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "CAT-same-seed-p0",
+    triggerEventId: "CAT-same-seed-p0:e:1:retreat",
+    position: POSITION,
+    meaning: "domestic-cat-rain-distress-call",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 520_000,
+    variantSeed: 43,
+    durationSteps: 6,
+  };
+}
+
 function accept(
   bank: SituatedExpressionChannelBank,
   nextIntent: SituatedExpressionIntent,
@@ -125,6 +143,15 @@ describe("situated-expression presentation leases", () => {
     )?.filter(({ event }) => !reloadedEventIds.has(event.eventId)).map(
       ({ event }) => event.eventId,
     )).toEqual([replacement.pair.event.eventId]);
+  });
+
+  it("does not repaint a reload-carried cat weather call as a fresh event", () => {
+    const reloaded = accept(
+      createSituatedExpressionChannelBank(),
+      catRainDistressIntent(),
+    );
+    expect(captureReloadedIncidentalExpressionEventIds(reloaded.bank))
+      .toEqual(new Set([reloaded.pair.event.eventId]));
   });
 
   it("preserves a guaranteed introduction through same-source priority and interval closure", () => {

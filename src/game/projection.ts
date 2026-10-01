@@ -311,6 +311,7 @@ export interface CoreWildlifeExpressionSource {
 export type GuardianDogCallKind = "bark" | "growl" | "whine";
 export type AnimalCallKind =
   | GuardianDogCallKind
+  | "cat-call"
   | "fish-crow-call"
   | "deer-call";
 
@@ -332,6 +333,8 @@ export function animalCallKind(
     ? "fish-crow-call"
     : meaning === "deer-alarm-call"
       ? "deer-call"
+      : meaning === "domestic-cat-rain-distress-call"
+        ? "cat-call"
       : guardianDogCallKind(meaning);
 }
 
@@ -378,6 +381,7 @@ export function projectSituatedExpressionSource(
     event.meaning === "fish-crow-alarm-call"
     || event.meaning === "deer-alarm-call"
     || event.meaning === "marsh-rabbit-alarm-thump"
+    || event.meaning === "domestic-cat-rain-distress-call"
   ) {
     if (reception?.kind === "heard-unseen") {
       return Object.freeze({
@@ -398,7 +402,9 @@ export function projectSituatedExpressionSource(
       ? "fish-crow"
       : event.meaning === "deer-alarm-call"
         ? "deer"
-        : "marsh-rabbit";
+        : event.meaning === "domestic-cat-rain-distress-call"
+          ? "domestic-cat"
+          : "marsh-rabbit";
     if (
       matches.length !== 1
       || source === undefined
@@ -411,6 +417,8 @@ export function projectSituatedExpressionSource(
         ? "Fish crow"
         : event.meaning === "deer-alarm-call"
           ? "Deer"
+          : event.meaning === "domestic-cat-rain-distress-call"
+            ? "Domestic cat"
           : "Marsh rabbit",
     });
   }

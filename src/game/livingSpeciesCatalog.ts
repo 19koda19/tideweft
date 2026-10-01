@@ -1139,6 +1139,13 @@ const currentDeerVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["deer-alarm-snort"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentDomesticCatVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["domestic-cat-rain-distress"],
+  communicationSignals: ["domestic-cat-rain-distress"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const noAftermath = (): LivingSpeciesAftermathContract => ({
   implementation: "unimplemented",
   ownerId: null,
@@ -1377,13 +1384,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "solitary",
     crossRegion: true,
-    sound: {
-      implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["cat-call"],
-      communicationSignals: [],
-      accessibilityCues: ["direct-observation-caption"],
-    },
+    sound: currentDomesticCatVoiceSound(),
     evidence: {
       status: "active",
       ownerId: "game:core-wildlife-actor:v1",
@@ -5746,6 +5747,7 @@ const HISTORICAL_PRE_VOICE_SOUND_SPECIES: ReadonlySet<string> = new Set([
   "human",
 ]);
 const HISTORICAL_PRE_VOICE_HEARING_SPECIES: ReadonlySet<string> = new Set([
+  "domestic-cat",
   "domestic-dog",
   "human",
 ]);
@@ -5797,7 +5799,15 @@ function historicalReleaseCompatibilityModule(
     : module.cognition.memoryKinds;
   const historicalSound = HISTORICAL_PRE_VOICE_SOUND_SPECIES.has(module.speciesId)
     ? noSound()
-    : module.sound;
+    : module.speciesId === "domestic-cat"
+      ? {
+          implementation: "active" as const,
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["cat-call"],
+          communicationSignals: [],
+          accessibilityCues: ["direct-observation-caption"],
+        }
+      : module.sound;
   const historicalCommunicationChannels = HISTORICAL_PRE_VOICE_HEARING_SPECIES.has(
     module.speciesId,
   )

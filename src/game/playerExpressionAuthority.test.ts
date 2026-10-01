@@ -263,6 +263,7 @@ function policy(
     case "guardian-dog-warning": throw new Error("Dog calls are not player authority");
     case "guardian-dog-defensive-growl": throw new Error("Dog calls are not player authority");
     case "guardian-dog-shelter-whine": throw new Error("Dog calls are not player authority");
+    case "domestic-cat-rain-distress-call": throw new Error("Cat calls are not player authority");
     case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
     case "deer-alarm-call": throw new Error("Deer calls are not player authority");
     case "marsh-rabbit-alarm-thump": throw new Error("Rabbit calls are not player authority");

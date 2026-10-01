@@ -30,6 +30,7 @@ export function captureReloadedIncidentalExpressionEventIds(
 ): Set<string> {
   return new Set(bank.channels.flatMap(({ state }) => (
     state.active?.meaning === "marsh-rabbit-alarm-thump"
+      || state.active?.meaning === "domestic-cat-rain-distress-call"
       ? [state.active.eventId]
       : []
   )));

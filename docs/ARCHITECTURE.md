@@ -167,17 +167,20 @@ In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
 the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
-physical rustle are live representative paths.
+physical rustle are live representative paths. One domestic-cat representative
+is also live: a freshly committed rain-caused retreat with matching rain
+observation and event-owned wet-track evidence may create one restrained,
+noninterrupting distress call through the shared Voice path.
 The former direct-detail resident state-line adapter has been retired. Ongoing
 suspicion, posture, observable exposure, contract, and selected-resident state
 remain legible through non-acoustic quick labels, emotion marks, condition
 labels, and ABOUT; projection cadence or selection can no longer manufacture
 an utterance. Hunger remains authoritative but deliberately gains no inferred
 utterance or hidden-need UI until an honest observable or expressive owner
-exists. Existing domestic-cat call, marsh-fox yip, and generic wildlife-alarm
-fallback cues still use the legacy audio/session-announcement path. Those
-animal cues remain `BYPASS` seams to migrate during Living Voice, not proof
-that broad animal Voice is complete.
+exists. Existing marsh-fox yip and generic wildlife-alarm fallback cues still
+use the legacy audio/session-announcement path. Those animal cues remain
+`BYPASS` seams to migrate during Living Voice. The narrow cat representative
+does not prove a broad cat repertoire or broad animal Voice.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
 vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;
@@ -567,6 +570,21 @@ suppress repeated visible `thump` text, but it cannot erase a distinct newly
 committed physical event from lawful actor hearing or its one player-audio
 opportunity.
 
+A seventh narrow signal consumes the domestic cat's existing weather
+cognition rather than vocalizing every intent transition. The owning regional
+ecology root must prove one materialized domestic cat, a freshly committed
+same-tick rain-caused retreat, the exact `weather:rain` observation and memory,
+and event-owned `wet-tracks` evidence at the physical sound locus. Living Voice
+may realize that event once as restrained `MRROW.` / `cat-call` output: a
+six-step, murmur-volume `animal-call` with 360,000 loudness, an eight-tile base
+range, and no WAIT/REST interruption. A lawfully heard visible source may be
+identified and anchored near the authenticated event locus. Heard-unseen
+presentation remains an anonymous directional animal call and cannot disclose
+the cat's hidden rain motive or exact position; an unheard source produces no
+text or audio. This representative does not make ordinary cat transitions,
+play, injury, territorial behavior, purring, hissing, or human-directed meows
+live.
+
 The first human-to-human warning consumes lawful perception instead of
 inventing a dialogue trigger; a strong fish-crow/deer alarm may supply its
 hearing cause, while the rabbit's physical thump may not. One linear,
@@ -709,6 +727,12 @@ one anonymous `store-secured-report` belief. Outer v46 is intentionally retired
 rather than allowing one schema number to mean two different pending-event
 outcomes. Current-v47 reload still reauthenticates the existing closure,
 admission, channel, and sample before deriving that transient meaning candidate.
+The later domestic-cat rain-distress representative does not change outer v47
+or perception carry v14. Current reload reauthenticates the exact regional
+owner, cat, rain observation, retreat event, weather memory, wet-track locus,
+admission, channel, and acoustic sample. An acknowledged call does not replay
+audio or ephemeral text after load, and an incompatible or forged causal tuple
+fails closed.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
@@ -780,7 +804,7 @@ new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
 This slice does not yet claim other work expression where no authoritative
 completed-work event exists; it also does not claim complete bark/growl/whine
-breadth, distress/play, general animal-call networks,
+breadth, broader distress/play, general animal-call networks,
 language/relationship realization, or complete Living Voice.
 
 ### Repository asset and storage law

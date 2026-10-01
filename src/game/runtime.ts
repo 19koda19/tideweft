@@ -202,6 +202,7 @@ import {
 import {
   appendSituatedExpressionAdmissionRecord,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
+  createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
@@ -283,6 +284,13 @@ import {
   fishCrowAlarmExpressionMemoryMatchesWorld,
   type CoreWildlifeAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
+import {
+  coreWildlifeWeatherDistressExpressionEventForTrigger,
+  coreWildlifeWeatherDistressExpressionEventMatchesWorld,
+  coreWildlifeWeatherDistressExpressionIntent,
+  coreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
+  type CoreWildlifeWeatherDistressExpressionInput,
+} from "./coreWildlifeWeatherDistressExpression";
 import {
   humanDangerWarningExpressionCandidate,
   humanDangerWarningExpressionEventForTrigger,
@@ -1081,6 +1089,7 @@ function recentMeaningAcousticTuples(
     case "guardian-dog-shelter-whine":
     case "need-rest-after-exertion":
     case "marsh-rabbit-alarm-thump":
+    case "domestic-cat-rain-distress-call":
       return [{ volume: "murmur", interrupt: "none" }];
     case "relief-after-near-fall":
     case "relief-after-cargo-recovery":
@@ -2276,6 +2285,7 @@ function runtimeRegionalEcologyProjectedSources(
  */
 function runtimeCoreWildlifeExpressionSources(
   projection: RegionalEcologyStateV6ActiveProjection,
+  activeExpressions: readonly ActiveSituatedExpressionChannelPair[] = [],
 ): readonly CoreWildlifeExpressionSource[] {
   const seenActorIds = new Set<string>();
   const sources: CoreWildlifeExpressionSource[] = [];
@@ -2285,6 +2295,7 @@ function runtimeCoreWildlifeExpressionSources(
         population.species !== "fish-crow"
         && population.species !== "deer"
         && population.species !== "marsh-rabbit"
+        && population.species !== "domestic-cat"
       ) continue;
       for (const { actor, materialization } of population.members) {
         if (materialization !== "materialized") continue;
@@ -2292,10 +2303,33 @@ function runtimeCoreWildlifeExpressionSources(
           throw new Error("Wildlife expression projection found duplicate actor custody");
         }
         seenActorIds.add(actor.identity.stableId);
+        const weatherCall = population.species === "domestic-cat"
+          ? activeExpressions.find(({ event }) => (
+              event.sourceActorId === actor.identity.stableId
+              && event.meaning === "domestic-cat-rain-distress-call"
+            ))?.event ?? null
+          : null;
+        let sourcePosition = actor.address.position;
+        if (weatherCall !== null) {
+          try {
+            const delta = worldPositionDelta(weatherCall.position, actor.address.position);
+            const maximumStepUnits = coreWildlifeMaximumStepUnits(
+              "domestic-cat",
+              "retreat",
+            );
+            if (
+              delta.x * delta.x + delta.y * delta.y
+                <= maximumStepUnits * maximumStepUnits
+            ) sourcePosition = weatherCall.position;
+          } catch {
+            // A cross-world/tampered locus keeps the current body position so
+            // downstream source authentication rejects the visible anchor.
+          }
+        }
         sources.push(Object.freeze({
           actorId: actor.identity.stableId,
           species: population.species,
-          position: actor.address.position,
+          position: sourcePosition,
         }));
       }
     }
@@ -6729,6 +6763,63 @@ function runtimeCoreWildlifeAlarmExpressionAuthority(
   return Object.freeze({ actor, event, world: patch });
 }
 
+/**
+ * Reconstructs one cat's freshly retained rain-retreat at the physical trace
+ * locus. The actor may already have completed its same-tick retreat step, so
+ * the committed weather memory—not its later body address—owns the sound
+ * source. The semantic adapter revalidates every cognition and ecology field.
+ */
+function runtimeCoreWildlifeWeatherDistressExpressionAuthority(
+  patch: CoreEcologyAggregatePatchState,
+  input: Readonly<{
+    actorId: string;
+    triggerEventId: string;
+    sourceObservationId: string;
+    acceptedAtTick: number;
+  }>,
+): CoreWildlifeWeatherDistressExpressionInput | null {
+  const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
+  if (
+    actor === null
+    || actor.identity.species !== "domestic-cat"
+    || actor.updatedAtTick !== input.acceptedAtTick
+  ) return null;
+  const matchingMemories = actor.memories.filter((memory) => (
+    memory.eventId === input.triggerEventId
+    && memory.kind === "weather"
+    && memory.referenceId === "weather:rain"
+    && memory.observationId === input.sourceObservationId
+    && memory.atTick === input.acceptedAtTick
+    && memory.environmentalEvidence?.kind === "wet-tracks"
+  ));
+  const memory = matchingMemories[0];
+  const position = memory?.environmentalEvidence?.position;
+  if (matchingMemories.length !== 1 || memory === undefined || position === undefined) {
+    return null;
+  }
+  const event: CoreWildlifeCausalEvent = Object.freeze({
+    version: CORE_WILDLIFE_EVENT_VERSION,
+    eventId: input.triggerEventId,
+    atTick: input.acceptedAtTick,
+    actorId: actor.identity.stableId,
+    species: "domestic-cat",
+    kind: "retreat",
+    causeReferenceId: input.sourceObservationId,
+    observationId: input.sourceObservationId,
+    resourceReference: null,
+    position,
+  });
+  const authority = Object.freeze({ actor, event, world: patch });
+  return coreWildlifeWeatherDistressExpressionIntent(authority) === null
+    ? null
+    : authority;
+}
+
+type RuntimeCoreWildlifeWeatherDistressAdmission = Extract<
+  SituatedExpressionAdmissionRecord,
+  { readonly kind: "core-wildlife-weather-distress" }
+>;
+
 type RuntimeCoreWildlifeAlarmAdmission = Extract<
   SituatedExpressionAdmissionRecord,
   {
@@ -6873,6 +6964,24 @@ function runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
         sourceObservationId: admission.sourceObservationId,
         acceptedAtTick: admission.acceptedAtTick,
         sourceSpecies: coreWildlifeAlarmAdmissionSpecies(admission),
+      });
+}
+
+function runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: RuntimeCoreWildlifeWeatherDistressAdmission,
+): CoreWildlifeWeatherDistressExpressionInput | null {
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  const source = sources[0];
+  return sources.length !== 1 || source === undefined
+    ? null
+    : runtimeCoreWildlifeWeatherDistressExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        acceptedAtTick: admission.acceptedAtTick,
       });
 }
 
@@ -10571,6 +10680,7 @@ export async function createTideweftRuntime(
   const initialSituatedExpression = initialSituatedExpressions[0] ?? null;
   const initialCoreWildlifeExpressionSources = runtimeCoreWildlifeExpressionSources(
     projectActiveRegionalEcology(),
+    initialSituatedExpressions,
   );
   let renderView = projectRuntimeSettlementFoodStore(
     {
@@ -11055,6 +11165,7 @@ export async function createTideweftRuntime(
     const projectedEcologySources = runtimeRegionalEcologyProjectedSources(ecologyProjection);
     const coreWildlifeExpressionSources = runtimeCoreWildlifeExpressionSources(
       ecologyProjection,
+      activeExpressions,
     );
     const activeCoreEcologyPatches = projectedEcologySources.map(({ patch }) => patch);
     const activityAuthoritiesBySource = projectCoreEcologyActivityAuthorityBundle(
@@ -12090,12 +12201,15 @@ export async function createTideweftRuntime(
       expression.meaning === "fish-crow-alarm-call"
       || expression.meaning === "deer-alarm-call"
       || expression.meaning === "marsh-rabbit-alarm-thump"
+      || expression.meaning === "domestic-cat-rain-distress-call"
     ) {
       const expectedSpecies = expression.meaning === "fish-crow-alarm-call"
         ? "fish-crow"
         : expression.meaning === "deer-alarm-call"
           ? "deer"
-          : "marsh-rabbit";
+          : expression.meaning === "domestic-cat-rain-distress-call"
+            ? "domestic-cat"
+            : "marsh-rabbit";
       const matchingActors = runtimeRegionalEcologyProjectedSources(
         projectActiveRegionalEcology(),
       ).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
@@ -12103,7 +12217,26 @@ export async function createTideweftRuntime(
           materialization === "materialized"
           && actor.identity.species === expectedSpecies
           && actor.identity.stableId === expression.sourceActorId
-          && stableStringify(actor.address.position) === stableStringify(expression.position)
+          && (
+            expression.meaning !== "domestic-cat-rain-distress-call"
+              ? sameRuntimeWorldPosition(actor.address.position, expression.position)
+              : (() => {
+                  try {
+                    const delta = worldPositionDelta(
+                      expression.position,
+                      actor.address.position,
+                    );
+                    const maximumStepUnits = coreWildlifeMaximumStepUnits(
+                      "domestic-cat",
+                      "retreat",
+                    );
+                    return delta.x * delta.x + delta.y * delta.y
+                      <= maximumStepUnits * maximumStepUnits;
+                  } catch {
+                    return false;
+                  }
+                })()
+          )
         ));
       return matchingActors.length === 1
         && isWildlifeWorldPositionDirectlyObserved(expression.position, {
@@ -12435,7 +12568,9 @@ export async function createTideweftRuntime(
       const intensity = baseIntensity * (0.35 + reception.certainty / FIXED_POINT * 0.65);
       const cue: SoundCue = event.meaning === "marsh-rabbit-alarm-thump"
         ? "rabbit-thump"
-        : `vocalization-${event.vocalization}` as SituatedVocalizationCue;
+        : event.meaning === "domestic-cat-rain-distress-call"
+          ? "cat-call"
+          : `vocalization-${event.vocalization}` as SituatedVocalizationCue;
       return Object.freeze({ cue, volume: intensity, variantSeed: event.variantSeed, pan });
     }));
   }
@@ -14926,6 +15061,65 @@ export async function createTideweftRuntime(
           playerRecoveryDisturbedThisStep = true;
         }
       }
+      const weatherDistressCandidates = coreSteps.flatMap(({
+        sourceKey,
+        beforePatch,
+        result,
+      }) => result.events
+        .filter((event) => (
+          event.species === "domestic-cat"
+          && event.kind === "retreat"
+        ))
+        .map((event) => ({
+          event,
+          sourceKey,
+          beforePatchUpdatedAtTick: beforePatch.updatedAtTick,
+        })))
+        .sort((left, right) => (
+          compareText(left.event.eventId, right.event.eventId)
+          || compareText(left.sourceKey, right.sourceKey)
+        ));
+      for (const candidate of weatherDistressCandidates) {
+        const patch = finalRegionalPatches.get(candidate.sourceKey);
+        if (patch === undefined || candidate.event.observationId === null) continue;
+        const authority = runtimeCoreWildlifeWeatherDistressExpressionAuthority(patch, {
+          actorId: candidate.event.actorId,
+          triggerEventId: candidate.event.eventId,
+          sourceObservationId: candidate.event.observationId,
+          acceptedAtTick: candidate.event.atTick,
+        });
+        if (
+          authority === null
+          || authority.event.causeReferenceId !== candidate.event.causeReferenceId
+          || authority.event.observationId !== candidate.event.observationId
+          || authority.event.atTick !== candidate.event.atTick
+          || !sameRuntimeWorldPosition(authority.event.position, candidate.event.position)
+          || candidate.event.atTick <= candidate.beforePatchUpdatedAtTick
+        ) continue;
+        const intent = coreWildlifeWeatherDistressExpressionIntent(authority);
+        if (intent === null) continue;
+        const audible = playerExpressionAudibility(intent);
+        const reception = audible === null || audible.contact === null
+          ? { kind: "none" as const }
+          : playerDirectlyObservesExpressionSource(intent)
+            ? { kind: "heard-visible" as const, certainty: audible.certainty }
+            : { kind: "heard-unseen" as const, contact: audible.contact };
+        acceptSituatedExpression(
+          intent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            createCoreWildlifeWeatherDistressExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              sourceOwnerKey: candidate.sourceKey,
+              sourceObservationId: candidate.event.observationId!,
+              acceptedAtTick: candidate.event.atTick,
+            })
+          ),
+        );
+      }
       const {
         directlyWitnessedCarcassIds,
         directlyWitnessedCoreEventIds,
@@ -15147,16 +15341,6 @@ export async function createTideweftRuntime(
         }
         return null;
       };
-      const witnessedCatTransition = allCoreStepEvents
-        .filter((event) => event.species === "domestic-cat")
-        .slice()
-        .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
-        .find((event) => {
-          const before = coreActorBeforeStep(event.actorId);
-          return directlyWitnessedCoreEventIds.has(event.eventId)
-            && before !== null
-            && before.intent.kind !== event.kind;
-        });
       const witnessedFoxYip = allCoreStepEvents
         .filter((event) => event.species === "marsh-fox" && event.kind === "pursue")
         .slice()
@@ -15173,21 +15357,12 @@ export async function createTideweftRuntime(
       // Living Voice coverage. Current real producers must migrate through the
       // common event boundary before this path can be retired.
       const ecologyCues: Array<Readonly<{
-        cue: "cat-call" | "fox-yip"
-          | "wildlife-alarm";
+        cue: "fox-yip" | "wildlife-alarm";
         volume: number;
         variantSeed: number;
         caption: string;
         pan?: number;
       }>> = [];
-      if (witnessedCatTransition !== undefined) {
-        ecologyCues.push(Object.freeze({
-          cue: "cat-call",
-          volume: 0.34,
-          variantSeed: witnessedCatTransition.atTick,
-          caption: "CAT CALL — nearby and in view.",
-        }));
-      }
       if (witnessedFoxYip !== undefined) {
         ecologyCues.push(Object.freeze({
           cue: "fox-yip",
@@ -19871,7 +20046,8 @@ function perceptionCarryUsesOnlyFishCrowSemantics(
  * every v34-v40 reader rejects the keeper reply introduced in retired v41,
  * the effort semantic introduced in retired v42/carry-v10, and the resident
  * introduction introduced by v43/carry-v11, the weather hold introduced by
- * v44/carry-v12, and current species-aware wildlife alarms.
+ * v44/carry-v12, current species-aware wildlife alarms, and the domestic-cat
+ * weather-distress call introduced by the current carry.
  */
 function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
   bank: SituatedExpressionChannelBank,
@@ -19883,6 +20059,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
     && kind !== "resident-introduction"
     && kind !== "resident-weather-hold"
     && kind !== "core-wildlife-alarm"
+    && kind !== "core-wildlife-weather-distress"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning, family }) => (
@@ -19892,6 +20069,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "resident-weather-hold"
       && meaning !== "deer-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
+      && meaning !== "domestic-cat-rain-distress-call"
       && family !== "condition"
       && family !== "social"
     )) && (active === null || (
@@ -19901,6 +20079,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "resident-weather-hold"
       && active.meaning !== "deer-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
+      && active.meaning !== "domestic-cat-rain-distress-call"
       && active.family !== "condition"
       && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
@@ -19908,6 +20087,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.knowledgeBasis !== "self-committed-introduction"
       && active.vocalization !== "deer-alarm-snort"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
+      && active.vocalization !== "domestic-cat-rain-distress"
     ));
   });
 }
@@ -20395,6 +20575,37 @@ function playerPerceptionCarryMatchesPosition(
           && player.timeAction.startedAtWorldTick < admission.acceptedAtTick
         );
     }
+    if (admission.kind === "core-wildlife-weather-distress") {
+      const authority = runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
+        regionalProjection,
+        admission,
+      );
+      const event = authority === null
+        ? null
+        : coreWildlifeWeatherDistressExpressionEventForTrigger(
+            authority,
+            admission.triggerEventId,
+          );
+      if (
+        authority === null
+        || event === null
+        || !coreWildlifeWeatherDistressAdmissionMatchesWorld(
+          admission,
+          authority,
+          economy.completedTick,
+        )
+        || !vocalizationSampleMatchesActiveEvent(sample, event)
+      ) return false;
+      return coreWildlifeWeatherDistressReceptionAtEventTime({
+        carry,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        authority,
+        event,
+        admission,
+      }) !== null;
+    }
     if (admission.kind === "human-danger-warning") {
       const authority = runtimeHumanDangerWarningExpressionAuthority(
         economy,
@@ -20624,6 +20835,76 @@ function situatedExpressionChannelsMatchWorld(
               spatialWorld,
               window: regionalTravel.window,
               playerTemplate: player,
+              event: active,
+              admission,
+              reception: channel.reception,
+            })
+          ));
+      });
+    }
+    const wildlifeWeatherDistressAdmissions = admissions.filter((candidate):
+      candidate is CoreWildlifeWeatherDistressAdmission => (
+      candidate.kind === "core-wildlife-weather-distress"
+    ));
+    if (wildlifeWeatherDistressAdmissions.length > 0) {
+      if (wildlifeWeatherDistressAdmissions.length !== admissions.length) return false;
+      const admissionFor = (
+        triggerEventId: string,
+      ): CoreWildlifeWeatherDistressAdmission | null => {
+        const matching = wildlifeWeatherDistressAdmissions.filter((candidate) => (
+          candidate.triggerEventId === triggerEventId
+        ));
+        return matching.length === 1 ? matching[0] ?? null : null;
+      };
+      const authorityFor = (
+        triggerEventId: string,
+      ): CoreWildlifeWeatherDistressExpressionInput | null => {
+        const admission = admissionFor(triggerEventId);
+        return admission === null
+          ? null
+          : runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
+              regionalProjection,
+              admission,
+            );
+      };
+      if (!channel.state.recent.every((memory) => {
+        const admission = admissionFor(memory.triggerEventId);
+        const authority = authorityFor(memory.triggerEventId);
+        return admission !== null
+          && authority !== null
+          && coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
+            authority,
+            memory,
+          );
+      })) return false;
+      if (active !== null) {
+        const admission = admissionFor(active.triggerEventId);
+        const authority = authorityFor(active.triggerEventId);
+        if (
+          admission === null
+          || authority === null
+          || !coreWildlifeWeatherDistressExpressionEventMatchesWorld(
+            authority,
+            active,
+          )
+        ) return false;
+      }
+      return wildlifeWeatherDistressAdmissions.every((admission) => {
+        const authority = authorityFor(admission.triggerEventId);
+        return authority !== null
+          && coreWildlifeWeatherDistressAdmissionMatchesWorld(
+            admission,
+            authority,
+            economy.completedTick,
+          )
+          && (active?.eventId !== admission.eventId || (
+            active !== null
+            && coreWildlifeWeatherDistressReceptionMatchesEventTime({
+              carry,
+              spatialWorld,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              authority,
               event: active,
               admission,
               reception: channel.reception,
@@ -21426,6 +21707,159 @@ function coreWildlifeAlarmAdmissionMatchesWorld(
         authority.actor,
         authority.event.eventId,
       ));
+}
+
+type CoreWildlifeWeatherDistressAdmission = RuntimeCoreWildlifeWeatherDistressAdmission;
+
+function coreWildlifeWeatherDistressAdmissionMatchesWorld(
+  admission: CoreWildlifeWeatherDistressAdmission,
+  authority: CoreWildlifeWeatherDistressExpressionInput,
+  completedTick: number,
+): boolean {
+  const event = coreWildlifeWeatherDistressExpressionEventForTrigger(
+    authority,
+    admission.triggerEventId,
+  );
+  return event !== null
+    && coreWildlifeWeatherDistressExpressionEventMatchesWorld(authority, event)
+    && admission.sourceActorId === authority.actor.identity.stableId
+    && admission.sourceActorId === authority.event.actorId
+    && admission.triggerEventId === authority.event.eventId
+    && admission.sourceObservationId === authority.event.observationId
+    && admission.sourceObservationId === authority.event.causeReferenceId
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && admission.acceptedAtTick === authority.event.atTick
+    && authority.world.updatedAtTick === completedTick
+    && sameRuntimeWorldPosition(event.position, authority.event.position);
+}
+
+interface CoreWildlifeWeatherDistressReceptionAuthorityInput {
+  readonly carry: PlayerPerceptionCarry;
+  readonly spatialWorld: WorldView;
+  readonly window: RegionalPlayerTravelState["window"];
+  readonly playerTemplate: PlayerState;
+  readonly authority: CoreWildlifeWeatherDistressExpressionInput;
+  readonly event: SituatedExpressionEvent;
+  readonly admission: CoreWildlifeWeatherDistressAdmission;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+function coreWildlifeWeatherDistressReceptionMatchesEventTime(
+  input: CoreWildlifeWeatherDistressReceptionAuthorityInput,
+): boolean {
+  const expected = coreWildlifeWeatherDistressReceptionAtEventTime(input);
+  return expected !== null
+    && stableStringify(expected.reception) === stableStringify(input.reception);
+}
+
+/** Replays one local, noninterrupting cat call through event-time acoustics. */
+function coreWildlifeWeatherDistressReceptionAtEventTime(
+  input: Omit<CoreWildlifeWeatherDistressReceptionAuthorityInput, "reception">,
+): GuardianDogCallEventTimeReception | null {
+  const {
+    carry,
+    spatialWorld,
+    window,
+    playerTemplate,
+    authority,
+    event,
+    admission,
+  } = input;
+  if (
+    spatialWorld.completedTick !== admission.acceptedAtTick
+    || event.eventId !== admission.eventId
+    || event.sourceActorId !== admission.sourceActorId
+    || event.triggerEventId !== admission.triggerEventId
+    || event.meaning !== "domestic-cat-rain-distress-call"
+    || !sameRuntimeWorldPosition(event.position, authority.event.position)
+  ) return null;
+  if (carry.intervalStartWasSleeping) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  const listenerPoint = perceptionIntervalPointInWindow(
+    window,
+    carry.intervalStartPosition,
+  );
+  if (listenerPoint === null) return null;
+  const eventTimePlayer: PlayerState = {
+    ...playerTemplate,
+    worldWidth: window.terrain.width,
+    worldHeight: window.terrain.height,
+    x: listenerPoint.x,
+    y: listenerPoint.y,
+    previousX: listenerPoint.x,
+    previousY: listenerPoint.y,
+    velocityX: 0,
+    velocityY: 0,
+    facingMilliRadians: carry.intervalStartFacingMilliRadians,
+  };
+  const reconstructed = playerWorldPositionInRegionalWindow(window, eventTimePlayer);
+  if (
+    reconstructed === null
+    || !sameRuntimeWorldPosition(reconstructed, carry.intervalStartPosition)
+  ) return null;
+  let delta: ReturnType<typeof worldPositionDelta>;
+  try {
+    delta = worldPositionDelta(carry.intervalStartPosition, event.position);
+  } catch {
+    return null;
+  }
+  const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
+  if (masking === null) return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const contact = evaluateAudibleContact({
+    listener: { x: 0, y: 0 },
+    source: { x: delta.x, y: delta.y },
+    baseRange: acoustics.rangeUnits,
+    ambientNoise: masking,
+    sourceLoudness: acoustics.loudness / FIXED_POINT,
+    wind: {
+      x: spatialWorld.weather.windX / FIXED_POINT,
+      y: spatialWorld.weather.windY / FIXED_POINT,
+    },
+  });
+  if (contact === null) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  let sourceWithinCommittedStep = false;
+  try {
+    const sourceDelta = worldPositionDelta(
+      event.position,
+      authority.actor.address.position,
+    );
+    const maximumStepUnits = coreWildlifeMaximumStepUnits("domestic-cat", "retreat");
+    sourceWithinCommittedStep = sourceDelta.x * sourceDelta.x + sourceDelta.y * sourceDelta.y
+      <= maximumStepUnits * maximumStepUnits;
+  } catch {
+    sourceWithinCommittedStep = false;
+  }
+  const directlyVisible = sourceWithinCommittedStep
+    && isWildlifeWorldPositionDirectlyObserved(event.position, {
+      window: {
+        origin: window.origin,
+        terrain: {
+          width: window.terrain.width,
+          height: window.terrain.height,
+        },
+      },
+      perception: projectPerception(spatialWorld, eventTimePlayer),
+    });
+  const expected = directlyVisible
+    ? createHeardVisibleSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        Math.max(1, Math.round(contact.certainty * FIXED_POINT)),
+        true,
+      )
+    : createHeardUnseenSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        contact,
+      );
+  return expected === null
+    ? null
+    : Object.freeze({ audible: true, reception: expected });
 }
 
 interface CoreWildlifeAlarmReceptionAuthorityInput {

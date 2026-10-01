@@ -515,6 +515,7 @@ function policyFor(
     case "guardian-dog-warning":
     case "guardian-dog-defensive-growl":
     case "guardian-dog-shelter-whine":
+    case "domestic-cat-rain-distress-call":
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
     case "marsh-rabbit-alarm-thump":

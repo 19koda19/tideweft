@@ -481,6 +481,7 @@ export interface SituatedExpressionCaptionUIView {
     | "bark"
     | "growl"
     | "whine"
+    | "cat-call"
     | "animal-call"
     | "bird-call"
     | "fish-crow-call"

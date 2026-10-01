@@ -238,6 +238,33 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toContain("KRAA");
   });
 
+  it("presents a cat call without translating its hidden rain distress", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:cat:call",
+      speakerLabel: "Domestic cat",
+      text: "MRROW.",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "cat-call",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[A cat calls plaintively.]");
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "situated-expression:event:v1:anonymous-fixture",
+      speakerLabel: "An animal",
+      text: "CALL.",
+      animalCallKind: "animal-call",
+      directionLabel: "west",
+    };
+    const unseenCopy = situatedExpressionCaptionCopy(unseen);
+    expect(unseenCopy).toBe("[An animal calls somewhere west.]");
+    expect(unseenCopy).not.toContain("rain");
+    expect(unseenCopy).not.toContain("distress");
+    expect(JSON.stringify(unseen)).not.toMatch(/cat|MRROW/iu);
+  });
+
   it("presents a visible deer snort without naming an unseen source", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:deer:alarm",
@@ -258,7 +285,7 @@ describe("situated expression caption", () => {
       directionLabel: "west",
     };
     expect(situatedExpressionCaptionCopy(unseen))
-      .toBe("[An animal snorts somewhere west.]");
+      .toBe("[An animal calls somewhere west.]");
     expect(JSON.stringify(unseen)).not.toContain("deer");
   });
 

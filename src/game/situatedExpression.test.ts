@@ -157,6 +157,28 @@ function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionInten
   };
 }
 
+function domesticCatRainDistressIntent(
+  triggerEventId: string,
+  overrides: Partial<SituatedExpressionIntent> = {},
+): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "CAT-expression-test",
+    triggerEventId,
+    position: POSITION,
+    meaning: "domestic-cat-rain-distress-call",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "murmur",
+    knowledgeBasis: "self-weather-distress",
+    priority: 300_000,
+    salience: 680_000,
+    variantSeed: 613,
+    durationSteps: 6,
+    ...overrides,
+  };
+}
+
 function keeperStoreResponseIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     version: SITUATED_EXPRESSION_VERSION,
@@ -530,6 +552,44 @@ describe("generic situated-expression kernel", () => {
       ...marshRabbitAlarmIntent("RABBIT-expression-test:e:2:alarm"),
       volume: "shout",
     })).toMatchObject({ accepted: false, reason: "invalid-intent" });
+  });
+
+  it("registers the restrained domestic-cat rain call as authored animal sound", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      domesticCatRainDistressIntent("CAT-expression-test:e:1:retreat"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "domestic-cat-rain-distress-call",
+        family: "animal-signal",
+        tone: "restrained",
+        volume: "murmur",
+        knowledgeBasis: "self-weather-distress",
+        vocalization: "domestic-cat-rain-distress",
+        durationSteps: 6,
+      },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "MRROW.",
+      realizationKey: "situated-expression.en.v1.domestic-cat-rain-distress-call.0",
+      vocalization: "domestic-cat-rain-distress",
+    });
+    for (const forged of [
+      domesticCatRainDistressIntent("CAT-expression-test:e:2:retreat", {
+        knowledgeBasis: "self-perceived-threat",
+      }),
+      domesticCatRainDistressIntent("CAT-expression-test:e:3:retreat", {
+        tone: "alarmed",
+      }),
+      domesticCatRainDistressIntent("CAT-expression-test:e:4:retreat", {
+        volume: "spoken",
+      }),
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged))
+        .toMatchObject({ accepted: false, reason: "invalid-intent" });
+    }
   });
 
   it("keeps heavy-work chatter bounded and every restrained authored line reachable", () => {

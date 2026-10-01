@@ -25,6 +25,7 @@ import {
 } from "./situatedExpressionAcoustics";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
 import { coreWildlifeAlarmExpressionPriority } from "./coreWildlifeSignalExpression";
+import { DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY } from "./coreWildlifeWeatherDistressExpression";
 
 /** One reauthenticated pending expression interval, safe for a save owner to retain. */
 export interface SituatedExpressionTrajectory {
@@ -160,6 +161,7 @@ export function canonicalizeSituatedExpressionTrajectory(
           || latest.kind === "guardian-dog-shelter-whine"
           || latest.kind === "core-wildlife-fish-crow-alarm"
           || latest.kind === "core-wildlife-alarm"
+          || latest.kind === "core-wildlife-weather-distress"
           || latest.kind === "human-danger-warning")
         && channel.reception !== null
         && (
@@ -227,6 +229,8 @@ function memoryMatchesAdmission(
       && memory.priority !== coreWildlifeAlarmExpressionPriority("fish-crow"))
     || (record.kind === "core-wildlife-alarm"
       && memory.priority !== coreWildlifeAlarmExpressionPriority(record.sourceSpecies))
+    || (record.kind === "core-wildlife-weather-distress"
+      && memory.priority !== DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY)
     || (record.kind === "human-danger-warning"
       && memory.priority !== HUMAN_DANGER_WARNING_PRIORITY)
   ) return false;
@@ -261,6 +265,8 @@ function eventMeaningMatchesAdmission(
       return meaning === "fish-crow-alarm-call";
     case "core-wildlife-alarm":
       return meaning === coreWildlifeAlarmMeaning(record.sourceSpecies);
+    case "core-wildlife-weather-distress":
+      return meaning === "domestic-cat-rain-distress-call";
     case "human-danger-warning":
       return meaning === "human-danger-warning";
     case "settlement-keeper-store-response":
@@ -313,6 +319,14 @@ function eventMatchesAdmission(
       && event.tone === "alarmed"
       && event.volume === coreWildlifeAlarmVolume(record.sourceSpecies);
   }
+  if (record.kind === "core-wildlife-weather-distress") {
+    return event.family === "animal-signal"
+      && event.tone === "restrained"
+      && event.volume === "murmur"
+      && event.knowledgeBasis === "self-weather-distress"
+      && event.priority === DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY
+      && event.salience >= 360_000;
+  }
   if (record.kind === "human-danger-warning") {
     return event.priority === HUMAN_DANGER_WARNING_PRIORITY
       && event.tone === "alarmed"
@@ -347,6 +361,15 @@ function sampleAcousticsMatchAdmission(
     const acoustics = situatedExpressionAcoustics({
       meaning: "resident-weather-hold",
       volume: "spoken",
+    });
+    return sample.soundLoudness === acoustics.loudness
+      && sample.soundRangeUnits === acoustics.rangeUnits
+      && sample.soundInterrupt === "none";
+  }
+  if (record.kind === "core-wildlife-weather-distress") {
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "domestic-cat-rain-distress-call",
+      volume: "murmur",
     });
     return sample.soundLoudness === acoustics.loudness
       && sample.soundRangeUnits === acoustics.rangeUnits
@@ -395,6 +418,7 @@ function admissionDurationSteps(
     case "guardian-dog-shelter-whine": return 8;
     case "core-wildlife-fish-crow-alarm": return 6;
     case "core-wildlife-alarm": return 6;
+    case "core-wildlife-weather-distress": return 6;
     case "human-danger-warning": return 6;
     case "settlement-keeper-store-response": return 12;
     case "resident-introduction": return 56;
@@ -417,6 +441,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "fish-crow-alarm-call": return 6;
     case "deer-alarm-call": return 6;
     case "marsh-rabbit-alarm-thump": return 6;
+    case "domestic-cat-rain-distress-call": return 6;
     case "human-danger-warning": return 6;
     case "keeper-secure-store-response": return 12;
     case "need-rest-after-exertion": return 8;
@@ -438,6 +463,7 @@ function admissionMeaning(
     case "guardian-dog-shelter-whine": return "guardian-dog-shelter-whine";
     case "core-wildlife-fish-crow-alarm": return "fish-crow-alarm-call";
     case "core-wildlife-alarm": return coreWildlifeAlarmMeaning(record.sourceSpecies);
+    case "core-wildlife-weather-distress": return "domestic-cat-rain-distress-call";
     case "human-danger-warning": return "human-danger-warning";
     case "settlement-keeper-store-response": return "keeper-secure-store-response";
     case "resident-introduction": return "resident-introduction";

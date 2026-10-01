@@ -2,7 +2,10 @@ import { FIXED_POINT } from "../sim/types";
 import {
   situatedExpressionEventIdForTrigger,
 } from "./situatedExpression";
-import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import {
+  LOCAL_PLAYER_LIVING_ACTOR_ID,
+  livingSpeciesActorIdMatchesNamespace,
+} from "./livingSpeciesRegistry";
 import {
   createWorldPosition,
   isWorldPosition,
@@ -31,6 +34,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "guardian-dog-shelter-whine",
   "core-wildlife-fish-crow-alarm",
   "core-wildlife-alarm",
+  "core-wildlife-weather-distress",
   "human-danger-warning",
   "settlement-keeper-store-response",
   "resident-introduction",
@@ -183,6 +187,17 @@ export interface CoreWildlifeAlarmExpressionAdmissionRecord
   readonly acceptedAtTick: number;
 }
 
+/** Exact causal authority for one domestic cat's committed rain-distress call. */
+export interface CoreWildlifeWeatherDistressExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "core-wildlife-weather-distress";
+  /** Exact regional ecology owner of the committed physical cat. */
+  readonly sourceOwnerKey: string;
+  /** Exact accepted rain-distress observation retained by the cat. */
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
 export interface HumanDangerWarningExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "human-danger-warning";
@@ -258,6 +273,7 @@ export type SituatedExpressionAdmissionRecord =
   | GuardianDogShelterWhineExpressionAdmissionRecord
   | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   | CoreWildlifeAlarmExpressionAdmissionRecord
+  | CoreWildlifeWeatherDistressExpressionAdmissionRecord
   | HumanDangerWarningExpressionAdmissionRecord
   | SettlementKeeperStoreResponseExpressionAdmissionRecord
   | ResidentIntroductionExpressionAdmissionRecord
@@ -332,6 +348,13 @@ export interface CoreWildlifeFishCrowAlarmExpressionAdmissionInput
 export interface CoreWildlifeAlarmExpressionAdmissionInput
   extends CoreWildlifeFishCrowAlarmExpressionAdmissionInput {
   readonly sourceSpecies: CoreWildlifeAlarmExpressionSpecies;
+}
+
+export interface CoreWildlifeWeatherDistressExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly sourceOwnerKey: string;
+  readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
 }
 
 export interface HumanDangerWarningExpressionAdmissionInput
@@ -669,6 +692,35 @@ export function createCoreWildlifeAlarmExpressionAdmissionRecord(
   }) as CoreWildlifeAlarmExpressionAdmissionRecord | null;
 }
 
+/** Creates one regional-ecology-owned domestic-cat rain-distress admission. */
+export function createCoreWildlifeWeatherDistressExpressionAdmissionRecord(
+  input: CoreWildlifeWeatherDistressExpressionAdmissionInput,
+): CoreWildlifeWeatherDistressExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "core-wildlife-weather-distress",
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  }) as CoreWildlifeWeatherDistressExpressionAdmissionRecord | null;
+}
+
 /** Creates one source-honest human warning admission from fresh perception. */
 export function createHumanDangerWarningExpressionAdmissionRecord(
   input: HumanDangerWarningExpressionAdmissionInput,
@@ -850,6 +902,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "guardian-dog-shelter-whine": return canonicalGuardianDogShelterWhineRecord(value);
     case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
     case "core-wildlife-alarm": return canonicalCoreWildlifeAlarmRecord(value);
+    case "core-wildlife-weather-distress": return canonicalCoreWildlifeWeatherDistressRecord(value);
     case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
     case "settlement-keeper-store-response": return canonicalSettlementKeeperStoreResponseRecord(value);
     case "resident-introduction": return canonicalResidentIntroductionRecord(value);
@@ -1276,6 +1329,43 @@ function canonicalCoreWildlifeAlarmRecord(
     admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase as number,
     kind: "core-wildlife-alarm",
     sourceSpecies: value.sourceSpecies,
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  });
+}
+
+function canonicalCoreWildlifeWeatherDistressRecord(
+  value: Readonly<Record<string, unknown>>,
+): CoreWildlifeWeatherDistressExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "eventId",
+    "kind",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "triggerEventId",
+    "version",
+  ])
+    || value.kind !== "core-wildlife-weather-distress"
+    || !livingSpeciesActorIdMatchesNamespace(value.sourceActorId, "domestic-cat")
+    || value.sourceActorId === LOCAL_PLAYER_LIVING_ACTOR_ID
+    || value.admittedAtPlayerStepPhase !== 0
+    || !validId(value.sourceOwnerKey)
+    || !validId(value.sourceObservationId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: 0,
+    kind: "core-wildlife-weather-distress",
     sourceOwnerKey: value.sourceOwnerKey,
     sourceObservationId: value.sourceObservationId,
     acceptedAtTick: value.acceptedAtTick,
