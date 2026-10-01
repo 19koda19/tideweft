@@ -296,6 +296,32 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toContain("position");
   });
 
+  it("describes an aggregate chorus without inventing species or source identity", () => {
+    const chorus: SituatedExpressionCaptionUIView = {
+      id: "acoustic:actor-vocalization:anonymous-chorus",
+      speakerLabel: "Sound",
+      text: "chorus",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "chorus",
+      directionLabel: "east",
+      assertive: false,
+    };
+
+    expect(situatedExpressionCaptionVisibleText(chorus)).toBe("chorus · east");
+    expect(situatedExpressionCaptionCopy(chorus))
+      .toBe("[A chorus sounds somewhere east.]");
+    expect(situatedExpressionCaptionCopy({
+      ...chorus,
+      directionLabel: "direction unclear",
+    })).toBe("[A chorus sounds; direction unclear.]");
+    expect(situatedExpressionCaptionCopy({
+      ...chorus,
+      directionLabel: "all around",
+    })).toBe("[A chorus sounds; the sound seems all around.]");
+    expect(JSON.stringify(chorus)).not.toMatch(/frog|aggregate|sourceActorId|position/iu);
+  });
+
   it("does not infer an animal call kind from authored prose", () => {
     const unclassified: SituatedExpressionCaptionUIView = {
       id: "expression:animal:unclassified",

@@ -1,8 +1,11 @@
+import type { ActorObservation } from "../sim/actorPerception";
 import { FIXED_POINT, type WorldView } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
   canonicalizeCoreEcologyAggregatePatch,
+  type CoreEcologyAggregateAreaAnchor,
   type CoreEcologyAggregatePatchState,
+  type CoreEcologyAggregatePopulationState,
 } from "./coreEcology";
 import {
   isLivingActorAddress,
@@ -10,29 +13,35 @@ import {
   type LivingActorAddress,
 } from "./livingActor";
 import { livingActorSenseProfile } from "./livingActorSenses";
+import type { AudibleContact } from "./perception";
 import {
-  calculateAmbientNoise,
-  evaluateAudibleContact,
-  type AudibleContact,
-} from "./perception";
+  ambientNoiseAt,
+  createPhysicalSoundSample,
+  evaluatePhysicalAcousticListener,
+  type PhysicalSoundSample,
+} from "./physicalAcousticPerception";
 import type { RegionalTerrainWindow } from "./regionalTravel";
-import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
+import { regionalWindowForWorld } from "./regionalWorldView";
+import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 import {
-  WORLD_POSITION_UNITS_PER_TILE,
-  createSpatialFrame,
-  createWorldPosition,
-  worldPositionToSpatialFrame,
-} from "./worldPosition";
-import {
-  audibleContactDirection,
   audibleContactPan,
-  type AudibleContactDirection,
 } from "./audibleContactPresentation";
+import {
+  createWorldAcousticEvent,
+  type WorldAcousticEvent,
+} from "./worldAcoustics";
 
 export const CORE_ECOLOGY_CHORUS_CADENCE_TICKS = 24 as const;
 export const CORE_ECOLOGY_CHORUS_MIN_ACTIVITY = 180_000 as const;
 export const CORE_ECOLOGY_FROG_CHORUS_RANGE_UNITS =
   32 * WORLD_POSITION_UNITS_PER_TILE;
+
+const CORE_ECOLOGY_CHORUS_DURATION_STEPS = 8;
+
+export interface CoreEcologyAggregateChorusEventFrameInput {
+  readonly patch: CoreEcologyAggregatePatchState;
+  readonly tick: number;
+}
 
 export interface CoreEcologyAggregateAudioFrameInput {
   readonly patch: CoreEcologyAggregatePatchState;
@@ -43,118 +52,235 @@ export interface CoreEcologyAggregateAudioFrameInput {
 }
 
 export interface CoreEcologyAggregateHeardCue {
-  readonly cue: "frog-chorus";
-  /** Player-facing sound equivalent; the species remains unknown in this slice. */
-  readonly caption: `[chorus ${"nearby" | "in the distance"} — ${ChorusDirection}]`;
   /** Stereo pan only; this is not a map bearing or an entity disclosure. */
   readonly pan: number;
   readonly volume: number;
   readonly variantSeed: number;
   /** Anonymous uncertainty bands from the shared hearing evaluator. */
   readonly contact: AudibleContact;
+  /** Exact world truth for downstream audio/response; never player-facing prose. */
+  readonly event: WorldAcousticEvent;
+  /** Lawful heard-unseen receipt; identity and exact source position stay absent. */
+  readonly observation: ActorObservation;
 }
 
 interface HeardCandidate {
-  readonly anchorOrdinal: number;
-  readonly aggregateId: string;
   readonly cue: CoreEcologyAggregateHeardCue;
 }
 
 /**
- * Projects an extant aggregate activity signal through ordinary player
- * hearing. It never creates a frog actor, reveals an aggregate ID, or emits a
- * cue merely because a population exists somewhere in the loaded region.
+ * Derives bounded ecology-owned chorus facts without consulting any listener.
+ * Each qualifying population emits one group event, never one event per frog
+ * or anchor. The largest occupied anchor represents that distributed chorus;
+ * ties use the lowest stable ordinal. Aggregate identity owns the stable sound
+ * source, while the representative anchor may move its current position.
+ */
+export function deriveCoreEcologyAggregateChorusEvents(
+  value: unknown,
+): readonly WorldAcousticEvent[] | null {
+  const input = canonicalChorusEventInput(value);
+  if (input === null) return null;
+  return deriveCanonicalChorusEvents(input);
+}
+
+function deriveCanonicalChorusEvents(
+  input: CoreEcologyAggregateChorusEventFrameInput,
+): readonly WorldAcousticEvent[] | null {
+  if (input.tick % CORE_ECOLOGY_CHORUS_CADENCE_TICKS !== 0) {
+    return Object.freeze([]);
+  }
+  const events: WorldAcousticEvent[] = [];
+  for (const population of input.patch.aggregatePopulations) {
+    if (!qualifyingFrogChorus(population)) continue;
+    const anchor = representativeChorusAnchor(population.anchors);
+    if (anchor === null) continue;
+    const sourceHash = hashCanonical({
+      aggregateId: population.aggregateId,
+      purpose: "aggregate-chorus-source:v1",
+    });
+    const triggerHash = hashCanonical({
+      activityTick: population.activitySignal.updatedAtTick,
+      aggregateId: population.aggregateId,
+      anchorOrdinal: anchor.anchorOrdinal,
+      purpose: "aggregate-chorus-event:v1",
+    });
+    const variantSeed = Number.parseInt(hashCanonical({
+      activityTick: population.activitySignal.updatedAtTick,
+      aggregateId: population.aggregateId,
+      anchorOrdinal: anchor.anchorOrdinal,
+    }).slice(0, 8), 16) >>> 0;
+    const event = createWorldAcousticEvent({
+      triggerEventId: `ecology-chorus:${triggerHash}`,
+      domain: "actor-vocalization",
+      sourceId: `ecology-aggregate-source:${sourceHash}`,
+      sourceCategory: "animal",
+      sourcePosition: anchor.position,
+      occurredAtTick: input.tick,
+      action: "vocalize",
+      sourceMaterial: "body",
+      surfaceMaterial: "water",
+      semanticFamily: "chorus",
+      soundClass: "animal-call",
+      // Collective activity remains the exact acoustic loudness authority.
+      // Chorus is semantically noninterrupting even when many frogs make it
+      // loud; loudness must not turn ambience into an impact/alarm receipt.
+      interrupt: "none",
+      intensity: population.activitySignal.intensity,
+      rangeUnits: CORE_ECOLOGY_FROG_CHORUS_RANGE_UNITS,
+      durationSteps: CORE_ECOLOGY_CHORUS_DURATION_STEPS,
+      priority: 360_000,
+      salience: 560_000,
+      repetitionKey: `ecology-chorus-repeat:${sourceHash}`,
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "informative",
+      variantSeed,
+    });
+    if (event === null || event.interrupt !== "none") return null;
+    events.push(event);
+  }
+  events.sort((left, right) => compareText(left.eventId, right.eventId));
+  return Object.freeze(events);
+}
+
+/** Shared bounded hearing stimulus for one authenticated aggregate chorus. */
+export function coreEcologyAggregateChorusSoundSample(
+  event: WorldAcousticEvent,
+): PhysicalSoundSample | null {
+  if (
+    event.domain !== "actor-vocalization"
+    || event.sourceCategory !== "animal"
+    || event.action !== "vocalize"
+    || event.sourceMaterial !== "body"
+    || event.surfaceMaterial !== "water"
+    || event.semanticFamily !== "chorus"
+    || event.soundClass !== "animal-call"
+    || event.interrupt !== "none"
+    || !event.triggerEventId.startsWith("ecology-chorus:")
+    || !event.sourceId.startsWith("ecology-aggregate-source:")
+    || !event.repetitionKey.startsWith("ecology-chorus-repeat:")
+  ) return null;
+  const sampleHash = hashCanonical({
+    eventId: event.eventId,
+    purpose: "aggregate-chorus-sample:v1",
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: event.eventId,
+    id: `chorus-${sampleHash.slice(0, 32)}`,
+    position: event.sourcePosition,
+    soundLoudness: event.intensity,
+    soundRangeUnits: event.rangeUnits,
+    soundClass: event.soundClass,
+    soundInterrupt: event.interrupt,
+    sourceId: event.sourceId,
+  });
+}
+
+/**
+ * Projects ecology-owned chorus events through ordinary player hearing. Source
+ * truth is derived first and stays independent of this listener. The result
+ * never creates a frog actor, reveals an aggregate ID, or emits a cue merely
+ * because a population exists somewhere in the loaded region.
  */
 export function projectCoreEcologyAggregateHeardCues(
   value: unknown,
 ): readonly CoreEcologyAggregateHeardCue[] | null {
   const input = canonicalInput(value);
   if (input === null) return null;
-  if (input.tick % CORE_ECOLOGY_CHORUS_CADENCE_TICKS !== 0) {
-    return Object.freeze([]);
-  }
   const player = livingActorAddressInRegionalWindow(input.player, input.window);
-  const origin = regionalAddressAt(input.world, 0);
-  if (player === null || origin === null) return Object.freeze([]);
-  let frame;
-  try {
-    frame = createSpatialFrame(
-      createWorldPosition(
-        origin.region,
-        origin.localX * WORLD_POSITION_UNITS_PER_TILE,
-        origin.localY * WORLD_POSITION_UNITS_PER_TILE,
-      ),
-      input.world.terrain.width * WORLD_POSITION_UNITS_PER_TILE,
-      input.world.terrain.height * WORLD_POSITION_UNITS_PER_TILE,
-    );
-  } catch {
-    return null;
-  }
-  const raining = input.world.weather.kind === "rain"
-    || input.world.weather.kind === "storm";
-  const ambientNoise = calculateAmbientNoise({
-    rainIntensity: raining ? input.world.weather.intensity / FIXED_POINT : 0,
-    // Water ambience has its own spatial owner. Omitting it here is explicit;
-    // this slice does not invent a listener-local turbulence sample.
-    localWaterTurbulence: 0,
+  if (player === null) return Object.freeze([]);
+  const events = deriveCanonicalChorusEvents({
+    patch: input.patch,
+    tick: input.tick,
   });
+  if (events === null) return null;
+  if (events.length === 0) return Object.freeze([]);
+  const ambientNoise = ambientNoiseAt(input.world, player.tileIndex);
   if (ambientNoise === null) return null;
   const hearing = livingActorSenseProfile(input.player.species).hearingSensitivity;
-  const baseRange = Math.trunc(
-    CORE_ECOLOGY_FROG_CHORUS_RANGE_UNITS * hearing / FIXED_POINT,
-  );
   const candidates: HeardCandidate[] = [];
-  for (const population of input.patch.aggregatePopulations) {
-    if (
-      population.species !== "southern-leopard-frog"
-      || population.activitySignal.kind !== "rain-chorus"
-      || population.activitySignal.intensity < CORE_ECOLOGY_CHORUS_MIN_ACTIVITY
-    ) continue;
-    for (const anchor of population.anchors) {
-      if (anchor.populationUnits === 0) continue;
-      const source = worldPositionToSpatialFrame(frame, anchor.position);
-      if (source === null) continue;
-      const populationFraction = anchor.populationUnits / population.populationSize;
-      const sourceLoudness = clampUnit(
-        population.activitySignal.intensity / FIXED_POINT
-          * (0.72 + 0.28 * populationFraction),
-      );
-      const contact = evaluateAudibleContact({
-        listener: player.point,
-        source,
-        baseRange,
-        ambientNoise,
-        sourceLoudness,
-        wind: {
-          x: input.world.weather.windX / FIXED_POINT,
-          y: input.world.weather.windY / FIXED_POINT,
-        },
-      });
-      if (contact === null) continue;
-      candidates.push(Object.freeze({
-        anchorOrdinal: anchor.anchorOrdinal,
-        aggregateId: population.aggregateId,
-        cue: Object.freeze({
-          cue: "frog-chorus",
-          caption: chorusCaption(contact),
-          pan: panFromContact(contact),
-          volume: clampUnit(0.2 + contact.certainty * 0.32),
-          variantSeed: variantSeed(population.aggregateId, anchor.anchorOrdinal, input.tick),
-          contact,
-        }),
-      }));
-    }
+  for (const event of events) {
+    const sample = coreEcologyAggregateChorusSoundSample(event);
+    if (sample === null) return null;
+    const effectiveRangeUnits = Math.trunc(event.rangeUnits * hearing / FIXED_POINT);
+    const reception = evaluatePhysicalAcousticListener({
+      observationId: `aggregate-chorus-hearing:${hashCanonical({
+        eventId: event.eventId,
+        observerId: input.player.actorId,
+        tick: input.tick,
+      })}`,
+      observerId: input.player.actorId,
+      observerPosition: input.player.position,
+      observedAtTick: input.tick,
+      sample,
+      effectiveRangeUnits,
+      ambientNoise,
+      wind: {
+        x: input.world.weather.windX / FIXED_POINT,
+        y: input.world.weather.windY / FIXED_POINT,
+      },
+    });
+    if (reception === null) return null;
+    if (reception.kind !== "heard") continue;
+    const contact = reception.contact;
+    candidates.push(Object.freeze({
+      cue: Object.freeze({
+        pan: panFromContact(contact),
+        volume: clampUnit(0.2 + contact.certainty * 0.32),
+        variantSeed: event.presentationVariantSeed,
+        contact,
+        event,
+        observation: reception.observation,
+      }),
+    }));
   }
   candidates.sort((left, right) => (
     right.cue.contact.certainty - left.cue.contact.certainty
     || left.cue.contact.distanceBand.maximum - right.cue.contact.distanceBand.maximum
-    || compareText(left.aggregateId, right.aggregateId)
-    || left.anchorOrdinal - right.anchorOrdinal
+    || compareText(left.cue.event.eventId, right.cue.event.eventId)
   ));
   const selected = candidates[0];
   return selected === undefined
     ? Object.freeze([])
     : Object.freeze([selected.cue]);
+}
+
+function canonicalChorusEventInput(
+  value: unknown,
+): CoreEcologyAggregateChorusEventFrameInput | null {
+  if (!plainRecord(value) || !exactKeys(value, ["patch", "tick"])) return null;
+  const patch = canonicalizeCoreEcologyAggregatePatch(value.patch);
+  if (
+    patch === null
+    || !nonnegativeSafeInteger(value.tick)
+    || patch.updatedAtTick !== value.tick
+  ) return null;
+  return Object.freeze({ patch, tick: value.tick });
+}
+
+function qualifyingFrogChorus(
+  population: CoreEcologyAggregatePopulationState,
+): boolean {
+  return population.species === "southern-leopard-frog"
+    && population.activitySignal.kind === "rain-chorus"
+    && population.activitySignal.intensity >= CORE_ECOLOGY_CHORUS_MIN_ACTIVITY;
+}
+
+function representativeChorusAnchor(
+  anchors: readonly CoreEcologyAggregateAreaAnchor[],
+): CoreEcologyAggregateAreaAnchor | null {
+  let selected: CoreEcologyAggregateAreaAnchor | null = null;
+  for (const anchor of anchors) {
+    if (anchor.populationUnits === 0) continue;
+    if (
+      selected === null
+      || anchor.populationUnits > selected.populationUnits
+      || (
+        anchor.populationUnits === selected.populationUnits
+        && anchor.anchorOrdinal < selected.anchorOrdinal
+      )
+    ) selected = anchor;
+  }
+  return selected;
 }
 
 function canonicalInput(value: unknown): CoreEcologyAggregateAudioFrameInput | null {
@@ -188,33 +314,6 @@ function canonicalInput(value: unknown): CoreEcologyAggregateAudioFrameInput | n
     window,
     world,
   });
-}
-
-function variantSeed(aggregateId: string, anchorOrdinal: number, tick: number): number {
-  return Number.parseInt(hashCanonical({ aggregateId, anchorOrdinal, tick }).slice(0, 8), 16)
-    >>> 0;
-}
-
-type ChorusDirection = AudibleContactDirection;
-
-function chorusCaption(
-  contact: AudibleContact,
-): CoreEcologyAggregateHeardCue["caption"] {
-  const distance = contact.distanceBand.maximum <= 8 * WORLD_POSITION_UNITS_PER_TILE
-    ? "nearby"
-    : "in the distance";
-  return `[chorus ${distance} — ${coreEcologyChorusDirection(contact)}]`;
-}
-
-/**
- * Converts the shared hearing band into only the direction that band can
- * honestly support. A co-located source surrounds the listener; a band that
- * crosses an octant boundary remains explicitly uncertain.
- */
-export function coreEcologyChorusDirection(
-  contact: AudibleContact,
-): ChorusDirection {
-  return audibleContactDirection(contact);
 }
 
 function panFromContact(contact: AudibleContact): number {

@@ -33,6 +33,7 @@ import {
 import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
+import * as dogPhysicalAcoustics from "./dogPhysicalAcousticPerception";
 import * as humanPerception from "./humanPerception";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
@@ -60,6 +61,7 @@ import {
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import { CORE_ECOLOGY_CHORUS_CADENCE_TICKS } from "./coreEcologyAggregateAudio";
 import {
   projectCoreEcologyActivity,
   projectCoreEcologyDayPhase,
@@ -216,6 +218,7 @@ import {
 const settlementShadowsHarness = vi.hoisted(() => ({
   excludePhysicalFood: false,
   exposeOnlyPhysicalFood: false,
+  forceRainIntensity: null as number | null,
   rejectAfterWorkingDog: false,
 }));
 const runtimeEcologyHarness = vi.hoisted(() => ({
@@ -522,14 +525,54 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./coreEcologySmallWorld")>();
   const filteredFrame = (
     frame: CoreEcologySettlementShadowsStimulusFrame,
-  ): CoreEcologySettlementShadowsStimulusFrame => ({
-    ...frame,
-    stimuli: frame.stimuli.filter(({ sourceKind }) => (
-      settlementShadowsHarness.exposeOnlyPhysicalFood
-        ? sourceKind === "exposed-food"
-        : sourceKind !== "exposed-food"
-    )),
-  });
+    patch?: CoreEcologyAggregatePatchState,
+  ): CoreEcologySettlementShadowsStimulusFrame => {
+    const stimuli = frame.stimuli
+      .filter(({ sourceKind }) => (
+        settlementShadowsHarness.exposeOnlyPhysicalFood
+          ? sourceKind === "exposed-food"
+          : sourceKind !== "exposed-food"
+      ))
+      .map((stimulus) => (
+        stimulus.sourceKind !== "rain"
+        || settlementShadowsHarness.forceRainIntensity === null
+          ? stimulus
+          : {
+              ...stimulus,
+              anchorInfluences: stimulus.anchorInfluences.map((influence) => ({
+                ...influence,
+                intensity: settlementShadowsHarness.forceRainIntensity!,
+              })),
+            }
+      ));
+    if (settlementShadowsHarness.forceRainIntensity !== null && patch !== undefined) {
+      for (const population of patch.aggregatePopulations) {
+        if (
+          population.species !== "southern-leopard-frog"
+          || stimuli.some(({ sourceKind, targetAggregateId }) => (
+            sourceKind === "rain" && targetAggregateId === population.aggregateId
+          ))
+        ) continue;
+        stimuli.push({
+          version: 1,
+          stimulusId: `test-rain:${hashCanonical([
+            population.aggregateId,
+            frame.atTick,
+          ])}`,
+          sourceReferenceId: "weather:test-rain",
+          sourceKind: "rain",
+          response: "attraction",
+          targetAggregateId: population.aggregateId,
+          channels: ["hearing", "touch"],
+          anchorInfluences: population.anchors.map(({ anchorOrdinal }) => ({
+            anchorOrdinal,
+            intensity: settlementShadowsHarness.forceRainIntensity!,
+          })),
+        });
+      }
+    }
+    return { ...frame, stimuli };
+  };
   return {
     ...actual,
     // This one integration seam isolates the existing physical-food channel
@@ -542,12 +585,17 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
       if (
         !settlementShadowsHarness.exposeOnlyPhysicalFood
         && !settlementShadowsHarness.excludePhysicalFood
+        && settlementShadowsHarness.forceRainIntensity === null
         || args[2] === undefined
       ) {
         return actual.stepCoreEcologySettlementShadows(...args);
       }
       const frame = args[2] as CoreEcologySettlementShadowsStimulusFrame;
-      return actual.stepCoreEcologySettlementShadows(args[0], args[1], filteredFrame(frame));
+      return actual.stepCoreEcologySettlementShadows(
+        args[0],
+        args[1],
+        filteredFrame(frame, args[0] as CoreEcologyAggregatePatchState),
+      );
     },
     stepCoreEcologySmallWorldSourceSet: (
       ...args: Parameters<typeof actual.stepCoreEcologySmallWorldSourceSet>
@@ -556,13 +604,14 @@ vi.mock("./coreEcologySmallWorld", async (importOriginal) => {
       if (
         !settlementShadowsHarness.exposeOnlyPhysicalFood
         && !settlementShadowsHarness.excludePhysicalFood
+        && settlementShadowsHarness.forceRainIntensity === null
       ) {
         return actual.stepCoreEcologySmallWorldSourceSet(...args);
       }
       const sources = args[0] as readonly CoreEcologySmallWorldSourceStepInput[];
       return actual.stepCoreEcologySmallWorldSourceSet(sources.map((source) => ({
         ...source,
-        stimulusFrame: filteredFrame(source.stimulusFrame),
+        stimulusFrame: filteredFrame(source.stimulusFrame, source.patch),
       })), args[1]);
     },
   };
@@ -623,6 +672,7 @@ beforeEach(() => {
 afterEach(() => {
   settlementShadowsHarness.excludePhysicalFood = false;
   settlementShadowsHarness.exposeOnlyPhysicalFood = false;
+  settlementShadowsHarness.forceRainIntensity = null;
   settlementShadowsHarness.rejectAfterWorkingDog = false;
   runtimeEcologyHarness.disableDomesticFoodInvestigation = false;
   guardianPerceptionHarness.mode = null;
@@ -2040,6 +2090,223 @@ async function advanceUntilDomesticFoodUse(
 }
 
 describe("runtime settlement ecology integration", () => {
+  it("routes one ecology-owned frog chorus through shared actor hearing and Living Voice", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world",
+      seed: "shared chorus belongs to the acoustic world",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await source.save();
+    source.destroy();
+
+    const sourceRecord = sourceRepository.snapshot();
+    const sourceEnvelope = savedEnvelope(sourceRepository);
+    const sourceWorld = deserializeWorld(String(sourceEnvelope.world));
+    const sourcePlayer = structuredClone(sourceEnvelope.player) as PlayerState;
+    const sourceTravel = restorePlayerRegionalTravel(
+      sourceWorld.meta.rootSeed,
+      sourcePlayer,
+      String(sourceEnvelope.regionalTravel),
+    );
+    const sourceBio0 = deserializeBio0Ecology(sourceEnvelope.bio0Ecology);
+    const chorusSource = requireRegionalEcology(sourceEnvelope.regionalEcology)
+      .activeResidents.find(({ patch }) => patch.aggregatePopulations.some(({ species }) => (
+        species === "southern-leopard-frog"
+      )));
+    const frogs = chorusSource?.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    const representative = frogs === undefined
+      ? undefined
+      : [...frogs.anchors]
+          .filter(({ populationUnits }) => populationUnits > 0)
+          .sort((left, right) => (
+            right.populationUnits - left.populationUnits
+            || left.anchorOrdinal - right.anchorOrdinal
+          ))[0];
+    if (sourceTravel === null || sourceBio0 === null || frogs === undefined
+      || representative === undefined) {
+      throw new Error("shared-chorus fixture omitted its current ecology authority");
+    }
+    const startingPlayerPosition = playerWorldPositionInRegionalWindow(
+      sourceTravel.window,
+      sourcePlayer,
+    );
+    if (startingPlayerPosition === null) {
+      throw new Error("shared-chorus fixture omitted the player's world position");
+    }
+    const sourceView = createRegionalWorldView(
+      createWorldView(sourceWorld),
+      sourceTravel.window,
+      { discovered: sourcePlayer.discovered, depthSoundings: sourcePlayer.depthSoundings },
+    );
+    const safeListener = sourceView.terrain.tiles.flatMap((tile, tileIndex) => {
+      if (
+        tile.terrain === "ridge"
+        || tile.waterDepth > ADRIFT_STAND_DEPTH
+        || tile.roughness >= 650_000
+      ) return [];
+      const address = regionalAddressAt(sourceView, tileIndex);
+      if (
+        address === null
+        || regionKey(address.region) !== regionKey(startingPlayerPosition.region)
+      ) return [];
+      const position = createWorldPosition(
+        address.region,
+        address.localX * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+        address.localY * WORLD_POSITION_UNITS_PER_TILE
+          + Math.floor(WORLD_POSITION_UNITS_PER_TILE / 2),
+      );
+      let distance: number;
+      try {
+        distance = Math.max(...frogs.anchors
+          .filter(({ populationUnits }) => populationUnits > 0)
+          .map(({ position: anchorPosition }) => {
+            const delta = worldPositionDelta(position, anchorPosition);
+            return Math.hypot(delta.x, delta.y);
+          }));
+      } catch {
+        return [];
+      }
+      return distance <= 24 * WORLD_POSITION_UNITS_PER_TILE
+        ? [{ distance, position }]
+        : [];
+    }).sort((left, right) => left.distance - right.distance)[0];
+    if (safeListener === undefined) {
+      throw new Error("shared-chorus fixture found no safe nearby listener footing");
+    }
+    expect(safeListener.distance).toBeLessThanOrEqual(8 * WORLD_POSITION_UNITS_PER_TILE);
+    const ticksUntilChorus = CORE_ECOLOGY_CHORUS_CADENCE_TICKS
+      - sourceWorld.meta.completedTick % CORE_ECOLOGY_CHORUS_CADENCE_TICKS;
+    const chorusTick = sourceWorld.meta.completedTick + ticksUntilChorus;
+
+    // The core rain/activity contract is covered independently. This fixture
+    // holds the acoustic listener's weather clear while injecting that already
+    // authenticated aggregate stimulus, isolating only the runtime bridge.
+    settlementShadowsHarness.forceRainIntensity = 900_000;
+    sourceWorld.weather = {
+      ...sourceWorld.weather,
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: chorusTick + CORE_ECOLOGY_CHORUS_CADENCE_TICKS,
+    };
+    assertWorldInvariants(sourceWorld);
+    const stagedRoots = withCurrentEnvelopeFields(sourceRecord, {
+      world: serializeWorld(sourceWorld),
+    });
+    const staged = withPlayerWitnessingWorldPosition(
+      stagedRoots,
+      safeListener.position,
+      representative.position,
+    );
+    const repository = new MemoryRepository(staged);
+    const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    const dogHearingSpy = vi.spyOn(
+      dogPhysicalAcoustics,
+      "collectDogPhysicalAcousticObservationBatches",
+    );
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    soundscapePlay.mockClear();
+
+    advancePlayerSteps(
+      runtime,
+      ticksUntilChorus * 10,
+    );
+    await runtime.save();
+    const chorusEnvelope = savedEnvelope(repository);
+    expect(deserializeWorld(String(chorusEnvelope.world)).meta.completedTick).toBe(chorusTick);
+    const committedFrogs = requireRegionalEcology(chorusEnvelope.regionalEcology)
+      .activeResidents.flatMap(({ patch }) => patch.aggregatePopulations)
+      .find(({ aggregateId }) => aggregateId === frogs.aggregateId);
+    expect(committedFrogs?.activitySignal).toMatchObject({
+      kind: "rain-chorus",
+      intensity: expect.any(Number),
+      updatedAtTick: chorusTick,
+    });
+    expect(committedFrogs?.activitySignal.intensity).toBeGreaterThanOrEqual(180_000);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "frog-chorus"))
+      .toHaveLength(1);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "Sound",
+      text: "chorus",
+      presentationKind: "animal-call",
+      animalCallKind: "chorus",
+      assertive: false,
+    });
+    expect(runtime.getUIView().expressionCaption).not.toHaveProperty("position");
+    expect(JSON.stringify(runtime.getUIView().expressionCaption)).not.toMatch(
+      /frog|aggregate|sourceId/iu,
+    );
+    expect(runtime.getUIView().announcement?.message ?? "").not.toMatch(/chorus/iu);
+    expect((runtime.getRenderView().acousticText ?? []).some(({ text }) => (
+      text === "chorus"
+    ))).toBe(false);
+
+    const committedRecord = repository.snapshot();
+
+    // Ephemeral playback/labels are not saved and never replay on load.
+    soundscapePlay.mockClear();
+    const reloadedRepository = new MemoryRepository(committedRecord);
+    const reloaded = await createTideweftRuntime(reloadedRepository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    expect(reloaded.getUIView().expressionCaption).toBeUndefined();
+    expect((reloaded.getRenderView().acousticText ?? []).some(({ text }) => (
+      text === "chorus"
+    ))).toBe(false);
+    // On the next interval after reload, the same committed cadence event is
+    // deterministically re-derived into bounded anonymous human and dog
+    // hearing without replaying its player-facing sound.
+    soundscapePlay.mockClear();
+    advancePlayerSteps(reloaded, 10);
+    const chorusHumanInputs = perceptionSpy.mock.calls.flatMap(([input]) => (
+      (input.physicalSoundSamples ?? []).filter(({ soundClass }) => (
+        soundClass === "animal-call"
+      ))
+    ));
+    expect(chorusHumanInputs).toEqual([
+      expect.objectContaining({
+        sourceId: expect.stringMatching(/^ecology-aggregate-source:/u),
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+      }),
+    ]);
+    expect(chorusHumanInputs[0]).not.toHaveProperty("sourceActorId");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "frog-chorus"))
+      .toHaveLength(0);
+    const chorusDogInputs = dogHearingSpy.mock.calls.flatMap(([input]) => (
+      input.physicalSoundSamples.filter(({ soundClass }) => soundClass === "animal-call")
+    ));
+    expect(chorusDogInputs).toEqual([
+      expect.objectContaining({
+        sourceId: expect.stringMatching(/^ecology-aggregate-source:/u),
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+      }),
+    ]);
+    // This generated dog is outside the lawful reception range. Feeding the
+    // shared bounded hearing bridge must not fabricate a belief at a distance.
+    await reloaded.save();
+    const distantDog = deserializeBio0Ecology(
+      savedEnvelope(reloadedRepository).bio0Ecology,
+    )?.dog;
+    expect(distantDog?.perception.beliefs).not.toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      perceivedClass: "animal-call",
+    }));
+    reloaded.destroy();
+    runtime.destroy();
+    dogHearingSpy.mockRestore();
+    perceptionSpy.mockRestore();
+  }, 180_000);
+
   it("keeps a boundary-straddling social group atomic while coarse-aging its off-frame member", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
@@ -4444,7 +4711,7 @@ describe("runtime settlement ecology integration", () => {
     expect(physicalIntervals).toHaveLength(1);
     expect(physicalIntervals[0]).toContainEqual(expect.objectContaining({
       acousticEventId: guardianContact?.event.eventId,
-      sourceActorId: guardian.identity.stableId,
+      sourceId: guardian.identity.stableId,
       soundClass: guardianContact?.event.soundClass,
     }));
     const hearingWorld = deserializeWorld(String(savedEnvelope(hearingRepository).world));

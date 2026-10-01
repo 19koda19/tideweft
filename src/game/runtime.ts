@@ -422,7 +422,12 @@ import {
   type CoreEcologyAggregateExposedFoodSource,
   type CoreEcologyAggregateVisualSource,
 } from "./coreEcologyAggregatePerception";
-import { projectCoreEcologyAggregateHeardCues } from "./coreEcologyAggregateAudio";
+import {
+  CORE_ECOLOGY_CHORUS_CADENCE_TICKS,
+  coreEcologyAggregateChorusSoundSample,
+  deriveCoreEcologyAggregateChorusEvents,
+  projectCoreEcologyAggregateHeardCues,
+} from "./coreEcologyAggregateAudio";
 import { resolveFallCargo } from "./fallCargo";
 import {
   capturePlayerRegionalTravel,
@@ -1492,6 +1497,8 @@ function worldAcousticSoundCue(event: WorldAcousticEvent): SoundCue {
     case "skitter":
     case "creak":
       return "stumble";
+    case "chorus":
+      return "frog-chorus";
     case "vocalization":
     case "other":
       return "impact";
@@ -6837,7 +6844,7 @@ function rabbitAlarmPhysicalSoundSample(
     soundRangeUnits: acoustics.rangeUnits,
     soundClass: "physical-thud",
     soundInterrupt: "none",
-    sourceActorId: event.actorId,
+    sourceId: event.actorId,
   });
 }
 
@@ -13212,10 +13219,10 @@ export async function createTideweftRuntime(
       playerStepsSinceWorldTick = 0;
       const elapsedWeather = { ...world.weather };
       const targetTick = world.meta.completedTick + 1;
-      const physicalSoundSamples = physicalSoundSamplesForAnimalContactCarry(
+      const animalContactSoundSamples = physicalSoundSamplesForAnimalContactCarry(
         animalContactAcousticCarry,
       );
-      if (physicalSoundSamples === null) {
+      if (animalContactSoundSamples === null) {
         throw new Error("Animal-contact acoustic carry failed reauthentication");
       }
       const priorPorter = runtimeBio0Porter(
@@ -13228,6 +13235,55 @@ export async function createTideweftRuntime(
       const projectedEcologySources = runtimeRegionalEcologyProjectedSources(
         regionalEcologyProjectionForStep,
       );
+      const chorusSourcePatches = [
+        ...projectedEcologySources.map(({ sourceKey, patch }) => ({ sourceKey, patch })),
+        ...(projectedEcologySources.some(({ sourceKey }) => (
+          sourceKey === regionalEcology.base.base.base.base.base.settlementHome.sourceKey
+        ))
+          ? []
+          : [{
+              sourceKey: regionalEcology.base.base.base.base.base.settlementHome.sourceKey,
+              patch: regionalEcology.base.base.base.base.base.settlementHome.patch,
+            }]),
+      ].sort((left, right) => compareText(left.sourceKey, right.sourceKey));
+      const priorAggregateChorusEvents: WorldAcousticEvent[] = [];
+      if (world.meta.completedTick % CORE_ECOLOGY_CHORUS_CADENCE_TICKS === 0) {
+        for (const { patch } of chorusSourcePatches) {
+          const events = deriveCoreEcologyAggregateChorusEvents({
+            patch,
+            tick: world.meta.completedTick,
+          });
+          if (events === null) {
+            throw new Error("Aggregate chorus authority could not be reauthenticated");
+          }
+          priorAggregateChorusEvents.push(...events);
+        }
+      }
+      priorAggregateChorusEvents.sort((left, right) => (
+        right.priority - left.priority
+        || right.salience - left.salience
+        || compareText(left.eventId, right.eventId)
+      ));
+      const remainingWorldSoundCapacity = Math.max(
+        0,
+        HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES - animalContactSoundSamples.length,
+      );
+      const aggregateChorusSoundSamples = priorAggregateChorusEvents
+        .slice(0, remainingWorldSoundCapacity)
+        .map((event) => {
+          const sample = coreEcologyAggregateChorusSoundSample(event);
+          if (sample === null) {
+            throw new Error("Aggregate chorus could not enter shared actor hearing");
+          }
+          return sample;
+        });
+      // Contact and chorus are both ordinary world sounds. Keep their shared
+      // listener input bounded; contact carry wins ties because it exists for
+      // only one interval, while a chorus recurs on its ecology-owned cadence.
+      const worldPhysicalSoundSamples = Object.freeze([
+        ...animalContactSoundSamples,
+        ...aggregateChorusSoundSamples,
+      ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
       const activityAuthoritiesBySourceForStep =
         projectCoreEcologyActivityAuthorityBundle(regionalEcologyProjectionForStep);
       const projectedHomeSource = projectedEcologySources.find(({ sourceKey }) => (
@@ -13408,7 +13464,7 @@ export async function createTideweftRuntime(
       );
       const humanPhysicalSoundSamples = Object.freeze([
         ...selectedRabbitPhysicalFallbacks.map(({ sample }) => sample),
-        ...physicalSoundSamples,
+        ...worldPhysicalSoundSamples,
       ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
       for (const prepared of preparedCoreAlarms) {
         const fallbackOwnsResidentHearing = selectedRabbitPhysicalFallbackEventIds.has(
@@ -13432,7 +13488,7 @@ export async function createTideweftRuntime(
       const dogPhysicalAcousticObservationBatches =
         collectDogPhysicalAcousticObservationBatches({
           dogs: runtimeDogActors(bio0Ecology, dogActorRoster),
-          physicalSoundSamples,
+          physicalSoundSamples: worldPhysicalSoundSamples,
           world: worldView,
           window: regionalTravel.window,
           targetTick,
@@ -14938,19 +14994,48 @@ export async function createTideweftRuntime(
         playerWaitDisturbedThisStep = true;
         playerRecoveryDisturbedThisStep = true;
       }
-      const heardAggregateCues = [...finalRegionalPatches.values()].flatMap((patch) => {
-        const projected = projectCoreEcologyAggregateHeardCues({
-          patch,
-          player: playerAddress,
-          tick: world.meta.completedTick,
-          window: regionalTravel.window,
-          world: worldView,
-        });
-        if (projected === null) {
-          throw new Error("Aggregate wildlife hearing could not be projected");
+      const heardAggregateCues = player.timeAction?.kind === "sleep"
+        ? []
+        : [...finalRegionalPatches.values()].flatMap((patch) => {
+            const projected = projectCoreEcologyAggregateHeardCues({
+              patch,
+              player: playerAddress,
+              tick: world.meta.completedTick,
+              window: regionalTravel.window,
+              world: worldView,
+            });
+            if (projected === null) {
+              throw new Error("Aggregate wildlife hearing could not be projected");
+            }
+            return projected;
+          });
+      const heardAggregateChorus = heardAggregateCues.slice().sort((left, right) => (
+        right.contact.certainty - left.contact.certainty
+        || left.contact.distanceBand.maximum - right.contact.distanceBand.maximum
+        || compareText(left.event.eventId, right.event.eventId)
+      ))[0] ?? null;
+      if (heardAggregateChorus !== null) {
+        const reception = createHeardUnseenWorldAcousticReception(
+          heardAggregateChorus.event,
+          heardAggregateChorus.contact,
+        );
+        if (reception === null) {
+          throw new Error("Aggregate chorus hearing receipt failed validation");
         }
-        return projected;
-      });
+        activeWorldAcousticPresentations = admitWorldAcousticPresentation(
+          activeWorldAcousticPresentations,
+          heardAggregateChorus.event,
+          reception,
+        );
+        // Presentation capacity never erases the lawful audio event. Release
+        // the cue only after the authoritative fixed step commits.
+        deferredWorldAcousticAudio.push(Object.freeze({
+          cue: worldAcousticSoundCue(heardAggregateChorus.event),
+          volume: heardAggregateChorus.volume,
+          variantSeed: heardAggregateChorus.variantSeed,
+          pan: heardAggregateChorus.pan,
+        }));
+      }
       let ecologyConsequenceAnnounced = false;
       for (const event of allCoreMortalityEvents) {
         if (!directlyWitnessedMortalityEventIds.has(event.eventId)) continue;
@@ -15063,7 +15148,7 @@ export async function createTideweftRuntime(
         });
       const ecologyCues: Array<Readonly<{
         cue: "rat-rustle" | "cat-call" | "fox-yip"
-          | "frog-chorus" | "wildlife-alarm";
+          | "wildlife-alarm";
         volume: number;
         variantSeed: number;
         caption: string;
@@ -15101,19 +15186,12 @@ export async function createTideweftRuntime(
           caption: "ANIMAL ALARM — source unclear.",
         }));
       }
-      for (const heard of heardAggregateCues) {
-        ecologyCues.push(Object.freeze({
-          cue: heard.cue,
-          volume: heard.volume,
-          variantSeed: heard.variantSeed,
-          caption: heard.caption,
-          pan: heard.pan,
-        }));
-      }
       // Two simultaneous voices preserve the strongest causal exchange
-      // without turning a busy habitat tick into an audio pile-up.
-      // The ordered list preserves event/alarm priority over an ambient chorus
-      // when more than two lawful cues coincide.
+      // without turning a busy habitat tick into an audio pile-up. Aggregate
+      // chorus uses the shared Living Voice queue above and does not compete
+      // through this legacy announcement channel.
+      // Stable causal order determines which legacy cues survive when more
+      // than two lawful events coincide.
       const emittedEcologyCues = ecologyCues.slice(0, 2);
       for (const cue of emittedEcologyCues) {
         if (cue.pan === undefined) {

@@ -330,23 +330,23 @@ interface AcousticCaptionCandidate {
 /** One deterministic shared caption slot; simulation timing remains untouched. */
 function selectAcousticCaption(
   expression: AcousticCaptionCandidate | null,
-  physical: AcousticCaptionCandidate | null,
+  worldAcoustic: AcousticCaptionCandidate | null,
 ): SituatedExpressionCaptionUIView | undefined {
-  if (expression === null) return physical?.caption;
-  if (physical === null) return expression.caption;
-  if (expression.priority !== physical.priority) {
-    return expression.priority > physical.priority
+  if (expression === null) return worldAcoustic?.caption;
+  if (worldAcoustic === null) return expression.caption;
+  if (expression.priority !== worldAcoustic.priority) {
+    return expression.priority > worldAcoustic.priority
       ? expression.caption
-      : physical.caption;
+      : worldAcoustic.caption;
   }
-  if (expression.salience !== physical.salience) {
-    return expression.salience > physical.salience
+  if (expression.salience !== worldAcoustic.salience) {
+    return expression.salience > worldAcoustic.salience
       ? expression.caption
-      : physical.caption;
+      : worldAcoustic.caption;
   }
-  return expression.stableId <= physical.stableId
+  return expression.stableId <= worldAcoustic.stableId
     ? expression.caption
-    : physical.caption;
+    : worldAcoustic.caption;
 }
 
 export function projectUIView(
@@ -549,31 +549,55 @@ export function projectUIView(
         options.worldAcousticEvent,
         options.worldAcousticRemainingSteps,
       );
-  const physicalAcoustic = projectedWorldAcoustic ?? anonymousWorldAcoustic;
-  const physicalCaptionCandidate: AcousticCaptionCandidate | null =
-    physicalAcoustic === null
-    ? null
-    : {
-        caption: {
-          id: options.worldAcousticEvent!.eventId,
-          // Physical captions never synthesize an actor/object identity.
-          speakerLabel: "Sound",
-          text: physicalAcoustic.text,
-          tone: physicalAcoustic.tone,
-          presentationKind: "physical",
-          physicalSoundKind: physicalAcoustic.semanticFamily,
-          ...(worldAcousticContact === null
-            ? {}
-            : { directionLabel: audibleContactDirection(worldAcousticContact) }),
-          assertive: physicalAcoustic.tone === "alarmed",
-        },
-        priority: physicalAcoustic.priority,
-        salience: physicalAcoustic.salience,
-        stableId: options.worldAcousticEvent!.eventId,
-      };
+  const worldAcousticRealization = projectedWorldAcoustic ?? anonymousWorldAcoustic;
+  const anonymousAnimalChorus = worldAcousticContact !== null
+    && options.worldAcousticEvent?.domain === "actor-vocalization"
+    && options.worldAcousticEvent.sourceCategory === "animal"
+    && options.worldAcousticEvent.semanticFamily === "chorus"
+    && options.worldAcousticEvent.soundClass === "animal-call";
+  const worldAcousticCaptionCandidate: AcousticCaptionCandidate | null =
+    worldAcousticRealization === null
+      ? null
+      : anonymousAnimalChorus
+        ? {
+            caption: {
+              id: options.worldAcousticEvent!.eventId,
+              // A chorus has no addressable actor or species-safe identity.
+              speakerLabel: "Sound",
+              text: worldAcousticRealization.text,
+              tone: worldAcousticRealization.tone,
+              presentationKind: "animal-call",
+              animalCallKind: "chorus",
+              directionLabel: audibleContactDirection(worldAcousticContact),
+              assertive: options.worldAcousticEvent!.interrupt === "strong",
+            },
+            priority: worldAcousticRealization.priority,
+            salience: worldAcousticRealization.salience,
+            stableId: options.worldAcousticEvent!.eventId,
+          }
+        : worldAcousticRealization.semanticFamily === "chorus"
+          ? null
+          : {
+              caption: {
+                id: options.worldAcousticEvent!.eventId,
+                // Physical captions never synthesize an actor/object identity.
+                speakerLabel: "Sound",
+                text: worldAcousticRealization.text,
+                tone: worldAcousticRealization.tone,
+                presentationKind: "physical",
+                physicalSoundKind: worldAcousticRealization.semanticFamily,
+                ...(worldAcousticContact === null
+                  ? {}
+                  : { directionLabel: audibleContactDirection(worldAcousticContact) }),
+                assertive: worldAcousticRealization.tone === "alarmed",
+              },
+              priority: worldAcousticRealization.priority,
+              salience: worldAcousticRealization.salience,
+              stableId: options.worldAcousticEvent!.eventId,
+            };
   const expressionCaption = selectAcousticCaption(
     expressionCaptionCandidate,
-    physicalCaptionCandidate,
+    worldAcousticCaptionCandidate,
   );
 
   return {

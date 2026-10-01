@@ -114,7 +114,7 @@ describe("animal-contact acoustic causal carry", () => {
       soundInterrupt: record.event.interrupt,
       soundLoudness: record.event.intensity,
       soundRangeUnits: record.event.rangeUnits,
-      sourceActorId: record.event.sourceId,
+      sourceId: record.event.sourceId,
     });
     expect(Object.isFrozen(sample)).toBe(true);
     expect(Object.isFrozen(sample?.position)).toBe(true);
@@ -414,7 +414,7 @@ describe("animal-contact acoustic causal carry", () => {
     const replay = physicalSoundSamplesForAnimalContactCarry(carry);
 
     expect(first).toEqual(replay);
-    expect(first?.map(({ sourceActorId }) => sourceActorId)).toEqual([
+    expect(first?.map(({ sourceId }) => sourceId)).toEqual([
       "A-v1-dog-alpha",
       "A-v1-dog-beta",
     ]);

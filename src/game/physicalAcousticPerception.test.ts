@@ -16,7 +16,7 @@ type PhysicalAcousticListenerInput = Parameters<typeof evaluatePhysicalAcousticL
 
 const REGION = createRegionCoord(3, -2);
 const OBSERVER_ID = "A-v1-dog-listener";
-const SOURCE_ACTOR_ID = "A-v1-dog-source";
+const SOURCE_ID = "A-v1-dog-source";
 const OBSERVED_AT_TICK = 812;
 const OBSERVER_POSITION = createWorldPosition(REGION, 24_000, 18_000);
 const SOURCE_POSITION = createWorldPosition(REGION, 30_000, 18_000);
@@ -29,7 +29,7 @@ const SAMPLE_INPUT = Object.freeze({
   soundInterrupt: "none",
   soundLoudness: FIXED_POINT,
   soundRangeUnits: 12_000,
-  sourceActorId: SOURCE_ACTOR_ID,
+  sourceId: SOURCE_ID,
 } as const satisfies PhysicalSoundSampleInput);
 
 function physicalSample(
@@ -111,7 +111,7 @@ describe("shared physical-acoustic listener evaluation", () => {
 
   it("treats the authenticated source actor as valid but not heard", () => {
     expect(evaluatePhysicalAcousticListener(listenerInput({
-      observerId: SOURCE_ACTOR_ID,
+      observerId: SOURCE_ID,
       observerPosition: SOURCE_POSITION,
     }))).toEqual({ kind: "not-heard" });
   });
@@ -162,6 +162,24 @@ describe("shared physical-acoustic listener evaluation", () => {
     }
   });
 
+  it("accepts a structured animal-call without exposing its source identity", () => {
+    const result = evaluatePhysicalAcousticListener(listenerInput({
+      sample: physicalSample({ soundClass: "animal-call" }),
+    }));
+
+    expect(result).toMatchObject({
+      kind: "heard",
+      observation: {
+        perceivedClass: "animal-call",
+        subjectId: null,
+        identification: "anonymous",
+      },
+    });
+    if (result?.kind !== "heard") throw new Error("Expected the animal call to be heard");
+    expect(result.observation).not.toHaveProperty("sourceId");
+    expect(result.observation).not.toHaveProperty("acousticEventId");
+  });
+
   it("fails malformed samples and listener inputs closed", () => {
     expect(createPhysicalSoundSample({
       ...SAMPLE_INPUT,
@@ -174,7 +192,7 @@ describe("shared physical-acoustic listener evaluation", () => {
       { ...SAMPLE_INPUT, soundClass: "animal-contact" },
       { ...SAMPLE_INPUT, soundLoudness: Number.NaN },
       { ...SAMPLE_INPUT, soundRangeUnits: PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS + 1 },
-      { ...SAMPLE_INPUT, sourceActorId: "invalid actor id" },
+      { ...SAMPLE_INPUT, sourceId: "invalid source id" },
       { ...SAMPLE_INPUT, unexpected: true },
     ];
     for (const malformed of malformedSamples) {

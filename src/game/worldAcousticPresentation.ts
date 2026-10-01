@@ -85,6 +85,7 @@ const TEXT_POOLS: Readonly<Record<AcousticSemanticFamily, readonly string[]>> = 
   creak: Object.freeze(["creak"]),
   crack: Object.freeze(["crack"]),
   skitter: Object.freeze(["skitter", "scritch"]),
+  chorus: Object.freeze(["chorus"]),
   vocalization: Object.freeze(["call"]),
   other: Object.freeze(["sound"]),
 });
@@ -172,7 +173,10 @@ export function projectWorldAcousticText(
     || input.tileSize <= 0
   ) return null;
   const realization = realizeWorldAcousticText(event, input.remainingSteps);
-  if (realization === null) return null;
+  // An aggregate chorus has no addressable visible actor to anchor in world
+  // space. Its lawful heard-unseen receipt is presented through the shared
+  // caption surface instead of being fabricated as a physical source label.
+  if (realization === null || realization.semanticFamily === "chorus") return null;
   const { text } = realization;
   const window = regionalWindowForWorld(input.world);
   if (window === null) return null;

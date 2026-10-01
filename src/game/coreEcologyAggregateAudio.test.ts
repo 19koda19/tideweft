@@ -6,12 +6,15 @@ import { FIXED_POINT, type WeatherKind } from "../sim/types";
 import {
   createCoreEcologyAggregatePatch,
   canonicalizeCoreEcologyAggregatePatch,
+  displaceCoreEcologyAggregatePopulation,
   serializeCoreEcologyAggregatePatch,
   setCoreEcologyAggregateActivityIntensity,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
 import {
-  coreEcologyChorusDirection,
+  CORE_ECOLOGY_CHORUS_MIN_ACTIVITY,
+  coreEcologyAggregateChorusSoundSample,
+  deriveCoreEcologyAggregateChorusEvents,
   projectCoreEcologyAggregateHeardCues,
 } from "./coreEcologyAggregateAudio";
 import {
@@ -35,6 +38,168 @@ import {
 const ORIGIN = createRegionCoord(-17, 23);
 
 describe("aggregate ecology heard cues", () => {
+  it("derives one exact ecology-owned group event at the deterministic representative anchor", () => {
+    const current = fixture("rain", 900_000, 0, 1);
+    const frogs = current.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    if (frogs === undefined) throw new Error("Expected aggregate frog population");
+    const representative = [...frogs.anchors]
+      .filter(({ populationUnits }) => populationUnits > 0)
+      .sort((left, right) => (
+        right.populationUnits - left.populationUnits
+        || left.anchorOrdinal - right.anchorOrdinal
+      ))[0];
+    if (representative === undefined) throw new Error("Expected occupied frog anchor");
+    const equallyLargest = frogs.anchors.filter(({ populationUnits }) => (
+      populationUnits === representative.populationUnits
+    ));
+
+    const first = deriveCoreEcologyAggregateChorusEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+    const replay = deriveCoreEcologyAggregateChorusEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+
+    expect(first).toEqual(replay);
+    expect(first).toHaveLength(1);
+    expect(frogs.anchors.length).toBeGreaterThan(1);
+    expect(equallyLargest.length).toBeGreaterThan(1);
+    expect(representative.anchorOrdinal).toBe(Math.min(
+      ...equallyLargest.map(({ anchorOrdinal }) => anchorOrdinal),
+    ));
+    expect(first?.[0]).toMatchObject({
+      domain: "actor-vocalization",
+      sourceCategory: "animal",
+      sourcePosition: representative.position,
+      occurredAtTick: 0,
+      action: "vocalize",
+      sourceMaterial: "body",
+      surfaceMaterial: "water",
+      semanticFamily: "chorus",
+      intensity: frogs.activitySignal.intensity,
+      soundClass: "animal-call",
+      interrupt: "none",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "informative",
+    });
+    expect(first?.[0]?.sourceId).toMatch(/^ecology-aggregate-source:/u);
+    expect(first?.[0]?.sourceId).not.toContain(frogs.aggregateId);
+    expect(first?.[0]).not.toHaveProperty("actorId");
+    expect(JSON.stringify(first)).not.toContain(frogs.aggregateId);
+
+    const sample = first?.[0] === undefined
+      ? null
+      : coreEcologyAggregateChorusSoundSample(first[0]);
+    expect(sample).toMatchObject({
+      acousticEventId: first?.[0]?.eventId,
+      position: representative.position,
+      soundLoudness: frogs.activitySignal.intensity,
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      sourceId: first?.[0]?.sourceId,
+    });
+    expect(sample).not.toHaveProperty("sourceActorId");
+  });
+
+  it("keeps representative selection independent of aggregate ordering", () => {
+    const current = fixture("rain", 900_000, 0, 1);
+    const reversed = canonicalizeCoreEcologyAggregatePatch({
+      ...current.patch,
+      aggregatePopulations: [...current.patch.aggregatePopulations].reverse(),
+    });
+    if (reversed === null) throw new Error("Expected reordered patch to canonicalize");
+
+    expect(deriveCoreEcologyAggregateChorusEvents({
+      patch: reversed,
+      tick: current.tick,
+    })).toEqual(deriveCoreEcologyAggregateChorusEvents({
+      patch: current.patch,
+      tick: current.tick,
+    }));
+  });
+
+  it("keeps aggregate source identity stable when its representative anchor moves", () => {
+    const current = fixture("rain", 900_000, 0, 1);
+    const frogs = current.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    if (frogs === undefined || frogs.anchors.length < 2) {
+      throw new Error("Expected two aggregate frog anchors for source-movement proof");
+    }
+    const baseline = deriveCoreEcologyAggregateChorusEvents({
+      patch: current.patch,
+      tick: current.tick,
+    });
+    const moved = displaceCoreEcologyAggregatePopulation(current.patch, {
+      aggregateId: frogs.aggregateId,
+      atTick: current.tick,
+      causeKind: "animal-disturbance",
+      causeReferenceId: "test:chorus-representative-shift",
+      fromAnchorOrdinal: frogs.anchors[0]!.anchorOrdinal,
+      toAnchorOrdinal: frogs.anchors[1]!.anchorOrdinal,
+      populationUnits: 1,
+      pressure: 1,
+    });
+    if (moved === null) throw new Error("Expected authenticated aggregate displacement");
+    const after = deriveCoreEcologyAggregateChorusEvents({
+      patch: moved.patch,
+      tick: current.tick,
+    });
+
+    expect(after).toHaveLength(1);
+    expect(after?.[0]?.sourcePosition).not.toEqual(baseline?.[0]?.sourcePosition);
+    expect(after?.[0]?.sourceId).toBe(baseline?.[0]?.sourceId);
+    expect(after?.[0]?.repetitionKey).toBe(baseline?.[0]?.repetitionKey);
+    expect(after?.[0]?.eventId).not.toBe(baseline?.[0]?.eventId);
+  });
+
+  it("emits only on cadence for an active threshold-qualified signal", () => {
+    const current = fixture("rain", 900_000, 0, 1);
+    const frogs = current.patch.aggregatePopulations.find(({ species }) => (
+      species === "southern-leopard-frog"
+    ));
+    if (frogs === undefined) throw new Error("Expected aggregate frog population");
+    const quiet = setCoreEcologyAggregateActivityIntensity(current.patch, {
+      aggregateId: frogs.aggregateId,
+      atTick: current.tick,
+      intensity: CORE_ECOLOGY_CHORUS_MIN_ACTIVITY - 1,
+    });
+    if (quiet === null) throw new Error("Expected quiet aggregate patch");
+
+    expect(deriveCoreEcologyAggregateChorusEvents({
+      patch: quiet,
+      tick: current.tick,
+    })).toEqual([]);
+    const offCadence = fixture("rain", 900_000, 1, 1);
+    expect(deriveCoreEcologyAggregateChorusEvents({
+      patch: offCadence.patch,
+      tick: offCadence.tick,
+    })).toEqual([]);
+  });
+
+  it("groups repetition by aggregate while each cadence tick remains an exact event", () => {
+    const first = deriveCoreEcologyAggregateChorusEvents({
+      patch: fixture("rain", 900_000, 0, 1).patch,
+      tick: 0,
+    });
+    const later = deriveCoreEcologyAggregateChorusEvents({
+      patch: fixture("rain", 900_000, 24, 1).patch,
+      tick: 24,
+    });
+
+    expect(first).toHaveLength(1);
+    expect(later).toHaveLength(1);
+    expect(later?.[0]?.sourceId).toBe(first?.[0]?.sourceId);
+    expect(later?.[0]?.repetitionKey).toBe(first?.[0]?.repetitionKey);
+    expect(later?.[0]?.eventId).not.toBe(first?.[0]?.eventId);
+    expect(later?.[0]?.triggerEventId).not.toBe(first?.[0]?.triggerEventId);
+    expect(later?.[0]?.occurredAtTick).toBe(24);
+  });
+
   it("projects one anonymous deterministic stereo chorus only through shared hearing", () => {
     const current = fixture("rain", 900_000, 0, 1);
     const before = serializeCoreEcologyAggregatePatch(current.patch);
@@ -43,59 +208,42 @@ describe("aggregate ecology heard cues", () => {
 
     expect(first).toEqual(replay);
     expect(first).toHaveLength(1);
-    expect(first?.[0]).toMatchObject({
-      cue: "frog-chorus",
-      caption: "[chorus nearby — direction unclear]",
-    });
+    expect(first?.[0]).not.toHaveProperty("cue");
+    expect(first?.[0]).not.toHaveProperty("caption");
     expect(first?.[0]?.pan).toBeGreaterThan(0);
     expect(first?.[0]?.contact.certainty).toBeGreaterThan(0);
-    expect(first?.[0]?.caption).not.toMatch(/frog/iu);
+    expect(first?.[0]?.observation).toMatchObject({
+      observerId: current.player.actorId,
+      channel: "hearing",
+      perceivedClass: "animal-call",
+      subjectId: null,
+      identification: "anonymous",
+      interrupt: "none",
+    });
+    expect(first?.[0]?.observation).not.toHaveProperty("sourceId");
+    expect(first?.[0]?.observation).not.toHaveProperty("sourcePosition");
     expect(JSON.stringify(first)).not.toContain("FROG-AREA");
     expect(JSON.stringify(first)).not.toContain("aggregateId");
     expect(serializeCoreEcologyAggregatePatch(current.patch)).toBe(before);
   });
 
-  it("keeps the anonymous caption and stereo rooted in one heard-bearing contact", () => {
+  it("keeps stereo rooted in the same anonymous heard-bearing contact", () => {
     const westward = projectCoreEcologyAggregateHeardCues(
       fixture("rain", 900_000, 0, -1),
     );
 
-    expect(westward?.[0]).toMatchObject({
-      caption: "[chorus nearby — direction unclear]",
-    });
     expect(westward?.[0]?.pan).toBeLessThan(0);
-    expect(westward?.[0]?.caption).not.toMatch(/frog/iu);
+    expect(westward?.[0]).not.toHaveProperty("caption");
   });
 
-  it("qualifies uncertain and co-located bearings instead of inventing a cardinal fact", () => {
-    expect(coreEcologyChorusDirection({
-      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI },
-      distanceBand: { minimum: 0, maximum: 0 },
-      certainty: 1,
-    })).toBe("all around");
-    expect(coreEcologyChorusDirection({
-      bearing: { centerRadians: 0, uncertaintyRadians: (3 * Math.PI) / 4 },
-      distanceBand: { minimum: 1, maximum: 10 },
-      certainty: 0.2,
-    })).toBe("direction unclear");
-    expect(coreEcologyChorusDirection({
-      bearing: { centerRadians: Math.PI / 8, uncertaintyRadians: 0.001 },
-      distanceBand: { minimum: 1, maximum: 2 },
-      certainty: 0.99,
-    })).toBe("direction unclear");
-    expect(coreEcologyChorusDirection({
-      bearing: { centerRadians: 0, uncertaintyRadians: 0.001 },
-      distanceBand: { minimum: 1, maximum: 2 },
-      certainty: 0.99,
-    })).toBe("east");
-
+  it("keeps a co-located chorus centered without inventing a separate caption", () => {
     const coLocated = projectCoreEcologyAggregateHeardCues(
       fixture("clear", 0, 0, 0),
     );
     expect(coLocated?.[0]).toMatchObject({
-      caption: "[chorus nearby — all around]",
       pan: 0,
     });
+    expect(coLocated?.[0]).not.toHaveProperty("caption");
   });
 
   it("lets rain mask a distant chorus and keeps emission cadence bounded", () => {
@@ -161,7 +309,14 @@ function fixture(
   const frogs = patch.aggregatePopulations.find(({ species }) => (
     species === "southern-leopard-frog"
   ));
-  const anchor = frogs?.anchors[0];
+  const anchor = frogs === undefined
+    ? undefined
+    : [...frogs.anchors]
+        .filter(({ populationUnits }) => populationUnits > 0)
+        .sort((left, right) => (
+          right.populationUnits - left.populationUnits
+          || left.anchorOrdinal - right.anchorOrdinal
+        ))[0];
   if (frogs === undefined || anchor === undefined) {
     throw new Error("Aggregate audio fixture requires a frog anchor");
   }

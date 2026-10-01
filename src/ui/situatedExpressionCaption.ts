@@ -74,6 +74,16 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
     return `[${sound} somewhere ${caption.directionLabel}.]`;
   }
   if (caption.presentationKind === "animal-call") {
+    if (caption.animalCallKind === "chorus") {
+      if (caption.directionLabel === undefined) return "[A chorus sounds.]";
+      if (caption.directionLabel === "all around") {
+        return "[A chorus sounds; the sound seems all around.]";
+      }
+      if (caption.directionLabel === "direction unclear") {
+        return "[A chorus sounds; direction unclear.]";
+      }
+      return `[A chorus sounds somewhere ${caption.directionLabel}.]`;
+    }
     const subject = caption.animalCallKind === "fish-crow-call"
       ? "A fish crow"
       : caption.animalCallKind === "bird-call"

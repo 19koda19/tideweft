@@ -49,6 +49,84 @@ function traversalInput(
 }
 
 describe("structured world acoustics", () => {
+  it("retains an explicit animal-call class for an actor-vocalization chorus", () => {
+    const chorusInput = {
+      triggerEventId: "ecology:aggregate:marsh-frog-chorus:411",
+      domain: "actor-vocalization",
+      sourceId: "aggregate:marsh-frog-chorus",
+      sourceCategory: "animal",
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+      action: "vocalize",
+      sourceMaterial: "body",
+      surfaceMaterial: "water",
+      semanticFamily: "chorus",
+      soundClass: "animal-call",
+      interrupt: "none",
+      intensity: 780_000,
+      rangeUnits: 24_000,
+      durationSteps: 24,
+      priority: 360_000,
+      salience: 440_000,
+      repetitionKey: "aggregate-call:marsh-frog-chorus",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "informative",
+      variantSeed: 0x1357_2468,
+    } as const;
+    const chorus = createWorldAcousticEvent(chorusInput);
+    const ordinaryContact = createWorldAcousticEvent({
+      triggerEventId: "ecology:contact:rustle:411",
+      domain: "animal-contact",
+      sourceId: "A-v1-animal-contact",
+      sourceCategory: "animal",
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+      action: "brush",
+      sourceMaterial: "body",
+      surfaceMaterial: "foliage",
+      semanticFamily: "rustle",
+      intensity: 780_000,
+      rangeUnits: 12_000,
+      durationSteps: 8,
+      priority: 320_000,
+      salience: 360_000,
+      repetitionKey: "animal-contact:rustle",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "routine",
+      variantSeed: 0x2468_1357,
+    });
+
+    expect(chorus).toMatchObject({
+      domain: "actor-vocalization",
+      semanticFamily: "chorus",
+      soundClass: "animal-call",
+      interrupt: "none",
+    });
+    expect(ordinaryContact).toMatchObject({
+      semanticFamily: "rustle",
+      soundClass: "physical-rustle",
+      interrupt: "strong",
+    });
+    expect(createWorldAcousticEvent({
+      ...chorusInput,
+      domain: "animal-contact",
+    })).toBeNull();
+    expect(createWorldAcousticEvent({
+      ...chorusInput,
+      sourceCategory: "human",
+    })).toBeNull();
+    expect(createWorldAcousticEvent({
+      ...chorusInput,
+      semanticFamily: "rustle",
+    })).toBeNull();
+    expect(createWorldAcousticEvent({
+      ...chorusInput,
+      soundClass: "physical-rustle",
+    })).toBeNull();
+    const { soundClass: _omitted, ...chorusWithoutClass } = chorusInput;
+    expect(createWorldAcousticEvent(chorusWithoutClass)).toBeNull();
+  });
+
   it("maps a loose-rock slide to one stable scrape event without reading display prose", () => {
     const firstIncident = incident({ label: "THUD · entirely misleading prose" });
     const secondIncident = incident({ label: "splash splash splash" });

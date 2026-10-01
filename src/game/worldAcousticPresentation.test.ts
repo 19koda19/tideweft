@@ -12,6 +12,7 @@ import {
   createHeardVisibleWorldAcousticReception,
   createSelfWorldAcousticReception,
   projectWorldAcousticText,
+  realizeWorldAcousticText,
   type WorldAcousticPresentationReception,
 } from "./worldAcousticPresentation";
 import {
@@ -193,6 +194,41 @@ describe("world acoustic text projection", () => {
     expect(project(routine)).toBeNull();
     expect(project(informative)).toMatchObject({ text: "rustle" });
     expect(project(audioOnly)).toBeNull();
+  });
+
+  it("realizes an animal chorus as one restrained anonymous semantic", () => {
+    const chorus = event({
+      triggerEventId: "ecology:aggregate:chorus:heard",
+      domain: "actor-vocalization",
+      sourceId: "aggregate:private-frog-identity",
+      sourceCategory: "animal",
+      action: "vocalize",
+      sourceMaterial: "body",
+      surfaceMaterial: "mixed",
+      semanticFamily: "chorus",
+      soundClass: "animal-call",
+      interrupt: "none",
+      intensity: 460_000,
+      priority: 480_000,
+      salience: 650_000,
+      repetitionKey: "aggregate-chorus:anonymous",
+      accessibilityRelevance: "informative",
+    });
+
+    expect(realizeWorldAcousticText(chorus, 3)).toEqual({
+      text: "chorus",
+      tone: "restrained",
+      priority: 480_000,
+      salience: 650_000,
+      semanticFamily: "chorus",
+    });
+    expect(projectWorldAcousticText({
+      world: fixture().world,
+      event: chorus,
+      reception: createHeardVisibleWorldAcousticReception(chorus),
+      remainingSteps: 3,
+      tileSize: 24,
+    })).toBeNull();
   });
 
   it("fails closed outside the loaded window and on malformed lifetime or scale", () => {

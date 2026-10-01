@@ -330,7 +330,7 @@ export function physicalSoundSampleForAnimalContact(
     soundInterrupt: record.event.interrupt,
     soundLoudness: record.event.intensity,
     soundRangeUnits: record.event.rangeUnits,
-    sourceActorId: record.event.sourceId,
+    sourceId: record.event.sourceId,
   });
 }
 

@@ -433,6 +433,29 @@ describe("existing-human sensory bridge", () => {
     expect(observations.some(({ channel }) => channel === "vision")).toBe(false);
   });
 
+  it("hears a structured aggregate animal call without inventing an actor", () => {
+    const current = fixture("an aggregate chorus remains anonymous", { facing: "east" });
+    const chorus = physicalSoundSample(
+      "aggregate-chorus",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      "ecology-aggregate-source:opaque",
+      { soundClass: "animal-call" },
+    );
+
+    const heard = observationsFor(current, [], 1, [], [chorus])
+      .find(({ id }) => id.includes(chorus.id));
+    expect(heard).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "animal-call",
+      identification: "anonymous",
+      subjectId: null,
+    });
+    expect(heard).not.toHaveProperty("sourceId");
+    expect(heard).not.toHaveProperty("sourceActorId");
+    expect(heard).not.toHaveProperty("acousticEventId");
+  });
+
   it("hears a carried-tool crack from the bounded player sample without learning the tool", () => {
     const current = fixture("a broken cleat carries as sound, not inventory knowledge", {
       facing: "east",
@@ -1058,7 +1081,7 @@ function physicalSoundSample(
   id: string,
   tileX: number,
   tileY: number,
-  sourceActorId: string,
+  sourceId: string,
   overrides: Partial<Pick<PhysicalSoundSample,
     "soundClass" | "soundInterrupt" | "soundLoudness" | "soundRangeUnits">> = {},
 ): PhysicalSoundSample {
@@ -1070,7 +1093,7 @@ function physicalSoundSample(
     soundRangeUnits: overrides.soundRangeUnits ?? 12_000,
     soundClass: overrides.soundClass ?? "physical-rustle",
     soundInterrupt: overrides.soundInterrupt ?? "none",
-    sourceActorId,
+    sourceId,
   });
   if (!sample) throw new Error("test physical sound must be valid");
   return sample;

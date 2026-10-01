@@ -29,7 +29,10 @@ import {
   serializeCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
-import { projectCoreEcologyAggregateHeardCues } from "./coreEcologyAggregateAudio";
+import {
+  deriveCoreEcologyAggregateChorusEvents,
+  projectCoreEcologyAggregateHeardCues,
+} from "./coreEcologyAggregateAudio";
 import { deriveCoreEcologySettlementShadowsStimulusFrame } from "./coreEcologyAggregatePerception";
 import {
   CORE_ECOLOGY_RAIN_CHORUS_HABITAT_MAX_ALLOCATIONS,
@@ -300,7 +303,14 @@ describe("Rain Chorus / Shadow Overhead integration", () => {
     const frogs = initialPatch.aggregatePopulations.find(({ species }) => (
       species === "southern-leopard-frog"
     ));
-    const anchor = frogs?.anchors[0];
+    const anchor = frogs === undefined
+      ? undefined
+      : [...frogs.anchors]
+          .filter(({ populationUnits }) => populationUnits > 0)
+          .sort((left, right) => (
+            right.populationUnits - left.populationUnits
+            || left.anchorOrdinal - right.anchorOrdinal
+          ))[0];
     if (frogs === undefined || anchor === undefined) {
       throw new Error("Rain-chorus integration fixture requires one frog area anchor");
     }
@@ -395,20 +405,40 @@ describe("Rain Chorus / Shadow Overhead integration", () => {
       audibleRain.frame,
     );
     if (audibleStep === null) throw new Error("Audible rain chorus step failed");
+    const chorusEvents = deriveCoreEcologyAggregateChorusEvents({
+      patch: audibleStep.patch,
+      tick: chorusTick,
+    });
+    const chorusEvent = chorusEvents?.[0];
+    if (chorusEvent === undefined) throw new Error("Audible rain chorus event was absent");
+    const heardEnvironment = aggregateWeatherEnvironment(
+      audibleStep.patch,
+      chorusEvent.sourcePosition,
+      chorusTick,
+      "rain",
+      820_000,
+    );
+    const heardPlayer = createLivingActorAddress({
+      actorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
+      species: "human",
+      position: translateWorldPosition(
+        chorusEvent.sourcePosition,
+        -WORLD_POSITION_UNITS_PER_TILE,
+        0,
+      ),
+      persistence: "promoted",
+    });
     const heard = projectCoreEcologyAggregateHeardCues({
       patch: audibleStep.patch,
-      player,
+      player: heardPlayer,
       tick: chorusTick,
-      window: audibleRain.window,
-      world: audibleRain.world,
+      window: heardEnvironment.window,
+      world: heardEnvironment.world,
     });
     expect(heard).toHaveLength(1);
-    expect(heard?.[0]).toMatchObject({
-      cue: "frog-chorus",
-      caption: "[chorus nearby — direction unclear]",
-    });
     expect(heard?.[0]?.pan).toBeGreaterThan(0);
-    expect(heard?.[0]?.caption).not.toMatch(/frog/iu);
+    expect(heard?.[0]).not.toHaveProperty("cue");
+    expect(heard?.[0]).not.toHaveProperty("caption");
     expect(JSON.stringify(heard)).not.toContain(frogs.aggregateId);
     expect(JSON.stringify(heard)).not.toContain("actorId");
   });

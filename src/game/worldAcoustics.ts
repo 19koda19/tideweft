@@ -84,6 +84,7 @@ export const ACOUSTIC_SEMANTIC_FAMILIES = Object.freeze([
   "creak",
   "crack",
   "skitter",
+  "chorus",
   "vocalization",
   "other",
 ] as const);
@@ -94,6 +95,22 @@ export type AcousticTextEligibility = "audio-only" | "salience-gated";
 export type AcousticAccessibilityRelevance = "routine" | "informative" | "urgent";
 export type AcousticInterrupt = "none" | "strong";
 export type PhysicalSoundClass = `physical-${AcousticSemanticFamily}`;
+export type WorldAcousticSoundClass = PhysicalSoundClass | "animal-call";
+
+/** Closed world-acoustic vocabulary shared by producers and hearing consumers. */
+export const WORLD_ACOUSTIC_SOUND_CLASSES: readonly WorldAcousticSoundClass[] = Object.freeze([
+  ...ACOUSTIC_SEMANTIC_FAMILIES.map(
+    (family): PhysicalSoundClass => `physical-${family}`,
+  ),
+  "animal-call",
+]);
+const WORLD_ACOUSTIC_SOUND_CLASS_SET = new Set<unknown>(WORLD_ACOUSTIC_SOUND_CLASSES);
+
+export function isWorldAcousticSoundClass(
+  value: unknown,
+): value is WorldAcousticSoundClass {
+  return WORLD_ACOUSTIC_SOUND_CLASS_SET.has(value);
+}
 
 /**
  * One immutable source event. It contains no prose and makes no layout choice;
@@ -117,7 +134,7 @@ export interface WorldAcousticEvent {
   readonly force: AcousticForceBand;
   readonly rangeUnits: number;
   readonly durationSteps: number;
-  readonly soundClass: PhysicalSoundClass;
+  readonly soundClass: WorldAcousticSoundClass;
   readonly interrupt: AcousticInterrupt;
   readonly priority: number;
   readonly salience: number;
@@ -139,6 +156,10 @@ export interface WorldAcousticEventInput {
   readonly sourceMaterial: AcousticMaterialClass;
   readonly surfaceMaterial: AcousticMaterialClass;
   readonly semanticFamily: AcousticSemanticFamily;
+  /** Optional perception class override for non-contact acoustic semantics. */
+  readonly soundClass?: WorldAcousticSoundClass;
+  /** Optional semantic interrupt policy; loudness remains independent authority. */
+  readonly interrupt?: AcousticInterrupt;
   readonly intensity: number;
   readonly rangeUnits: number;
   readonly durationSteps: number;
@@ -230,6 +251,11 @@ export function createWorldAcousticEvent(
     || !ACOUSTIC_MATERIAL_CLASSES.includes(input.sourceMaterial)
     || !ACOUSTIC_MATERIAL_CLASSES.includes(input.surfaceMaterial)
     || !ACOUSTIC_SEMANTIC_FAMILIES.includes(input.semanticFamily)
+    || (input.soundClass !== undefined && !isWorldAcousticSoundClass(input.soundClass))
+    || !soundClassMatchesSemantics(input)
+    || (input.interrupt !== undefined
+      && input.interrupt !== "none"
+      && input.interrupt !== "strong")
     || !fixedUnit(input.intensity)
     || !positiveSafeInteger(input.rangeUnits)
     || !positiveSafeInteger(input.durationSteps)
@@ -279,8 +305,8 @@ export function createWorldAcousticEvent(
     force: forceBand(input.intensity),
     rangeUnits: input.rangeUnits,
     durationSteps: input.durationSteps,
-    soundClass: `physical-${input.semanticFamily}`,
-    interrupt: input.intensity >= 700_000 ? "strong" : "none",
+    soundClass: input.soundClass ?? `physical-${input.semanticFamily}`,
+    interrupt: input.interrupt ?? (input.intensity >= 700_000 ? "strong" : "none"),
     priority: input.priority,
     salience: input.salience,
     repetitionKey: input.repetitionKey,
@@ -288,6 +314,23 @@ export function createWorldAcousticEvent(
     accessibilityRelevance: input.accessibilityRelevance,
     presentationVariantSeed,
   });
+}
+
+function soundClassMatchesSemantics(input: WorldAcousticEventInput): boolean {
+  if (input.semanticFamily === "chorus") {
+    return input.soundClass === "animal-call"
+      && input.domain === "actor-vocalization"
+      && input.sourceCategory === "animal"
+      && input.action === "vocalize";
+  }
+  if (input.soundClass === undefined) return true;
+  if (input.soundClass === "animal-call") {
+    return input.domain === "actor-vocalization"
+      && input.sourceCategory === "animal"
+      && input.action === "vocalize"
+      && input.semanticFamily === "vocalization";
+  }
+  return input.soundClass === `physical-${input.semanticFamily}`;
 }
 
 /**

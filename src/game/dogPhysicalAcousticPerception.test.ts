@@ -89,7 +89,7 @@ describe("dog physical-acoustic perception bridge", () => {
       soundInterrupt: "none",
       soundLoudness: FIXED_POINT,
       soundRangeUnits: 10_000,
-      sourceActorId: "A-v1-dog-acoustic-source",
+      sourceId: "A-v1-dog-acoustic-source",
     });
     const outsideSensitivityBoundary = createPhysicalSoundSample({
       acousticEventId: "acoustic:dog-contact:outside-sensitivity-boundary",
@@ -99,7 +99,7 @@ describe("dog physical-acoustic perception bridge", () => {
       soundInterrupt: "none",
       soundLoudness: FIXED_POINT,
       soundRangeUnits: 10_000,
-      sourceActorId: "A-v1-dog-acoustic-source-2",
+      sourceId: "A-v1-dog-acoustic-source-2",
     });
     if (atSensitivityBoundary === null || outsideSensitivityBoundary === null) {
       throw new Error("Dog physical-acoustic samples were malformed");
@@ -134,6 +134,27 @@ describe("dog physical-acoustic perception bridge", () => {
       ...validInput,
       physicalSoundSamples: [null as never],
     })).toBeNull();
+    const chorus = createPhysicalSoundSample({
+      acousticEventId: "acoustic:actor-vocalization:aggregate-chorus",
+      id: "aggregate-chorus",
+      position: createWorldPosition(region, 35_000, 30_500),
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      soundLoudness: FIXED_POINT,
+      soundRangeUnits: 10_000,
+      sourceId: "ecology-aggregate-source:opaque",
+    });
+    if (chorus === null) throw new Error("Dog aggregate-chorus sample was malformed");
+    expect(collectDogPhysicalAcousticObservationBatches({
+      ...validInput,
+      physicalSoundSamples: [chorus],
+    })?.[0]?.observations).toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      perceivedClass: "animal-call",
+      identification: "anonymous",
+      subjectId: null,
+      interrupt: "none",
+    }));
 
     const sourceTileIndex = 30 * world.terrain.width + 40;
     const listenerTileIndex = 30 * world.terrain.width + 30;

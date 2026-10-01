@@ -22,8 +22,8 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 import {
-  ACOUSTIC_SEMANTIC_FAMILIES,
-  type PhysicalSoundClass,
+  isWorldAcousticSoundClass,
+  type WorldAcousticSoundClass,
 } from "./worldAcoustics";
 
 export const PHYSICAL_ACOUSTIC_MAX_SAMPLES = 8 as const;
@@ -33,11 +33,8 @@ export const PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS =
 const HEARING_AREA_MAX_RADIUS_UNITS = 10_000_000;
 const LOCAL_WATER_MASK_RADIUS_TILES = 2;
 const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
-const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
+const SOURCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const ACOUSTIC_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
-const PHYSICAL_SOUND_CLASSES = new Set<string>(
-  ACOUSTIC_SEMANTIC_FAMILIES.map((family) => `physical-${family}`),
-);
 // Canonical samples are reused across every bounded listener in a frame. Keep
 // their validation authority private so hot hearing loops do not repeatedly
 // copy, sort, and freeze the same already-authenticated stimulus.
@@ -50,9 +47,9 @@ export interface PhysicalSoundSample {
   /** Fixed-point 0..1 source loudness; zero means no sound. */
   readonly soundLoudness: number;
   readonly soundRangeUnits: number;
-  readonly soundClass: PhysicalSoundClass;
+  readonly soundClass: WorldAcousticSoundClass;
   readonly soundInterrupt: ObservationInterrupt;
-  readonly sourceActorId: string;
+  readonly sourceId: string;
   /** Committed world-acoustic fact; never exposed as perceived identity. */
   readonly acousticEventId: string;
 }
@@ -100,7 +97,7 @@ export function createPhysicalSoundSample(
     "soundInterrupt",
     "soundLoudness",
     "soundRangeUnits",
-    "sourceActorId",
+    "sourceId",
   ])
     || typeof value.id !== "string"
     || !SAMPLE_ID_PATTERN.test(value.id)
@@ -108,9 +105,9 @@ export function createPhysicalSoundSample(
     || !fixedUnit(value.soundLoudness)
     || !nonnegativeSafeInteger(value.soundRangeUnits)
     || value.soundRangeUnits > PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS
-    || !isPhysicalSoundClass(value.soundClass)
+    || !isWorldAcousticSoundClass(value.soundClass)
     || (value.soundInterrupt !== "none" && value.soundInterrupt !== "strong")
-    || !validActorId(value.sourceActorId)
+    || !validSourceId(value.sourceId)
     || !validAcousticEventId(value.acousticEventId)
   ) return null;
   const sample = Object.freeze({
@@ -125,7 +122,7 @@ export function createPhysicalSoundSample(
     soundRangeUnits: value.soundRangeUnits,
     soundClass: value.soundClass,
     soundInterrupt: value.soundInterrupt,
-    sourceActorId: value.sourceActorId,
+    sourceId: value.sourceId,
   });
   CANONICAL_PHYSICAL_SOUND_SAMPLES.add(sample);
   return sample;
@@ -164,7 +161,7 @@ export function evaluatePhysicalAcousticListener(
   const sample = createPhysicalSoundSample(value.sample as PhysicalSoundSample);
   if (sample === null || value.effectiveRangeUnits > sample.soundRangeUnits) return null;
   if (
-    sample.sourceActorId === value.observerId
+    sample.sourceId === value.observerId
     || sample.soundLoudness <= 0
     || value.effectiveRangeUnits <= 0
   ) return NOT_HEARD;
@@ -358,15 +355,15 @@ function nonnegativeSafeInteger(value: unknown): value is number {
 }
 
 function validActorId(value: unknown): value is string {
-  return typeof value === "string" && ACTOR_ID_PATTERN.test(value);
+  return validSourceId(value);
+}
+
+function validSourceId(value: unknown): value is string {
+  return typeof value === "string" && SOURCE_ID_PATTERN.test(value);
 }
 
 function validAcousticEventId(value: unknown): value is string {
   return typeof value === "string" && ACOUSTIC_EVENT_ID_PATTERN.test(value);
-}
-
-function isPhysicalSoundClass(value: unknown): value is PhysicalSoundClass {
-  return typeof value === "string" && PHYSICAL_SOUND_CLASSES.has(value);
 }
 
 function sameWorldPosition(left: WorldPosition, right: WorldPosition): boolean {

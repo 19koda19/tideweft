@@ -27,6 +27,7 @@ import { residentIntroductionExpressionIntent } from "./residentIntroductionExpr
 import { projectUIView } from "./uiProjection";
 import {
   createHeardUnseenWorldAcousticReception,
+  createHeardVisibleWorldAcousticReception,
   createSelfWorldAcousticReception,
 } from "./worldAcousticPresentation";
 import {
@@ -112,6 +113,39 @@ function acousticEvent(
     variantSeed: 0x51de,
   });
   if (event === null) throw new Error("acoustic event fixture was rejected");
+  return event;
+}
+
+function chorusAcousticEvent(
+  sourcePosition: WorldPosition,
+  priority: number,
+  salience: number,
+  triggerEventId = `chorus:${priority}:${salience}`,
+): WorldAcousticEvent {
+  const event = createWorldAcousticEvent({
+    triggerEventId,
+    domain: "actor-vocalization",
+    sourceId: "aggregate:private-frog-identity",
+    sourceCategory: "animal",
+    sourcePosition,
+    occurredAtTick: 0,
+    action: "vocalize",
+    sourceMaterial: "body",
+    surfaceMaterial: "mixed",
+    semanticFamily: "chorus",
+    soundClass: "animal-call",
+    interrupt: "none",
+    intensity: 520_000,
+    rangeUnits: 20_000,
+    durationSteps: 8,
+    priority,
+    salience,
+    repetitionKey: "aggregate-chorus:anonymous",
+    textualEligibility: "salience-gated",
+    accessibilityRelevance: "informative",
+    variantSeed: 0xc407,
+  });
+  if (event === null) throw new Error("chorus acoustic event fixture was rejected");
   return event;
 }
 
@@ -219,6 +253,43 @@ describe("UI acoustic-caption arbitration", () => {
     });
   });
 
+  it("presents a heard-unseen aggregate chorus as one anonymous directional animal call", () => {
+    const context = fixture();
+    const event = chorusAcousticEvent(context.sourcePosition, 520_000, 740_000);
+    const caption = projectUIView(context.world, context.player, context.session, {
+      economyWorld: context.compatibility,
+      worldAcousticEvent: event,
+      worldAcousticRemainingSteps: 5,
+      worldAcousticReception: createHeardUnseenWorldAcousticReception(event, {
+        bearing: { centerRadians: 0.05, uncertaintyRadians: 0.1 },
+        distanceBand: { minimum: 2_000, maximum: 8_000 },
+        certainty: 0.72,
+      }),
+    }).expressionCaption;
+
+    expect(caption).toEqual({
+      id: event.eventId,
+      speakerLabel: "Sound",
+      text: "chorus",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "chorus",
+      directionLabel: "east",
+      assertive: false,
+    });
+    expect(caption).not.toHaveProperty("physicalSoundKind");
+    expect(caption).not.toHaveProperty("sourceId");
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toMatch(/frog|aggregate:private/iu);
+
+    expect(projectUIView(context.world, context.player, context.session, {
+      economyWorld: context.compatibility,
+      worldAcousticEvent: event,
+      worldAcousticRemainingSteps: 5,
+      worldAcousticReception: createHeardVisibleWorldAcousticReception(event),
+    }).expressionCaption).toBeUndefined();
+  });
+
   it("never projects personalized introduction facts through heard-unseen reception", () => {
     const context = fixture();
     const resident = context.state.residents[0];
@@ -288,6 +359,35 @@ describe("UI acoustic-caption arbitration", () => {
       worldAcousticEvent: scrape,
       worldAcousticRemainingSteps: 5,
       worldAcousticReception: scrapeReception,
+    }).expressionCaption).toMatchObject({
+      id: warning.eventId,
+      presentationKind: "speech",
+      speakerLabel: "You",
+      tone: "alarmed",
+    });
+  });
+
+  it("keeps a critical warning over a more salient but lower-priority chorus", () => {
+    const context = fixture();
+    const warning = expression(context.sourcePosition, 900_000, 700_000, true);
+    const warningReception = createSelfSituatedExpressionReception(warning, 0);
+    const chorus = chorusAcousticEvent(context.sourcePosition, 899_999, 1_000_000);
+    const chorusReception = createHeardUnseenWorldAcousticReception(chorus, {
+      bearing: { centerRadians: 0.05, uncertaintyRadians: 0.1 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.72,
+    });
+    if (warningReception === null || chorusReception === null) {
+      throw new Error("caption arbitration reception was rejected");
+    }
+
+    expect(projectUIView(context.world, context.player, context.session, {
+      economyWorld: context.compatibility,
+      situatedExpression: warning,
+      situatedExpressionReception: warningReception,
+      worldAcousticEvent: chorus,
+      worldAcousticRemainingSteps: 5,
+      worldAcousticReception: chorusReception,
     }).expressionCaption).toMatchObject({
       id: warning.eventId,
       presentationKind: "speech",

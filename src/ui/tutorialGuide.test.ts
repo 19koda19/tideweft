@@ -696,7 +696,9 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("Gnaw marks, small tracks, and shelter signs");
     expect(copy).toContain("never reveals an exact count, hidden anchor, pressure value, cause, or individual rat identity");
     expect(copy).toContain("fish-crow double call");
-    expect(copy).toContain("shared directional hearing from its actual strongest heard anchor");
+    expect(copy).toContain("one bounded group sound from a deterministic occupied part");
+    expect(copy).toContain("same directional hearing as other world acoustics");
+    expect(copy).toContain("never reveals the hidden aggregate or exact anchor");
     expect(copy).toContain("rain can both stir it and mask the sound");
     expect(copy).toContain("caption remains anonymous");
     expect(copy).toContain("direction unclear or all around");

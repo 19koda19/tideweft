@@ -309,6 +309,27 @@ hearing and localization. Humans retain only physical-sound knowledge and no
 strong interruption. This does not make arbitrary rabbit locomotion, broad
 non-dog animal contact, or the remaining species repertoires complete.
 
+The current unpublished candidate also replaces the frog chorus's former
+ecology-only sound-and-announcement route with the shared acoustic world. Every
+qualifying 24-tick `rain-chorus` cadence derives one structured anonymous
+`animal-call` event per conserved frog aggregate, never one call per frog or
+anchor. The largest occupied anchor represents the distributed population for
+that occurrence, with lowest stable ordinal breaking a tie, while opaque stable
+source/repetition identity remains aggregate-owned and the occurrence keeps its
+own event identity. When its sample is admitted to the shared eight-input
+budget, the same non-interrupting event can feed human and dog hearing through
+the shared weather/water-masked evaluator; saturation leaves the chorus
+unoffered rather than exceeding the bound. For a lawful awake player receipt,
+the event drives stereo audio plus Living Voice's single accessible caption
+slot. The caption says only **chorus** and a coarse direction supported
+by the uncertain contact; it does not invent a visible actor or Chart/Relief
+world label. Speech and warnings retain priority, caption saturation cannot
+erase audio or already-admitted actor hearing, and the old session
+announcement/direct playback bypass is gone. Loading does not replay player
+audio or caption state. An admitted next-interval actor sample can arise only by
+deterministic re-derivation from the current ecology patch, not restoration of
+an ephemeral event queue.
+
 The player's sparse dry-exhaustion murmur is the vocal consequence of a
 committed movement-and-stamina transition, not a footstep caption. It uses the
 shared situated-expression channel, self reception, acoustic sample, bounded
@@ -998,7 +1019,7 @@ conservation, migration/replay properties, bounded performance, and one
 representative visible-yard composition—not a species-by-species or N² test
 matrix.
 
-The frog aggregate conserves 64–72 units across no more than three suitable wetland anchors. Rain raises its bounded activity while lawful nearby pressure can quiet it or redistribute at most one existing unit on the fixed opportunity. Marsh-fox pressure reaches it through the same small-prey trophic rule as the rat aggregate; nearby rabbit presence remains neutral. The same rain that encourages chorus also masks hearing, so an extant strongest audible anchor may produce one directional stereo chorus and an anonymous nearby/distant caption with a coarse direction derived from that same heard bearing. The current caption says only **chorus**, not **frog**, and discloses neither aggregate identity, exact location, nor hidden population count. Weather alone cannot create, kill, duplicate, or reroll frogs.
+The frog aggregate conserves 64–72 units across no more than three suitable wetland anchors. Rain raises its bounded activity while lawful nearby pressure can quiet it or redistribute at most one existing unit on the fixed opportunity. Marsh-fox pressure reaches it through the same small-prey trophic rule as the rat aggregate; nearby rabbit presence remains neutral. In the current unpublished candidate, each qualifying 24-tick activity cadence derives exactly one structured group acoustic event for the aggregate at its largest occupied anchor, using the lowest stable ordinal to break a tie; it never creates a call per unit or anchor. The same rain that encourages chorus also contributes to listener-local masking. A lawful awake player may therefore hear one directional stereo chorus and a shared Living Voice caption whose text says only **chorus** plus no more direction than the uncertain receipt supports. When admitted to the shared bounded input, nearby humans and eligible full-simulation in-window dogs evaluate the same anonymous `animal-call` sample through ordinary hearing. The event is explicitly non-interrupting, discloses neither frog nor aggregate identity, exact location, nor hidden population count, and never fabricates a frog actor. Player audio and caption state are not saved or replayed; next-interval actor input can only be re-derived from the authoritative ecology patch. Weather alone cannot create, kill, duplicate, or reroll frogs.
 
 The Tide Table derives each saved tidal anchor's current depth from its baseline elevation and the target tick's authoritative tide. An Atlantic-silverside school evacuates any drying anchor into an existing saved wet refuge immediately; ordinary ebb/flood redistribution moves at most one conserved unit on a fixed opportunity. Atlantic-marsh-fiddler-crab activity emerges or retreats as mudflat inundation changes. A snowy egret uses only current depth-safe wading edges and one saved dry refuge. In daylight it holds or returns to refuge unless shared vision supplies a current anonymous aquatic-activity observation, after which ordinary aerial locomotion can move it toward that observed edge. A lawfully visible egret may exert shared wader pressure on either tidal aggregate, but the result remains conserved avoidance. No interaction captures, injures, kills, consumes, creates a carcass, implements fishing, or touches cargo. Surface dimples, brief school glints, burrow openings, and feeding scrapes become selectable close ABOUT evidence only through current direct-detail sight and reveal neither a hidden count nor a fake fish or crab actor.
 
@@ -1055,13 +1076,16 @@ not increase the existing materialization ceiling or population totals.
 At the released Alpha 17 boundary, player-facing rat rustles, domestic-cat
 calls, rabbit thumps, fox yips, and fish-crow double calls occurred only for
 activity visible at event time. The current unpublished Living Voice candidate
-leaves the first four cue boundaries unchanged but supersedes witnessed-only
-fish-crow alarm playback with source-bound audible reception: direct sight may
-anchor the exact call, while heard-unseen reception remains bird-generic and
-directional. The frog chorus instead passes through shared directional hearing
-from its actual aggregate anchor. Its anonymous bottom-right caption and
-attenuated stereo pan derive from the same heard-bearing uncertainty; it names
-a cardinal direction only when that contact supports one. The northern harrier,
+supersedes witnessed-only fish-crow alarm playback with source-bound audible
+reception: direct sight may anchor the exact call, while heard-unseen reception
+remains bird-generic and directional. It also moves the frog chorus out of the
+legacy ecology announcement route: ecology now creates one aggregate-owned
+world acoustic event on each qualifying cadence, and the shared listener
+evaluator supplies its anonymous human/dog hearing and player heard-unseen
+receipt. Attenuated stereo pan and the accessible **chorus** caption derive from
+the same uncertainty; the caption names a cardinal direction only when that
+contact supports one and never becomes an actor-anchored world callout. The
+northern harrier,
 snowy egret,
 American black duck, North American river otter, wild boar, elk, gray wolf,
 cougar, and brown bear have no fabricated calls. Wild boar, elk, and gray wolf
