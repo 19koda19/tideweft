@@ -170,7 +170,8 @@ export interface CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
 export type CoreWildlifeAlarmExpressionSpecies =
   | "fish-crow"
   | "deer"
-  | "marsh-rabbit";
+  | "marsh-rabbit"
+  | "gull";
 
 /**
  * Current species-aware alarm admission. The legacy fish-crow-only record
@@ -1370,7 +1371,8 @@ function canonicalCoreWildlifeAlarmRecord(
     || value.kind !== "core-wildlife-alarm"
     || (value.sourceSpecies !== "fish-crow"
       && value.sourceSpecies !== "deer"
-      && value.sourceSpecies !== "marsh-rabbit")
+      && value.sourceSpecies !== "marsh-rabbit"
+      && value.sourceSpecies !== "gull")
     || !validId(value.sourceOwnerKey)
     || !validId(value.sourceObservationId)
     || !nonnegativeSafeInteger(value.acceptedAtTick)

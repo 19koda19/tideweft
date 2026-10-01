@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
   canonicalizeSituatedExpressionSemanticFact,
+  situatedExpressionAudioPresentation,
   situatedExpressionAcoustics,
   situatedExpressionSemanticFactForMemory,
   situatedExpressionSoundClass,
@@ -21,6 +22,8 @@ describe("situated expression acoustics", () => {
     expect(situatedExpressionSoundClass("fish-crow-alarm-call"))
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("deer-alarm-call"))
+      .toBe("animal-alarm");
+    expect(situatedExpressionSoundClass("gull-alarm-call"))
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("marsh-rabbit-alarm-thump"))
       .toBe("physical-thud");
@@ -51,6 +54,51 @@ describe("situated expression acoustics", () => {
       meaning: "fish-crow-alarm-call",
       volume: "shout",
     }).rangeUnits).toBeLessThan(situatedExpressionAcoustics("shout").rangeUnits);
+  });
+
+  it("keeps a gull cry on its core-ecology alarm envelope", () => {
+    expect(situatedExpressionAcoustics({
+      meaning: "gull-alarm-call",
+      volume: "shout",
+    })).toEqual({
+      loudness: 1_000_000,
+      rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundInterrupt({
+      meaning: "gull-alarm-call",
+      tone: "alarmed",
+      volume: "shout",
+    })).toBe("strong");
+  });
+
+  it("projects species-aware gull audio when optional retained expression is unavailable", () => {
+    const audio = situatedExpressionAudioPresentation({
+      meaning: "gull-alarm-call",
+      vocalization: "gull-alarm-cry",
+      volume: "shout",
+      variantSeed: 0x51a7,
+    }, {
+      certainty: 500_000,
+      pan: -0.25,
+    });
+    expect(audio).toMatchObject({
+      sound: {
+        kind: "vocalization",
+        vocalization: "gull-alarm-cry",
+      },
+      variantSeed: 0x51a7,
+      pan: -0.25,
+    });
+    expect(audio?.volume).toBeCloseTo(0.621, 12);
+    expect(situatedExpressionAudioPresentation({
+      meaning: "gull-alarm-call",
+      vocalization: "gull-alarm-cry",
+      volume: "shout",
+      variantSeed: 0x51a7,
+    }, {
+      certainty: 1_000_001,
+      pan: -0.25,
+    })).toBeNull();
   });
 
   it("keeps the marsh-rabbit thump on core ecology's soft small-prey envelope", () => {

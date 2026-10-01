@@ -298,6 +298,45 @@ describe("core-wildlife signal expression", () => {
     });
   });
 
+  it("derives one authenticated gull alarm without translating its threat", () => {
+    const { input, rawEvent } = alarmFixture("gull");
+    const first = coreWildlifeAlarmExpressionIntent(input);
+    const second = coreWildlifeAlarmExpressionIntent(structuredClone(input));
+
+    expect(first).not.toBeNull();
+    expect(second).toEqual(first);
+    expect(first).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      position: input.actor.address.position,
+      meaning: "gull-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 920_000,
+      durationSteps: 6,
+    });
+    expect(coreWildlifeAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), first);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "gull-alarm-call",
+        vocalization: "gull-alarm-cry",
+      },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "KEE-AH!",
+      realizationKey: "situated-expression.en.v1.gull-alarm-call.0",
+      vocalization: "gull-alarm-cry",
+    });
+    expect(JSON.stringify(reduction.event)).not.toContain("aerial-predator");
+    expect(JSON.stringify(reduction.event)).not.toContain("OBS-gull-sees-harrier");
+  });
+
   it("does not let expression repetition policy erase a distinct committed rabbit thump", () => {
     const { input } = alarmFixture(
       "marsh-rabbit",
@@ -457,7 +496,9 @@ describe("core-wildlife signal expression", () => {
     const gull = alarmFixture("gull");
 
     expect(fishCrowAlarmExpressionIntent(gull.input)).toBeNull();
-    expect(coreWildlifeAlarmExpressionIntent(gull.input)).toBeNull();
+    expect(coreWildlifeAlarmExpressionIntent(gull.input)).toMatchObject({
+      meaning: "gull-alarm-call",
+    });
     expect(deerAlarmExpressionIntent(crow.input)).toBeNull();
     expect(marshRabbitAlarmExpressionIntent(crow.input)).toBeNull();
     expect(deerAlarmExpressionIntent(rabbit.input)).toBeNull();

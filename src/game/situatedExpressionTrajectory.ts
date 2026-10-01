@@ -468,6 +468,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "guardian-dog-shelter-whine": return 8;
     case "fish-crow-alarm-call": return 6;
     case "deer-alarm-call": return 6;
+    case "gull-alarm-call": return 6;
     case "marsh-rabbit-alarm-thump": return 6;
     case "domestic-cat-rain-distress-call": return 6;
     case "marsh-fox-pursuit-yip": return 6;
@@ -511,6 +512,7 @@ function coreWildlifeAlarmMeaning(
   switch (species) {
     case "fish-crow": return "fish-crow-alarm-call";
     case "deer": return "deer-alarm-call";
+    case "gull": return "gull-alarm-call";
     case "marsh-rabbit": return "marsh-rabbit-alarm-thump";
   }
 }

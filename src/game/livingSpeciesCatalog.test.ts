@@ -453,6 +453,13 @@ describe("Living Weft species module catalog", () => {
       communicationSignals: ["fish-crow-alarm"],
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
+    expect(livingSpeciesModule("gull")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["gull-alarm-cry"],
+      communicationSignals: ["gull-alarm-cry"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
     expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:world-acoustics:v1",
@@ -479,7 +486,7 @@ describe("Living Weft species module catalog", () => {
       LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
     ];
     for (const catalog of releasedCatalogs) {
-      for (const speciesId of ["deer", "domestic-dog", "human"] as const) {
+      for (const speciesId of ["deer", "domestic-dog", "gull", "human"] as const) {
         expect(catalog.modules.find((module) => module.speciesId === speciesId)?.sound)
           .toEqual({
             implementation: "unimplemented",

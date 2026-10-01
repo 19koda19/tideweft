@@ -212,7 +212,7 @@ its transient `thump` text. Repetition control may keep successive text
 restrained, but every distinct ecology-committed thump remains an audible world
 event for lawful listeners.
 
-Either anonymous strong fish-crow or deer alarm may become ordinary human
+An anonymous strong fish-crow, deer, or gull alarm may become ordinary human
 knowledge before it becomes speech. At most one deterministic nearby resident
 who has a fresh, strongly attended direct predator sighting or anonymous
 animal-alarm belief may issue a short shouted warning from their actual
@@ -253,7 +253,7 @@ does not yet add general NPC conversation or a broad animal-expression system.
 
 The current unpublished status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
-signals, fish-crow/deer calls, the rabbit thump, and the frog chorus are live in
+signals, fish-crow/deer/gull calls, the rabbit thump, and the frog chorus are live in
 the candidate. The aggregate rat rustle and one exact domestic-cat rain-distress
 call are also live through the shared acoustic path; the cat representative
 requires a freshly committed rain-caused retreat plus matching rain memory and
@@ -263,7 +263,8 @@ materialized fox, current identified living prey, matching pursuit resource and
 memory, and committed fox locus. A visible fox may own **YIP.**; heard-unseen
 presentation stays the anonymous **CALL.**, and nearby humans learn no prey,
 pursuit, or source identity from sound alone. Renderer-polled resident state
-lines have been removed; the generic wildlife-alarm fallback remains a
+lines have been removed. The gull's real alarm has migrated, but the generic
+wildlife-alarm fallback remains for other unclaimed alarm sources as a
 compatibility bypass that does not prove world-event acoustics, listener receipt,
 or knowledge transfer. Future tool,
 violence, and vessel examples are contract fixtures only. General conversation,

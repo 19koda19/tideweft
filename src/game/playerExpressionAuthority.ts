@@ -518,6 +518,7 @@ function policyFor(
     case "domestic-cat-rain-distress-call":
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
+    case "gull-alarm-call":
     case "marsh-rabbit-alarm-thump":
     case "marsh-fox-pursuit-yip":
     case "human-danger-warning":

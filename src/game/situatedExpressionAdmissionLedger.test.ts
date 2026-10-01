@@ -383,6 +383,10 @@ describe("situated-expression admission ledger", () => {
       ...input,
       sourceSpecies: "marsh-rabbit",
     })).toMatchObject({ sourceSpecies: "marsh-rabbit" });
+    expect(createCoreWildlifeAlarmExpressionAdmissionRecord({
+      ...input,
+      sourceSpecies: "gull",
+    })).toMatchObject({ sourceSpecies: "gull" });
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       sourceSpecies: "elk",

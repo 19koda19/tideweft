@@ -147,6 +147,15 @@ function deerAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function gullAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowAlarmIntent(triggerEventId),
+    sourceActorId: "GULL-expression-test",
+    meaning: "gull-alarm-call",
+    variantSeed: 613,
+  };
+}
+
 function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     ...fishCrowAlarmIntent(triggerEventId),
@@ -546,6 +555,27 @@ describe("generic situated-expression kernel", () => {
       text: "SNORT!",
       realizationKey: "situated-expression.en.v1.deer-alarm-call.0",
       vocalization: "deer-alarm-snort",
+    });
+  });
+
+  it("registers the gull alarm through the shared animal-signal policy", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      gullAlarmIntent("GULL-expression-test:e:1:alarm"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "gull-alarm-call",
+        family: "animal-signal",
+        vocalization: "gull-alarm-cry",
+      },
+    });
+    if (reduction.event === null) throw new Error("Gull alarm was not accepted");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "KEE-AH!",
+      realizationKey: "situated-expression.en.v1.gull-alarm-call.0",
+      vocalization: "gull-alarm-cry",
     });
   });
 

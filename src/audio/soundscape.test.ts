@@ -80,6 +80,7 @@ describe("situated vocalization cues", () => {
       "vocalization-dog-shelter-whine",
       "vocalization-fish-crow-alarm",
       "vocalization-deer-alarm-snort",
+      "vocalization-gull-alarm-cry",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });

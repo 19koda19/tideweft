@@ -486,6 +486,7 @@ export function projectUIView(
     : animalCallKind(situatedExpressionEvent.meaning);
   const presentedAnimalCallKind = options.situatedExpressionReception?.kind === "heard-unseen"
     ? semanticAnimalCallKind === "fish-crow-call"
+      || semanticAnimalCallKind === "gull-call"
       ? "bird-call" as const
       : semanticAnimalCallKind === "deer-call"
         ? "animal-call" as const

@@ -74,7 +74,6 @@ import {
   TideweftSoundscape,
   spatialPanForBearing,
   type SoundCue,
-  type SituatedVocalizationCue,
   type WaterAmbienceState,
 } from "../audio/soundscape";
 import {
@@ -160,6 +159,7 @@ import {
 import type { FallRiskEvaluation } from "./fallRisk";
 import {
   SITUATED_EXPRESSION_VERSION,
+  situatedExpressionVocalizationFor,
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
   type SituatedExpressionMeaning,
@@ -228,6 +228,7 @@ import {
   type SituatedExpressionCausalAuthorityLedger,
 } from "./situatedExpressionCausalAuthority";
 import {
+  situatedExpressionAudioPresentation,
   situatedExpressionAcoustics,
   situatedExpressionSemanticFactForEvent,
   situatedExpressionSemanticFactForMemory,
@@ -276,15 +277,19 @@ import {
   type GuardianDogShelterWhineExpressionInput,
 } from "./dogSignalExpression";
 import {
+  coreWildlifeAlarmMeaningForSpecies,
   coreWildlifeAlarmExpressionEventForTrigger,
   coreWildlifeAlarmExpressionEventMatchesWorld,
   coreWildlifeAlarmExpressionIntent,
   coreWildlifeAlarmExpressionMemoryMatchesWorld,
   coreWildlifeAlarmExpressionPriority,
+  coreWildlifeAlarmSpeciesForMeaning,
   fishCrowAlarmExpressionEventForTrigger,
   fishCrowAlarmExpressionEventMatchesWorld,
   fishCrowAlarmExpressionMemoryMatchesWorld,
+  isExpressiveAlarmSpecies,
   type CoreWildlifeAlarmExpressionInput,
+  type ExpressiveAlarmSpecies,
 } from "./coreWildlifeSignalExpression";
 import {
   coreWildlifeWeatherDistressExpressionEventForTrigger,
@@ -1120,6 +1125,7 @@ function recentMeaningAcousticTuples(
     case "guardian-dog-warning":
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
+    case "gull-alarm-call":
     case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
@@ -1540,6 +1546,23 @@ interface CommittedAudioCue {
   readonly volume: number;
   readonly variantSeed: number;
   readonly pan: number;
+}
+
+function committedAudioCueForSituatedExpression(
+  expression: Parameters<typeof situatedExpressionAudioPresentation>[0],
+  reception: Parameters<typeof situatedExpressionAudioPresentation>[1],
+): CommittedAudioCue | null {
+  const presentation = situatedExpressionAudioPresentation(expression, reception);
+  if (presentation === null) return null;
+  const cue: SoundCue = presentation.sound.kind === "legacy-cue"
+    ? presentation.sound.cue
+    : `vocalization-${presentation.sound.vocalization}`;
+  return Object.freeze({
+    cue,
+    volume: presentation.volume,
+    variantSeed: presentation.variantSeed,
+    pan: presentation.pan,
+  });
 }
 
 function runtimePerformanceNow(): number {
@@ -2304,9 +2327,7 @@ function runtimeCoreWildlifeExpressionSources(
   for (const { patch } of runtimeRegionalEcologyProjectedSources(projection)) {
     for (const population of patch.populations) {
       if (
-        population.species !== "fish-crow"
-        && population.species !== "deer"
-        && population.species !== "marsh-rabbit"
+        !isExpressiveAlarmSpecies(population.species)
         && population.species !== "domestic-cat"
         && population.species !== "marsh-fox"
       ) continue;
@@ -6795,7 +6816,7 @@ function runtimeCoreWildlifeAlarmExpressionAuthority(
     triggerEventId: string;
     sourceObservationId: string;
     acceptedAtTick: number;
-    sourceSpecies: "fish-crow" | "deer" | "marsh-rabbit";
+    sourceSpecies: ExpressiveAlarmSpecies;
   }>,
 ): CoreWildlifeAlarmExpressionInput | null {
   const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
@@ -6973,7 +6994,7 @@ function coreWildlifeAlarmMemoryMatchesAdmission(
 
 function coreWildlifeAlarmAdmissionSpecies(
   admission: RuntimeCoreWildlifeAlarmAdmission,
-): "fish-crow" | "deer" | "marsh-rabbit" {
+): ExpressiveAlarmSpecies {
   return admission.kind === "core-wildlife-fish-crow-alarm"
     ? "fish-crow"
     : admission.sourceSpecies;
@@ -12317,6 +12338,7 @@ export async function createTideweftRuntime(
       && expression.meaning !== "guardian-dog-warning"
       && expression.meaning !== "fish-crow-alarm-call"
       && expression.meaning !== "deer-alarm-call"
+      && expression.meaning !== "gull-alarm-call"
       && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -12356,22 +12378,16 @@ export async function createTideweftRuntime(
   function playerDirectlyObservesExpressionSource(
     expression: Pick<SituatedExpressionIntent, "meaning" | "position" | "sourceActorId">,
   ): boolean {
+    const alarmSpecies = coreWildlifeAlarmSpeciesForMeaning(expression.meaning);
     if (
-      expression.meaning === "fish-crow-alarm-call"
-      || expression.meaning === "deer-alarm-call"
-      || expression.meaning === "marsh-rabbit-alarm-thump"
+      alarmSpecies !== null
       || expression.meaning === "domestic-cat-rain-distress-call"
       || expression.meaning === "marsh-fox-pursuit-yip"
     ) {
-      const expectedSpecies = expression.meaning === "fish-crow-alarm-call"
-        ? "fish-crow"
-        : expression.meaning === "deer-alarm-call"
-          ? "deer"
-          : expression.meaning === "domestic-cat-rain-distress-call"
-            ? "domestic-cat"
-            : expression.meaning === "marsh-fox-pursuit-yip"
-              ? "marsh-fox"
-            : "marsh-rabbit";
+      const expectedSpecies = alarmSpecies
+        ?? (expression.meaning === "domestic-cat-rain-distress-call"
+          ? "domestic-cat"
+          : "marsh-fox");
       const matchingActors = runtimeRegionalEcologyProjectedSources(
         projectActiveRegionalEcology(),
       ).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
@@ -12722,20 +12738,14 @@ export async function createTideweftRuntime(
         }
         pan = audibleContactPan(contact);
       }
-      const baseIntensity = event.volume === "shout"
-        ? 0.92
-        : event.volume === "spoken"
-          ? 0.68
-          : 0.42;
-      const intensity = baseIntensity * (0.35 + reception.certainty / FIXED_POINT * 0.65);
-      const cue: SoundCue = event.meaning === "marsh-rabbit-alarm-thump"
-        ? "rabbit-thump"
-        : event.meaning === "domestic-cat-rain-distress-call"
-          ? "cat-call"
-          : event.meaning === "marsh-fox-pursuit-yip"
-            ? "fox-yip"
-          : `vocalization-${event.vocalization}` as SituatedVocalizationCue;
-      return Object.freeze({ cue, volume: intensity, variantSeed: event.variantSeed, pan });
+      const audio = committedAudioCueForSituatedExpression(event, {
+        certainty: reception.certainty,
+        pan,
+      });
+      if (audio === null) {
+        throw new Error("Situated expression audio projection failed validation");
+      }
+      return audio;
     }));
   }
 
@@ -15180,11 +15190,7 @@ export async function createTideweftRuntime(
       const expressiveAlarmCandidates = coreSteps.flatMap(({ sourceKey, beforePatch, result }) => (
         result.events
           .filter((event) => (
-            (
-              event.species === "fish-crow"
-              || event.species === "deer"
-              || event.species === "marsh-rabbit"
-            )
+            isExpressiveAlarmSpecies(event.species)
             && event.kind === "alarm"
           ))
           .map((event) => ({
@@ -15198,13 +15204,9 @@ export async function createTideweftRuntime(
       ));
       for (const candidate of expressiveAlarmCandidates) {
         const patch = finalRegionalPatches.get(candidate.sourceKey);
-        const sourceSpecies = candidate.event.species === "fish-crow"
-          ? "fish-crow" as const
-          : candidate.event.species === "deer"
-            ? "deer" as const
-            : candidate.event.species === "marsh-rabbit"
-              ? "marsh-rabbit" as const
-            : null;
+        const sourceSpecies = isExpressiveAlarmSpecies(candidate.event.species)
+          ? candidate.event.species
+          : null;
         if (
           patch === undefined
           || candidate.event.observationId === null
@@ -15267,22 +15269,25 @@ export async function createTideweftRuntime(
           ),
         );
         // Channel/caption capacity may suppress the optional retained
-        // expression, but it cannot make an otherwise-heard physical thump
+        // expression, but it cannot make an otherwise-heard physical alarm
         // cease to exist. Successful admission releases this cue through the
-        // ordinary acknowledgement path; only the rejected rabbit signal uses
-        // this exact event-time audio fallback.
+        // ordinary acknowledgement path; a rejected event uses the same
+        // species-aware audio semantics without recreating text or a second
+        // generic wildlife-alarm cue.
         if (
-          sourceSpecies === "marsh-rabbit"
-          && lawfullyAudible
+          lawfullyAudible
           && audible !== null
           && !expressionAdmitted
         ) {
-          deferredWorldAcousticAudio.push(Object.freeze({
-            cue: "rabbit-thump",
-            volume: 0.42 * (0.35 + audible.certainty / FIXED_POINT * 0.65),
-            variantSeed: intent.variantSeed,
-            pan: audible.pan,
-          }));
+          const vocalization = situatedExpressionVocalizationFor(intent);
+          const audio = committedAudioCueForSituatedExpression({
+            ...intent,
+            vocalization,
+          }, audible);
+          if (audio === null) {
+            throw new Error("Core wildlife alarm audio projection failed validation");
+          }
+          deferredWorldAcousticAudio.push(audio);
         }
         if (
           lawfullyAudible
@@ -20345,6 +20350,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "resident-introduction"
       && meaning !== "resident-weather-hold"
       && meaning !== "deer-alarm-call"
+      && meaning !== "gull-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20356,6 +20362,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "resident-introduction"
       && active.meaning !== "resident-weather-hold"
       && active.meaning !== "deer-alarm-call"
+      && active.meaning !== "gull-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20366,6 +20373,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.knowledgeBasis !== "self-committed-introduction"
       && active.knowledgeBasis !== "self-perceived-prey"
       && active.vocalization !== "deer-alarm-snort"
+      && active.vocalization !== "gull-alarm-cry"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"
@@ -22415,13 +22423,11 @@ function coreWildlifeAlarmReceptionAtEventTime(
     || event.eventId !== admission.eventId
     || event.sourceActorId !== admission.sourceActorId
     || event.triggerEventId !== admission.triggerEventId
-    || event.meaning !== (coreWildlifeAlarmAdmissionSpecies(admission) === "fish-crow"
-      ? "fish-crow-alarm-call"
-      : coreWildlifeAlarmAdmissionSpecies(admission) === "deer"
-        ? "deer-alarm-call"
-        : "marsh-rabbit-alarm-thump")
+    || event.meaning !== coreWildlifeAlarmMeaningForSpecies(
+      coreWildlifeAlarmAdmissionSpecies(admission),
+    )
   ) return null;
-  // Unlike the carrying fish-crow and deer alarms, core ecology classifies a
+  // Unlike the carrying fish-crow, deer, and gull alarms, core ecology classifies a
   // rabbit foot-thump as a local, non-interrupting signal. Admission therefore
   // leaves a sleeping courier asleep and records no player receipt. Recreate
   // that exact event-time gate before evaluating otherwise-audible contact so

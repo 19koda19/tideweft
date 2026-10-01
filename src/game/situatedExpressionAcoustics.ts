@@ -10,6 +10,7 @@ import {
 } from "./situatedExpression";
 import { coreEcologyAlarmSignalProfile } from "./coreEcology";
 import { CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS } from "./coreEcologyPerception";
+import { coreWildlifeAlarmSpeciesForMeaning } from "./coreWildlifeSignalExpression";
 import { livingActorSenseProfile } from "./livingActorSenses";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 import type { AcousticInterrupt } from "./worldAcoustics";
@@ -17,6 +18,107 @@ import type { AcousticInterrupt } from "./worldAcoustics";
 export interface SituatedExpressionAcoustics {
   readonly loudness: number;
   readonly rangeUnits: number;
+}
+
+export interface SituatedExpressionAudioPresentation {
+  readonly sound:
+    | Readonly<{
+      readonly kind: "vocalization";
+      readonly vocalization: SituatedExpressionPlaybackVocalization;
+    }>
+    | Readonly<{
+      readonly kind: "legacy-cue";
+      readonly cue: "rabbit-thump" | "cat-call" | "fox-yip";
+    }>;
+  readonly volume: number;
+  readonly variantSeed: number;
+  readonly pan: number;
+}
+
+export type SituatedExpressionPlaybackVocalization = Exclude<
+  SituatedExpressionEvent["vocalization"],
+  | "domestic-cat-rain-distress"
+  | "marsh-rabbit-alarm-thump"
+  | "marsh-fox-pursuit-yip"
+>;
+
+/**
+ * Projects authenticated expression semantics into one committed audio cue.
+ * Admission may retain text and hearing state, but it does not own whether a
+ * lawfully heard physical sound exists; rejected optional admission therefore
+ * uses this same projection rather than a parallel generic fallback.
+ */
+export function situatedExpressionAudioPresentation(
+  expression: Pick<
+    SituatedExpressionEvent,
+    "meaning" | "vocalization" | "volume" | "variantSeed"
+  >,
+  reception: Readonly<{ readonly certainty: number; readonly pan: number }>,
+): SituatedExpressionAudioPresentation | null {
+  if (
+    !Number.isInteger(reception.certainty)
+    || reception.certainty < 0
+    || reception.certainty > 1_000_000
+    || !Number.isFinite(reception.pan)
+    || reception.pan < -1
+    || reception.pan > 1
+    || !Number.isSafeInteger(expression.variantSeed)
+  ) return null;
+  const baseIntensity = expression.volume === "shout"
+    ? 0.92
+    : expression.volume === "spoken"
+      ? 0.68
+      : 0.42;
+  const sound = situatedExpressionPlaybackSound(expression);
+  if (sound === null) return null;
+  return Object.freeze({
+    sound,
+    volume: baseIntensity * (0.35 + reception.certainty / 1_000_000 * 0.65),
+    variantSeed: expression.variantSeed,
+    pan: reception.pan,
+  });
+}
+
+function situatedExpressionPlaybackSound(
+  expression: Pick<SituatedExpressionEvent, "meaning" | "vocalization">,
+): SituatedExpressionAudioPresentation["sound"] | null {
+  if (expression.meaning === "marsh-rabbit-alarm-thump") {
+    return Object.freeze({ kind: "legacy-cue", cue: "rabbit-thump" });
+  }
+  if (expression.meaning === "domestic-cat-rain-distress-call") {
+    return Object.freeze({ kind: "legacy-cue", cue: "cat-call" });
+  }
+  if (expression.meaning === "marsh-fox-pursuit-yip") {
+    return Object.freeze({ kind: "legacy-cue", cue: "fox-yip" });
+  }
+  return isLiveSituatedVocalization(expression.vocalization)
+    ? Object.freeze({
+        kind: "vocalization",
+        vocalization: expression.vocalization,
+      })
+    : null;
+}
+
+function isLiveSituatedVocalization(
+  value: SituatedExpressionEvent["vocalization"],
+): value is SituatedExpressionPlaybackVocalization {
+  switch (value) {
+    case "steady":
+    case "strained":
+    case "alarm":
+    case "relief":
+    case "dog-warning-bark":
+    case "dog-defensive-growl":
+    case "dog-shelter-whine":
+    case "fish-crow-alarm":
+    case "deer-alarm-snort":
+    case "gull-alarm-cry":
+      return true;
+    case "domestic-cat-rain-distress":
+    case "marsh-rabbit-alarm-thump":
+    case "marsh-fox-pursuit-yip":
+      return false;
+  }
 }
 
 export type SituatedExpressionSoundClass =
@@ -147,6 +249,7 @@ const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
   "guardian-dog-defensive-growl",
   "fish-crow-alarm-call",
   "deer-alarm-call",
+  "gull-alarm-call",
 ]);
 
 const ANIMAL_CALL_MEANINGS = new Set<SituatedExpressionMeaning>([
@@ -198,11 +301,7 @@ export function situatedExpressionAcoustics(
   const volume = typeof value === "string" ? value : value.volume;
   if (
     typeof value !== "string"
-    && (
-      value.meaning === "fish-crow-alarm-call"
-      || value.meaning === "deer-alarm-call"
-      || value.meaning === "marsh-rabbit-alarm-thump"
-    )
+    && coreWildlifeAlarmSpeciesForMeaning(value.meaning) !== null
   ) {
     // Core ecology already owns this physical signal. Supplemental samples
     // reach humans only, so bake the same human hearing sensitivity into the
@@ -210,11 +309,7 @@ export function situatedExpressionAcoustics(
     // second, much larger acoustic world.
     return Object.freeze({
       loudness: coreEcologyAlarmSignalProfile(
-        value.meaning === "fish-crow-alarm-call"
-          ? "fish-crow"
-          : value.meaning === "deer-alarm-call"
-            ? "deer"
-            : "marsh-rabbit",
+        coreWildlifeAlarmSpeciesForMeaning(value.meaning)!,
       ).sourceLoudness,
       rangeUnits: Math.floor(
         CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS

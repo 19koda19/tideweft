@@ -4078,21 +4078,61 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
   }, 45_000);
 
-  it("retains the generic event-time fallback for an alarm Living Voice does not claim", async () => {
-    const { runtime } = await createAlarmRuntime(-8, "gull");
+  it("routes an authentic gull alarm through shared Voice without legacy fallback or reload replay", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8, "gull");
     soundscapePlay.mockClear();
 
     advancePlayerSteps(runtime, 10);
 
-    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-gull-alarm-cry",
+    ))
       .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+      .toEqual([]);
     expect(soundscapePlay.mock.calls.filter(
       ([cue]) => cue === "vocalization-deer-alarm-snort"
         || cue === "vocalization-fish-crow-alarm",
     )).toEqual([]);
-    expect(runtime.getUIView().announcement?.message)
-      .toBe("ANIMAL ALARM — source unclear.");
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "A bird",
+      text: "CALL! CALL!",
+      presentationKind: "animal-call",
+      animalCallKind: "bird-call",
+      assertive: true,
+    });
+    expect(runtime.getUIView().announcement?.message ?? "")
+      .not.toContain("ANIMAL ALARM — source unclear.");
+
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const gullAdmissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm"
+        && record.sourceSpecies === "gull"
+      ),
+    );
+    expect(gullAdmissions).toHaveLength(1);
+    expect(gullAdmissions[0]).toMatchObject({
+      sourceActorId: alarmActorId,
+      sourceSpecies: "gull",
+      acceptedAtTick: deserializeWorld(saved.world).meta.completedTick,
+    });
+    const durableCarry = stableStringify(saved.perceptionCarry);
+
     runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(
+      ([cue]) => cue === "vocalization-gull-alarm-cry" || cue === "wildlife-alarm",
+    )).toEqual([]);
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry))
+      .toBe(durableCarry);
+    resumed.destroy();
+    scheduledFrame = undefined;
   }, 45_000);
 
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {

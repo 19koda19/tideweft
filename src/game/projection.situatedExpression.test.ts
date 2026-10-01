@@ -306,6 +306,32 @@ function canonicalDeerAlarm(
   return reduced.state.active;
 }
 
+function canonicalGullAlarm(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "GULL-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "gull-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 820_000,
+    variantSeed: 0x6a11,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Gull expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalMarshRabbitAlarm(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -439,6 +465,14 @@ function deerSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSourc
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "deer",
+    position: event.position,
+  });
+}
+
+function gullSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "gull",
     position: event.position,
   });
 }
@@ -1424,6 +1458,57 @@ describe("situated expression game projection", () => {
     });
     expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
     expect(JSON.stringify(caption)).not.toContain("DEER-living-voice");
+  });
+
+  it("anchors a visible gull cry and anonymizes the heard-unseen bird call", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalGullAlarm(
+      wildlifePositionInWindow(window),
+      "gull-signal:alarm",
+    );
+    const visible = heardVisibleReception(expression);
+    const sources = [gullSource(expression)];
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressions).toEqual([expect.objectContaining({
+      sourceActorId: expression.sourceActorId,
+      speakerLabel: "Gull",
+      text: "KEE-AH!",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Gull",
+      text: "KEE-AH!",
+      presentationKind: "animal-call",
+      animalCallKind: "gull-call",
+    });
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Hidden gull reception fixture was rejected");
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A bird",
+      text: "CALL! CALL!",
+      presentationKind: "animal-call",
+      animalCallKind: "bird-call",
+      directionLabel: "west",
+    });
+    expect(JSON.stringify(caption)).not.toMatch(/gull|KEE-AH/iu);
   });
 
   it("anchors a visible cat weather call while hiding its unseen identity and cause", () => {

@@ -25,6 +25,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "domestic-cat-rain-distress-call",
   "fish-crow-alarm-call",
   "deer-alarm-call",
+  "gull-alarm-call",
   "marsh-rabbit-alarm-thump",
   "marsh-fox-pursuit-yip",
   "human-danger-warning",
@@ -95,6 +96,7 @@ export type SituatedExpressionVocalization =
   | "domestic-cat-rain-distress"
   | "fish-crow-alarm"
   | "deer-alarm-snort"
+  | "gull-alarm-cry"
   | "marsh-rabbit-alarm-thump"
   | "marsh-fox-pursuit-yip";
 
@@ -326,6 +328,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "gull-alarm-call": Object.freeze({
+    family: "animal-signal",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
+    tones: new Set<SituatedExpressionTone>(["alarmed"]),
+    volumes: new Set<SituatedExpressionVolume>(["shout"]),
+    vocalization: "gull-alarm-cry",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
   "marsh-rabbit-alarm-thump": Object.freeze({
     family: "animal-signal",
     knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-threat"]),
@@ -491,6 +502,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.deer-alarm-call.0",
       text: "SNORT!",
+    }),
+  ]),
+  "gull-alarm-call": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.gull-alarm-call.0",
+      text: "KEE-AH!",
     }),
   ]),
   "marsh-rabbit-alarm-thump": Object.freeze([
@@ -733,7 +750,7 @@ function eventFor(intent: SituatedExpressionIntent): SituatedExpressionEvent {
     tone: intent.tone,
     volume: intent.volume,
     knowledgeBasis: intent.knowledgeBasis,
-    vocalization: vocalizationFor(intent),
+    vocalization: situatedExpressionVocalizationFor(intent),
     priority: intent.priority,
     salience: intent.salience,
     variantSeed: intent.variantSeed,
@@ -777,7 +794,8 @@ function canInterrupt(
     || (candidate.priority === active.priority && candidate.salience > active.salience);
 }
 
-function vocalizationFor(
+/** Resolves one intent through the canonical semantic law without creating an event. */
+export function situatedExpressionVocalizationFor(
   value: Pick<SituatedExpressionIntent, "meaning" | "tone">,
 ): SituatedExpressionVocalization {
   const override = SEMANTIC_LAWS[value.meaning].vocalization;
@@ -988,7 +1006,7 @@ function canonicalEvent(value: unknown): SituatedExpressionEvent | null {
     || !law.knowledgeBases.has(value.knowledgeBasis)
     || !law.tones.has(value.tone)
     || !law.volumes.has(value.volume)
-    || value.vocalization !== vocalizationFor({
+    || value.vocalization !== situatedExpressionVocalizationFor({
       meaning: value.meaning,
       tone: value.tone,
     })
@@ -1120,6 +1138,7 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "domestic-cat-rain-distress"
     || value === "fish-crow-alarm"
     || value === "deer-alarm-snort"
+    || value === "gull-alarm-cry"
     || value === "marsh-rabbit-alarm-thump"
     || value === "marsh-fox-pursuit-yip";
 }

@@ -99,6 +99,10 @@ import {
 } from "./dogActorRoster";
 import { CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS } from "./coreEcology";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
+import {
+  coreWildlifeAlarmSpeciesForMeaning,
+  type ExpressiveAlarmSpecies,
+} from "./coreWildlifeSignalExpression";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { directPolylineRuns, polylineBounds } from "../render/routePresentation";
 import {
@@ -314,6 +318,7 @@ export type AnimalCallKind =
   | "cat-call"
   | "fish-crow-call"
   | "deer-call"
+  | "gull-call"
   | "marsh-fox-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
@@ -330,16 +335,29 @@ export function guardianDogCallKind(
 export function animalCallKind(
   meaning: SituatedExpressionEvent["meaning"],
 ): AnimalCallKind | null {
-  return meaning === "fish-crow-alarm-call"
-    ? "fish-crow-call"
-    : meaning === "deer-alarm-call"
-      ? "deer-call"
-      : meaning === "domestic-cat-rain-distress-call"
-        ? "cat-call"
-        : meaning === "marsh-fox-pursuit-yip"
-          ? "marsh-fox-call"
-      : guardianDogCallKind(meaning);
+  switch (meaning) {
+    case "fish-crow-alarm-call": return "fish-crow-call";
+    case "deer-alarm-call": return "deer-call";
+    case "gull-alarm-call": return "gull-call";
+    case "domestic-cat-rain-distress-call": return "cat-call";
+    case "marsh-fox-pursuit-yip": return "marsh-fox-call";
+    default: return guardianDogCallKind(meaning);
+  }
 }
+
+const coreWildlifeAlarmSourceLabel = (species: ExpressiveAlarmSpecies): string => {
+  switch (species) {
+    case "fish-crow": return "Fish crow";
+    case "deer": return "Deer";
+    case "marsh-rabbit": return "Marsh rabbit";
+    case "gull": return "Gull";
+  }
+};
+
+const coreWildlifeAlarmSourceIsBird = (species: ExpressiveAlarmSpecies): boolean => (
+  species === "fish-crow"
+  || species === "gull"
+);
 
 /**
  * Authenticate the speaking actor before any renderer or caption can label it.
@@ -380,17 +398,18 @@ export function projectSituatedExpressionSource(
     });
   }
 
+  const alarmSpecies = coreWildlifeAlarmSpeciesForMeaning(event.meaning);
   if (
-    event.meaning === "fish-crow-alarm-call"
-    || event.meaning === "deer-alarm-call"
-    || event.meaning === "marsh-rabbit-alarm-thump"
+    alarmSpecies !== null
     || event.meaning === "domestic-cat-rain-distress-call"
     || event.meaning === "marsh-fox-pursuit-yip"
   ) {
     if (reception?.kind === "heard-unseen") {
       return Object.freeze({
         sourceKind: "animal",
-        speakerLabel: event.meaning === "fish-crow-alarm-call" ? "A bird" : "An animal",
+        speakerLabel: alarmSpecies !== null && coreWildlifeAlarmSourceIsBird(alarmSpecies)
+          ? "A bird"
+          : "An animal",
       });
     }
     if (
@@ -402,15 +421,10 @@ export function projectSituatedExpressionSource(
       actorId === event.sourceActorId
     ));
     const source = matches[0];
-    const expectedSpecies = event.meaning === "fish-crow-alarm-call"
-      ? "fish-crow"
-      : event.meaning === "deer-alarm-call"
-        ? "deer"
-        : event.meaning === "domestic-cat-rain-distress-call"
-          ? "domestic-cat"
-          : event.meaning === "marsh-fox-pursuit-yip"
-            ? "marsh-fox"
-          : "marsh-rabbit";
+    const expectedSpecies = alarmSpecies
+      ?? (event.meaning === "domestic-cat-rain-distress-call"
+        ? "domestic-cat"
+        : "marsh-fox");
     if (
       matches.length !== 1
       || source === undefined
@@ -419,15 +433,11 @@ export function projectSituatedExpressionSource(
     ) return null;
     return Object.freeze({
       sourceKind: "animal",
-      speakerLabel: event.meaning === "fish-crow-alarm-call"
-        ? "Fish crow"
-        : event.meaning === "deer-alarm-call"
-          ? "Deer"
-          : event.meaning === "domestic-cat-rain-distress-call"
-            ? "Domestic cat"
-            : event.meaning === "marsh-fox-pursuit-yip"
-              ? "Marsh fox"
-          : "Marsh rabbit",
+      speakerLabel: alarmSpecies !== null
+        ? coreWildlifeAlarmSourceLabel(alarmSpecies)
+        : event.meaning === "domestic-cat-rain-distress-call"
+          ? "Domestic cat"
+          : "Marsh fox",
     });
   }
 

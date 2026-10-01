@@ -1160,6 +1160,13 @@ const currentFishCrowVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["fish-crow-alarm"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentGullVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["gull-alarm-cry"],
+  communicationSignals: ["gull-alarm-cry"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const WORLD_ACOUSTIC_SOUND_OWNER_ID = "game:world-acoustics:v1" as const;
 const currentBrownRatContactSound = (): LivingSpeciesSoundContract => ({
   implementation: "active",
@@ -1294,7 +1301,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "group",
     crossRegion: false,
-    sound: noSound(),
+    sound: currentGullVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -5749,6 +5756,7 @@ const HISTORICAL_RELEASE_COMPATIBILITY_MODULES = new Map<
 const HISTORICAL_PRE_VOICE_SOUND_SPECIES: ReadonlySet<string> = new Set([
   "deer",
   "domestic-dog",
+  "gull",
   "human",
 ]);
 const HISTORICAL_PRE_VOICE_HEARING_SPECIES: ReadonlySet<string> = new Set([

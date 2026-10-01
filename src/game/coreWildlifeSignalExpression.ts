@@ -44,7 +44,40 @@ export type DeerAlarmExpressionInput = CoreWildlifeAlarmExpressionInput;
 /** The canonical marsh habitat uses the `marsh-rabbit` species key. */
 export type MarshRabbitAlarmExpressionInput = CoreWildlifeAlarmExpressionInput;
 
-type ExpressiveAlarmSpecies = "fish-crow" | "deer" | "marsh-rabbit";
+export const CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES = Object.freeze([
+  "deer",
+  "gull",
+  "marsh-rabbit",
+  "fish-crow",
+] as const);
+export type ExpressiveAlarmSpecies =
+  (typeof CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES)[number];
+
+/** Closed current alarm repertoire; adding an alarm-source species must be explicit. */
+export function isExpressiveAlarmSpecies(
+  species: CoreWildlifeActorState["identity"]["species"],
+): species is ExpressiveAlarmSpecies {
+  return CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES.includes(
+    species as ExpressiveAlarmSpecies,
+  );
+}
+
+/** Shared semantic lookup; consumers never infer species from prose or IDs. */
+export function coreWildlifeAlarmSpeciesForMeaning(
+  meaning: SituatedExpressionIntent["meaning"],
+): ExpressiveAlarmSpecies | null {
+  for (const species of CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES) {
+    if (ALARM_EXPRESSION_PROFILE_BY_SPECIES[species].meaning === meaning) return species;
+  }
+  return null;
+}
+
+/** Shared inverse lookup; persistence/runtime gates never duplicate the table. */
+export function coreWildlifeAlarmMeaningForSpecies(
+  species: ExpressiveAlarmSpecies,
+): CoreWildlifeAlarmExpressionProfile["meaning"] {
+  return ALARM_EXPRESSION_PROFILE_BY_SPECIES[species].meaning;
+}
 
 /**
  * A foot-thump is meaningful ecological communication, but its restrained
@@ -68,12 +101,16 @@ interface CoreWildlifeAlarmExpressionProfile {
   readonly variantDomain: string;
 }
 
-interface CoreWildlifeAlarmEvidence {
+interface AuthenticatedCoreWildlifeAlarmEvidence {
   readonly actor: CoreWildlifeActorState;
   readonly belief: CoreWildlifeActorState["perception"]["beliefs"][number];
   readonly event: CoreWildlifeCausalEvent;
   readonly confidence: number;
   readonly salience: number;
+}
+
+interface CoreWildlifeAlarmExpressionEvidence
+  extends AuthenticatedCoreWildlifeAlarmEvidence {
   readonly profile: CoreWildlifeAlarmExpressionProfile;
 }
 
@@ -94,6 +131,11 @@ const ALARM_EXPRESSION_PROFILE_BY_SPECIES: Readonly<
     species: "marsh-rabbit",
     meaning: "marsh-rabbit-alarm-thump",
     variantDomain: "marsh-rabbit-alarm-expression:v1",
+  }),
+  gull: Object.freeze({
+    species: "gull",
+    meaning: "gull-alarm-call",
+    variantDomain: "gull-alarm-expression:v1",
   }),
 });
 
@@ -359,18 +401,26 @@ function deriveCoreWildlifeAlarmExpression(
 function coreWildlifeAlarmEvidence(
   inputValue: CoreWildlifeAlarmExpressionInput,
   expectedSpecies: ExpressiveAlarmSpecies | null,
-): CoreWildlifeAlarmEvidence | null {
+): CoreWildlifeAlarmExpressionEvidence | null {
+  const evidence = authenticatedCoreWildlifeAlarmEvidence(inputValue);
+  if (evidence === null) return null;
+  const profile = expressiveAlarmProfile(evidence.actor.identity.species);
+  if (
+    profile === null
+    || (expectedSpecies !== null && profile.species !== expectedSpecies)
+  ) return null;
+  return Object.freeze({ ...evidence, profile });
+}
+
+function authenticatedCoreWildlifeAlarmEvidence(
+  inputValue: CoreWildlifeAlarmExpressionInput,
+): AuthenticatedCoreWildlifeAlarmEvidence | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["actor", "event", "world"])) return null;
   const actor = canonicalizeCoreWildlifeActorState(input.actor);
   const world = canonicalizeCoreEcologyAggregatePatch(input.world);
   if (actor === null || world === null) return null;
-  const profile = expressiveAlarmProfile(actor.identity.species);
-  if (
-    profile === null
-    || (expectedSpecies !== null && profile.species !== expectedSpecies)
-    || actor.address.species !== profile.species
-  ) return null;
+  if (actor.address.species !== actor.identity.species) return null;
 
   const ownedMembers = world.populations.flatMap(({ members }) => members).filter(
     ({ actor: candidate }) => candidate.identity.stableId === actor.identity.stableId,
@@ -383,7 +433,11 @@ function coreWildlifeAlarmEvidence(
     || stableStringify(owned.actor) !== stableStringify(actor)
   ) return null;
 
-  const event = canonicalCoreWildlifeAlarmEvent(input.event, actor, profile);
+  const event = canonicalCoreWildlifeAlarmEvent(
+    input.event,
+    actor,
+    actor.identity.species,
+  );
   if (
     event === null
     || situatedExpressionEventIdForTrigger(actor.identity.stableId, event.eventId) === null
@@ -429,12 +483,13 @@ function coreWildlifeAlarmEvidence(
     event,
     confidence: belief.confidence,
     salience: belief.salience,
-    profile,
   });
 }
 
 /** Exact semantic fence retained for the supported v38 fish-crow record kind. */
-function isLegacyFishCrowAlarmEvidence(evidence: CoreWildlifeAlarmEvidence): boolean {
+function isLegacyFishCrowAlarmEvidence(
+  evidence: CoreWildlifeAlarmExpressionEvidence,
+): boolean {
   const { belief, profile } = evidence;
   return profile.species === "fish-crow"
     && belief.channel === "vision"
@@ -447,7 +502,7 @@ function isLegacyFishCrowAlarmEvidence(evidence: CoreWildlifeAlarmEvidence): boo
 function canonicalCoreWildlifeAlarmEvent(
   value: unknown,
   actor: CoreWildlifeActorState,
-  profile: CoreWildlifeAlarmExpressionProfile,
+  species: CoreWildlifeActorState["identity"]["species"],
 ): CoreWildlifeCausalEvent | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "actorId",
@@ -464,7 +519,7 @@ function canonicalCoreWildlifeAlarmEvent(
   if (
     value.version !== CORE_WILDLIFE_EVENT_VERSION
     || value.kind !== "alarm"
-    || value.species !== profile.species
+    || value.species !== species
     || value.actorId !== actor.identity.stableId
     || !nonnegativeSafeInteger(value.atTick)
     || !validId(value.eventId)
@@ -481,7 +536,7 @@ function canonicalCoreWildlifeAlarmEvent(
     eventId: expectedEventId,
     atTick: value.atTick,
     actorId: actor.identity.stableId,
-    species: profile.species,
+    species,
     kind: "alarm" as const,
     causeReferenceId: actor.intent.cause.referenceId,
     observationId: actor.intent.focusObservationId,
@@ -498,10 +553,9 @@ function canonicalCoreWildlifeAlarmEvent(
 function expressiveAlarmProfile(
   species: CoreWildlifeActorState["identity"]["species"],
 ): CoreWildlifeAlarmExpressionProfile | null {
-  if (species === "fish-crow" || species === "deer" || species === "marsh-rabbit") {
-    return ALARM_EXPRESSION_PROFILE_BY_SPECIES[species];
-  }
-  return null;
+  return isExpressiveAlarmSpecies(species)
+    ? ALARM_EXPRESSION_PROFILE_BY_SPECIES[species]
+    : null;
 }
 
 function immutableExpressionFields(

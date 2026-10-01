@@ -238,6 +238,32 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toContain("KRAA");
   });
 
+  it("presents a visible gull cry while keeping unseen hearing anonymous", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:gull:alarm",
+      speakerLabel: "Gull",
+      text: "KEE-AH!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      animalCallKind: "gull-call",
+      assertive: true,
+    };
+    expect(situatedExpressionCaptionCopy(visible))
+      .toBe("[A gull cries sharply.]");
+
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "expression:bird:hidden-call",
+      speakerLabel: "A bird",
+      text: "CALL! CALL!",
+      animalCallKind: "bird-call",
+      directionLabel: "west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[A bird calls somewhere west.]");
+    expect(JSON.stringify(unseen)).not.toMatch(/gull|KEE-AH/iu);
+  });
+
   it("presents a cat call without translating its hidden rain distress", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:cat:call",

@@ -271,7 +271,8 @@ function workingPeopleFixture(
 /**
  * Saves one porter already travelling under clear weather. The runtime owns
  * the next severe-weather step, so only its newly committed shelter event may
- * become Living Voice speech.
+ * become this porter's Living Voice speech. Independent ecology actors may
+ * lawfully emit their own event-backed expressions in the same interval.
  */
 function weatherHoldFixture(seed: string): WeatherHoldFixture {
   const world = createWorld(seed, "standard");
@@ -425,15 +426,20 @@ describe("runtime Working People heavy-porter expression", () => {
     expect(committed.perceptionCarry.intervalStartPosition).toEqual(admission.listenerPosition);
     expect(committed.perceptionCarry.intervalStartWasSleeping)
       .toBe(admission.listenerWasSleepingAtAdmission);
-    expect(committed.perceptionCarry.actorVocalizationSamples).toEqual([
-      expect.objectContaining({
-        expressionEventId: admission.eventId,
-        sourceActorId: fixture.actorId,
-        position: residentChannel.state.active?.position,
-        soundClass: "human-vocalization",
-        soundInterrupt: "none",
-      }),
-    ]);
+    const porterSample = committed.perceptionCarry.actorVocalizationSamples[
+      admission.sampleOrdinal
+    ];
+    expect(porterSample).toMatchObject({
+      expressionEventId: admission.eventId,
+      sourceActorId: fixture.actorId,
+      position: residentChannel.state.active.position,
+      soundClass: "human-vocalization",
+      soundInterrupt: "none",
+    });
+    expect(committed.perceptionCarry.actorVocalizationSamples.filter((sample) => (
+      sample.expressionEventId === admission.eventId
+      && sample.sourceActorId === fixture.actorId
+    ))).toHaveLength(1);
     expect(runtime.getRenderView().porters.every((porter) => (
       !Object.prototype.hasOwnProperty.call(porter, "speech")
     ))).toBe(true);
