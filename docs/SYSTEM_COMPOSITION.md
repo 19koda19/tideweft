@@ -464,6 +464,14 @@ registry rather than silently dropping the obligation.
 
 Composition does not authorize every system to query every other system.
 
+Before accepting a new bridge, ask whether it creates full-world fan-out,
+duplicated computation, actor-to-actor/all-to-all work, unbounded event,
+listener, or presentation propagation, or repeated derivation of state another
+owner already computes. A causal connection is not healthy if every producer
+awakens every possible consumer. Route consequences through the smallest
+lawful spatial/event candidate set and one shared derived-state owner or exact
+cache with explicit invalidation.
+
 Use:
 
 - domain-owned transactions;
@@ -483,6 +491,8 @@ Reject:
 - pairwise species interaction functions;
 - cross-system mutation through renderer/UI state;
 - full-world scans where an index or event suffices;
+- unbounded event/listener/label queues or broadcast fan-out;
+- duplicate Chart/Relief, perception, acoustic, terrain, or market derivation;
 - save logs that append every routine use forever.
 
 Every completed bridge must survive current-schema save/reload. A sold item
