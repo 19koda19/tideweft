@@ -3132,8 +3132,8 @@ rest. They retain their exact historical scope at each boundary, but none is a
 standalone release; all first ship cumulatively in Alpha53.
 
 Released Alpha53 advances the Field Manual/tutorial to version 63 and gameplay
-contract to 51. It records the representative golden-eagle multi-day
-persistence/streaming soak, exact frame-cadence and lawful WAIT-interruption
+contract to 51. It records the representative golden-eagle direct-owner
+serialization/streaming harness, exact frame-cadence and lawful WAIT-interruption
 witnesses, and packaged desktop Chart/Relief plus mobile Relief recovery
 coverage. It retains outer save v32 and closes Directive 04_1A without claiming
 the independent dog as a routine or bonded companion, physical interiors,
@@ -3374,7 +3374,8 @@ accumulated through the non-standalone internal Alpha40–52 milestones.
 Production-backed checks cover exact frame-cadence authority, lawfully heard
 automatic WAIT interruption, all 42 current humans, all seventeen addressable
 wildlife rhythms, three simulated days of real resident and wildlife routine
-projection with daily persistence and bounded save growth, and one
+projection with daily world serialization, restored regional-ecology
+continuation, and bounded save growth, plus one
 representative golden eagle across dematerialization/rematerialization. The
 packaged evidence spans stopped Title/Quiet Hour clocks, a real REST action,
 desktop Chart and Relief, and mobile portrait/landscape Relief using shared

@@ -1408,7 +1408,8 @@ authoring a species-by-species script. It proves exact authoritative WAIT
 cadence at distinct animation-frame rates, automatic interruption by one
 lawfully heard alarm at its committed boundary, and a three-day direct
 production-owner harness for resident and wildlife routine projection with
-daily persistence and bounded save growth. That harness starts from a
+daily world serialization, restored regional-ecology continuation, and bounded
+save growth. That harness starts from a
 runtime-adopted synthetic v1-shaped record rather than archived v1 bytes, omits
 the working dog from its timed loop, and carries one real activity-bound Alpine
 golden eagle through dematerialization/rematerialization. Separate runtime
@@ -2524,7 +2525,7 @@ Cumulatively released in Alpha53:
   independent dog;
 - distributed production proof through shared cadence, perception, actor,
   ecology, persistence, and packaged-presentation owners, including the
-  representative activity-bound Alpine golden-eagle soak plus production
+  representative activity-bound Alpine golden-eagle harness plus production
   dormant/coarse paths and shared invariants rather than a scripted all-species
   or N² matrix;
 - outer save v32, gameplay contract 51, and Field Manual 63, while simulation

@@ -316,6 +316,7 @@ describe("Turning Day direct production-owner multi-day budget", () => {
     expect(CORE_ECOLOGY_CIRCADIAN_BINDINGS.some(({ speciesId }) => (
       speciesId === productionRoutine.species
     ))).toBe(true);
+    expect(productionRoutine.species).toBe("golden-eagle");
     expect(world.meta.completedTick).toBe(soakStartTick + SOAK_TICKS);
     expect(world.residents).toHaveLength(42);
     expect(world.residents.every(({ circadian }) => circadian !== undefined)).toBe(true);
@@ -567,7 +568,7 @@ function selectProductionRoutineSource(
     const sourceKind = kindBySource.get(sourceKey);
     if (sourceKind === undefined) continue;
     for (const { species, members } of patch.populations) {
-      if (!boundSpecies.has(species)) continue;
+      if (species !== "golden-eagle" || !boundSpecies.has(species)) continue;
       for (const { actor } of members) {
         let materialized: CoreEcologyAggregatePatchState;
         try {

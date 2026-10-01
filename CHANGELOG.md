@@ -284,7 +284,7 @@ The Turning Day is the Alpha 53 build: the shared civil clock now has complete p
 ### Fixes
 
 - The closure harness now proves exact authoritative WAIT cadence from the same saved baseline at different animation-frame rates, preventing render cadence from becoming simulation authority.
-- A production multi-day soak now exercises real resident and wildlife routine owners across four touched world days, including physical movement, return to rest, daily serialization, and one exact dematerialize and rematerialize identity cycle.
+- A three-day direct production-owner harness exercises real resident and wildlife routine owners across four touched world days, including physical movement, return to rest, daily world serialization, restored regional-ecology continuation, and one exact dematerialize and rematerialize identity cycle.
 - Packaged desktop checks now hold the Title and Quiet Hour clocks still, exercise real REST on validated dry stable footing, and cover shared desktop, mobile portrait, and mobile landscape recovery controls.
 
 ### Balancing

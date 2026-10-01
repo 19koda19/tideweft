@@ -122,6 +122,9 @@ describe("TIDEWEFT field-manual content", () => {
     const copy = views?.steps.map((step) => `${step.title} ${step.body}`).join(" ") ?? "";
     const boundaries = tutorialSectionById("build-boundaries");
     const liveBoundary = boundaries?.steps.find((step) => step.id === "boundaries-live-weather");
+    const plannedEcology = boundaries?.steps.find((step) => (
+      step.id === "boundaries-planned-ecology"
+    ));
     expect(copy).toContain("One clock carries first light into night");
     expect(copy).toContain("every 1,440 ticks begins a new day");
     expect(copy).toContain(
@@ -184,6 +187,10 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("None of these optimizations or diagnostics changes gameplay, visuals, a save");
     expect(liveBoundary?.body).toContain("Build metadata alone does not prove deployment");
     expect(liveBoundary?.body).toContain("LIVE_VERIFIED status still requires the separate release checkpoint and exact deployed-build verification");
+    expect(plannedEcology?.body).toContain(
+      "physical guest lodging/bed and guaranteed return travel",
+    );
+    expect(plannedEcology?.body).not.toContain("physical guest rest/return travel");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {

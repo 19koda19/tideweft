@@ -529,7 +529,9 @@ describe("canonical offline patch notes", () => {
     expect(alpha53Copy).toContain("One deterministic civil clock carries day, dusk, night, and dawn");
     expect(alpha53Copy).toContain("WAIT stops at the committed boundary of a lawfully heard strong alarm");
     expect(alpha53Copy).toContain("exact authoritative WAIT cadence");
-    expect(alpha53Copy).toContain("production multi-day soak");
+    expect(alpha53Copy).toContain("three-day direct production-owner harness");
+    expect(alpha53Copy).toContain("daily world serialization");
+    expect(alpha53Copy).toContain("restored regional-ecology continuation");
     expect(alpha53Copy).toContain("all forty-two current residents");
     expect(alpha53Copy).toContain("one exact dematerialize and rematerialize identity cycle");
     expect(alpha53Copy).toContain("desktop, mobile portrait, and mobile landscape recovery controls");
