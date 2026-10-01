@@ -1,6 +1,6 @@
 import p5 from "p5";
 
-import { configureP5RuntimePolicy } from "./p5RuntimePolicy";
+import { configureP5RuntimePolicy, preserveP5RuntimePolicy } from "./p5RuntimePolicy";
 
 import {
   biomeEnvironmentalEmphasis,
@@ -2452,7 +2452,7 @@ export function createTideweftReliefRenderer(
 
     const ensurePerceptionMaterialShader = (): p5.Shader => {
       if (perceptionMaterialShader) return perceptionMaterialShader;
-      perceptionMaterialShader = p.baseMaterialShader().modify({
+      perceptionMaterialShader = preserveP5RuntimePolicy(p5, () => p.baseMaterialShader().modify({
         "Inputs getPixelInputs": `(Inputs inputs) {
           vec3 localEmission = vec3(inputs.texCoord.xy, inputs.color.a);
           inputs.color.a = 1.0;
@@ -2460,7 +2460,7 @@ export function createTideweftReliefRenderer(
           inputs.emissiveMaterial = localEmission;
           return inputs;
         }`,
-      });
+      }));
       return perceptionMaterialShader;
     };
 

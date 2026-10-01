@@ -16,3 +16,21 @@ export function configureP5RuntimePolicy(
 ): void {
   if (production) target.disableFriendlyErrors = true;
 }
+
+/**
+ * p5 2.3.2's object-form Shader.modify restores a flag captured when its
+ * Strands addon loaded, which can undo our later production policy. Keep the
+ * public application policy across that operation, including shader failure.
+ * Recheck this boundary when upgrading p5; no library source is patched.
+ */
+export function preserveP5RuntimePolicy<T>(
+  target: P5RuntimePolicyTarget,
+  operation: () => T,
+): T {
+  const disabled = target.disableFriendlyErrors;
+  try {
+    return operation();
+  } finally {
+    target.disableFriendlyErrors = disabled;
+  }
+}

@@ -43,6 +43,7 @@ const p5Harness = vi.hoisted(() => ({
   perceptionShaderSupported: false,
   perceptionShaderThrowsAfterBind: false,
   perceptionShaderHooks: [] as object[],
+  friendlyErrorsDisabled: false,
 }));
 
 function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
@@ -55,6 +56,14 @@ function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number
 
 vi.mock("p5", () => {
   class FakeP5 {
+    static get disableFriendlyErrors(): boolean {
+      return p5Harness.friendlyErrorsDisabled;
+    }
+
+    static set disableFriendlyErrors(disabled: boolean) {
+      p5Harness.friendlyErrorsDisabled = disabled;
+    }
+
     constructor(sketch: (instance: Record<string, unknown>) => void) {
       const camera = vi.fn();
       const methods = new Map<PropertyKey, ReturnType<typeof vi.fn>>();
@@ -123,6 +132,9 @@ vi.mock("p5", () => {
           return {
             modify: vi.fn((hooks: object) => {
               p5Harness.perceptionShaderHooks.push(hooks);
+              // Reproduce the pinned library's object-modifier cleanup, which
+              // restores its module-load flag rather than the caller's policy.
+              p5Harness.friendlyErrorsDisabled = false;
               return modifiedPerceptionShader;
             }),
           };
@@ -623,6 +635,7 @@ beforeEach(() => {
   p5Harness.perceptionShaderSupported = false;
   p5Harness.perceptionShaderThrowsAfterBind = false;
   p5Harness.perceptionShaderHooks.length = 0;
+  p5Harness.friendlyErrorsDisabled = false;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -771,6 +784,7 @@ describe("Relief renderer telemetry", () => {
     vi.stubGlobal("performance", { now: () => clock });
     p5Harness.reducedMotion = true;
     p5Harness.perceptionShaderSupported = true;
+    p5Harness.friendlyErrorsDisabled = true;
     const base = view("retained-perception", { x: 48, y: 48 });
     const perception = {
       version: 1,
@@ -817,6 +831,7 @@ describe("Relief renderer telemetry", () => {
     harness.draw();
     expect(buildGeometry).toHaveBeenCalledTimes(durableBuildCount + 1);
     expect(baseMaterialShader).toHaveBeenCalledOnce();
+    expect(p5Harness.friendlyErrorsDisabled).toBe(true);
     expect(p5Harness.perceptionShaderHooks).toHaveLength(1);
     const hooks = p5Harness.perceptionShaderHooks[0] as Record<string, string>;
     expect(hooks["Inputs getPixelInputs"]).toContain("inputs.ambientMaterial = inputs.color.rgb");
