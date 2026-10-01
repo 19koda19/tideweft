@@ -1670,6 +1670,171 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   }, 120_000);
 
+  it("routes around directly observed wildlife owned outside the settlement-home ecology", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-4);
+    runtime.dispatchUI({ type: "resume-world" });
+    const before = requiredEnvelope(repository);
+    const regionalBefore = requiredRegionalEcology(before);
+    const ownerBefore = requiredRegionalCoreOwner(before, alarmActorId);
+    expect(ownerBefore.patchKey).not.toBe(regionalBefore.settlementHome.patch.patchKey);
+    expect(regionalBefore.activeResidents.some(({ patch }) => (
+      patch.patchKey === ownerBefore.patchKey
+    ))).toBe(true);
+
+    const wildlife = runtime.getRenderView().wildlife?.find(({ actorId }) => (
+      actorId === alarmActorId
+    ));
+    if (wildlife === undefined) {
+      throw new Error("Regional reroute fixture could not directly observe its deer");
+    }
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "living-actor",
+      species: wildlife.species,
+      id: wildlife.actorId,
+      point: wildlife.position,
+    });
+    expect(runtime.getUIView().selectedLivingActor?.interactions?.find(({ id }) => (
+      id === "reroute"
+    ))).toMatchObject({ id: "reroute", disabled: true });
+
+    const start = runtime.getRenderView().player.position;
+    const tileSize = runtime.getRenderView().terrain.tileSize;
+    const direction = Math.sign(wildlife.position.x - start.x);
+    if (direction === 0) throw new Error("Regional reroute fixture placed deer over player");
+    const destination = {
+      x: start.x + direction * 6 * tileSize,
+      y: start.y,
+    };
+    runtime.dispatchRenderer({ type: "move-target", point: destination, additive: false });
+    // Route planning changes the contextual choice. Re-selection mirrors the
+    // next player-facing projection instead of inspecting stale cached UI.
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "living-actor",
+      species: wildlife.species,
+      id: wildlife.actorId,
+      point: wildlife.position,
+    });
+    expect(runtime.getUIView().selectedLivingActor?.interactions?.find(({ id }) => (
+      id === "reroute"
+    ))?.disabled).not.toBe(true);
+    runtime.dispatchUI({
+      type: "living-actor",
+      action: "interact",
+      interaction: "reroute",
+      target: { species: wildlife.species, actorId: wildlife.actorId },
+    });
+    expect(runtime.getUIView().announcement?.message).toBe(
+      "The Loom bends the current route around the actor's observed position.",
+    );
+    await runtime.save();
+
+    const saved = requiredEnvelope(repository);
+    const actorAtChoice = requiredCoreActor(
+      requiredRegionalCoreOwner(saved, alarmActorId),
+      alarmActorId,
+    );
+    const choices = canonicalizeLivingActorPlayerChoiceState(saved.livingActorPlayerChoice);
+    if (choices === null) throw new Error("Regional reroute fixture lost its choice ledger");
+    const reroutes = choices.events.filter(({ kind, effect }) => (
+      kind === "reroute"
+      && effect.kind === "request-reroute"
+      && effect.focusActorId === alarmActorId
+    ));
+    expect(reroutes).toHaveLength(1);
+    expect(reroutes[0]).toMatchObject({
+      kind: "reroute",
+      effect: {
+        kind: "request-reroute",
+        focusActorId: alarmActorId,
+        avoidArea: {
+          radiusUnits: WORLD_POSITION_UNITS_PER_TILE,
+        },
+      },
+    });
+    const rerouteEffect = reroutes[0]?.effect;
+    if (rerouteEffect?.kind !== "request-reroute") {
+      throw new Error("Regional reroute fixture lost its committed effect");
+    }
+    // The current bounded activity projection may sit between persisted world
+    // ticks. Its observed locus must nevertheless remain on the same animal's
+    // physical tile, rather than being synthesized from the settlement owner.
+    const observedDelta = worldPositionDelta(
+      actorAtChoice.address.position,
+      rerouteEffect.avoidArea.center,
+    );
+    expect(Math.hypot(observedDelta.x, observedDelta.y))
+      .toBeLessThan(WORLD_POSITION_UNITS_PER_TILE / 2);
+
+    const visited = [start];
+    runtime.start();
+    for (let frame = 0; frame < 160; frame += 1) {
+      const callback = scheduledFrame;
+      if (!callback) throw new Error("Regional reroute stopped scheduling frames");
+      scheduledFrame = undefined;
+      callback(nextFrameTime);
+      nextFrameTime += 100;
+      const position = runtime.getRenderView().player.position;
+      visited.push(position);
+      if (
+        Math.trunc(position.x / tileSize) === Math.trunc(destination.x / tileSize)
+        && Math.trunc(position.y / tileSize) === Math.trunc(destination.y / tileSize)
+      ) break;
+    }
+    runtime.stop();
+    const arrived = runtime.getRenderView().player.position;
+    expect({
+      x: Math.trunc(arrived.x / tileSize),
+      y: Math.trunc(arrived.y / tileSize),
+    }).toEqual({
+      x: Math.trunc(destination.x / tileSize),
+      y: Math.trunc(destination.y / tileSize),
+    });
+    expect(visited.some(({ y }) => (
+      Math.abs(y - start.y) >= tileSize / 2
+    ))).toBe(true);
+    expect(visited.some((position) => {
+      const centerX = Math.trunc(position.x / tileSize) * tileSize + tileSize / 2;
+      const centerY = Math.trunc(position.y / tileSize) * tileSize + tileSize / 2;
+      return Math.hypot(
+        centerX - wildlife.position.x,
+        centerY - wildlife.position.y,
+      ) <= tileSize;
+    })).toBe(false);
+    await runtime.save();
+    const durableChoices = stableStringify(
+      canonicalizeLivingActorPlayerChoiceState(
+        requiredEnvelope(repository).livingActorPlayerChoice,
+      ),
+    );
+    runtime.destroy();
+    scheduledFrame = undefined;
+
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    const reloaded = requiredEnvelope(repository);
+    expect(stableStringify(
+      canonicalizeLivingActorPlayerChoiceState(reloaded.livingActorPlayerChoice),
+    )).toBe(durableChoices);
+    const reloadedChoices = canonicalizeLivingActorPlayerChoiceState(
+      reloaded.livingActorPlayerChoice,
+    );
+    expect(reloadedChoices?.events.filter(({ kind, effect }) => (
+      kind === "reroute"
+      && effect.kind === "request-reroute"
+      && effect.focusActorId === alarmActorId
+    ))).toHaveLength(1);
+    expect(requiredRegionalCoreOwner(reloaded, alarmActorId).patchKey).toBe(
+      ownerBefore.patchKey,
+    );
+    expect(regionalCoreActors(requiredRegionalEcology(reloaded)).filter(({ identity }) => (
+      identity.stableId === alarmActorId
+    ))).toHaveLength(1);
+    resumed.destroy();
+  }, 120_000);
+
   it(`${PHYSICAL_PROVISION_CONSERVATION_OWNER_INTENT} lets one fish crow physically reach and consume one persistent provision exactly once`, async () => {
     const repository = new MemoryRepository();
     const initial = await createTideweftRuntime(repository);

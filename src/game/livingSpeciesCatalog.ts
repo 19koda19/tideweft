@@ -1146,6 +1146,35 @@ const currentDomesticCatVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["domestic-cat-rain-distress"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentMarshRabbitVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["marsh-rabbit-alarm-thump"],
+  communicationSignals: ["marsh-rabbit-alarm-thump"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
+const currentFishCrowVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["fish-crow-alarm"],
+  communicationSignals: ["fish-crow-alarm"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
+const WORLD_ACOUSTIC_SOUND_OWNER_ID = "game:world-acoustics:v1" as const;
+const currentBrownRatContactSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: WORLD_ACOUSTIC_SOUND_OWNER_ID,
+  repertoire: ["physical-rustle"],
+  communicationSignals: [],
+  accessibilityCues: ["directional-hearing-caption"],
+});
+const currentFrogChorusSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: WORLD_ACOUSTIC_SOUND_OWNER_ID,
+  repertoire: ["chorus"],
+  communicationSignals: ["chorus"],
+  accessibilityCues: ["directional-hearing-caption"],
+});
 const noAftermath = (): LivingSpeciesAftermathContract => ({
   implementation: "unimplemented",
   ownerId: null,
@@ -1338,13 +1367,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: false,
-    sound: {
-      implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["rat-rustle"],
-      communicationSignals: [],
-      accessibilityCues: ["direct-observation-caption"],
-    },
+    sound: currentBrownRatContactSound(),
     evidence: {
       status: "active",
       ownerId: "game:core-ecology:v3",
@@ -1424,13 +1447,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: true,
-    sound: {
-      implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["rabbit-thump"],
-      communicationSignals: ["rabbit-thump"],
-      accessibilityCues: ["direct-observation-caption"],
-    },
+    sound: currentMarshRabbitVoiceSound(),
     evidence: {
       status: "active",
       ownerId: "game:core-wildlife-actor:v1",
@@ -1509,13 +1526,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "group",
     crossRegion: true,
-    sound: {
-      implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["crow-nasal-double-call"],
-      communicationSignals: ["crow-nasal-double-call"],
-      accessibilityCues: ["direct-observation-caption"],
-    },
+    sound: currentFishCrowVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -1588,13 +1599,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: false,
-    sound: {
-      implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["rain-chorus"],
-      communicationSignals: ["rain-chorus"],
-      accessibilityCues: ["directional-hearing-caption"],
-    },
+    sound: currentFrogChorusSound(),
     evidence: {
       status: "active",
       ownerId: "game:core-ecology:v4",
@@ -5755,6 +5760,50 @@ const HISTORICAL_PRE_TURNING_DAY_CIRCADIAN_SPECIES: ReadonlySet<string> = new Se
   "human",
 ]);
 
+/** Exact pre-Voice declarations for released species that already had audio. */
+function historicalActiveSound(
+  speciesId: string,
+): LivingSpeciesSoundContract | null {
+  switch (speciesId) {
+    case "brown-rat": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rat-rustle"],
+      communicationSignals: [],
+      accessibilityCues: ["direct-observation-caption"],
+    };
+    case "domestic-cat": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["cat-call"],
+      communicationSignals: [],
+      accessibilityCues: ["direct-observation-caption"],
+    };
+    case "marsh-rabbit": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rabbit-thump"],
+      communicationSignals: ["rabbit-thump"],
+      accessibilityCues: ["direct-observation-caption"],
+    };
+    case "fish-crow": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["crow-nasal-double-call"],
+      communicationSignals: ["crow-nasal-double-call"],
+      accessibilityCues: ["direct-observation-caption"],
+    };
+    case "southern-leopard-frog": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["rain-chorus"],
+      communicationSignals: ["rain-chorus"],
+      accessibilityCues: ["directional-hearing-caption"],
+    };
+    default: return null;
+  }
+}
+
 /**
  * Released catalog children authenticate their original declarations. Current
  * routines and Living Voice may refine rhythm, hearing, and sound capability,
@@ -5799,15 +5848,7 @@ function historicalReleaseCompatibilityModule(
     : module.cognition.memoryKinds;
   const historicalSound = HISTORICAL_PRE_VOICE_SOUND_SPECIES.has(module.speciesId)
     ? noSound()
-    : module.speciesId === "domestic-cat"
-      ? {
-          implementation: "active" as const,
-          ownerId: "audio:soundscape:v1",
-          repertoire: ["cat-call"],
-          communicationSignals: [],
-          accessibilityCues: ["direct-observation-caption"],
-        }
-      : module.sound;
+    : historicalActiveSound(module.speciesId) ?? module.sound;
   const historicalCommunicationChannels = HISTORICAL_PRE_VOICE_HEARING_SPECIES.has(
     module.speciesId,
   )

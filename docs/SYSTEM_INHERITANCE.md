@@ -442,6 +442,11 @@ activity, group, evidence, materialization, persistence, and projection.
 Aggregate activity likewise remains aggregate when it becomes audible: shared
 sound may use a bounded deterministic representative locus, but may not invent
 an individual body, identity, count, or one event per hidden member.
+Current harmful aftermath is only the exact solitary-rabbit mortality/body and
+finite scavenger-use seam. Catalog capabilities and tested kernels do not make
+player hunting, fishing, general harm, runtime decay, or material processing
+live; later domains must consume their named ecology, health/recovery, and
+material-culture owners rather than infer those mechanics from data.
 Confidence comes from common invariants, deterministic properties,
 conservation, bounded interaction-graph fuzzing, and representative emergent
 compositions—not a bespoke test for every species or every interaction pair.

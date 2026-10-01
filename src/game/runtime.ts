@@ -16252,25 +16252,18 @@ export async function createTideweftRuntime(
 
   function planLivingActorReroute(effect: RerouteEffect): number[] | null {
     if (autopilotPath.length === 0) return null;
-    const focusAddress = runtimeDogActorById(
-      bio0Ecology,
-      dogActorRoster,
-      effect.focusActorId,
-    )?.address ?? coreEcologyAggregatePatchActor(coreEcology, effect.focusActorId)?.address;
-    if (focusAddress === undefined) return null;
     const destination = autopilotPath.at(-1);
     if (destination === undefined) return null;
-    const placement = livingActorAddressInRegionalWindow(
-      focusAddress,
-      {
-        origin: regionalTravel.window.origin,
-        terrain: {
-          width: worldView.terrain.width,
-          height: worldView.terrain.height,
-        },
-      },
+    // The reducer has already reauthenticated the selected actor and committed
+    // its directly observed world-space locus into the effect. Plan around
+    // that immutable observation instead of re-querying one ecology owner:
+    // regional wildlife need not belong to the settlement-home patch, and a
+    // later actor position must not rewrite the place the player chose to avoid.
+    const avoidedPoint = perceptionIntervalPointInWindow(
+      regionalTravel.window,
+      effect.avoidArea.center,
     );
-    if (placement === null) return null;
+    if (avoidedPoint === null) return null;
     const start = playerTileIndex(player);
     const avoidedTiles = new Set<number>();
     for (let tileIndex = 0; tileIndex < worldView.terrain.tiles.length; tileIndex += 1) {
@@ -16280,7 +16273,7 @@ export async function createTideweftRuntime(
         + WORLD_POSITION_UNITS_PER_TILE / 2;
       const centerY = tile.y * WORLD_POSITION_UNITS_PER_TILE
         + WORLD_POSITION_UNITS_PER_TILE / 2;
-      if (Math.hypot(centerX - placement.point.x, centerY - placement.point.y)
+      if (Math.hypot(centerX - avoidedPoint.x, centerY - avoidedPoint.y)
         <= effect.avoidArea.radiusUnits) {
         avoidedTiles.add(tileIndex);
       }

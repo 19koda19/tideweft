@@ -432,6 +432,34 @@ describe("Living Weft species module catalog", () => {
         accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
       },
     });
+    expect(livingSpeciesModule("marsh-rabbit")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["marsh-rabbit-alarm-thump"],
+      communicationSignals: ["marsh-rabbit-alarm-thump"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
+    expect(livingSpeciesModule("fish-crow")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["fish-crow-alarm"],
+      communicationSignals: ["fish-crow-alarm"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
+    expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:world-acoustics:v1",
+      repertoire: ["physical-rustle"],
+      communicationSignals: [],
+      accessibilityCues: ["directional-hearing-caption"],
+    });
+    expect(livingSpeciesModule("southern-leopard-frog")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:world-acoustics:v1",
+      repertoire: ["chorus"],
+      communicationSignals: ["chorus"],
+      accessibilityCues: ["directional-hearing-caption"],
+    });
 
     const releasedCatalogs = [
       LIVING_SPECIES_ALPHA32_CATALOG,
@@ -468,6 +496,39 @@ describe("Living Weft species module catalog", () => {
         repertoire: ["cat-call"],
         communicationSignals: [],
         accessibilityCues: ["direct-observation-caption"],
+      });
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "marsh-rabbit")?.sound)
+        .toEqual({
+          implementation: "active",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["rabbit-thump"],
+          communicationSignals: ["rabbit-thump"],
+          accessibilityCues: ["direct-observation-caption"],
+        });
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "fish-crow")?.sound)
+        .toEqual({
+          implementation: "active",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["crow-nasal-double-call"],
+          communicationSignals: ["crow-nasal-double-call"],
+          accessibilityCues: ["direct-observation-caption"],
+        });
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "brown-rat")?.sound)
+        .toEqual({
+          implementation: "active",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["rat-rustle"],
+          communicationSignals: [],
+          accessibilityCues: ["direct-observation-caption"],
+        });
+      expect(catalog.modules.find(({ speciesId }) => (
+        speciesId === "southern-leopard-frog"
+      ))?.sound).toEqual({
+        implementation: "active",
+        ownerId: "audio:soundscape:v1",
+        repertoire: ["rain-chorus"],
+        communicationSignals: ["rain-chorus"],
+        accessibilityCues: ["directional-hearing-caption"],
       });
     }
   });
@@ -1325,10 +1386,10 @@ describe("Living Weft species module catalog", () => {
       social: { implementation: "foundation", groupModel: "variable" },
       sound: {
         implementation: "active",
-        ownerId: "audio:soundscape:v1",
-        repertoire: ["rat-rustle"],
+        ownerId: "game:world-acoustics:v1",
+        repertoire: ["physical-rustle"],
         communicationSignals: [],
-        accessibilityCues: ["direct-observation-caption"],
+        accessibilityCues: ["directional-hearing-caption"],
       },
       cognition: { implementation: "foundation", model: "aggregate" },
       evidence: {
@@ -1611,10 +1672,10 @@ describe("Living Weft species module catalog", () => {
       social: { communicationChannels: ["hearing"], groupModel: "variable" },
       sound: {
         implementation: "active",
-        ownerId: "audio:soundscape:v1",
-        repertoire: ["rabbit-thump"],
-        communicationSignals: ["rabbit-thump"],
-        accessibilityCues: ["direct-observation-caption"],
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["marsh-rabbit-alarm-thump"],
+        communicationSignals: ["marsh-rabbit-alarm-thump"],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
       },
       evidence: {
         status: "active",
@@ -1785,8 +1846,9 @@ describe("Living Weft species module catalog", () => {
       activity: { ownerId: CORE_ECOLOGY_ACTIVITY_OWNER_ID },
       sound: {
         implementation: "active",
-        repertoire: ["crow-nasal-double-call"],
-        communicationSignals: ["crow-nasal-double-call"],
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["fish-crow-alarm"],
+        communicationSignals: ["fish-crow-alarm"],
       },
       evidence: { status: "unimplemented", produces: [] },
     });
@@ -1846,8 +1908,9 @@ describe("Living Weft species module catalog", () => {
       activity: { decisionModel: "aggregate", offscreenModel: "aggregate" },
       sound: {
         implementation: "active",
-        repertoire: ["rain-chorus"],
-        communicationSignals: ["rain-chorus"],
+        ownerId: "game:world-acoustics:v1",
+        repertoire: ["chorus"],
+        communicationSignals: ["chorus"],
       },
       evidence: { status: "active", produces: ["frog-track"] },
       environment: {
