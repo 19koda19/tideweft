@@ -247,6 +247,18 @@ identity, or a visual position from sound alone. Other work lines remain silent
 until their real completed-work facts have an authoritative owner. This slice
 does not yet add general NPC conversation or a broad animal-expression system.
 
+The current unpublished status is deliberately narrower than the shared
+vocabulary. Receipt-backed player/human representatives, three guardian-dog
+signals, fish-crow/deer calls, the rabbit thump, and the frog chorus are live in
+the candidate. Remaining renderer-polled resident state lines and the existing
+visible-event rat/cat/fox and generic wildlife-alarm fallback cues are
+compatibility bypasses: they do not prove world-event acoustics, listener
+receipt, or knowledge transfer. Future tool,
+violence, and vessel examples are contract fixtures only. General conversation,
+rumors, multilingual comprehension, animated gesture, most animal repertoires,
+and expressions for work that does not yet exist remain specified or deferred;
+catalog data and tests do not make them gameplay.
+
 ### Embodied sound and visible acoustics
 
 Living Voice also owns the restrained textual language of the audible physical
@@ -399,7 +411,7 @@ Each seed creates:
 
 - One continuous deterministic terrain world. The original 96 × 72 seeded estuary remains unchanged at its established coordinates, including five authoritative terrain families, tidal water depth, and seven derived biome identities: Tide Channel, Brine Flat, Reed Marsh, Rain Meadow, Sun Meadow, Wind Ridge, and Glimmerfen. A bounded 120 × 120 presentation frame moves quietly through the world as the courier travels; stored Alpha 0.1 worlds retain their original 64 × 48 terrain inside it.
 - Seven named settlements, each specializing in one of food, fresh water, reed, medicine, or parts.
-- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, useful skills, bounded background history, needs, local relationships, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, a world location, and one shared home-anchored day/night routine whose real work, travel, weather, need, and watch overrides preserve individual continuity.
+- 42 human residents in the original harbor country with a stable semantic identity, seed-derived name and physical presentation, occupation, coherent temperament, a mixed profile of live and future-facing skills, bounded generated biography, needs, static local trust baselines, changing condition, bounded memories, player knowledge, a bounded vision/hearing perception state, an intention, a world location, and one shared home-anchored day/night routine whose real work, travel, weather, need, and watch overrides preserve individual continuity. These fields do not imply a general physical NPC inventory, evolving social graph, causal occupation economy, or enacted verb for every skill/intention.
 - Exactly one independent domestic dog generated from stable seed and origin inputs, paired with one existing porter for a bounded food-and-rain interaction without ownership or a companion bond.
 - Exactly one separate seed-stable settlement working dog with its own kennel and custody. A generic persisted guardian assignment binds that dog, the existing keeper, the protected goat custody and herd, and the pen worksite without changing the original dog's independent relationship.
 - One deterministic starting-harbor yard flock of two or three individually identified domestic chickens. The settlement, existing keeper, bounded home area, and stable flock group hold custody; each bird still uses the shared actor, perception, attention, group, locomotion, and physical-item owners.

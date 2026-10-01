@@ -18,6 +18,11 @@ import {
 /** Renderer-neutral structured sound emitted by a committed world event. */
 export const WORLD_ACOUSTIC_EVENT_VERSION = 1 as const;
 
+/**
+ * Closed admission vocabulary shared by current and reserved domain adapters.
+ * Membership makes a structured event shape eligible; it does not prove that
+ * a runtime producer, action, item, or gameplay loop currently exists.
+ */
 export const WORLD_ACOUSTIC_DOMAINS = Object.freeze([
   "traversal",
   "actor-vocalization",

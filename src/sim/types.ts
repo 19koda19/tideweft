@@ -124,6 +124,7 @@ export interface SettlementState {
 }
 
 export interface ResidentTraits {
+  /** Generated baseline disposition inputs, not a complete personality or speech profile. */
   resolve: number;
   empathy: number;
   curiosity: number;
@@ -136,7 +137,9 @@ export interface ResidentNeeds {
 }
 
 export interface ResidentRelationship {
+  /** Exact resident counterpart for one relationship that has actually been established. */
   residentId: EntityId;
+  /** Current simulation trust; an empty relationship list is not a generated social graph. */
   trust: number;
 }
 
@@ -175,8 +178,11 @@ export interface ResidentIdentity {
     palette: "silt" | "reed" | "tide" | "ember" | "lichen" | "storm";
   };
   temperament: ResidentTemperament[];
+  /** Generated aptitude profile; it does not prove that an occupation currently performs work. */
   skills: ResidentSkill[];
+  /** Generated visible travel-kit appearance, not physical inventory, custody, or equipped gear. */
   visibleGear: ResidentVisibleGear[];
+  /** Generated identity history, not a witnessed world event or Deep Time/provenance record. */
   history: ResidentHistoryEvent[];
 }
 
@@ -280,6 +286,10 @@ export interface ResidentMemory {
   cause: "PLAYER_GREETING" | "SEVERE_WEATHER";
 }
 
+/**
+ * Coarse state-selection vocabulary. A label makes a disposition selectable;
+ * it does not prove that the corresponding world action is implemented or enacted.
+ */
 export type ResidentIntention =
   | "rest"
   | "eat"
@@ -306,10 +316,13 @@ export interface ResidentState {
   memories: ResidentMemory[];
   traits: ResidentTraits;
   needs: ResidentNeeds;
+  /** Sparse established ties only; compatibility residents do not begin with a full social graph. */
   relationships: ResidentRelationship[];
+  /** Coarse current need/contract disposition, not a committed action plan or completed work. */
   intention: ResidentIntention;
   location: ResidentLocation;
   activeContractId: EntityId | null;
+  /** Persisted compatibility/future-cadence data; not currently a runtime cognition scheduler. */
   nextThinkTick: Tick;
 }
 

@@ -292,7 +292,7 @@ function projectResidentAbout(
     },
   ];
   if (mark !== "none") observed.splice(2, 0, { label: "Distinguishing mark", value: titleCase(mark.replaceAll("-", " ")) });
-  if (visibleGear) observed.push({ label: "Visible gear", value: visibleGear });
+  if (visibleGear) observed.push({ label: "Apparent travel kit", value: visibleGear });
 
   const level = resident.playerKnowledge.level;
   return {

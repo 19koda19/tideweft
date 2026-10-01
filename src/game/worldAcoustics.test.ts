@@ -409,7 +409,10 @@ describe("structured world acoustics", () => {
     })).toBeNull();
   });
 
-  it("accepts the shared future contracts for material work, violence, and vessels", () => {
+  it("validates reserved domain fixtures without claiming runtime producers", () => {
+    // These inputs prove only that future owners can join the shared schema.
+    // They are deliberately not emitted by crafting, violence, or vessel
+    // gameplay in this test.
     const contracts: readonly WorldAcousticEventInput[] = [
       {
         triggerEventId: "craft:saw-wood:17",

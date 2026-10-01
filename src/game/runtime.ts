@@ -15146,6 +15146,11 @@ export async function createTideweftRuntime(
             && before !== null
             && before.intent.kind !== event.kind;
         });
+      // Compatibility-only player presentation. These visible/heard legacy
+      // cues do not emit shared world-acoustic events, produce listener
+      // receipts, or transfer actor knowledge, and therefore cannot count as
+      // Living Voice coverage. Current real producers must migrate through the
+      // common event boundary before this path can be retired.
       const ecologyCues: Array<Readonly<{
         cue: "rat-rustle" | "cat-call" | "fox-yip"
           | "wildlife-alarm";

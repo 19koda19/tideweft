@@ -521,11 +521,14 @@ function projectSituatedExpressionView(
 }
 
 /**
- * Adapts the older direct-detail resident speech seam into Living Voice's one
- * acoustic-text layout. This does not promote the compatibility utterance to
- * save authority; it only prevents a second renderer-owned speech universe.
+ * Adapts older direct-detail resident state text into Living Voice's one label
+ * layout. These quoted compatibility labels are not committed sound events,
+ * audio, listener receipts, conversation, or knowledge transfer; the speech
+ * visual kind only preserves their historical styling while the remaining
+ * causal seams migrate. This prevents a second renderer-owned layout universe
+ * without falsely promoting projection-time copy to Voice authority.
  */
-function projectResidentSpeechViews(
+function projectLegacyResidentStateTextViews(
   world: WorldView,
   perception: PerceptionResult,
   residentSpeech: ReadonlyMap<number, string> | undefined,
@@ -541,7 +544,7 @@ function projectResidentSpeechViews(
     ) continue;
     const selected = selectedResidentId === resident.id;
     const text = residentSpeech?.get(resident.id)
-      ?? porterStateSpeech(resident, world.completedTick, selected);
+      ?? legacyResidentStateText(resident, world.completedTick, selected);
     if (text === undefined || text.trim().length === 0) continue;
     const sourceActorId = resident.identity.stableId;
     const speakerLabel = residentKnowsFact(resident.playerKnowledge, "name")
@@ -750,10 +753,15 @@ function porterEmotionMark(
   }
 }
 
-function porterStateSpeech(resident: ResidentState, tick: number, selected: boolean): string | undefined {
-  // Strong state becomes briefly audible at a deterministic cadence. Because
-  // callers project only direct-detail actors, this can never become a global
-  // transcript or off-screen identity leak.
+function legacyResidentStateText(
+  resident: ResidentState,
+  tick: number,
+  selected: boolean,
+): string | undefined {
+  // This is deterministic visible presentation, not an audible world event.
+  // Callers project only direct-detail actors, so it cannot become a global
+  // transcript or off-screen identity leak while causal Voice migration remains
+  // incomplete.
   const ambientWindow = (tick + resident.id * 17) % 180 < 14;
   if (!selected && !ambientWindow) return undefined;
   const restState = observableResidentRestState(resident);
@@ -976,7 +984,7 @@ export function projectGameView(
       options.coreWildlifeExpressionSources,
     )
   )));
-  const residentSpeechExpressions = projectResidentSpeechViews(
+  const legacyResidentStateTextExpressions = projectLegacyResidentStateTextViews(
     world,
     perception,
     options.residentSpeech,
@@ -997,7 +1005,7 @@ export function projectGameView(
   });
   const acousticText = Object.freeze([
     ...expressions,
-    ...residentSpeechExpressions,
+    ...legacyResidentStateTextExpressions,
     ...physicalAcousticText,
   ]);
   const activeWayknotIds = new Set(
@@ -1359,7 +1367,7 @@ export function projectGameView(
       const selected = options.selectedResidentId === resident.id;
       const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
       const speech = options.residentSpeech?.get(resident.id)
-        ?? porterStateSpeech(resident, world.completedTick, selected);
+        ?? legacyResidentStateText(resident, world.completedTick, selected);
       const emotionMark = porterEmotionMark(resident, selected);
       const identityLabel = knowsName
         ? resident.name

@@ -134,7 +134,7 @@ describe("independent NPC ABOUT disclosure audit", () => {
       "Current state",
       "Emotion",
       "Behavior",
-      "Visible gear",
+      "Apparent travel kit",
     ]));
     expect(about?.observed.some(({ value }) => value === resident.name)).toBe(false);
     expect(about?.observed.some(({ value }) => value.toLocaleLowerCase() === resident.role)).toBe(false);

@@ -389,6 +389,68 @@ describe("Living Weft species module catalog", () => {
     expect(livingSpeciesModule("american-black-duck")).not.toBe(releasedDucks[0]);
   });
 
+  it("publishes live Voice repertoires without rewriting released pre-Voice catalogs", () => {
+    expect(livingSpeciesModule("human")).toMatchObject({
+      social: { communicationChannels: ["hearing"] },
+      sound: {
+        implementation: "active",
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["alarm", "relief", "steady", "strained"],
+        communicationSignals: [],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+      },
+    });
+    expect(livingSpeciesModule("domestic-dog")).toMatchObject({
+      social: { communicationChannels: ["hearing"] },
+      sound: {
+        implementation: "active",
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["dog-defensive-growl", "dog-shelter-whine", "dog-warning-bark"],
+        communicationSignals: [
+          "dog-defensive-growl",
+          "dog-shelter-whine",
+          "dog-warning-bark",
+        ],
+      },
+    });
+    expect(livingSpeciesModule("deer")).toMatchObject({
+      social: { communicationChannels: ["hearing"] },
+      sound: {
+        implementation: "active",
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["deer-alarm-snort"],
+        communicationSignals: ["deer-alarm-snort"],
+      },
+    });
+
+    const releasedCatalogs = [
+      LIVING_SPECIES_ALPHA32_CATALOG,
+      LIVING_SPECIES_ALPHA33_CATALOG,
+      LIVING_SPECIES_ALPHA34_CATALOG,
+      LIVING_SPECIES_ALPHA35_CATALOG,
+      LIVING_SPECIES_ALPHA36_CATALOG,
+      LIVING_SPECIES_WAVE_G_ESTUARY_CATALOG,
+      LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_CATALOG,
+      LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
+    ];
+    for (const catalog of releasedCatalogs) {
+      for (const speciesId of ["deer", "domestic-dog", "human"] as const) {
+        expect(catalog.modules.find((module) => module.speciesId === speciesId)?.sound)
+          .toEqual({
+            implementation: "unimplemented",
+            ownerId: null,
+            repertoire: [],
+            communicationSignals: [],
+            accessibilityCues: [],
+          });
+      }
+      for (const speciesId of ["domestic-dog", "human"] as const) {
+        expect(catalog.modules.find((module) => module.speciesId === speciesId)
+          ?.social.communicationChannels).toEqual([]);
+      }
+    }
+  });
+
   it("keeps individual wildlife identity over habitat-derived hybrid population patches", () => {
     for (const species of ["deer", "gull", "black-bear"] as const) {
       const module = livingSpeciesModule(species);
@@ -2129,7 +2191,7 @@ describe("Living Weft species module catalog", () => {
       ...dog,
       social: {
         ...dog.social,
-        communicationChannels: ["vision" as const],
+        communicationChannels: ["hearing" as const, "vision" as const],
         groupModel: "group" as const,
         group: {
           status: "foundation" as const,
@@ -2382,7 +2444,7 @@ describe("Living Weft species module catalog", () => {
       social: {
         ...dog.social,
         actorToActorRelationships: false,
-        communicationChannels: ["vision"],
+        communicationChannels: ["hearing", "vision"],
         groupModel: "group",
         relationshipAxes: [],
         group: {
@@ -2445,13 +2507,21 @@ describe("Living Weft species module catalog", () => {
           sharedMemory: false,
         },
       },
+      sound: {
+        implementation: "unimplemented",
+        ownerId: null,
+        repertoire: [],
+        communicationSignals: [],
+        accessibilityCues: [],
+      },
     });
     expect(sessileColony?.locomotion).toMatchObject({ mode: "sessile", movementVerbs: [] });
     expect(sessileColony?.cognition).toMatchObject({ model: "noncognitive", attentionOwnerId: null });
   });
 
-  it("uses broad ecological target affordances and rejects unsupported perception channels", () => {
+  it("treats broad interaction availability as eligibility, not runtime proof", () => {
     const dog = cloneModule("domestic-dog");
+    expect(dog.interactions.implementation).toBe("foundation");
     expect(dog.interactions.targets.map(({ targetClass }) => targetClass)).toEqual(["human", "predator"]);
     expect(canonicalizeLivingSpeciesModule({
       ...dog,
@@ -2562,14 +2632,8 @@ describe("Living Weft species module catalog", () => {
     })).toBeNull();
     expect(canonicalizeLivingSpeciesModule({
       ...dog,
-      sound: {
-        ...dog.sound,
-        implementation: "foundation",
-        ownerId: "game:dog-sound:v1",
-        repertoire: ["bark"],
-        communicationSignals: ["bark"],
-      },
-    })).toBeNull(); // Audible communication cannot bypass the shared hearing contract.
+      social: { ...dog.social, communicationChannels: [] },
+    })).toBeNull(); // Active communication cannot bypass the shared hearing contract.
     expect(canonicalizeLivingSpeciesModule({
       ...dog,
       aftermath: {
@@ -2869,6 +2933,8 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "elk"
           || module.speciesId === "gray-wolf"
           || module.speciesId === "southern-leopard-frog"
+          || module.speciesId === "domestic-dog"
+          || module.speciesId === "human"
           ? ["hearing"]
           : [],
       );

@@ -547,6 +547,7 @@ export const LIVING_SPECIES_INTERACTION_TARGET_CLASSES = [
 ] as const;
 export type LivingSpeciesInteractionTargetClass =
   (typeof LIVING_SPECIES_INTERACTION_TARGET_CLASSES)[number];
+/** Eligibility in the shared interaction vocabulary, not proof of a live runtime encounter. */
 export type LivingSpeciesInteractionPolicy = "available" | "intentional-no-response";
 
 /** Authored identity and ecological classification, never runtime-generated species soup. */
@@ -612,7 +613,10 @@ export interface LivingSpeciesHealthContract {
   readonly recovery: boolean;
 }
 
-/** Sound is a simulation event contract as well as an audiovisual repertoire. */
+/**
+ * Sound declares repertoire eligibility and its owner. Even an `active` row
+ * does not replace evidence that a causal runtime producer emits the event.
+ */
 export interface LivingSpeciesSoundContract {
   readonly implementation: LivingSpeciesImplementation;
   readonly ownerId: string | null;
@@ -632,7 +636,11 @@ export interface LivingSpeciesAftermathContract {
   readonly evidenceOutputs: readonly string[];
 }
 
-/** One broad-class affordance, resolved by the shared Living Weft rather than a pair script. */
+/**
+ * One broad-class eligibility declaration for the shared Living Weft. An
+ * `available` target still requires a real perception/action owner before the
+ * interaction is live; this row must never be treated as a pair-script claim.
+ */
 export interface LivingSpeciesInteractionTargetContract {
   readonly targetClass: LivingSpeciesInteractionTargetClass;
   readonly policy: LivingSpeciesInteractionPolicy;
@@ -644,7 +652,7 @@ export interface LivingSpeciesInteractionTargetContract {
   readonly disengagementVerbs: readonly string[];
 }
 
-/** Broad interaction declarations force every profile to address the shared living world. */
+/** Coverage declarations, not a runtime producer/consumer implementation ledger. */
 export interface LivingSpeciesInteractionContract {
   readonly implementation: LivingSpeciesImplementation;
   readonly ownerId: string | null;
@@ -1094,6 +1102,34 @@ const noSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: [],
   accessibilityCues: [],
 });
+const LIVING_VOICE_SOUND_OWNER_ID = "game:situated-expression:v1" as const;
+const currentHumanVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["alarm", "relief", "steady", "strained"],
+  // These are realization contours. Structured expression meanings, not the
+  // contour name, decide whether any particular utterance communicates a fact.
+  communicationSignals: [],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
+const currentDogVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["dog-defensive-growl", "dog-shelter-whine", "dog-warning-bark"],
+  communicationSignals: [
+    "dog-defensive-growl",
+    "dog-shelter-whine",
+    "dog-warning-bark",
+  ],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
+const currentDeerVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["deer-alarm-snort"],
+  communicationSignals: ["deer-alarm-snort"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const noAftermath = (): LivingSpeciesAftermathContract => ({
   implementation: "unimplemented",
   ownerId: null,
@@ -1179,7 +1215,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "group",
     crossRegion: false,
-    sound: noSound(),
+    sound: currentDeerVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -5186,11 +5222,11 @@ const CURRENT_MODULE_INPUTS: readonly LivingSpeciesModule[] = [
       groupModel: "variable",
       actorToActorRelationships: true,
       relationshipAxes: [fixed("trust")],
-      communicationChannels: [],
+      communicationChannels: ["hearing"],
       group: noGroupSystem(),
       territory: noTerritory(),
     },
-    sound: noSound(),
+    sound: currentHumanVoiceSound(),
     cognition: {
       implementation: "active",
       ownerId: "sim:resident-memory-knowledge:v1",
@@ -5430,11 +5466,11 @@ const CURRENT_MODULE_INPUTS: readonly LivingSpeciesModule[] = [
       groupModel: "variable",
       actorToActorRelationships: true,
       relationshipAxes: [enumAxis("human-familiarity"), fixed("human-familiarity-confidence")],
-      communicationChannels: [],
+      communicationChannels: ["hearing"],
       group: noGroupSystem(),
       territory: noTerritory(),
     },
-    sound: noSound(),
+    sound: currentDogVoiceSound(),
     cognition: {
       implementation: "foundation",
       ownerId: "game:dog-actor:v1",
@@ -5688,31 +5724,40 @@ const legacyBoundedCircadian = (species: CoreWildlifeSpecies): LivingSpeciesCirc
       }
     : noCircadianSchedule()
 );
-const HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES = new Map<
+const HISTORICAL_RELEASE_COMPATIBILITY_MODULES = new Map<
   string,
   LivingSpeciesModule
 >();
+const HISTORICAL_PRE_VOICE_SOUND_SPECIES: ReadonlySet<string> = new Set([
+  "deer",
+  "domestic-dog",
+  "human",
+]);
+const HISTORICAL_PRE_VOICE_HEARING_SPECIES: ReadonlySet<string> = new Set([
+  "domestic-dog",
+  "human",
+]);
 
 /**
- * Released catalog children authenticate their original bounded-activity
- * declarations. Current physical routines may refine a species rhythm, but a
- * new binding must never rewrite those historical bytes.
+ * Released catalog children authenticate their original declarations. Current
+ * routines and Living Voice may refine rhythm, hearing, and sound capability,
+ * but those truthful current profiles must never rewrite historical bytes.
  */
-function historicalCircadianCompatibilityModule(
+function historicalReleaseCompatibilityModule(
   module: LivingSpeciesModule,
 ): LivingSpeciesModule {
-  const cached = HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES.get(module.speciesId);
+  const cached = HISTORICAL_RELEASE_COMPATIBILITY_MODULES.get(module.speciesId);
   if (cached !== undefined) return cached;
-  if (!CORE_WILDLIFE_SPECIES.includes(module.speciesId as CoreWildlifeSpecies)) {
-    return module;
-  }
-  const historicalCircadian = legacyBoundedCircadian(
+  const coreWildlifeSpecies = CORE_WILDLIFE_SPECIES.includes(
     module.speciesId as CoreWildlifeSpecies,
   );
-  const historicalActivityOwnerId = module.speciesId === "marsh-rabbit"
+  const historicalCircadian = coreWildlifeSpecies
+    ? legacyBoundedCircadian(module.speciesId as CoreWildlifeSpecies)
+    : module.activity.circadian;
+  const historicalActivityOwnerId = coreWildlifeSpecies && module.speciesId === "marsh-rabbit"
     ? "game:core-wildlife-actor:v1"
     : module.activity.ownerId;
-  const historicalDuck = module.speciesId === "american-black-duck";
+  const historicalDuck = coreWildlifeSpecies && module.speciesId === "american-black-duck";
   const historicalWeather = historicalDuck ? absentResponse() : module.environment.weather;
   const historicalWeatherTargets = historicalDuck
     ? module.interactions.targets.map((target) => target.targetClass === "weather"
@@ -5731,12 +5776,22 @@ function historicalCircadianCompatibilityModule(
   const historicalMemoryKinds = historicalDuck
     ? module.cognition.memoryKinds.filter((kind) => kind !== "weather")
     : module.cognition.memoryKinds;
+  const historicalSound = HISTORICAL_PRE_VOICE_SOUND_SPECIES.has(module.speciesId)
+    ? noSound()
+    : module.sound;
+  const historicalCommunicationChannels = HISTORICAL_PRE_VOICE_HEARING_SPECIES.has(
+    module.speciesId,
+  )
+    ? []
+    : module.social.communicationChannels;
   if (
     module.activity.ownerId === historicalActivityOwnerId
     && sameData(module.activity.circadian, historicalCircadian)
     && sameData(module.environment.weather, historicalWeather)
     && sameData(module.interactions.targets, historicalWeatherTargets)
     && sameData(module.cognition.memoryKinds, historicalMemoryKinds)
+    && sameData(module.sound, historicalSound)
+    && sameData(module.social.communicationChannels, historicalCommunicationChannels)
   ) return module;
   const historical = canonicalizeLivingSpeciesModule({
     ...module,
@@ -5749,6 +5804,11 @@ function historicalCircadianCompatibilityModule(
       ...module.cognition,
       memoryKinds: historicalMemoryKinds,
     },
+    social: {
+      ...module.social,
+      communicationChannels: historicalCommunicationChannels,
+    },
+    sound: historicalSound,
     interactions: {
       ...module.interactions,
       targets: historicalWeatherTargets,
@@ -5759,9 +5819,9 @@ function historicalCircadianCompatibilityModule(
     },
   });
   if (historical === null) {
-    throw new Error(`Living Weft could not preserve ${module.speciesId} circadian lineage`);
+    throw new Error(`Living Weft could not preserve ${module.speciesId} released lineage`);
   }
-  HISTORICAL_CIRCADIAN_COMPATIBILITY_MODULES.set(module.speciesId, historical);
+  HISTORICAL_RELEASE_COMPATIBILITY_MODULES.set(module.speciesId, historical);
   return historical;
 }
 
@@ -5770,7 +5830,7 @@ const alpha32CompatibilityModules = LIVING_SPECIES_ALPHA32_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-32 compatibility species ${speciesId}`);
   }
-  return historicalCircadianCompatibilityModule(module);
+  return historicalReleaseCompatibilityModule(module);
 });
 const alpha32CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5796,7 +5856,7 @@ const alpha33CompatibilityModules = LIVING_SPECIES_ALPHA33_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-33 compatibility species ${speciesId}`);
   }
-  return historicalCircadianCompatibilityModule(module);
+  return historicalReleaseCompatibilityModule(module);
 });
 const alpha33CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5822,7 +5882,7 @@ const alpha34CompatibilityModules = LIVING_SPECIES_ALPHA34_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-34 compatibility species ${speciesId}`);
   }
-  return historicalCircadianCompatibilityModule(module);
+  return historicalReleaseCompatibilityModule(module);
 });
 const alpha34CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5848,7 +5908,7 @@ const alpha35CompatibilityModules = LIVING_SPECIES_ALPHA35_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-35 compatibility species ${speciesId}`);
   }
-  return historicalCircadianCompatibilityModule(module);
+  return historicalReleaseCompatibilityModule(module);
 });
 const alpha35CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5874,7 +5934,7 @@ const alpha36CompatibilityModules = LIVING_SPECIES_ALPHA36_SPECIES_IDS.map((spec
   if (module === undefined) {
     throw new Error(`Living Weft catalog omitted Alpha-36 compatibility species ${speciesId}`);
   }
-  return historicalCircadianCompatibilityModule(module);
+  return historicalReleaseCompatibilityModule(module);
 });
 const alpha36CompatibilityCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,
@@ -5901,7 +5961,7 @@ const waveGEstuaryCompatibilityModules = LIVING_SPECIES_WAVE_G_ESTUARY_SPECIES_I
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G estuary species ${speciesId}`);
     }
-    return historicalCircadianCompatibilityModule(module);
+    return historicalReleaseCompatibilityModule(module);
   },
 );
 const waveGEstuaryCompatibilityCatalog = deepFreeze({
@@ -5931,7 +5991,7 @@ const waveGMarshChannelModules = LIVING_SPECIES_WAVE_G_MARSH_CHANNEL_SPECIES_IDS
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G marsh-channel species ${speciesId}`);
     }
-    return historicalCircadianCompatibilityModule(module);
+    return historicalReleaseCompatibilityModule(module);
   },
 );
 const waveGMarshChannelCatalog = deepFreeze({
@@ -5961,7 +6021,7 @@ const waveGSaltmarshSmallWorldsModules =
     if (module === undefined) {
       throw new Error(`Living Weft catalog omitted Wave-G saltmarsh species ${speciesId}`);
     }
-    return historicalCircadianCompatibilityModule(module);
+    return historicalReleaseCompatibilityModule(module);
   });
 const waveGSaltmarshSmallWorldsCatalog = deepFreeze({
   version: LIVING_SPECIES_CATALOG_VERSION,

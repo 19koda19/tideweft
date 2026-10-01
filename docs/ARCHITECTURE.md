@@ -160,6 +160,30 @@ deterministically from actor ID, causal event ID, presentation seed, and catalog
 version. Rendering frequency, wall time, and global RNG cannot select or expire
 a line.
 
+#### Audited implementation frontier
+
+The shared schema is deliberately broader than the current set of producers.
+In the unpublished candidate, receipt-backed player reactions, the porter
+heavy-load departure, keeper response, resident introduction and weather hold,
+one human danger warning, three guardian-dog signals, fish-crow and deer calls,
+the rabbit thump, and the aggregate frog chorus are live representative paths.
+The remaining direct-detail resident state lines are a visible renderer-time
+compatibility adapter: they share collision layout, but they are not committed
+sound events, listener receipts, conversation, or knowledge transfer. Existing
+rat rustle, domestic-cat call, marsh-fox yip, and generic wildlife-alarm fallback
+cues likewise still use the legacy audio/session-announcement path. These are
+`BYPASS` seams to migrate during Living Voice, not proof that broad animal
+Voice is complete.
+
+Tool/material, violence, and vehicle acoustic domains are reusable contract
+vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;
+they do not establish production actions. General NPC conversation and rumors,
+multilingual comprehension, authored visual gesture, broad communicative
+silence, most species repertoires, and future work/economy/violence/vessel
+expressions remain `SPECIFIED` or `DEFERRED` to their real owners. A catalog
+entry, schema field, semantic pool, or passing fixture is never by itself a
+live producer.
+
 The first migrated legacy interaction seam consumes the exact committed
 starting-store closure. An immediate in-person player report, its retained
 evidence, the unique store/keeper identity, and the applied closure transaction
@@ -1362,6 +1386,32 @@ The game projection places residents on non-deep tiles around their current orig
 Actor events are stamped at emission time only when their recorded route/settlement locus was directly observable. That persisted observation fact, player-caused commands, and a very small global-event allowlist feed the player chronicle. A porter walking into view later cannot reveal an unwitnessed historical event retroactively. Full causal events remain in authoritative simulation state.
 
 This is not universal perception or a universal NPC architecture. The first porter-dog web, separate settlement working dog, separate starting-settlement home ecology, and signed-region wild-population owners extend the shared boundary through a narrow set of current consumers: one dog's physical food scent, bounded species-neutral external perception participants, individual-wildlife visual contact, explicit anonymous alarm calls, bounded individual decisions, exact physical resource and carcass transactions, one generic working-animal assignment, deer/gull/fish-crow/wild-boar/elk/gray-wolf group topology, the released conserved aggregate populations—including capelin—receiving only declared lawful pressure, role-and-size-aware rabbit/fox/harrier/gray-wolf/cougar/bear pursuit, exact marsh-fox/gray-wolf/cougar contact against an eligible solitary rabbit, and snowy-egret, American-black-duck, North American river-otter, or harbor-seal actors receiving current anonymous aquatic-activity facts through ordinary visual occlusion. A polar bear may pursue a currently visible seal through those same role and cognition rules, but owns no contact or mortality outcome. A fish crow can alarm at a directly perceived aerial predator; only that causally retained, directly visible behavior can become mobbing pressure that interrupts a northern harrier. A working dog may investigate an anonymous alarm area, but a fox is deterred only after lawfully seeing the dog. Current physical evidence is limited to directly observable rat/frog area signs, silverside or capelin surface activity, fiddler-crab burrows or feeding scrapes, rain-response cat pawprints, rabbit paired tracks, and fox or gray-wolf canid pawprints. The Arctic fox reuses the anonymous canid-pawprint evidence form rather than adding a private track system; seals and polar bears add no track-evidence owner. Fish crows, harriers, snowy egrets, American black ducks, river otters, harbor seals, polar bears, wild boars, elk, and the working dog do not create ground-track evidence. The authored boar, elk, and wolf voice profiles remain inaudible, while wolves do create canid pawprints in this release. General scent fields, broad evidence and tracking, social reports and rumors, broad cross-group communication, physical human pursuit/search pathfinding, human-to-human sensing, generated people beyond the original estuary, additional dogs beyond the current two, worldwide species breadth, the full bestiary, wider ownership and social networks, general physical NPC inventory, negotiation, guaranteed deterrence, foliage consumption, complete circadian life, and companion behavior remain later slices.
+
+### Living Weft current-truth boundary
+
+Directive 03 is immutable execution history. Its broad charter described the
+eventual shared actor fabric; the released closure was the authorized bounded
+F0 slice and later Biodiversity/Turning Day extensions, not universal adoption
+of every item in that historical Definition of Done. Current humans have stable
+identity, condition, needs, bounded memory and perception, knowledge-honest
+observe/greet behavior, route/cargo continuity, and selected day/night and
+weather responses. The generic actor vocabulary and release-gate reports are
+reusable foundations and development evidence, not additional gameplay.
+
+Several persisted human fields intentionally remain only partial. Resident
+relationships are symmetric, static, one-axis trust baselines whose broad live
+consumer is belonging; they are not an evolving directed social graph. Generic
+`eat`, `rest`, `connect`, and `work` intentions select state, while only
+`carry` currently has a substantial enacted work loop. Occupation informs
+identity and narrow selection; it does not yet produce goods. Some skills affect
+weather/courier decisions, while others are profile data. Seed-derived history
+is bounded biography, not witnessed causal world history. Apparent travel-kit
+tokens support characterization and two weather modifiers, but are not stable
+physical NPC inventory, equipped objects, or proof that those props are
+rendered. S1 owns evolving social/economic consequences, actor visuals owns
+visible equipment, material culture owns physical equipment/repair, and future
+occupation owners must attach real work transactions before claiming those
+systems live.
 
 ## First porter-dog living web
 

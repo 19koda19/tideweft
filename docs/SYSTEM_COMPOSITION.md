@@ -178,7 +178,9 @@ recipes, or pair-specific scripts.
 | Physical food + wind/rain/containment | classified scent opportunity | dog and selected wildlife appraisal | PARTIAL | MODERATE | One real food-scent path is live. There is no general scent field for blood, bodies, people, fire, or tracking. |
 | Alarm / danger observation | attention and behavioral pressure | other actors that lawfully perceive the event | LIVE | MODERATE | An attended belief that passes the shared core alarm-source policy and species threshold can commit a fish-crow, deer, or marsh-rabbit alarm; Living Voice consumes those same roots rather than maintaining a narrower threat allowlist. All three continue through core ecology to wildlife and dogs without disclosing the threat. Human hearing is species-honest: crow/deer may remain anonymous `animal-alarm`, while the rabbit foot-thump becomes non-interrupting anonymous `physical-thud` rather than decoded intent. General social information and audible alarm breadth remain incomplete. |
 | Conserved frog aggregate + committed rain-chorus activity + cadence | one structured anonymous aggregate acoustic event | human/dog hearing, player audio, and shared Living Voice presentation | LIVE | STRONG | The local unpublished representative emits one bounded event per qualifying cadence, not per frog/anchor. Shared masking/range/uncertainty and the sample budget govern receipt; no actor, hidden count, exact anchor, duplicate playback, interruption, or reload replay is created. Other aggregate repertoires remain incomplete. |
-| World/actor event | semantic expression intent | current player, human, dog and wildlife expression; later conversation/report breadth | LIVE | STRONG | Current expression is event-owned, deterministic, source-bound, knowledge-honest and bounded. Dry exhaustion, work/closure/introduction/weather-hold, guardian/wildlife/rabbit and warning representatives consume their real causes rather than polling UI state. Wider work, reports/rumors, conversation and future-domain reactions remain active or explicitly deferred work. |
+| Selected committed world/actor event | semantic expression intent | current player, human, dog and wildlife representative expression | LIVE | STRONG | Dry exhaustion, porter departure, keeper closure, introduction, weather hold, guardian/wildlife/rabbit and human-warning representatives are event-owned, deterministic, source-bound, knowledge-honest and bounded. This row does not cover the legacy resident state-text adapter or imply general conversation/report breadth. |
+| Visible resident state polled during projection | quoted compatibility line | shared world-label collision layout | BYPASS | WEAK | The legacy direct-detail adapter prevents a second layout system, but it creates no committed sound, lawful listener receipt, conversation, or knowledge consequence. Available meaningful seams must migrate to event-owned Voice; otherwise the information should remain non-acoustic state presentation. |
+| Visible rat/cat/fox activity or legacy wildlife-alarm fallback | direct sound + session announcement | player-only legacy cue | BYPASS | WEAK | These existing producers still bypass shared acoustic propagation, listener cognition and the acoustic-text presenter. Fish crow, rabbit and frog have migrated; rat rustle, domestic-cat call, marsh-fox yip and the generic fallback remain active Living Voice integration work. |
 | Committed vocal or physical domain event | source-bound acoustic event | environmental propagation and listener-specific hearing receipts | PARTIAL | MODERATE | Current speech/calls plus traversal, cargo, dog contact, rabbit thump, frog chorus and one gear break share stable event identity and hearing. Broader tool/material, routine non-dog contact, arbitrary object/foliage contact, violence and vessels remain `SPECIFIED` with their future producers. |
 | Source-bound acoustic event | lawful heard fact with uncertainty | human/animal attention, belief, interruption and response | PARTIAL | STRONG | Current vocal and physical representatives enter bounded spatial hearing without granting visual identity or decoded producer intent. Interruption is explicit; sample saturation bounds fan-out; optional presentation cannot erase an admitted causal leg. Broader cross-species/coarse hearing remains incomplete. |
 | Lawful player acoustic receipt | audible semantic cue | audio, shared Living Voice text, directional caption and accessibility | PARTIAL | STRONG | Current representatives share deterministic lanes, collision/repetition suppression, a four-label global cap and one label per source. Visible authenticated/direct-contact sources may anchor; unseen hearing stays coarse and directional. Audio/hearing survive optional text suppression; ephemeral labels/audio do not persist or replay. Legacy ambient-water syllables still need full event identity. |
@@ -189,7 +191,8 @@ recipes, or pair-specific scripts.
 | Fish population | physical catch | player/NPC food, settlement stock, market, extraction pressure | SPECIFIED | NONE | Fishing, tackle, catch bodies, and population-pressure feedback are not live. |
 | Physical settlement food lot | scent and finite quantity | rats, chickens, dogs, selected wildlife, keeper knowledge | LIVE | STRONG | Consumption changes the exact lot once. This lot is not reconciled with abstract settlement food stock. |
 | Animal extraction | reduced local abundance | predators, future yield, settlement supply and demand | PARTIAL | WEAK | Rabbit death removes one population unit; recovery/reproduction and economic feedback are absent. |
-| Resident relationship trust | belonging and selected actor appraisal | resident need/behavior state | LIVE | MODERATE | Resident relationship trust contributes to belonging. Wider willingness, access, teaching, and services remain specified consumers. |
+| Resident relationship trust | belonging pressure | resident need/intention selection | PARTIAL | MODERATE | Current relationships are seed-created symmetric one-axis baselines and have no ordinary runtime writer. They contribute to belonging, but do not form an evolving directed social graph or yet affect access, teaching, trade, services, or broad behavior. |
+| Seed-derived resident profile | identity, appearance, role, skill/kit/history descriptors | presentation, weather modifiers and narrow courier selection | PARTIAL | WEAK | Names and core appearance are live; navigation/weather skills and two travel-kit tokens have narrow consumers. Other skills, apparent-kit tokens and generated biography are data present only. They are not physical inventory, enacted professions, witnessed history, or proof of a gameplay verb. |
 | Living Voice fact transfer | structured warning/report/rumor | actor knowledge and later behavior | PARTIAL | MODERATE | An anonymous strong fish-crow/deer alarm can cause one source-honest human warning, and that warning can become anonymous `danger-sound` knowledge for other residents without disclosing predator identity or recursively re-warning. A rabbit alarm reaches humans only as `physical-thud` and cannot enter this warning bridge. General reports, rumors, work-state transfer, and response breadth remain future bridges. |
 
 ### Materials, settlements, Promises, and economy
@@ -350,7 +353,7 @@ interaction suite.
 | Biodiversity | habitat/activity/evidence, animal perception, finite food lots, narrow mortality and scavenging | composed ecologically; human material/economy bridge absent |
 | Crafting/PACK | field harvesting, gear acquisition, four travel adaptations, wear, MEND, and dismantling | composed player loop; settlements/NPCs do not consume it |
 | Cartography | navigation, learned-terrain projection, soundings, recovery cues, and surveyed route reinforcement | narrow infrastructure consumer; no general paid information economy |
-| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. Breadth remains partial because legacy state speech, ambient-water syllables and broad animal/object/tool/violence/vessel producers are not integrated. |
+| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. Breadth remains partial because legacy resident state text, rat/cat/fox/generic-alarm player-only cues, ambient-water syllables and broad animal/object/tool/violence/vessel producers are not integrated. |
 | Settlement stock/logistics core | shortages, Promises, residents, projects, routes, trust, and histories | strong finite loop; no HC/market and no infinite-world settlement bridge |
 | Deep Time / field gear / supernatural systems | almost no current gameplay | correctly marked future rather than falsely live |
 
@@ -378,6 +381,10 @@ interaction suite.
 10. **Living Voice facts** now support one causal human-warning propagation
     slice, but general reports, rumors, work-state transfer, and response breadth
     remain unfinished.
+11. **Human profile breadth** includes skills, apparent-kit tokens, biography,
+    generic intentions and static trust whose current consumers are narrower
+    than their names. Future owners must connect them to real actions rather
+    than treating persisted data as completed gameplay.
 
 ## Magic inputs and bypasses
 
@@ -394,6 +401,11 @@ interaction suite.
 6. Current unknown-destination presentation can reveal exact objective location
    through markers, distance/bearing, routing, focus, or touch despite the
    intended knowledge contract.
+7. Renderer-polled resident compatibility lines look like speech but bypass
+   committed sound, lawful hearing, conversation, and knowledge transfer.
+8. Rat/cat/fox and generic wildlife-alarm compatibility cues play directly to
+   the player and announce through the session path rather than entering shared
+   acoustic propagation and actor cognition.
 
 ## Deliberate initial abstractions
 
