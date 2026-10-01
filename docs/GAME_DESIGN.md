@@ -2400,7 +2400,7 @@ and packaged-parity evidence without adding a scheduler or rewriting actor
 identity. It closes the
 bounded architecture; the working settlement dog remains the current
 relationship-bearing continuity witness rather than a bonded companion, and
-packaged timing is not universal low-end certification. The soak's materialized
+packaged timing is not universal low-end certification. The harness's materialized
 wildlife representative is one real activity-bound Alpine golden eagle, not
 every species at once.
 Directive 04_1A is complete. Current **LIVE_VERIFIED** Alpha 60 closes Directive
