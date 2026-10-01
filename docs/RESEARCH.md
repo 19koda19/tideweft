@@ -737,10 +737,11 @@ strong disturbance retain priority.
 The proof is deliberately distributed across production owners. Direct
 witnesses establish exact WAIT results under distinct presented-frame cadences
 and interruption by a lawfully heard alarm at its committed boundary. A bounded
-three-day / 4,320-tick production soak projects every current resident, carries
-one real activity-bound Alpine golden eagle through daily persistence and source
-dematerialization/rematerialization alongside the production dormant/coarse
-paths, and bounds save growth. Packaged witnesses
+three-day / 4,320-tick direct production-owner harness projects every current
+resident, carries one real activity-bound Alpine golden eagle through daily
+persistence and source dematerialization/rematerialization alongside the
+production dormant/coarse paths, and bounds save growth. It is not a
+whole-runtime, all-wildlife, working-dog, or archived-v1 soak. Packaged witnesses
 exercise the same clock and real REST path across desktop Chart/Relief and
 mobile Relief while holding Title and Quiet Hour still. Together these shared
 representative invariants prove one causal day more honestly than a monolithic
