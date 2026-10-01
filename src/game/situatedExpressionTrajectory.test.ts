@@ -20,6 +20,7 @@ import {
   canonicalizeSituatedExpressionAdmissionLedger,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
+  createCoreWildlifePursuitCallExpressionAdmissionRecord,
   createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogWarningExpressionAdmissionRecord,
   createHumanDangerWarningExpressionAdmissionRecord,
@@ -33,6 +34,7 @@ import {
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
 import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "./coreWildlifeSignalExpression";
+import { MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY } from "./coreWildlifePursuitExpression";
 import {
   situatedExpressionAcoustics,
   situatedExpressionSoundClass,
@@ -60,6 +62,8 @@ const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const DEER_ID = "D-expression-trajectory-deer";
 const MARSH_RABBIT_ID = "M-expression-trajectory-marsh-rabbit";
+const MARSH_FOX_ID = "FOX-v1-expression-trajectory-marsh-fox";
+const PURSUIT_RABBIT_ID = "RABBIT-v1-expression-trajectory-prey";
 const DOMESTIC_CAT_ID = "CAT-v1-expression-trajectory";
 const WARNING_HUMAN_ID = "H-expression-trajectory-warning";
 const INTRODUCING_RESIDENT_ID = "H-expression-trajectory-introduction";
@@ -206,6 +210,24 @@ function domesticCatRainDistressIntent(
     priority: 300_000,
     salience: 610_000,
     variantSeed: 139,
+    durationSteps: 6,
+  };
+}
+
+function marshFoxPursuitIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    version: 1,
+    sourceActorId: MARSH_FOX_ID,
+    triggerEventId,
+    position: POSITION,
+    meaning: "marsh-fox-pursuit-yip",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-prey",
+    priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
+    salience: 680_000,
+    variantSeed: 141,
     durationSteps: 6,
   };
 }
@@ -695,6 +717,66 @@ function domesticCatRainDistressFixture(
   }
   return {
     bank: canonicalBank,
+    ledger: ledger([record]),
+    phase,
+    samples: [animalSample(admitted.event, 0)],
+  };
+}
+
+function marshFoxPursuitFixture(
+  receptionKind: "none" | "heard-visible" | "heard-unseen",
+): Fixture {
+  const phase = 3;
+  const acceptedAtTick = 40;
+  const triggerEventId = `${MARSH_FOX_ID}:e:14:pursue`;
+  const admitted = accept(
+    createSituatedExpressionState(),
+    marshFoxPursuitIntent(triggerEventId),
+  );
+  const current = advanceSituatedExpression(admitted.state, phase);
+  if (current === null || current.active === null) {
+    throw new Error("fixture marsh-fox pursuit expression expired unexpectedly");
+  }
+  const reception: SituatedExpressionReception | null = receptionKind === "none"
+    ? null
+    : receptionKind === "heard-visible"
+      ? createHeardVisibleSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          720_000,
+          true,
+        )
+      : createHeardUnseenSituatedExpressionReception(
+          current.active,
+          acceptedAtTick,
+          {
+            bearing: { centerRadians: 0.75, uncertaintyRadians: 0.2 },
+            distanceBand: { minimum: 2, maximum: 6 },
+            certainty: 0.72,
+          },
+        );
+  if (receptionKind !== "none" && reception === null) {
+    throw new Error("fixture marsh-fox pursuit reception was not canonical");
+  }
+  const bank = canonicalizeSituatedExpressionChannelBank({
+    version: 1,
+    channels: [{ sourceActorId: MARSH_FOX_ID, state: current, reception }],
+  });
+  const record = createCoreWildlifePursuitCallExpressionAdmissionRecord({
+    sourceActorId: MARSH_FOX_ID,
+    triggerEventId,
+    sampleOrdinal: 0,
+    admittedAtPlayerStepPhase: 0,
+    sourceOwnerKey: "regional-ecology:trajectory-test",
+    sourceObservationId: "observation:live-prey:trajectory-test",
+    targetActorId: PURSUIT_RABBIT_ID,
+    acceptedAtTick,
+  });
+  if (bank === null || record === null) {
+    throw new Error("fixture marsh-fox pursuit trajectory was not canonical");
+  }
+  return {
+    bank,
     ledger: ledger([record]),
     phase,
     samples: [animalSample(admitted.event, 0)],
@@ -1402,6 +1484,88 @@ describe("situated-expression admission trajectory", () => {
       [resetDuration, worldOnly.ledger, worldOnly.samples],
       [worldOnly.bank, worldOnly.ledger, changedAcoustics],
       [worldOnly.bank, worldOnly.ledger, promotedInterrupt],
+      [mistimedReceipt, received.ledger, received.samples],
+    ] as const) {
+      expect(situatedExpressionTrajectoryIsCanonical(
+        bankValue,
+        ledgerValue,
+        worldOnly.phase,
+        samplesValue,
+      )).toBe(false);
+    }
+  });
+
+  it("binds marsh-fox pursuit yips to restrained prey-derived semantics", () => {
+    const expectedAcoustics = situatedExpressionAcoustics({
+      meaning: "marsh-fox-pursuit-yip",
+      volume: "spoken",
+    });
+    for (const receptionKind of ["none", "heard-visible", "heard-unseen"] as const) {
+      const fixture = marshFoxPursuitFixture(receptionKind);
+      expect(accepts(fixture), receptionKind).toBe(true);
+      expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+        meaning: "marsh-fox-pursuit-yip",
+        vocalization: "marsh-fox-pursuit-yip",
+        family: "animal-signal",
+        tone: "restrained",
+        volume: "spoken",
+        knowledgeBasis: "self-perceived-prey",
+        priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
+        salience: 680_000,
+        durationSteps: 6,
+        remainingSteps: 3,
+      });
+      expect(fixture.ledger.records[0]).toMatchObject({
+        kind: "core-wildlife-pursuit-call",
+        sourceActorId: MARSH_FOX_ID,
+        sourceOwnerKey: "regional-ecology:trajectory-test",
+        sourceObservationId: "observation:live-prey:trajectory-test",
+        targetActorId: PURSUIT_RABBIT_ID,
+        acceptedAtTick: 40,
+      });
+      expect(fixture.samples[0]).toMatchObject({
+        sourceActorId: MARSH_FOX_ID,
+        soundLoudness: expectedAcoustics.loudness,
+        soundRangeUnits: expectedAcoustics.rangeUnits,
+        soundClass: "animal-call",
+        soundInterrupt: "none",
+      });
+      expect(fixture.bank.channels[0]?.reception?.kind ?? "none").toBe(receptionKind);
+    }
+  });
+
+  it("rejects marsh-fox pursuit semantic, lifetime, receipt, and acoustic tampering", () => {
+    const worldOnly = marshFoxPursuitFixture("none");
+    const received = marshFoxPursuitFixture("heard-visible");
+
+    const wrongPriority = mutable(worldOnly.bank);
+    wrongPriority.channels[0]!.state.active!.priority -= 1;
+    wrongPriority.channels[0]!.state.recent[0]!.priority -= 1;
+    expect(canonicalizeSituatedExpressionChannelBank(wrongPriority)).not.toBeNull();
+
+    const impossibleSalience = mutable(worldOnly.bank);
+    impossibleSalience.channels[0]!.state.active!.salience = 419_999;
+    expect(canonicalizeSituatedExpressionChannelBank(impossibleSalience)).not.toBeNull();
+
+    const resetDuration = mutable(worldOnly.bank);
+    resetDuration.channels[0]!.state.active!.durationSteps += 1;
+    resetDuration.channels[0]!.state.active!.remainingSteps += 1;
+    expect(canonicalizeSituatedExpressionChannelBank(resetDuration)).not.toBeNull();
+
+    const changedAcoustics = mutable(worldOnly.samples);
+    changedAcoustics[0]!.soundRangeUnits -= 1;
+
+    const mistimedReceipt = mutable(received.bank);
+    if (mistimedReceipt.channels[0]!.reception?.kind !== "heard-visible") {
+      throw new Error("fixture lost marsh-fox pursuit reception");
+    }
+    mistimedReceipt.channels[0]!.reception.receivedAtTick += 1;
+
+    for (const [bankValue, ledgerValue, samplesValue] of [
+      [wrongPriority, worldOnly.ledger, worldOnly.samples],
+      [impossibleSalience, worldOnly.ledger, worldOnly.samples],
+      [resetDuration, worldOnly.ledger, worldOnly.samples],
+      [worldOnly.bank, worldOnly.ledger, changedAcoustics],
       [mistimedReceipt, received.ledger, received.samples],
     ] as const) {
       expect(situatedExpressionTrajectoryIsCanonical(

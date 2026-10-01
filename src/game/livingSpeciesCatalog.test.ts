@@ -439,6 +439,13 @@ describe("Living Weft species module catalog", () => {
       communicationSignals: ["marsh-rabbit-alarm-thump"],
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
+    expect(livingSpeciesModule("marsh-fox")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["marsh-fox-pursuit-yip"],
+      communicationSignals: ["marsh-fox-pursuit-yip"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
     expect(livingSpeciesModule("fish-crow")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:situated-expression:v1",
@@ -503,6 +510,14 @@ describe("Living Weft species module catalog", () => {
           ownerId: "audio:soundscape:v1",
           repertoire: ["rabbit-thump"],
           communicationSignals: ["rabbit-thump"],
+          accessibilityCues: ["direct-observation-caption"],
+        });
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "marsh-fox")?.sound)
+        .toEqual({
+          implementation: "active",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["fox-yip"],
+          communicationSignals: [],
           accessibilityCues: ["direct-observation-caption"],
         });
       expect(catalog.modules.find(({ speciesId }) => speciesId === "fish-crow")?.sound)
@@ -1709,13 +1724,13 @@ describe("Living Weft species module catalog", () => {
         ],
         movementVerbs: ["trot", "wade", "walk"],
       },
-      social: { communicationChannels: [], groupModel: "solitary" },
+      social: { communicationChannels: ["hearing"], groupModel: "solitary" },
       sound: {
         implementation: "active",
-        ownerId: "audio:soundscape:v1",
-        repertoire: ["fox-yip"],
-        communicationSignals: [],
-        accessibilityCues: ["direct-observation-caption"],
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["marsh-fox-pursuit-yip"],
+        communicationSignals: ["marsh-fox-pursuit-yip"],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
       },
       evidence: {
         status: "active",
@@ -3053,6 +3068,7 @@ describe("Living Weft species module catalog", () => {
           || module.speciesId === "gull"
           || module.speciesId === "fish-crow"
           || module.speciesId === "marsh-rabbit"
+          || module.speciesId === "marsh-fox"
           || module.speciesId === "domestic-cat"
           || module.speciesId === "wild-boar"
           || module.speciesId === "elk"

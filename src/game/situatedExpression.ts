@@ -26,6 +26,7 @@ export const SITUATED_EXPRESSION_MEANINGS = Object.freeze([
   "fish-crow-alarm-call",
   "deer-alarm-call",
   "marsh-rabbit-alarm-thump",
+  "marsh-fox-pursuit-yip",
   "human-danger-warning",
   "keeper-secure-store-response",
   "need-rest-after-exertion",
@@ -69,6 +70,7 @@ export const SITUATED_EXPRESSION_KNOWLEDGE_BASES = Object.freeze([
   "self-handled-heavy-cargo",
   "self-heard-anonymous-alarm",
   "self-perceived-threat",
+  "self-perceived-prey",
   "self-weather-distress",
   "self-committed-store-closure",
   "self-felt-exhaustion",
@@ -93,7 +95,8 @@ export type SituatedExpressionVocalization =
   | "domestic-cat-rain-distress"
   | "fish-crow-alarm"
   | "deer-alarm-snort"
-  | "marsh-rabbit-alarm-thump";
+  | "marsh-rabbit-alarm-thump"
+  | "marsh-fox-pursuit-yip";
 
 /**
  * A semantic request to the kernel. The caller supplies only facts it is
@@ -332,6 +335,15 @@ const SEMANTIC_LAWS: Readonly<Record<SituatedExpressionMeaning, SemanticLaw>> = 
     meaningCooldownSteps: 24,
     familyCooldownSteps: 12,
   }),
+  "marsh-fox-pursuit-yip": Object.freeze({
+    family: "animal-signal",
+    knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>(["self-perceived-prey"]),
+    tones: new Set<SituatedExpressionTone>(["restrained"]),
+    volumes: new Set<SituatedExpressionVolume>(["spoken"]),
+    vocalization: "marsh-fox-pursuit-yip",
+    meaningCooldownSteps: 24,
+    familyCooldownSteps: 12,
+  }),
   "human-danger-warning": Object.freeze({
     family: "warning",
     knowledgeBases: new Set<SituatedExpressionKnowledgeBasis>([
@@ -485,6 +497,12 @@ const PRESENTATION_REALIZATIONS: Readonly<
     Object.freeze({
       key: "situated-expression.en.v1.marsh-rabbit-alarm-thump.0",
       text: "thump",
+    }),
+  ]),
+  "marsh-fox-pursuit-yip": Object.freeze([
+    Object.freeze({
+      key: "situated-expression.en.v1.marsh-fox-pursuit-yip.0",
+      text: "YIP.",
     }),
   ]),
   "human-danger-warning": Object.freeze([
@@ -1102,7 +1120,8 @@ function isVocalization(value: unknown): value is SituatedExpressionVocalization
     || value === "domestic-cat-rain-distress"
     || value === "fish-crow-alarm"
     || value === "deer-alarm-snort"
-    || value === "marsh-rabbit-alarm-thump";
+    || value === "marsh-rabbit-alarm-thump"
+    || value === "marsh-fox-pursuit-yip";
 }
 
 function validId(value: unknown): value is string {

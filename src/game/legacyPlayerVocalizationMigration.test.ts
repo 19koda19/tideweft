@@ -268,6 +268,19 @@ describe("legacy v33 player-vocalization migration", () => {
     });
     expect(migrateLegacyV33PlayerVocalizations(marshRabbit.state, [], 108, 0)).toBeNull();
 
+    const marshFox = accept(createSituatedExpressionState(), {
+      ...baseIntent("legacy:future-marsh-fox"),
+      meaning: "marsh-fox-pursuit-yip",
+      family: "animal-signal",
+      tone: "restrained",
+      volume: "spoken",
+      knowledgeBasis: "self-perceived-prey",
+      priority: 340_000,
+      salience: 840_000,
+      durationSteps: 6,
+    });
+    expect(migrateLegacyV33PlayerVocalizations(marshFox.state, [], 108, 0)).toBeNull();
+
     const player = accept(createSituatedExpressionState(), stumble("legacy:bad-id"));
     expect(migrateLegacyV33PlayerVocalizations(
       player.state,

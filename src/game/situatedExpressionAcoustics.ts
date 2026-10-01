@@ -152,6 +152,7 @@ const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
 const ANIMAL_CALL_MEANINGS = new Set<SituatedExpressionMeaning>([
   "guardian-dog-shelter-whine",
   "domestic-cat-rain-distress-call",
+  "marsh-fox-pursuit-yip",
 ]);
 
 /** Shared F0 sound class; species voice is semantic, not inferred from tone. */

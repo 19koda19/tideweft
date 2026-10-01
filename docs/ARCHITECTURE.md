@@ -170,17 +170,23 @@ the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
 physical rustle are live representative paths. One domestic-cat representative
 is also live: a freshly committed rain-caused retreat with matching rain
 observation and event-owned wet-track evidence may create one restrained,
-noninterrupting distress call through the shared Voice path.
+noninterrupting distress call through the shared Voice path. One marsh-fox
+representative is live as well: only a freshly entered ecology-owned pursuit
+backed by the fox's current identified live-prey observation, matching resource,
+memory, living target, and committed post-locomotion body address may create one
+restrained yip. A visible authenticated fox remains source-associated; a heard-
+unseen call remains an anonymous animal call and never exposes the prey or the
+fox's private pursuit cause.
 The former direct-detail resident state-line adapter has been retired. Ongoing
 suspicion, posture, observable exposure, contract, and selected-resident state
 remain legible through non-acoustic quick labels, emotion marks, condition
 labels, and ABOUT; projection cadence or selection can no longer manufacture
 an utterance. Hunger remains authoritative but deliberately gains no inferred
 utterance or hidden-need UI until an honest observable or expressive owner
-exists. Existing marsh-fox yip and generic wildlife-alarm fallback cues still
-use the legacy audio/session-announcement path. Those animal cues remain
-`BYPASS` seams to migrate during Living Voice. The narrow cat representative
-does not prove a broad cat repertoire or broad animal Voice.
+exists. The generic wildlife-alarm fallback still uses the legacy audio/session-
+announcement path and remains a `BYPASS` seam to migrate or retire during
+Living Voice. The narrow cat and fox representatives do not prove broad species
+repertoires, general hunting communication, or broad animal Voice.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
 vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;
@@ -733,6 +739,17 @@ owner, cat, rain observation, retreat event, weather memory, wet-track locus,
 admission, channel, and acoustic sample. An acknowledged call does not replay
 audio or ephemeral text after load, and an incompatible or forged causal tuple
 fails closed.
+The later marsh-fox pursuit-yip representative likewise changes no save shape.
+For an admitted call, current-v47 reload reauthenticates the exact regional
+owner, materialized fox, fresh pursuit event, identified live-prey observation,
+matching target/resource and pursuit memory, committed body address, admission,
+channel, sample, and event-time player receipt. If optional expression capacity
+was saturated, no admission, channel, sample, or caption is retained; the same
+exact ecology authority may re-derive at most the next bounded anonymous human-
+hearing consequence. The target must still be one living materialized actor in
+that same ecology root. Load never replays player audio/text or duplicates an
+already consumed downstream receipt; a forged or stale causal tuple fails
+closed.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
@@ -789,10 +806,13 @@ same-tick alarm event, species-valid causal belief, and retained alarm memory;
 reception replays from the event-time listener pose, the species acoustic
 profile, waking perception, and exact visible-source authority. Ordinary
 admitted expression keeps sound capacity atomic, so a ninth candidate stays
-silent instead of creating unconserved knowledge. The rabbit's ecology-owned
-fallback is the narrow exception: presentation saturation preserves one
-physical audio/hearing event but creates no expression channel, sample,
-caption, or hidden alarm knowledge. Resealed remote, acoustically altered,
+silent instead of creating unconserved knowledge. Ecology-owned rabbit and
+marsh-fox fallbacks are the narrow exceptions: presentation saturation
+preserves one authenticated physical consequence without creating an
+expression channel, sample, caption, or hidden motive knowledge. The rabbit
+retains a bounded physical-thud leg; the fox retains event-time player audio and
+one re-derived anonymous `animal-call` human-hearing leg. Resealed remote,
+acoustically altered,
 temporally reset, or causally forged expression samples fail before becoming
 NPC knowledge.
 
@@ -2427,7 +2447,7 @@ wildlife held by non-home regional owners; it never follows a later hidden
 animal position. If no detour exists, the prior route and choice ledger remain
 unchanged.
 
-`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The same candidate adapts the existing core-deer alarm through a short synthesized `vocalization-deer-alarm-snort`; it does not invent a second alarm or player-only ecology path. The frog chorus now follows that common acoustic boundary without inventing an individual: qualifying aggregate activity derives one `animal-call` world event on its cadence at the deterministic representative occupied anchor. A sample admitted to the shared bound can drive anonymous human/dog hearing; a lawful awake player receipt independently releases the existing stereo synthesis after commit and competes for the shared accessible caption as **chorus**. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. The aggregate ID, exact coordinates, hidden population, and opaque source identity remain undisclosed, and no actor-anchored Chart/Relief callout is fabricated. The former ecology session-announcement/direct-playback bypass is gone, and reload does not replay ephemeral player audio or text. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in either the Alpha 17 release or the current unpublished Living Voice candidate. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
+`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The same candidate adapts the existing core-deer alarm through a short synthesized `vocalization-deer-alarm-snort`; it does not invent a second alarm or player-only ecology path. The frog chorus now follows that common acoustic boundary without inventing an individual: qualifying aggregate activity derives one `animal-call` world event on its cadence at the deterministic representative occupied anchor. A sample admitted to the shared bound can drive anonymous human/dog hearing; a lawful awake player receipt independently releases the existing stereo synthesis after commit and competes for the shared accessible caption as **chorus**. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. The aggregate ID, exact coordinates, hidden population, and opaque source identity remain undisclosed, and no actor-anchored Chart/Relief callout is fabricated. A freshly committed marsh-fox pursuit yip now uses that same carrier and delegates to the existing `fox-yip` synthesis only after causal authentication: an unseen receipt is an anonymous **CALL.**, while lawful nearby humans receive only an anonymous animal-call fact. If optional expression admission is saturated, lawful player audio and bounded anonymous human hearing still derive from that same authenticated ecology event without manufacturing a caption or retained Voice record. The migrated crow, frog, and fox events no longer use their former ecology session-announcement/direct-playback bypasses, and reload does not replay ephemeral player audio or text. The northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear have no fabricated audible calls in either the Alpha 17 release or the current unpublished Living Voice candidate. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
 
 ## First settlement-store ecology composition
 

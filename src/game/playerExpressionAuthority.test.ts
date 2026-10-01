@@ -267,6 +267,7 @@ function policy(
     case "fish-crow-alarm-call": throw new Error("Fish-crow calls are not player authority");
     case "deer-alarm-call": throw new Error("Deer calls are not player authority");
     case "marsh-rabbit-alarm-thump": throw new Error("Rabbit calls are not player authority");
+    case "marsh-fox-pursuit-yip": throw new Error("Fox calls are not player authority");
     case "human-danger-warning":
     case "keeper-secure-store-response":
     case "resident-introduction":
@@ -358,6 +359,28 @@ function marshRabbitEvent(sourceActorId: string): SituatedExpressionEvent {
   });
   if (!reduction.accepted || reduction.event === null) {
     throw new Error(`Marsh-rabbit fixture was rejected: ${reduction.reason}`);
+  }
+  return reduction.event;
+}
+
+function marshFoxPursuitEvent(sourceActorId: string): SituatedExpressionEvent {
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId: "core-wildlife:marsh-fox-pursuit:authority",
+    position: POSITION,
+    meaning: "marsh-fox-pursuit-yip",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-prey",
+    priority: 340_000,
+    salience: 840_000,
+    variantSeed: 131,
+    durationSteps: 6,
+  });
+  if (!reduction.accepted || reduction.event === null) {
+    throw new Error(`Marsh-fox fixture was rejected: ${reduction.reason}`);
   }
   return reduction.event;
 }
@@ -849,5 +872,10 @@ describe("player situated-expression authority", () => {
       evidence,
     )).toBe(false);
     expect(playerExpressionAdmissionSoundPolicy(rabbitAdmission, evidence)).toBeNull();
+
+    const foxEvent = marshFoxPursuitEvent("F-player-authority-marsh-fox");
+    expect(playerExpressionEventMatchesAuthority(foxEvent, evidence)).toBe(false);
+    expect(playerExpressionMemoryMatchesAuthority(memoryFor(foxEvent, 2), evidence))
+      .toBe(false);
   });
 });

@@ -157,6 +157,28 @@ function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionInten
   };
 }
 
+function marshFoxPursuitIntent(
+  triggerEventId: string,
+  overrides: Partial<SituatedExpressionIntent> = {},
+): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "FOX-expression-test",
+    triggerEventId,
+    position: POSITION,
+    meaning: "marsh-fox-pursuit-yip",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-prey",
+    priority: 340_000,
+    salience: 900_000,
+    variantSeed: 614,
+    durationSteps: 6,
+    ...overrides,
+  };
+}
+
 function domesticCatRainDistressIntent(
   triggerEventId: string,
   overrides: Partial<SituatedExpressionIntent> = {},
@@ -552,6 +574,43 @@ describe("generic situated-expression kernel", () => {
       ...marshRabbitAlarmIntent("RABBIT-expression-test:e:2:alarm"),
       volume: "shout",
     })).toMatchObject({ accepted: false, reason: "invalid-intent" });
+  });
+
+  it("registers one restrained marsh-fox pursuit yip without exposing prey", () => {
+    const reduction = reduceSituatedExpression(
+      createSituatedExpressionState(),
+      marshFoxPursuitIntent("FOX-expression-test:e:1:pursue"),
+    );
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "marsh-fox-pursuit-yip",
+        family: "animal-signal",
+        tone: "restrained",
+        volume: "spoken",
+        knowledgeBasis: "self-perceived-prey",
+        vocalization: "marsh-fox-pursuit-yip",
+      },
+    });
+    if (reduction.event === null) throw new Error("Marsh-fox pursuit yip was not accepted");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "YIP.",
+      realizationKey: "situated-expression.en.v1.marsh-fox-pursuit-yip.0",
+      vocalization: "marsh-fox-pursuit-yip",
+    });
+    expect(JSON.stringify(reduction.event)).not.toContain("prey-actor");
+
+    for (const forged of [
+      marshFoxPursuitIntent("FOX-expression-test:e:2:pursue", {
+        knowledgeBasis: "self-perceived-threat",
+      }),
+      marshFoxPursuitIntent("FOX-expression-test:e:3:pursue", { tone: "alarmed" }),
+      marshFoxPursuitIntent("FOX-expression-test:e:4:pursue", { volume: "shout" }),
+      marshFoxPursuitIntent("FOX-expression-test:e:5:pursue", { family: "warning" }),
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged))
+        .toMatchObject({ accepted: false, reason: "invalid-intent" });
+    }
   });
 
   it("registers the restrained domestic-cat rain call as authored animal sound", () => {

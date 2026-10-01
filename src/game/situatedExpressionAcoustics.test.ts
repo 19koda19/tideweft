@@ -24,6 +24,8 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("marsh-rabbit-alarm-thump"))
       .toBe("physical-thud");
+    expect(situatedExpressionSoundClass("marsh-fox-pursuit-yip"))
+      .toBe("animal-call");
     expect(situatedExpressionSoundClass("porter-heavy-load")).toBe("human-vocalization");
   });
 
@@ -82,6 +84,11 @@ describe("situated expression acoustics", () => {
       tone: "restrained",
       volume: "murmur",
     })).toBe("none");
+    expect(situatedExpressionSoundInterrupt({
+      meaning: "marsh-fox-pursuit-yip",
+      tone: "restrained",
+      volume: "spoken",
+    })).toBe("none");
   });
 
   it("makes the spoken defensive growl quieter and shorter-ranged than a warning shout", () => {
@@ -105,6 +112,16 @@ describe("situated expression acoustics", () => {
     })).toEqual({
       loudness: 360_000,
       rangeUnits: 8_000,
+    });
+  });
+
+  it("keeps the restrained fox pursuit yip on the bounded spoken envelope", () => {
+    expect(situatedExpressionAcoustics({
+      meaning: "marsh-fox-pursuit-yip",
+      volume: "spoken",
+    })).toEqual({
+      loudness: 620_000,
+      rangeUnits: 18_000,
     });
   });
 

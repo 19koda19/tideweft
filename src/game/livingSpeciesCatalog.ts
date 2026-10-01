@@ -1486,10 +1486,10 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     crossRegion: true,
     sound: {
       implementation: "active",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["fox-yip"],
-      communicationSignals: [],
-      accessibilityCues: ["direct-observation-caption"],
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["marsh-fox-pursuit-yip"],
+      communicationSignals: ["marsh-fox-pursuit-yip"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     },
     evidence: {
       status: "active",
@@ -5755,6 +5755,7 @@ const HISTORICAL_PRE_VOICE_HEARING_SPECIES: ReadonlySet<string> = new Set([
   "domestic-cat",
   "domestic-dog",
   "human",
+  "marsh-fox",
 ]);
 const HISTORICAL_PRE_TURNING_DAY_CIRCADIAN_SPECIES: ReadonlySet<string> = new Set([
   "human",
@@ -5784,6 +5785,13 @@ function historicalActiveSound(
       ownerId: "audio:soundscape:v1",
       repertoire: ["rabbit-thump"],
       communicationSignals: ["rabbit-thump"],
+      accessibilityCues: ["direct-observation-caption"],
+    };
+    case "marsh-fox": return {
+      implementation: "active",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["fox-yip"],
+      communicationSignals: [],
       accessibilityCues: ["direct-observation-caption"],
     };
     case "fish-crow": return {

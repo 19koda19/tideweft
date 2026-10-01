@@ -202,6 +202,7 @@ import {
 import {
   appendSituatedExpressionAdmissionRecord,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
+  createCoreWildlifePursuitCallExpressionAdmissionRecord,
   createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
@@ -279,6 +280,7 @@ import {
   coreWildlifeAlarmExpressionEventMatchesWorld,
   coreWildlifeAlarmExpressionIntent,
   coreWildlifeAlarmExpressionMemoryMatchesWorld,
+  coreWildlifeAlarmExpressionPriority,
   fishCrowAlarmExpressionEventForTrigger,
   fishCrowAlarmExpressionEventMatchesWorld,
   fishCrowAlarmExpressionMemoryMatchesWorld,
@@ -291,6 +293,14 @@ import {
   coreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
   type CoreWildlifeWeatherDistressExpressionInput,
 } from "./coreWildlifeWeatherDistressExpression";
+import {
+  MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
+  coreWildlifePursuitExpressionEventForTrigger,
+  coreWildlifePursuitExpressionEventMatchesWorld,
+  coreWildlifePursuitExpressionIntent,
+  coreWildlifePursuitExpressionMemoryMatchesWorld,
+  type CoreWildlifePursuitExpressionInput,
+} from "./coreWildlifePursuitExpression";
 import {
   humanDangerWarningExpressionCandidate,
   humanDangerWarningExpressionEventForTrigger,
@@ -1091,6 +1101,8 @@ function recentMeaningAcousticTuples(
     case "marsh-rabbit-alarm-thump":
     case "domestic-cat-rain-distress-call":
       return [{ volume: "murmur", interrupt: "none" }];
+    case "marsh-fox-pursuit-yip":
+      return [{ volume: "spoken", interrupt: "none" }];
     case "relief-after-near-fall":
     case "relief-after-cargo-recovery":
     case "porter-heavy-load":
@@ -2296,6 +2308,7 @@ function runtimeCoreWildlifeExpressionSources(
         && population.species !== "deer"
         && population.species !== "marsh-rabbit"
         && population.species !== "domestic-cat"
+        && population.species !== "marsh-fox"
       ) continue;
       for (const { actor, materialization } of population.members) {
         if (materialization !== "materialized") continue;
@@ -6697,6 +6710,48 @@ function runtimeCoreAlarmEvents(
   )));
 }
 
+/**
+ * Reconstructs only pursuit onsets still pending the next bounded human-hearing
+ * interval. The ecology actor/memory remains authority, so save/reload can
+ * recover a sound that optional expression admission did not retain without
+ * persisting a second acoustic queue.
+ */
+function runtimeFreshCoreWildlifePursuitExpressionAuthorities(
+  state: CoreEcologyAggregatePatchState,
+): readonly CoreWildlifePursuitExpressionInput[] {
+  return Object.freeze(state.populations.flatMap(({ members }) => members.flatMap((member) => {
+    if (member.materialization !== "materialized") return [];
+    const actor = member.actor;
+    const resource = actor.intent.resourceReference;
+    if (
+      actor.identity.species !== "marsh-fox"
+      || actor.intent.kind !== "pursue"
+      || actor.intent.enteredAtTick !== state.updatedAtTick
+      || actor.intent.focusObservationId === null
+      || resource === null
+    ) return [];
+    const memories = actor.memories.filter((memory) => (
+      memory.kind === "pursuit"
+      && memory.atTick === state.updatedAtTick
+      && memory.referenceId === resource.resourceId
+      && memory.observationId === actor.intent.focusObservationId
+    ));
+    const memory = memories[0];
+    if (memories.length !== 1 || memory === undefined) return [];
+    const authority = runtimeCoreWildlifePursuitExpressionAuthority(state, {
+      actorId: actor.identity.stableId,
+      triggerEventId: memory.eventId,
+      sourceObservationId: actor.intent.focusObservationId,
+      targetActorId: resource.resourceId,
+      acceptedAtTick: state.updatedAtTick,
+    });
+    return authority === null ? [] : [authority];
+  })).sort((left, right) => compareText(
+    left.event.eventId,
+    right.event.eventId,
+  )));
+}
+
 function runtimeCoreAlarmEventAt(
   actor: CoreWildlifeActorState,
   position: WorldPosition,
@@ -6815,9 +6870,66 @@ function runtimeCoreWildlifeWeatherDistressExpressionAuthority(
     : authority;
 }
 
+/**
+ * Reconstructs one newly entered marsh-fox pursuit at the fox's committed
+ * post-locomotion body address. Core ecology owns both the live target and the
+ * exact perception/resource tuple; Living Voice only adapts that committed
+ * cause into a call.
+ */
+function runtimeCoreWildlifePursuitExpressionAuthority(
+  patch: CoreEcologyAggregatePatchState,
+  input: Readonly<{
+    actorId: string;
+    triggerEventId: string;
+    sourceObservationId: string;
+    targetActorId: string;
+    acceptedAtTick: number;
+  }>,
+): CoreWildlifePursuitExpressionInput | null {
+  const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
+  if (
+    actor === null
+    || actor.identity.species !== "marsh-fox"
+    || actor.updatedAtTick !== input.acceptedAtTick
+  ) return null;
+  const resource = actor.intent.resourceReference;
+  if (
+    actor.intent.kind !== "pursue"
+    || actor.intent.enteredAtTick !== input.acceptedAtTick
+    || actor.intent.focusObservationId !== input.sourceObservationId
+    || actor.intent.cause.referenceId !== input.sourceObservationId
+    || resource === null
+    || resource.resourceId !== input.targetActorId
+    || resource.observationId !== input.sourceObservationId
+    || resource.foodClass !== "live-prey"
+    || resource.sourceKind !== "living-actor"
+  ) return null;
+  const event: CoreWildlifeCausalEvent = Object.freeze({
+    version: CORE_WILDLIFE_EVENT_VERSION,
+    eventId: input.triggerEventId,
+    atTick: input.acceptedAtTick,
+    actorId: actor.identity.stableId,
+    species: "marsh-fox",
+    kind: "pursue",
+    causeReferenceId: input.sourceObservationId,
+    observationId: input.sourceObservationId,
+    resourceReference: resource,
+    position: actor.address.position,
+  });
+  const authority = Object.freeze({ actor, event, world: patch });
+  return coreWildlifePursuitExpressionIntent(authority) === null
+    ? null
+    : authority;
+}
+
 type RuntimeCoreWildlifeWeatherDistressAdmission = Extract<
   SituatedExpressionAdmissionRecord,
   { readonly kind: "core-wildlife-weather-distress" }
+>;
+
+type RuntimeCoreWildlifePursuitAdmission = Extract<
+  SituatedExpressionAdmissionRecord,
+  { readonly kind: "core-wildlife-pursuit-call" }
 >;
 
 type RuntimeCoreWildlifeAlarmAdmission = Extract<
@@ -6948,6 +7060,34 @@ function rabbitAlarmPhysicalSoundSample(
   });
 }
 
+/**
+ * Reprojects one authenticated pursuit yip into anonymous physical hearing
+ * when the optional expression ledger had no capacity. Presentation and audio
+ * remain separate; this sample exists only for the next bounded human-hearing
+ * interval and is re-derived from ecology authority after reload.
+ */
+function foxPursuitPhysicalSoundSample(
+  event: SituatedExpressionEvent,
+): PhysicalSoundSample | null {
+  if (event.meaning !== "marsh-fox-pursuit-yip") return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const eventHash = hashCanonical({
+    domain: "marsh-fox-pursuit-call:v1",
+    eventId: event.eventId,
+    sourceActorId: event.sourceActorId,
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: `fox-pursuit-call:v1:${eventHash}`,
+    id: `fpc-${eventHash}`,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: "animal-call",
+    soundInterrupt: "none",
+    sourceId: event.sourceActorId,
+  });
+}
+
 function runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
   projection: RegionalEcologyStateV6ActiveProjection,
   admission: RuntimeCoreWildlifeAlarmAdmission,
@@ -6981,6 +7121,25 @@ function runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
         actorId: admission.sourceActorId,
         triggerEventId: admission.triggerEventId,
         sourceObservationId: admission.sourceObservationId,
+        acceptedAtTick: admission.acceptedAtTick,
+      });
+}
+
+function runtimeRegionalCoreWildlifePursuitExpressionAuthority(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: RuntimeCoreWildlifePursuitAdmission,
+): CoreWildlifePursuitExpressionInput | null {
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  const source = sources[0];
+  return sources.length !== 1 || source === undefined
+    ? null
+    : runtimeCoreWildlifePursuitExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        targetActorId: admission.targetActorId,
         acceptedAtTick: admission.acceptedAtTick,
       });
 }
@@ -12202,6 +12361,7 @@ export async function createTideweftRuntime(
       || expression.meaning === "deer-alarm-call"
       || expression.meaning === "marsh-rabbit-alarm-thump"
       || expression.meaning === "domestic-cat-rain-distress-call"
+      || expression.meaning === "marsh-fox-pursuit-yip"
     ) {
       const expectedSpecies = expression.meaning === "fish-crow-alarm-call"
         ? "fish-crow"
@@ -12209,6 +12369,8 @@ export async function createTideweftRuntime(
           ? "deer"
           : expression.meaning === "domestic-cat-rain-distress-call"
             ? "domestic-cat"
+            : expression.meaning === "marsh-fox-pursuit-yip"
+              ? "marsh-fox"
             : "marsh-rabbit";
       const matchingActors = runtimeRegionalEcologyProjectedSources(
         projectActiveRegionalEcology(),
@@ -12570,6 +12732,8 @@ export async function createTideweftRuntime(
         ? "rabbit-thump"
         : event.meaning === "domestic-cat-rain-distress-call"
           ? "cat-call"
+          : event.meaning === "marsh-fox-pursuit-yip"
+            ? "fox-yip"
           : `vocalization-${event.vocalization}` as SituatedVocalizationCue;
       return Object.freeze({ cue, volume: intensity, variantSeed: event.variantSeed, pan });
     }));
@@ -13543,6 +13707,60 @@ export async function createTideweftRuntime(
       const humanCoreAlarmObserverIds = new Set(corePerceptionFrame.participants.flatMap(
         ({ address }) => address.species === "human" ? [address.actorId] : [],
       ));
+      const pendingFoxPursuits = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
+        runtimeFreshCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({
+          authority,
+          sourceKey,
+        }))
+      )).filter(({ authority }) => (
+        localMaterializedCoreActorIdSet.has(authority.actor.identity.stableId)
+      )).sort((left, right) => (
+        compareText(left.authority.event.eventId, right.authority.event.eventId)
+        || compareText(left.sourceKey, right.sourceKey)
+      ));
+      const foxPursuitPhysicalFallbacks = pendingFoxPursuits.flatMap(({
+        authority,
+        sourceKey,
+      }) => {
+        const expression = coreWildlifePursuitExpressionEventForTrigger(
+          authority,
+          authority.event.eventId,
+        );
+        if (expression === null) {
+          throw new Error("Fresh fox pursuit lost its acoustic expression authority");
+        }
+        const matchingAdmissions = situatedExpressionAdmissions.records.filter(
+          (record): record is RuntimeCoreWildlifePursuitAdmission => (
+            record.kind === "core-wildlife-pursuit-call"
+            && record.sourceOwnerKey === sourceKey
+            && record.sourceActorId === authority.actor.identity.stableId
+            && record.triggerEventId === authority.event.eventId
+          ),
+        );
+        const admission = matchingAdmissions[0];
+        const retainedSample = admission === undefined
+          ? undefined
+          : actorVocalizationSamples[admission.sampleOrdinal];
+        const humanHearingOwnedByExpression = matchingAdmissions.length === 1
+          && admission !== undefined
+          && coreWildlifePursuitAdmissionMatchesWorld(
+            admission,
+            authority,
+            world.meta.completedTick,
+          )
+          && retainedSample?.expressionEventId === admission.eventId
+          && retainedSample.sourceActorId === admission.sourceActorId;
+        if (humanHearingOwnedByExpression) return [];
+        const sample = foxPursuitPhysicalSoundSample(expression);
+        if (sample === null) {
+          throw new Error("Fox pursuit could not enter shared physical hearing");
+        }
+        return [{
+          eventId: authority.event.eventId,
+          priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
+          sample,
+        }];
+      });
       const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
         runtimeCoreAlarmEvents(patch)
       )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
@@ -13618,23 +13836,36 @@ export async function createTideweftRuntime(
         }));
       }
       // Expression admission and acoustic hearing have independent budgets.
-      // Retained rabbit alarms take the bounded human physical-hearing slots
-      // before routine contact carry, so a full caption/sample ledger cannot
-      // make the world acoustically silent. Dogs keep the original contact
-      // list and continue to receive rabbit meaning through core ecology. A
-      // distinct freshly committed thump is never dropped by expression
-      // cooldown; repetition policy may coalesce only optional presentation.
-      const selectedRabbitPhysicalFallbacks = preparedCoreAlarms
+      // Retained fox calls and rabbit alarms compete by semantic priority for
+      // bounded human physical-hearing slots before routine contact carry, so
+      // a full caption/sample ledger cannot make the world acoustically silent.
+      // Dogs keep the original alarm-contact list and rabbit meaning through
+      // core ecology; this slice makes no new dog interpretation claim for the
+      // fox call. Repetition policy may coalesce only optional presentation.
+      const selectedExpressionPhysicalFallbacks = [
+        ...foxPursuitPhysicalFallbacks,
+        ...preparedCoreAlarms
         .flatMap(({ alarm, rabbitPhysicalFallback }) => (
-          rabbitPhysicalFallback === null ? [] : [{ alarm, sample: rabbitPhysicalFallback }]
-        ))
-        .sort((left, right) => compareText(left.alarm.eventId, right.alarm.eventId))
+          rabbitPhysicalFallback === null
+            ? []
+            : [{
+                eventId: alarm.eventId,
+                priority: coreWildlifeAlarmExpressionPriority("marsh-rabbit"),
+                sample: rabbitPhysicalFallback,
+              }]
+        )),
+      ].sort((left, right) => (
+        right.priority - left.priority
+        || compareText(left.eventId, right.eventId)
+      ))
         .slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES);
       const selectedRabbitPhysicalFallbackEventIds = new Set(
-        selectedRabbitPhysicalFallbacks.map(({ alarm }) => alarm.eventId),
+        selectedExpressionPhysicalFallbacks.flatMap(({ eventId, sample }) => (
+          sample.soundClass === "physical-thud" ? [eventId] : []
+        )),
       );
       const humanPhysicalSoundSamples = Object.freeze([
-        ...selectedRabbitPhysicalFallbacks.map(({ sample }) => sample),
+        ...selectedExpressionPhysicalFallbacks.map(({ sample }) => sample),
         ...worldPhysicalSoundSamples,
       ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
       for (const prepared of preparedCoreAlarms) {
@@ -15120,9 +15351,95 @@ export async function createTideweftRuntime(
           ),
         );
       }
+      const pursuitCallCandidates = coreSteps.flatMap(({
+        sourceKey,
+        beforePatch,
+        result,
+      }) => result.events
+        .filter((event) => (
+          event.species === "marsh-fox"
+          && event.kind === "pursue"
+        ))
+        .map((event) => ({
+          event,
+          sourceKey,
+          beforePatchUpdatedAtTick: beforePatch.updatedAtTick,
+        })))
+        .sort((left, right) => (
+          compareText(left.event.eventId, right.event.eventId)
+          || compareText(left.sourceKey, right.sourceKey)
+        ));
+      for (const candidate of pursuitCallCandidates) {
+        const patch = finalRegionalPatches.get(candidate.sourceKey);
+        const resource = candidate.event.resourceReference;
+        if (
+          patch === undefined
+          || candidate.event.observationId === null
+          || resource === null
+          || resource.foodClass !== "live-prey"
+          || resource.sourceKind !== "living-actor"
+          || candidate.event.atTick <= candidate.beforePatchUpdatedAtTick
+        ) continue;
+        const authority = runtimeCoreWildlifePursuitExpressionAuthority(patch, {
+          actorId: candidate.event.actorId,
+          triggerEventId: candidate.event.eventId,
+          sourceObservationId: candidate.event.observationId,
+          targetActorId: resource.resourceId,
+          acceptedAtTick: candidate.event.atTick,
+        });
+        if (
+          authority === null
+          || authority.event.eventId !== candidate.event.eventId
+          || authority.event.atTick !== candidate.event.atTick
+          || authority.event.actorId !== candidate.event.actorId
+          || authority.event.causeReferenceId !== candidate.event.causeReferenceId
+          || authority.event.observationId !== candidate.event.observationId
+          || stableStringify(authority.event.resourceReference)
+            !== stableStringify(candidate.event.resourceReference)
+        ) continue;
+        const intent = coreWildlifePursuitExpressionIntent(authority);
+        if (intent === null) continue;
+        const audible = playerExpressionAudibility(intent);
+        const reception = audible === null || audible.contact === null
+          ? { kind: "none" as const }
+          : playerDirectlyObservesExpressionSource(intent)
+            ? { kind: "heard-visible" as const, certainty: audible.certainty }
+            : { kind: "heard-unseen" as const, contact: audible.contact };
+        const expressionAdmitted = acceptSituatedExpression(
+          intent,
+          reception,
+          (acceptedEvent, sampleOrdinal) => (
+            createCoreWildlifePursuitCallExpressionAdmissionRecord({
+              sourceActorId: acceptedEvent.sourceActorId,
+              triggerEventId: acceptedEvent.triggerEventId,
+              sampleOrdinal,
+              admittedAtPlayerStepPhase: 0,
+              sourceOwnerKey: candidate.sourceKey,
+              sourceObservationId: candidate.event.observationId!,
+              targetActorId: resource.resourceId,
+              acceptedAtTick: candidate.event.atTick,
+            })
+          ),
+        );
+        // The pursuit and its sound are already committed ecology truth.
+        // Optional expression/sample capacity may suppress retained text, but
+        // cannot erase lawful event-time player audio; resident hearing is
+        // independently re-derived from the same fox state next interval.
+        if (
+          !expressionAdmitted
+          && audible !== null
+          && audible.contact !== null
+        ) {
+          deferredWorldAcousticAudio.push(Object.freeze({
+            cue: "fox-yip",
+            volume: 0.68 * (0.35 + audible.certainty / FIXED_POINT * 0.65),
+            variantSeed: intent.variantSeed,
+            pan: audible.pan,
+          }));
+        }
+      }
       const {
         directlyWitnessedCarcassIds,
-        directlyWitnessedCoreEventIds,
         directlyWitnessedMortalityEventIds,
         settlementFoodLossDirectlyWitnessed,
         witnessedCoreBeforeMortality,
@@ -15153,12 +15470,6 @@ export async function createTideweftRuntime(
             }
             return projected;
           });
-          const witnessedEventIds = new Set(allCoreStepEvents
-            .filter((event) => isWildlifeWorldPositionDirectlyObservedInFrame(
-              event.position,
-              eventObservationFrame,
-            ))
-            .map(({ eventId }) => eventId));
           const witnessedMortalityIds = new Set(allCoreMortalityEvents
             .filter((event) => isWildlifeWorldPositionDirectlyObservedInFrame(
               event.victimPosition,
@@ -15174,7 +15485,6 @@ export async function createTideweftRuntime(
             .map(({ carcassId }) => carcassId));
           return {
             directlyWitnessedCarcassIds: witnessedCarcassIds,
-            directlyWitnessedCoreEventIds: witnessedEventIds,
             directlyWitnessedMortalityEventIds: witnessedMortalityIds,
             settlementFoodLossDirectlyWitnessed:
               isWildlifeWorldPositionDirectlyObservedInFrame(
@@ -15334,43 +15644,18 @@ export async function createTideweftRuntime(
           ecologyConsequenceAnnounced = true;
         }
       }
-      const coreActorBeforeStep = (actorId: string): CoreWildlifeActorState | null => {
-        for (const { beforePatch } of coreSteps) {
-          const actor = coreEcologyAggregatePatchActor(beforePatch, actorId);
-          if (actor !== null) return actor;
-        }
-        return null;
-      };
-      const witnessedFoxYip = allCoreStepEvents
-        .filter((event) => event.species === "marsh-fox" && event.kind === "pursue")
-        .slice()
-        .sort((left, right) => left.eventId < right.eventId ? -1 : left.eventId > right.eventId ? 1 : 0)
-        .find((event) => {
-          const before = coreActorBeforeStep(event.actorId);
-          return directlyWitnessedCoreEventIds.has(event.eventId)
-            && before !== null
-            && before.intent.kind !== event.kind;
-        });
-      // Compatibility-only player presentation. These visible/heard legacy
-      // cues do not emit shared world-acoustic events, produce listener
-      // receipts, or transfer actor knowledge, and therefore cannot count as
-      // Living Voice coverage. Current real producers must migrate through the
+      // Compatibility-only generic alarm presentation. This legacy fallback
+      // does not emit a shared world-acoustic event, produce listener receipts,
+      // or preserve per-event identity, and therefore cannot count as Living
+      // Voice coverage. Its remaining real producers must migrate through the
       // common event boundary before this path can be retired.
       const ecologyCues: Array<Readonly<{
-        cue: "fox-yip" | "wildlife-alarm";
+        cue: "wildlife-alarm";
         volume: number;
         variantSeed: number;
         caption: string;
         pan?: number;
       }>> = [];
-      if (witnessedFoxYip !== undefined) {
-        ecologyCues.push(Object.freeze({
-          cue: "fox-yip",
-          volume: 0.36,
-          variantSeed: witnessedFoxYip.atTick,
-          caption: "[brief yip nearby]",
-        }));
-      }
       if (lawfullyHeardAlarm) {
         ecologyCues.push(Object.freeze({
           cue: "wildlife-alarm",
@@ -15379,12 +15664,10 @@ export async function createTideweftRuntime(
           caption: "ANIMAL ALARM — source unclear.",
         }));
       }
-      // Two simultaneous voices preserve the strongest causal exchange
-      // without turning a busy habitat tick into an audio pile-up. Aggregate
-      // chorus and physical contact use the shared Living Voice queue above
-      // and do not compete through this legacy announcement channel.
-      // Stable causal order determines which legacy cues survive when more
-      // than two lawful events coincide.
+      // Keep this final compatibility channel bounded even though the boolean
+      // fallback currently yields at most one cue. Aggregate chorus, physical
+      // contact, and migrated species calls use the shared Voice queues above
+      // and never compete through this announcement channel.
       const emittedEcologyCues = ecologyCues.slice(0, 2);
       for (const cue of emittedEcologyCues) {
         if (cue.pan === undefined) {
@@ -20053,6 +20336,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
     && kind !== "resident-weather-hold"
     && kind !== "core-wildlife-alarm"
     && kind !== "core-wildlife-weather-distress"
+    && kind !== "core-wildlife-pursuit-call"
   )) && bank.channels.every((channel) => {
     const active = channel.state.active;
     return channel.state.recent.every(({ meaning, family }) => (
@@ -20063,6 +20347,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "deer-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
+      && meaning !== "marsh-fox-pursuit-yip"
       && family !== "condition"
       && family !== "social"
     )) && (active === null || (
@@ -20073,14 +20358,17 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "deer-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
+      && active.meaning !== "marsh-fox-pursuit-yip"
       && active.family !== "condition"
       && active.family !== "social"
       && active.knowledgeBasis !== "self-committed-store-closure"
       && active.knowledgeBasis !== "self-felt-exhaustion"
       && active.knowledgeBasis !== "self-committed-introduction"
+      && active.knowledgeBasis !== "self-perceived-prey"
       && active.vocalization !== "deer-alarm-snort"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
+      && active.vocalization !== "marsh-fox-pursuit-yip"
     ));
   });
 }
@@ -20599,6 +20887,37 @@ function playerPerceptionCarryMatchesPosition(
         admission,
       }) !== null;
     }
+    if (admission.kind === "core-wildlife-pursuit-call") {
+      const authority = runtimeRegionalCoreWildlifePursuitExpressionAuthority(
+        regionalProjection,
+        admission,
+      );
+      const event = authority === null
+        ? null
+        : coreWildlifePursuitExpressionEventForTrigger(
+            authority,
+            admission.triggerEventId,
+          );
+      if (
+        authority === null
+        || event === null
+        || !coreWildlifePursuitAdmissionMatchesWorld(
+          admission,
+          authority,
+          economy.completedTick,
+        )
+        || !vocalizationSampleMatchesActiveEvent(sample, event)
+      ) return false;
+      return coreWildlifePursuitReceptionAtEventTime({
+        carry,
+        spatialWorld,
+        window: regionalTravel.window,
+        playerTemplate: player,
+        authority,
+        event,
+        admission,
+      }) !== null;
+    }
     if (admission.kind === "human-danger-warning") {
       const authority = runtimeHumanDangerWarningExpressionAuthority(
         economy,
@@ -20893,6 +21212,70 @@ function situatedExpressionChannelsMatchWorld(
           && (active?.eventId !== admission.eventId || (
             active !== null
             && coreWildlifeWeatherDistressReceptionMatchesEventTime({
+              carry,
+              spatialWorld,
+              window: regionalTravel.window,
+              playerTemplate: player,
+              authority,
+              event: active,
+              admission,
+              reception: channel.reception,
+            })
+          ));
+      });
+    }
+    const wildlifePursuitAdmissions = admissions.filter((candidate):
+      candidate is CoreWildlifePursuitAdmission => (
+      candidate.kind === "core-wildlife-pursuit-call"
+    ));
+    if (wildlifePursuitAdmissions.length > 0) {
+      if (wildlifePursuitAdmissions.length !== admissions.length) return false;
+      const admissionFor = (
+        triggerEventId: string,
+      ): CoreWildlifePursuitAdmission | null => {
+        const matching = wildlifePursuitAdmissions.filter((candidate) => (
+          candidate.triggerEventId === triggerEventId
+        ));
+        return matching.length === 1 ? matching[0] ?? null : null;
+      };
+      const authorityFor = (
+        triggerEventId: string,
+      ): CoreWildlifePursuitExpressionInput | null => {
+        const admission = admissionFor(triggerEventId);
+        return admission === null
+          ? null
+          : runtimeRegionalCoreWildlifePursuitExpressionAuthority(
+              regionalProjection,
+              admission,
+            );
+      };
+      if (!channel.state.recent.every((memory) => {
+        const admission = admissionFor(memory.triggerEventId);
+        const authority = authorityFor(memory.triggerEventId);
+        return admission !== null
+          && authority !== null
+          && coreWildlifePursuitExpressionMemoryMatchesWorld(authority, memory);
+      })) return false;
+      if (active !== null) {
+        const admission = admissionFor(active.triggerEventId);
+        const authority = authorityFor(active.triggerEventId);
+        if (
+          admission === null
+          || authority === null
+          || !coreWildlifePursuitExpressionEventMatchesWorld(authority, active)
+        ) return false;
+      }
+      return wildlifePursuitAdmissions.every((admission) => {
+        const authority = authorityFor(admission.triggerEventId);
+        return authority !== null
+          && coreWildlifePursuitAdmissionMatchesWorld(
+            admission,
+            authority,
+            economy.completedTick,
+          )
+          && (active?.eventId !== admission.eventId || (
+            active !== null
+            && coreWildlifePursuitReceptionMatchesEventTime({
               carry,
               spatialWorld,
               window: regionalTravel.window,
@@ -21838,6 +22221,148 @@ function coreWildlifeWeatherDistressReceptionAtEventTime(
       },
       perception: projectPerception(spatialWorld, eventTimePlayer),
     });
+  const expected = directlyVisible
+    ? createHeardVisibleSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        Math.max(1, Math.round(contact.certainty * FIXED_POINT)),
+        true,
+      )
+    : createHeardUnseenSituatedExpressionReception(
+        event,
+        admission.acceptedAtTick,
+        contact,
+      );
+  return expected === null
+    ? null
+    : Object.freeze({ audible: true, reception: expected });
+}
+
+type CoreWildlifePursuitAdmission = RuntimeCoreWildlifePursuitAdmission;
+
+function coreWildlifePursuitAdmissionMatchesWorld(
+  admission: CoreWildlifePursuitAdmission,
+  authority: CoreWildlifePursuitExpressionInput,
+  completedTick: number,
+): boolean {
+  const event = coreWildlifePursuitExpressionEventForTrigger(
+    authority,
+    admission.triggerEventId,
+  );
+  return event !== null
+    && coreWildlifePursuitExpressionEventMatchesWorld(authority, event)
+    && admission.sourceActorId === authority.actor.identity.stableId
+    && admission.sourceActorId === authority.event.actorId
+    && admission.triggerEventId === authority.event.eventId
+    && admission.sourceObservationId === authority.event.observationId
+    && admission.sourceObservationId === authority.event.causeReferenceId
+    && admission.targetActorId === authority.event.resourceReference?.resourceId
+    && admission.admittedAtPlayerStepPhase === 0
+    && admission.acceptedAtTick === completedTick
+    && admission.acceptedAtTick === authority.event.atTick
+    && authority.world.updatedAtTick === completedTick
+    && sameRuntimeWorldPosition(event.position, authority.actor.address.position);
+}
+
+interface CoreWildlifePursuitReceptionAuthorityInput {
+  readonly carry: PlayerPerceptionCarry;
+  readonly spatialWorld: WorldView;
+  readonly window: RegionalPlayerTravelState["window"];
+  readonly playerTemplate: PlayerState;
+  readonly authority: CoreWildlifePursuitExpressionInput;
+  readonly event: SituatedExpressionEvent;
+  readonly admission: CoreWildlifePursuitAdmission;
+  readonly reception: SituatedExpressionReception | null;
+}
+
+function coreWildlifePursuitReceptionMatchesEventTime(
+  input: CoreWildlifePursuitReceptionAuthorityInput,
+): boolean {
+  const expected = coreWildlifePursuitReceptionAtEventTime(input);
+  return expected !== null
+    && stableStringify(expected.reception) === stableStringify(input.reception);
+}
+
+/** Replays one local, noninterrupting pursuit call through event-time acoustics. */
+function coreWildlifePursuitReceptionAtEventTime(
+  input: Omit<CoreWildlifePursuitReceptionAuthorityInput, "reception">,
+): GuardianDogCallEventTimeReception | null {
+  const {
+    carry,
+    spatialWorld,
+    window,
+    playerTemplate,
+    authority,
+    event,
+    admission,
+  } = input;
+  if (
+    spatialWorld.completedTick !== admission.acceptedAtTick
+    || event.eventId !== admission.eventId
+    || event.sourceActorId !== admission.sourceActorId
+    || event.triggerEventId !== admission.triggerEventId
+    || event.meaning !== "marsh-fox-pursuit-yip"
+    || !sameRuntimeWorldPosition(event.position, authority.event.position)
+    || !sameRuntimeWorldPosition(event.position, authority.actor.address.position)
+  ) return null;
+  if (carry.intervalStartWasSleeping) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  const listenerPoint = perceptionIntervalPointInWindow(
+    window,
+    carry.intervalStartPosition,
+  );
+  if (listenerPoint === null) return null;
+  const eventTimePlayer: PlayerState = {
+    ...playerTemplate,
+    worldWidth: window.terrain.width,
+    worldHeight: window.terrain.height,
+    x: listenerPoint.x,
+    y: listenerPoint.y,
+    previousX: listenerPoint.x,
+    previousY: listenerPoint.y,
+    velocityX: 0,
+    velocityY: 0,
+    facingMilliRadians: carry.intervalStartFacingMilliRadians,
+  };
+  const reconstructed = playerWorldPositionInRegionalWindow(window, eventTimePlayer);
+  if (
+    reconstructed === null
+    || !sameRuntimeWorldPosition(reconstructed, carry.intervalStartPosition)
+  ) return null;
+  let delta: ReturnType<typeof worldPositionDelta>;
+  try {
+    delta = worldPositionDelta(carry.intervalStartPosition, event.position);
+  } catch {
+    return null;
+  }
+  const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
+  if (masking === null) return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const contact = evaluateAudibleContact({
+    listener: { x: 0, y: 0 },
+    source: { x: delta.x, y: delta.y },
+    baseRange: acoustics.rangeUnits,
+    ambientNoise: masking,
+    sourceLoudness: acoustics.loudness / FIXED_POINT,
+    wind: {
+      x: spatialWorld.weather.windX / FIXED_POINT,
+      y: spatialWorld.weather.windY / FIXED_POINT,
+    },
+  });
+  if (contact === null) {
+    return Object.freeze({ audible: false, reception: null });
+  }
+  const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
+    window: {
+      origin: window.origin,
+      terrain: {
+        width: window.terrain.width,
+        height: window.terrain.height,
+      },
+    },
+    perception: projectPerception(spatialWorld, eventTimePlayer),
+  });
   const expected = directlyVisible
     ? createHeardVisibleSituatedExpressionReception(
         event,

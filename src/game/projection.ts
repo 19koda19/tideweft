@@ -313,7 +313,8 @@ export type AnimalCallKind =
   | GuardianDogCallKind
   | "cat-call"
   | "fish-crow-call"
-  | "deer-call";
+  | "deer-call"
+  | "marsh-fox-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
 export function guardianDogCallKind(
@@ -335,6 +336,8 @@ export function animalCallKind(
       ? "deer-call"
       : meaning === "domestic-cat-rain-distress-call"
         ? "cat-call"
+        : meaning === "marsh-fox-pursuit-yip"
+          ? "marsh-fox-call"
       : guardianDogCallKind(meaning);
 }
 
@@ -382,6 +385,7 @@ export function projectSituatedExpressionSource(
     || event.meaning === "deer-alarm-call"
     || event.meaning === "marsh-rabbit-alarm-thump"
     || event.meaning === "domestic-cat-rain-distress-call"
+    || event.meaning === "marsh-fox-pursuit-yip"
   ) {
     if (reception?.kind === "heard-unseen") {
       return Object.freeze({
@@ -404,6 +408,8 @@ export function projectSituatedExpressionSource(
         ? "deer"
         : event.meaning === "domestic-cat-rain-distress-call"
           ? "domestic-cat"
+          : event.meaning === "marsh-fox-pursuit-yip"
+            ? "marsh-fox"
           : "marsh-rabbit";
     if (
       matches.length !== 1
@@ -419,6 +425,8 @@ export function projectSituatedExpressionSource(
           ? "Deer"
           : event.meaning === "domestic-cat-rain-distress-call"
             ? "Domestic cat"
+            : event.meaning === "marsh-fox-pursuit-yip"
+              ? "Marsh fox"
           : "Marsh rabbit",
     });
   }

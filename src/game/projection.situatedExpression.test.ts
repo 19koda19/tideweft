@@ -358,6 +358,32 @@ function canonicalDomesticCatRainDistress(
   return reduced.state.active;
 }
 
+function canonicalMarshFoxPursuitYip(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "FOX-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "marsh-fox-pursuit-yip",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-prey",
+    priority: 340_000,
+    salience: 590_000,
+    variantSeed: 0xf09,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Marsh-fox expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalHumanDangerWarning(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -429,6 +455,14 @@ function domesticCatSource(event: SituatedExpressionEvent): CoreWildlifeExpressi
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "domestic-cat",
+    position: event.position,
+  });
+}
+
+function marshFoxSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "marsh-fox",
     position: event.position,
   });
 }
@@ -1445,6 +1479,91 @@ describe("situated expression game projection", () => {
     const serializedCaption = JSON.stringify(caption);
     expect(serializedCaption).not.toContain(expression.sourceActorId);
     expect(serializedCaption).not.toMatch(/cat|MRROW|weather|retreat/iu);
+  });
+
+  it("anchors a visible marsh-fox pursuit yip while hiding its unseen identity and cause", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalMarshFoxPursuitYip(
+      wildlifePositionInWindow(window),
+      "marsh-fox-signal:pursuit-start:prey-hidden",
+    );
+    const visible = heardVisibleReception(expression);
+    const sources = [marshFoxSource(expression)];
+
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressions).toEqual([expect.objectContaining({
+      acousticKind: "animal-call",
+      sourceActorId: expression.sourceActorId,
+      sourceKind: "animal",
+      speakerLabel: "Marsh fox",
+      text: "YIP.",
+    })]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: sources,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Marsh fox",
+      text: "YIP.",
+      presentationKind: "animal-call",
+      animalCallKind: "marsh-fox-call",
+    });
+
+    const source = sources[0];
+    if (source === undefined) throw new Error("Marsh-fox source fixture was not created");
+    const forgedSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
+      [],
+      [{ ...source, species: "deer" }],
+      [{
+        ...source,
+        position: createWorldPosition(
+          source.position.region,
+          source.position.localX + 1,
+          source.position.localY,
+        ),
+      }],
+      [source, { ...source }],
+    ];
+    for (const coreWildlifeExpressionSources of forgedSources) {
+      expect(projectGameView(world, player, {
+        situatedExpression: expression,
+        situatedExpressionReception: visible,
+        coreWildlifeExpressionSources,
+      }).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        situatedExpression: expression,
+        situatedExpressionReception: visible,
+        coreWildlifeExpressionSources,
+      }).expressionCaption).toBeUndefined();
+    }
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI / 4, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Hidden marsh-fox reception fixture was rejected");
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "CALL.",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      directionLabel: "south-east",
+    });
+    const serializedCaption = JSON.stringify(caption);
+    expect(serializedCaption).not.toContain(expression.sourceActorId);
+    expect(serializedCaption).not.toMatch(/fox|YIP|prey|pursuit/iu);
   });
 
   it("anchors a visible marsh-rabbit thump only to its authenticated body", () => {

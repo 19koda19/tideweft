@@ -383,8 +383,10 @@ an utterance. Audible expression requires a newly committed source event.
 
 When Living Voice adapts an existing ecological or working-animal signal, that
 causal domain retains semantic and physical authority. Living Voice may add
-human hearing and presentation only through one source-bound admission and must
-suppress any duplicate human observation or player cue for the same event.
+human hearing and presentation only from one authenticated source-bound event
+and acoustic leg; an optional presentation admission may retain that leg but is
+not allowed to become its physical cause. Duplicate human observation or player
+cue for the same event must be suppressed.
 Listener knowledge is derived independently from producer intent: a signal that
 means alarm inside ecology may remain only an anonymous impact to a human who
 heard it. Interruption strength is explicit semantic authority, not inferred

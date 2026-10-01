@@ -13,6 +13,7 @@ import {
   canonicalizeSituatedExpressionAdmissionRecord,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifeFishCrowAlarmExpressionAdmissionRecord,
+  createCoreWildlifePursuitCallExpressionAdmissionRecord,
   createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
   createGuardianDogDefensiveGrowlExpressionAdmissionRecord,
   createGuardianDogShelterWhineExpressionAdmissionRecord,
@@ -38,6 +39,8 @@ const PLAYER_ID = LOCAL_PLAYER_LIVING_ACTOR_ID;
 const PORTER_ID = "H-porter-admission";
 const GUARDIAN_DOG_ID = "D-guardian-admission";
 const DOMESTIC_CAT_ID = "CAT-v1-expression-admission";
+const MARSH_FOX_ID = "FOX-v1-expression-admission";
+const MARSH_RABBIT_ID = "RABBIT-v1-expression-admission";
 const POSITION = createWorldPosition(createRegionCoord(-4, 11), 17_000, 29_000);
 
 function traversalInput(
@@ -443,6 +446,69 @@ describe("situated-expression admission ledger", () => {
     const missingObservation = { ...canonical } as Record<string, unknown>;
     delete missingObservation.sourceObservationId;
     expect(canonicalizeSituatedExpressionAdmissionRecord(missingObservation)).toBeNull();
+  });
+
+  it("binds a marsh-fox pursuit call to its exact prey observation and ledger order", () => {
+    const input = {
+      sourceActorId: MARSH_FOX_ID,
+      triggerEventId: `${MARSH_FOX_ID}:e:p9:pursue`,
+      sampleOrdinal: 1,
+      admittedAtPlayerStepPhase: 0,
+      sourceOwnerKey: "regional-habitat:11:-4",
+      sourceObservationId: "observation:live-prey:rabbit:1",
+      targetActorId: MARSH_RABBIT_ID,
+      acceptedAtTick: 909,
+    } as const;
+    const canonical = createCoreWildlifePursuitCallExpressionAdmissionRecord(input);
+
+    expect(canonical).toEqual({
+      version: 1,
+      eventId: situatedExpressionEventIdForTrigger(
+        input.sourceActorId,
+        input.triggerEventId,
+      ),
+      kind: "core-wildlife-pursuit-call",
+      ...input,
+    });
+    expect(Object.isFrozen(canonical)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(canonical)))
+      .toEqual(canonical);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rawLedger([
+      traversalRecord(0),
+      structuredClone(canonical),
+    ]))?.records).toEqual([traversalRecord(0), canonical]);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rawLedger([
+      structuredClone(canonical),
+      traversalRecord(0),
+    ]))).toBeNull();
+
+    for (const mutation of [
+      { sourceActorId: PLAYER_ID },
+      { sourceActorId: DOMESTIC_CAT_ID },
+      { targetActorId: MARSH_FOX_ID },
+      { targetActorId: "D-deer-not-current-prey" },
+      { admittedAtPlayerStepPhase: 1 },
+      { sourceOwnerKey: " padded " },
+      { sourceObservationId: "" },
+      { acceptedAtTick: -0 },
+    ] as const) {
+      expect(createCoreWildlifePursuitCallExpressionAdmissionRecord({
+        ...input,
+        ...mutation,
+      })).toBeNull();
+    }
+    expect(createCoreWildlifePursuitCallExpressionAdmissionRecord({
+      ...input,
+      hiddenPreyPosition: POSITION,
+    } as never)).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      eventId: "situated-expression:event:v1:forged",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...canonical,
+      undisclosedTargetPosition: POSITION,
+    })).toBeNull();
   });
 
   it("binds a human danger warning to one exact non-player observation and rejects ledger tampering", () => {

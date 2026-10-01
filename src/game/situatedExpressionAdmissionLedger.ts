@@ -35,6 +35,7 @@ export const SITUATED_EXPRESSION_ADMISSION_KINDS = Object.freeze([
   "core-wildlife-fish-crow-alarm",
   "core-wildlife-alarm",
   "core-wildlife-weather-distress",
+  "core-wildlife-pursuit-call",
   "human-danger-warning",
   "settlement-keeper-store-response",
   "resident-introduction",
@@ -198,6 +199,19 @@ export interface CoreWildlifeWeatherDistressExpressionAdmissionRecord
   readonly acceptedAtTick: number;
 }
 
+/** Exact causal authority for one marsh fox's committed live-prey pursuit yip. */
+export interface CoreWildlifePursuitCallExpressionAdmissionRecord
+  extends SituatedExpressionAdmissionRecordBase {
+  readonly kind: "core-wildlife-pursuit-call";
+  /** Exact regional ecology owner of the committed physical fox. */
+  readonly sourceOwnerKey: string;
+  /** Exact direct live-prey observation that caused the pursuit. */
+  readonly sourceObservationId: string;
+  /** Exact living target retained by both the observation and resource reference. */
+  readonly targetActorId: string;
+  readonly acceptedAtTick: number;
+}
+
 export interface HumanDangerWarningExpressionAdmissionRecord
   extends SituatedExpressionAdmissionRecordBase {
   readonly kind: "human-danger-warning";
@@ -274,6 +288,7 @@ export type SituatedExpressionAdmissionRecord =
   | CoreWildlifeFishCrowAlarmExpressionAdmissionRecord
   | CoreWildlifeAlarmExpressionAdmissionRecord
   | CoreWildlifeWeatherDistressExpressionAdmissionRecord
+  | CoreWildlifePursuitCallExpressionAdmissionRecord
   | HumanDangerWarningExpressionAdmissionRecord
   | SettlementKeeperStoreResponseExpressionAdmissionRecord
   | ResidentIntroductionExpressionAdmissionRecord
@@ -354,6 +369,14 @@ export interface CoreWildlifeWeatherDistressExpressionAdmissionInput
   extends SituatedExpressionAdmissionInputBase {
   readonly sourceOwnerKey: string;
   readonly sourceObservationId: string;
+  readonly acceptedAtTick: number;
+}
+
+export interface CoreWildlifePursuitCallExpressionAdmissionInput
+  extends SituatedExpressionAdmissionInputBase {
+  readonly sourceOwnerKey: string;
+  readonly sourceObservationId: string;
+  readonly targetActorId: string;
   readonly acceptedAtTick: number;
 }
 
@@ -721,6 +744,37 @@ export function createCoreWildlifeWeatherDistressExpressionAdmissionRecord(
   }) as CoreWildlifeWeatherDistressExpressionAdmissionRecord | null;
 }
 
+/** Creates one regional-ecology-owned marsh-fox live-prey pursuit admission. */
+export function createCoreWildlifePursuitCallExpressionAdmissionRecord(
+  input: CoreWildlifePursuitCallExpressionAdmissionInput,
+): CoreWildlifePursuitCallExpressionAdmissionRecord | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "targetActorId",
+    "triggerEventId",
+  ])) return null;
+  const eventId = eventIdFor(value);
+  return eventId === null ? null : canonicalizeSituatedExpressionAdmissionRecord({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId,
+    sourceActorId: value.sourceActorId,
+    triggerEventId: value.triggerEventId,
+    sampleOrdinal: value.sampleOrdinal,
+    admittedAtPlayerStepPhase: value.admittedAtPlayerStepPhase,
+    kind: "core-wildlife-pursuit-call",
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    targetActorId: value.targetActorId as string,
+    acceptedAtTick: value.acceptedAtTick,
+  }) as CoreWildlifePursuitCallExpressionAdmissionRecord | null;
+}
+
 /** Creates one source-honest human warning admission from fresh perception. */
 export function createHumanDangerWarningExpressionAdmissionRecord(
   input: HumanDangerWarningExpressionAdmissionInput,
@@ -903,6 +957,7 @@ export function canonicalizeSituatedExpressionAdmissionRecord(
     case "core-wildlife-fish-crow-alarm": return canonicalFishCrowAlarmRecord(value);
     case "core-wildlife-alarm": return canonicalCoreWildlifeAlarmRecord(value);
     case "core-wildlife-weather-distress": return canonicalCoreWildlifeWeatherDistressRecord(value);
+    case "core-wildlife-pursuit-call": return canonicalCoreWildlifePursuitCallRecord(value);
     case "human-danger-warning": return canonicalHumanDangerWarningRecord(value);
     case "settlement-keeper-store-response": return canonicalSettlementKeeperStoreResponseRecord(value);
     case "resident-introduction": return canonicalResidentIntroductionRecord(value);
@@ -1368,6 +1423,46 @@ function canonicalCoreWildlifeWeatherDistressRecord(
     kind: "core-wildlife-weather-distress",
     sourceOwnerKey: value.sourceOwnerKey,
     sourceObservationId: value.sourceObservationId,
+    acceptedAtTick: value.acceptedAtTick,
+  });
+}
+
+function canonicalCoreWildlifePursuitCallRecord(
+  value: Readonly<Record<string, unknown>>,
+): CoreWildlifePursuitCallExpressionAdmissionRecord | null {
+  if (!exactKeys(value, [
+    "acceptedAtTick",
+    "admittedAtPlayerStepPhase",
+    "eventId",
+    "kind",
+    "sampleOrdinal",
+    "sourceActorId",
+    "sourceObservationId",
+    "sourceOwnerKey",
+    "targetActorId",
+    "triggerEventId",
+    "version",
+  ])
+    || value.kind !== "core-wildlife-pursuit-call"
+    || !livingSpeciesActorIdMatchesNamespace(value.sourceActorId, "marsh-fox")
+    || !livingSpeciesActorIdMatchesNamespace(value.targetActorId, "marsh-rabbit")
+    || value.sourceActorId === value.targetActorId
+    || value.admittedAtPlayerStepPhase !== 0
+    || !validId(value.sourceOwnerKey)
+    || !validId(value.sourceObservationId)
+    || !nonnegativeSafeInteger(value.acceptedAtTick)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_ADMISSION_LEDGER_VERSION,
+    eventId: value.eventId as string,
+    sourceActorId: value.sourceActorId as string,
+    triggerEventId: value.triggerEventId as string,
+    sampleOrdinal: value.sampleOrdinal as number,
+    admittedAtPlayerStepPhase: 0,
+    kind: "core-wildlife-pursuit-call",
+    sourceOwnerKey: value.sourceOwnerKey,
+    sourceObservationId: value.sourceObservationId,
+    targetActorId: value.targetActorId as string,
     acceptedAtTick: value.acceptedAtTick,
   });
 }

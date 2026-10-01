@@ -97,6 +97,24 @@ function catRainDistressIntent(): SituatedExpressionIntent {
   };
 }
 
+function marshFoxPursuitYipIntent(): SituatedExpressionIntent {
+  return {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: "FOX-same-seed-p0",
+    triggerEventId: "FOX-same-seed-p0:e:1:pursue",
+    position: POSITION,
+    meaning: "marsh-fox-pursuit-yip",
+    family: "animal-signal",
+    tone: "restrained",
+    volume: "spoken",
+    knowledgeBasis: "self-perceived-prey",
+    priority: 340_000,
+    salience: 520_000,
+    variantSeed: 47,
+    durationSteps: 6,
+  };
+}
+
 function accept(
   bank: SituatedExpressionChannelBank,
   nextIntent: SituatedExpressionIntent,
@@ -152,6 +170,21 @@ describe("situated-expression presentation leases", () => {
     );
     expect(captureReloadedIncidentalExpressionEventIds(reloaded.bank))
       .toEqual(new Set([reloaded.pair.event.eventId]));
+  });
+
+  it("does not repaint a reload-carried marsh-fox pursuit yip as a fresh event", () => {
+    const reloaded = accept(
+      createSituatedExpressionChannelBank(),
+      marshFoxPursuitYipIntent(),
+    );
+    const reloadedEventIds = captureReloadedIncidentalExpressionEventIds(
+      reloaded.bank,
+    );
+    expect(reloadedEventIds).toEqual(new Set([reloaded.pair.event.eventId]));
+    expect(activeSituatedExpressionPresentationPairs(
+      reloaded.bank,
+      createSituatedExpressionPresentationLeases(),
+    )?.filter(({ event }) => !reloadedEventIds.has(event.eventId))).toEqual([]);
   });
 
   it("preserves a guaranteed introduction through same-source priority and interval closure", () => {

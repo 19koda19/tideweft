@@ -213,6 +213,7 @@ import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
 import type {
   CoreWildlifeAlarmExpressionAdmissionRecord,
+  CoreWildlifePursuitCallExpressionAdmissionRecord,
   CoreWildlifeWeatherDistressExpressionAdmissionRecord,
   SituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
@@ -5054,12 +5055,14 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
     expect(runtime.getUIView().expressionCaption).toMatchObject({
-      speakerLabel: "Marsh rabbit",
-      text: "thump",
-      presentationKind: "embodied-signal",
+      speakerLabel: "Marsh fox",
+      text: "YIP.",
+      presentationKind: "animal-call",
+      animalCallKind: "marsh-fox-call",
       assertive: false,
     });
     expect(runtime.getUIView().announcement?.message).not.toContain("soft thump");
+    expect(runtime.getUIView().announcement?.message).not.toContain("brief yip nearby");
 
     await runtime.save();
     const after = requiredEnvelope(repository);
@@ -5102,8 +5105,9 @@ describe("runtime core-ecology vertical slice", () => {
     resumed.destroy();
   }, 45_000);
 
-  it("retains a fox pursuit cue witnessed at its event locus when the fox moves out of view", async () => {
-    const { runtime, foxActorId } = await createFoxEventBoundaryRuntime();
+  it("routes a fresh fox pursuit yip through shared hearing and reloads without replay", async () => {
+    const { runtime, repository, foxActorId, rabbitActorId } =
+      await createFoxEventBoundaryRuntime();
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === foxActorId))
       .toBe(true);
     soundscapePlay.mockClear();
@@ -5114,8 +5118,224 @@ describe("runtime core-ecology vertical slice", () => {
       .toBe(false);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "CALL.",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      assertive: false,
+    });
+    expect(runtime.getUIView().announcement?.message).not.toContain("brief yip nearby");
+
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const savedWorld = deserializeWorld(saved.world);
+    const savedCore = requiredRegionalCoreOwner(saved, foxActorId);
+    const savedFox = requiredCoreActor(savedCore, foxActorId);
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifePursuitCallExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-pursuit-call"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Fox pursuit voice fixture omitted admission");
+    expect(admission).toMatchObject({
+      kind: "core-wildlife-pursuit-call",
+      sourceActorId: foxActorId,
+      sourceOwnerKey: savedCore.patchKey,
+      targetActorId: rabbitActorId,
+      admittedAtPlayerStepPhase: 0,
+      acceptedAtTick: savedWorld.meta.completedTick,
+    });
+    expect(savedFox).toMatchObject({
+      updatedAtTick: admission.acceptedAtTick,
+      intent: {
+        kind: "pursue",
+        cause: { kind: "perception", referenceId: admission.sourceObservationId },
+        focusObservationId: admission.sourceObservationId,
+        resourceReference: {
+          resourceId: rabbitActorId,
+          observationId: admission.sourceObservationId,
+          foodClass: "live-prey",
+          sourceKind: "living-actor",
+        },
+      },
+    });
+    expect(savedFox.memories.filter(({ eventId }) => (
+      eventId === admission.triggerEventId
+    ))).toEqual([expect.objectContaining({
+      kind: "pursuit",
+      referenceId: rabbitActorId,
+      observationId: admission.sourceObservationId,
+      atTick: admission.acceptedAtTick,
+    })]);
+    const sample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "marsh-fox-pursuit-yip",
+      volume: "spoken",
+    });
+    expect(sample).toMatchObject({
+      expressionEventId: admission.eventId,
+      sourceActorId: foxActorId,
+      position: savedFox.address.position,
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+    });
+    const channel = saved.perceptionCarry.situatedExpressionChannels.channels.find(
+      ({ sourceActorId }) => sourceActorId === foxActorId,
+    );
+    expect(channel?.state.active).toMatchObject({
+      eventId: admission.eventId,
+      triggerEventId: admission.triggerEventId,
+      position: savedFox.address.position,
+      meaning: "marsh-fox-pursuit-yip",
+      family: "animal-signal",
+      tone: "restrained",
+      volume: "spoken",
+      knowledgeBasis: "self-perceived-prey",
+      vocalization: "marsh-fox-pursuit-yip",
+      priority: 340_000,
+      durationSteps: 6,
+      audioAcknowledged: true,
+    });
+    expect(channel?.reception).toMatchObject({
+      eventId: admission.eventId,
+      sourceActorId: foxActorId,
+      receivedAtTick: admission.acceptedAtTick,
+      kind: "heard-unseen",
+    });
+    const durableCarry = stableStringify(saved.perceptionCarry);
     runtime.destroy();
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(resumed.getUIView().expressionCaption).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+
+    advancePlayerSteps(resumed, 10);
+    await resumed.save();
+    const propagated = requiredEnvelope(repository);
+    const propagatedWorld = deserializeWorld(propagated.world);
+    const humanCallBeliefs = propagatedWorld.residents.flatMap((resident) => {
+      const matching = resident.perception.beliefs.filter((belief) => (
+        belief.channel === "hearing"
+        && belief.lastObservedTick === propagatedWorld.meta.completedTick
+        && belief.perceivedClass === "animal-call"
+      ));
+      expect(matching.length).toBeLessThanOrEqual(1);
+      expect(matching.every(({ identification, subjectId, sourceObservationId }) => (
+        identification === "anonymous"
+        && subjectId === null
+        && sourceObservationId.includes("-av-")
+      ))).toBe(true);
+      return matching;
+    });
+    expect(humanCallBeliefs.length).toBeGreaterThanOrEqual(2);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
+    resumed.destroy();
   }, 45_000);
+
+  it("keeps a lawful fox yip audible when optional expression capacity is saturated", async () => {
+    vi.resetModules();
+    const fallbackHumanObserverFrames: string[][] = [];
+    const fallbackPhysicalSampleCounts: number[] = [];
+    vi.doMock("./humanPerception", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./humanPerception")>();
+      return {
+        ...actual,
+        HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+        collectExistingHumanObservations: (
+          input: Parameters<typeof actual.collectExistingHumanObservations>[0],
+        ) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          const foxPhysicalSamples = (input.physicalSoundSamples ?? []).filter((sample) => (
+            sample.soundClass === "animal-call"
+            && sample.acousticEventId.startsWith("fox-pursuit-call:v1:")
+          ));
+          if (foxPhysicalSamples.length > 0) {
+            fallbackPhysicalSampleCounts.push(input.physicalSoundSamples?.length ?? 0);
+            fallbackHumanObserverFrames.push(batches.flatMap((batch) => (
+              batch.observations.some((observation) => (
+                observation.channel === "hearing"
+                && observation.perceivedClass === "animal-call"
+              ))
+                ? [batch.observerId]
+                : []
+            )).sort());
+          }
+          return batches;
+        },
+      };
+    });
+    let runtime: TideweftRuntime | null = null;
+    try {
+      const saturatedRuntimeModule = await import("./runtime");
+      const fixture = await createFoxEventBoundaryRuntime({
+        createRuntime: saturatedRuntimeModule.createTideweftRuntime,
+      });
+      runtime = fixture.runtime;
+      soundscapePlay.mockClear();
+
+      advancePlayerSteps(runtime, 10);
+
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
+        .toHaveLength(1);
+      expect(runtime.getUIView().expressionCaption).toBeUndefined();
+      await runtime.save();
+      const saved = requiredEnvelope(fixture.repository);
+      expect(saved.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        (record) => record.kind === "core-wildlife-pursuit-call",
+      )).toEqual([]);
+      expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(
+        ({ sourceActorId }) => sourceActorId === fixture.foxActorId,
+      )).toBe(false);
+
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await saturatedRuntimeModule.createTideweftRuntime(fixture.repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().expressionCaption).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
+
+      advancePlayerSteps(runtime, 10);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
+      await runtime.save();
+      const propagated = requiredEnvelope(fixture.repository);
+      const propagatedWorld = deserializeWorld(propagated.world);
+      const freshHumanHearingByResident = propagatedWorld.residents.flatMap((resident) => {
+        const matching = resident.perception.beliefs.filter((belief) => (
+          belief.channel === "hearing"
+          && belief.lastObservedTick === propagatedWorld.meta.completedTick
+          && belief.perceivedClass === "animal-call"
+        ));
+        expect(matching).toHaveLength(matching.length > 0 ? 1 : 0);
+        expect(matching.every(({ identification, subjectId }) => (
+          identification === "anonymous" && subjectId === null
+        ))).toBe(true);
+        return matching.length > 0 ? [resident.identity.stableId] : [];
+      }).sort();
+      expect(fallbackHumanObserverFrames).toHaveLength(1);
+      expect(fallbackHumanObserverFrames[0]?.length).toBeGreaterThanOrEqual(2);
+      expect(freshHumanHearingByResident).toEqual(fallbackHumanObserverFrames[0]);
+      expect(fallbackPhysicalSampleCounts).toHaveLength(1);
+      expect(fallbackPhysicalSampleCounts[0]).toBeLessThanOrEqual(8);
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+      vi.doUnmock("./humanPerception");
+      vi.resetModules();
+    }
+  }, 120_000);
 
   it(`${ALPHA30_BODY_BEARING_SAVE_ADOPTION_OWNER_INTENT} adopts one body-bearing v22 save exactly once`, async () => {
     const repository = new MemoryRepository();
@@ -8450,15 +8670,19 @@ function makeWorldTraceableAndClear(world: ReturnType<typeof deserializeWorld>):
 }
 
 async function createFoxEventBoundaryRuntime(
-  options: Readonly<{ lethalContact?: boolean }> = {},
+  options: Readonly<{
+    lethalContact?: boolean;
+    createRuntime?: typeof createTideweftRuntime;
+  }> = {},
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   foxActorId: string;
   rabbitActorId: string;
 }>> {
+  const createRuntime = options.createRuntime ?? createTideweftRuntime;
   const repository = new MemoryRepository();
-  const initial = await createTideweftRuntime(repository);
+  const initial = await createRuntime(repository);
   initial.dispatchUI({
     type: "new-world",
     seed: "marsh-edge-runtime-cue-1",
@@ -8576,7 +8800,7 @@ async function createFoxEventBoundaryRuntime(
   await repository.save(recordWithEnvelope(record, nextEnvelope));
   initial.destroy();
   scheduledFrame = undefined;
-  const runtime = await createTideweftRuntime(repository);
+  const runtime = await createRuntime(repository);
   expect(runtime.getUIView().saveWarning).toBeUndefined();
   await runtime.save();
   return Object.freeze({
