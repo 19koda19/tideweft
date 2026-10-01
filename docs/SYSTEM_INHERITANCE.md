@@ -375,6 +375,12 @@ future effort states extend the same situated-expression, acoustic,
 perception, causal-authority, and movement-owned step-state owners rather than
 poll condition independently.
 
+Continuing visible actor state is not automatically speech. Quick labels,
+posture, emotion marks, condition details, and ABOUT may present lawfully
+observable state without entering the acoustic channel; selection, render
+cadence, a threshold that remains true, or a catalog line cannot manufacture
+an utterance. Audible expression requires a newly committed source event.
+
 When Living Voice adapts an existing ecological or working-animal signal, that
 causal domain retains semantic and physical authority. Living Voice may add
 human hearing and presentation only through one source-bound admission and must

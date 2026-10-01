@@ -115,7 +115,6 @@ describe("existing-human perception presentation", () => {
       quickLabel: "Unknown porter · listening",
       state: "listening",
       emotionMark: ":S",
-      speech: "Thought I heard something.",
       emotion: "Appears uncertain",
       behavior: "Listening toward a nearby sound",
     },
@@ -124,7 +123,6 @@ describe("existing-human perception presentation", () => {
       quickLabel: "Unknown porter · investigating",
       state: "listening",
       emotionMark: ":S",
-      speech: "Who's there?",
       emotion: "Appears uncertain",
       behavior: "Investigating something nearby",
     },
@@ -133,7 +131,6 @@ describe("existing-human perception presentation", () => {
       quickLabel: "Unknown porter · watching you",
       state: "watching",
       emotionMark: ":|",
-      speech: "I see you.",
       emotion: "Appears calm",
       behavior: "Watching you",
     },
@@ -142,7 +139,6 @@ describe("existing-human perception presentation", () => {
       quickLabel: "Unknown porter · alert",
       state: "alert",
       emotionMark: ":|",
-      speech: "What was that?",
       emotion: "Appears alert",
       behavior: "Alert and scanning nearby",
     },
@@ -151,7 +147,6 @@ describe("existing-human perception presentation", () => {
       quickLabel: "Unknown porter · searching nearby",
       state: "searching",
       emotionMark: ":S",
-      speech: "I saw someone here.",
       emotion: "Appears wary",
       behavior: "Searching the nearby area",
     },
@@ -177,8 +172,9 @@ describe("existing-human perception presentation", () => {
       quickLabel: expected.quickLabel,
       state: expected.state,
       emotionMark: expected.emotionMark,
-      speech: expected.speech,
     });
+    expect(porter).not.toHaveProperty("speech");
+    expect(rendered.acousticText).toEqual([]);
     expect(about?.observed.find(({ label }) => label === "Emotion")?.value)
       .toBe(expected.emotion);
     expect(about?.observed.find(({ label }) => label === "Behavior")?.value)
@@ -199,7 +195,6 @@ describe("existing-human perception presentation", () => {
     }
     const disclosedCopy = JSON.stringify({
       quickLabel: porter?.quickLabel,
-      speech: porter?.speech,
       observed: about?.observed,
       known: about?.known,
     });
@@ -264,7 +259,6 @@ describe("existing-human perception presentation", () => {
     const currentPerception = projectPerception(world, player);
     const rendered = projectGameView(world, player, {
       selectedResidentId: resident.id,
-      residentSpeech: new Map([[resident.id, "Private remote speech"]]),
       perception: currentPerception,
     });
     const ui = projectUIView(world, player, createSessionState(world.seedText), {

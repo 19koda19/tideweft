@@ -198,7 +198,6 @@ describe("independent NPC ABOUT disclosure audit", () => {
 
     const rendered = projectGameView(world, player, {
       selectedResidentId: resident.id,
-      residentSpeech: new Map([[resident.id, `${resident.name}: private remote speech`]]),
       perception: forged,
     });
     const about = projectUIView(world, player, createSessionState(world.seedText), {

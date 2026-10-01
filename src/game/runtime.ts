@@ -10715,7 +10715,6 @@ export async function createTideweftRuntime(
   let preparedResidentIntroduction: PreparedResidentIntroductionTransaction | null = null;
   let residentIntroductionSavePending = false;
   let eventObservationCursor = 0;
-  const residentSpeech = new Map<number, { text: string; untilSessionMs: number }>();
   // Autosave cadence is elapsed play time, not distance from the civil epoch.
   // Fresh daylight worlds begin at 07:00, so their first interval begins now.
   let lastAutosaveTick = world.meta.completedTick;
@@ -11171,7 +11170,6 @@ export async function createTideweftRuntime(
         ...projectGameView(worldView, player, {
           selectedSettlementId: session.selectedSettlementId,
           selectedResidentId,
-          residentSpeech: activeResidentSpeech(),
           selectedRouteId: objectiveContract?.routeId ?? null,
           destinationSettlementId: destinationSettlementId ?? null,
           ...(destinationKind ? { destinationKind } : {}),
@@ -11480,18 +11478,6 @@ export async function createTideweftRuntime(
     const id = `player-${kind}-${world.meta.completedTick + 1}-${commandSequence}`;
     commandSequence += 1;
     return id;
-  }
-
-  function activeResidentSpeech(): ReadonlyMap<number, string> {
-    const active = new Map<number, string>();
-    for (const [residentId, speech] of residentSpeech) {
-      if (speech.untilSessionMs <= session.sessionPlayMilliseconds) {
-        residentSpeech.delete(residentId);
-        continue;
-      }
-      active.set(residentId, speech.text);
-    }
-    return active;
   }
 
   function queue(command: SimCommand): void {
@@ -17177,7 +17163,6 @@ export async function createTideweftRuntime(
     pendingResidentGreeting = null;
     preparedResidentIntroduction = null;
     residentIntroductionSavePending = false;
-    residentSpeech.clear();
     lastAutosaveTick = world.meta.completedTick;
     announce(session, "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.");
     soundscape.play("strand", 0.9);
@@ -18871,7 +18856,6 @@ export async function createTideweftRuntime(
       pendingResidentObservation: structuredClone(pendingResidentObservation),
       pendingResidentGreeting: structuredClone(pendingResidentGreeting),
       residentIntroductionSavePending,
-      residentSpeech: new Map(residentSpeech),
       autopilotPath: [...autopilotPath],
       pendingPlayerWait: structuredClone(pendingPlayerWait),
       lastAutosaveTick,
@@ -18950,10 +18934,6 @@ export async function createTideweftRuntime(
       pendingResidentGreeting = prior.pendingResidentGreeting;
       preparedResidentIntroduction = null;
       residentIntroductionSavePending = prior.residentIntroductionSavePending;
-      residentSpeech.clear();
-      for (const [residentId, speech] of prior.residentSpeech) {
-        residentSpeech.set(residentId, speech);
-      }
       autopilotPath = prior.autopilotPath;
       pendingPlayerWait = prior.pendingPlayerWait;
       lastAutosaveTick = prior.lastAutosaveTick;

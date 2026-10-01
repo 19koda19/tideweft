@@ -571,12 +571,14 @@ describe("Chart situated expression presentation", () => {
     let current: TideweftView = {
       ...base,
       porters: [{
+        actorId: "human:shared-acoustic",
         id: "porter:shared-acoustic",
+        quickLabel: "Unknown porter · alert",
         position: { x: 12, y: 12 },
         facing: 0,
         state: "alert",
         emotionMark: ":S",
-        speech: "LEGACY PORTER SPEECH",
+        selected: true,
       }],
       player: {
         ...base.player,
@@ -645,6 +647,20 @@ describe("Chart situated expression presentation", () => {
           tone: "alarmed",
           variantSeed: 7,
         },
+        {
+          acousticKind: "speech",
+          id: "matching-source-offscreen",
+          sourceActorId: "human:shared-acoustic",
+          sourceKind: "human",
+          speakerLabel: "Nearby porter",
+          text: "OFFSCREEN MATCHING SPEECH",
+          position: { x: 1_000_000, y: 1_000_000 },
+          progress: 0.2,
+          priority: 1,
+          salience: 1,
+          tone: "restrained",
+          variantSeed: 9,
+        },
       ],
     };
     const renderer = createTideweftRenderer({
@@ -660,7 +676,34 @@ describe("Chart situated expression presentation", () => {
     expect(text.mock.calls.some(([copy]) => copy === "LOWER ACOUSTIC SPEECH")).toBe(false);
     expect(text.mock.calls.some(([copy]) => copy === "LEGACY EXPRESSION FALLBACK")).toBe(false);
     expect(text.mock.calls.some(([copy]) => copy === "LEGACY ACOUSTIC INCIDENT")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "OFFSCREEN MATCHING SPEECH")).toBe(false);
+    // The selected animal cue must not erase an unrelated resident's state.
+    expect(text.mock.calls.some(([copy]) => copy === ":S")).toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "Unknown porter · alert")).toBe(true);
+
+    const originalAcousticText = current.acousticText;
+    if (originalAcousticText === undefined) throw new Error("expected unified acoustic fixture");
+    text.mockClear();
+    const sourceOwnedSpeech = {
+      acousticKind: "speech" as const,
+      id: "source-owned-speech",
+      sourceActorId: "human:shared-acoustic",
+      sourceKind: "human" as const,
+      speakerLabel: "Nearby porter",
+      text: "SOURCE OWNED SPEECH",
+      position: { x: 12, y: 12 },
+      progress: 0.2,
+      priority: 10,
+      salience: 10,
+      tone: "restrained" as const,
+      variantSeed: 23,
+    };
+    current = { ...current, acousticText: [sourceOwnedSpeech] };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "SOURCE OWNED SPEECH")).toBe(true);
     expect(text.mock.calls.some(([copy]) => copy === ":S")).toBe(false);
+    expect(text.mock.calls.some(([copy]) => copy === "Unknown porter · alert")).toBe(false);
+    current = { ...current, acousticText: originalAcousticText };
 
     text.mockClear();
     const physicalAcousticText = current.acousticText?.find(({ acousticKind }) => (

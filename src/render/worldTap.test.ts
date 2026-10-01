@@ -140,6 +140,7 @@ const perceivedView = ({
   }],
   traces: [],
   porters: [{
+    actorId: "human:porter-1",
     id: "porter-1",
     position: { x: 25, y: 5 },
     facing: 0,

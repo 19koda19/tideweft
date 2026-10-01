@@ -231,7 +231,6 @@ const terrainKindCode: Readonly<Record<TerrainTileView["terrain"], number>> = {
 export interface ProjectionOptions {
   selectedSettlementId?: number | null;
   selectedResidentId?: number | null;
-  residentSpeech?: ReadonlyMap<number, string>;
   selectedRouteId?: number | null;
   destinationSettlementId?: number | null;
   destinationKind?: "pickup" | "delivery" | "report";
@@ -520,57 +519,6 @@ function projectSituatedExpressionView(
   }
 }
 
-/**
- * Adapts older direct-detail resident state text into Living Voice's one label
- * layout. These quoted compatibility labels are not committed sound events,
- * audio, listener receipts, conversation, or knowledge transfer; the speech
- * visual kind only preserves their historical styling while the remaining
- * causal seams migrate. This prevents a second renderer-owned layout universe
- * without falsely promoting projection-time copy to Voice authority.
- */
-function projectLegacyResidentStateTextViews(
-  world: WorldView,
-  perception: PerceptionResult,
-  residentSpeech: ReadonlyMap<number, string> | undefined,
-  selectedResidentId: number | null,
-  tileSize: number,
-): readonly SituatedExpressionView[] {
-  const views: SituatedExpressionView[] = [];
-  for (const resident of world.residents) {
-    const routeProjection = projectResidentWorldPosition(world, resident, tileSize);
-    if (
-      routeProjection === null
-      || perception.detailVisibilityGrades[routeProjection.tileIndex] !== VISIBILITY_DIRECT
-    ) continue;
-    const selected = selectedResidentId === resident.id;
-    const text = residentSpeech?.get(resident.id)
-      ?? legacyResidentStateText(resident, world.completedTick, selected);
-    if (text === undefined || text.trim().length === 0) continue;
-    const sourceActorId = resident.identity.stableId;
-    const speakerLabel = residentKnowsFact(resident.playerKnowledge, "name")
-      ? resident.name
-      : resident.location.kind === "route"
-        ? "Unknown porter"
-        : "Unknown resident";
-    const variantSeed = seedFromText(`${sourceActorId}:${text}`)[0] >>> 0;
-    views.push(Object.freeze({
-      acousticKind: "speech",
-      id: `resident-speech:${sourceActorId}:${variantSeed}`,
-      sourceActorId,
-      sourceKind: "human",
-      speakerLabel,
-      text,
-      position: Object.freeze({ ...routeProjection.position }),
-      progress: 0,
-      priority: selected ? 560_000 : 430_000,
-      salience: selected ? 620_000 : 470_000,
-      tone: "restrained",
-      variantSeed,
-    }));
-  }
-  return Object.freeze(views.sort((left, right) => left.id.localeCompare(right.id)));
-}
-
 export interface ResidentRouteProjection {
   readonly tileIndex: number;
   readonly position: { readonly x: number; readonly y: number };
@@ -751,39 +699,6 @@ function porterEmotionMark(
     case "content": return selected ? ":)" : undefined;
     case "focused": return selected ? ":|" : undefined;
   }
-}
-
-function legacyResidentStateText(
-  resident: ResidentState,
-  tick: number,
-  selected: boolean,
-): string | undefined {
-  // This is deterministic visible presentation, not an audible world event.
-  // Callers project only direct-detail actors, so it cannot become a global
-  // transcript or off-screen identity leak while causal Voice migration remains
-  // incomplete.
-  const ambientWindow = (tick + resident.id * 17) % 180 < 14;
-  if (!selected && !ambientWindow) return undefined;
-  const restState = observableResidentRestState(resident);
-  // A weak retained observation cannot make an authoritative sleeping body
-  // stand up or speak. A lawful waking disturbance first changes the receipt
-  // to STARTLED/AWAKE, after which ordinary perception presentation resumes.
-  if (restState === "asleep") return undefined;
-  switch (resident.perception.suspicion) {
-    case "noticed": return "Thought I heard something.";
-    case "suspicious": return "Who's there?";
-    case "identified": return "I see you.";
-    case "alert": return "What was that?";
-    case "searching": return "I saw someone here.";
-    case "unaware": break;
-  }
-  if (restState === "resting") return selected ? "Taking a rest." : undefined;
-  if (resident.condition.coldStress >= 720_000) return "This cold bites.";
-  if (resident.condition.wetness >= 700_000) return "Soaked through.";
-  if (resident.condition.exhaustion >= 720_000) return "Need a moment.";
-  if (resident.needs.food >= 760_000) return "Need food soon.";
-  if (resident.activeContractId !== null) return "Still carrying this promise.";
-  return selected ? "Keeping an eye on the weather." : undefined;
 }
 
 /**
@@ -984,13 +899,6 @@ export function projectGameView(
       options.coreWildlifeExpressionSources,
     )
   )));
-  const legacyResidentStateTextExpressions = projectLegacyResidentStateTextViews(
-    world,
-    perception,
-    options.residentSpeech,
-    options.selectedResidentId ?? null,
-    tileSize,
-  );
   const physicalInputs = options.worldAcousticPresentations
     ?? (options.worldAcousticEvent === undefined || options.worldAcousticEvent === null
       ? []
@@ -1005,7 +913,6 @@ export function projectGameView(
   });
   const acousticText = Object.freeze([
     ...expressions,
-    ...legacyResidentStateTextExpressions,
     ...physicalAcousticText,
   ]);
   const activeWayknotIds = new Set(
@@ -1366,8 +1273,6 @@ export function projectGameView(
       if (perception.detailVisibilityGrades[routeProjection.tileIndex] !== VISIBILITY_DIRECT) return [];
       const selected = options.selectedResidentId === resident.id;
       const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
-      const speech = options.residentSpeech?.get(resident.id)
-        ?? legacyResidentStateText(resident, world.completedTick, selected);
       const emotionMark = porterEmotionMark(resident, selected);
       const identityLabel = knowsName
         ? resident.name
@@ -1379,6 +1284,7 @@ export function projectGameView(
       const restState = observableResidentRestState(resident);
       return [
         {
+          actorId: resident.identity.stableId,
           id: String(resident.id),
           ...(knowsName ? { name: resident.name } : {}),
           quickLabel: restState === "asleep"
@@ -1408,7 +1314,6 @@ export function projectGameView(
           },
           conditionLabels: porterConditionLabels(resident),
           ...(emotionMark ? { emotionMark } : {}),
-          ...(speech ? { speech } : {}),
           progress: routeProjection.progress,
           selected,
         },

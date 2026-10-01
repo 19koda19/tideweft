@@ -186,6 +186,7 @@ function obscuredView(terrain: TerrainGridView): TideweftView {
     looseCargo: [parcel],
     traces: [],
     porters: [{
+      actorId: "human:secret-porter",
       id: "secret-porter",
       name: "SECRET ACTOR LABEL",
       position: point,

@@ -434,9 +434,9 @@ describe("runtime Working People heavy-porter expression", () => {
         soundInterrupt: "none",
       }),
     ]);
-    expect(runtime.getRenderView().porters.some(({ speech }) => (
-      speech === "Holding here until this eases."
-    ))).toBe(false);
+    expect(runtime.getRenderView().porters.every((porter) => (
+      !Object.prototype.hasOwnProperty.call(porter, "speech")
+    ))).toBe(true);
     const cueCountBeforeReload = steadyCueCount();
     runtime.destroy();
 

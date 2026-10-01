@@ -229,15 +229,19 @@ in the accessible caption when an exact self or heard-and-visible receipt
 exists. An unseen animal call may instead use only an uncertainty-bounded
 directional caption and never gains an actor-anchored world callout. A bounded
 per-actor channel bank prevents one speaker's cooldown from
-silencing another actor. All active expression channels and directly rendered
-remaining legacy resident state speech now enter the shared
-world-label budget: at most four labels globally and one per source. The
+silencing another actor. All active expression channels enter the shared
+world-label budget: at most four labels globally and one per source. A placed
+event-owned resident callout temporarily outranks only that same stable actor's
+ordinary quick/emotion labels; unrelated resident state remains visible, and a
+layout-suppressed callout does not erase its source's state. The
 secured-store response, resident introduction, and resident weather-hold
-response are receipt-backed and no longer use that compatibility adapter. The
+response are receipt-backed. Renderer-polled resident state speech has been
+retired instead of promoted: ongoing suspicion, rest, observable exposure,
+contract, and selection remain non-acoustic quick-label/condition/ABOUT facts
+until a committed transition authorizes expression. Authoritative hunger stays
+silent rather than becoming an inferred utterance or hidden-need UI. The
 accessible caption surface keeps
-one highest-priority receipt-backed cue; remaining legacy state speech is not promoted to an
-auditory caption merely because its currently visible actor can share the
-collision layout. The physical footing/cargo cause remains in
+one highest-priority receipt-backed cue. The physical footing/cargo cause remains in
 EVENTS where the player directly experienced or observed it; eligible sound
 text is only a restrained presentation of that same cause, never a second
 omniscient narrator. Source-bound sound uses ordinary
@@ -250,10 +254,10 @@ does not yet add general NPC conversation or a broad animal-expression system.
 The current unpublished status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
 signals, fish-crow/deer calls, the rabbit thump, and the frog chorus are live in
-the candidate. Remaining renderer-polled resident state lines and the existing
-visible-event rat/cat/fox and generic wildlife-alarm fallback cues are
-compatibility bypasses: they do not prove world-event acoustics, listener
-receipt, or knowledge transfer. Future tool,
+the candidate. Renderer-polled resident state lines have been removed; the
+existing visible-event rat/cat/fox and generic wildlife-alarm fallback cues
+remain compatibility bypasses that do not prove world-event acoustics,
+listener receipt, or knowledge transfer. Future tool,
 violence, and vessel examples are contract fixtures only. General conversation,
 rumors, multilingual comprehension, animated gesture, most animal repertoires,
 and expressions for work that does not yet exist remain specified or deferred;
@@ -352,9 +356,9 @@ stamina gap cannot be relabeled as the cause of the murmur.
 It does not fire from idle or recovery, water or rescue,
 already-zero stamina, or a step with a competing traversal incident.
 
-Active Living Voice channels, remaining legacy visible resident state
-speech, animal calls, and eligible physical candidates enter one Chart/Relief
-layout with
+Active Living Voice expression, animal-call, and eligible physical candidates
+enter one Chart/Relief layout; continuing visible resident state remains
+non-acoustic. The acoustic layout uses
 deterministic source-relative lanes, collision suppression, a four-label global
 cap, and a one-label-per-source cap. The physical presentation queue is bounded
 and coalesces repeated semantics from the same source. A busy moment loses
@@ -1511,7 +1515,7 @@ Physical jobs appear only in Promises. Reports appear in a separately headed **S
 - Clicking or tapping a directly visible person from the original harbor country opens non-pausing ABOUT text. OBSERVED summarizes approximate body, visible gear, condition, behavior, and apparent emotion; KNOWN contains only learned facts. A close, grounded GREET records one introduction rather than revealing hidden scores or farming repeated relationship progress.
 - Clicking or tapping the one directly visible dog opens the same knowledge-honest ABOUT surface. Its five actions let the player request help or pack security, wait, leave, or—when a current automatic route exists—replace that route with a genuine detour around the observed spot.
 - Existing humans can notice the courier through occluded sight or anonymous directional sound. Moving openly is more visually salient; active weather reduces visual clarity; rain and nearby rough water mask sound; and wind changes how it travels. A person who loses identified sight searches the last observed area and either reacquires through fresh sight or gives up, rather than tracking an unseen player.
-- Weather can make an assigned porter wet, cold, exhausted, worried, afraid, or temporarily hold position. Small text emoticons, state speech, and behavior communicate those changes; exact emotion values remain private and do not modify the player's difficulty.
+- Weather can make an assigned porter wet, cold, exhausted, worried, afraid, or temporarily hold position. Small text emoticons, quick labels, condition details, and behavior communicate continuing state; only committed transitions may produce speech. Exact emotion values remain private and do not modify the player's difficulty.
 - Player-facing EVENTS includes resident events only when the player caused them or could directly observe their event-time locus. The authoritative history remains complete without granting later knowledge of distant activity.
 - Pointer paths price the same Wayknot fields as manual travel. The placed aids persist in saves and can always be reclaimed; they never become an upgrade currency or upkeep chore.
 - An active Tide Harp adds its three knot-centered echoes without changing cargo, settlement stock, route history, or the simulation ledger. Overlapping selected triangles still grant only one Harp recharge benefit at the courier's tile.

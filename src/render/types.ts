@@ -511,6 +511,8 @@ export type PorterState =
   | "searching";
 
 export interface PorterView {
+  /** Stable simulation identity used to coordinate source-owned presentation. */
+  readonly actorId: string;
   readonly id: string;
   readonly name?: string;
   /** Always observable at direct-detail range; never substitutes for a learned name. */
@@ -527,8 +529,6 @@ export interface PorterView {
   readonly conditionLabels?: readonly string[];
   /** Restrained, directly observable emotion punctuation; never a raw meter. */
   readonly emotionMark?: ":)" | ":|" | ":S" | ":[" | "=]";
-  /** Directly witnessed state speech only; absent actors never emit this view data. */
-  readonly speech?: string;
   readonly progress?: number;
   readonly destinationId?: string;
   readonly cargoColor?: string;

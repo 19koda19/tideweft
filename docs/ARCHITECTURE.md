@@ -167,13 +167,16 @@ In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
 the rabbit thump, and the aggregate frog chorus are live representative paths.
-The remaining direct-detail resident state lines are a visible renderer-time
-compatibility adapter: they share collision layout, but they are not committed
-sound events, listener receipts, conversation, or knowledge transfer. Existing
-rat rustle, domestic-cat call, marsh-fox yip, and generic wildlife-alarm fallback
-cues likewise still use the legacy audio/session-announcement path. These are
-`BYPASS` seams to migrate during Living Voice, not proof that broad animal
-Voice is complete.
+The former direct-detail resident state-line adapter has been retired. Ongoing
+suspicion, posture, observable exposure, contract, and selected-resident state
+remain legible through non-acoustic quick labels, emotion marks, condition
+labels, and ABOUT; projection cadence or selection can no longer manufacture
+an utterance. Hunger remains authoritative but deliberately gains no inferred
+utterance or hidden-need UI until an honest observable or expressive owner
+exists. Existing rat rustle, domestic-cat call, marsh-fox yip, and generic
+wildlife-alarm fallback cues still use the legacy audio/session-announcement
+path. Those animal cues remain `BYPASS` seams to migrate during Living Voice,
+not proof that broad animal Voice is complete.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
 vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;
@@ -407,12 +410,11 @@ directional accessible caption.
 One renderer-neutral acoustic presentation candidate family covers speech,
 animal calls, human/animal nonverbal sounds, physical contact, object/cargo
 impact, and eligible environmental sound. Every candidate is derived from an
-authenticated player receipt, except the explicitly bounded legacy
-current-visibility resident state-speech adapter: it joins world-label
-collision layout only and cannot become an acoustic DOM caption until each
-remaining interaction seam gains event-time sound authority. The storekeeper's
-committed closure response, resident introduction, and resident weather-hold
-response no longer use this adapter. The presenter—not
+authenticated player receipt. The former current-visibility resident
+state-speech adapter has been removed rather than promoted: continuing state
+stays non-acoustic unless a committed transition authorizes an expression.
+The storekeeper's committed closure response, resident introduction, and
+resident weather-hold response already use that event-owned path. The presenter—not
 producer domains—owns category style, category-specific lifetime,
 source/contact anchoring, bounded
 deterministic lanes, collision checks, salience/priority, per-source queues,
@@ -426,9 +428,9 @@ cues, while critical speech and warnings outrank that non-interrupting chorus.
 Routine steps, continuous wading, and repetitive work normally remain
 audio/animation only.
 
-Chart and Relief now consume the same combined active-expression, directly
-visible remaining legacy resident state speech, and eligible
-physical-acoustic candidate list.
+Chart and Relief now consume the same combined active-expression and eligible
+physical-acoustic candidate list. Directly visible continuing resident state
+uses ordinary non-acoustic actor presentation and spends no acoustic-text slot.
 One shared renderer-neutral layout ranks by priority, salience, and stable
 identity, admits at most four labels globally and one per source, tries the same
 small deterministic source-relative lanes, rejects anchors too far outside the
@@ -436,7 +438,11 @@ playable aperture, and suppresses a lower-ranked candidate when no
 collision-free lane remains. Neither renderer may jitter around this decision
 or restore the old independent incident/speech-label paths. An NPC warning can
 therefore remain readable while a player scrape uses another lane or is
-suppressed; presentation loss never erases audio or actor hearing.
+suppressed. A placed event-owned resident callout temporarily suppresses that
+same stable actor's ordinary quick label and emotion mark; unrelated residents
+retain their lawful state, and a layout-suppressed callout does not erase its
+source's state. This join uses actor identity rather than screen proximity.
+Presentation loss never erases audio or actor hearing.
 
 The layout envelopes, bounded active physical queue, and fade progress are ephemeral
 and neither persist nor replay after load. Chart and Relief share the bounded
@@ -1449,7 +1455,7 @@ The simulation persists four separate layers: immutable identity, dynamic condit
 
 The live game bridge applies that kernel only to the original harbor country's existing 42 humans observing the local courier. Each fixed player step contributes a bounded position sample with terrain-dependent exposure, movement salience, and—when caused—footfall, splash, or impact sound. Point-to-point visual contact uses the same short detail ranges, forward field, terrain elevation, ridges, dense rough ground, and built obstruction rules that protect player-facing detail; active weather shortens sight. Hearing remains anonymous and directional: rain and turbulent water near the listener create masking pressure, while wind changes reach and uncertainty. A person may face the highest lawful attention area or the next saved search probe, never the courier's hidden live position. Segmented world positions keep the underlying observation and saved-area contracts exact across signed and extreme coordinates, but this release does not generate humans outside the original harbor country.
 
-The game projection places residents on non-deep tiles around their current original-estuary settlement and interpolates assigned porters along their real route. Both positions pass through the same ten-tile exact-detail perception mask before rendering, hit testing, ABOUT, or greeting. Chart and Relief emit the same typed resident command and maintain a minimum 44-pixel selection diameter. ABOUT is a pointer-local, pane-free non-modal DOM region: it never pauses the simulation, disappears when exact sight is lost, and leaves transparent space available to the world canvas. Quick labels, restrained text faces, short speech, and ABOUT behavior can truthfully say that a visible person is listening, investigating, watching, alert, or searching nearby; they do not reveal the hidden attention key, confidence, or saved search coordinate. Desktop, touch, Chart, and Relief consume the same projection.
+The game projection places residents on non-deep tiles around their current original-estuary settlement and interpolates assigned porters along their real route. Both positions pass through the same ten-tile exact-detail perception mask before rendering, hit testing, ABOUT, or greeting. Chart and Relief emit the same typed resident command and maintain a minimum 44-pixel selection diameter. ABOUT is a pointer-local, pane-free non-modal DOM region: it never pauses the simulation, disappears when exact sight is lost, and leaves transparent space available to the world canvas. Quick labels, restrained text faces, event-owned short speech, and ABOUT behavior can truthfully say that a visible person is listening, investigating, watching, alert, or searching nearby; they do not reveal the hidden attention key, confidence, or saved search coordinate. Continuing state never fabricates speech. Desktop, touch, Chart, and Relief consume the same projection.
 
 Actor events are stamped at emission time only when their recorded route/settlement locus was directly observable. That persisted observation fact, player-caused commands, and a very small global-event allowlist feed the player chronicle. A porter walking into view later cannot reveal an unwitnessed historical event retroactively. Full causal events remain in authoritative simulation state.
 

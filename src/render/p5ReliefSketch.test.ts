@@ -2179,12 +2179,14 @@ describe("Relief situated expression presentation", () => {
     let current: TideweftView = {
       ...base,
       porters: [{
+        actorId: "human:shared-acoustic",
         id: "porter:shared-acoustic",
+        quickLabel: "Unknown porter · alert",
         position: { x: 48, y: 48 },
         facing: 0,
         state: "alert",
         emotionMark: ":S",
-        speech: "LEGACY PORTER SPEECH",
+        selected: true,
       }],
       player: {
         ...base.player,
@@ -2253,6 +2255,20 @@ describe("Relief situated expression presentation", () => {
           tone: "restrained",
           variantSeed: 17,
         },
+        {
+          acousticKind: "speech",
+          id: "relief-matching-source-offscreen",
+          sourceActorId: "human:shared-acoustic",
+          sourceKind: "human",
+          speakerLabel: "Nearby porter",
+          text: "RELIEF OFFSCREEN MATCHING SPEECH",
+          position: { x: 1_000_000, y: 1_000_000 },
+          progress: 0.2,
+          priority: 1,
+          salience: 1,
+          tone: "restrained",
+          variantSeed: 18,
+        },
       ],
     };
     const harness = renderHarness(current);
@@ -2272,7 +2288,39 @@ describe("Relief situated expression presentation", () => {
     expect(layer?.children.some((child) =>
       child.textContent === "LEGACY ACOUSTIC INCIDENT" && !child.removed)).toBe(false);
     expect(layer?.children.some((child) =>
+      child.textContent === "RELIEF OFFSCREEN MATCHING SPEECH" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.dataset.tone === "porter-emotion" && !child.removed)).toBe(true);
+    expect(layer?.children.some((child) =>
+      child.dataset.tone === "porter" && !child.removed)).toBe(true);
+
+    const originalAcousticText = current.acousticText;
+    if (originalAcousticText === undefined) throw new Error("expected unified acoustic fixture");
+    const sourceOwnedSpeech = {
+      acousticKind: "speech" as const,
+      id: "relief-source-owned-speech",
+      sourceActorId: "human:shared-acoustic",
+      sourceKind: "human" as const,
+      speakerLabel: "Nearby porter",
+      text: "RELIEF SOURCE OWNED SPEECH",
+      position: { x: 48, y: 48 },
+      progress: 0.2,
+      priority: 10,
+      salience: 10,
+      tone: "restrained" as const,
+      variantSeed: 24,
+    };
+    current = { ...current, acousticText: [sourceOwnedSpeech] };
+    harness.setView(current);
+    harness.draw();
+    expect(layer?.children.some((child) =>
+      child.textContent === "RELIEF SOURCE OWNED SPEECH" && !child.removed)).toBe(true);
+    expect(layer?.children.some((child) =>
       child.dataset.tone === "porter-emotion" && !child.removed)).toBe(false);
+    expect(layer?.children.some((child) =>
+      child.dataset.tone === "porter" && !child.removed)).toBe(false);
+    current = { ...current, acousticText: originalAcousticText };
+    harness.setView(current);
 
     const embodiedSignal = current.acousticText?.find(({ acousticKind }) => (
       acousticKind === "embodied-signal"

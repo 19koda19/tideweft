@@ -150,10 +150,8 @@ import {
   type PlayerBalancePresentation,
 } from "./playerPresentation";
 import {
-  clampPorterSpeechPlacement,
   porterAppearancePresentation,
   porterQuickLabel,
-  wrapPorterSpeech,
 } from "./porterPresentation";
 import {
   adriftPresentation,
@@ -1003,6 +1001,30 @@ export function createTideweftReliefRenderer(
     if (!labelLayer || !instance) return;
     const activeInstance = instance;
     const used = new Set<string>();
+    const acousticLayout = view.acousticText === undefined
+      ? null
+      : layoutAcousticTextCallouts(
+          view.acousticText,
+          actorCalloutViewport(activeInstance.width, activeInstance.height),
+          (acousticText) => {
+            const sourceSurface = discoveredReliefSurfaceHeightAt(
+              view.terrain,
+              acousticText.position,
+              cache.mesh.verticalScale,
+              true,
+            );
+            const projected = projectReliefPoint(
+              acousticText.position,
+              sourceSurface + view.terrain.tileSize * 0.72,
+              camera,
+              { width: activeInstance.width, height: activeInstance.height },
+            );
+            return projected.visible ? projected : null;
+          },
+        );
+    const activeAcousticSourceIds = new Set(
+      acousticLayout?.placements.map(({ candidate }) => candidate.sourceId) ?? [],
+    );
     const destination = view.player.destination;
     const tileSize = view.terrain.tileSize;
     const labelNode = (id: string, text: string): HTMLSpanElement => {
@@ -1187,7 +1209,11 @@ export function createTideweftReliefRenderer(
         porter.selected
         || (hoverTarget?.entity === "porter" && hoverTarget.id === porter.id),
       );
-      const quickLabel = porterQuickLabel(porter, highlighted && !porter.speech);
+      const hasActiveAcousticCallout = activeAcousticSourceIds.has(porter.actorId);
+      const quickLabel = porterQuickLabel(
+        porter,
+        highlighted && !hasActiveAcousticCallout,
+      );
       if (quickLabel) {
         place(
           `porter-${porter.id}`,
@@ -1198,59 +1224,7 @@ export function createTideweftReliefRenderer(
           highlighted,
         );
       }
-      if (porter.speech && view.acousticText === undefined) {
-        const viewportWidth = instance?.width ?? 1;
-        const charactersPerLine = Math.max(
-          8,
-          Math.min(viewportWidth < 440 ? 22 : 30, Math.floor((viewportWidth - 32) / 6.5)),
-        );
-        const lines = [
-          ...(porter.emotionMark ? [porter.emotionMark] : []),
-          ...wrapPorterSpeech(porter.speech, charactersPerLine),
-        ];
-        const id = `porter-speech-${porter.id}`;
-        const projected = projectReliefPoint(
-          porter.position,
-          surface + tileSize * 0.96,
-          camera,
-          { width: instance?.width ?? 1, height: instance?.height ?? 1 },
-        );
-        const node = labelNode(id, lines.join("\n"));
-        node.dataset.tone = "porter-speech";
-        node.dataset.selected = highlighted ? "true" : "false";
-        node.hidden = !projected.visible;
-        if (!projected.visible) {
-          labelPositions.delete(id);
-          continue;
-        }
-        const eased = easeWorldLabelPoint(labelPositions.get(id), projected, now, reducedMotion);
-        labelPositions.set(id, eased);
-        const viewport = { width: instance?.width ?? 1, height: instance?.height ?? 1 };
-        const width = Math.max(
-          1,
-          Math.min(
-            viewport.width - 16,
-            Math.max(64, Math.max(...lines.map((line) => line.length)) * 6.4 + 16),
-          ),
-        );
-        const height = lines.length * 13 + 10;
-        const placement = clampPorterSpeechPlacement(
-          eased,
-          { width, height },
-          viewport,
-          18,
-          8,
-        );
-        node.style.width = `${width.toFixed(1)}px`;
-        node.style.left = `${placement.x.toFixed(1)}px`;
-        node.style.top = `${placement.y.toFixed(1)}px`;
-      } else if (
-        porter.emotionMark
-        && !(porter.speech && view.acousticText !== undefined)
-      ) {
-        // Shared acoustic speech owns the source's collision-aware label. The
-        // legacy emotion mark used to be bundled with speech and must not
-        // reappear as a second overlapping node beside the shared presenter.
+      if (porter.emotionMark && !hasActiveAcousticCallout) {
         place(
           `porter-emotion-${porter.id}`,
           porter.emotionMark,
@@ -1565,26 +1539,8 @@ export function createTideweftReliefRenderer(
       }
     };
     if (view.acousticText !== undefined) {
-      const viewport = actorCalloutViewport(activeInstance.width, activeInstance.height);
-      const layout = layoutAcousticTextCallouts(
-        view.acousticText,
-        viewport,
-        (acousticText) => {
-          const sourceSurface = discoveredReliefSurfaceHeightAt(
-            view.terrain,
-            acousticText.position,
-            cache.mesh.verticalScale,
-            true,
-          );
-          const projected = projectReliefPoint(
-            acousticText.position,
-            sourceSurface + tileSize * 0.72,
-            camera,
-            { width: activeInstance.width, height: activeInstance.height },
-          );
-          return projected.visible ? projected : null;
-        },
-      );
+      const layout = acousticLayout;
+      if (layout === null) return;
       for (const placed of layout.placements) {
         const acousticText = placed.candidate.acousticText;
         const id = `acoustic-text-${acousticText.id}`;

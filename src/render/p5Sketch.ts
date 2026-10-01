@@ -3054,7 +3054,7 @@ export function createTideweftRenderer(
     const drawPorters = (
       porters: readonly PorterView[],
       now: number,
-      sharedAcousticTextActive: boolean,
+      activeAcousticSourceIds: ReadonlySet<string>,
     ): void => {
       for (const porter of porters) {
         if (
@@ -3087,59 +3087,24 @@ export function createTideweftRenderer(
         p.rect(-length * 0.9, 0, length * 0.72, breadth * 0.88, radius * 0.12);
         p.pop();
 
-        const legacySpeech = sharedAcousticTextActive ? undefined : porter.speech;
-        // Shared acoustic speech already owns this actor's one collision-aware
-        // label. The old emotion glyph was formerly bundled into that speech;
-        // suppress it while the shared label is active rather than restoring a
-        // second unarbitrated mark over the same source.
-        const standaloneEmotionMark = sharedAcousticTextActive && porter.speech
+        // A real source-owned acoustic callout outranks ordinary state copy
+        // from that same person. Other residents keep their lawful labels.
+        const hasActiveAcousticCallout = activeAcousticSourceIds.has(porter.actorId);
+        const standaloneEmotionMark = hasActiveAcousticCallout
           ? undefined
           : porter.emotionMark;
         const quickLabel = porterQuickLabel(
           porter,
-          Boolean((porter.selected || hovered) && !porter.speech),
+          Boolean((porter.selected || hovered) && !hasActiveAcousticCallout),
         );
-        if (quickLabel || legacySpeech || standaloneEmotionMark) {
+        if (quickLabel || standaloneEmotionMark) {
           const screen = worldLabelScreen(`porter-${porter.id}`, porter.position, now);
           p.push();
           p.resetMatrix();
           p.textAlign(p.CENTER, p.CENTER);
           p.textSize(10.5);
           p.noStroke();
-          if (legacySpeech) {
-            const charactersPerLine = Math.max(
-              8,
-              Math.min(p.width < 440 ? 22 : 30, Math.floor((p.width - 32) / 6.5)),
-            );
-            const lines = [
-              ...(porter.emotionMark ? [porter.emotionMark] : []),
-              ...wrapPorterSpeech(legacySpeech, charactersPerLine),
-            ];
-            const lineHeight = 13;
-            const width = Math.min(
-              Math.max(1, p.width - 16),
-              Math.max(1, ...lines.map((line) => p.textWidth(line))) + 14,
-            );
-            const height = lines.length * lineHeight + 10;
-            const placement = clampPorterSpeechPlacement(
-              screen,
-              { width, height },
-              { width: p.width, height: p.height },
-              18,
-              8,
-            );
-            const textX = placement.x + width / 2;
-            const textTop = placement.y + 5 + lineHeight / 2;
-            for (let index = 0; index < lines.length; index += 1) {
-              const line = lines[index];
-              if (line === undefined) continue;
-              const textY = textTop + index * lineHeight;
-              p.fill(withAlpha(PALETTE.ink, 235));
-              p.text(line, textX + 1, textY + 1);
-              p.fill(PALETTE.foam);
-              p.text(line, textX, textY);
-            }
-          } else if (standaloneEmotionMark) {
+          if (standaloneEmotionMark) {
             const emotionX = clamp(screen.x, 8, Math.max(8, p.width - 8));
             const emotionY = clamp(screen.y - 20, 10, Math.max(10, p.height - 10));
             p.fill(withAlpha(PALETTE.ink, 235));
@@ -5362,14 +5327,15 @@ export function createTideweftRenderer(
       if (player.recoveryKind === undefined) drawPlayerBalanceMark(presentation, radius);
     };
 
-    const drawAcousticTextOrLegacyCallout = (view: TideweftView, now: number): void => {
+    const drawAcousticTextOrLegacyCallout = (
+      view: TideweftView,
+      now: number,
+      acousticLayout: ReturnType<typeof layoutAcousticTextCallouts> | null,
+    ): void => {
       const viewport = actorCalloutViewport(p.width, p.height);
       if (view.acousticText !== undefined) {
-        const layout = layoutAcousticTextCallouts(
-          view.acousticText,
-          viewport,
-          (acousticText) => worldToScreen(acousticText.position),
-        );
+        const layout = acousticLayout;
+        if (layout === null) return;
         if (layout.placements.length === 0) return;
         p.push();
         p.resetMatrix();
@@ -5924,6 +5890,16 @@ export function createTideweftRenderer(
 
       const spatialEpochObservation = observeSpatialEpoch(latestView);
       if (spatialEpochObservation === "unchanged") updateCamera(latestView, now);
+      const acousticLayout = latestView.acousticText === undefined
+        ? null
+        : layoutAcousticTextCallouts(
+            latestView.acousticText,
+            actorCalloutViewport(p.width, p.height),
+            (acousticText) => worldToScreen(acousticText.position),
+          );
+      const activeAcousticSourceIds = new Set(
+        acousticLayout?.placements.map(({ candidate }) => candidate.sourceId) ?? [],
+      );
       const terrainMemory = terrainPerceptionMemory.sample({
         terrain: latestView.terrain,
         ...(latestView.spatialEpoch === undefined
@@ -5956,7 +5932,7 @@ export function createTideweftRenderer(
       drawAggregateWildlifeEvidence(latestView.aggregateWildlifeEvidence ?? [], now);
       drawWildlifeCarcasses(latestView.wildlifeCarcasses ?? [], now);
       drawSettlements(latestView.settlements, now);
-      drawPorters(latestView.porters, now, latestView.acousticText !== undefined);
+      drawPorters(latestView.porters, now, activeAcousticSourceIds);
       drawDogs(latestView.dogs ?? [], now);
       drawWildlife(latestView.wildlife ?? [], now);
       const particles = drawParticles(latestView.particles ?? [], detailedTelemetry);
@@ -5967,7 +5943,7 @@ export function createTideweftRenderer(
       drawEvents(latestView.events ?? [], now);
       drawWind(latestView.weather, now);
       drawWeather(latestView.weather, now);
-      drawAcousticTextOrLegacyCallout(latestView, now);
+      drawAcousticTextOrLegacyCallout(latestView, now, acousticLayout);
       if (latestView.paused) drawPausedVeil();
       cleanupWorldLabelPositions();
       telemetry.recordFrame(

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
+import type { ResidentState } from "../sim/types";
 import { TILE_UNITS, createPlayer } from "./player";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
@@ -556,7 +557,7 @@ describe("situated expression game projection", () => {
     ]);
   });
 
-  it("adapts directly visible resident speech into the shared acoustic layer", () => {
+  it("does not manufacture speech from a selected resident's continuing state", () => {
     const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
     const resident = compatibility.residents.find((candidate) => (
       projectResidentWorldPosition(world, candidate, 1) !== null
@@ -571,20 +572,86 @@ describe("situated expression game projection", () => {
     const baseline = projectGameView(world, player);
     const visiblePorter = baseline.porters.find(({ id }) => Number(id) === resident.id);
     if (visiblePorter === undefined) throw new Error("fixture needs a directly visible porter");
-    const residentId = Number(visiblePorter.id);
-    const speech = "Mind the wet stone.";
-
+    expect(visiblePorter.actorId).toBe(resident.identity.stableId);
     const view = projectGameView(world, player, {
-      residentSpeech: new Map([[residentId, speech]]),
+      selectedResidentId: resident.id,
     });
 
-    expect(view.porters.find(({ id }) => id === visiblePorter.id)?.speech).toBe(speech);
-    expect(view.acousticText).toContainEqual(expect.objectContaining({
-      acousticKind: "speech",
-      sourceKind: "human",
-      text: speech,
-      position: visiblePorter.position,
-    }));
+    expect(view.porters.find(({ id }) => id === visiblePorter.id))
+      .not.toHaveProperty("speech");
+    expect(view.acousticText).toEqual([]);
+  });
+
+  it("keeps former condition fallbacks silent and exposes only lawful observable state", () => {
+    const cases: readonly {
+      readonly label: string;
+      readonly apply: (resident: ResidentState) => void;
+      readonly expectedCondition?: string;
+      readonly expectedBehavior?: string;
+    }[] = [
+      {
+        label: "wet",
+        apply: (resident) => { resident.condition.wetness = 700_000; },
+        expectedCondition: "Soaked",
+      },
+      {
+        label: "cold",
+        apply: (resident) => { resident.condition.coldStress = 720_000; },
+        expectedCondition: "Cold",
+      },
+      {
+        label: "exhausted",
+        apply: (resident) => { resident.condition.exhaustion = 720_000; },
+        expectedCondition: "Tired",
+      },
+      {
+        label: "hungry",
+        apply: (resident) => { resident.needs.food = 900_000; },
+      },
+      {
+        label: "under contract",
+        apply: (resident) => { resident.activeContractId = 1; },
+        expectedBehavior: "Carrying a Promise",
+      },
+    ];
+
+    for (const scenario of cases) {
+      const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+      const resident = compatibility.residents.find((candidate) => (
+        projectResidentWorldPosition(world, candidate, 1) !== null
+      ));
+      if (resident === undefined) throw new Error(`fixture needs a porter for ${scenario.label}`);
+      const placement = projectResidentWorldPosition(world, resident, 1);
+      if (placement === null) throw new Error(`fixture porter lost position for ${scenario.label}`);
+      scenario.apply(resident);
+      player.x = Math.floor(placement.position.x * TILE_UNITS);
+      player.y = Math.floor(placement.position.y * TILE_UNITS);
+      player.previousX = player.x;
+      player.previousY = player.y;
+
+      const view = projectGameView(world, player, { selectedResidentId: resident.id });
+      const porter = view.porters.find(({ actorId }) => actorId === resident.identity.stableId);
+      const about = projectUIView(world, player, createSessionState(world.seedText), {
+        economyWorld: compatibility,
+        selectedResidentId: resident.id,
+      }).selectedResident;
+
+      expect(porter, scenario.label).toBeDefined();
+      expect(porter, scenario.label).not.toHaveProperty("speech");
+      expect(view.acousticText, scenario.label).toEqual([]);
+      if (scenario.expectedCondition !== undefined) {
+        expect(porter?.conditionLabels, scenario.label).toContain(scenario.expectedCondition);
+        expect(about?.observed.find(({ label }) => label === "Current state")?.value, scenario.label)
+          .toContain(scenario.expectedCondition);
+      }
+      if (scenario.expectedBehavior !== undefined) {
+        expect(about?.observed.find(({ label }) => label === "Behavior")?.value, scenario.label)
+          .toBe(scenario.expectedBehavior);
+      }
+      if (scenario.label === "hungry") {
+        expect(JSON.stringify({ porter, about })).not.toMatch(/hungr|need\s+food/iu);
+      }
+    }
   });
 
   it("does not manufacture weather-hold speech from continuing shelter state", () => {
@@ -606,7 +673,7 @@ describe("situated expression game projection", () => {
     });
     const visiblePorter = view.porters.find(({ id }) => Number(id) === resident.id);
     expect(visiblePorter?.conditionLabels).toContain("Holding for weather");
-    expect(visiblePorter?.speech).not.toBe("Holding here until this eases.");
+    expect(visiblePorter).not.toHaveProperty("speech");
     expect(view.acousticText?.some(({ text }) => (
       text === "Holding here until this eases."
     ))).toBe(false);
