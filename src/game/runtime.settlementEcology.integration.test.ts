@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import {
+  ACTOR_BELIEF_CAP,
   createActorObservation,
   createActorPerceptionState,
   stepActorPerception,
@@ -174,6 +175,7 @@ import {
   type TideweftRuntime,
 } from "./runtime";
 import { createSessionState } from "./sessionTypes";
+import { SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE } from "./situatedExpressionAcoustics";
 import {
   canonicalizeSettlementEcologyState,
   deserializeSettlementEcologyState,
@@ -822,8 +824,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 46 || current.version !== 46) {
-    throw new Error("runtime fixture is not a current v46 save");
+  if (record.payloadVersion !== 47 || current.version !== 47) {
+    throw new Error("runtime fixture is not a current v47 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1861,7 +1863,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 46) throw new Error("fixture is not a current save");
+  if (current.version !== 47) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1891,7 +1893,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 46) throw new Error("fixture is not a current save");
+  if (current.version !== 47) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1921,7 +1923,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 46 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 47 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1975,7 +1977,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 46
+    current.version !== 47
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -3053,8 +3055,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(46);
-    expect(envelope.version).toBe(46);
+    expect(record.payloadVersion).toBe(47);
+    expect(envelope.version).toBe(47);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -3128,19 +3130,19 @@ describe("runtime settlement ecology integration", () => {
     runtime.dispatchUI({ type: "interact" });
 
     const replyLabels = (runtime.getRenderView().acousticText ?? []).filter(({ text }) => (
-      text === "I'll bar the storehouse door."
+      text === "Storehouse door's barred."
     ));
     expect(replyLabels).toHaveLength(1);
     expect(replyLabels[0]).toMatchObject({
       acousticKind: "speech",
       sourceKind: "human",
-      text: "I'll bar the storehouse door.",
+      text: "Storehouse door's barred.",
     });
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
       .toHaveLength(1);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "ui")).toHaveLength(0);
     expect(runtime.getUIView().expressionCaption).toMatchObject({
-      text: "I'll bar the storehouse door.",
+      text: "Storehouse door's barred.",
       presentationKind: "speech",
     });
 
@@ -3212,11 +3214,106 @@ describe("runtime settlement ecology integration", () => {
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     expect(soundscapePlay).not.toHaveBeenCalled();
     expect((reloaded.getRenderView().acousticText ?? []).filter(({ text }) => (
-      text === "I'll bar the storehouse door."
+      text === "Storehouse door's barred."
     ))).toHaveLength(1);
     await reloaded.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     reloaded.destroy();
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumedPending = await createTideweftRuntime(repository);
+    expect(resumedPending.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    expect((resumedPending.getRenderView().acousticText ?? []).filter(({ text }) => (
+      text === "Storehouse door's barred."
+    ))).toHaveLength(1);
+    advancePlayerSteps(resumedPending, 10);
+    await resumedPending.save();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    const consumed = savedEnvelope(repository);
+    const consumedWorld = deserializeWorld(String(consumed.world));
+    const factHolders = consumedWorld.residents.filter(({ perception }) => (
+      perception.beliefs.some(({ perceivedClass }) => (
+        perceivedClass === "store-secured-report"
+      ))
+    ));
+    expect(factHolders.length).toBeGreaterThan(0);
+    expect(factHolders.length).toBeLessThanOrEqual(
+      humanPerception.HUMAN_PERCEPTION_MAX_RESIDENTS - 1,
+    );
+    expect(consumedWorld.residents.every(({ perception }) => (
+      perception.beliefs.length <= ACTOR_BELIEF_CAP
+    ))).toBe(true);
+    expect(factHolders.some(({ identity }) => (
+      identity.stableId === settlement.identity.keeperActorId
+    ))).toBe(false);
+    const learnedFacts = factHolders.flatMap(({ perception }) => (
+      perception.beliefs.filter(({ perceivedClass }) => (
+        perceivedClass === "store-secured-report"
+      ))
+    ));
+    expect(learnedFacts).toHaveLength(factHolders.length);
+    for (const fact of learnedFacts) {
+      expect(fact).toMatchObject({
+        channel: "hearing",
+        perceivedClass: "store-secured-report",
+        subjectId: null,
+        identification: "anonymous",
+        firstObservedTick: consumedWorld.meta.completedTick,
+        lastObservedTick: consumedWorld.meta.completedTick,
+        strongInterrupt: false,
+      });
+      expect(fact.confidence)
+        .toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+      expect(fact.area.radiusUnits).toBeGreaterThanOrEqual(250);
+      expect(fact).not.toHaveProperty("quantity");
+      expect(JSON.stringify(fact)).not.toContain(settlement.identity.keeperActorId);
+      expect(JSON.stringify(fact)).not.toContain(settlement.identity.storeId);
+      expect(JSON.stringify(fact)).not.toContain(String(settlement.lastClosureTransactionId));
+      expect(JSON.stringify(fact)).not.toContain(String(
+        settlement.keeperKnowledge[0]?.evidenceId,
+      ));
+      expect(JSON.stringify(fact)).not.toContain(humanPerception.LOCAL_PLAYER_SUBJECT_ID);
+      expect(JSON.stringify(fact)).not.toContain("fresh-produce");
+      expect(JSON.stringify(fact)).not.toContain("rat");
+      expect(consumedWorld.residents.some(({ perception }) => (
+        perception.beliefs.some((belief) => (
+          belief.sourceObservationId === fact.sourceObservationId
+          && belief.perceivedClass === "human-vocalization"
+        ))
+      ))).toBe(false);
+    }
+    const consumedCarry = consumed.perceptionCarry as typeof carry;
+    expect(consumedCarry.actorVocalizationSamples).toEqual([]);
+    expect(consumedCarry.situatedExpressionAdmissions.records).toEqual([]);
+    const learnedFactReceipts = learnedFacts.map((fact) => ({
+      sourceObservationId: fact.sourceObservationId,
+      firstObservedTick: fact.firstObservedTick,
+      lastObservedTick: fact.lastObservedTick,
+    }));
+    resumedPending.destroy();
+
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumedAfterReceipt = await createTideweftRuntime(repository);
+    expect(resumedAfterReceipt.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advancePlayerSteps(resumedAfterReceipt, 10);
+    await resumedAfterReceipt.save();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    const afterReplayWindow = deserializeWorld(String(savedEnvelope(repository).world));
+    const replayedFacts = afterReplayWindow.residents.flatMap(({ perception }) => (
+      perception.beliefs.filter(({ perceivedClass }) => (
+        perceivedClass === "store-secured-report"
+      ))
+    ));
+    expect(replayedFacts.map((fact) => ({
+      sourceObservationId: fact.sourceObservationId,
+      firstObservedTick: fact.firstObservedTick,
+      lastObservedTick: fact.lastObservedTick,
+    }))).toEqual(learnedFactReceipts);
+    resumedAfterReceipt.destroy();
   });
 
   it("migrates honest v40 store state without inventing speech and fences future reply semantics from v34-v40", async () => {
@@ -3268,18 +3365,88 @@ describe("runtime settlement ecology integration", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     expect(soundscapePlay).not.toHaveBeenCalled();
     expect((migrated.getRenderView().acousticText ?? []).some(({ text }) => (
-      text === "I'll bar the storehouse door."
+      text === "Storehouse door's barred."
     ))).toBe(false);
+    advancePlayerSteps(migrated, 10);
     await migrated.save();
     const migratedEnvelope = savedEnvelope(honestRepository);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedEnvelope.version).toBe(47);
     expect(migratedEnvelope.perceptionCarry).toMatchObject({
       version: 14,
       actorVocalizationSamples: [],
       situatedExpressionAdmissions: { records: [] },
       situatedExpressionChannels: { channels: [] },
     });
+    expect(deserializeWorld(String(migratedEnvelope.world)).residents.some(({ perception }) => (
+      perception.beliefs.some(({ perceivedClass }) => (
+        perceivedClass === "store-secured-report"
+      ))
+    ))).toBe(false);
     migrated.destroy();
+
+    const smuggledWorld = deserializeWorld(String(current.world));
+    const smuggledResident = smuggledWorld.residents[0];
+    if (smuggledResident === undefined) {
+      throw new Error("v40 semantic-smuggling fixture needs a resident");
+    }
+    const forgedObservationTick = smuggledResident.perception.tick + 1;
+    const forgedObservation = createActorObservation({
+      id: "OBS-v40-future-secured-store-report",
+      observerId: smuggledResident.identity.stableId,
+      observedAtTick: forgedObservationTick,
+      channel: "hearing",
+      perceivedClass: "store-secured-report",
+      subjectId: null,
+      area: {
+        center: createWorldPosition(createRegionCoord(0, 0), 500, 500),
+        radiusUnits: 250,
+      },
+      confidence: 500_000,
+      salience: 500_000,
+      identification: "anonymous",
+      interrupt: "none",
+    });
+    const learnedFutureReport = forgedObservation === null
+      ? null
+      : stepActorPerception(
+          createActorPerceptionState(
+            smuggledResident.identity.stableId,
+            smuggledResident.perception.tick,
+          ),
+          { tick: forgedObservationTick, observations: [forgedObservation] },
+        );
+    if (learnedFutureReport === null || learnedFutureReport.beliefs.length !== 1) {
+      throw new Error("v40 semantic-smuggling fixture could not form its forged belief");
+    }
+    smuggledWorld.residents[0] = {
+      ...smuggledResident,
+      perception: {
+        ...learnedFutureReport,
+        tick: smuggledResident.perception.tick,
+        beliefs: learnedFutureReport.beliefs.map((belief) => ({
+          ...belief,
+          firstObservedTick: smuggledResident.perception.tick,
+          lastObservedTick: smuggledResident.perception.tick,
+        })),
+        salientMemory: [],
+      },
+    };
+    const smuggledV40Base = {
+      ...honestV40Base,
+      world: serializeWorld(smuggledWorld),
+    };
+    const rejectedFutureBelief = await createTideweftRuntime(new MemoryRepository({
+      ...currentRecord,
+      payloadVersion: 40,
+      updatedAt: currentRecord.updatedAt + 2,
+      worldJson: JSON.stringify({
+        ...smuggledV40Base,
+        integrity: gameSaveEnvelopeIntegrity(smuggledV40Base),
+      }),
+    }));
+    expect(rejectedFutureBelief.getUIView().saveWarning?.message)
+      .toBe("LOCAL AUTOSAVE UNREADABLE");
+    rejectedFutureBelief.destroy();
 
     for (const [index, historical] of [
       { outerVersion: 40, carryVersion: 8, keepsAnimalContactCarry: true },
@@ -3301,7 +3468,7 @@ describe("runtime settlement ecology integration", () => {
       const rejected = await createTideweftRuntime(new MemoryRepository({
         ...currentRecord,
         payloadVersion: historical.outerVersion,
-        updatedAt: currentRecord.updatedAt + 2 + index,
+        updatedAt: currentRecord.updatedAt + 3 + index,
         worldJson: JSON.stringify({
           ...forgedHistoricalBase,
           integrity: gameSaveEnvelopeIntegrity(forgedHistoricalBase),
@@ -3358,8 +3525,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(46);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedRecord.payloadVersion).toBe(47);
+    expect(migratedEnvelope.version).toBe(47);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -3446,8 +3613,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(46);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedRecord.payloadVersion).toBe(47);
+    expect(migratedEnvelope.version).toBe(47);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -3620,8 +3787,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(46);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedRecord.payloadVersion).toBe(47);
+    expect(migratedEnvelope.version).toBe(47);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -3776,8 +3943,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(46);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedRecord.payloadVersion).toBe(47);
+    expect(migratedEnvelope.version).toBe(47);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -3892,8 +4059,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(46);
-    expect(migratedEnvelope.version).toBe(46);
+    expect(migratedRecord.payloadVersion).toBe(47);
+    expect(migratedEnvelope.version).toBe(47);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -4306,7 +4473,7 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(46);
+    expect(migratedWarningEnvelope.version).toBe(47);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
       ...v7CommittedCarry,
       version: 14,
@@ -5431,8 +5598,8 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedGrowlRecord = v36GrowlRepository.snapshot();
     const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(46);
-    expect(migratedGrowlEnvelope.version).toBe(46);
+    expect(migratedGrowlRecord.payloadVersion).toBe(47);
+    expect(migratedGrowlEnvelope.version).toBe(47);
     expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
       ...v7GrowlCarry,
       version: 14,
@@ -6214,8 +6381,8 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWhineRecord = v37WhineRepository.snapshot();
     const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(46);
-    expect(migratedWhineEnvelope.version).toBe(46);
+    expect(migratedWhineRecord.payloadVersion).toBe(47);
+    expect(migratedWhineEnvelope.version).toBe(47);
     expect(migratedWhineEnvelope.perceptionCarry).toEqual({
       ...v7WhineCarry,
       version: 14,

@@ -42,7 +42,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 46;
+  readonly version: 47;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly perceptionCarry: unknown;
@@ -275,10 +275,10 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 46
-    || record.payloadVersion !== 46
+    || value.version !== 47
+    || record.payloadVersion !== 47
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a current v46 envelope");
+  ) throw new Error("runtime fixture did not produce a current v47 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
     throw new Error("v34 envelope integrity did not authenticate");

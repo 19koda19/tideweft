@@ -388,6 +388,15 @@ presentation, never the committed physical consequence. Likewise, expression
 cooldown may coalesce optional text but must not erase a distinct newly
 committed acoustic event from propagation or listener receipts.
 
+Factual speech likewise requires an authenticated source event, expression,
+admission and acoustic sample plus listener-specific audible confidence. The
+current secured-store response is the bounded representative: sufficiently
+clear hearing yields only the expressed anonymous report at an uncertain area;
+weaker hearing remains generic vocalization. Authored prose, captions, hidden
+identity and domain details never become knowledge authority, and pending
+meaning is re-derived after reload rather than stored in a parallel dialogue
+queue.
+
 The current unpublished aggregate-frog chorus is a representative aggregate
 proof: ecology identity/activity and bounded cadence are `INTEGRATED`; item
 custody is `NOT APPLICABLE`; other aggregate repertoires remain `DEFERRED` to

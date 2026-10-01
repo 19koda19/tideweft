@@ -2,6 +2,11 @@ import type {
   SituatedExpressionEvent,
   SituatedExpressionIntent,
   SituatedExpressionMeaning,
+  SituatedExpressionMemory,
+} from "./situatedExpression";
+import {
+  projectSituatedExpression,
+  situatedExpressionEventIdForTrigger,
 } from "./situatedExpression";
 import { coreEcologyAlarmSignalProfile } from "./coreEcology";
 import { CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS } from "./coreEcologyPerception";
@@ -20,6 +25,122 @@ export type SituatedExpressionSoundClass =
   | "animal-alarm"
   | "animal-call"
   | "physical-thud";
+
+export const SITUATED_EXPRESSION_SEMANTIC_FACT_VERSION = 1 as const;
+/**
+ * Ordinary audible speech is not automatically understood. This threshold is
+ * applied after shared distance/weather masking and before a semantic report
+ * may enter listener cognition.
+ */
+export const SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE = 450_000 as const;
+
+export type SituatedExpressionSemanticFactClass = "store-secured-report";
+
+/**
+ * One bounded, source-authenticated meaning candidate carried beside an
+ * acoustic sample. It is deliberately transient: actor cognition persists the
+ * lawful receipt, while save/load re-derives an unconsumed candidate from the
+ * authenticated expression channel.
+ */
+export interface SituatedExpressionSemanticFact {
+  readonly version: typeof SITUATED_EXPRESSION_SEMANTIC_FACT_VERSION;
+  readonly expressionEventId: string;
+  readonly sourceActorId: string;
+  readonly perceivedClass: SituatedExpressionSemanticFactClass;
+  readonly minimumHearingConfidence: number;
+}
+
+/** Maps only currently supported factual speech onto listener-safe meaning. */
+export function situatedExpressionSemanticFactForEvent(
+  event: SituatedExpressionEvent,
+): SituatedExpressionSemanticFact | null {
+  if (projectSituatedExpression(event) === null) return null;
+  const expectedEventId = situatedExpressionEventIdForTrigger(
+    event.sourceActorId,
+    event.triggerEventId,
+  );
+  if (expectedEventId === null || event.eventId !== expectedEventId) return null;
+  return semanticFactFor(
+    event.sourceActorId,
+    event.eventId,
+    event.meaning,
+  );
+}
+
+/** Re-derives an unconsumed factual-speech candidate from canonical memory. */
+export function situatedExpressionSemanticFactForMemory(
+  memory: SituatedExpressionMemory,
+): SituatedExpressionSemanticFact | null {
+  const eventId = situatedExpressionEventIdForTrigger(
+    memory.sourceActorId,
+    memory.triggerEventId,
+  );
+  if (eventId === null) return null;
+  return semanticFactFor(memory.sourceActorId, eventId, memory.meaning);
+}
+
+/** Strictly validates transient fact shape; domain authority remains caller-owned. */
+export function canonicalizeSituatedExpressionSemanticFact(
+  value: unknown,
+): SituatedExpressionSemanticFact | null {
+  if (
+    value === null
+    || typeof value !== "object"
+    || Array.isArray(value)
+    || (
+      Object.getPrototypeOf(value) !== Object.prototype
+      && Object.getPrototypeOf(value) !== null
+    )
+    || Object.getOwnPropertySymbols(value).length !== 0
+  ) return null;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  const expected = [
+    "expressionEventId",
+    "minimumHearingConfidence",
+    "perceivedClass",
+    "sourceActorId",
+    "version",
+  ];
+  if (
+    keys.length !== expected.length
+    || !keys.every((key, index) => key === expected[index])
+    || record.version !== SITUATED_EXPRESSION_SEMANTIC_FACT_VERSION
+    || record.perceivedClass !== "store-secured-report"
+    || record.minimumHearingConfidence
+      !== SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE
+    || typeof record.expressionEventId !== "string"
+    || typeof record.sourceActorId !== "string"
+  ) return null;
+  const expressionEventId = record.expressionEventId;
+  const sourceActorId = record.sourceActorId;
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/.test(expressionEventId)
+    || !/^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/.test(sourceActorId)
+  ) return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_SEMANTIC_FACT_VERSION,
+    expressionEventId,
+    sourceActorId,
+    perceivedClass: "store-secured-report",
+    minimumHearingConfidence: SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+  });
+}
+
+function semanticFactFor(
+  sourceActorId: string,
+  expressionEventId: string,
+  meaning: SituatedExpressionMeaning,
+): SituatedExpressionSemanticFact | null {
+  if (meaning !== "keeper-secure-store-response") return null;
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_SEMANTIC_FACT_VERSION,
+    expressionEventId,
+    sourceActorId,
+    perceivedClass: "store-secured-report",
+    minimumHearingConfidence: SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+  });
+}
 
 const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
   "guardian-dog-warning",

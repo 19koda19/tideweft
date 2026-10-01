@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+  canonicalizeSituatedExpressionSemanticFact,
   situatedExpressionAcoustics,
+  situatedExpressionSemanticFactForMemory,
   situatedExpressionSoundClass,
   situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
@@ -86,5 +89,42 @@ describe("situated expression acoustics", () => {
     const growl = situatedExpressionAcoustics("spoken");
     expect(whine.loudness).toBeLessThan(growl.loudness);
     expect(whine.rangeUnits).toBeLessThan(growl.rangeUnits);
+  });
+
+  it("derives one listener-safe fact only from the secured-store meaning", () => {
+    const storeFact = situatedExpressionSemanticFactForMemory({
+      sourceActorId: "HUMAN-KEEPER-1",
+      triggerEventId: "settlement-store-closure:1",
+      meaning: "keeper-secure-store-response",
+      family: "work",
+      priority: 600_000,
+      meaningCooldownRemainingSteps: 30,
+      familyCooldownRemainingSteps: 10,
+    });
+    expect(storeFact).toEqual({
+      version: 1,
+      expressionEventId: expect.stringMatching(/^situated-expression:event:v1:/),
+      sourceActorId: "HUMAN-KEEPER-1",
+      perceivedClass: "store-secured-report",
+      minimumHearingConfidence: SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+    });
+    expect(situatedExpressionSemanticFactForMemory({
+      sourceActorId: "HUMAN-PORTER-1",
+      triggerEventId: "contract-departed:1",
+      meaning: "porter-heavy-load",
+      family: "work",
+      priority: 500_000,
+      meaningCooldownRemainingSteps: 20,
+      familyCooldownRemainingSteps: 8,
+    })).toBeNull();
+    if (storeFact === null) throw new Error("store fact fixture was not created");
+    expect(canonicalizeSituatedExpressionSemanticFact({
+      ...storeFact,
+      perceivedClass: "hidden-store-details",
+    })).toBeNull();
+    expect(canonicalizeSituatedExpressionSemanticFact(Object.assign(
+      Object.create({ inheritedAuthority: true }) as Record<string, unknown>,
+      storeFact,
+    ))).toBeNull();
   });
 });

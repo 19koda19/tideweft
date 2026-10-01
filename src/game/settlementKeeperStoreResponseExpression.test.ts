@@ -193,7 +193,7 @@ describe("settlement keeper store-response expression authority", () => {
     if (first === null) throw new Error("fixture omitted its keeper response");
     const accepted = acceptedExpression(first);
     expect(projectSituatedExpression(accepted.event)?.text).toBe(
-      "I'll bar the storehouse door.",
+      "Storehouse door's barred.",
     );
   });
 

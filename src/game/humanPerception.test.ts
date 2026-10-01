@@ -41,6 +41,12 @@ import {
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import {
+  SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+  situatedExpressionAcoustics,
+  situatedExpressionSemanticFactForMemory,
+  type SituatedExpressionSemanticFact,
+} from "./situatedExpressionAcoustics";
 import { createWorldPosition, type WorldPosition } from "./worldPosition";
 
 const OBSERVER_X = 24;
@@ -322,6 +328,222 @@ describe("existing-human sensory bridge", () => {
     }));
     expect(listenerObservations.find(({ id }) => id.includes(voice.id)))
       .not.toHaveProperty("sourceActorId");
+  });
+
+  it("lets clear authenticated factual speech teach one anonymous bounded fact", () => {
+    const current = fixture("a keeper report can be understood", { facing: "east" });
+    const listener = current.state.residents.find(({ id }) => id !== current.resident.id);
+    const route = current.state.routes[0];
+    if (!listener || !route) throw new Error("semantic voice fixture needs two residents");
+    listener.location = { kind: "route", routeId: route.id, progress: 0 };
+    const rebuilt = rebuildWorld(current);
+    const fact = situatedExpressionSemanticFactForMemory({
+      sourceActorId: current.resident.identity.stableId,
+      triggerEventId: "settlement-store-closure:test",
+      meaning: "keeper-secure-store-response",
+      family: "work",
+      priority: 600_000,
+      meaningCooldownRemainingSteps: 30,
+      familyCooldownRemainingSteps: 10,
+    });
+    if (fact === null) throw new Error("secured-store report must have semantic authority");
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "keeper-secure-store-response",
+      volume: "spoken",
+    });
+    const voice = supplementalSoundSample(
+      "secured-store-report",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      current.resident.identity.stableId,
+      {
+        expressionEventId: fact.expressionEventId,
+        soundLoudness: acoustics.loudness,
+        soundRangeUnits: acoustics.rangeUnits,
+      },
+    );
+
+    const batches = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [voice],
+      supplementalSemanticFacts: [fact],
+    });
+    const sourceObservations = batchFor(batches, current.resident.id)?.observations ?? [];
+    const listenerObservations = batchFor(batches, listener.id)?.observations ?? [];
+    const understood = listenerObservations.find(({ id }) => id.includes(voice.id));
+
+    expect(sourceObservations.some(({ id }) => id.includes(voice.id))).toBe(false);
+    expect(understood).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "store-secured-report",
+      identification: "anonymous",
+      subjectId: null,
+      interrupt: "none",
+    });
+    expect(understood?.confidence)
+      .toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+    expect(understood?.area.radiusUnits).toBeGreaterThanOrEqual(250);
+    expect(understood).not.toHaveProperty("sourceActorId");
+    expect(understood).not.toHaveProperty("expressionEventId");
+
+    const forged = { ...fact, sourceActorId: "HUMAN-FORGED-KEEPER" };
+    expect(collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [voice],
+      supplementalSemanticFacts: [forged],
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [voice],
+      supplementalSemanticFacts: [fact, fact],
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [voice],
+      supplementalSemanticFacts: Array.from(
+        { length: HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES + 1 },
+        () => fact,
+      ),
+    })).toEqual([]);
+    expect(collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [voice],
+      supplementalSemanticFacts: [{
+        ...fact,
+        minimumHearingConfidence:
+          SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE - 1,
+      }],
+    })).toEqual([]);
+
+    const weakVoice = supplementalSoundSample(
+      "weak-secured-store-report",
+      OBSERVER_X + 4,
+      OBSERVER_Y,
+      current.resident.identity.stableId,
+      {
+        expressionEventId: fact.expressionEventId,
+        soundLoudness: acoustics.loudness,
+        soundRangeUnits: acoustics.rangeUnits,
+      },
+    );
+    const weakBatches = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 2),
+      playerSamples: [],
+      supplementalSoundSamples: [weakVoice],
+      supplementalSemanticFacts: [fact],
+    });
+    const weakObservations = batchFor(weakBatches, listener.id)?.observations ?? [];
+    expect(weakObservations.find(({ id }) => id.includes(weakVoice.id))).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "human-vocalization",
+      identification: "anonymous",
+    });
+    expect(weakObservations.find(({ id }) => id.includes(weakVoice.id))?.confidence)
+      .toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+  });
+
+  it("binds semantic facts to their own voice events independent of input order", () => {
+    const current = fixture("two keeper reports keep their own authority", { facing: "east" });
+    const otherSource = current.state.residents.find(({ id }) => id !== current.resident.id);
+    const listener = current.state.residents.find(({ id }) => (
+      id !== current.resident.id && id !== otherSource?.id
+    ));
+    const route = current.state.routes[0];
+    if (!otherSource || !listener || !route) {
+      throw new Error("ordered semantic voice fixture needs three residents and a route");
+    }
+    otherSource.location = { kind: "route", routeId: route.id, progress: 0 };
+    listener.location = { kind: "route", routeId: route.id, progress: 0 };
+    const rebuilt = rebuildWorld(current);
+    const firstFact = situatedExpressionSemanticFactForMemory({
+      sourceActorId: current.resident.identity.stableId,
+      triggerEventId: "settlement-store-closure:ordered-a",
+      meaning: "keeper-secure-store-response",
+      family: "work",
+      priority: 600_000,
+      meaningCooldownRemainingSteps: 30,
+      familyCooldownRemainingSteps: 10,
+    });
+    const secondFact = situatedExpressionSemanticFactForMemory({
+      sourceActorId: otherSource.identity.stableId,
+      triggerEventId: "settlement-store-closure:ordered-b",
+      meaning: "keeper-secure-store-response",
+      family: "work",
+      priority: 600_000,
+      meaningCooldownRemainingSteps: 30,
+      familyCooldownRemainingSteps: 10,
+    });
+    if (firstFact === null || secondFact === null) {
+      throw new Error("ordered secured-store reports must have semantic authority");
+    }
+    const acoustics = situatedExpressionAcoustics({
+      meaning: "keeper-secure-store-response",
+      volume: "spoken",
+    });
+    const firstVoice = supplementalSoundSample(
+      "ordered-secured-store-a",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      current.resident.identity.stableId,
+      {
+        expressionEventId: firstFact.expressionEventId,
+        soundLoudness: acoustics.loudness,
+        soundRangeUnits: acoustics.rangeUnits,
+      },
+    );
+    const secondVoice = supplementalSoundSample(
+      "ordered-secured-store-b",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      otherSource.identity.stableId,
+      {
+        expressionEventId: secondFact.expressionEventId,
+        soundLoudness: acoustics.loudness,
+        soundRangeUnits: acoustics.rangeUnits,
+      },
+    );
+
+    const forward = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [firstVoice, secondVoice],
+      supplementalSemanticFacts: [firstFact, secondFact],
+    });
+    const reversed = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      supplementalSoundSamples: [secondVoice, firstVoice],
+      supplementalSemanticFacts: [secondFact, firstFact],
+    });
+
+    expect(reversed).toEqual(forward);
+    const reports = batchFor(forward, listener.id)?.observations.filter(({ perceivedClass }) => (
+      perceivedClass === "store-secured-report"
+    )) ?? [];
+    expect(reports).toHaveLength(2);
+    expect(reports.some(({ id }) => id.includes(firstVoice.id))).toBe(true);
+    expect(reports.some(({ id }) => id.includes(secondVoice.id))).toBe(true);
   });
 
   it("fails closed when a supplemental voice lacks a canonical authenticated source", () => {
@@ -997,6 +1219,7 @@ function observationsFor(
   targetTick: number,
   supplementalSoundSamples: readonly SupplementalSoundSample[] = [],
   physicalSoundSamples: readonly PhysicalSoundSample[] = [],
+  supplementalSemanticFacts: readonly SituatedExpressionSemanticFact[] = [],
 ) {
   return batchFor(collectExistingHumanObservations({
     world: current.world,
@@ -1004,6 +1227,7 @@ function observationsFor(
     targetTick: fixtureTick(current, targetTick),
     playerSamples: samples,
     supplementalSoundSamples,
+    supplementalSemanticFacts,
     physicalSoundSamples,
   }), current.resident.id)?.observations ?? [];
 }
@@ -1061,10 +1285,11 @@ function supplementalSoundSample(
   tileY: number,
   sourceActorId: string = LOCAL_PLAYER_SUBJECT_ID,
   overrides: Partial<Pick<SupplementalSoundSample,
-    "soundLoudness" | "soundRangeUnits">> = {},
+    "expressionEventId" | "soundLoudness" | "soundRangeUnits">> = {},
 ): SupplementalSoundSample {
   const sample = createSupplementalSoundSample({
-    expressionEventId: `situated-expression:event:test:${id}`,
+    expressionEventId: overrides.expressionEventId
+      ?? `situated-expression:event:test:${id}`,
     id,
     position: worldPoint(tileX, tileY),
     soundLoudness: overrides.soundLoudness ?? FIXED_POINT,

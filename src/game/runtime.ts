@@ -227,8 +227,11 @@ import {
 } from "./situatedExpressionCausalAuthority";
 import {
   situatedExpressionAcoustics,
+  situatedExpressionSemanticFactForEvent,
+  situatedExpressionSemanticFactForMemory,
   situatedExpressionSoundClass,
   situatedExpressionSoundInterrupt,
+  type SituatedExpressionSemanticFact,
 } from "./situatedExpressionAcoustics";
 import { porterHeavyDepartureAdmissionMatchesEventTimePerception } from "./porterHeavyDepartureAdmissionAuthority";
 import {
@@ -1111,8 +1114,10 @@ const SAVE_RETRY_MAX_DELAY_MS = 30_000;
 const HARD_POSTURE = "gale" as const;
 const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
-/** Current outer save whose situated-expression union owns the rabbit alarm thump. */
+/** Current outer save whose pending factual speech can become listener knowledge. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** Retired pre-1.0 save whose pending keeper speech remained acoustically generic. */
+const RABBIT_ALARM_GAME_SAVE_VERSION = 46;
 /** Retired pre-1.0 save whose closed expression union first owned deer alarms. */
 const DEER_ALARM_GAME_SAVE_VERSION = 45;
 /** Retired pre-1.0 save whose closed expression union first owned weather holds. */
@@ -1199,6 +1204,7 @@ const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   RESIDENT_INTRODUCTION_GAME_SAVE_VERSION,
   RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION,
   DEER_ALARM_GAME_SAVE_VERSION,
+  RABBIT_ALARM_GAME_SAVE_VERSION,
 ]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
@@ -12205,6 +12211,48 @@ export async function createTideweftRuntime(
     );
   }
 
+  /**
+   * Re-derives transient meaning candidates from the same authenticated
+   * channel that owns each pending sound. Nothing semantic is serialized
+   * beside the sound, and no English realization becomes knowledge authority.
+   */
+  function pendingAuthenticatedSituatedExpressionSemanticFacts(): readonly SituatedExpressionSemanticFact[] {
+    const facts: SituatedExpressionSemanticFact[] = [];
+    for (let sampleOrdinal = 0; sampleOrdinal < actorVocalizationSamples.length; sampleOrdinal += 1) {
+      const sample = actorVocalizationSamples[sampleOrdinal];
+      if (sample === undefined) {
+        throw new Error("Pending expression sound sample order became sparse");
+      }
+      const channel = situatedExpressionChannels.channels.find(({ sourceActorId }) => (
+        sourceActorId === sample.sourceActorId
+      ));
+      if (channel === undefined) {
+        throw new Error("Pending expression sound lost its source channel");
+      }
+      const active = channel.state.active;
+      const fact = active?.eventId === sample.expressionEventId
+        ? situatedExpressionSemanticFactForEvent(active)
+        : channel.state.recent
+          .map(situatedExpressionSemanticFactForMemory)
+          .find((candidate) => (
+            candidate?.expressionEventId === sample.expressionEventId
+          )) ?? null;
+      if (fact !== null) {
+        const matchingAdmissions = situatedExpressionAdmissions.records.filter((record) => (
+          record.kind === "settlement-keeper-store-response"
+          && record.eventId === fact.expressionEventId
+          && record.sourceActorId === fact.sourceActorId
+          && record.sampleOrdinal === sampleOrdinal
+        ));
+        if (matchingAdmissions.length !== 1) {
+          throw new Error("Factual keeper speech lost its committed admission authority");
+        }
+        facts.push(fact);
+      }
+    }
+    return Object.freeze(facts);
+  }
+
   function activeSituatedExpressionPairs(): readonly ActiveSituatedExpressionChannelPair[] {
     const pairs = activeSituatedExpressionPresentationPairs(
       situatedExpressionChannels,
@@ -12421,6 +12469,7 @@ export async function createTideweftRuntime(
       targetTick,
       playerSamples: playerSenseSamples,
       supplementalSoundSamples: actorVocalizationSamples,
+      supplementalSemanticFacts: pendingAuthenticatedSituatedExpressionSemanticFacts(),
       physicalSoundSamples,
     });
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
@@ -22217,6 +22266,19 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
     const world = deserializeWorld(decoded.world);
+    if (
+      decoded.version <= ANIMAL_CONTACT_GAME_SAVE_VERSION
+      && world.residents.some(({ perception }) => (
+        perception.beliefs.some(({ perceivedClass }) => (
+          perceivedClass === "store-secured-report"
+        ))
+        || perception.salientMemory.some(({ perceivedClass }) => (
+          perceivedClass === "store-secured-report"
+        ))
+      ))
+    ) {
+      throw new Error("Historical save contains future secured-store report authority");
+    }
     // Ordering metadata is authoritative only when it describes the payload
     // being adopted. A lying MAX_SAFE tick must not pin every later save.
     if (record.playTicks !== world.meta.completedTick) {

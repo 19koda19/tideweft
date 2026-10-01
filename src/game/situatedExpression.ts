@@ -483,7 +483,7 @@ const PRESENTATION_REALIZATIONS: Readonly<
   "keeper-secure-store-response": Object.freeze([
     Object.freeze({
       key: "situated-expression.en.v1.keeper-secure-store-response.0",
-      text: "I'll bar the storehouse door.",
+      text: "Storehouse door's barred.",
     }),
   ]),
   "need-rest-after-exertion": Object.freeze([

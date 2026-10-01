@@ -191,9 +191,16 @@ authorize one restrained keeper response through the same expression channel,
 vocal sample, audio, caption, and shared world-label path. The recorded
 event-time player pose must still reproduce a lawful direct-visible,
 conversation-range hearing outcome; a masked response remains world sound
-without player presentation. Other listeners receive only an ordinary acoustic
-fact, not semantic knowledge that the store was secured. Already-secured
-historical state cannot synthesize retroactive speech.
+without player presentation. A nearby human who lawfully hears that exact
+authenticated line with sufficient confidence receives one anonymous
+`store-secured-report` belief at an uncertain heard area; weaker but audible
+receipt remains ordinary `human-vocalization`. The listener learns no keeper
+identity, exact hidden source, stock quantity, rat detail, or player identity.
+This transient meaning candidate is re-derived from the existing committed
+expression/admission/sample trajectory, so current save/reload can finish the
+pending receipt once without persisting a parallel conversation queue or
+replaying audio. Already-secured historical state cannot synthesize retroactive
+speech or knowledge.
 
 The ordinary first-greeting seam now follows the same law. One exact retained
 `resident-introduced` event, accepted `GREET` command, persistent human body,
@@ -664,7 +671,7 @@ sound sample.
 Supported v38-v40 legacy fish-crow admissions retain their original identified
 direct-vision aerial-predator semantic fence; the broader shared alarm-belief
 policy belongs only to the species-aware record.
-The current rabbit embodied-signal candidate advances the writer to outer v46
+The rabbit embodied-signal candidate advanced the writer to outer v46
 and perception carry v14. It extends that admission to marsh rabbit while
 binding the rabbit-specific murmur volume, `physical-thud` human sound class,
 explicit non-interrupting semantics, and optional embodied-text presentation.
@@ -674,6 +681,13 @@ alarm, causal observation, locus, memory, admission, channel, and sound sample
 without replaying acknowledged audio, hearing, interruption, or ephemeral
 text. A retained phase-zero sleeping state canonically yields no player receipt
 rather than manufacturing a post-load thump.
+The current bounded factual-speech candidate advances the writer to outer v47
+without changing perception carry v14. Pending keeper speech now has a new
+authoritative consequence: sufficiently clear lawful human hearing may create
+one anonymous `store-secured-report` belief. Outer v46 is intentionally retired
+rather than allowing one schema number to mean two different pending-event
+outcomes. Current-v47 reload still reauthenticates the existing closure,
+admission, channel, and sample before deriving that transient meaning candidate.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
@@ -2851,21 +2865,23 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 46 and the bounded perception carry through version 14;
-the current source writer emits outer version 46. The preceding v43/carry-v11
+session through version 47 and the bounded perception carry through version 14;
+the current source writer emits outer version 47. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
 v45/carry-v13 added the species-aware fish-crow/deer alarm admission and deer
-semantic trajectory. Current v46/carry-v14 adds the marsh-rabbit embodied
+semantic trajectory. V46/carry-v14 added the marsh-rabbit embodied
 alarm-thump trajectory, its physical human-listener semantics, and explicit
-non-interrupting authority. Outer v41 through v45 are explicitly retired under
+non-interrupting authority. Current v47 keeps carry v14 and adds the first
+non-warning human-to-human structured fact receipt from the authenticated
+secured-store response. Outer v41 through v46 are explicitly retired under
 the pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v46 roundtrip
+promise to preserve every internal development format. Current-v47 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 

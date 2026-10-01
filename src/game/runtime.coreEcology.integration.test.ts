@@ -250,14 +250,14 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 46;
+  readonly version: 47;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly perceptionCarry: CurrentPerceptionCarry;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v46 envelopes never carry this field. */
+  /** Historical fixtures only; current v47 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -560,7 +560,7 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(46);
+    expect(adoptedRecord.payloadVersion).toBe(47);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
@@ -624,7 +624,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(46);
+    expect(adoptedRecord.payloadVersion).toBe(47);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -735,7 +735,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(46);
+    expect(repository.snapshot().payloadVersion).toBe(47);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -851,7 +851,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(46);
+    expect(v13Record.payloadVersion).toBe(47);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v10Envelope.player));
@@ -932,7 +932,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(46);
+    expect(v13Record.payloadVersion).toBe(47);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v11Envelope.player));
@@ -1030,7 +1030,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(46);
+    expect(v13Record.payloadVersion).toBe(47);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v12Envelope.player));
@@ -1117,7 +1117,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(46);
+    expect(adoptedRecord.payloadVersion).toBe(47);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v13Envelope.player));
@@ -1187,7 +1187,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(46);
+    expect(adoptedRecord.payloadVersion).toBe(47);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v14Envelope.player));
@@ -1600,7 +1600,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(46);
+    expect(before.version).toBe(47);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -4405,7 +4405,7 @@ describe("runtime core-ecology vertical slice", () => {
     )?.eventPosition).toBeUndefined();
 
     // Strip the fish-crow presentation interval so rejection below can only
-    // come from current-v46 ecology custody, not admission/sample reauth.
+    // come from current-v47 ecology custody, not admission/sample reauth.
     const ecologyOnlyCarry: CurrentPerceptionCarry = {
       ...validEnvelope.perceptionCarry,
       actorVocalizationSamples: [],
@@ -4431,7 +4431,7 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
 
     // The same authenticated no-locus V6 shape is legitimate under outer v37.
-    // It adopts the durable stored body address once, saves as v46, and never
+    // It adopts the durable stored body address once, saves as v47, and never
     // replays a Living Voice cue on either migration load or current reload.
     expect(serializedMissingLocusRegional).not.toContain('"eventPosition":');
     const { integrity: _missingLocusIntegrity, ...missingLocusFields } = missingLocusEnvelope;
@@ -4464,7 +4464,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const upgradedLocusRecord = repository.snapshot();
     const upgradedLocusEnvelope = requiredEnvelope(repository);
-    expect(upgradedLocusRecord.payloadVersion).toBe(46);
+    expect(upgradedLocusRecord.payloadVersion).toBe(47);
     const upgradedLocusCrow = requiredCoreActor(
       requiredCore(upgradedLocusEnvelope),
       crowActorId,
@@ -4874,7 +4874,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(46);
+    expect(repository.snapshot().payloadVersion).toBe(47);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -5005,7 +5005,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(46);
+    expect(repository.snapshot().payloadVersion).toBe(47);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -7061,10 +7061,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 46
+    || value.version !== 47
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v46 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v47 envelope");
   }
   return value;
 }
@@ -7241,7 +7241,7 @@ function stripFixtureAlarmEventPositionsForV24(
 /**
  * Gives an untouched compatibility cohort its real durable owner before a
  * gameplay fixture mutates it. Historical migration runs exactly once; every
- * later edit targets the resulting current v46 active resident.
+ * later edit targets the resulting current v47 active resident.
  */
 async function adoptUntouchedFixtureCoreAsCurrent(
   repository: MemoryRepository,
@@ -7296,8 +7296,8 @@ function resealedCurrentEnvelopeWithCorePatch(
     | "world"
   >> = {},
 ): CurrentEnvelope {
-  if ((envelope as Readonly<{ version: number }>).version !== 46) {
-    throw new Error("current ecology fixture requires a v46 envelope");
+  if ((envelope as Readonly<{ version: number }>).version !== 47) {
+    throw new Error("current ecology fixture requires a v47 envelope");
   }
   const state = requiredRegionalEcologyV6(envelope);
   const v5 = state.base;
@@ -8293,7 +8293,7 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
   if (
-    version === 46
+    version === 47
     || version === 45
     || version === 40
     || version === 39

@@ -1012,9 +1012,11 @@ In the current unpublished Living Voice candidate, the applied in-person
 closure also causes one restrained keeper reply through the shared
 source-bound acoustic/expression channel. It replaces the former session-local
 label and generic UI cue without changing the physical settlement owner.
-Nearby actors may receive only an ordinary human-vocalization sound fact; the
-line does not grant them semantic knowledge of the closure, and no autonomous
-keeper-observation or general conversation system is implied.
+Nearby humans who hear that exact authenticated line clearly enough may now
+retain one anonymous `store-secured-report` belief with uncertain location;
+weaker audible receipt remains ordinary human vocalization. The exchange grants
+no keeper identity, stock quantity, rat detail, player identity, autonomous
+reply, or general conversation system.
 
 Released Alpha 24 composes the same settlement-custody seam with
 the new yard flock. Habitat version 8 retains the complete version-7 population

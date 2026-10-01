@@ -269,7 +269,7 @@ describe("generic situated-expression kernel", () => {
       },
     });
     expect(projectSituatedExpression(reduction.event)).toMatchObject({
-      text: "I'll bar the storehouse door.",
+      text: "Storehouse door's barred.",
       vocalization: "steady",
     });
     expect(reduceSituatedExpression(createSituatedExpressionState(), {

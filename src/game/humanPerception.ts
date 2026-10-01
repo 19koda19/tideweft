@@ -47,6 +47,10 @@ import {
   inferAnonymousHearingArea,
   type PhysicalSoundSample,
 } from "./physicalAcousticPerception";
+import {
+  canonicalizeSituatedExpressionSemanticFact,
+  type SituatedExpressionSemanticFact,
+} from "./situatedExpressionAcoustics";
 
 export {
   ambientNoiseAt,
@@ -72,6 +76,8 @@ const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const EXPRESSION_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/;
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
+const EMPTY_SUPPLEMENTAL_SEMANTIC_FACTS: readonly SituatedExpressionSemanticFact[] =
+  Object.freeze([]);
 const EMPTY_PHYSICAL_SOUND_SAMPLES: readonly PhysicalSoundSample[] = Object.freeze([]);
 
 /**
@@ -123,6 +129,13 @@ export interface HumanPerceptionInput {
   readonly playerSamples: readonly PlayerSenseSample[];
   /** Bounded hearing-only facts carried beside, never merged into, physical step samples. */
   readonly supplementalSoundSamples?: readonly SupplementalSoundSample[];
+  /**
+   * Bounded meanings that the caller has re-derived from authenticated domain
+   * authority. This bridge validates their shape and matching sound, but does
+   * not authenticate the originating action/admission itself. A matching sound
+   * must still be lawfully heard clearly enough by each actor.
+   */
+  readonly supplementalSemanticFacts?: readonly SituatedExpressionSemanticFact[];
   /** Bounded physical-world sounds bound to committed acoustic events. */
   readonly physicalSoundSamples?: readonly PhysicalSoundSample[];
 }
@@ -219,18 +232,23 @@ export function collectExistingHumanObservations(
   const value: unknown = input;
   if (!plainRecord(value)) return EMPTY_BATCHES;
   const hasSupplementalSounds = Object.hasOwn(value, "supplementalSoundSamples");
+  const hasSupplementalSemanticFacts = Object.hasOwn(value, "supplementalSemanticFacts");
   const hasPhysicalSounds = Object.hasOwn(value, "physicalSoundSamples");
   const expectedKeys = ["playerSamples", "targetTick", "window", "world"];
   if (hasSupplementalSounds) expectedKeys.push("supplementalSoundSamples");
+  if (hasSupplementalSemanticFacts) expectedKeys.push("supplementalSemanticFacts");
   if (hasPhysicalSounds) expectedKeys.push("physicalSoundSamples");
   if (!exactKeys(value, expectedKeys)) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
   if (
     (hasSupplementalSounds && !Array.isArray(input.supplementalSoundSamples))
+    || (hasSupplementalSemanticFacts && !Array.isArray(input.supplementalSemanticFacts))
     || (hasPhysicalSounds && !Array.isArray(input.physicalSoundSamples))
   ) return EMPTY_BATCHES;
   const rawSupplementalSounds = input.supplementalSoundSamples
     ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
+  const rawSupplementalSemanticFacts = input.supplementalSemanticFacts
+    ?? EMPTY_SUPPLEMENTAL_SEMANTIC_FACTS;
   const rawPhysicalSounds = input.physicalSoundSamples
     ?? EMPTY_PHYSICAL_SOUND_SAMPLES;
   if (
@@ -241,6 +259,8 @@ export function collectExistingHumanObservations(
     || input.playerSamples.length > HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES
     || !Array.isArray(rawSupplementalSounds)
     || rawSupplementalSounds.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+    || !Array.isArray(rawSupplementalSemanticFacts)
+    || rawSupplementalSemanticFacts.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
     || !Array.isArray(rawPhysicalSounds)
     || rawPhysicalSounds.length > HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES
     || !validRegionalWorld(world, window)
@@ -253,14 +273,22 @@ export function collectExistingHumanObservations(
   const samples = canonicalSamples(input.playerSamples);
   if (samples === null) return EMPTY_BATCHES;
   const supplementalSounds = canonicalSupplementalSoundSamples(rawSupplementalSounds);
+  const supplementalSemanticFacts = canonicalSupplementalSemanticFacts(
+    rawSupplementalSemanticFacts,
+    supplementalSounds,
+  );
   const physicalSounds = canonicalPhysicalSoundSamples(rawPhysicalSounds);
   if (
     supplementalSounds === null
+    || supplementalSemanticFacts === null
     || physicalSounds === null
     || !disjointSampleIds(samples, supplementalSounds, physicalSounds)
   ) return EMPTY_BATCHES;
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
+  const semanticFactByExpressionEventId = new Map(
+    supplementalSemanticFacts.map((fact) => [fact.expressionEventId, fact]),
+  );
 
   const positioned = world.residents.flatMap((resident) => {
     const placement = resolveResidentWorldPlacement(economy, resident);
@@ -296,6 +324,7 @@ export function collectExistingHumanObservations(
     const appendHearingObservation = (
       sample: AcousticSample,
       targetPoint: SpatialFramePoint,
+      semanticFact: SituatedExpressionSemanticFact | null = null,
     ): boolean => {
       if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) return true;
       const heard = evaluateAudibleContact({
@@ -312,15 +341,20 @@ export function collectExistingHumanObservations(
       if (heard === null) return true;
       const area = inferAnonymousHearingArea(placement.position, sample.position, heard);
       if (area === null) return false;
+      const hearingConfidence = scaleContact(heard.certainty);
+      const perceivedClass = semanticFact !== null
+        && hearingConfidence >= semanticFact.minimumHearingConfidence
+        ? semanticFact.perceivedClass
+        : sample.soundClass;
       const observation = createActorObservation({
         id: observationId("h", targetTick, resident.id, sample.id),
         observerId: priorState.actorId,
         observedAtTick: targetTick,
         channel: "hearing",
-        perceivedClass: sample.soundClass,
+        perceivedClass,
         subjectId: null,
         area,
-        confidence: scaleContact(heard.certainty),
+        confidence: hearingConfidence,
         salience: hearingSalience(heard.certainty, sample.soundLoudness),
         identification: "anonymous",
         interrupt: sample.soundInterrupt,
@@ -384,7 +418,11 @@ export function collectExistingHumanObservations(
       if (sample.sourceActorId === priorState.actorId) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
-      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+      if (!appendHearingObservation(
+        sample,
+        targetPoint,
+        semanticFactByExpressionEventId.get(sample.expressionEventId) ?? null,
+      )) return EMPTY_BATCHES;
     }
     for (const sample of physicalSounds) {
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
@@ -481,6 +519,36 @@ function canonicalSupplementalSoundSamples(
   }
   samples.sort((left, right) => compareText(left.id, right.id));
   return Object.freeze(samples);
+}
+
+function canonicalSupplementalSemanticFacts(
+  value: readonly SituatedExpressionSemanticFact[],
+  samples: readonly SupplementalSoundSample[] | null,
+): readonly SituatedExpressionSemanticFact[] | null {
+  if (samples === null) return null;
+  const sampleByEventId = new Map(samples.map((sample) => [sample.expressionEventId, sample]));
+  const facts: SituatedExpressionSemanticFact[] = [];
+  const eventIds = new Set<string>();
+  for (const raw of value) {
+    const fact = canonicalizeSituatedExpressionSemanticFact(raw);
+    const sample = fact === null
+      ? undefined
+      : sampleByEventId.get(fact.expressionEventId);
+    if (
+      fact === null
+      || sample === undefined
+      || sample.sourceActorId !== fact.sourceActorId
+      || sample.soundClass !== "human-vocalization"
+      || eventIds.has(fact.expressionEventId)
+    ) return null;
+    eventIds.add(fact.expressionEventId);
+    facts.push(fact);
+  }
+  facts.sort((left, right) => compareText(
+    left.expressionEventId,
+    right.expressionEventId,
+  ));
+  return Object.freeze(facts);
 }
 
 function canonicalPhysicalSoundSamples(
