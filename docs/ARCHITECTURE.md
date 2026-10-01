@@ -74,8 +74,11 @@ Four performance responsibilities remain distinct and cumulative:
 - **Whole-game performance / scale — The Lean World** deepens profiling,
   full/near/coarse/archive fidelity, rendering LOD, streaming, camera and zoom
   discipline, save and memory growth, mobile budgets, and long-session
-  stability as the mature world expands. This is a responsibility boundary,
-  not an assertion that no later directive may exist.
+  stability as the mature world expands. Its final certification profiles the
+  actual workload-producing expansions, including Far Settlements; only a
+  measured missing scale prerequisite should run before that workload. This is
+  a responsibility boundary, not an assertion that no later directive may
+  exist.
 
 Future systems inherit these contracts where applicable. Expensive reasoning
 should be event-driven or deterministically cadence-bounded when that preserves
@@ -1254,7 +1257,7 @@ tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
 cache-bypassed production files matched the exact 4,377,380-byte tested web
 artifact; and its runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
-is next.
+is active in the local unpublished candidate.
 
 ## Authoritative tick
 
@@ -1943,7 +1946,8 @@ production files byte-for-byte. Directive 04_1 is closed. At that released
 checkpoint, the next authorized directive was 04_1A **The Turning Day**.
 Alpha53 has now shipped that bounded architecture as **LIVE_VERIFIED** and
 closes 04_1A. Current **LIVE_VERIFIED** Alpha 60 closes Directive 04_1B **The
-Breathing Room**, and 04_2 **The Living Voice** is next.
+Breathing Room**; 04_2 **The Living Voice** is active in the local unpublished
+candidate.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
@@ -3278,7 +3282,8 @@ succeeded; and all 5/5 cache-bypassed deployed production files matched the
 wildlife actor v1, and gameplay contract 51 remain unchanged; Field Manual 70
 is current. Host-specific cadence is not universal 60 FPS or low-power
 certification, and the periodic world-update hitch remains visible in
-worst-frame gaps. Directive 04_1B is closed; 04_2 **The Living Voice** is next.
+worst-frame gaps. Directive 04_1B is closed; 04_2 **The Living Voice** is active
+in the local unpublished candidate and is not part of the Alpha60 release.
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

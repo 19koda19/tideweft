@@ -778,7 +778,7 @@ universal 60 FPS or broad low-power certification. Periodic worst-frame gaps
 remain visible, and the measurements retain their documented host, platform,
 view, seed, and resource-observation limits. The bounded reuse preserves truth;
 it does not weaken simulation authority. Directive 04_1B is closed, and 04_2
-**The Living Voice** is next.
+**The Living Voice** is active in the local unpublished candidate.
 
 Design implication: future species breadth and settlement ecology should
 expand this aggregate/representative, physical-custody, domestic-custody,
@@ -824,7 +824,8 @@ ecology, and wider sound/evidence tracking still require their own authoritative
 owners. Alpha39's shared performance and seamless-crossing evidence closed
 Directive 04_1; Alpha53's distributed production evidence closed Directive
 04_1A; and Alpha60's bounded exact-reuse and exact-release evidence closes
-Directive 04_1B. 04_2 **The Living Voice** is next.
+Directive 04_1B. 04_2 **The Living Voice** is active in the local unpublished
+candidate and is not part of that public release.
 
 - Dwarf Fortress demonstrates that legible remembered events, relationships, loyalties, and consequences across sites can create depth without those details being the player's direct job. [Bay 12 development roadmap](https://bay12games.com/dwarves/dev.html)
 - Factorio's transport design shows why constrained logistics and topology create problems worth solving, and why automating a genuinely solved route prevents the core loop becoming chores. [Factorio Friday Facts 224](https://www.factorio.com/blog/post/fff-224)

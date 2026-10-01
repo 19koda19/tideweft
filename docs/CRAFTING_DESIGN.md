@@ -417,7 +417,12 @@ The implementation is not complete until all of these hold:
 
 ## Rollout and verification
 
-The feature ships in reversible slices. Each slice updates this document, README/build ledger, the T/? field manual, focused tests, production build, Electron smoke, and a GitHub Pages checkpoint before the next slice changes authoritative state.
+The feature ships in reversible slices under `AGENTS.md`'s three validation
+levels. Each ordinary slice updates the applicable owner/player truth, runs
+focused tests plus critical smoke and affected integration, and receives a
+local commit. Production packaging, cumulative regression, push, CI, Pages and
+exact deployed verification occur at the designated release checkpoint rather
+than automatically after every slice.
 
 ### Slice A — Derived ecology
 

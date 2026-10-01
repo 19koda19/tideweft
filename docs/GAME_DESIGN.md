@@ -1415,7 +1415,7 @@ tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
 cache-bypassed deployed files matched the exact 4,377,380-byte tested web
 artifact; and the runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
-is next.
+is active in the local unpublished candidate.
 
 When an entire deer herd, gull flock, or fish-crow flock is coarse, high persisted habitat pressure can produce a bounded player-absent displacement or separation between already validated habitat anchors, followed later by reunion as cohesion recovers. This aftermath is explicitly nonlethal, cannot touch cargo, and never enters player EVENTS or knowledge automatically.
 
@@ -2369,7 +2369,8 @@ packaged timing is not universal low-end certification. The soak's materialized
 wildlife representative is one real activity-bound Alpine golden eagle, not
 every species at once.
 Directive 04_1A is complete. Current **LIVE_VERIFIED** Alpha 60 closes Directive
-04_1B **The Breathing Room**, and 04_2 **Living Voice** is next.
+04_1B **The Breathing Room**, and 04_2 **Living Voice** is active in the local
+unpublished candidate.
 
 Live through Alpha 60:
 
@@ -2519,7 +2520,8 @@ Released in Alpha60:
   periodic world-update hitch in worst-frame gaps.
 
 Alpha60 is the current **LIVE_VERIFIED** release. It closes Directive 04_1B
-**The Breathing Room**, and 04_2 **Living Voice** is next.
+**The Breathing Room**; 04_2 **Living Voice** is active in the local unpublished
+candidate and is not yet part of that public release.
 
 Expansion runway, not current behavior:
 
