@@ -3004,6 +3004,38 @@ Unsupported simulation versions fail rather than being guessed into a current wo
 
 ## Dual p5 presentation
 
+### Renderer lifecycle and production policy
+
+Chart requests p5 `P2D`; Relief requests `WEBGL`. Both already exist. Chart
+caps pixel density at 2 and Relief at 1.5; their requested cadence is 60 Hz.
+Only the selected view loops and accepts input. Shared fixed-step simulation
+continues under the runtime owner, independently of p5 `draw`. The title
+atmosphere is a separate Canvas 2D surface with a 30 Hz ceiling, density cap
+1.5 and 3.2-million-pixel backing limit. There are no application-owned
+`p5.Graphics`, framebuffers, rendering workers or intermediate effect canvases.
+Renderer mode does not prove acceleration or presentation throughput.
+
+Production disables p5's Friendly Error validation through the supported
+`disableFriendlyErrors` flag; development keeps the caller's policy. The flag
+belongs to the shared p5 constructor, so a Relief shader operation can affect
+Chart too. In the pinned p5 version, Strands cleanup after object-form
+`Shader.modify` can restore a flag captured before application configuration.
+`preserveP5RuntimePolicy` therefore restores the entry value in `finally`
+around lazy perception-shader creation, including failure. Rendering arguments,
+shader code, return values and ordinary errors remain unchanged. Recheck this
+boundary against the exact dependency source when upgrading p5. This is
+application integration; no library source or dependency version is modified.
+
+Terrain geometry has an existing 768-entry bound; perception geometry has one
+retained entry with quiet-time admission and vertex/byte limits. World,
+generator, terrain and perception revisions own invalidation. Context loss and
+destruction release GPU resources; quick view switches may retain bounded
+presentation resources while stopping the inactive loop. Neither cache may
+retain hidden actor knowledge or become simulation authority.
+
+See [the measured integration record](RESEARCH.md#production-p5-policy-experiment--2026-10-01)
+for evidence, upgrade constraints and unavailable measurements.
+
 Released Alpha 29 projects the same authoritative physical carcass through Chart and
 Relief only while current direct-detail perception permits it. Both views use
 the same body ID, world position, species-clarity boundary, and depleted/remains
@@ -3237,6 +3269,16 @@ Vite uses `base: './'`, a single HTML entry, relative build assets, and no histo
 
 The Pages workflow runs `npm ci`, type-checking, the deterministic suite, and the web build before uploading only `dist/`. Static Pages has local saves only; cloud continuity or genuine cross-player asynchronous strands would require an explicit backend and abuse/privacy design.
 
+Validate emitted files with `npm run build:web` and `npm run smoke:web`, then
+run the browser witness against static `dist/` beneath `/tideweft/` using
+`npm run profile:browser -- --packaged-baseline <artifact.json>`. The development
+server is not production acceptance. There is no service worker, required
+backend, history-router rewrite or application worker today. Current browser
+compilation targets ES2022; an explicit minimum-browser-version matrix is not
+yet established. Report the actual tested browser and untested targets.
+The current Pages workflow publishes main pushes; a local optimization commit
+does not authorize a push, deployment or exact-live-build claim.
+
 ## Platform and distribution responsibility
 
 Web deployment and the hardened packaged Electron runtime are live, while
@@ -3246,6 +3288,25 @@ simulation, save/migration, input, accessibility, security, and local-first
 rules; a platform build may not fork gameplay truth. Release claims bind to the
 exact tested artifact, and installers, updates, lifecycle handling, and signing
 must fail honestly when their platform-specific evidence is absent.
+
+`npm run package:desktop` invokes Forge packaging; its pre-package hook builds
+the web artifact. `npm run make:desktop` also creates the configured host
+platform/architecture ZIP. ASAR includes only the manifest, Electron main entry
+and `dist/`; no preload, application IPC, native game dependency or unpacked
+resource path exists. Test the generated executable independently with
+`npm run smoke:desktop -- --executable <packaged-executable>` using disposable
+data. Compilation, packaging, ZIP creation, launch, installer testing and
+signing/notarization are separate outcomes. The current Forge configuration has
+no installer, updater or signing/notarization setup. macOS, Linux and Windows
+remain product targets; a host-only ZIP pass does not verify the other targets.
+
+Changes to rendering, workers, dependencies or platform integration must
+preserve supported production web/GitHub Pages and desktop builds. Profile
+before optimizing, validate generated artifacts, record dependency changes in
+installation sources and their canonical rationale, and report untested
+targets. Use targeted component tests plus critical smoke during edits; perform
+both affected artifact checks at an integration checkpoint. Do not lower visual
+quality, slow simulation or weaken security to satisfy a timing gate.
 
 ## Verification layers
 

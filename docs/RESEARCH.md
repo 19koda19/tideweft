@@ -85,6 +85,229 @@ GitHub Pages is a static host. A Pages workflow must build before upload and nee
 
 The initial exact stack is p5.js 2.3.2, Electron 44.1.0, Vite 8.2.2, TypeScript 7.0.2, Vitest 4.1.11, and Electron Forge 7.11.2. Research initially found Vitest 4.1.10, but npm's current optional-peer graph failed under npm 10 while 4.1.11 resolved cleanly. Forge 7.11.2 declares the 1.x Electron fuses API, so the project pins compatible `@electron/fuses` 1.8.0 rather than forcing the current 2.x API through a peer conflict.
 
+### Production p5 policy experiment — 2026-10-01
+
+**Scope:** bounded, local, unpublished runtime integration work. Before source
+checkpoint `19408a68ff6349ec1798a0b8c688211ac391b089`; retained application fix
+`a429993`. The starting tracked tree was clean. No gameplay producer, save
+schema, simulation cadence or release identity changed. Whole-game performance
+closure still requires the final implemented workload, stress and soak evidence.
+
+**Dependency and configuration record:** DEPENDENCY CHANGES: NONE.
+`package.json` and `package-lock.json` remain the installation authorities.
+There is no override, patch, fork, transitive change or `node_modules` edit.
+Application configuration: NONE; Electron, Vite, Forge and Pages settings are
+unchanged. Upstream library source modified: p5.js NO; Electron NO. A clean
+isolated reinstall was not run in this pass; installed exact versions matched
+the manifest/lockfile without replacing the working installation.
+
+**Observed bottleneck and hypothesis:** a separate 20-second, 1 ms CDP CPU
+profile attributed about 3.43 seconds of inclusive sampled CPU time to p5
+parameter validation/schema parsing. Production already requested disabled
+Friendly Error validation, but the pinned Strands addon restored its module-load
+flag after object-form `Shader.modify`. This silently reenabled repeated
+validation for both p5 views. Preserving the configured flag should remove that
+diagnostic work without changing drawing or simulation.
+
+**Application implementation:** `src/render/p5RuntimePolicy.ts` adds
+`preserveP5RuntimePolicy`; `p5ReliefSketch.ts` wraps lazy perception material
+modification in it. `finally` restores the entry policy on success or failure.
+Focused tests cover the true/false policy, return identity, original thrown
+error and the actual integration boundary with a flag-resetting modifier.
+The installed addon behavior was also reproduced directly using its exact
+object-form wrapper. Shader strings, geometry, draw order and arguments do not
+change. The after diagnostic contains no sampled validator stack.
+
+**Upgrade constraint:** recheck the public flag and object-form modifier
+against the exact upgraded p5 source. Remove the preservation boundary only
+when supported behavior and the integration test establish that it is redundant;
+rerun web and packaged desktop checks. No upstream patch needs maintaining.
+Sources: [p5 public policy](https://p5js.org/reference/p5/disableFriendlyErrors/),
+[public shader modification](https://p5js.org/reference/p5.Shader/modify/),
+[versioned Strands implementation](https://github.com/processing/p5.js/blob/v2.3.2/src/strands/p5.strands.js).
+
+#### Environment and comparable workloads
+
+AC-powered Apple M4 MacBook Air, 10 CPU cores, 8 GPU cores, 16 GiB, macOS
+26.5.2 / Darwin 25.5.0. Low Power Mode was off. Initial battery captures were
+excluded after the operator identified the power difference. CoreGraphics
+reported a 60 Hz main-display mode; requested p5 cadence was 60 Hz. Build shell
+Node was 22.20.0/npm 10.9.3, within the manifest engine range; CI selects
+`.nvmrc` 24.20.0. Electron 44.1.0 reports Chromium 152.0.7977.65 in its runtime
+user agent and bundles Node 24.19.0; these are separate runtimes.
+[Electron release metadata](https://releases.electronjs.org/release/v44.1.0)
+records the bundled versions. Firefox 157.0 was tested headless.
+
+Both artifacts were production builds, independently frozen before timing.
+Existing fixtures/harnesses were reused with 30 renderer warmup frames, 20 s
+stationary windows and a 210 s ordinary travel window. Estuary seed:
+`runtime baseline estuary`; dense seed: `breathing room regional density 8`;
+travel seed: `breathing-room all-tide corridor 187`. Stationary inputs were
+none; travel used the existing bounded ordinary movement sequence. Quality,
+camera, actor budgets and viewport were held constant per scenario. Desktop
+viewport was 1440×900; mobile cases used the existing emulated viewport, not
+mobile hardware. Actual active Electron Relief was WebGL2, CSS 1440×900 and
+backing 2160×1350; Chart backing was 2880×1800. Density was selected at setup
+from the physical display before profiler DPR emulation. No density or
+antialiasing option changed.
+
+Source mode: Chart P2D, Relief WEBGL, title Canvas 2D. Existing-context
+diagnostics confirmed packaged Relief WebGL2 with antialias, depth, stencil
+and preserveDrawingBuffer enabled. A separate capability query reported ANGLE
+Metal / Apple M4. Browser-process CDP diagnostics for both actual packaged
+launches also reported GPU compositing, rasterization and WebGL enabled on
+ANGLE Metal / Apple M4; these status reports do not time presented GPU frames.
+Firefox reported a privacy-reduced Apple renderer. There are no application
+Graphics/framebuffers, offscreen passes, workers or pixel readbacks to migrate.
+
+The existing packaged profiler uses explicit scheduling/occlusion overrides
+only in its opt-in diagnostic launch. Normal launches retain their existing
+throttling behavior; no flags or acceleration bypass were added. Trusted input,
+viewport and lifecycle guards passed. Confirmation timings had CPU sampling
+and hitch tracing disabled, while bounded existing telemetry remained enabled.
+
+#### Before and after
+
+Rows below are individual comparable full-matrix runs. FPS means renderer
+callback-count throughput, **not verified presentation FPS**. Draw means CPU
+time inside drawing, **not whole GPU frame time**. Interval p99 and worst use
+the existing bounded, edge-censored renderer samples.
+
+| Packaged Electron scenario | Callback FPS before → after | Draw mean ms before → after | Interval p99 ms before → after | Worst gap ms before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Estuary desktop Relief | 55.33 → 55.75 | 8.57 → 6.56 | 92.0 → 89.5 | 126.6 → 122.3 |
+| Estuary desktop Chart | 53.28 → 55.43 | 14.68 → 7.28 | 102.9 → 97.4 | 142.1 → 131.0 |
+| Estuary mobile Relief | 55.98 → 55.95 | 6.55 → 5.56 | 89.6 → 90.1 | 118.3 → 118.0 |
+| Estuary mobile Chart | 55.89 → 55.55 | 5.44 → 3.22 | 95.2 → 98.8 | 129.6 → 131.9 |
+| Dense Relief | 54.52 → 54.80 | 9.52 → 7.36 | 106.0 → 104.0 | 143.1 → 139.9 |
+| Dense Retina Relief | 54.63 → 54.93 | 9.31 → 7.23 | 107.9 → 106.0 | 143.9 → 136.8 |
+| Continuous regional travel | 36.61 → 45.10 | 9.90 → 6.94 | 60.9 → 57.9 | 202.6 → 105.2 |
+
+Desktop Relief repeated means were 8.57/7.36 ms before and 6.56/6.17 ms after:
+the median of two per-run means was 7.97 → 6.37 ms, **20.1% lower**. This is
+not a per-frame median. Stationary callback throughput stayed around 56/s.
+Travel throughput and tails improved in one pair; that broader result has not
+been repeated and is exploratory. Desktop before/after completed the same
+199 fixed steps per stationary sample and 2099 for travel, identical start
+projection hashes, actor counts, world ticks (420→439 / 420→629), travel
+distance/end locus and zero discontinuity/projection-mismatch witnesses.
+
+| Production Firefox, headless | Draw mean ms before → after | Callback FPS before → after | Interval p99 ms before → after | Worst gap ms before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Estuary, repetition 1 | 7.40 → 5.40 | 47.72 → 48.44 | 165 → 157 | 189 → 198 |
+| Estuary, repetition 2 | 7.04 → 5.55 | 47.24 → 47.45 | 158 → 162 | 178 → 195 |
+| Estuary, 60 s confirmation | 6.94 → 5.30 | 48.76 → 49.87 | 169 → 165 | 253 → 206 |
+
+The median of these two browser per-run draw means was 7.22 → 5.48 ms,
+**24.1% lower**. Browser world ticks matched 420→440, but terminal fixed-step
+counts varied (201–208), so these wall-clock runs do not prove identical final
+session bytes. Browser callback FPS and tail improvement are not established;
+short candidate worst gaps were longer. The 60 s pair matched 602 fixed steps
+and ticks 420→480, reduced draw cost by 23.7% and did not repeat that worst-gap
+regression. One attempted long candidate capture was rejected by the harness
+because documentation changed during its repository-identity window; it was
+discarded and rerun with a stable tree. No gain is extrapolated to Safari, ordinary
+headed browsers, other GPUs or desktop platforms.
+
+#### Decision, resource findings and remaining costs
+
+Retain the policy fix: repeat draw-cost reductions exceed the pre-edit 15%
+threshold at unchanged quality, with independent stack evidence explaining the
+removed work. This pass claims rendering CPU headroom. It does not certify
+universal FPS, complete frame-tail repair or whole-game performance closure.
+The local finite guardrails were 45 callback FPS for stationary desktop, 30
+for travel, renderer p99≤200 ms/worst≤350 ms, draw mean≤25 ms/p99≤50 ms,
+fixed-step mean≤25 ms and world-advance mean≤150 ms; Firefox floors/ceilings
+were 40 FPS, p99≤250 ms/worst≤400 ms, draw mean≤30 ms and world mean≤230 ms.
+These measured metrics passed. Proposed p95 and retention ceilings were not
+certified: existing output omits p50/p95 and short heap snapshots do not prove
+retained growth. Stop this bounded integration experiment after artifact and
+correctness validation; schedule further causal experiments under the existing
+performance owner when the implemented workload is ready.
+
+World advances remain the principal stationary spikes: about 87–101 ms in
+Electron and 152–159 ms in Firefox. Regional aggregate commit alone measured
+about 36 ms in the desktop estuary. A before diagnostic also sampled repeated
+water depth-state `getParameter` calls at about 1.41 s self time over 20 s;
+these blocking-query costs vary and need a separate state-preservation
+experiment. Chart color conversion, unnecessary equal-size resize/DOM updates
+and full-state copying are candidates requiring attribution, not implemented
+optimizations. Do not replace existing depth-state restoration with an assumed
+default or alter the authority cadence to hide these costs.
+
+Main-process responsibilities are lifecycle, secure resource serving and
+navigation/permission policy. Shared simulation, p5, DOM and Web Audio run on
+the renderer JavaScript thread; saves use IndexedDB with the existing
+localStorage fallback. There are no application IPC channels or preload bridge,
+so IPC is not a game workload bottleneck. Main-process blocking, GPU/raster/
+compositor durations, real input latency, startup timing, actual dropped frames
+and tick-debt time series were not measured.
+
+Existing terrain/perception caches are bounded and dispose resources on their
+owned invalidation paths. Travel kept loaded terrain at 5 regions and active
+ecology at 6, with no pending commands/save workers at the captured endpoint.
+Point-in-time heap/ArrayBuffer counts fluctuated, including larger candidate
+post-save snapshots; no retained-memory reduction or leak-free long soak is
+claimed. No pooling, forced GC, extra canvas layer or resolution tradeoff was
+introduced. No quality tradeoffs were implemented.
+
+#### Compatibility and reproduction
+
+Production web compilation and nested-path static smoke passed (613 modules,
+5 output files). Candidate JS is `assets/index-CCtf4xYW.js`, SHA-256
+`86318c8c83b19969a59d95bca9761bacbc0e6bbd80df9ef73c954eeb7f687502`.
+The stopped initial fixture wrote byte-identical complete v47 envelopes in
+both packaged builds (1,710,029 bytes, SHA-256
+`c2853ae436978bf2c1b3a7363b49dfc93e6161886920ca36980cf41328f2dc3e`).
+This is initial-state equivalence, not a claim about every wall-clock endpoint.
+The Firefox performance witness loaded this actual output without Electron or
+a development server, checked resource/error/CSP guards and wrote current saves.
+Additional interactive browser smoke and cumulative results are recorded at
+the final local checkpoint.
+
+macOS arm64 compilation, normal Forge packaging, generated-app launch and ZIP
+generation passed. Packaged smoke verified a runtime-only 10-entry ASAR,
+Node globals absent, views, keyboard/touch brace, resize, title/menu transitions,
+gameplay transactions and current-save/reload scenarios, with no reported
+resource/navigation/renderer errors. Desktop and compact screenshots were
+visually inspected; this is scene verification rather than pixel equality.
+The final make ASAR matches the launched candidate SHA-256
+`a7c618df8c8cf754ffc2688749f45bc2db2b9f06c5b0557e0f4def0b0c3a87cb`.
+No installer is configured; installation and signing/notarization were NOT RUN.
+Linux, Windows and macOS x64 packaging/launch were NOT RUN (no compatible
+runner in this environment).
+
+Pages configuration was inspected and preserved: `.github/workflows/pages.yml`
+uses npm CI and `.nvmrc`, validates and uploads only `dist/`, then deploys to
+the Pages environment on main pushes/manual dispatch. Vite retains `base:'./'`.
+The actual project path is `/tideweft/` at
+`https://19koda19.github.io/tideweft/`; no custom domain, router or service worker
+is configured. Local static artifact smoke passed. Pages deployment and exact
+deployed candidate verification were NOT RUN: this pass did not push/publish.
+No workflow trigger, permission, artifact destination, storage namespace,
+security boundary or update policy changed. Synthetic profiles and ignored
+local diagnostics kept private planning, credentials and real saves out of
+the five-file web output and runtime-only ASAR.
+
+Reproduce with the exact before/after source checkpoints and installed lockfile:
+
+```sh
+npm run build:web
+npm run smoke:web
+npm run package:desktop
+npm run profile:baseline -- --executable <generated-executable> --sample-ms 20000 --output artifacts/performance/<matrix>.json
+npm run profile:baseline -- --executable <generated-executable> --scenario estuary-desktop-relief --sample-ms 20000 --output artifacts/performance/<repeat>.json
+npm run profile:browser -- --packaged-baseline artifacts/performance/<matrix>.json --sample-ms 20000 --output artifacts/performance/<browser>.json
+npm run smoke:desktop -- --executable <generated-executable>
+npm run make:desktop
+```
+
+Run one measurement at a time on AC power after warmup, retain artifact/harness
+hashes and disable CPU sampling for confirmation. Existing benchmark commands
+remain the lightweight regression entry points. Focused renderer tests passed
+4 files/161 tests; the explicitly reconstructed six-file critical smoke passed
+97 tests. No completed directive or gameplay resumption point was changed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
