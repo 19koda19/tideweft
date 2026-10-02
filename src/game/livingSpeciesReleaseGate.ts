@@ -1,4 +1,5 @@
 import {
+  LIVING_SPECIES_ALPHA32_CATALOG,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_CATALOG_VERSION,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
@@ -4764,7 +4765,15 @@ Alpha22TidalConvergenceSourceCandidateReadinessReport {
       escalationConstraints.includes("no-health-or-mortality-outcome")
     ));
 
-  const excludedClaimIntegrityReady = candidateModules.every((module) => (
+  // These exclusions describe the bounded historical proof, not capabilities
+  // later directives may legitimately add. The authenticated pre-Voice catalog
+  // preserves those declarations; current coherence and conservation above
+  // still use the current modules and runtime owners.
+  const historicalCandidateModules = ALPHA22_TIDAL_CONVERGENCE_SPECIES.map((speciesId) => (
+    LIVING_SPECIES_ALPHA32_CATALOG.modules.find((module) => module.speciesId === speciesId)
+      ?? null
+  ));
+  const excludedClaimIntegrityReady = historicalCandidateModules.every((module) => (
     module !== null
     && module.lifeHistory.mortality === "unimplemented"
     && module.lifeHistory.reproduction === "unimplemented"

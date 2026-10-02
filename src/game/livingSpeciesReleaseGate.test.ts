@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LIVING_SPECIES_ALPHA32_CATALOG,
   LIVING_SPECIES_CATALOG,
   LIVING_SPECIES_INTERACTION_TARGET_CLASSES,
   livingSpeciesModule,
@@ -1745,6 +1746,39 @@ describe("Living Weft species release gate", () => {
     expect(Object.isFrozen(readiness.blockingCapabilities)).toBe(true);
     expect(Object.isFrozen(readiness.evidenceOwnerIds)).toBe(true);
     expect(Object.isFrozen(readiness.excludedClaims)).toBe(true);
+  });
+
+  it("keeps Alpha-22 exclusions historical when current gulls gain Living Voice", () => {
+    const currentGull = livingSpeciesModule("gull");
+    const historicalGull = LIVING_SPECIES_ALPHA32_CATALOG.modules.find(({ speciesId }) => (
+      speciesId === "gull"
+    ));
+
+    expect(currentGull?.sound).toMatchObject({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["gull-alarm-cry"],
+    });
+    expect(historicalGull?.sound).toEqual({
+      implementation: "unimplemented",
+      ownerId: null,
+      repertoire: [],
+      communicationSignals: [],
+      accessibilityCues: [],
+    });
+    expect(currentGull).not.toBe(historicalGull);
+    expect(Object.isFrozen(historicalGull)).toBe(true);
+    expect(alpha22TidalConvergenceSourceCandidateReadiness()).toMatchObject({
+      registryCoherenceReady: true,
+      resourceConservationReady: true,
+      excludedClaimIntegrityReady: true,
+      sourceCandidateReady: true,
+      blockingCapabilities: [],
+      publicationRecordsReady: false,
+      exactTestedDeploymentVerified: false,
+      liveVerified: false,
+      published: false,
+    });
   });
 
   it("authenticates Alpha-24 as one bounded domestic flock over shared owners", () => {
