@@ -76,7 +76,7 @@ interface AlarmFixture {
 function alarmFixture(
   species: Extract<
     CoreWildlifeSpecies,
-    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk"
+    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar"
   > = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
@@ -87,8 +87,10 @@ function alarmFixture(
         ? RABBIT_OBSERVATION_ID
         : species === "elk"
           ? "OBS-elk-sees-wolf"
-          : "OBS-gull-sees-harrier",
-  perceivedThreatClass = species === "deer" || species === "elk"
+          : species === "wild-boar"
+            ? "OBS-boar-sees-wolf"
+            : "OBS-gull-sees-harrier",
+  perceivedThreatClass = species === "deer" || species === "elk" || species === "wild-boar"
     ? "large-predator"
     : species === "marsh-rabbit"
       ? "predator"
@@ -101,10 +103,11 @@ function alarmFixture(
   }> = {},
 ): AlarmFixture {
   const position = createWorldPosition(ORIGIN, 23_000, 31_000);
+  const groupedAlarmSource = species === "elk" || species === "wild-boar";
   const population: CoreEcologyPopulationInput = {
     species,
     populationKey: `living-voice:${species}`,
-    members: (species === "elk" ? [0, 1] : [0]).map((populationOrdinal) => ({
+    members: (groupedAlarmSource ? [0, 1] : [0]).map((populationOrdinal) => ({
       populationOrdinal,
       position: translateWorldPosition(position, populationOrdinal * 500, 0),
       heading: 125_000,
@@ -117,7 +120,7 @@ function alarmFixture(
     originRegion: ORIGIN,
     derivation: { kind: "bounded-input-v1" },
     populations: [population],
-    ...(species === "elk" ? {
+    ...(groupedAlarmSource ? {
       groups: createCoreEcologyGroupSet([createCoreEcologyGroup({
         seed: SEED,
         species,
@@ -435,6 +438,86 @@ describe("core-wildlife signal expression", () => {
     expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, {
       ...memory,
       triggerEventId: herdMate.identity.stableId + ":e:1:alarm",
+    })).toBe(false);
+  });
+
+  it("derives one boar alarm from its committed sounder member without exposing the threat", () => {
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "wild-boar",
+      "WOLF-living-voice-test",
+    );
+    const intent = coreWildlifeAlarmExpressionIntent(input);
+
+    expect(initialWorld.groups.groups).toMatchObject([{
+      identity: { species: "wild-boar", organization: "sounder" },
+      memberOrdinals: [0, 1],
+    }]);
+    expect(input.world.populations[0]?.members).toHaveLength(2);
+    expect(intent).toEqual(coreWildlifeAlarmExpressionIntent(structuredClone(input)));
+    expect(intent).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      position: input.event.position,
+      meaning: "wild-boar-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 920_000,
+      durationSteps: 6,
+    });
+    expect(coreWildlifeAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+    expect(fishCrowAlarmExpressionIntent(input)).toBeNull();
+    expect(coreWildlifeAlarmMeaningForSpecies("wild-boar")).toBe("wild-boar-alarm-call");
+    expect(coreWildlifeAlarmSpeciesForMeaning("wild-boar-alarm-call")).toBe("wild-boar");
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: { meaning: "wild-boar-alarm-call", vocalization: "boar-grunt" },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "GRUNT!",
+      realizationKey: "situated-expression.en.v1.wild-boar-alarm-call.0",
+      vocalization: "boar-grunt",
+    });
+    expect(JSON.stringify(reduction.event)).not.toMatch(/WOLF-living-voice|OBS-boar|large-predator/u);
+  });
+
+  it("reauthenticates restored boar alarm authority and rejects forged sounder-member roots", () => {
+    const { input } = alarmFixture("wild-boar", "WOLF-living-voice-test");
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(input.world),
+    );
+    if (restoredWorld === null) throw new Error("Boar fixture world did not roundtrip");
+    const restored = { ...input, actor: sourceActor(restoredWorld), world: restoredWorld };
+    const intent = coreWildlifeAlarmExpressionIntent(restored);
+    if (intent === null) throw new Error("Restored boar alarm intent was rejected");
+    const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (reduced.event === null || reduced.state === null) {
+      throw new Error("Boar alarm expression was not accepted");
+    }
+    const memory = advanceSituatedExpression(reduced.state, intent.durationSteps)?.recent[0];
+    if (memory === undefined) throw new Error("Boar alarm cooldown was not retained");
+    expect(coreWildlifeAlarmExpressionEventForTrigger(restored, intent.triggerEventId))
+      .toEqual(reduced.event);
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, reduced.event)).toBe(true);
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, memory)).toBe(true);
+
+    const sounderMate = restoredWorld.populations[0]?.members[1]?.actor;
+    if (sounderMate === undefined) throw new Error("Boar fixture omitted its second sounder member");
+    expect(coreWildlifeAlarmExpressionIntent({ ...restored, actor: sounderMate })).toBeNull();
+    for (const event of [
+      { ...input.event, species: "elk" as const },
+      { ...input.event, causeReferenceId: "OBS-boar-forged-threat" },
+      { ...input.event, position: translateWorldPosition(input.event.position, 1, 0) },
+    ]) {
+      expect(coreWildlifeAlarmExpressionIntent({ ...restored, event })).toBeNull();
+    }
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, {
+      ...memory,
+      triggerEventId: sounderMate.identity.stableId + ":e:1:alarm",
     })).toBe(false);
   });
 

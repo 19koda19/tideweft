@@ -401,9 +401,23 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord(
       JSON.parse(JSON.stringify(elkAdmission)),
     )).toEqual(elkAdmission);
+    const boarInput = {
+      ...input,
+      sourceActorId: "BOAR-alarm-admission",
+      triggerEventId: "BOAR-alarm-admission:e:pc:alarm",
+      sourceSpecies: "wild-boar" as const,
+    };
+    const boarAdmission = createCoreWildlifeAlarmExpressionAdmissionRecord(boarInput);
+    expect(boarAdmission).toMatchObject({
+      kind: "core-wildlife-alarm",
+      ...boarInput,
+    });
+    expect(canonicalizeSituatedExpressionAdmissionRecord(
+      JSON.parse(JSON.stringify(boarAdmission)),
+    )).toEqual(boarAdmission);
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
-      sourceSpecies: "wild-boar",
+      sourceSpecies: "gray-wolf",
     })).toBeNull();
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,

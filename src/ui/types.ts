@@ -488,6 +488,7 @@ export interface SituatedExpressionCaptionUIView {
     | "deer-call"
     | "gull-call"
     | "elk-call"
+    | "boar-call"
     | "marsh-fox-call"
     | "chorus";
   /** Structured physical semantics; never inferred from localized text. */

@@ -268,6 +268,7 @@ function policy(
     case "deer-alarm-call": throw new Error("Deer calls are not player authority");
     case "gull-alarm-call": throw new Error("Gull calls are not player authority");
     case "elk-alarm-call": throw new Error("Elk calls are not player authority");
+    case "wild-boar-alarm-call": throw new Error("Boar calls are not player authority");
     case "marsh-rabbit-alarm-thump": throw new Error("Rabbit calls are not player authority");
     case "marsh-fox-pursuit-yip": throw new Error("Fox calls are not player authority");
     case "human-danger-warning":

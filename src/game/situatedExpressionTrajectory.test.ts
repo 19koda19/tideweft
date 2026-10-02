@@ -61,6 +61,7 @@ const PORTER_ID = "H-expression-trajectory-porter";
 const GUARDIAN_DOG_ID = "D-expression-trajectory-guardian";
 const FISH_CROW_ID = "C-expression-trajectory-fish-crow";
 const DEER_ID = "D-expression-trajectory-deer";
+const BOAR_ID = "BOAR-expression-trajectory-boar";
 const MARSH_RABBIT_ID = "M-expression-trajectory-marsh-rabbit";
 const MARSH_FOX_ID = "FOX-v1-expression-trajectory-marsh-fox";
 const PURSUIT_RABBIT_ID = "RABBIT-v1-expression-trajectory-prey";
@@ -180,6 +181,15 @@ function deerIntent(triggerEventId: string): SituatedExpressionIntent {
     sourceActorId: DEER_ID,
     meaning: "deer-alarm-call",
     variantSeed: 128,
+  };
+}
+
+function boarIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowIntent(triggerEventId),
+    sourceActorId: BOAR_ID,
+    meaning: "wild-boar-alarm-call",
+    variantSeed: 130,
   };
 }
 
@@ -581,14 +591,17 @@ function fishCrowFixture(
   };
 }
 
-function deerAlarmFixture(): Fixture {
+function deerAlarmFixture(species: "deer" | "wild-boar" = "deer"): Fixture {
   const phase = 3;
   const acceptedAtTick = 40;
-  const triggerEventId = "core-wildlife:alarm:deer:trajectory";
-  const admitted = accept(createSituatedExpressionState(), deerIntent(triggerEventId));
+  const triggerEventId = `core-wildlife:alarm:${species}:trajectory`;
+  const admitted = accept(createSituatedExpressionState(), species === "deer"
+    ? deerIntent(triggerEventId)
+    : boarIntent(triggerEventId));
+  const sourceActorId = admitted.event.sourceActorId;
   const current = advanceSituatedExpression(admitted.state, phase);
   if (current === null || current.active === null) {
-    throw new Error("fixture deer expression expired unexpectedly");
+    throw new Error(`fixture ${species} expression expired unexpectedly`);
   }
   const reception = createHeardVisibleSituatedExpressionReception(
     current.active,
@@ -598,20 +611,20 @@ function deerAlarmFixture(): Fixture {
   );
   const bank = canonicalizeSituatedExpressionChannelBank({
     version: 1,
-    channels: [{ sourceActorId: DEER_ID, state: current, reception }],
+    channels: [{ sourceActorId, state: current, reception }],
   });
   const record = createCoreWildlifeAlarmExpressionAdmissionRecord({
-    sourceActorId: DEER_ID,
+    sourceActorId,
     triggerEventId,
     sampleOrdinal: 0,
     admittedAtPlayerStepPhase: 0,
-    sourceSpecies: "deer",
+    sourceSpecies: species,
     sourceOwnerKey: "regional-ecology:trajectory-test",
     sourceObservationId: "observation:large-predator:trajectory-test",
     acceptedAtTick,
   });
   if (bank === null || record === null || reception === null) {
-    throw new Error("fixture deer trajectory was not canonical");
+    throw new Error(`fixture ${species} trajectory was not canonical`);
   }
   return {
     bank,
@@ -1353,6 +1366,45 @@ describe("situated-expression admission trajectory", () => {
       fixture.samples,
     )).toBe(false);
 
+  });
+
+  it("binds a boar alarm to its exact species-aware receipt and core acoustic envelope", () => {
+    const fixture = deerAlarmFixture("wild-boar");
+    expect(accepts(fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      sourceActorId: BOAR_ID,
+      meaning: "wild-boar-alarm-call",
+      vocalization: "boar-grunt",
+      priority: 760_000,
+      durationSteps: 6,
+      remainingSteps: 3,
+    });
+    expect(fixture.ledger.records[0]).toMatchObject({
+      kind: "core-wildlife-alarm",
+      sourceSpecies: "wild-boar",
+    });
+    expect(fixture.samples[0]).toMatchObject({
+      soundClass: "animal-alarm",
+      soundInterrupt: "strong",
+      soundLoudness: 1_000_000,
+      soundRangeUnits: 9_100,
+    });
+    const restored = JSON.parse(JSON.stringify(fixture)) as Fixture;
+    expect(accepts(restored)).toBe(true);
+
+    const forged = mutable(fixture.ledger);
+    if (forged.records[0]?.kind !== "core-wildlife-alarm") {
+      throw new Error("fixture lost species-aware boar admission");
+    }
+    forged.records[0].sourceSpecies = "elk";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, forged, fixture.phase, fixture.samples,
+    )).toBe(false);
+    const erasedInterrupt = mutable(fixture.samples);
+    erasedInterrupt[0]!.soundInterrupt = "none";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, erasedInterrupt,
+    )).toBe(false);
   });
 
   it("binds a marsh-rabbit alarm thump to the shared species-aware admission", () => {

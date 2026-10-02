@@ -168,7 +168,7 @@ The shared schema is deliberately broader than the current set of producers.
 In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
-one gull alarm cry, one elk alarm bark, the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
+one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
 physical rustle are live representative paths. One domestic-cat representative
 is also live: a freshly committed rain-caused retreat with matching rain
 observation and event-owned wet-track evidence may create one restrained,
@@ -190,12 +190,18 @@ aware Voice path; visible receipt may identify the gull while heard-unseen
 presentation remains an anonymous bird call. A freshly committed elk alarm now
 uses that same path; visible receipt may identify the elk and its bark, while
 heard-unseen presentation remains an anonymous animal call. Elk bugling remains
-synthesis foundation only. The generic wildlife-alarm fallback still serves
-American black duck, domestic chicken, domestic goat and wild boar through the
+synthesis foundation only. A freshly committed wild-boar alarm joins that same
+source-bound path and reuses the existing grunt synthesis; visible receipt may
+identify the boar and its grunt, while unseen hearing remains an anonymous
+animal call. Boar squealing and routine social grunts remain foundation-only.
+Optional expression capacity may suppress text but cannot suppress lawful
+committed alarm audio, strong interruption, or the ecology-owned hearing leg.
+The generic wildlife-alarm fallback still serves
+American black duck, domestic chicken and domestic goat through the
 legacy player-audio/session-announcement path. That presentation leg remains a
 `BYPASS` seam to migrate or retire during Living Voice; the underlying ecology
 alarm already propagates to wildlife, dogs and the applicable porter listener.
-The narrow gull, elk, cat, and fox representatives do not prove broad species
+The narrow gull, elk, boar, cat, and fox representatives do not prove broad species
 repertoires, general hunting communication, or broad animal Voice.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract

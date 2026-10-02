@@ -1127,6 +1127,7 @@ function recentMeaningAcousticTuples(
     case "deer-alarm-call":
     case "gull-alarm-call":
     case "elk-alarm-call":
+    case "wild-boar-alarm-call":
     case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
@@ -12341,6 +12342,7 @@ export async function createTideweftRuntime(
       && expression.meaning !== "deer-alarm-call"
       && expression.meaning !== "gull-alarm-call"
       && expression.meaning !== "elk-alarm-call"
+      && expression.meaning !== "wild-boar-alarm-call"
       && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -20355,6 +20357,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "deer-alarm-call"
       && meaning !== "gull-alarm-call"
       && meaning !== "elk-alarm-call"
+      && meaning !== "wild-boar-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20368,6 +20371,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "deer-alarm-call"
       && active.meaning !== "gull-alarm-call"
       && active.meaning !== "elk-alarm-call"
+      && active.meaning !== "wild-boar-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20380,6 +20384,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.vocalization !== "deer-alarm-snort"
       && active.vocalization !== "gull-alarm-cry"
       && active.vocalization !== "elk-alarm-bark"
+      && active.vocalization !== "boar-grunt"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"

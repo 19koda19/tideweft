@@ -13,6 +13,7 @@ export const SITUATED_VOCALIZATIONS = Object.freeze([
   "deer-alarm-snort",
   "gull-alarm-cry",
   "elk-alarm-bark",
+  "boar-grunt",
 ] as const);
 
 export type SituatedVocalization = (typeof SITUATED_VOCALIZATIONS)[number];
@@ -59,9 +60,10 @@ export type SmallWildlifeCue =
   | "fox-yip";
 
 /**
- * Authored Alpha 30 voice vocabulary. These cues have deterministic pattern
- * data only: they are deliberately absent from `SoundCue`, so no caller can
- * claim a runtime audio event or playback bridge yet.
+ * Historical Alpha 30 authored voice vocabulary. These raw names remain
+ * pattern data rather than direct `SoundCue` entries. Current Living Voice
+ * may explicitly adapt a pattern through `SituatedVocalizationCue`; membership
+ * in this frozen list alone never proves a live producer or playback bridge.
  */
 export const ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES = Object.freeze([
   "boar-grunt",
@@ -299,6 +301,10 @@ export class TideweftSoundscape {
       ),
       "vocalization-elk-alarm-bark": situatedVocalizationPattern(
         "elk-alarm-bark",
+        variantSeed,
+      ),
+      "vocalization-boar-grunt": situatedVocalizationPattern(
+        "boar-grunt",
         variantSeed,
       ),
     };
@@ -551,6 +557,8 @@ export function situatedVocalizationPattern(
       ];
     case "elk-alarm-bark":
       return ecologyVoicePattern("elk-alarm-bark", variantSeed);
+    case "boar-grunt":
+      return ecologyVoicePattern("boar-grunt", variantSeed);
     case "relief":
       return [
         toneStep(523.25 + shift, 0, "square", 0.055),

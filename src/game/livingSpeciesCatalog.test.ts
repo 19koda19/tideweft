@@ -467,6 +467,13 @@ describe("Living Weft species module catalog", () => {
       communicationSignals: ["elk-alarm-bark"],
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
+    expect(livingSpeciesModule("wild-boar")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["boar-grunt"],
+      communicationSignals: ["boar-grunt"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
     expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:world-acoustics:v1",
@@ -493,6 +500,14 @@ describe("Living Weft species module catalog", () => {
       LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
     ];
     for (const catalog of releasedCatalogs) {
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "wild-boar")?.sound)
+        .toEqual({
+          implementation: "foundation",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["boar-grunt", "boar-squeal"],
+          communicationSignals: ["boar-grunt"],
+          accessibilityCues: ["direct-observation-caption"],
+        });
       expect(catalog.modules.find(({ speciesId }) => speciesId === "elk")?.sound)
         .toEqual({
           implementation: "foundation",
@@ -1245,13 +1260,13 @@ describe("Living Weft species module catalog", () => {
     expect(goat?.environment.weather.status).toBe("unimplemented");
   });
 
-  it("projects the Alpha 30 upland roster through one shared catalog contract", () => {
+  it("projects the inherited Alpha 30 upland roster through the current shared catalog contract", () => {
     const cases = [
       [
         "wild-boar",
         "SOUNDER",
         ["forest-edge", "temperate-upland", "wooded-ridge"],
-        ["boar-grunt", "boar-squeal"],
+        ["boar-grunt"],
         ["boar-grunt"],
       ],
       [
@@ -1271,6 +1286,8 @@ describe("Living Weft species module catalog", () => {
     ] as const;
 
     for (const [species, namespace, habitatClasses, repertoire, communicationSignals] of cases) {
+      // This is the current catalog, not the frozen historical release above.
+      const voiceActive = species === "elk" || species === "wild-boar";
       const module = livingSpeciesModule(species);
       expect(module).not.toBeNull();
       expect(module).toMatchObject({
@@ -1296,11 +1313,11 @@ describe("Living Weft species module catalog", () => {
           group: { stableIdNamespace: namespace },
         },
         sound: {
-          implementation: species === "elk" ? "active" : "foundation",
-          ownerId: species === "elk" ? "game:situated-expression:v1" : "audio:soundscape:v1",
+          implementation: voiceActive ? "active" : "foundation",
+          ownerId: voiceActive ? "game:situated-expression:v1" : "audio:soundscape:v1",
           repertoire,
           communicationSignals,
-          accessibilityCues: species === "elk"
+          accessibilityCues: voiceActive
             ? ["direct-observation-caption", "directional-hearing-caption"]
             : ["direct-observation-caption"],
         },

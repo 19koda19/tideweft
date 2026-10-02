@@ -50,6 +50,7 @@ export const CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES = Object.freeze([
   "marsh-rabbit",
   "fish-crow",
   "elk",
+  "wild-boar",
 ] as const);
 export type ExpressiveAlarmSpecies =
   (typeof CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES)[number];
@@ -142,6 +143,11 @@ const ALARM_EXPRESSION_PROFILE_BY_SPECIES: Readonly<
     species: "elk",
     meaning: "elk-alarm-call",
     variantDomain: "elk-alarm-expression:v1",
+  }),
+  "wild-boar": Object.freeze({
+    species: "wild-boar",
+    meaning: "wild-boar-alarm-call",
+    variantDomain: "wild-boar-alarm-expression:v1",
   }),
 });
 

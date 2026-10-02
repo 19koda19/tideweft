@@ -290,6 +290,32 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toMatch(/elk|BARK|bear|threat/iu);
   });
 
+  it("presents a boar grunt only for a visible source and keeps unseen hearing anonymous", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:boar:alarm",
+      speakerLabel: "Wild boar",
+      text: "GRUNT!",
+      tone: "alarmed",
+      presentationKind: "animal-call",
+      animalCallKind: "boar-call",
+      assertive: true,
+    };
+    expect(situatedExpressionCaptionCopy(visible)).toBe("[A wild boar grunts sharply.]");
+    expect(situatedExpressionCaptionVisibleText(visible)).toBe("GRUNT!");
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible,
+      id: "situated-expression:event:v1:anonymous-fixture",
+      speakerLabel: "An animal",
+      text: "CALL!",
+      animalCallKind: "animal-call",
+      directionLabel: "west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen))
+      .toBe("[An animal calls somewhere west.]");
+    expect(situatedExpressionCaptionVisibleText(unseen)).toBe("CALL! · west");
+    expect(JSON.stringify(unseen)).not.toMatch(/boar|GRUNT|wolf|threat/iu);
+  });
+
   it("presents a cat call without translating its hidden rain distress", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:cat:call",

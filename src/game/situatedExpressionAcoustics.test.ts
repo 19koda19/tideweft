@@ -27,6 +27,8 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("elk-alarm-call"))
       .toBe("animal-alarm");
+    expect(situatedExpressionSoundClass("wild-boar-alarm-call"))
+      .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("marsh-rabbit-alarm-thump"))
       .toBe("physical-thud");
     expect(situatedExpressionSoundClass("marsh-fox-pursuit-yip"))
@@ -123,6 +125,31 @@ describe("situated expression acoustics", () => {
     expect(audio).toMatchObject({
       sound: { kind: "vocalization", vocalization: "elk-alarm-bark" },
       variantSeed: 0xe1a,
+      pan: 0.25,
+    });
+    expect(audio?.volume).toBeCloseTo(0.621, 12);
+  });
+
+  it("preserves the boar alarm envelope and audio independently of optional text admission", () => {
+    const expression = {
+      meaning: "wild-boar-alarm-call" as const,
+      vocalization: "boar-grunt" as const,
+      tone: "alarmed" as const,
+      volume: "shout" as const,
+      variantSeed: 0xb0a,
+    };
+    expect(situatedExpressionAcoustics(expression)).toEqual({
+      loudness: 1_000_000,
+      rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("strong");
+    const audio = situatedExpressionAudioPresentation(expression, {
+      certainty: 500_000,
+      pan: 0.25,
+    });
+    expect(audio).toMatchObject({
+      sound: { kind: "vocalization", vocalization: "boar-grunt" },
+      variantSeed: 0xb0a,
       pan: 0.25,
     });
     expect(audio?.volume).toBeCloseTo(0.621, 12);

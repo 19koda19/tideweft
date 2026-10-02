@@ -82,6 +82,7 @@ describe("situated vocalization cues", () => {
       "vocalization-deer-alarm-snort",
       "vocalization-gull-alarm-cry",
       "vocalization-elk-alarm-bark",
+      "vocalization-boar-grunt",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -198,6 +199,15 @@ describe("situated vocalization cues", () => {
     expect(situatedVocalizationPattern("elk-alarm-bark", variantSeed))
       .not.toEqual(situatedVocalizationPattern("dog-warning-bark", variantSeed));
     expect(SITUATED_VOCALIZATIONS).not.toContain("elk-bugle");
+  });
+
+  it("reuses the authored boar grunt without making the squeal a situated voice", () => {
+    const variantSeed = 0xb0a;
+    expect(situatedVocalizationPattern("boar-grunt", variantSeed))
+      .toEqual(ecologyVoicePattern("boar-grunt", variantSeed));
+    expect(situatedVocalizationPattern("boar-grunt", variantSeed))
+      .not.toEqual(situatedVocalizationPattern("elk-alarm-bark", variantSeed));
+    expect(SITUATED_VOCALIZATIONS).not.toContain("boar-squeal");
   });
 });
 

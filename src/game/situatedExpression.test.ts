@@ -165,6 +165,15 @@ function elkAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function boarAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowAlarmIntent(triggerEventId),
+    sourceActorId: "BOAR-expression-test",
+    meaning: "wild-boar-alarm-call",
+    variantSeed: 615,
+  };
+}
+
 function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     ...fishCrowAlarmIntent(triggerEventId),
@@ -609,6 +618,40 @@ describe("generic situated-expression kernel", () => {
       text: "BARK!",
       realizationKey: "situated-expression.en.v1.elk-alarm-call.0",
       vocalization: "elk-alarm-bark",
+    });
+    expect(canonicalizeSituatedExpressionState(JSON.parse(JSON.stringify(reduction.state))))
+      .toEqual(reduction.state);
+    for (const forged of [
+      { ...intent, volume: "murmur" },
+      { ...intent, tone: "restrained" },
+      { ...intent, knowledgeBasis: "self-heard-anonymous-alarm" },
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged))
+        .toMatchObject({ accepted: false, reason: "invalid-intent" });
+    }
+  });
+
+  it("registers and roundtrips the restrained boar alarm grunt through the shared policy", () => {
+    const intent = boarAlarmIntent("BOAR-expression-test:e:1:alarm");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "wild-boar-alarm-call",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "shout",
+        vocalization: "boar-grunt",
+        durationSteps: 6,
+      },
+    });
+    if (reduction.event === null || reduction.state === null) {
+      throw new Error("Boar alarm was not accepted");
+    }
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "GRUNT!",
+      realizationKey: "situated-expression.en.v1.wild-boar-alarm-call.0",
+      vocalization: "boar-grunt",
     });
     expect(canonicalizeSituatedExpressionState(JSON.parse(JSON.stringify(reduction.state))))
       .toEqual(reduction.state);

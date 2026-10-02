@@ -391,6 +391,7 @@ function v33AcousticTuples(meaning: SituatedExpressionMeaning): readonly Acousti
     case "deer-alarm-call":
     case "gull-alarm-call":
     case "elk-alarm-call":
+    case "wild-boar-alarm-call":
     case "marsh-rabbit-alarm-thump":
     case "marsh-fox-pursuit-yip":
     case "human-danger-warning":
@@ -418,6 +419,7 @@ function legacyExpressionDurationSteps(meaning: SituatedExpressionMeaning): numb
     case "deer-alarm-call": return 6;
     case "gull-alarm-call": return 6;
     case "elk-alarm-call": return 6;
+    case "wild-boar-alarm-call": return 6;
     case "marsh-rabbit-alarm-thump": return 6;
     case "marsh-fox-pursuit-yip": return 6;
     case "human-danger-warning": return 6;

@@ -212,7 +212,7 @@ its transient `thump` text. Repetition control may keep successive text
 restrained, but every distinct ecology-committed thump remains an audible world
 event for lawful listeners.
 
-An anonymous strong fish-crow, deer, gull, or elk alarm may become ordinary human
+An anonymous strong fish-crow, deer, gull, elk, or wild-boar alarm may become ordinary human
 knowledge before it becomes speech. At most one deterministic nearby resident
 who has a fresh, strongly attended direct predator sighting or anonymous
 animal-alarm belief may issue a short shouted warning from their actual
@@ -253,7 +253,7 @@ does not yet add general NPC conversation or a broad animal-expression system.
 
 The current unpublished status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
-signals, fish-crow/deer/gull calls, the rabbit thump, and the frog chorus are live in
+signals, fish-crow/deer/gull/elk/boar calls, the rabbit thump, and the frog chorus are live in
 the candidate. The aggregate rat rustle and one exact domestic-cat rain-distress
 call are also live through the shared acoustic path; the cat representative
 requires a freshly committed rain-caused retreat plus matching rain memory and
@@ -266,7 +266,11 @@ pursuit, or source identity from sound alone. Renderer-polled resident state
 lines have been removed. The gull and elk real alarms have migrated. A visible
 elk may bark **BARK!**; unseen hearing remains **An animal** / **CALL!**, never
 an identified elk or hidden predator. Elk bugling remains foundation-only.
-The generic wildlife-alarm fallback remains for duck, chicken, goat and boar
+A visible wild boar may grunt **GRUNT!**; unseen hearing remains **An animal** /
+**CALL!**, without source identity or hidden threat. Boar squeals and routine
+social grunts remain foundation-only. Suppressing optional captions cannot
+silence a lawful alarm or erase its strong WAIT interruption and bounded
+ecology hearing. The generic wildlife-alarm fallback remains for duck, chicken and goat
 as a player audio/session-announcement bypass of shared Voice presentation.
 Their underlying ecology alarms already propagate to applicable wildlife,
 dog and porter listeners; this does not establish the missing Voice leg.
@@ -954,9 +958,9 @@ gray-wolf movement can leave paired tracks or canid pawprints at the saved
 movement site. Crows, the harrier, the egret, the duck, the otter, harbor
 seals, polar bears, chickens, goats, boars, elk, cougars, and brown bears do
 not manufacture ground tracks.
-Wild-boar and gray-wolf voice profiles remain foundation-only. The current
-unpublished elk alarm bark uses shared Living Voice; elk bugling remains
-foundation-only. Cougar and
+Gray-wolf voice profiles remain foundation-only. The current unpublished elk
+alarm bark and wild-boar alarm grunt use shared Living Voice; elk bugling,
+boar squealing and routine social grunts remain foundation-only. Cougar and
 brown-bear voice behavior is not implemented. Directly visible individual
 wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT
 surface; each visible crow, chicken, goat, boar, elk, wolf, cougar, brown-bear,
