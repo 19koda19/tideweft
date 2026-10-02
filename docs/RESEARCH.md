@@ -209,6 +209,49 @@ because documentation changed during its repository-identity window; it was
 discarded and rerun with a stable tree. No gain is extrapolated to Safari, ordinary
 headed browsers, other GPUs or desktop platforms.
 
+#### Supported zoom and current activity supplements
+
+The reachable gameplay zoom endpoints were also exercised on AC in frozen
+packaged builds, using the dense seed, 1440×900 viewport, unchanged quality,
+public `renderer.focusWorld`, 2.2 s camera settling, the existing 30-frame warmup
+and 20 s measurement. Each pair retained identical initial projection hashes,
+actor counts, 199 fixed steps and ticks 420→439. These are single pairs rather
+than repeated throughput claims.
+
+| Packaged view / zoom | Draw mean ms before → after | Callback FPS before → after | Interval p99 ms before → after | Worst gap ms before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Relief wide / 0.38 | 13.24 → 9.29 | 50.08 → 52.65 | 145.0 → 137.8 | 212.0 → 197.5 |
+| Relief maximum / 3.2 | 5.56 → 4.89 | 54.58 → 54.79 | 111.9 → 107.7 | 165.6 → 170.0 |
+| Chart wide / 0.58 | 29.92 → 16.60 | 25.60 → 42.24 | 182.1 → 177.4 | 223.4 → 248.0 |
+| Chart maximum / 2.4 | 6.04 → 3.52 | 53.68 → 51.65 | 132.5 → 114.8 | 156.1 → 360.4 |
+
+The maximum-Chart candidate window also recorded a 345.1 ms world tick.
+A longer 60 s matched recheck did not repeat that outlier: draw mean
+5.76→3.11 ms, callback FPS 53.62→54.58, interval p99 121.7→113.5 ms,
+worst gap 239.6→144.9 ms, with identical 599 fixed steps and ticks 420→479.
+This diagnoses an odd sample without claiming that all frame spikes are fixed.
+Wide Chart remains a costly workload; its measured 42.24 callbacks/s does not
+meet the default-scene 45/s guardrail, which was defined for different fixtures.
+
+The local supplement also collected callback-interval quantiles. Browser rAF
+p50/p95 was 16.7/33.3→16.7/18.4 ms for wide Relief and
+33.3/50.4→16.7/33.4 ms for wide Chart. Maximum-zoom p50 remained 16.7 ms;
+p95 was about 18 ms in both builds. These are edge-censored scheduling proxies,
+not presented-frame or GPU quantiles; default-matrix p50/p95 remains uncollected.
+Candidate screenshots at all four endpoints were visually inspected for
+terrain masking, actors, labels and HUD information.
+
+Dense fixtures contained 22 materialized wildlife, but zero directly visible
+wildlife and only three visible actors. They prove near-cap simulation work,
+not a visually crowded or saturated acoustic scene. A separate current-game
+Firefox bout used trusted charged Space scans and 800 ms W movement in both
+views, then a legal offered resident GREET. It observed one real introduction
+expression/acoustic-text candidate in mist, with ordinary water/vegetation
+presentation. The same committed caption was inspected in Chart and Relief;
+simulation was stopped only for that visual witness, outside performance
+windows. No actor, event or future producer was invented. Four-label saturation,
+broad alarm migration and final producer stress remain closure obligations.
+
 #### Decision, resource findings and remaining costs
 
 Retain the policy fix: repeat draw-cost reductions exceed the pre-edit 15%
@@ -226,7 +269,7 @@ correctness validation; schedule further causal experiments under the existing
 performance owner when the implemented workload is ready.
 
 World advances remain the principal stationary spikes: about 87–101 ms in
-Electron and 152–159 ms in Firefox. Regional aggregate commit alone measured
+Electron and 152–164 ms in Firefox. Regional aggregate commit alone measured
 about 36 ms in the desktop estuary. A before diagnostic also sampled repeated
 water depth-state `getParameter` calls at about 1.41 s self time over 20 s;
 these blocking-query costs vary and need a separate state-preservation
@@ -262,8 +305,43 @@ both packaged builds (1,710,029 bytes, SHA-256
 This is initial-state equivalence, not a claim about every wall-clock endpoint.
 The Firefox performance witness loaded this actual output without Electron or
 a development server, checked resource/error/CSP guards and wrote current saves.
-Additional interactive browser smoke and cumulative results are recorded at
-the final local checkpoint.
+Interactive Firefox 157 headless smoke passed actual Chart 2D/Relief WebGL2,
+trusted brace/orbit input, resize, current-v47 primary/fallback save identity
+across normal refresh, title pause/continue and usable context-loss fallback
+with simulation continuing. Firefox backing was 1440×900 at density 1;
+antialias was false on that existing context, with no application-quality
+change. There were no HTTP/fetch failures or window errors/rejections. The
+existing startup CSP eval rejection remained one per document; it was not
+silenced or fixed by weakening CSP. An isolated native audio-graph witness
+reported one running context, advancing clock and five scheduled oscillators.
+
+Extended activity audio is separately **BLOCKED** in this headless environment:
+both frozen before and candidate builds kept a native context suspended at
+time zero, with the optional public title-cue resume promise pending even after
+trusted pointer input. Protocol activation and a real gesture retry did not
+resolve it; the cause was not attributed. The initial extended probes timed out
+and remain failed records; subsequent bounded diagnostics preserved the
+successful activity observations and reported audio as blocked. No autoplay
+preference, audio fallback or shipping behavior was changed. Audible hardware
+output and a headed extended-session audio check remain NOT RUN. Safari 26.5.2
+automation was NOT RUN because Allow Remote Automation was disabled; browser
+settings were preserved. Chrome and other supported browser/device targets
+were not available for this pass.
+
+The complete awake `caffeinate -i env CI=true npm run test:ci` run at
+`49069a3e420f897ae22a787b8392ea592b6fa923` finished **FAIL**: 353/354 files and
+3498/3499 tests passed in 1893.19 s; context-index 23 and player-facing policy
+39 self-tests also passed. The sole failure is the Alpha-22 source-convergence
+expectation in `src/game/livingSpeciesReleaseGate.test.ts`: current sound
+implementation violates its historical sound-unimplemented predicate. The
+same 32-pass/1-fail focused result reproduced in a clean detached worktree at
+the untouched starting `19408a6`; all game/release-gate sources are unchanged
+by this pass. This preexisting gameplay/evidence-owner issue is handed back
+without changing the gate, test or historical directives. No clean cumulative
+certificate or release readiness is claimed. An earlier interrupted full run
+was invalidated by recorded host sleep; its four long integration timeout
+failures did not recur in the awake run. The temporary idle-sleep assertion
+changed no permanent power preference or shipping behavior.
 
 macOS arm64 compilation, normal Forge packaging, generated-app launch and ZIP
 generation passed. Packaged smoke verified a runtime-only 10-entry ASAR,

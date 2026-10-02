@@ -64,8 +64,10 @@ Four performance responsibilities remain distinct and cumulative:
   the real expanded game, with particular attention to expression, acoustics,
   hearing, localization, acoustic-text arbitration, Chart, Relief, allocations,
   streaming, and frame-time tails, then repairs only demonstrated bottlenecks
-  before the next gameplay directive begins. It is not active while Living
-  Voice remains active, and no optimization result is claimed yet.
+  before the next gameplay directive begins. The full queued pass remains
+  blocked while Living Voice is active. Separately authorized eligible runtime
+  integration evidence is recorded in RESEARCH; it does not close this owner
+  or certify the final expanded workload.
 - **Per-directive performance regression** is the permanent lightweight gate:
   every major directive runs representative checks before transition. Healthy
   work continues; a material regression is profiled, repaired at its measured
