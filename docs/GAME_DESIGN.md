@@ -212,7 +212,7 @@ its transient `thump` text. Repetition control may keep successive text
 restrained, but every distinct ecology-committed thump remains an audible world
 event for lawful listeners.
 
-An anonymous strong fish-crow, deer, or gull alarm may become ordinary human
+An anonymous strong fish-crow, deer, gull, or elk alarm may become ordinary human
 knowledge before it becomes speech. At most one deterministic nearby resident
 who has a fresh, strongly attended direct predator sighting or anonymous
 animal-alarm belief may issue a short shouted warning from their actual
@@ -263,10 +263,14 @@ materialized fox, current identified living prey, matching pursuit resource and
 memory, and committed fox locus. A visible fox may own **YIP.**; heard-unseen
 presentation stays the anonymous **CALL.**, and nearby humans learn no prey,
 pursuit, or source identity from sound alone. Renderer-polled resident state
-lines have been removed. The gull's real alarm has migrated, but the generic
-wildlife-alarm fallback remains for other unclaimed alarm sources as a
-compatibility bypass that does not prove world-event acoustics, listener receipt,
-or knowledge transfer. Future tool,
+lines have been removed. The gull and elk real alarms have migrated. A visible
+elk may bark **BARK!**; unseen hearing remains **An animal** / **CALL!**, never
+an identified elk or hidden predator. Elk bugling remains foundation-only.
+The generic wildlife-alarm fallback remains for duck, chicken, goat and boar
+as a player audio/session-announcement bypass of shared Voice presentation.
+Their underlying ecology alarms already propagate to applicable wildlife,
+dog and porter listeners; this does not establish the missing Voice leg.
+Future tool,
 violence, and vessel examples are contract fixtures only. General conversation,
 rumors, multilingual comprehension, animated gesture, most animal repertoires,
 and expressions for work that does not yet exist remain specified or deferred;
@@ -950,7 +954,9 @@ gray-wolf movement can leave paired tracks or canid pawprints at the saved
 movement site. Crows, the harrier, the egret, the duck, the otter, harbor
 seals, polar bears, chickens, goats, boars, elk, cougars, and brown bears do
 not manufacture ground tracks.
-Wild-boar, elk, and gray-wolf voice profiles remain inaudible; cougar and
+Wild-boar and gray-wolf voice profiles remain foundation-only. The current
+unpublished elk alarm bark uses shared Living Voice; elk bugling remains
+foundation-only. Cougar and
 brown-bear voice behavior is not implemented. Directly visible individual
 wildlife has distinct Chart and Relief silhouettes and a non-pausing ABOUT
 surface; each visible crow, chicken, goat, boar, elk, wolf, cougar, brown-bear,

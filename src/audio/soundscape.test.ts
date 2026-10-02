@@ -81,6 +81,7 @@ describe("situated vocalization cues", () => {
       "vocalization-fish-crow-alarm",
       "vocalization-deer-alarm-snort",
       "vocalization-gull-alarm-cry",
+      "vocalization-elk-alarm-bark",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -189,6 +190,15 @@ describe("situated vocalization cues", () => {
     expect(Math.max(...snort.map(({ delay, duration }) => delay + duration)))
       .toBeLessThanOrEqual(0.2);
   });
+
+  it("reuses the authored elk alarm bark without making the bugle a situated voice", () => {
+    const variantSeed = 0xe1a;
+    expect(situatedVocalizationPattern("elk-alarm-bark", variantSeed))
+      .toEqual(ecologyVoicePattern("elk-alarm-bark", variantSeed));
+    expect(situatedVocalizationPattern("elk-alarm-bark", variantSeed))
+      .not.toEqual(situatedVocalizationPattern("dog-warning-bark", variantSeed));
+    expect(SITUATED_VOCALIZATIONS).not.toContain("elk-bugle");
+  });
 });
 
 describe("small-world wildlife cues", () => {
@@ -223,7 +233,7 @@ describe("small-world wildlife cues", () => {
       .toEqual(smallWildlifePattern("rat-rustle", 0));
   });
 
-  it("authors the complete Alpha 30 repertoire without a runtime playback claim", () => {
+  it("preserves the complete authored Alpha 30 pattern repertoire", () => {
     expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).toEqual([
       "boar-grunt",
       "boar-squeal",

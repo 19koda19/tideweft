@@ -25,6 +25,8 @@ describe("situated expression acoustics", () => {
       .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("gull-alarm-call"))
       .toBe("animal-alarm");
+    expect(situatedExpressionSoundClass("elk-alarm-call"))
+      .toBe("animal-alarm");
     expect(situatedExpressionSoundClass("marsh-rabbit-alarm-thump"))
       .toBe("physical-thud");
     expect(situatedExpressionSoundClass("marsh-fox-pursuit-yip"))
@@ -99,6 +101,31 @@ describe("situated expression acoustics", () => {
       certainty: 1_000_001,
       pan: -0.25,
     })).toBeNull();
+  });
+
+  it("preserves the elk alarm envelope and audio independently of optional text admission", () => {
+    const expression = {
+      meaning: "elk-alarm-call" as const,
+      vocalization: "elk-alarm-bark" as const,
+      tone: "alarmed" as const,
+      volume: "shout" as const,
+      variantSeed: 0xe1a,
+    };
+    expect(situatedExpressionAcoustics(expression)).toEqual({
+      loudness: 1_000_000,
+      rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("strong");
+    const audio = situatedExpressionAudioPresentation(expression, {
+      certainty: 500_000,
+      pan: 0.25,
+    });
+    expect(audio).toMatchObject({
+      sound: { kind: "vocalization", vocalization: "elk-alarm-bark" },
+      variantSeed: 0xe1a,
+      pan: 0.25,
+    });
+    expect(audio?.volume).toBeCloseTo(0.621, 12);
   });
 
   it("keeps the marsh-rabbit thump on core ecology's soft small-prey envelope", () => {

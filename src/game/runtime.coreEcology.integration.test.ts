@@ -4135,6 +4135,139 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
   }, 45_000);
 
+  it("routes an authentic elk herd alarm through shared Voice, interrupts WAIT, and reloads without replay", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8, "elk");
+    const beforeTick = deserializeWorld(requiredEnvelope(repository).world).meta.completedTick;
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
+      .toBe(false);
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 10);
+
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-elk-alarm-bark"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+      .toEqual([]);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "CALL!",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      assertive: true,
+    });
+    expect(runtime.getUIView().announcement?.message ?? "")
+      .not.toContain("ANIMAL ALARM — source unclear.");
+
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    expect(runtime.getUIView().controls?.waitActive).toBe(false);
+    expect(deserializeWorld(saved.world).meta.completedTick).toBe(beforeTick + 1);
+    expect(Object.hasOwn(saved, "pendingPlayerWait")).toBe(false);
+    const core = requiredRegionalCoreOwner(saved, alarmActorId);
+    const elk = requiredCoreActor(core, alarmActorId);
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (record): record is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        record.kind === "core-wildlife-alarm" && record.sourceSpecies === "elk"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Elk fixture omitted its admission");
+    expect(admission).toMatchObject({
+      sourceActorId: alarmActorId,
+      sourceOwnerKey: core.patchKey,
+      acceptedAtTick: deserializeWorld(saved.world).meta.completedTick,
+    });
+    expect(elk.intent).toMatchObject({
+      kind: "alarm",
+      cause: { kind: "perception", referenceId: admission.sourceObservationId },
+    });
+    expect(saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal])
+      .toMatchObject({
+        sourceActorId: alarmActorId,
+        expressionEventId: admission.eventId,
+        soundClass: "animal-alarm",
+        soundInterrupt: "strong",
+      });
+    const durableCarry = stableStringify(saved.perceptionCarry);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-elk-alarm-bark" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    await resumed.save();
+    expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    resumed.destroy();
+    scheduledFrame = undefined;
+
+    const wrongSpeciesCarry: CurrentPerceptionCarry = {
+      ...saved.perceptionCarry,
+      situatedExpressionAdmissions: {
+        ...saved.perceptionCarry.situatedExpressionAdmissions,
+        records: saved.perceptionCarry.situatedExpressionAdmissions.records.map((candidate) => (
+          candidate.kind === "core-wildlife-alarm"
+            && candidate.eventId === admission.eventId
+            ? { ...candidate, sourceSpecies: "deer" as const }
+            : candidate
+        )),
+      },
+    };
+    const tamperedRepository = new MemoryRepository(recordWithEnvelope(
+      repository.snapshot(),
+      resealedEnvelope(saved, { perceptionCarry: wrongSpeciesCarry }),
+    ));
+    const tamperedRecord = stableStringify(tamperedRepository.snapshot());
+    const rejected = await createTideweftRuntime(tamperedRepository);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    await expect(rejected.save()).rejects.toThrow(
+      "Choose a seed before replacing the unreadable or conflicting local autosave.",
+    );
+    expect(stableStringify(tamperedRepository.snapshot())).toBe(tamperedRecord);
+    rejected.destroy();
+    scheduledFrame = undefined;
+  }, 45_000);
+
+  it("anchors an authentic elk bark only with direct visible-source authority", async () => {
+    const { runtime, alarmActorId } = await createAlarmRuntime(-4, "elk");
+    expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
+      .toBe(true);
+    soundscapePlay.mockClear();
+    advancePlayerSteps(runtime, 10);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-elk-alarm-bark"))
+      .toHaveLength(1);
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "Elk",
+      text: "BARK!",
+      animalCallKind: "elk-call",
+    });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+      .toEqual([]);
+    runtime.destroy();
+  }, 45_000);
+
+  it("keeps an authentic out-of-hearing elk alarm in the world without player audio or text", async () => {
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-12, "elk");
+    soundscapePlay.mockClear();
+    advancePlayerSteps(runtime, 10);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-elk-alarm-bark" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    expect(runtime.getUIView().expressionCaption?.animalCallKind).not.toBe("elk-call");
+    expect(runtime.getRenderView().expressions?.some(({ sourceActorId }) => (
+      sourceActorId === alarmActorId
+    ))).toBe(false);
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const source = requiredCoreActor(requiredRegionalCoreOwner(saved, alarmActorId), alarmActorId);
+    expect(source.intent.kind).toBe("alarm");
+    runtime.destroy();
+  }, 45_000);
+
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
     const {
       runtime,
@@ -6707,8 +6840,8 @@ async function createCatWeatherRuntime(
 }
 
 async function createAlarmRuntime(
-  offsetTiles: -8 | -4 | 9,
-  sourceSpecies: "deer" | "marsh-rabbit" | "gull" = "deer",
+  offsetTiles: -12 | -8 | -4 | 9,
+  sourceSpecies: "deer" | "marsh-rabbit" | "gull" | "elk" = "deer",
   runtimeFactory: (repository: SaveRepository) => Promise<TideweftRuntime> =
     createTideweftRuntime,
 ): Promise<{

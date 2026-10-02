@@ -332,6 +332,32 @@ function canonicalGullAlarm(
   return reduced.state.active;
 }
 
+function canonicalElkAlarm(
+  position: ReturnType<typeof createWorldPosition>,
+  triggerEventId: string,
+  sourceActorId = "ELK-living-voice-projection",
+): SituatedExpressionEvent {
+  const reduced = reduceSituatedExpression(createSituatedExpressionState(), {
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId,
+    triggerEventId,
+    position,
+    meaning: "elk-alarm-call",
+    family: "animal-signal",
+    tone: "alarmed",
+    volume: "shout",
+    knowledgeBasis: "self-perceived-threat",
+    priority: 760_000,
+    salience: 820_000,
+    variantSeed: 0xe1a,
+    durationSteps: 6,
+  });
+  if (!reduced.accepted || reduced.state?.active === null || reduced.state === null) {
+    throw new Error(`Elk expression fixture was rejected: ${reduced.reason}`);
+  }
+  return reduced.state.active;
+}
+
 function canonicalMarshRabbitAlarm(
   position: ReturnType<typeof createWorldPosition>,
   triggerEventId: string,
@@ -473,6 +499,14 @@ function gullSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSourc
   return Object.freeze({
     actorId: event.sourceActorId,
     species: "gull",
+    position: event.position,
+  });
+}
+
+function elkSource(event: SituatedExpressionEvent): CoreWildlifeExpressionSource {
+  return Object.freeze({
+    actorId: event.sourceActorId,
+    species: "elk",
     position: event.position,
   });
 }
@@ -1509,6 +1543,80 @@ describe("situated expression game projection", () => {
       directionLabel: "west",
     });
     expect(JSON.stringify(caption)).not.toMatch(/gull|KEE-AH/iu);
+  });
+
+  it("anchors a perceived elk bark and keeps an unseen alarm directional and species-anonymous", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalElkAlarm(
+      wildlifePositionInWindow(window),
+      "elk-signal:alarm",
+    );
+    const visible = heardVisibleReception(expression);
+    const source = elkSource(expression);
+    const visibleOptions = {
+      situatedExpression: expression,
+      situatedExpressionReception: visible,
+      coreWildlifeExpressionSources: [source],
+    };
+    const visibleView = projectGameView(world, player, visibleOptions);
+    expect(visibleView.expressions).toEqual([expect.objectContaining({
+      id: expression.eventId,
+      acousticKind: "animal-call",
+      sourceActorId: expression.sourceActorId,
+      sourceKind: "animal",
+      speakerLabel: "Elk",
+      text: "BARK!",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
+      tone: "alarmed",
+    })]);
+    expect(visibleView.acousticText?.[0]).toBe(visibleView.expressions?.[0]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      ...visibleOptions,
+    }).expressionCaption).toMatchObject({
+      speakerLabel: "Elk",
+      text: "BARK!",
+      presentationKind: "animal-call",
+      animalCallKind: "elk-call",
+      assertive: true,
+    });
+    expect(projectGameView(world, player, {
+      ...visibleOptions,
+      coreWildlifeExpressionSources: [{ ...source, species: "deer" }],
+    }).expressions).toEqual([]);
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI / 2, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Hidden elk reception fixture was rejected");
+    expect(projectGameView(world, player, {
+      ...visibleOptions,
+      situatedExpressionReception: unseen,
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      text: "CALL!",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      directionLabel: "south",
+      assertive: true,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toMatch(/elk|BARK|wolf/iu);
+    expect(JSON.stringify(caption)).not.toContain(expression.sourceActorId);
+    expect(JSON.stringify(caption)).not.toContain(String(expression.position.localX));
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      coreWildlifeExpressionSources: [source],
+    }).expressions).toEqual([]);
   });
 
   it("anchors a visible cat weather call while hiding its unseen identity and cause", () => {

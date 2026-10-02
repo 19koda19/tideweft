@@ -156,6 +156,15 @@ function gullAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function elkAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowAlarmIntent(triggerEventId),
+    sourceActorId: "ELK-expression-test",
+    meaning: "elk-alarm-call",
+    variantSeed: 614,
+  };
+}
+
 function marshRabbitAlarmIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     ...fishCrowAlarmIntent(triggerEventId),
@@ -577,6 +586,40 @@ describe("generic situated-expression kernel", () => {
       realizationKey: "situated-expression.en.v1.gull-alarm-call.0",
       vocalization: "gull-alarm-cry",
     });
+  });
+
+  it("registers and roundtrips the restrained elk alarm bark through the shared policy", () => {
+    const intent = elkAlarmIntent("ELK-expression-test:e:1:alarm");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "elk-alarm-call",
+        family: "animal-signal",
+        tone: "alarmed",
+        volume: "shout",
+        vocalization: "elk-alarm-bark",
+        durationSteps: 6,
+      },
+    });
+    if (reduction.event === null || reduction.state === null) {
+      throw new Error("Elk alarm was not accepted");
+    }
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "BARK!",
+      realizationKey: "situated-expression.en.v1.elk-alarm-call.0",
+      vocalization: "elk-alarm-bark",
+    });
+    expect(canonicalizeSituatedExpressionState(JSON.parse(JSON.stringify(reduction.state))))
+      .toEqual(reduction.state);
+    for (const forged of [
+      { ...intent, volume: "murmur" },
+      { ...intent, tone: "restrained" },
+      { ...intent, knowledgeBasis: "self-heard-anonymous-alarm" },
+    ]) {
+      expect(reduceSituatedExpression(createSituatedExpressionState(), forged))
+        .toMatchObject({ accepted: false, reason: "invalid-intent" });
+    }
   });
 
   it("registers the marsh-rabbit foot-thump without promoting it to a shout", () => {

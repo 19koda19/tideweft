@@ -171,6 +171,7 @@ export type CoreWildlifeAlarmExpressionSpecies =
   | "fish-crow"
   | "deer"
   | "marsh-rabbit"
+  | "elk"
   | "gull";
 
 /**
@@ -1372,6 +1373,7 @@ function canonicalCoreWildlifeAlarmRecord(
     || (value.sourceSpecies !== "fish-crow"
       && value.sourceSpecies !== "deer"
       && value.sourceSpecies !== "marsh-rabbit"
+      && value.sourceSpecies !== "elk"
       && value.sourceSpecies !== "gull")
     || !validId(value.sourceOwnerKey)
     || !validId(value.sourceObservationId)

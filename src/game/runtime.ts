@@ -1126,6 +1126,7 @@ function recentMeaningAcousticTuples(
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
     case "gull-alarm-call":
+    case "elk-alarm-call":
     case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
@@ -12339,6 +12340,7 @@ export async function createTideweftRuntime(
       && expression.meaning !== "fish-crow-alarm-call"
       && expression.meaning !== "deer-alarm-call"
       && expression.meaning !== "gull-alarm-call"
+      && expression.meaning !== "elk-alarm-call"
       && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -15650,10 +15652,11 @@ export async function createTideweftRuntime(
         }
       }
       // Compatibility-only generic alarm presentation. This legacy fallback
-      // does not emit a shared world-acoustic event, produce listener receipts,
-      // or preserve per-event identity, and therefore cannot count as Living
-      // Voice coverage. Its remaining real producers must migrate through the
-      // common event boundary before this path can be retired.
+      // collapses real ecology-owned alarms that already propagate to wildlife,
+      // dogs and humans into a player-only cue/announcement. That presentation
+      // preserves neither per-event identity nor shared Voice receipts/layout,
+      // and cannot count as Living Voice coverage. Migrate remaining producers
+      // before retiring it; do not erase their existing ecological hearing.
       const ecologyCues: Array<Readonly<{
         cue: "wildlife-alarm";
         volume: number;
@@ -20351,6 +20354,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "resident-weather-hold"
       && meaning !== "deer-alarm-call"
       && meaning !== "gull-alarm-call"
+      && meaning !== "elk-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20363,6 +20367,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "resident-weather-hold"
       && active.meaning !== "deer-alarm-call"
       && active.meaning !== "gull-alarm-call"
+      && active.meaning !== "elk-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20374,6 +20379,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.knowledgeBasis !== "self-perceived-prey"
       && active.vocalization !== "deer-alarm-snort"
       && active.vocalization !== "gull-alarm-cry"
+      && active.vocalization !== "elk-alarm-bark"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"

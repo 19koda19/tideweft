@@ -460,6 +460,13 @@ describe("Living Weft species module catalog", () => {
       communicationSignals: ["gull-alarm-cry"],
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
+    expect(livingSpeciesModule("elk")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["elk-alarm-bark"],
+      communicationSignals: ["elk-alarm-bark"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
     expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:world-acoustics:v1",
@@ -486,6 +493,14 @@ describe("Living Weft species module catalog", () => {
       LIVING_SPECIES_WAVE_G_SALTMARSH_SMALL_WORLDS_CATALOG,
     ];
     for (const catalog of releasedCatalogs) {
+      expect(catalog.modules.find(({ speciesId }) => speciesId === "elk")?.sound)
+        .toEqual({
+          implementation: "foundation",
+          ownerId: "audio:soundscape:v1",
+          repertoire: ["elk-alarm-bark", "elk-bugle"],
+          communicationSignals: ["elk-alarm-bark", "elk-bugle"],
+          accessibilityCues: ["direct-observation-caption"],
+        });
       for (const speciesId of ["deer", "domestic-dog", "gull", "human"] as const) {
         expect(catalog.modules.find((module) => module.speciesId === speciesId)?.sound)
           .toEqual({
@@ -1243,8 +1258,8 @@ describe("Living Weft species module catalog", () => {
         "elk",
         "HERD",
         ["forest-edge", "temperate-upland", "upland-meadow"],
-        ["elk-alarm-bark", "elk-bugle"],
-        ["elk-alarm-bark", "elk-bugle"],
+        ["elk-alarm-bark"],
+        ["elk-alarm-bark"],
       ],
       [
         "gray-wolf",
@@ -1281,11 +1296,13 @@ describe("Living Weft species module catalog", () => {
           group: { stableIdNamespace: namespace },
         },
         sound: {
-          implementation: "foundation",
-          ownerId: "audio:soundscape:v1",
+          implementation: species === "elk" ? "active" : "foundation",
+          ownerId: species === "elk" ? "game:situated-expression:v1" : "audio:soundscape:v1",
           repertoire,
           communicationSignals,
-          accessibilityCues: ["direct-observation-caption"],
+          accessibilityCues: species === "elk"
+            ? ["direct-observation-caption", "directional-hearing-caption"]
+            : ["direct-observation-caption"],
         },
         about: { implementation: "active", ownerId: "game:wildlife-about:v1" },
       });

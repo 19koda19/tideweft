@@ -519,6 +519,7 @@ function policyFor(
     case "fish-crow-alarm-call":
     case "deer-alarm-call":
     case "gull-alarm-call":
+    case "elk-alarm-call":
     case "marsh-rabbit-alarm-thump":
     case "marsh-fox-pursuit-yip":
     case "human-danger-warning":

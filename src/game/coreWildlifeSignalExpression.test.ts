@@ -10,12 +10,17 @@ import { seedFromText } from "../sim/rng";
 import {
   CORE_ECOLOGY_MAX_STEP_TICKS,
   createCoreEcologyAggregatePatch,
+  deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  serializeCoreEcologyAggregatePatch,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
+import { createCoreEcologyGroup, createCoreEcologyGroupSet } from "./coreEcologyGroups";
 import {
+  coreWildlifeAlarmMeaningForSpecies,
+  coreWildlifeAlarmSpeciesForMeaning,
   coreWildlifeAlarmExpressionEventForTrigger,
   coreWildlifeAlarmExpressionEventMatchesWorld,
   coreWildlifeAlarmExpressionIntent,
@@ -71,7 +76,7 @@ interface AlarmFixture {
 function alarmFixture(
   species: Extract<
     CoreWildlifeSpecies,
-    "fish-crow" | "deer" | "marsh-rabbit" | "gull"
+    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk"
   > = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
@@ -80,8 +85,10 @@ function alarmFixture(
       ? DEER_OBSERVATION_ID
       : species === "marsh-rabbit"
         ? RABBIT_OBSERVATION_ID
-        : "OBS-gull-sees-harrier",
-  perceivedThreatClass = species === "deer"
+        : species === "elk"
+          ? "OBS-elk-sees-wolf"
+          : "OBS-gull-sees-harrier",
+  perceivedThreatClass = species === "deer" || species === "elk"
     ? "large-predator"
     : species === "marsh-rabbit"
       ? "predator"
@@ -97,12 +104,12 @@ function alarmFixture(
   const population: CoreEcologyPopulationInput = {
     species,
     populationKey: `living-voice:${species}`,
-    members: [{
-      populationOrdinal: 0,
-      position,
+    members: (species === "elk" ? [0, 1] : [0]).map((populationOrdinal) => ({
+      populationOrdinal,
+      position: translateWorldPosition(position, populationOrdinal * 500, 0),
       heading: 125_000,
-      materialization: "materialized",
-    }],
+      materialization: "materialized" as const,
+    })),
   };
   const initialWorld = createCoreEcologyAggregatePatch({
     seed: SEED,
@@ -110,6 +117,18 @@ function alarmFixture(
     originRegion: ORIGIN,
     derivation: { kind: "bounded-input-v1" },
     populations: [population],
+    ...(species === "elk" ? {
+      groups: createCoreEcologyGroupSet([createCoreEcologyGroup({
+        seed: SEED,
+        species,
+        originRegion: ORIGIN,
+        populationKey: population.populationKey,
+        groupOrdinal: 0,
+        memberOrdinals: [0, 1],
+        anchor: position,
+        heading: 125_000,
+      })]),
+    } : {}),
   });
   const source = sourceActor(initialWorld);
   const observation = createActorObservation({
@@ -131,12 +150,14 @@ function alarmFixture(
   if (observation === null) throw new Error(`${species} alarm observation was invalid`);
   const stepped = stepCoreEcologyAggregatePatch(initialWorld, {
     tick: 1,
-    actorSteps: [{
-      actorId: source.identity.stableId,
-      observations: [observation],
+    actorSteps: initialWorld.populations[0]!.members.map(({ actor }) => ({
+      actorId: actor.identity.stableId,
+      observations: actor.identity.stableId === source.identity.stableId
+        ? [observation]
+        : [],
       foodOpportunities: [],
       accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
-    }],
+    })),
   });
   if (stepped === null) throw new Error(`${species} alarm world step failed`);
   const committedActor = sourceActor(stepped.patch);
@@ -335,6 +356,86 @@ describe("core-wildlife signal expression", () => {
     });
     expect(JSON.stringify(reduction.event)).not.toContain("aerial-predator");
     expect(JSON.stringify(reduction.event)).not.toContain("OBS-gull-sees-harrier");
+  });
+
+  it("derives one elk alarm from its committed herd member without exposing the threat", () => {
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "elk",
+      "WOLF-living-voice-test",
+    );
+    const intent = coreWildlifeAlarmExpressionIntent(input);
+
+    expect(initialWorld.groups.groups).toMatchObject([{
+      identity: { species: "elk", organization: "herd" },
+      memberOrdinals: [0, 1],
+    }]);
+    expect(input.world.populations[0]?.members).toHaveLength(2);
+    expect(intent).toEqual(coreWildlifeAlarmExpressionIntent(structuredClone(input)));
+    expect(intent).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      position: input.event.position,
+      meaning: "elk-alarm-call",
+      family: "animal-signal",
+      tone: "alarmed",
+      volume: "shout",
+      knowledgeBasis: "self-perceived-threat",
+      priority: 760_000,
+      salience: 920_000,
+      durationSteps: 6,
+    });
+    expect(coreWildlifeAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+    expect(fishCrowAlarmExpressionIntent(input)).toBeNull();
+    expect(coreWildlifeAlarmMeaningForSpecies("elk")).toBe("elk-alarm-call");
+    expect(coreWildlifeAlarmSpeciesForMeaning("elk-alarm-call")).toBe("elk");
+
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: { meaning: "elk-alarm-call", vocalization: "elk-alarm-bark" },
+    });
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "BARK!",
+      realizationKey: "situated-expression.en.v1.elk-alarm-call.0",
+      vocalization: "elk-alarm-bark",
+    });
+    expect(JSON.stringify(reduction.event)).not.toMatch(/WOLF-living-voice|OBS-elk|large-predator/u);
+  });
+
+  it("reauthenticates restored elk alarm authority and rejects forged herd-member roots", () => {
+    const { input } = alarmFixture("elk", "WOLF-living-voice-test");
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(input.world),
+    );
+    if (restoredWorld === null) throw new Error("Elk fixture world did not roundtrip");
+    const restored = { ...input, actor: sourceActor(restoredWorld), world: restoredWorld };
+    const intent = coreWildlifeAlarmExpressionIntent(restored);
+    if (intent === null) throw new Error("Restored elk alarm intent was rejected");
+    const reduced = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (reduced.event === null || reduced.state === null) {
+      throw new Error("Elk alarm expression was not accepted");
+    }
+    const memory = advanceSituatedExpression(reduced.state, intent.durationSteps)?.recent[0];
+    if (memory === undefined) throw new Error("Elk alarm cooldown was not retained");
+    expect(coreWildlifeAlarmExpressionEventForTrigger(restored, intent.triggerEventId))
+      .toEqual(reduced.event);
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, reduced.event)).toBe(true);
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, memory)).toBe(true);
+
+    const herdMate = restoredWorld.populations[0]?.members[1]?.actor;
+    if (herdMate === undefined) throw new Error("Elk fixture omitted its second herd member");
+    expect(coreWildlifeAlarmExpressionIntent({ ...restored, actor: herdMate })).toBeNull();
+    for (const event of [
+      { ...input.event, species: "deer" as const },
+      { ...input.event, causeReferenceId: "OBS-elk-forged-threat" },
+      { ...input.event, position: translateWorldPosition(input.event.position, 1, 0) },
+    ]) {
+      expect(coreWildlifeAlarmExpressionIntent({ ...restored, event })).toBeNull();
+    }
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, {
+      ...memory,
+      triggerEventId: herdMate.identity.stableId + ":e:1:alarm",
+    })).toBe(false);
   });
 
   it("does not let expression repetition policy erase a distinct committed rabbit thump", () => {

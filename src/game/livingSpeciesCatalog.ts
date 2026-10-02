@@ -1167,6 +1167,13 @@ const currentGullVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["gull-alarm-cry"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentElkVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["elk-alarm-bark"],
+  communicationSignals: ["elk-alarm-bark"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const WORLD_ACOUSTIC_SOUND_OWNER_ID = "game:world-acoustics:v1" as const;
 const currentBrownRatContactSound = (): LivingSpeciesSoundContract => ({
   implementation: "active",
@@ -2080,13 +2087,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: false,
     groupModel: "group",
     crossRegion: false,
-    sound: {
-      implementation: "foundation",
-      ownerId: "audio:soundscape:v1",
-      repertoire: ["elk-alarm-bark", "elk-bugle"],
-      communicationSignals: ["elk-alarm-bark", "elk-bugle"],
-      accessibilityCues: ["direct-observation-caption"],
-    },
+    sound: currentElkVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -5774,6 +5775,14 @@ function historicalActiveSound(
   speciesId: string,
 ): LivingSpeciesSoundContract | null {
   switch (speciesId) {
+    // These pre-Voice declarations were synthesis foundation, not live calls.
+    case "elk": return {
+      implementation: "foundation",
+      ownerId: "audio:soundscape:v1",
+      repertoire: ["elk-alarm-bark", "elk-bugle"],
+      communicationSignals: ["elk-alarm-bark", "elk-bugle"],
+      accessibilityCues: ["direct-observation-caption"],
+    };
     case "brown-rat": return {
       implementation: "active",
       ownerId: "audio:soundscape:v1",
