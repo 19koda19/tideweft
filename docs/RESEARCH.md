@@ -315,15 +315,20 @@ existing startup CSP eval rejection remained one per document; it was not
 silenced or fixed by weakening CSP. An isolated native audio-graph witness
 reported one running context, advancing clock and five scheduled oscillators.
 
-Extended activity audio is separately **BLOCKED** in this headless environment:
-both frozen before and candidate builds kept a native context suspended at
+Extended activity audio is separately **BLOCKED** in the tested Firefox environment:
+both headless frozen before and candidate builds kept a native context suspended at
 time zero, with the optional public title-cue resume promise pending even after
 trusted pointer input. Protocol activation and a real gesture retry did not
 resolve it; the cause was not attributed. The initial extended probes timed out
 and remain failed records; subsequent bounded diagnostics preserved the
 successful activity observations and reported audio as blocked. No autoplay
-preference, audio fallback or shipping behavior was changed. Audible hardware
-output and a headed extended-session audio check remain NOT RUN. Safari 26.5.2
+preference, audio fallback or shipping behavior was changed. A disposable
+headed Firefox 157 candidate probe also passed initial loading, both views,
+trusted input/orbit/resize, scans, movement and caption inspection, but reproduced
+the suspended context and pending resume. The cause therefore cannot be assigned
+to headless mode alone. No matched headed performance result is claimed.
+Extended-session audio remains unverified; audible hardware output was NOT RUN.
+Safari 26.5.2
 automation was NOT RUN because Allow Remote Automation was disabled; browser
 settings were preserved. Chrome and other supported browser/device targets
 were not available for this pass.
