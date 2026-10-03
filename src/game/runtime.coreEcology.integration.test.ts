@@ -5,6 +5,7 @@ import {
   ACTOR_PERCEPTION_SCALE,
   createActorObservation,
   createActorPerceptionState,
+  type ActorObservation,
 } from "../sim/actorPerception";
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
@@ -113,6 +114,7 @@ import {
   replaceCoreWildlifeActorPhysiology,
   stepCoreWildlifeActor,
   type CoreWildlifeActorState,
+  type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
 import { repositionDogActor } from "./dogActor";
 import {
@@ -137,7 +139,7 @@ import {
   type PhysicalCargoState,
   type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
-import type { SupplementalSoundSample } from "./humanPerception";
+import { LOCAL_PLAYER_SUBJECT_ID, type SupplementalSoundSample } from "./humanPerception";
 import type { PlayerState } from "./player";
 import {
   LOOSE_CARGO_TILE_UNITS,
@@ -4972,6 +4974,76 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
+  it.each([false, true])("releases a real remembered-threat player alarm only after successful closure (failure=%s)", async (failClosure) => {
+    const fixture = await createRememberedDeerPlayerAlarmRuntime();
+    const { runtime, repository, alarmActorId, firstObservedTick, threatObservationId, playerAlarmReceipts } = fixture;
+    try {
+      // The fixture is at T+4/phase nine without another save or player
+      // relocation. Only the last step asks cognition to emit its real T+5
+      // repeat; the prior valid persisted first-alarm checkpoint stays intact.
+      const baselineRecord = repository.snapshot();
+      const baseline = requiredEnvelope(repository);
+      const priorRender = runtime.getRenderView();
+      const priorPlayer = structuredClone(priorRender.player);
+      expect(deserializeWorld(baseline.world).meta.completedTick).toBe(firstObservedTick);
+      expect(priorRender.tick).toBe(firstObservedTick + 4);
+      const priorSource = requiredCoreActor(requiredRegionalCoreOwner(baseline, alarmActorId), alarmActorId);
+      expect(priorSource.perception.beliefs.find(({ sourceObservationId }) => (
+        sourceObservationId === threatObservationId
+      ))?.lastObservedTick).toBe(firstObservedTick);
+      if (failClosure) vi.spyOn(situatedExpressionChannels, "closeSituatedExpressionChannelBankInterval")
+        .mockReturnValueOnce(null);
+      soundscapePlay.mockClear();
+      playerAlarmReceipts.length = 0;
+
+      advancePlayerSteps(runtime, 1);
+      await Promise.resolve();
+
+      const targetTick = firstObservedTick + 5;
+      const dueReceipts = playerAlarmReceipts.filter(({ event }) => event.atTick === targetTick);
+      expect(dueReceipts).toHaveLength(1);
+      expect(dueReceipts[0]?.event).toMatchObject({
+        kind: "alarm", actorId: alarmActorId, species: "deer", observationId: threatObservationId,
+      });
+      expect(dueReceipts[0]?.observations).toHaveLength(1);
+      expect(dueReceipts[0]?.observations[0]).toMatchObject({
+        observerId: LOCAL_PLAYER_SUBJECT_ID, observedAtTick: targetTick,
+        channel: "hearing", perceivedClass: "animal-alarm", subjectId: null,
+        identification: "anonymous", interrupt: "strong",
+      });
+      const playerCues = soundscapePlay.mock.calls.filter(([cue]) => (
+        cue === "wildlife-alarm" || cue === "vocalization-deer-alarm-snort"
+      ));
+      if (failClosure) {
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(playerCues).toEqual([]);
+        expect(repository.snapshot()).toEqual(baselineRecord);
+        expect(runtime.getRenderView().tick).toBe(priorRender.tick);
+        const { active: _priorActive, ...priorPhysicalPlayer } = priorPlayer;
+        const { active, ...restoredPhysicalPlayer } = runtime.getRenderView().player;
+        expect(active).toBe(false);
+        expect(restoredPhysicalPlayer).toEqual(priorPhysicalPlayer);
+      } else {
+        expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+        expect(playerCues).toEqual([["wildlife-alarm", 0.44, 0, undefined]]);
+        await runtime.save();
+        const completed = requiredEnvelope(repository);
+        expect(deserializeWorld(completed.world).meta.completedTick).toBe(targetTick);
+        const source = requiredCoreActor(requiredRegionalCoreOwner(completed, alarmActorId), alarmActorId);
+        expect(source.memories).toContainEqual(expect.objectContaining({
+          kind: "alarm", atTick: targetTick, observationId: threatObservationId,
+          eventId: dueReceipts[0]?.event.eventId, eventPosition: dueReceipts[0]?.event.position,
+        }));
+        expect(source.perception.beliefs.find(({ sourceObservationId }) => (
+          sourceObservationId === threatObservationId
+        ))?.lastObservedTick).toBe(firstObservedTick);
+      }
+    } finally {
+      runtime.destroy();
+      scheduledFrame = undefined;
+    }
+  }, 120_000);
+
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
     const {
       runtime,
@@ -7748,6 +7820,65 @@ async function createAlarmRuntime(
   const runtime = await runtimeFactory(repository);
   if (sourceSpecies !== "marsh-rabbit") await runtime.save();
   return { runtime, repository, alarmActorId: alarmActor.identity.stableId };
+}
+
+async function createRememberedDeerPlayerAlarmRuntime(): Promise<{
+  runtime: TideweftRuntime;
+  repository: MemoryRepository;
+  alarmActorId: string;
+  firstObservedTick: number;
+  threatObservationId: string;
+  playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[] }>;
+}> {
+  const collectVisual = coreEcologyPerception.collectCoreEcologyVisualObservationBatches;
+  const propagateAlarm = coreEcologyPerception.propagateCoreEcologyAlarmObservationBatches;
+  let sourceId: string | null = null;
+  const playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[] }> = [];
+  vi.spyOn(coreEcologyPerception, "collectCoreEcologyVisualObservationBatches").mockImplementation((input) => {
+    const batches = collectVisual(input);
+    if (batches === null || sourceId === null) return batches;
+    return Object.freeze(batches.map((batch) => batch.observerId !== sourceId
+      ? batch
+      : Object.freeze({ ...batch, observations: Object.freeze(batch.observations.filter(({ channel }) => channel !== "vision")) })));
+  });
+  vi.spyOn(coreEcologyPerception, "propagateCoreEcologyAlarmObservationBatches").mockImplementation((...args) => {
+    const batches = propagateAlarm(...args);
+    if (batches !== null) {
+      const event = args[0] as CoreWildlifeCausalEvent;
+      const playerBatch = batches.find(({ observerId }) => observerId === LOCAL_PLAYER_SUBJECT_ID);
+      if (event.actorId === sourceId && playerBatch !== undefined && playerBatch.observations.length > 0) {
+        playerAlarmReceipts.push({ event, observations: playerBatch.observations });
+      }
+    }
+    return batches;
+  });
+  // Existing controlled legacy-cohort adoption/current47 fixture; no new
+  // species population, alarm event, or direct perception is manufactured.
+  const fixture = await createAlarmRuntime(-4, "deer");
+  const runtime = fixture.runtime;
+  const { repository, alarmActorId } = fixture;
+  try {
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const first = requiredEnvelope(repository);
+    const firstObservedTick = deserializeWorld(first.world).meta.completedTick;
+    const firstSource = requiredCoreActor(requiredRegionalCoreOwner(first, alarmActorId), alarmActorId);
+    const firstAlarm = firstSource.memories.find(({ kind, atTick, observationId }) => (
+      kind === "alarm" && atTick === firstObservedTick && observationId !== null
+    ));
+    if (firstAlarm?.observationId === undefined || firstAlarm.observationId === null) {
+      throw new Error("Player alarm fixture lost its real first sighting/alarm");
+    }
+    const threatObservationId = firstAlarm.observationId;
+    sourceId = alarmActorId;
+    advancePlayerSteps(runtime, 49);
+    expect(runtime.getRenderView().tick).toBe(firstObservedTick + 4);
+    return { runtime, repository, alarmActorId, firstObservedTick, threatObservationId, playerAlarmReceipts };
+  } catch (error) {
+    runtime.destroy();
+    scheduledFrame = undefined;
+    throw error;
+  }
 }
 
 async function createFishCrowAlarmRuntime(

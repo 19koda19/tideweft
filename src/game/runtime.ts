@@ -1553,7 +1553,7 @@ interface CommittedAudioCue {
   readonly cue: SoundCue;
   readonly volume: number;
   readonly variantSeed: number;
-  readonly pan: number;
+  readonly pan?: number;
 }
 
 function committedAudioCueForSituatedExpression(
@@ -15806,13 +15806,7 @@ export async function createTideweftRuntime(
       // contact, and migrated species calls use the shared Voice queues above
       // and never compete through this announcement channel.
       const emittedEcologyCues = ecologyCues.slice(0, 2);
-      for (const cue of emittedEcologyCues) {
-        if (cue.pan === undefined) {
-          soundscape.play(cue.cue, cue.volume, cue.variantSeed);
-        } else {
-          soundscape.play(cue.cue, cue.volume, cue.variantSeed, cue.pan);
-        }
-      }
+      deferredWorldAcousticAudio.push(...emittedEcologyCues);
       if (emittedEcologyCues.length > 0) {
         const cueCaption = emittedEcologyCues.map(({ caption }) => caption).join(" ");
         if (ecologyConsequenceAnnounced && session.announcement !== null) {
@@ -15845,14 +15839,20 @@ export async function createTideweftRuntime(
     }
 
     if (result.moved && player.mode !== "swept") {
-      soundscape.play("step", player.pace === "swift" ? 0.8 : 0.42);
+      deferredWorldAcousticAudio.push(Object.freeze({
+        cue: "step",
+        volume: player.pace === "swift" ? 0.8 : 0.42,
+        variantSeed: 0,
+      }));
     }
     if (
       result.adriftPaddling === true
       && session.sessionPlayMilliseconds - lastAdriftPaddleSoundMs >= 360
     ) {
       lastAdriftPaddleSoundMs = session.sessionPlayMilliseconds;
-      soundscape.play("paddle", 0.48);
+      deferredWorldAcousticAudio.push(Object.freeze({
+        cue: "paddle", volume: 0.48, variantSeed: 0,
+      }));
     }
     if (result.becameSwept) {
       autopilotPath = [];
@@ -19425,6 +19425,7 @@ export async function createTideweftRuntime(
       pendingPlayerWait: structuredClone(pendingPlayerWait),
       lastAutosaveTick,
       lastCargoDamageNoticeMs,
+      lastAdriftPaddleSoundMs,
     };
     if (failClosedCheckpointStartedAtMs !== null) {
       worldAdvanceFailClosedCheckpointPerformance.recordSpan(
@@ -19503,6 +19504,7 @@ export async function createTideweftRuntime(
       pendingPlayerWait = prior.pendingPlayerWait;
       lastAutosaveTick = prior.lastAutosaveTick;
       lastCargoDamageNoticeMs = prior.lastCargoDamageNoticeMs;
+      lastAdriftPaddleSoundMs = prior.lastAdriftPaddleSoundMs;
       manualControl = { moveX: 0, moveY: 0, brace: false };
       adriftTapControl = null;
       adriftTapTicksRemaining = 0;

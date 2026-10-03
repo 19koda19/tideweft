@@ -256,9 +256,12 @@ metadata; it does not reset authoritative world or acoustic carry state.
 All nine current core alarm-source profiles now have shared Voice adapters,
 but not every lawful domain alarm qualifies for a fresh Voice expression.
 The legacy generic player fallback can still handle a heard remembered-threat
-alarm lacking that fresh expression authority; its direct audio/announcement
-transaction boundary remains active reconciliation work, not an unreachable
-defensive branch. Protected expression freshness is not relaxed to hide that gap.
+alarm lacking that fresh expression authority. Its audio now shares the
+post-commit queue: a genuine remembered-deer repeat proves lawful player hearing,
+one successful cue, and no leaked cue on later closure failure. Its bounded
+legacy announcement still needs explicit shared-presentation reconciliation;
+it is not an unreachable defensive branch. Protected expression freshness is
+not relaxed to hide that gap.
 Future alarm sources still require an explicit source-authenticated adapter.
 The narrow gull, elk, boar, chicken, duck, goat, cat, and fox representatives do not
 prove broad species repertoires, general hunting communication, or broad animal
@@ -491,8 +494,23 @@ consequence.
 External audio for these structured embodied-contact events is released only
 after the fallible fixed-step transaction commits, so fail-closed rollback
 cannot leak and then replay a rejected contact while the event itself retains
-its original simulation tick. Legacy step/paddle playback has not yet crossed
-that transaction boundary and is not claimed by this slice.
+its original simulation tick. Ordinary step and ADRIFT paddle playback now
+reuse that same tick-local committed-audio queue. Existing volume, default
+variant, undefined pan and 360ms paddle throttle remain; undefined pan avoids
+creating a stereo-panner node for routine self movement. The ephemeral paddle
+throttle is checkpointed and restored on failure, not serialized. Successful
+movement releases one cue after interval closure, while rejected steps restore
+physical state and release no step/paddle cue. This adds no footstep captions,
+new watercraft action, or independent sound framework.
+
+A separate pre-existing current47 save gap remains under investigation: a real
+sweep-entry step followed by eight accepted floating beats refuses a phase-nine
+save. Sweep entry moves the body and then resets velocity, while sensory capture
+uses terminal velocity and save replay checks actual displacement. That is a
+static causal lead, not yet a repaired or fully isolated validation leaf. The
+passing completed-interval ADRIFT reload fixture does not prove mid-interval
+correctness; current-schema fail-closed validation must remain intact during
+repair.
 
 These are representative producers, not false whole-world completion.
 Production views suppress the old renderer-created ADRIFT syllables whenever

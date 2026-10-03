@@ -368,7 +368,7 @@ interaction suite.
 | Crafting/PACK | field harvesting, gear acquisition, four travel adaptations, wear, MEND, and dismantling | composed player loop; settlements/NPCs do not consume it |
 | Cartography | navigation, learned-terrain projection, soundings, recovery cues, and surveyed route reinforcement | narrow infrastructure consumer; no general paid information economy |
 | World time / Turning Day | weather, tides, needs, recipes, player time actions, physical light, forty-two human rest projections, one working dog, and seventeen wildlife routines | strongly composed for elapsed time and the named bounded roster; daily work, feeding, interiors, companion life, broad nocturnal ecology and time-aware Voice remain future |
-| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. All nine current core alarm sources have Voice adapters, but remembered-threat alarms can remain lawfully audible without fresh expression authority. Refused/unadmitted strong alarms now share bounded anonymous ordinary-resident hearing; actual core event removal removes that opportunity. The generic player fallback remains an active transaction/presentation seam, not an unreachable branch. Ambient-water syllables and legacy step/paddle playback remain unintegrated, and broad animal/object/tool/violence/vessel producers are absent. Continuing resident state is deliberately non-acoustic. |
+| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. All nine current core alarm sources have Voice adapters, but remembered-threat alarms can remain lawfully audible without fresh expression authority. Refused/unadmitted strong alarms now share bounded anonymous ordinary-resident hearing; actual core event removal removes that opportunity. The reachable generic player fallback now uses post-commit audio, with actual remembered-deer success/rollback proof; its legacy announcement remains a presentation seam, not an unreachable branch. Step/paddle audio now shares the post-commit queue without extra captions; ambient-water syllables and a newly exposed current47 mid-interval sweep save remain active reconciliation gaps, and broad animal/object/tool/violence/vessel producers are absent. Continuing resident state is deliberately non-acoustic. |
 | Settlement stock/logistics core | shortages, Promises, residents, projects, routes, trust, and histories | strong finite loop; no HC/market and no infinite-world settlement bridge |
 | Deep Time / field gear / supernatural systems | almost no current gameplay | correctly marked future rather than falsely live |
 
@@ -423,10 +423,16 @@ interaction suite.
    eliminate lawful remembered-threat instances that fail fresh-expression
    admission and may still reach the generic player fallback. The shared
    anonymous human-hearing bridge is independent of that optional admission;
-   the remaining generic audio/announcement seam is owned by active Voice.
-8. Ambient-water syllables and legacy step/paddle playback still sit outside
-   the committed acoustic-event/receipt boundary; they require explicit
-   migration or a truthful non-acoustic classification before Voice closes.
+   generic audio now uses the post-commit queue, while the remaining bounded
+   announcement/presentation seam is owned by active Voice.
+8. Ambient-water syllables still sit outside the committed acoustic-event/
+   receipt boundary and require explicit migration or a truthful non-acoustic
+   classification before Voice closes. Routine step/paddle playback now uses
+   the existing post-commit queue without inventing new captions or actions.
+9. A real current47 mid-interval sweep save refuses despite accepted physical
+   steps; the completed-interval reload witness is insufficient. Active Voice
+   owns the sensory-carry/actual-displacement reconciliation, retaining strict
+   fail-closed persistence rather than relaxing its validation.
 
 ## Deliberate initial abstractions
 

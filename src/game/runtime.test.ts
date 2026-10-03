@@ -1114,6 +1114,179 @@ function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
   runtime.stop();
 }
 
+async function createCurrentAdriftFootingFixture(): Promise<{
+  readonly repository: MemoryRepository;
+  readonly runtime: TideweftRuntime;
+}> {
+  const repository = new MemoryRepository();
+  const setup = await createTideweftRuntime(repository);
+  setup.dispatchUI({ type: "resume-world" });
+  const offer = setup
+    .getUIView()
+    .contracts.find(
+      (contract) => contract.actionLabel === "Pick up cargo here",
+    );
+  if (!offer)
+    throw new Error("fixture did not begin beside physical Promise cargo");
+  setup.dispatchUI({
+    type: "contract",
+    action: "accept",
+    contractId: offer.id,
+  });
+  advancePlayerSteps(setup, 10);
+  await setup.save();
+  setup.destroy();
+
+  // Begin from a real, sealed current save with an authoritative physical cargo
+  // manifest. Choose the strongest real wet contact in its persisted region
+  // at high tide so the next movement beat can lose live footing.
+  const preparedRecord = repository.snapshot();
+  const prepared = decodeGameSave(preparedRecord);
+  expect(prepared.version).toBe(47);
+  expect(
+    prepared.physicalCargo?.expectedManifest.entries.length,
+  ).toBeGreaterThan(0);
+  const preparedWorld = deserializeWorld(prepared.world);
+  preparedWorld.weather = {
+    kind: "storm",
+    intensity: FIXED_POINT,
+    windX: FIXED_POINT,
+    windY: -FIXED_POINT,
+    nextChangeTick: preparedWorld.meta.completedTick + 1_000,
+  };
+  const preparedRegional = restorePlayerRegionalTravel(
+    preparedWorld.meta.rootSeed,
+    prepared.player,
+    prepared.regionalTravel ?? "",
+  );
+  if (!preparedRegional)
+    throw new Error("fixture lost its sealed regional stream");
+  const exposedChannelTile = [...preparedRegional.window.terrain.tiles]
+    .filter((tile) => {
+      const address = preparedRegional.window.addresses[tile.index];
+      return (
+        address?.region.x === 0 &&
+        address.region.y === 0 &&
+        preparedWorld.tide.level - tile.elevation >= 120_000
+      );
+    })
+    .sort(
+      (left, right) =>
+        (preparedWorld.tide.level - right.elevation) * 2 +
+        right.roughness -
+        ((preparedWorld.tide.level - left.elevation) * 2 + left.roughness),
+    )[0];
+  if (!exposedChannelTile)
+    throw new Error("fixture did not provide an exposed channel tile");
+  const exposedAddress =
+    preparedRegional.window.addresses[exposedChannelTile.index];
+  if (!exposedAddress)
+    throw new Error("fixture channel lost its stable address");
+  const compatibilityChannel =
+    preparedWorld.terrain.tiles[
+      exposedAddress.localY * preparedWorld.terrain.width +
+        exposedAddress.localX
+    ];
+  if (!compatibilityChannel)
+    throw new Error("fixture channel left the compatibility terrain");
+  compatibilityChannel.elevation = 0;
+  compatibilityChannel.terrain = "deep-water";
+  compatibilityChannel.roughness = FIXED_POINT;
+  compatibilityChannel.baseTravelCost = 520;
+  const positionedRegional = moveRegionalFixtureToAddress(
+    preparedWorld.meta.rootSeed,
+    preparedRegional,
+    prepared.player,
+    exposedAddress.region,
+    exposedAddress.localX,
+    exposedAddress.localY,
+  );
+  const positionedChannel = regionLocalToWindowTile(
+    positionedRegional.window,
+    exposedAddress.region,
+    exposedAddress.localX,
+    exposedAddress.localY,
+  );
+  if (positionedChannel === null)
+    throw new Error("fixture channel left its aligned frame");
+  prepared.world = serializeWorld(preparedWorld);
+  const regionalX = positionedChannel.x;
+  const regionalY = positionedChannel.y;
+  const regionalTileIndex = regionalY * REGIONAL_TRAVEL_COLUMNS + regionalX;
+  prepared.player.x = regionalX * TILE_UNITS + TILE_UNITS / 2;
+  prepared.player.y = regionalY * TILE_UNITS + TILE_UNITS / 2;
+  prepared.player.previousX = prepared.player.x;
+  prepared.player.previousY = prepared.player.y;
+  prepared.player.currentTrace = [regionalTileIndex];
+  prepared.player.surveyTrace = [regionalTileIndex];
+  prepared.player.mode = "foot";
+  prepared.player.pace = "steady";
+  prepared.player.stability = FIXED_POINT;
+  prepared.player.stamina = 800_000;
+  prepared.player.velocityX = 0;
+  prepared.player.velocityY = -100;
+  prepared.player.sweepPath = [];
+  prepared.player.sweepTicksRemaining = 0;
+  prepared.player.sweepTotalTicks = 0;
+  prepared.player.sweepSupport = null;
+  prepared.regionalTravel = serializePlayerRegionalTravel(
+    capturePlayerRegionalTravel(positionedRegional, prepared.player),
+  );
+  prepared.promiseJourney =
+    prepared.player.activeContractId === null
+      ? {
+          version: 1,
+          contractId: null,
+          detoured: false,
+          compatibilityTrace: [],
+        }
+      : {
+          version: 1,
+          contractId: prepared.player.activeContractId,
+          detoured: true,
+          compatibilityTrace: [],
+        };
+  prepared.traversalFeedback = createTraversalFeedbackState();
+  // This fixture intentionally fast-forwards the compatibility world outside
+  // the production runtime. Route it once through the supported v5 migration
+  // so the new BIO0 root is created at that completed tick instead of forging
+  // hundreds of ecology/weather steps that the fixture never observed.
+  const {
+    bio0Ecology: _outdatedBio0Ecology,
+    regionalEcology: _outdatedRegionalEcology,
+    settlementEcology: _outdatedSettlementEcology,
+    dogActorRoster: _outdatedDogActorRoster,
+    settlementWorkingAnimals: _outdatedSettlementWorkingAnimals,
+    settlementDomesticAnimalRecovery:
+      _outdatedSettlementDomesticAnimalRecovery,
+    porterResponse: _outdatedPorterResponse,
+    livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
+    integrity: _preparedIntegrity,
+    ...v5Base
+  } = prepared;
+  const v5Envelope: TestGameSaveEnvelope = {
+    ...v5Base,
+    player: legacyPlayerWithoutTimeAction(prepared.player),
+    perceptionCarry: legacyPlayerPerceptionCarry(prepared.perceptionCarry),
+    version: 5,
+  };
+  resealGameSave(v5Envelope);
+  repository.replace({
+    ...preparedRecord,
+    payloadVersion: 5,
+    playTicks: preparedWorld.meta.completedTick,
+    worldJson: JSON.stringify(v5Envelope),
+  });
+
+  const migration = await createTideweftRuntime(repository);
+  await migration.save();
+  migration.destroy();
+
+  const runtime = await createTideweftRuntime(repository);
+  runtime.dispatchUI({ type: "resume-world" });
+  return { repository, runtime };
+}
+
 function nextTideExtremeTick(
   atTick: number,
   extreme: "high" | "low",
@@ -1626,6 +1799,116 @@ describe("perpetual new worlds", () => {
     expect(persisted.events.some(({ type }) => type === "resident-introduced")).toBe(false);
     runtime.destroy();
   });
+
+  it.each([
+    ["step", false],
+    ["step", true],
+    ["paddle", false],
+    ["paddle", true],
+  ] as const)("releases fixed-step %s audio only after interval commit (reject=%s)", async (cue, reject) => {
+    const repository = new MemoryRepository();
+    let runtime: TideweftRuntime;
+    if (cue === "paddle") {
+      const prepared = await createCurrentAdriftFootingFixture();
+      runtime = prepared.runtime;
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 1 } });
+      advancePlayerSteps(runtime, 1);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+      // Use real accepted floating beats to approach the next world interval.
+      // The test never edits a saved phase or fabricates a paddling result.
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      advancePlayerSteps(runtime, 9);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+      await runtime.save();
+      const saved = prepared.repository.snapshot();
+      const envelope = decodeGameSave(saved);
+      expect(envelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
+      expect(saved.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+      expect(envelope.player.mode).toBe("swept");
+      expect(envelope.perceptionCarry).toMatchObject({ playerStepsSinceWorldTick: 0 });
+      repository.replace(saved);
+      runtime.destroy();
+      runtime = await createTideweftRuntime(repository);
+      runtime.dispatchUI({ type: "resume-world" });
+      advancePlayerSteps(runtime, 9);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+    } else {
+      runtime = await createTideweftRuntime(repository);
+      runtime.dispatchUI({
+        type: "new-world",
+        seed: "fixed-step movement audio transaction",
+        posture: "journey",
+        sessionShape: "wander",
+      });
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      expect(decodeGameSave(repository.snapshot()).perceptionCarry)
+        .toMatchObject({ playerStepsSinceWorldTick: 9 });
+    }
+    const beforePlayer = structuredClone(runtime.getRenderView().player);
+    const beforeRecord = repository.snapshot();
+    const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
+    let closureCalls = 0;
+    let closureCommitted = false;
+    let audioSeenInsideClosure = false;
+    const audioReleaseStates: Array<{
+      readonly closureCommitted: boolean;
+      readonly player: typeof beforePlayer;
+    }> = [];
+    soundscapePlay.mockClear();
+    soundscapePlay.mockImplementation((playedCue: string) => {
+      if (playedCue === cue) audioReleaseStates.push({
+        closureCommitted,
+        player: structuredClone(runtime.getRenderView().player),
+      });
+    });
+    vi.spyOn(
+      situatedExpressionChannelBank,
+      "closeSituatedExpressionChannelBankInterval",
+    ).mockImplementation((...args) => {
+      closureCalls += 1;
+      audioSeenInsideClosure ||= soundscapePlay.mock.calls.some(([playedCue]) => playedCue === cue);
+      if (reject) return null;
+      const closed = close(...args);
+      closureCommitted = closed !== null;
+      return closed;
+    });
+    try {
+      runtime.dispatchRenderer({
+        type: "movement",
+        vector: cue === "paddle" ? { x: 0, y: 1 } : { x: 1, y: 0 },
+      });
+      advancePlayerSteps(runtime, 1);
+      await Promise.resolve();
+      expect(closureCalls).toBe(1);
+      if (reject) {
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        const { active: _beforeActive, ...beforePhysicalPlayer } = beforePlayer;
+        const { active: afterActive, ...afterPhysicalPlayer } = runtime.getRenderView().player;
+        expect(afterActive).toBe(false);
+        expect(afterPhysicalPlayer).toEqual(beforePhysicalPlayer);
+        expect(repository.snapshot()).toEqual(beforeRecord);
+        // The halt warning is intentional; no rejected movement sound may escape.
+        expect(soundscapePlay.mock.calls.filter(([playedCue]) => playedCue === cue)).toEqual([]);
+        expect(audioReleaseStates).toEqual([]);
+      } else {
+        const afterPlayer = runtime.getRenderView().player;
+        expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+        expect(afterPlayer.position).not.toEqual(beforePlayer.position);
+        expect(afterPlayer.stamina).toBeLessThan(beforePlayer.stamina);
+        if (cue === "paddle") expect(afterPlayer.adrift?.paddling).toBe(true);
+        const calls = soundscapePlay.mock.calls.filter(([playedCue]) => playedCue === cue);
+        expect(calls).toHaveLength(1);
+        expect(calls[0]?.[1]).toBe(cue === "paddle" ? 0.48 : afterPlayer.pace === "swift" ? 0.8 : 0.42);
+        expect(calls[0]?.[3]).toBeUndefined();
+        expect(audioReleaseStates).toEqual([{ closureCommitted: true, player: afterPlayer }]);
+      }
+      expect(audioSeenInsideClosure).toBe(false);
+    } finally {
+      runtime.destroy();
+      soundscapePlay.mockReset();
+    }
+  }, 30_000);
 
   it("routes the title flourish through the runtime-owned soundscape", async () => {
     const runtime = await createTideweftRuntime(new MemoryRepository());
@@ -4233,172 +4516,7 @@ describe("runtime clarity guards", () => {
   }, 30_000);
 
   it("reloads a current ADRIFT save without moving the porter or changing physical cargo", async () => {
-    const repository = new MemoryRepository();
-    const setup = await createTideweftRuntime(repository);
-    setup.dispatchUI({ type: "resume-world" });
-    const offer = setup
-      .getUIView()
-      .contracts.find(
-        (contract) => contract.actionLabel === "Pick up cargo here",
-      );
-    if (!offer)
-      throw new Error("fixture did not begin beside physical Promise cargo");
-    setup.dispatchUI({
-      type: "contract",
-      action: "accept",
-      contractId: offer.id,
-    });
-    advancePlayerSteps(setup, 10);
-    await setup.save();
-    setup.destroy();
-
-    // Begin from a real, sealed current save with an authoritative physical cargo
-    // manifest. Choose the strongest real wet contact in its persisted region
-    // at high tide so the next movement beat can lose live footing.
-    const preparedRecord = repository.snapshot();
-    const prepared = decodeGameSave(preparedRecord);
-    expect(prepared.version).toBe(47);
-    expect(
-      prepared.physicalCargo?.expectedManifest.entries.length,
-    ).toBeGreaterThan(0);
-    const preparedWorld = deserializeWorld(prepared.world);
-    preparedWorld.weather = {
-      kind: "storm",
-      intensity: FIXED_POINT,
-      windX: FIXED_POINT,
-      windY: -FIXED_POINT,
-      nextChangeTick: preparedWorld.meta.completedTick + 1_000,
-    };
-    const preparedRegional = restorePlayerRegionalTravel(
-      preparedWorld.meta.rootSeed,
-      prepared.player,
-      prepared.regionalTravel ?? "",
-    );
-    if (!preparedRegional)
-      throw new Error("fixture lost its sealed regional stream");
-    const exposedChannelTile = [...preparedRegional.window.terrain.tiles]
-      .filter((tile) => {
-        const address = preparedRegional.window.addresses[tile.index];
-        return (
-          address?.region.x === 0 &&
-          address.region.y === 0 &&
-          preparedWorld.tide.level - tile.elevation >= 120_000
-        );
-      })
-      .sort(
-        (left, right) =>
-          (preparedWorld.tide.level - right.elevation) * 2 +
-          right.roughness -
-          ((preparedWorld.tide.level - left.elevation) * 2 + left.roughness),
-      )[0];
-    if (!exposedChannelTile)
-      throw new Error("fixture did not provide an exposed channel tile");
-    const exposedAddress =
-      preparedRegional.window.addresses[exposedChannelTile.index];
-    if (!exposedAddress)
-      throw new Error("fixture channel lost its stable address");
-    const compatibilityChannel =
-      preparedWorld.terrain.tiles[
-        exposedAddress.localY * preparedWorld.terrain.width +
-          exposedAddress.localX
-      ];
-    if (!compatibilityChannel)
-      throw new Error("fixture channel left the compatibility terrain");
-    compatibilityChannel.elevation = 0;
-    compatibilityChannel.terrain = "deep-water";
-    compatibilityChannel.roughness = FIXED_POINT;
-    compatibilityChannel.baseTravelCost = 520;
-    const positionedRegional = moveRegionalFixtureToAddress(
-      preparedWorld.meta.rootSeed,
-      preparedRegional,
-      prepared.player,
-      exposedAddress.region,
-      exposedAddress.localX,
-      exposedAddress.localY,
-    );
-    const positionedChannel = regionLocalToWindowTile(
-      positionedRegional.window,
-      exposedAddress.region,
-      exposedAddress.localX,
-      exposedAddress.localY,
-    );
-    if (positionedChannel === null)
-      throw new Error("fixture channel left its aligned frame");
-    prepared.world = serializeWorld(preparedWorld);
-    const regionalX = positionedChannel.x;
-    const regionalY = positionedChannel.y;
-    const regionalTileIndex = regionalY * REGIONAL_TRAVEL_COLUMNS + regionalX;
-    prepared.player.x = regionalX * TILE_UNITS + TILE_UNITS / 2;
-    prepared.player.y = regionalY * TILE_UNITS + TILE_UNITS / 2;
-    prepared.player.previousX = prepared.player.x;
-    prepared.player.previousY = prepared.player.y;
-    prepared.player.currentTrace = [regionalTileIndex];
-    prepared.player.surveyTrace = [regionalTileIndex];
-    prepared.player.mode = "foot";
-    prepared.player.pace = "steady";
-    prepared.player.stability = FIXED_POINT;
-    prepared.player.stamina = 800_000;
-    prepared.player.velocityX = 0;
-    prepared.player.velocityY = -100;
-    prepared.player.sweepPath = [];
-    prepared.player.sweepTicksRemaining = 0;
-    prepared.player.sweepTotalTicks = 0;
-    prepared.player.sweepSupport = null;
-    prepared.regionalTravel = serializePlayerRegionalTravel(
-      capturePlayerRegionalTravel(positionedRegional, prepared.player),
-    );
-    prepared.promiseJourney =
-      prepared.player.activeContractId === null
-        ? {
-            version: 1,
-            contractId: null,
-            detoured: false,
-            compatibilityTrace: [],
-          }
-        : {
-            version: 1,
-            contractId: prepared.player.activeContractId,
-            detoured: true,
-            compatibilityTrace: [],
-          };
-    prepared.traversalFeedback = createTraversalFeedbackState();
-    // This fixture intentionally fast-forwards the compatibility world outside
-    // the production runtime. Route it once through the supported v5 migration
-    // so the new BIO0 root is created at that completed tick instead of forging
-    // hundreds of ecology/weather steps that the fixture never observed.
-    const {
-      bio0Ecology: _outdatedBio0Ecology,
-      regionalEcology: _outdatedRegionalEcology,
-      settlementEcology: _outdatedSettlementEcology,
-      dogActorRoster: _outdatedDogActorRoster,
-      settlementWorkingAnimals: _outdatedSettlementWorkingAnimals,
-      settlementDomesticAnimalRecovery:
-        _outdatedSettlementDomesticAnimalRecovery,
-      porterResponse: _outdatedPorterResponse,
-      livingActorPlayerChoice: _outdatedLivingActorPlayerChoice,
-      integrity: _preparedIntegrity,
-      ...v5Base
-    } = prepared;
-    const v5Envelope: TestGameSaveEnvelope = {
-      ...v5Base,
-      player: legacyPlayerWithoutTimeAction(prepared.player),
-      perceptionCarry: legacyPlayerPerceptionCarry(prepared.perceptionCarry),
-      version: 5,
-    };
-    resealGameSave(v5Envelope);
-    repository.replace({
-      ...preparedRecord,
-      payloadVersion: 5,
-      playTicks: preparedWorld.meta.completedTick,
-      worldJson: JSON.stringify(v5Envelope),
-    });
-
-    const migration = await createTideweftRuntime(repository);
-    await migration.save();
-    migration.destroy();
-
-    const runtime = await createTideweftRuntime(repository);
-    runtime.dispatchUI({ type: "resume-world" });
+    const { repository, runtime } = await createCurrentAdriftFootingFixture();
     const tileSize = runtime.getRenderView().terrain.tileSize;
 
     // This movement command models a held keyboard direction. It is sent while
