@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import * as canonicalUtil from "../sim/util";
+import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -102,6 +105,54 @@ function takeScheduledFrame(message: string): (now: number) => void {
 }
 
 describe("runtime performance telemetry", () => {
+  it.each(["runtime baseline estuary", "breathing room regional density 8"])(
+    "characterizes equal accepted work and repeated habitat encodes: %s",
+    async (seed) => {
+      const repository = new MemoryRepository();
+      const runtime = await createTideweftRuntime(repository);
+      beginFreshWorld(runtime, seed);
+      runtime.setPerformanceTelemetryEnabled(true);
+      runtime.resetPerformanceTelemetry();
+      const originalEncoder = canonicalUtil.stableStringify;
+      const inputs = new Map<object, number>();
+      let encodedCodeUnits = 0;
+      const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
+        const encoded = originalEncoder(value);
+        if (typeof value === "object" && value !== null && "ownerId" in value
+          && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
+          inputs.set(value, (inputs.get(value) ?? 0) + 1);
+          encodedCodeUnits += encoded.length;
+        }
+        return encoded;
+      });
+      try {
+        advancePlayerSteps(runtime, 30);
+      } finally {
+        encoder.mockRestore();
+      }
+      const telemetry = runtime.getPerformanceTelemetry();
+      expect(telemetry.fixedStep.totalCount).toBe(30);
+      expect(telemetry.worldAdvanceStep.totalCount).toBe(3);
+      await runtime.save();
+      const worldJson = repository.snapshot().worldJson;
+      const digest = createHash("sha256").update(worldJson).digest("hex");
+      if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
+        seed, acceptedSteps: 30, advances: 3, saveBytes: Buffer.byteLength(worldJson), digest,
+        habitatEncodes: [...inputs.values()].reduce((sum, count) => sum + count, 0),
+        uniqueHabitatInputs: inputs.size, encodedCodeUnits,
+        perInputEncodes: [...inputs.values()].sort((left, right) => left - right),
+      })}\n`);
+      // Captured on the unoptimized 6215116 authority at exactly30 accepted steps.
+      const baselineDigests: Readonly<Record<string, string>> = {
+        "runtime baseline estuary": "6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7",
+        "breathing room regional density 8": "e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e",
+      };
+      expect(digest).toBe(baselineDigests[seed]);
+      expect(JSON.parse(worldJson)).toMatchObject({ version: 47 });
+      runtime.destroy();
+    },
+  );
+
   it("starts a replacement world on a fresh fixed-step phase", async () => {
     const runtime = await createTideweftRuntime(new MemoryRepository());
     runtime.start();

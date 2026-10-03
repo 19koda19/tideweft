@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { generateRegionTerrain } from "../sim/regionTerrain";
 import { keyedRandomInt, seedFromText, type RootSeed } from "../sim/rng";
 import { REGION_COORD_LIMIT, createRegionCoord } from "../sim/regions";
 import { hashCanonical, stableStringify } from "../sim/util";
+import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_TIDAL_MINIMUM_FISH_DEPTH } from "./coreEcologyHabitat";
 import {
   CORE_ECOLOGY_BREADTH_COHORT_DEFINITIONS,
@@ -107,6 +108,74 @@ function admittedBySpecies(habitats: readonly CoreEcologyBreadthHabitat[]) {
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} append-only habitat authority`, () => {
+  it("characterizes exact-identity world binding and keeps clone validation", () => {
+    clearCoreEcologyBreadthHabitatCache();
+    const region = createRegionCoord(-1, 1);
+    const habitat = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: COHORT });
+    const clone = canonicalizeCoreEcologyBreadthHabitat(JSON.parse(stableStringify(habitat)));
+    expect(clone).not.toBeNull();
+    expect(clone).not.toBe(habitat);
+    const encoder = vi.spyOn(canonicalUtil, "stableStringify");
+    const habitatEncodes = () => encoder.mock.calls.filter(([value]) => (
+      typeof value === "object" && value !== null
+      && "ownerId" in value && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID
+    )).length;
+    try {
+      expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
+      // The exact immutable world-bound input no longer needs two whole encodes.
+      expect(habitatEncodes()).toBe(0);
+      encoder.mockClear();
+      expect(canonicalCoreEcologyBreadthHabitatForWorld(clone, SEED, region)).toBe(clone);
+      expect(habitatEncodes()).toBe(2);
+      expect(stableStringify(clone)).toBe(stableStringify(habitat));
+    } finally {
+      encoder.mockRestore();
+    }
+  });
+
+  it("keeps full world binding after cache reset and rejects a trusted foreign derivation", () => {
+    clearCoreEcologyBreadthHabitatCache();
+    const region = createRegionCoord(-1, -1);
+    const habitat = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: COHORT });
+    const exactBytes = stableStringify(habitat);
+    clearCoreEcologyBreadthHabitatCache();
+    const rederived = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: COHORT });
+    expect(rederived).not.toBe(habitat);
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
+    expect(stableStringify(habitat)).toBe(exactBytes);
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, FOREIGN_SEED, region)).toBeNull();
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, createRegionCoord(1, -1))).toBeNull();
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, [-0, SEED[1], SEED[2], SEED[3]], region)).toBeNull();
+    for (const suffix of ["—é🌊", "\ud800", "\udfff"]) {
+      const { derivationHash: _hash, ...base } = habitat;
+      const changed = { ...base, sourceStableId: `${base.sourceStableId}${suffix}` };
+      const trustedForeign = canonicalizeCoreEcologyBreadthHabitat({
+        ...changed,
+        derivationHash: hashCanonical(changed),
+      });
+      expect(trustedForeign).not.toBeNull();
+      expect(canonicalCoreEcologyBreadthHabitatForWorld(trustedForeign, SEED, region)).toBeNull();
+    }
+  });
+
+  it("retains exact world binding through real bounded-cache eviction", () => {
+    clearCoreEcologyBreadthHabitatCache();
+    const region = createRegionCoord(-1, -1);
+    const habitat = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: COHORT });
+    const bytes = stableStringify(habitat);
+    for (let ordinal = 0; ordinal < CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT; ordinal += 1) {
+      deriveCoreEcologyBreadthHabitat({
+        seed: SEED, region: createRegionCoord(ordinal, 1), cohortId: COHORT,
+      });
+    }
+    expect(coreEcologyBreadthHabitatCacheDiagnostics().entryCount)
+      .toBe(CORE_ECOLOGY_BREADTH_HABITAT_CACHE_LIMIT);
+    const rederived = deriveCoreEcologyBreadthHabitat({ seed: SEED, region, cohortId: COHORT });
+    expect(rederived).not.toBe(habitat);
+    expect(stableStringify(rederived)).toBe(bytes);
+    expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
+  });
+
   it("replays canonical terrain independent of evaluation order and binds authority to its world", () => {
     clearCoreEcologyBreadthHabitatCache();
     const emptyDiagnostics = coreEcologyBreadthHabitatCacheDiagnostics();
