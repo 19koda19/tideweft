@@ -11,12 +11,14 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
+  canonicalizeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
 import { deriveCoreEcologyRegionalPredatorHabitatAssemblage } from "./coreEcologyHabitat";
-import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH } from "./coreEcologyBreadthHabitat";
+import { CORE_ECOLOGY_BREADTH_CURRENT_EPOCH, CORE_ECOLOGY_BREADTH_DERIVATION_KIND } from "./coreEcologyBreadthHabitat";
+import * as canonicalUtil from "../sim/util";
 import type { CoreEcologyRuntimeWindow } from "./coreEcologyRuntime";
 import { createCoreEcologySettlementHomePatch } from "./coreEcologySettlementHome";
 import {
@@ -30,6 +32,7 @@ import {
 import {
   createRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
+  regionalEcologyResidentTransitionIsVisitationOnly,
 } from "./regionalEcologyState";
 import { createFreshRegionalEcologyStateV2 } from "./regionalEcologyStateV2";
 import { createFreshRegionalEcologyStateV3 } from "./regionalEcologyStateV3";
@@ -482,6 +485,46 @@ function replaceActiveRegion(
 }
 
 describe(`${ALPHA37_ESTUARY_BREADTH_COMPOSITE_SHARED_INVARIANTS_OWNER_INTENT} regional ecology v6`, () => {
+  it("characterizes visitation lineage identity and keeps clone and changed-lineage fallback", () => {
+    const state = createFreshRegionalEcologyStateV6(fixture().v5, SEED);
+    const before = projectionOf(state).breadthResidents[0]!.patch;
+    const neutral = advanceProjectedPatchWithoutAction(before, TICK + 1).patch;
+    if (neutral.derivation.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND) {
+      throw new Error("Visitation fixture needs a breadth derivation");
+    }
+    const clone = JSON.parse(stableStringify(neutral));
+    const { derivationHash: _hash, ...habitat } = neutral.derivation.habitat;
+    const changedHabitat = { ...habitat, sourceStableId: "visitation:changed:🌊:\ud800" };
+    const changed = canonicalizeCoreEcologyAggregatePatch({
+      ...neutral,
+      derivation: {
+        ...neutral.derivation,
+        habitat: { ...changedHabitat, derivationHash: hashCanonical(changedHabitat) },
+      },
+    });
+    expect(changed).not.toBeNull();
+    const encoder = vi.spyOn(canonicalUtil, "stableStringify");
+    const signals = () => encoder.mock.calls.flatMap(([value]) => (
+      typeof value === "object" && value !== null && "patchKey" in value
+      && "derivation" in value && "groups" in value && Array.isArray(value.groups)
+        ? [value] : []
+    ));
+    try {
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(before, neutral)).toBe(true);
+      expect(signals()).toHaveLength(2);
+      expect(signals().every((signal) => signal.derivation !== null)).toBe(true);
+      encoder.mockClear();
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(before, clone)).toBe(true);
+      expect(signals()).toHaveLength(2);
+      expect(signals().every((signal) => signal.derivation !== null)).toBe(true);
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(before, changed)).toBe(false);
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(neutral, before)).toBe(false);
+      expect(regionalEcologyResidentTransitionIsVisitationOnly(before, { ...neutral, patchKey: "foreign" })).toBe(false);
+    } finally {
+      encoder.mockRestore();
+    }
+  });
+
   it("memoizes only the exact frozen authority and signed projection window", () => {
     const state = regionalEcologyV6AtBreadthEpoch(CORE_ECOLOGY_BREADTH_CURRENT_EPOCH);
     const activeWindow = windowAtBreadthActor(state);

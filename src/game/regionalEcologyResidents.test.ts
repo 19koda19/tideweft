@@ -46,6 +46,7 @@ import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
 } from "./worldPosition";
+import { regionalEcologyResidentTransitionIsVisitationOnly } from "./regionalEcologyState";
 
 const SEED = seedFromText("alpha32-regional-habitat-properties");
 const OTHER_SEED = seedFromText("another-alpha32-world");
@@ -497,6 +498,8 @@ describe("regional ecology resident patches", () => {
     forged.derivation.suppression.sourcePatchHash = "0000000000000000";
     const structurallyCanonical = canonicalizeCoreEcologyAggregatePatch(forged);
     expect(structurallyCanonical).not.toBeNull();
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(baseline, stepped.patch)).toBe(true);
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(baseline, structurallyCanonical)).toBe(false);
     expect(() => putRegionalEcologyResidentDeviation(advanced, {
       rootSeed: SEED,
       patch: structurallyCanonical!,

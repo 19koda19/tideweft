@@ -116,12 +116,27 @@ describe("runtime performance telemetry", () => {
       const originalEncoder = canonicalUtil.stableStringify;
       const inputs = new Map<object, number>();
       let encodedCodeUnits = 0;
+      let durableSignalEncodes = 0;
+      let durableSignalCodeUnits = 0;
+      let durableDerivationCodeUnits = 0;
+      const durableHabitats = new Map<object, number>();
       const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
         const encoded = originalEncoder(value);
         if (typeof value === "object" && value !== null && "ownerId" in value
           && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
           inputs.set(value, (inputs.get(value) ?? 0) + 1);
           encodedCodeUnits += encoded.length;
+        }
+        if (typeof value === "object" && value !== null && "patchKey" in value
+          && "derivation" in value && "groups" in value && Array.isArray(value.groups)) {
+          durableSignalEncodes += 1;
+          durableSignalCodeUnits += encoded.length;
+          const derivation = value.derivation as Readonly<Record<string, unknown>> | null;
+          durableDerivationCodeUnits += originalEncoder(derivation).length;
+          if (derivation !== null && typeof derivation.habitat === "object"
+            && derivation.habitat !== null) {
+            durableHabitats.set(derivation.habitat, (durableHabitats.get(derivation.habitat) ?? 0) + 1);
+          }
         }
         return encoded;
       });
@@ -141,6 +156,9 @@ describe("runtime performance telemetry", () => {
         habitatEncodes: [...inputs.values()].reduce((sum, count) => sum + count, 0),
         uniqueHabitatInputs: inputs.size, encodedCodeUnits,
         perInputEncodes: [...inputs.values()].sort((left, right) => left - right),
+        durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
+        uniqueDurableHabitats: durableHabitats.size,
+        perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
       })}\n`);
       // Captured on the unoptimized 6215116 authority at exactly30 accepted steps.
       const baselineDigests: Readonly<Record<string, string>> = {

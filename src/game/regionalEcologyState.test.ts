@@ -673,6 +673,19 @@ function retireCrossOwnerAttackerAtEventTick(
 }
 
 describe("regional ecology v25 owner substrate", () => {
+  it("compares all legacy derivation fields during visitation, not only habitat or kind", () => {
+    const { legacy } = legacyStateFixture();
+    const neutral = stepCoreEcologyAggregatePatch(legacy, { tick: TICK + 1, actorSteps: [] });
+    if (neutral === null) throw new Error("Legacy visitation fixture failed to advance");
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(legacy, neutral.patch)).toBe(true);
+    const changed = canonicalizeCoreEcologyAggregatePatch({
+      ...neutral.patch,
+      derivation: { ...neutral.patch.derivation, sourcePatchHash: hashCanonical("changed visitation lineage") },
+    });
+    expect(changed).not.toBeNull();
+    expect(regionalEcologyResidentTransitionIsVisitationOnly(legacy, changed)).toBe(false);
+  });
+
   it("canonicalizes one home plus a bounded order-independent hot neighborhood", () => {
     const first = stateFixture();
     expect({
