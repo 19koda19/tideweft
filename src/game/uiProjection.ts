@@ -488,6 +488,7 @@ export function projectUIView(
     ? semanticAnimalCallKind === "fish-crow-call"
       || semanticAnimalCallKind === "gull-call"
       || semanticAnimalCallKind === "chicken-call"
+      || semanticAnimalCallKind === "duck-call"
       ? "bird-call" as const
       : semanticAnimalCallKind === "deer-call"
         || semanticAnimalCallKind === "elk-call"
@@ -501,7 +502,8 @@ export function projectUIView(
     : semanticAnimalCallKind;
   const embodiedSignal = situatedExpressionEvent?.meaning === "marsh-rabbit-alarm-thump";
   const presentedExpressionText = presentedAnimalCallKind === "bird-call"
-    ? semanticAnimalCallKind === "chicken-call" ? "CALL." : "CALL! CALL!"
+    ? semanticAnimalCallKind === "chicken-call" || semanticAnimalCallKind === "duck-call"
+      ? "CALL." : "CALL! CALL!"
     : options.situatedExpressionReception?.kind === "heard-unseen"
       && (semanticAnimalCallKind === "elk-call" || semanticAnimalCallKind === "boar-call")
       ? "CALL!"

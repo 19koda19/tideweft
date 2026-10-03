@@ -41,7 +41,10 @@ import {
   situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 import {
+  SITUATED_EXPRESSION_CHANNEL_BANK_MAX_CHANNELS,
   canonicalizeSituatedExpressionChannelBank,
+  createSituatedExpressionChannelBank,
+  reduceSituatedExpressionChannelBank,
   type SituatedExpressionChannelBank,
 } from "./situatedExpressionChannelBank";
 import {
@@ -201,6 +204,15 @@ function chickenIntent(triggerEventId: string): SituatedExpressionIntent {
     volume: "murmur",
     priority: 160_000,
     variantSeed: 131,
+  };
+}
+
+function duckIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...chickenIntent(triggerEventId),
+    sourceActorId: "DUCK-expression-trajectory-current",
+    meaning: "american-black-duck-alarm-call",
+    variantSeed: 163,
   };
 }
 
@@ -602,13 +614,16 @@ function fishCrowFixture(
   };
 }
 
-function deerAlarmFixture(species: "deer" | "wild-boar" | "domestic-chicken" = "deer"): Fixture {
+function deerAlarmFixture(
+  species: "deer" | "wild-boar" | "domestic-chicken" | "american-black-duck" = "deer",
+): Fixture {
   const phase = 3;
   const acceptedAtTick = 40;
   const triggerEventId = `core-wildlife:alarm:${species}:trajectory`;
   const admitted = accept(createSituatedExpressionState(), species === "deer"
     ? deerIntent(triggerEventId)
-    : species === "wild-boar" ? boarIntent(triggerEventId) : chickenIntent(triggerEventId));
+    : species === "wild-boar" ? boarIntent(triggerEventId)
+      : species === "american-black-duck" ? duckIntent(triggerEventId) : chickenIntent(triggerEventId));
   const sourceActorId = admitted.event.sourceActorId;
   const current = advanceSituatedExpression(admitted.state, phase);
   if (current === null || current.active === null) {
@@ -1452,6 +1467,84 @@ describe("situated-expression admission trajectory", () => {
     expect(situatedExpressionTrajectoryIsCanonical(
       shouted, fixture.ledger, fixture.phase, fixture.samples,
     )).toBe(false);
+  });
+
+  it("authenticates a quiet duck trajectory and rejects acoustic, species or presentation escalation", () => {
+    const fixture = deerAlarmFixture("american-black-duck");
+    expect(accepts(fixture)).toBe(true);
+    expect(accepts(JSON.parse(JSON.stringify(fixture)) as Fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      meaning: "american-black-duck-alarm-call", vocalization: "duck-alarm-quack",
+      volume: "murmur", priority: 160_000, durationSteps: 6, remainingSteps: 3,
+    });
+    expect(fixture.bank.channels[0]?.state.recent[0]).toMatchObject({
+      meaningCooldownRemainingSteps: 21, familyCooldownRemainingSteps: 9,
+    });
+    expect(fixture.samples[0]).toMatchObject({
+      soundClass: "animal-call", soundInterrupt: "none", soundLoudness: 420_000,
+      soundRangeUnits: 9_100,
+    });
+    const wrongSpecies = mutable(fixture.ledger);
+    if (wrongSpecies.records[0]?.kind !== "core-wildlife-alarm") throw new Error("Missing duck receipt");
+    wrongSpecies.records[0].sourceSpecies = "domestic-chicken";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, wrongSpecies, fixture.phase, fixture.samples,
+    )).toBe(false);
+    for (const change of [
+      { soundInterrupt: "strong" as const }, { soundClass: "animal-alarm" as const },
+      { soundLoudness: 1_000_000 }, { soundRangeUnits: 18_000 },
+      { sourceActorId: "DUCK-other-source" },
+    ]) {
+      const samples = mutable(fixture.samples);
+      Object.assign(samples[0]!, change);
+      expect(situatedExpressionTrajectoryIsCanonical(
+        fixture.bank, fixture.ledger, fixture.phase, samples,
+      )).toBe(false);
+    }
+    for (const change of [
+      { volume: "shout" as const }, { priority: 760_000 }, { durationSteps: 7 },
+      { vocalization: "chicken-alarm-squawk" as const },
+    ]) {
+      const bank = mutable(fixture.bank);
+      Object.assign(bank.channels[0]!.state.active!, change);
+      expect(situatedExpressionTrajectoryIsCanonical(
+        bank, fixture.ledger, fixture.phase, fixture.samples,
+      )).toBe(false);
+    }
+    const duplicated = mutable(fixture.samples);
+    duplicated.push(duplicated[0]!);
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, fixture.ledger, fixture.phase, duplicated,
+    )).toBe(false);
+    const worldOnly = mutable(fixture.bank);
+    worldOnly.channels[0]!.reception = null;
+    expect(situatedExpressionTrajectoryIsCanonical(
+      worldOnly, fixture.ledger, fixture.phase, fixture.samples,
+    )).toBe(true);
+  });
+
+  it("keeps duck channels under the shared capacity without mutating a full bank", () => {
+    let bank = createSituatedExpressionChannelBank();
+    for (let index = 0; index < SITUATED_EXPRESSION_CHANNEL_BANK_MAX_CHANNELS; index += 1) {
+      const intent = {
+        ...duckIntent(`duck-alarm:bounded:${index}`), sourceActorId: `DUCK-bounded-${index}`,
+      };
+      const reduction = reduceSituatedExpressionChannelBank(bank, intent, null);
+      if (!reduction.accepted || reduction.bank === null || reduction.event === null) {
+        throw new Error(`Bounded duck bank fixture ${index} was rejected: ${reduction.reason}`);
+      }
+      bank = reduction.bank;
+    }
+    // This exercises the bank's independent bound, not sixteen admissions in
+    // one interval: the acoustic admission owner has its own smaller budget.
+    expect(canonicalizeSituatedExpressionChannelBank(bank)).toEqual(bank);
+    const before = structuredClone(bank);
+    const refused = reduceSituatedExpressionChannelBank(bank, {
+      ...duckIntent("duck-alarm:capacity-refused"), sourceActorId: "DUCK-capacity-refused",
+    }, null);
+    expect(refused).toMatchObject({ accepted: false, reason: "channel-capacity-reached", event: null });
+    expect(refused.bank).toEqual(before);
+    expect(canonicalizeSituatedExpressionChannelBank(refused.bank)).toEqual(before);
   });
 
   it("binds a marsh-rabbit alarm thump to the shared species-aware admission", () => {

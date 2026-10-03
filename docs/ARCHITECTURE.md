@@ -160,7 +160,8 @@ In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
 one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, one domestic-
-chicken alarm squawk, the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
+chicken alarm squawk, one American-black-duck alarm quack, the rabbit thump,
+the aggregate frog chorus, and one aggregate brown-rat
 physical rustle are live representative paths. One domestic-cat representative
 is also live: a freshly committed rain-caused retreat with matching rain
 observation and event-owned wet-track evidence may create one restrained,
@@ -196,17 +197,27 @@ may carry `SQUAWK.`; heard-unseen presentation remains an anonymous bird call
 and an already sleeping player receives no new quiet-call hearing or playback,
 including after current-save reload and cancellation. Clucking, crowing and
 routine flock conversation are not live.
+One existing regional-habitat American black duck now supplies a narrow alarm
+quack through the same authenticated source, observation, memory and committed
+locus path. It retains the small-prey murmur policy: loudness420,000,
+priority160,000 and interruption `none`. Visible receipt may identify the duck
+and carry `QUACK.`; unseen hearing remains anonymous bird `CALL.`, and humans
+receive anonymous `animal-call` rather than the private alarm cause. Ordinary
+WAIT/REST controls, exact current-save restore, no replay, refused optional
+caption admission and next-interval human hearing are tested. The fixture uses
+a real generated duck near the existing dog on unchanged terrain, with normal
+proximity admission; it is not a traversal or broad duck-repertoire proof.
 Optional expression capacity may suppress text but cannot suppress lawful
 committed alarm audio, applicable interruption, or the ecology-owned hearing
-leg. Refused optional chicken admission still preserves each real alarm's
+leg. Refused optional chicken or duck admission still preserves each real alarm's
 audio and next-interval anonymous human hearing, without duplicate receipts.
-The generic wildlife-alarm fallback still serves
-American black duck and domestic goat through the
+The generic wildlife-alarm fallback still serves domestic goat through the
 legacy player-audio/session-announcement path. That presentation leg remains a
 `BYPASS` seam to migrate or retire during Living Voice; the underlying ecology
 alarm already propagates to wildlife, dogs and the applicable porter listener.
-The narrow gull, elk, boar, chicken, cat, and fox representatives do not prove broad species
-repertoires, general hunting communication, or broad animal Voice.
+The narrow gull, elk, boar, chicken, duck, cat, and fox representatives do not
+prove broad species repertoires, general hunting communication, or broad animal
+Voice.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
 vocabulary. Synthetic saw, impact, and hull fixtures validate that vocabulary;

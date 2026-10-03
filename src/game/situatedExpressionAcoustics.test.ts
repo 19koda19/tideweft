@@ -31,6 +31,40 @@ describe("situated expression acoustics", () => {
       .toBeCloseTo(0.2835, 12);
   });
 
+  it("preserves a duck alarm as a quiet animal call without inventing human alarm knowledge", () => {
+    const expression = {
+      meaning: "american-black-duck-alarm-call" as const,
+      vocalization: "duck-alarm-quack" as const,
+      volume: "murmur" as const, tone: "alarmed" as const, variantSeed: 163,
+    };
+    expect(situatedExpressionAcoustics(expression)).toEqual({
+      loudness: 420_000, rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundClass(expression)).toBe("animal-call");
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
+    // A forged presentation volume cannot escalate the ecology-owned signal.
+    expect(situatedExpressionAcoustics({ ...expression, volume: "shout" }))
+      .toEqual({ loudness: 420_000, rangeUnits: 9_100 });
+    expect(situatedExpressionSoundInterrupt({ ...expression, volume: "shout" }))
+      .toBe("none");
+    const audio = situatedExpressionAudioPresentation(expression, {
+      certainty: 500_000, pan: -0.25,
+    });
+    expect(audio).toMatchObject({
+      sound: { kind: "vocalization", vocalization: "duck-alarm-quack" },
+      variantSeed: 163, pan: -0.25,
+    });
+    expect(audio?.volume).toBeCloseTo(0.2835, 12);
+    expect(situatedExpressionAudioPresentation(expression, {
+      certainty: 1_000_001, pan: -0.25,
+    })).toBeNull();
+    expect(situatedExpressionSemanticFactForMemory({
+      sourceActorId: "DUCK-current-acoustics", triggerEventId: "duck-alarm:1",
+      meaning: expression.meaning, family: "animal-signal", priority: 160_000,
+      meaningCooldownRemainingSteps: 24, familyCooldownRemainingSteps: 12,
+    })).toBeNull();
+  });
+
   it("classifies alarm-bearing dog calls separately from a neutral shelter whine", () => {
     expect(situatedExpressionSoundClass("guardian-dog-warning")).toBe("animal-alarm");
     expect(situatedExpressionSoundClass("guardian-dog-defensive-growl"))

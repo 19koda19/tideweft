@@ -52,6 +52,7 @@ export const CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES = Object.freeze([
   "elk",
   "wild-boar",
   "domestic-chicken",
+  "american-black-duck",
 ] as const);
 export type ExpressiveAlarmSpecies =
   (typeof CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES)[number];
@@ -156,6 +157,11 @@ const ALARM_EXPRESSION_PROFILE_BY_SPECIES: Readonly<
     species: "domestic-chicken",
     meaning: "domestic-chicken-alarm-call",
     variantDomain: "domestic-chicken-alarm-expression:v1",
+  }),
+  "american-black-duck": Object.freeze({
+    species: "american-black-duck",
+    meaning: "american-black-duck-alarm-call",
+    variantDomain: "american-black-duck-alarm-expression:v1",
   }),
 });
 

@@ -1581,6 +1581,82 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toMatch(/CHICKEN-projection|chicken|SQUAWK|predator|custody/iu);
   });
 
+  it("anchors only an authenticated duck and keeps its soft unseen call bird-anonymous", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+      version: 1, sourceActorId: "DUCK-projection-test", triggerEventId: "duck-signal:alarm",
+      position: wildlifePositionInWindow(window), meaning: "american-black-duck-alarm-call",
+      family: "animal-signal", tone: "alarmed", volume: "murmur",
+      knowledgeBasis: "self-perceived-threat", priority: 160_000, salience: 820_000,
+      variantSeed: 157, durationSteps: 6,
+    });
+    const expression = reduction.event;
+    if (expression === null) throw new Error("Duck projection fixture rejected");
+    const source: CoreWildlifeExpressionSource = {
+      actorId: expression.sourceActorId, species: "american-black-duck", position: expression.position,
+    };
+    const options = {
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+      coreWildlifeExpressionSources: [source],
+    };
+    const visible = projectGameView(world, player, options);
+    expect(visible.expressions).toEqual([expect.objectContaining({
+      id: expression.eventId, sourceActorId: expression.sourceActorId, sourceKind: "animal",
+      speakerLabel: "American black duck", text: "QUACK.", acousticKind: "animal-call",
+      position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 }, priority: 160_000,
+    })]);
+    expect(visible.acousticText?.[0]).toBe(visible.expressions?.[0]);
+    expect(projectUIView(world, player, session, { economyWorld: compatibility, ...options })
+      .expressionCaption).toMatchObject({
+        speakerLabel: "American black duck", text: "QUACK.", animalCallKind: "duck-call",
+        presentationKind: "animal-call", assertive: false,
+      });
+    const invalidSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
+      [],
+      [{ ...source, species: "domestic-chicken" }],
+      [{ ...source, actorId: "DUCK-other-body" }],
+      [{ ...source, position: wildlifePositionInWindow(window, 19, 22) }],
+      [source, source],
+    ];
+    for (const coreWildlifeExpressionSources of invalidSources) {
+      const forgedOptions = { ...options, coreWildlifeExpressionSources };
+      expect(projectGameView(world, player, forgedOptions).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility, ...forgedOptions,
+      }).expressionCaption).toBeUndefined();
+    }
+    const unheardOptions = { ...options, situatedExpressionReception: null };
+    expect(projectGameView(world, player, unheardOptions).expressions).toEqual([]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility, ...unheardOptions,
+    }).expressionCaption).toBeUndefined();
+
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 2_000, maximum: 5_000 }, certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Duck unseen fixture rejected");
+    const unseenView = projectGameView(world, player, {
+      ...options, situatedExpressionReception: unseen,
+    });
+    expect(unseenView.expressions).toEqual([]);
+    expect(unseenView.acousticText).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility, situatedExpression: expression, situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A bird", text: "CALL.", animalCallKind: "bird-call",
+      presentationKind: "animal-call", directionLabel: "west", assertive: false,
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(caption).not.toHaveProperty("sourceActorId");
+    expect(caption).not.toHaveProperty("meaning");
+    expect(caption).not.toHaveProperty("triggerEventId");
+    expect(JSON.stringify(caption)).not.toMatch(/DUCK-projection|duck|QUACK|predator|threat|custody/iu);
+  });
+
   it("anchors a visible gull cry and anonymizes the heard-unseen bird call", () => {
     const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
     const session = createSessionState(world.seedText);

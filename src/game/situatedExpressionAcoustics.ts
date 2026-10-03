@@ -116,6 +116,7 @@ function isLiveSituatedVocalization(
     case "elk-alarm-bark":
     case "boar-grunt":
     case "chicken-alarm-squawk":
+    case "duck-alarm-quack":
       return true;
     case "domestic-cat-rain-distress":
     case "marsh-rabbit-alarm-thump":
@@ -259,6 +260,7 @@ const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
 
 const ANIMAL_CALL_MEANINGS = new Set<SituatedExpressionMeaning>([
   "domestic-chicken-alarm-call",
+  "american-black-duck-alarm-call",
   "guardian-dog-shelter-whine",
   "domestic-cat-rain-distress-call",
   "marsh-fox-pursuit-yip",

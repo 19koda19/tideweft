@@ -218,6 +218,7 @@ import type {
   SituatedExpressionAdmissionLedger,
 } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
+import * as situatedExpressionChannels from "./situatedExpressionChannelBank";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import {
   deserializeSettlementDomesticAnimalRecoveryState,
@@ -2429,6 +2430,337 @@ describe("runtime core-ecology vertical slice", () => {
       },
     });
     runtime.destroy();
+  }, 45_000);
+
+  it.each([
+    [false, "wait"],
+    [true, "wait"],
+    [false, "rest"],
+  ] as const)("carries a current regional duck alarm through quiet Voice without replay (optional refusal=%s, action=%s)", async (refused, action) => {
+    const actualReduction = situatedExpressionChannels.reduceSituatedExpressionChannelBank;
+    if (refused) vi.spyOn(situatedExpressionChannels, "reduceSituatedExpressionChannelBank")
+      .mockImplementation((bankValue, intent, reception) => {
+        if (typeof intent === "object" && intent !== null && "meaning" in intent
+          && intent.meaning === "american-black-duck-alarm-call") {
+          return {
+            accepted: false, reason: "channel-capacity-reached", event: null,
+            bank: situatedExpressionChannels.canonicalizeSituatedExpressionChannelBank(bankValue),
+          };
+        }
+        return actualReduction(bankValue, intent, reception);
+      });
+    const repository = new MemoryRepository();
+    const initial = await createTideweftRuntime(repository);
+    initial.dispatchUI({
+      type: "new-world",
+      seed: "duck-runtime-0",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    await initial.save();
+    const record = repository.snapshot();
+    const envelope = requiredEnvelope(repository);
+    const world = deserializeWorld(envelope.world);
+    const travel = restorePlayerRegionalTravel(
+      world.meta.rootSeed,
+      envelope.player,
+      envelope.regionalTravel,
+    );
+    if (travel === null) throw new Error("Duck Voice fixture lost its current frame");
+    const regional = requiredRegionalEcologyV6(envelope);
+    const active = projectRegionalEcologyStateV6ActiveState(regional, {
+      origin: travel.window.origin,
+      terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+    });
+    if (active === null) throw new Error("Duck Voice fixture lost its current projection");
+    const source = active.base.base.base.base.base.residents.find(({ kind, patch }) => (
+      kind === "regional-habitat"
+      && patch.populations.some(({ species }) => species === "american-black-duck")
+    ));
+    if (source === undefined) {
+      throw new Error(`Duck Voice fixture omitted an actual source: ${stableStringify(
+        active.base.base.base.base.base.residents.map(({ kind, patch }) => ({
+          kind, region: patch.originRegion, species: patch.populations.map(({ species }) => species),
+        })),
+      )}`);
+    }
+    if (source.kind !== "regional-habitat") throw new Error("Duck fixture requires its current owner");
+    expect(regional.base.base.base.base.base.root.legacyCohort).toBeNull();
+    const duck = source.patch.populations.find(({ species }) => (
+      species === "american-black-duck"
+    ))?.members[0]?.actor;
+    if (duck === undefined) throw new Error("Duck fixture omitted its actual body");
+    const activityAuthority = projectCoreEcologyActivityAuthority({
+      rootSeed: world.meta.rootSeed,
+      root: regional.base.base.base.base.base.root,
+      sourceKind: source.kind,
+      patch: source.patch,
+      actorId: duck.identity.stableId,
+    });
+    expect(activityAuthority).toMatchObject({
+      species: "american-black-duck", provenance: "regional-habitat",
+    });
+    expect(activityAuthority?.tidalAnchors.some(({ species, purpose }) => (
+      species === "american-black-duck" && purpose === "refuge"
+    ))).toBe(true);
+    world.weather.kind = "clear";
+    world.weather.intensity = 0;
+    world.weather.windX = 0;
+    world.weather.windY = 0;
+    world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+    const player = structuredClone(envelope.player);
+    player.stamina = 800_000;
+    player.facingMilliRadians = 0;
+    const playerPosition = playerWorldPositionInRegionalWindow(travel.window, player);
+    if (playerPosition === null) throw new Error("Duck fixture lost its player position");
+    const spatial = createRegionalWorldView(createWorldView(world), travel.window, {
+      discovered: player.discovered,
+      depthSoundings: player.depthSoundings,
+    });
+    const playerTile = spatial.terrain.tiles[
+      Math.floor(player.y / WORLD_POSITION_UNITS_PER_TILE) * REGIONAL_TRAVEL_COLUMNS
+        + Math.floor(player.x / WORLD_POSITION_UNITS_PER_TILE)
+    ];
+    expect(playerTile?.waterDepth).toBeLessThanOrEqual(ADRIFT_STAND_DEPTH);
+    const duckPosition = translateWorldPosition(playerPosition, 200, 0);
+    const patch = replaceCoreEcologyAggregatePatchActor(source.patch, repositionCoreWildlifeActor(
+      duck,
+      { atTick: source.patch.updatedAtTick, position: duckPosition, heading: 0 },
+    ));
+    const independentDog = deserializeBio0Ecology(envelope.bio0Ecology)?.dog;
+    if (independentDog === undefined) throw new Error("Duck fixture lost its existing independent dog");
+    const staged = resealedCurrentEnvelopeWithCorePatch(envelope, patch, {
+      world: serializeWorld(world),
+      player,
+      perceptionCarry: {
+        ...envelope.perceptionCarry,
+        intervalStartPosition: playerPosition,
+        intervalStartFacingMilliRadians: player.facingMilliRadians,
+      },
+    });
+    const stagedProjection = projectRegionalEcologyStateV6ActiveState(
+      requiredRegionalEcologyV6(staged),
+      {
+        origin: travel.window.origin,
+        terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+      },
+    );
+    const hotSource = stagedProjection?.base.base.base.base.base.residents.find(({ sourceKey }) => (
+      sourceKey === source.patch.patchKey
+    ));
+    if (hotSource === undefined) throw new Error("Duck fixture lost its normally projected source");
+    expect(requiredCoreMember(hotSource.patch, duck.identity.stableId).materialization)
+      .toBe("materialized");
+    await repository.save(recordWithEnvelope(record, staged));
+    initial.destroy();
+    scheduledFrame = undefined;
+    if (!refused && action === "wait") {
+      // Removing the fixture's physical encounter leaves this same finite
+      // duck at its original habitat-owned address. No observation/event is
+      // injected in either branch: normal current runtime admission decides
+      // whether the actual source can perceive the existing dog.
+      const withoutEncounter = resealedCurrentEnvelopeWithCorePatch(envelope, source.patch, {
+        world: serializeWorld(world),
+        player,
+        perceptionCarry: staged.perceptionCarry,
+      });
+      const controlRepository = new MemoryRepository(recordWithEnvelope(record, withoutEncounter));
+      const control = await createTideweftRuntime(controlRepository);
+      expect(control.getUIView().saveWarning).toBeUndefined();
+      soundscapePlay.mockClear();
+      advancePlayerSteps(control, 10);
+      await control.save();
+      const controlEnvelope = requiredEnvelope(controlRepository);
+      const controlDuck = requiredCoreActor(
+        requiredRegionalCoreOwner(controlEnvelope, duck.identity.stableId),
+        duck.identity.stableId,
+      );
+      expect(controlDuck.intent.kind).not.toBe("alarm");
+      expect(controlEnvelope.perceptionCarry.situatedExpressionAdmissions.records.some((candidate) => (
+        candidate.kind === "core-wildlife-alarm" && candidate.sourceActorId === duck.identity.stableId
+      ))).toBe(false);
+      control.destroy();
+      scheduledFrame = undefined;
+    }
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    soundscapePlay.mockClear();
+    runtime.dispatchUI(action === "rest"
+      ? { type: "recover", action: "begin" }
+      : { type: "wait", action: "begin" });
+    advanceWaitFrames(runtime, action === "rest" ? 1 : 10);
+    await runtime.save();
+    const saved = requiredEnvelope(repository);
+    const committedOwner = requiredRegionalCoreOwner(saved, duck.identity.stableId);
+    const committedDuck = requiredCoreActor(committedOwner, duck.identity.stableId);
+    // The active projector admits the nearby actor above. The durable owner
+    // deliberately normalizes representation back to coarse on storage while
+    // retaining identity, condition, cognition, and committed event history.
+    expect(requiredCoreMember(committedOwner, duck.identity.stableId).materialization)
+      .toBe("coarse");
+    expect(committedDuck.identity).toEqual(duck.identity);
+    expect(committedDuck.intent.kind, stableStringify({
+      intent: committedDuck.intent, perception: committedDuck.perception, calls: soundscapePlay.mock.calls,
+    })).toBe("alarm");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-duck-alarm-quack"))
+      .toHaveLength(1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    if (action === "rest") expect(runtime.getUIView().controls).toMatchObject({
+      recoveryActive: true, recoveryKind: "rest",
+    });
+    else expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    if (refused) {
+      expect(saved.perceptionCarry.situatedExpressionAdmissions.records.some((candidate) => (
+        candidate.kind === "core-wildlife-alarm" && candidate.sourceSpecies === "american-black-duck"
+      ))).toBe(false);
+      expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(({ sourceActorId }) => (
+        sourceActorId === duck.identity.stableId
+      ))).toBe(false);
+      expect(runtime.getRenderView().expressions?.some(({ sourceActorId }) => (
+        sourceActorId === duck.identity.stableId
+      ))).toBe(false);
+      runtime.destroy();
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      const resumed = await createTideweftRuntime(repository);
+      expect(resumed.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => (
+        cue === "vocalization-duck-alarm-quack" || cue === "wildlife-alarm"
+      ))).toEqual([]);
+      resumed.dispatchUI({ type: "wait", action: "cancel" });
+      advancePlayerSteps(resumed, 10);
+      await resumed.save();
+      const propagated = deserializeWorld(requiredEnvelope(repository).world);
+      const sourceEvent = committedDuck.memories.find(({ kind, atTick }) => (
+        kind === "alarm" && atTick === world.meta.completedTick + 1
+      ));
+      if (sourceEvent === undefined) throw new Error("Duck fixture lost its retained source event");
+      const hearing = propagated.residents.flatMap((resident) => {
+        const observationId = `alarm:${hashCanonical([
+          sourceEvent.eventId, resident.identity.stableId, propagated.meta.completedTick,
+        ])}`;
+        const matches = resident.perception.beliefs.filter(({ sourceObservationId }) => (
+          sourceObservationId === observationId
+        ));
+        expect(matches.length).toBeLessThanOrEqual(1);
+        return matches;
+      });
+      expect(hearing.length).toBeGreaterThanOrEqual(1);
+      for (const belief of hearing) expect(belief).toMatchObject({
+        perceivedClass: "animal-call", identification: "anonymous", subjectId: null,
+        strongInterrupt: false,
+      });
+      resumed.destroy();
+      return;
+    }
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      speakerLabel: "American black duck",
+      text: "QUACK.",
+      presentationKind: "animal-call",
+      animalCallKind: "duck-call",
+      assertive: false,
+    });
+    const admissions = saved.perceptionCarry.situatedExpressionAdmissions.records.filter(
+      (candidate): candidate is CoreWildlifeAlarmExpressionAdmissionRecord => (
+        candidate.kind === "core-wildlife-alarm"
+          && candidate.sourceSpecies === "american-black-duck"
+      ),
+    );
+    expect(admissions).toHaveLength(1);
+    const admission = admissions[0];
+    if (admission === undefined) throw new Error("Duck fixture lost its admitted event");
+    expect(admission).toMatchObject({
+      sourceActorId: duck.identity.stableId,
+      sourceOwnerKey: source.patch.patchKey,
+      acceptedAtTick: world.meta.completedTick + 1,
+    });
+    expect(committedDuck.intent).toMatchObject({
+      kind: "alarm",
+      cause: { kind: "perception", referenceId: admission.sourceObservationId },
+    });
+    const threatBelief = committedDuck.perception.beliefs.find(({ sourceObservationId }) => (
+      sourceObservationId === admission.sourceObservationId
+    ));
+    expect(threatBelief).toMatchObject({
+      perceivedClass: "predator", subjectId: independentDog.identity.stableId,
+    });
+    const acousticSample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    expect(acousticSample).toMatchObject({
+      sourceActorId: duck.identity.stableId,
+      expressionEventId: admission.eventId,
+      soundClass: "animal-call",
+      soundInterrupt: "none",
+      soundLoudness: 420_000,
+    });
+    if (acousticSample === undefined) throw new Error("Duck fixture lost its committed sound leg");
+    expect(saved.version).toBe(47);
+    expect(saved.perceptionCarry.version).toBe(14);
+    expect(requiredRegionalEcologyV6(saved).base.base.base.base.base.root.legacyCohort)
+      .toBeNull();
+    const durableCarry = stableStringify(saved.perceptionCarry);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-duck-alarm-quack" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    await resumed.save();
+    const restored = requiredEnvelope(repository);
+    expect(stableStringify(restored.perceptionCarry)).toBe(durableCarry);
+    expect(restored.world).toBe(saved.world);
+    expect(restored.regionalEcology).toBe(saved.regionalEcology);
+    expect(restored.physicalCargo).toEqual(saved.physicalCargo);
+    expect(restored.dogActorRoster).toBe(saved.dogActorRoster);
+    resumed.dispatchUI(action === "rest"
+      ? { type: "recover", action: "cancel" }
+      : { type: "wait", action: "cancel" });
+    advancePlayerSteps(resumed, 10);
+    await resumed.save();
+    const propagated = deserializeWorld(requiredEnvelope(repository).world);
+    const hearing = propagated.residents.flatMap((resident) => {
+      const observationId = `hp-h-${propagated.meta.completedTick}-${resident.id}-${acousticSample.id}`;
+      const matches = resident.perception.beliefs.filter(({ sourceObservationId }) => (
+        sourceObservationId === observationId
+      ));
+      expect(matches.length).toBeLessThanOrEqual(1);
+      return matches;
+    });
+    expect(hearing.length).toBeGreaterThanOrEqual(1);
+    for (const belief of hearing) expect(belief).toMatchObject({
+      perceivedClass: "animal-call", identification: "anonymous", subjectId: null,
+      strongInterrupt: false,
+    });
+    resumed.destroy();
+    scheduledFrame = undefined;
+
+    const wrongSpecies: CurrentPerceptionCarry = {
+      ...saved.perceptionCarry,
+      situatedExpressionAdmissions: {
+        ...saved.perceptionCarry.situatedExpressionAdmissions,
+        records: saved.perceptionCarry.situatedExpressionAdmissions.records.map((candidate) => (
+          candidate.kind === "core-wildlife-alarm" && candidate.eventId === admission.eventId
+            ? { ...candidate, sourceSpecies: "domestic-chicken" as const }
+            : candidate
+        )),
+      },
+    };
+    const rejectedRepository = new MemoryRepository(recordWithEnvelope(
+      repository.snapshot(),
+      resealedCurrentEnvelopeWithCorePatch(saved, requiredRegionalCoreOwner(saved, duck.identity.stableId), {
+        perceptionCarry: wrongSpecies,
+      }),
+    ));
+    const untouchedRecord = stableStringify(rejectedRepository.snapshot());
+    const rejected = await createTideweftRuntime(rejectedRepository);
+    expect(rejected.getUIView().title.hasSave).toBe(false);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    await expect(rejected.save()).rejects.toThrow(
+      "Choose a seed before replacing the unreadable or conflicting local autosave.",
+    );
+    expect(stableStringify(rejectedRepository.snapshot())).toBe(untouchedRecord);
+    rejected.destroy();
   }, 45_000);
 
   it("feeds authoritative storm weather into one regional duck refuge routine", async () => {

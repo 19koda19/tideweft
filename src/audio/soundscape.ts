@@ -15,6 +15,7 @@ export const SITUATED_VOCALIZATIONS = Object.freeze([
   "elk-alarm-bark",
   "boar-grunt",
   "chicken-alarm-squawk",
+  "duck-alarm-quack",
 ] as const);
 
 export type SituatedVocalization = (typeof SITUATED_VOCALIZATIONS)[number];
@@ -312,6 +313,10 @@ export class TideweftSoundscape {
         "chicken-alarm-squawk",
         variantSeed,
       ),
+      "vocalization-duck-alarm-quack": situatedVocalizationPattern(
+        "duck-alarm-quack",
+        variantSeed,
+      ),
     };
 
     for (const { frequency, delay, type, duration } of patterns[cue]) {
@@ -569,6 +574,12 @@ export function situatedVocalizationPattern(
         toneStep(659.25 + shift, 0, "sawtooth", 0.055),
         toneStep(783.99 + shift * 2, 0.035, "square", 0.065),
         toneStep(523.25 + shift, 0.095, "triangle", 0.09),
+      ];
+    case "duck-alarm-quack":
+      return [
+        toneStep(293.66 + shift, 0, "square", 0.055),
+        toneStep(220 + shift, 0.035, "sawtooth", 0.08),
+        toneStep(196 + Math.trunc(shift / 2), 0.085, "triangle", 0.095),
       ];
     case "relief":
       return [

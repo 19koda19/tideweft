@@ -1188,6 +1188,13 @@ const currentChickenVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["chicken-alarm-squawk"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentDuckVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["duck-alarm-quack"],
+  communicationSignals: ["duck-alarm-quack"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const WORLD_ACOUSTIC_SOUND_OWNER_ID = "game:world-acoustics:v1" as const;
 const currentBrownRatContactSound = (): LivingSpeciesSoundContract => ({
   implementation: "active",
@@ -1840,7 +1847,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "variable",
     crossRegion: false,
-    sound: noSound(),
+    sound: currentDuckVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -5763,6 +5770,7 @@ const HISTORICAL_RELEASE_COMPATIBILITY_MODULES = new Map<
   LivingSpeciesModule
 >();
 const HISTORICAL_PRE_VOICE_SOUND_SPECIES: ReadonlySet<string> = new Set([
+  "american-black-duck",
   "deer",
   "domestic-chicken",
   "domestic-dog",

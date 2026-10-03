@@ -1105,6 +1105,7 @@ function recentMeaningAcousticTuples(
     case "need-rest-after-exertion":
     case "marsh-rabbit-alarm-thump":
     case "domestic-chicken-alarm-call":
+    case "american-black-duck-alarm-call":
     case "domestic-cat-rain-distress-call":
       return [{ volume: "murmur", interrupt: "none" }];
     case "marsh-fox-pursuit-yip":
@@ -20369,6 +20370,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "elk-alarm-call"
       && meaning !== "wild-boar-alarm-call"
       && meaning !== "domestic-chicken-alarm-call"
+      && meaning !== "american-black-duck-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20384,6 +20386,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "elk-alarm-call"
       && active.meaning !== "wild-boar-alarm-call"
       && active.meaning !== "domestic-chicken-alarm-call"
+      && active.meaning !== "american-black-duck-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20398,6 +20401,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.vocalization !== "elk-alarm-bark"
       && active.vocalization !== "boar-grunt"
       && active.vocalization !== "chicken-alarm-squawk"
+      && active.vocalization !== "duck-alarm-quack"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"

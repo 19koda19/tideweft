@@ -435,6 +435,38 @@ describe("situated-expression admission ledger", () => {
     })).toBeNull();
   });
 
+  it("retains exact duck alarm ownership and rejects player, malformed or non-phase-zero claims", () => {
+    const input = {
+      sourceActorId: "DUCK-current-alarm", triggerEventId: "DUCK-current-alarm:e:1:alarm",
+      sampleOrdinal: 0, admittedAtPlayerStepPhase: 0,
+      sourceSpecies: "american-black-duck" as const,
+      sourceOwnerKey: "regional-habitat:-3:3", sourceObservationId: "OBS-current-dog",
+      acceptedAtTick: 1,
+    };
+    const admission = createCoreWildlifeAlarmExpressionAdmissionRecord(input);
+    expect(admission).toEqual({
+      version: 1, kind: "core-wildlife-alarm", ...input,
+      eventId: situatedExpressionEventIdForTrigger(input.sourceActorId, input.triggerEventId),
+    });
+    expect(Object.isFrozen(admission)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(admission)))
+      .toEqual(admission);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rawLedger([structuredClone(admission)]))
+      ?.records).toEqual([admission]);
+    for (const change of [
+      { sourceActorId: PLAYER_ID }, { admittedAtPlayerStepPhase: 1 },
+      { sourceOwnerKey: "" }, { sourceObservationId: "" },
+      { acceptedAtTick: -1 }, { sourceSpecies: "gray-wolf" },
+      { hiddenThreatId: "DOG-secret" },
+    ]) {
+      expect(createCoreWildlifeAlarmExpressionAdmissionRecord({ ...input, ...change } as never))
+        .toBeNull();
+    }
+    expect(canonicalizeSituatedExpressionAdmissionRecord({
+      ...admission, eventId: "situated-expression:event:v1:forged-duck",
+    })).toBeNull();
+  });
+
   it("binds domestic-cat rain distress to exact phase-zero ecology evidence", () => {
     const input = {
       sourceActorId: DOMESTIC_CAT_ID,

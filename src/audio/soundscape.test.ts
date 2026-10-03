@@ -85,6 +85,7 @@ describe("situated vocalization cues", () => {
       "vocalization-elk-alarm-bark",
       "vocalization-boar-grunt",
       "vocalization-chicken-alarm-squawk",
+      "vocalization-duck-alarm-quack",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -232,67 +233,90 @@ describe("situated vocalization cues", () => {
     expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).not.toContain("chicken-alarm-squawk");
   });
 
-  it("plays the live chicken cue through the unlocked Web Audio tone boundary", async () => {
-    const parameter = () => ({
-      value: 0,
-      setValueAtTime: vi.fn(),
-      exponentialRampToValueAtTime: vi.fn(),
-      setTargetAtTime: vi.fn(),
-    });
-    const context = {
-      currentTime: 12,
-      sampleRate: 8_000,
-      state: "running",
-      destination: {},
-      createGain: () => ({ gain: parameter(), connect: vi.fn() }),
-      createBiquadFilter: () => ({
-        type: "lowpass",
-        frequency: parameter(),
-        Q: parameter(),
-        connect: vi.fn(),
-      }),
-      createStereoPanner: () => ({ pan: parameter(), connect: vi.fn() }),
-      createBuffer: (_channels: number, length: number) => ({
-        getChannelData: () => new Float32Array(length),
-      }),
-      createBufferSource: () => ({
-        buffer: null,
-        loop: false,
-        connect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-      }),
-      createOscillator: vi.fn(() => ({
-        type: "sine",
-        frequency: parameter(),
-        connect: vi.fn(),
-        start: vi.fn(),
-        stop: vi.fn(),
-      })),
-      close: vi.fn(),
-    };
-    vi.stubGlobal("AudioContext", function AudioContextFixture() { return context; });
-    const soundscape = new TideweftSoundscape();
-    try {
-      await soundscape.unlock();
-      const variantSeed = 0xc41;
-      soundscape.play("vocalization-chicken-alarm-squawk", 0.4, variantSeed);
-      const pattern = situatedVocalizationPattern("chicken-alarm-squawk", variantSeed);
-      expect(context.createOscillator).toHaveBeenCalledTimes(pattern.length);
-      for (const [index, step] of pattern.entries()) {
-        const oscillator = context.createOscillator.mock.results[index]!.value;
-        expect(oscillator.type).toBe(step.type);
-        expect(oscillator.frequency.setValueAtTime)
-          .toHaveBeenCalledWith(step.frequency, context.currentTime + step.delay);
-        expect(oscillator.start).toHaveBeenCalledWith(context.currentTime + step.delay);
-        expect(oscillator.stop)
-          .toHaveBeenCalledWith(context.currentTime + step.delay + step.duration + 0.02);
-      }
-    } finally {
-      soundscape.destroy();
-      vi.unstubAllGlobals();
-    }
+  it("gives the duck alarm a distinct short descending quack with bounded seeded variation", () => {
+    const variantSeed = 0xd0c;
+    const quack = situatedVocalizationPattern("duck-alarm-quack", variantSeed);
+    expect(quack).toEqual(situatedVocalizationPattern("duck-alarm-quack", variantSeed));
+    expect(quack).toHaveLength(3);
+    expect(quack[0]?.delay).toBe(0);
+    expect(quack[0]?.frequency ?? 0).toBeGreaterThan(quack[1]?.frequency ?? 0);
+    expect(quack[1]?.frequency ?? 0).toBeGreaterThan(quack[2]?.frequency ?? 0);
+    expect(Math.max(...quack.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.2);
+    expect(quack).not.toEqual(wildlifeAlarmPattern());
+    expect(quack).not.toEqual(situatedVocalizationPattern("chicken-alarm-squawk", variantSeed));
+    expect(quack).not.toEqual(situatedVocalizationPattern("fish-crow-alarm", variantSeed));
+    expect(quack).not.toEqual(situatedVocalizationPattern("gull-alarm-cry", variantSeed));
+    expect(situatedVocalizationPattern("duck-alarm-quack", Number.NaN))
+      .toEqual(situatedVocalizationPattern("duck-alarm-quack", 0));
+    expect(quack).not.toEqual(situatedVocalizationPattern("duck-alarm-quack", variantSeed + 1));
+    expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).not.toContain("duck-alarm-quack");
   });
+
+  it.each(["chicken-alarm-squawk", "duck-alarm-quack"] as const)(
+    "plays the live %s cue through the unlocked Web Audio tone boundary",
+    async (vocalization) => {
+      const parameter = () => ({
+        value: 0,
+        setValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+        setTargetAtTime: vi.fn(),
+      });
+      const context = {
+        currentTime: 12,
+        sampleRate: 8_000,
+        state: "running",
+        destination: {},
+        createGain: () => ({ gain: parameter(), connect: vi.fn() }),
+        createBiquadFilter: () => ({
+          type: "lowpass",
+          frequency: parameter(),
+          Q: parameter(),
+          connect: vi.fn(),
+        }),
+        createStereoPanner: () => ({ pan: parameter(), connect: vi.fn() }),
+        createBuffer: (_channels: number, length: number) => ({
+          getChannelData: () => new Float32Array(length),
+        }),
+        createBufferSource: () => ({
+          buffer: null,
+          loop: false,
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        }),
+        createOscillator: vi.fn(() => ({
+          type: "sine",
+          frequency: parameter(),
+          connect: vi.fn(),
+          start: vi.fn(),
+          stop: vi.fn(),
+        })),
+        close: vi.fn(),
+      };
+      vi.stubGlobal("AudioContext", function AudioContextFixture() { return context; });
+      const soundscape = new TideweftSoundscape();
+      try {
+        await soundscape.unlock();
+        const variantSeed = 0xc41;
+        soundscape.play(situatedVocalizationCue(vocalization), 0.4, variantSeed);
+        const pattern = situatedVocalizationPattern(vocalization, variantSeed);
+        expect(context.createOscillator).toHaveBeenCalledTimes(pattern.length);
+        for (const [index, step] of pattern.entries()) {
+          const oscillator = context.createOscillator.mock.results[index]!.value;
+          expect(oscillator.type).toBe(step.type);
+          expect(oscillator.frequency.setValueAtTime)
+            .toHaveBeenCalledWith(step.frequency, context.currentTime + step.delay);
+          expect(oscillator.start).toHaveBeenCalledWith(context.currentTime + step.delay);
+          expect(oscillator.stop)
+            .toHaveBeenCalledWith(context.currentTime + step.delay + step.duration + 0.02);
+        }
+      } finally {
+        soundscape.destroy();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
 });
 
 describe("small-world wildlife cues", () => {

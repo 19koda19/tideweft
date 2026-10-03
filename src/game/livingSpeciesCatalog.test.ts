@@ -482,7 +482,13 @@ describe("Living Weft species module catalog", () => {
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
     expect(livingSpeciesModule("domestic-goat")?.sound.implementation).toBe("unimplemented");
-    expect(livingSpeciesModule("american-black-duck")?.sound.implementation).toBe("unimplemented");
+    expect(livingSpeciesModule("american-black-duck")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["duck-alarm-quack"],
+      communicationSignals: ["duck-alarm-quack"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
     expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:world-acoustics:v1",
@@ -525,7 +531,7 @@ describe("Living Weft species module catalog", () => {
           communicationSignals: ["elk-alarm-bark", "elk-bugle"],
           accessibilityCues: ["direct-observation-caption"],
         });
-      for (const speciesId of ["deer", "domestic-chicken", "domestic-dog", "gull", "human"] as const) {
+      for (const speciesId of ["deer", "domestic-chicken", "american-black-duck", "domestic-dog", "gull", "human"] as const) {
         expect(catalog.modules.find((module) => module.speciesId === speciesId)?.sound)
           .toEqual({
             implementation: "unimplemented",
@@ -2118,7 +2124,11 @@ describe("Living Weft species module catalog", () => {
         communicationChannels: ["hearing"],
         group: { status: "unimplemented" },
       },
-      sound: { implementation: "unimplemented", repertoire: [], communicationSignals: [] },
+      sound: {
+        implementation: "active", ownerId: "game:situated-expression:v1",
+        repertoire: ["duck-alarm-quack"], communicationSignals: ["duck-alarm-quack"],
+        accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+      },
       evidence: { status: "unimplemented", produces: [] },
       health: { implementation: "unimplemented", causalDeath: false },
       aftermath: { implementation: "unimplemented", carcassModel: "none" },

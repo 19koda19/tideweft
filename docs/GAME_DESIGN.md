@@ -277,10 +277,14 @@ hearing stays **A bird** / **CALL.**, and nearby humans receive anonymous
 does not interrupt WAIT or REST and does not wake an already sleeping player;
 reload cannot manufacture a missed receipt or replay audio. Optional caption
 refusal preserves lawful audio and human hearing. This is not routine clucking,
-crowing or a complete chicken repertoire. The generic wildlife-alarm fallback
-remains for duck and goat
+crowing or a complete chicken repertoire. A real regional American-black-duck
+alarm now follows that same quiet shared path: authenticated visible **QUACK.**,
+anonymous unseen bird **CALL.**, and anonymous human `animal-call`, without
+exposing its private threat. Ordinary WAIT/REST, current-save no-replay and
+optional-caption refusal are covered; routine quacking and a broad duck
+repertoire are not live. The generic wildlife-alarm fallback remains for goat
 as a player audio/session-announcement bypass of shared Voice presentation.
-Their underlying ecology alarms already propagate to applicable wildlife,
+Its underlying ecology alarms already propagate to applicable wildlife,
 dog and porter listeners; this does not establish the missing Voice leg.
 Future tool,
 violence, and vessel examples are contract fixtures only. General conversation,
