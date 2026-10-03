@@ -1583,6 +1583,38 @@ visible equipment, material culture owns physical equipment/repair, and future
 occupation owners must attach real work transactions before claiming those
 systems live.
 
+### Planned bounded existing-world integration
+
+**PLANNED — not implemented by registration.** The existing-human integration
+owner must connect the original settlement and traveler populations to the
+applicable shared actor and world contracts. It must not create a second NPC
+population, cargo stock, dialogue manager, or story orchestrator. The current
+Living Weft boundary above remains unchanged until executable evidence closes
+each bridge.
+
+Required adoption has one authoritative human body and a bounded action
+lifecycle: causal selection, capability and target validation, finite claims,
+ordinary approach, authenticated arrival, domain-owned completion or failure,
+claim release, and reassessment. Existing ration use, civic material service,
+keeper inspection, and conserved delivery provide real consumers; sourced
+professions, broad production, commerce, and addressable porter cargo retain
+their separate owners.
+
+Environmental truth and actor knowledge remain distinct. Relevant local
+water/route observations or lawful reports may change a task, but loaded terrain
+or a remote hazard cannot silently teach an actor. Navigation/body heading,
+look direction, recognition, and interaction attention must remain separate;
+neutral player recognition cannot indefinitely monopolize work or rest.
+Optional expression follows committed results through Living Voice and shared
+acoustics.
+
+Closure requires normal-play and deterministic counterfactual proof, coherent
+current-schema interruption/reload, conserved stock and custody, accountable
+full/coarse transitions, bounded planning and retries, scheduler fairness, and
+measured performance. The [inheritance applicability](./SYSTEM_INHERITANCE.md#existing-human-and-world-response-adoption)
+and [composition repair registry](./SYSTEM_COMPOSITION.md#high-leverage-composition-repair-registry)
+register these obligations without claiming that planned activity is live.
+
 ## First porter-dog living web
 
 The game host creates one dog from the root seed, the selected existing porter's immutable origin identity, and stable regional generation inputs. Dog identity, actor address, needs, condition, perception, intent, bounded memory, player knowledge, and persistence tier are distinct from the porter's resident state. Their deterministic pairing is an interaction fixture, not ownership, adoption, or a companion relationship. Full-detail movement and new sensing are limited to the bounded loaded interaction window; promoted state preserves earned history without claiming a full coarse animal population simulation.

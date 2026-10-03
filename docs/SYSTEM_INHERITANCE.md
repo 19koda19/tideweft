@@ -361,6 +361,25 @@ People learn the player's name through introduction, records, reports,
 conversation, reputation, or social propagation—not by reading save data.
 Reputation may spread identity locally, but there is no global hive mind.
 
+### Existing-human and world-response adoption
+
+**PLANNED — not implemented.** The bounded existing-world integration owner
+must include legacy settlement residents and travelers in applicable shared
+actor architecture. Adoption inherits `living-actor`, `perception-information`,
+`world-time`, `circadian-routine`, `movement-visibility`, `actor-visuals`,
+`environment`, `physical-conservation`, `promise-network`, `living-voice`,
+`embodied-acoustics`, `save-migration`, and bounded performance where relevant.
+Their existing LIVE/PARTIAL/RESERVED statuses do not change by registration.
+
+A stored intention or occupation is not an executable task. Applicable new
+actions require a causal source, capability-aware approach, finite claims,
+domain-owned completion/failure, release and reassessment, with at least one
+real consumer. Local observation and sourced knowledge govern response;
+recognition does not imply permanent watch or task interruption. Read the
+[planned architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
+for ownership and acceptance. Broader livelihoods, commerce, physical porter
+cargo, health, and maritime systems remain with their existing owners.
+
 ### Expression, acoustic world, and information
 
 Expression follows experience, knowledge, emotion, relationship, intent, and

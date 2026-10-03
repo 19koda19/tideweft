@@ -489,10 +489,23 @@ and closure truth.
 | 13 | Trust/stress/travel cost ↔ actor and offer decisions | SPECIFIED | Living Weft + settlements + Promise/economy | `S1` and later offer owners | An already-produced value changes a lawful decision or opportunity through a bounded transparent rule. |
 | 14 | Civic project output ↔ stable physical tool | BYPASS | infrastructure + physical items | `P1A` service / HARD aid | A project transfers one source-owned stable-ID tool with condition, custody, loss, and repair. |
 | 15 | Autonomous porter cargo ↔ nearby addressable custody | PARTIAL | cargo + actor visuals + coarse simulation | `P1C` + `VIS0-CORE` | Full/near/coarse transitions preserve one conserved quantity while nearby custody becomes inspectable and recoverable. |
+| 16 | Existing human intent ↔ executable settlement service and delivery | SPECIFIED | shared actor actions + settlement stock/project/store + Promise network | PLANNED — bounded existing-world integration | Legacy humans approach authenticated targets, complete/fail domain-owned ration, material-service, keeper or delivery work, release finite claims, and continue; stock/custody and real consumers change exactly once. |
+| 17 | Locally observed water/route condition ↔ human task response | SPECIFIED | environment + perception/knowledge + shared locomotion/actions | PLANNED — bounded existing-world integration | A legitimate observation/report changes relevant waiting, route or progress; contrasting water conditions permit reassessment, while an unknown remote hazard grants no knowledge. |
+| 18 | Recognition/interaction ↔ bounded attention and behavior-owned expression | SPECIFIED | shared perception/appraisal + actor visuals + Living Voice | PLANNED — bounded existing-world integration | Neutral player recognition produces bounded attention, preserves locomotion/task/rest authority and returns to activity; optional speech follows committed causes without repeated proximity emission. |
 
 The ordering prioritizes reusable architecture bridges over content count. A
 future owner may refine order when dependencies change, but it must update this
 registry rather than silently dropping the obligation.
+
+The three existing-world integration rows are **PLANNED**, using the existing
+`SPECIFIED` bridge status; registration implements no gameplay and changes none
+of the current runtime evidence above. Their bounded scope is summarized by the
+[canonical architecture owner](./ARCHITECTURE.md#planned-bounded-existing-world-integration).
+Sourced settlement production, physical-lot/stock conversion, nearby
+addressable porter custody, persistent route repair, specialist work and
+commerce retain their assigned owners. Each new bridge requires autonomous
+normal-play proof, causal counterfactuals, current-schema continuity and measured
+behavioral liveness as well as cost.
 
 ## Performance, persistence, and authority gate
 
