@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "../game/coreWildlifeSignalExpression";
-import type { PlayerBalanceView, SituatedExpressionView } from "./types";
+import type { AcousticTextView, PlayerBalanceView, SituatedExpressionView } from "./types";
+import {
+  DEFAULT_ACOUSTIC_TEXT_GUTTER,
+  acousticTextRectsOverlap,
+  type AcousticTextRect,
+} from "./acousticTextLayout";
 import {
   acousticTextCalloutSize,
   actorCalloutViewport,
+  layoutAcousticTextCallouts,
   placeIncidentCallout,
   playerBalancePresentation,
   selectSituatedExpression,
@@ -214,4 +220,103 @@ describe("acoustic text callout bounds", () => {
       actorCalloutViewport(1_280, 720),
     ).height).toBe(35);
   });
+});
+
+describe("production-aperture acoustic callout adapter", () => {
+  // These are perceived-presentation fixtures, not concurrent runtime causes
+  // or a measurement of browser glyphs, hardware, or native mobile gameplay.
+  const mixedText = (anchors: readonly { x: number; y: number }[]): AcousticTextView[] => [
+    {
+      acousticKind: "speech", id: "mixed-warning", sourceActorId: "human:warning",
+      sourceKind: "human", speakerLabel: "Nearby courier",
+      text: "Watch your footing near the flooded boards and keep the medicine case steady.",
+      position: anchors[0]!, progress: 0.1, priority: 900_000, salience: 800_000,
+      tone: "alarmed", variantSeed: 1,
+    },
+    {
+      acousticKind: "animal-call", id: "mixed-bark", sourceActorId: "dog:warning",
+      sourceKind: "animal", speakerLabel: "Nearby dog", text: "BARK!",
+      position: anchors[1]!, progress: 0.2, priority: 760_000, salience: 800_000,
+      tone: "alarmed", variantSeed: 2,
+    },
+    {
+      acousticKind: "physical", id: "mixed-slide", sourceId: "player",
+      sourceKind: "player", text: "scrape", semanticFamily: "scrape",
+      position: anchors[2]!, progress: 0.3, priority: 500_000, salience: 900_000,
+      tone: "restrained", variantSeed: 3,
+    },
+    {
+      acousticKind: "physical", id: "mixed-cargo", sourceId: "cargo:parcel",
+      sourceKind: "object", text: "thud", semanticFamily: "thud",
+      position: anchors[3]!, progress: 0.4, priority: 450_000, salience: 900_000,
+      tone: "restrained", variantSeed: 4,
+    },
+  ];
+  const separatedAnchors = (width: number) => width === 390
+    ? [{ x: 195, y: 220 }, { x: 195, y: 360 }, { x: 195, y: 500 }, { x: 195, y: 640 }]
+    : [{ x: 320, y: 230 }, { x: 880, y: 230 }, { x: 320, y: 490 }, { x: 880, y: 490 }];
+  const decisions = (layout: ReturnType<typeof layoutAcousticTextCallouts>) => ({
+    placements: layout.placements.map(({ candidate, laneId, rect }) => ({
+      id: candidate.id, sourceId: candidate.sourceId, laneId, rect,
+    })),
+    suppressions: layout.suppressions.map(({ candidate, reason }) => ({ id: candidate.id, reason })),
+  });
+  const expectSeparatedAperture = (rects: readonly AcousticTextRect[], width: number, height: number) => {
+    const aperture = actorCalloutViewport(width, height);
+    for (const [index, rect] of rects.entries()) {
+      expect(rect.x).toBeGreaterThanOrEqual(12);
+      expect(rect.x + rect.width).toBeLessThanOrEqual(width - 12);
+      expect(rect.y).toBeGreaterThanOrEqual(aperture.safeTop + 1);
+      expect(rect.y + rect.height).toBeLessThanOrEqual(height - aperture.safeBottom - 1);
+      for (const other of rects.slice(index + 1)) {
+        expect(acousticTextRectsOverlap(rect, other, DEFAULT_ACOUSTIC_TEXT_GUTTER)).toBe(false);
+      }
+    }
+  };
+
+  it.each([[1_280, 720], [390, 844]])(
+    "places four mixed current kinds inside the production %sx%s aperture",
+    (width, height) => {
+      const candidates = mixedText(separatedAnchors(width));
+      const viewport = actorCalloutViewport(width, height);
+      const forward = layoutAcousticTextCallouts(candidates, viewport, ({ position }) => position);
+      const reversed = layoutAcousticTextCallouts([...candidates].reverse(), viewport, ({ position }) => position);
+
+      expect(forward.placements.map(({ candidate }) => candidate.id)).toEqual([
+        "mixed-warning", "mixed-bark", "mixed-slide", "mixed-cargo",
+      ]);
+      expect(forward.suppressions).toEqual([]);
+      expect(new Set(forward.placements.map(({ candidate }) => candidate.sourceId)).size).toBe(4);
+      expect(forward.placements[0]?.rect.height).toBeGreaterThan(22);
+      expectSeparatedAperture(forward.placements.map(({ rect }) => rect), width, height);
+      expect(decisions(reversed)).toEqual(decisions(forward));
+    },
+  );
+
+  it.each([[1_280, 720], [390, 844]])(
+    "keeps the warning primary under overlapping mixed load at %sx%s",
+    (width, height) => {
+      const anchor = { x: width / 2, y: height / 2 };
+      const candidates = mixedText([anchor, anchor, anchor, anchor]);
+      const warning = candidates[0]!;
+      const duplicateSource: AcousticTextView = {
+        ...warning, id: "quiet-same-human", text: "Easy now.", priority: 100_000,
+      };
+      const overloaded = [...candidates, duplicateSource];
+      const viewport = actorCalloutViewport(width, height);
+      const forward = layoutAcousticTextCallouts(overloaded, viewport, ({ position }) => position);
+      const reversed = layoutAcousticTextCallouts([...overloaded].reverse(), viewport, ({ position }) => position);
+
+      expect(forward.placements[0]?.candidate.id).toBe("mixed-warning");
+      expect(forward.placements.length).toBeLessThanOrEqual(4);
+      expect(forward.suppressions).toContainEqual(expect.objectContaining({
+        candidate: expect.objectContaining({ id: "quiet-same-human" }), reason: "per-source-cap",
+      }));
+      expect(forward.suppressions.some(({ reason }) => reason === "overlap")).toBe(true);
+      expect(new Set(forward.placements.map(({ candidate }) => candidate.sourceId)).size)
+        .toBe(forward.placements.length);
+      expectSeparatedAperture(forward.placements.map(({ rect }) => rect), width, height);
+      expect(decisions(reversed)).toEqual(decisions(forward));
+    },
+  );
 });

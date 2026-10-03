@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AcousticTextView,
   AggregateWildlifeEvidenceView,
   DogView,
   FieldResourceNodeView,
@@ -14,6 +15,12 @@ import type {
 import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 import { outdoorIlluminationPresentation } from "./outdoorIllumination";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
+import * as playerPresentation from "./playerPresentation";
+import {
+  acousticTextRectsOverlap,
+  DEFAULT_ACOUSTIC_TEXT_GUTTER,
+  MAX_ACOUSTIC_TEXT_PLACEMENTS,
+} from "./acousticTextLayout";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
   "test:alpha31-predator-presentation-invariants:v1" as const;
@@ -44,13 +51,14 @@ const p5Harness = vi.hoisted(() => ({
   perceptionShaderThrowsAfterBind: false,
   perceptionShaderHooks: [] as object[],
   friendlyErrorsDisabled: false,
+  viewport: null as null | { readonly width: number; readonly height: number },
 }));
 
 function projectOverlayLocalToScreen(x: number, y: number): { readonly x: number; readonly y: number } {
   const basis = p5Harness.overlayProjection;
   return {
-    x: 160 + x * basis.xx + y * basis.yx,
-    y: 120 + x * basis.xy + y * basis.yy,
+    x: (p5Harness.viewport?.width ?? 320) / 2 + x * basis.xx + y * basis.yx,
+    y: (p5Harness.viewport?.height ?? 240) / 2 + x * basis.xy + y * basis.yy,
   };
 }
 
@@ -84,8 +92,8 @@ vi.mock("p5", () => {
       const vertex = vi.fn();
       const modifiedPerceptionShader = { kind: "fake-perception-shader" };
       const target: Record<PropertyKey, unknown> = {
-        width: 320,
-        height: 240,
+        width: p5Harness.viewport?.width ?? 320,
+        height: p5Harness.viewport?.height ?? 240,
         WEBGL: "webgl",
         TRIANGLES: "triangles",
         HALF_PI: Math.PI / 2,
@@ -105,8 +113,15 @@ vi.mock("p5", () => {
         emissiveMaterial: tracedMaterial("emissiveMaterial"),
         lerpColor: (_left: unknown, right: unknown) => right,
         worldToScreen: (x: number, y: number) => projectOverlayLocalToScreen(x, y),
-        createCanvas: () => ({ elt: p5Harness.canvasFactory?.() }),
-        resizeCanvas: vi.fn(),
+        createCanvas: vi.fn((width: number, height: number) => {
+          target.width = width;
+          target.height = height;
+          return { elt: p5Harness.canvasFactory?.() };
+        }),
+        resizeCanvas: vi.fn((width: number, height: number) => {
+          target.width = width;
+          target.height = height;
+        }),
         noLoop: vi.fn(),
         loop: vi.fn(),
         buildGeometry: vi.fn((callback: () => void) => {
@@ -221,6 +236,7 @@ class FakeElement extends FakeEventTarget {
   className = "";
   textContent: string | null = null;
   removed = false;
+  viewport = { width: 320, height: 240 };
 
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
@@ -247,7 +263,7 @@ class FakeElement extends FakeEventTarget {
   }
 
   getBoundingClientRect(): { left: number; top: number; width: number; height: number } {
-    return { left: 0, top: 0, width: 320, height: 240 };
+    return { left: 0, top: 0, ...this.viewport };
   }
 }
 
@@ -287,9 +303,15 @@ class FakeDocument extends FakeEventTarget {
 }
 
 class FakeWindow extends FakeEventTarget {
-  readonly innerWidth = 320;
-  readonly innerHeight = 240;
+  readonly innerWidth: number;
+  readonly innerHeight: number;
   readonly devicePixelRatio = 1;
+
+  constructor(viewport = { width: 320, height: 240 }) {
+    super();
+    this.innerWidth = viewport.width;
+    this.innerHeight = viewport.height;
+  }
 
   matchMedia(query: string): {
     matches: boolean;
@@ -588,12 +610,21 @@ function pointer(
 
 function renderHarness(
   initial: TideweftView,
-  options: { readonly chunkSize?: number } = {},
+  options: {
+    readonly chunkSize?: number;
+    readonly viewport?: { readonly width: number; readonly height: number };
+  } = {},
 ) {
+  const { viewport, ...rendererOptions } = options;
+  p5Harness.viewport = viewport ?? null;
   const mount = new FakeElement();
   const canvas = new FakeCanvas();
+  if (viewport !== undefined) {
+    mount.viewport = viewport;
+    canvas.viewport = viewport;
+  }
   const documentTarget = new FakeDocument();
-  const windowTarget = new FakeWindow();
+  const windowTarget = new FakeWindow(viewport);
   vi.stubGlobal("Element", FakeElement);
   vi.stubGlobal("document", documentTarget);
   vi.stubGlobal("window", windowTarget);
@@ -605,7 +636,7 @@ function renderHarness(
     mount: mount as unknown as HTMLElement,
     getView: () => current,
     dispatch,
-    ...options,
+    ...rendererOptions,
   });
   const instance = p5Harness.instances.at(-1);
   if (!instance) throw new Error("Relief p5 harness did not create an instance");
@@ -636,6 +667,7 @@ beforeEach(() => {
   p5Harness.perceptionShaderThrowsAfterBind = false;
   p5Harness.perceptionShaderHooks.length = 0;
   p5Harness.friendlyErrorsDisabled = false;
+  p5Harness.viewport = null;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -2179,6 +2211,154 @@ describe("Relief ADRIFT presentation path", () => {
 });
 
 describe("Relief situated expression presentation", () => {
+  it.each([
+    [1_280, 720, false],
+    [390, 844, false],
+    [1_280, 720, true],
+    [390, 844, true],
+  ] as const)("matches shared mixed acoustic layout at %sx%s (reduced motion: %s)", (width, height, reducedMotion) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    const base = view("relief-mixed-acoustic", { x: 48, y: 48 });
+    const acousticText: readonly AcousticTextView[] = [
+      {
+        acousticKind: "speech", id: "mixed-speech", sourceActorId: "human:mixed",
+        sourceKind: "human", speakerLabel: "Nearby person", text: "Careful.",
+        position: { x: 32, y: 32 }, progress: 0.2, priority: 900_000,
+        salience: 900_000, tone: "alarmed", variantSeed: 1,
+      },
+      {
+        acousticKind: "animal-call", id: "mixed-bark", sourceActorId: "animal:mixed",
+        sourceKind: "animal", speakerLabel: "Nearby dog", text: "BARK!",
+        position: { x: 64, y: 32 }, progress: 0.2, priority: 760_000,
+        salience: 760_000, tone: "alarmed", variantSeed: 2,
+      },
+      {
+        acousticKind: "physical", id: "mixed-scrape", sourceId: "player:mixed",
+        sourceKind: "player", text: "scrape", semanticFamily: "scrape",
+        position: { x: 32, y: 64 }, progress: 0.2, priority: 500_000,
+        salience: 700_000, tone: "restrained", variantSeed: 3,
+      },
+      {
+        acousticKind: "physical", id: "mixed-cargo-thud", sourceId: "cargo:mixed",
+        sourceKind: "object", text: "thud", semanticFamily: "thud",
+        position: { x: 64, y: 64 }, progress: 0.2, priority: 450_000,
+        salience: 700_000, tone: "restrained", variantSeed: 4,
+      },
+    ];
+    const legacySpeech = acousticText[0];
+    if (legacySpeech?.acousticKind !== "speech") throw new Error("Mixed fixture needs its speech source");
+    let current: TideweftView = {
+      ...base,
+      camera: { ...base.camera, zoom: 4 },
+      player: {
+        ...base.player,
+        incident: {
+          id: "mixed-old-incident", kind: "stumble", label: "OLD MIXED INCIDENT",
+          progress: 0.2, variantSeed: 1,
+        },
+      },
+      expressions: [{ ...legacySpeech, text: "OLD MIXED SPEECH" }],
+      acousticText,
+    };
+    const layout = playerPresentation.layoutAcousticTextCallouts;
+    const sharedLayout = vi.spyOn(playerPresentation, "layoutAcousticTextCallouts");
+    const harness = renderHarness(current, { viewport: { width, height } });
+    try {
+      expect(harness.instance).toMatchObject({ width, height });
+      expect(harness.mount.getBoundingClientRect()).toMatchObject({ width, height });
+      expect(harness.canvas.getBoundingClientRect()).toMatchObject({ width, height });
+      expect(harness.instance.createCanvas).toHaveBeenCalledWith(width, height, "webgl");
+      harness.renderer.resize();
+      expect(harness.instance.resizeCanvas).toHaveBeenCalledWith(width, height, true);
+      const viewport = playerPresentation.actorCalloutViewport(width, height);
+
+      const drawAndCompare = () => {
+        harness.draw();
+        const args = sharedLayout.mock.calls.at(-1);
+        if (args === undefined) throw new Error("Relief did not consume the shared acoustic adapter");
+        expect(args[0]).toBe(current.acousticText);
+        expect(args[1]).toEqual(viewport);
+        // Reuse the real terrain-aware Relief projector, not invented screen
+        // anchors. These are the adapter's estimated envelopes, not measured
+        // CSS glyphs or browser/mobile hardware evidence.
+        const expected = layout(...args);
+        const layer = harness.mount.children.find(({ className }) => className === "relief-label-layer");
+        if (layer === undefined) throw new Error("Relief label layer was not mounted");
+        const nodes = layer.children.filter((node) => !node.removed && node.dataset.acousticKind !== undefined);
+        expect(nodes).toHaveLength(expected.placements.length);
+        expect(nodes.length).toBeLessThanOrEqual(MAX_ACOUSTIC_TEXT_PLACEMENTS);
+        expect(new Set(expected.placements.map(({ candidate }) => candidate.sourceId)).size).toBe(nodes.length);
+        const snapshot = expected.placements.map(({ candidate, rect }) => {
+          const node = nodes.find(({ textContent }) => textContent === candidate.acousticText.text);
+          if (node === undefined) throw new Error(`Relief omitted placed acoustic label ${candidate.id}`);
+          expect(node.hidden).toBe(false);
+          expect(node.dataset.acousticKind).toBe(candidate.acousticText.acousticKind);
+          expect(node.style.left).toBe(`${(rect.x + rect.width / 2).toFixed(1)}px`);
+          expect(node.style.top).toBe(`${(rect.y + rect.height / 2).toFixed(1)}px`);
+          expect(node.style.width).toBe(`${rect.width.toFixed(1)}px`);
+          expect(node.style.maxWidth).toBe(node.style.width);
+          expect(node.style.transform).toBe("translate(-50%, -50%)");
+          expect(rect.x).toBeGreaterThanOrEqual(12);
+          expect(rect.x + rect.width).toBeLessThanOrEqual(width - 12);
+          expect(rect.y).toBeGreaterThan(viewport.safeTop);
+          expect(rect.y + rect.height).toBeLessThan(height - viewport.safeBottom);
+          const { left, top, width: renderedWidth } = node.style;
+          if (left === undefined || top === undefined || renderedWidth === undefined) {
+            throw new Error(`Relief placed acoustic label ${candidate.id} without complete CSS bounds`);
+          }
+          return {
+            id: candidate.id, node, left, top, width: renderedWidth,
+            rect: {
+              x: parseFloat(left) - parseFloat(renderedWidth) / 2,
+              y: parseFloat(top) - rect.height / 2,
+              width: parseFloat(renderedWidth), height: rect.height,
+            },
+          };
+        });
+        for (let left = 0; left < snapshot.length; left += 1) {
+          for (let right = left + 1; right < snapshot.length; right += 1) {
+            // CSS centers/widths round to a tenth of a pixel; retain the
+            // shared gutter except that bounded rounding allowance.
+            expect(acousticTextRectsOverlap(
+              snapshot[left]!.rect, snapshot[right]!.rect, DEFAULT_ACOUSTIC_TEXT_GUTTER - 0.2,
+            )).toBe(false);
+          }
+        }
+        return { snapshot, layer };
+      };
+
+      const first = drawAndCompare();
+      expect(first.snapshot).toHaveLength(4);
+      expect(first.snapshot.map(({ id }) => id)).toEqual(acousticText.map(({ id }) => id));
+      expect(drawAndCompare().snapshot).toEqual(first.snapshot);
+      current = { ...current, acousticText: [...acousticText].reverse() };
+      harness.setView(current);
+      expect(drawAndCompare().snapshot).toEqual(first.snapshot);
+
+      const crowded = acousticText.map((candidate) => ({ ...candidate, position: { x: 48, y: 48 } }));
+      current = { ...current, acousticText: [
+        ...crowded,
+        { ...crowded[0]!, id: "mixed-repeated-source", text: "More words", priority: 100_000 },
+      ] };
+      harness.setView(current);
+      const crowdedResult = drawAndCompare();
+      expect(crowdedResult.snapshot.map(({ id }) => id)).toContain("mixed-speech");
+      expect(crowdedResult.snapshot.map(({ id }) => id)).not.toContain("mixed-repeated-source");
+      expect(drawAndCompare().snapshot).toEqual(crowdedResult.snapshot);
+      current = { ...current, acousticText: [] };
+      harness.setView(current);
+      expect(drawAndCompare().snapshot).toEqual([]);
+      expect(first.layer.children.filter((node) => !node.removed && node.dataset.acousticKind !== undefined)).toEqual([]);
+      expect(first.layer.children.some((node) => !node.removed && (
+        node.textContent === "OLD MIXED INCIDENT" || node.textContent === "OLD MIXED SPEECH"
+      ))).toBe(false);
+    } finally {
+      harness.renderer.destroy();
+      sharedLayout.mockRestore();
+    }
+  });
+
   it("shares bounded arbitration with Chart and removes stale expression nodes", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-situated-expression", { x: 48, y: 48 });

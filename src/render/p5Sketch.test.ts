@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  AcousticTextView,
   AggregateWildlifeEvidenceView,
   DogView,
   RendererCommand,
@@ -9,6 +10,12 @@ import type {
   WildlifeCarcassView,
   WildlifeView,
 } from "./types";
+import {
+  DEFAULT_ACOUSTIC_TEXT_GUTTER,
+  acousticTextRectsOverlap,
+  type AcousticTextRect,
+} from "./acousticTextLayout";
+import { actorCalloutViewport, layoutAcousticTextCallouts } from "./playerPresentation";
 import { MAX_TERRAIN_PERCEPTION_MEMORY_TILES } from "./terrainPerceptionMemory";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import {
@@ -732,6 +739,135 @@ describe("Chart situated expression presentation", () => {
     draw();
     expect(text.mock.calls.some(([copy]) => copy === "LEGACY ACOUSTIC INCIDENT")).toBe(true);
     renderer.destroy();
+  });
+
+  it.each([
+    [1_280, 720, false],
+    [1_280, 720, true],
+    [390, 844, false],
+    [390, 844, true],
+  ] as const)("draws bounded mixed four-kind callouts at %sx%s (reduced motion: %s)", (width, height, reducedMotion) => {
+    // Contract fixtures exercise real Chart drawing and the shared estimated
+    // envelope, not four runtime producers, browser glyphs or mobile hardware.
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      bottom: height, height, left: 0, right: width, top: 0, width,
+      x: 0, y: 0, toJSON: () => ({}),
+    });
+    const viewport = actorCalloutViewport(width, height);
+    const screenAnchors = width === 390
+      ? [{ x: 195, y: 220 }, { x: 195, y: 360 }, { x: 195, y: 500 }, { x: 195, y: 640 }]
+      : [{ x: 320, y: 230 }, { x: 880, y: 230 }, { x: 320, y: 490 }, { x: 880, y: 490 }];
+    const worldPositions = screenAnchors.map(({ x, y }) => ({ x: x - width / 2, y: y - height / 2 }));
+    const candidates: AcousticTextView[] = [
+      {
+        acousticKind: "speech", id: "chart-mixed-warning", sourceActorId: "human:warning",
+        sourceKind: "human", speakerLabel: "Nearby courier",
+        text: "Watch your footing near the flooded boards and keep the medicine case steady.",
+        position: worldPositions[0]!, progress: 0.1, priority: 900_000, salience: 800_000,
+        tone: "alarmed", variantSeed: 1,
+      },
+      {
+        acousticKind: "animal-call", id: "chart-mixed-bark", sourceActorId: "dog:warning",
+        sourceKind: "animal", speakerLabel: "Nearby dog", text: "BARK!",
+        position: worldPositions[1]!, progress: 0.2, priority: 760_000, salience: 800_000,
+        tone: "alarmed", variantSeed: 2,
+      },
+      {
+        acousticKind: "physical", id: "chart-mixed-slide", sourceId: "player",
+        sourceKind: "player", text: "scrape", semanticFamily: "scrape",
+        position: worldPositions[2]!, progress: 0.3, priority: 500_000, salience: 900_000,
+        tone: "restrained", variantSeed: 3,
+      },
+      {
+        acousticKind: "physical", id: "chart-mixed-cargo", sourceId: "cargo:parcel",
+        sourceKind: "object", text: "thud", semanticFamily: "thud",
+        position: worldPositions[3]!, progress: 0.4, priority: 450_000, salience: 900_000,
+        tone: "restrained", variantSeed: 4,
+      },
+    ];
+    const base = view("chart-four-kind-contract", { x: 0, y: 0 }, { followPlayer: false });
+    let current: TideweftView = { ...base, acousticText: candidates };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+    const rect = p5Harness.instance?.rect as ReturnType<typeof vi.fn>;
+    const line = p5Harness.instance?.line as ReturnType<typeof vi.fn>;
+    const projectAnchor = ({ position }: AcousticTextView) => ({
+      x: position.x + width / 2, y: position.y + height / 2,
+    });
+    const copies = new Set([...candidates.map(({ text: copy }) => copy), "Easy now."]);
+    const drawAndCheck = (items: readonly AcousticTextView[]): readonly AcousticTextRect[] => {
+      current = { ...current, acousticText: items };
+      text.mockClear();
+      rect.mockClear();
+      line.mockClear();
+      draw();
+      expect(p5Harness.instance).toMatchObject({ width, height });
+      const expected = layoutAcousticTextCallouts(items, viewport, projectAnchor);
+      const drawn = text.mock.calls.filter(([copy]) => copies.has(String(copy)));
+      expect(drawn).toEqual(expected.placements.map(({ candidate, rect: box }) => [
+        candidate.acousticText.text,
+        box.x + box.width / 2,
+        box.y + box.height / 2 - 0.5,
+        box.width - 12,
+        box.height - 4,
+      ]));
+      const actualRects = drawn.map(([, x, y, contentWidth, contentHeight]): AcousticTextRect => ({
+        x: Number(x) - (Number(contentWidth) + 12) / 2,
+        y: Number(y) + 0.5 - (Number(contentHeight) + 4) / 2,
+        width: Number(contentWidth) + 12,
+        height: Number(contentHeight) + 4,
+      }));
+      expect(actualRects).toEqual(expected.placements.map(({ rect: box }) => box));
+      expect(actualRects.length).toBeLessThanOrEqual(4);
+      expect(new Set(expected.placements.map(({ candidate }) => candidate.sourceId)).size)
+        .toBe(actualRects.length);
+      for (const [index, box] of actualRects.entries()) {
+        expect(box.x).toBeGreaterThanOrEqual(12);
+        expect(box.x + box.width).toBeLessThanOrEqual(width - 12);
+        expect(box.y).toBeGreaterThanOrEqual(viewport.safeTop + 1);
+        expect(box.y + box.height).toBeLessThanOrEqual(height - viewport.safeBottom - 1);
+        expect(rect.mock.calls).toContainEqual([
+          box.x + box.width / 2, box.y + box.height / 2, box.width, box.height, 5,
+        ]);
+        const { candidate } = expected.placements[index]!;
+        const centerY = box.y + box.height / 2;
+        expect(line.mock.calls).toContainEqual([
+          box.x + box.width / 2,
+          centerY < candidate.anchor.y ? box.y + box.height : box.y,
+          candidate.anchor.x,
+          candidate.anchor.y,
+        ]);
+        for (const other of actualRects.slice(index + 1)) {
+          expect(acousticTextRectsOverlap(box, other, DEFAULT_ACOUSTIC_TEXT_GUTTER)).toBe(false);
+        }
+      }
+      return actualRects;
+    };
+
+    try {
+      const separated = drawAndCheck(candidates);
+      expect(separated).toHaveLength(4);
+      expect(drawAndCheck([...candidates].reverse())).toEqual(separated);
+      const crowded = candidates.map((candidate) => ({ ...candidate, position: { x: 0, y: 0 } }));
+      const overloaded: AcousticTextView[] = [...crowded, {
+        ...crowded[0]!, id: "chart-quiet-same-human", text: "Easy now.", priority: 100_000,
+      }];
+      const crowdedRects = drawAndCheck(overloaded);
+      expect(crowdedRects.length).toBeLessThan(4);
+      expect(text.mock.calls.filter(([copy]) => copies.has(String(copy)))[0]?.[0])
+        .toBe(candidates[0]!.text);
+      expect(text.mock.calls.some(([copy]) => copy === "Easy now.")).toBe(false);
+      expect(drawAndCheck([...overloaded].reverse())).toEqual(crowdedRects);
+      expect(drawAndCheck([])).toEqual([]);
+    } finally {
+      renderer.destroy();
+    }
   });
 });
 
