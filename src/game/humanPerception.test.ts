@@ -19,6 +19,8 @@ import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
 import {
+  HUMAN_HEARING_MAX_RANGE_UNITS,
+  HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT,
   HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
   HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
@@ -27,10 +29,12 @@ import {
   createPhysicalSoundSample,
   createPlayerSenseSample,
   createSupplementalSoundSample,
+  createUnadmittedAlarmSoundSample,
   type HumanObservationBatch,
   type PhysicalSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
+  type UnadmittedAlarmSoundSample,
 } from "./humanPerception";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
@@ -629,6 +633,238 @@ describe("existing-human sensory bridge", () => {
       .some(({ id }) => id.includes(effort.id))).toBe(false);
   });
 
+  it("copies a bounded domain alarm without claiming an admitted expression", () => {
+    const raw: UnadmittedAlarmSoundSample = {
+      id: "unadmitted-domain-alarm",
+      acousticEventId: "DEER-1:e:ca:alarm",
+      sourceActorId: "DEER-1",
+      position: worldPoint(OBSERVER_X + 3, OBSERVER_Y),
+      soundClass: "animal-alarm",
+      soundInterrupt: "strong",
+      soundLoudness: FIXED_POINT,
+      soundRangeUnits: HUMAN_HEARING_MAX_RANGE_UNITS,
+    };
+    const sample = createUnadmittedAlarmSoundSample(raw);
+
+    expect(sample).toEqual(raw);
+    expect(sample).not.toBe(raw);
+    expect(Object.isFrozen(sample)).toBe(true);
+    expect(Object.isFrozen(sample?.position)).toBe(true);
+    expect(sample).not.toHaveProperty("expressionEventId");
+    expect(createUnadmittedAlarmSoundSample({
+      ...raw,
+      acousticEventId: "a".repeat(192),
+    })).not.toBeNull();
+  });
+
+  it("hears an unadmitted domain alarm anonymously with its explicit strong interrupt", () => {
+    const current = fixture("alarm hearing does not need an expression", { facing: "west" });
+    const alarm = unadmittedAlarmSoundSample("unadmitted-alarm", OBSERVER_X + 4, OBSERVER_Y);
+    const before = JSON.stringify(current.state);
+    const observations = observationsFor(current, [], 1, [], [], [], [alarm]);
+    const heard = observations.find(({ id }) => id.includes(alarm.id));
+
+    expect(heard).toMatchObject({
+      channel: "hearing",
+      perceivedClass: "animal-alarm",
+      identification: "anonymous",
+      subjectId: null,
+      interrupt: "strong",
+    });
+    expect(heard?.area.radiusUnits).toBeGreaterThanOrEqual(250);
+    expect(heard?.area.center).not.toEqual(alarm.position);
+    expect(heard).not.toHaveProperty("sourceActorId");
+    expect(heard).not.toHaveProperty("acousticEventId");
+    expect(heard).not.toHaveProperty("expressionEventId");
+    expect(observations.some(({ channel }) => channel === "vision")).toBe(false);
+    expect(JSON.stringify(current.state)).toBe(before);
+    expect(observationsFor(current, [], 1)).toEqual([]);
+  });
+
+  it("excludes an unadmitted alarm's source while another nearby resident hears", () => {
+    const current = fixture("an alarm is not a source's self-observation", { facing: "east" });
+    const listener = current.state.residents.find(({ id }) => id !== current.resident.id);
+    const route = current.state.routes[0];
+    if (!listener || !route) throw new Error("alarm fixture needs two residents and a route");
+    listener.location = { kind: "route", routeId: route.id, progress: 0 };
+    const rebuilt = rebuildWorld(current);
+    const alarm = unadmittedAlarmSoundSample(
+      "resident-domain-alarm",
+      OBSERVER_X + 2,
+      OBSERVER_Y,
+      current.resident.identity.stableId,
+    );
+    const batches = collectExistingHumanObservations({
+      world: rebuilt.world,
+      window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1),
+      playerSamples: [],
+      unadmittedAlarmSoundSamples: [alarm],
+    });
+
+    expect(batchFor(batches, current.resident.id)?.observations).toEqual([]);
+    expect(batchFor(batches, listener.id)?.observations).toContainEqual(expect.objectContaining({
+      channel: "hearing",
+      perceivedClass: "animal-alarm",
+      identification: "anonymous",
+      subjectId: null,
+      interrupt: "strong",
+    }));
+  });
+
+  it("keeps unadmitted alarm hearing subject to masking, range, and the current frame", () => {
+    const calm = fixture("a domain alarm carries in calm air", { facing: "west" });
+    const masked = fixture("storm water masks a domain alarm", {
+      facing: "west",
+      turbulentWater: true,
+      storm: true,
+    });
+    const carrying = unadmittedAlarmSoundSample(
+      "carrying-domain-alarm", OBSERVER_X + 6, OBSERVER_Y, "DEER-1",
+      { soundLoudness: 800_000, soundRangeUnits: 20_000 },
+    );
+    const short = unadmittedAlarmSoundSample(
+      "short-domain-alarm", OBSERVER_X + 6, OBSERVER_Y, "DEER-1",
+      { soundRangeUnits: 1_000 },
+    );
+    const silent = unadmittedAlarmSoundSample(
+      "silent-domain-alarm", OBSERVER_X + 2, OBSERVER_Y, "DEER-1",
+      { soundLoudness: 0 },
+    );
+    const outOfFrame = {
+      ...carrying,
+      position: createWorldPosition(createRegionCoord(-1_000_000, 1_000_000), 500, 500),
+    };
+
+    expect(observationsFor(calm, [], 1, [], [], [], [carrying])).toHaveLength(1);
+    expect(observationsFor(masked, [], 1, [], [], [], [carrying])).toEqual([]);
+    expect(observationsFor(calm, [], 1, [], [], [], [short])).toEqual([]);
+    expect(observationsFor(calm, [], 1, [], [], [], [silent])).toEqual([]);
+    expect(observationsFor(calm, [], 1, [], [], [], [outOfFrame])).toEqual([]);
+  });
+
+  it("orders mixed world hearing deterministically without changing resident or source order", () => {
+    const seed = "mixed domain alarm inputs have no ordering authority";
+    const forward = fixture(seed, { facing: "west" });
+    const reversed = fixture(seed, { facing: "west", reverseResidents: true });
+    const alarms = [
+      unadmittedAlarmSoundSample("z-domain-alarm", OBSERVER_X + 3, OBSERVER_Y),
+      unadmittedAlarmSoundSample("a-domain-alarm", OBSERVER_X + 4, OBSERVER_Y, "DEER-2"),
+    ];
+    const impacts = [
+      physicalSoundSample("z-impact", OBSERVER_X + 2, OBSERVER_Y, "CRATE-1"),
+      physicalSoundSample("a-impact", OBSERVER_X + 3, OBSERVER_Y, "CRATE-2"),
+    ];
+
+    expect(observationsFor(forward, [], 1, [], impacts, [], alarms)).toHaveLength(4);
+    expect(observationsFor(forward, [], 1, [], impacts, [], alarms)).toEqual(
+      observationsFor(reversed, [], 1, [], [...impacts].reverse(), [], [...alarms].reverse()),
+    );
+  });
+
+  it("fails closed for invalid unadmitted alarm shapes instead of repairing their meaning", () => {
+    const current = fixture("invalid domain alarms have no sensory meaning", { facing: "east" });
+    const valid = unadmittedAlarmSoundSample("valid-domain-alarm", OBSERVER_X + 2, OBSERVER_Y);
+    const { acousticEventId: _omitted, ...missingEvent } = valid;
+    const malformed: readonly unknown[] = [
+      missingEvent,
+      { ...valid, acousticEventId: "invalid event id" },
+      { ...valid, acousticEventId: "a".repeat(193) },
+      { ...valid, sourceActorId: "invalid actor id" },
+      { ...valid, sourceActorId: "A".repeat(193) },
+      { ...valid, id: "a".repeat(49) },
+      { ...valid, soundClass: "animal-call" },
+      { ...valid, soundInterrupt: "none" },
+      { ...valid, soundLoudness: FIXED_POINT + 1 },
+      { ...valid, soundLoudness: 0.5 },
+      { ...valid, soundRangeUnits: HUMAN_HEARING_MAX_RANGE_UNITS + 1 },
+      { ...valid, soundRangeUnits: -1 },
+      { ...valid, position: { ...valid.position, localX: -1 } },
+      { ...valid, expressionEventId: "situated-expression:event:not-admitted" },
+      { ...valid, [Symbol("hidden")]: true },
+      Object.assign(Object.create({ inherited: true }), valid),
+      null,
+      [],
+    ];
+
+    for (const raw of malformed) {
+      expect(createUnadmittedAlarmSoundSample(raw as UnadmittedAlarmSoundSample)).toBeNull();
+      expect(collectExistingHumanObservations({
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [],
+        unadmittedAlarmSoundSamples: [raw as UnadmittedAlarmSoundSample],
+      })).toEqual([]);
+    }
+    for (const raw of [undefined, null, {}, "alarm"]) {
+      expect(collectExistingHumanObservations({
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [],
+        unadmittedAlarmSoundSamples: raw,
+      } as unknown as Parameters<typeof collectExistingHumanObservations>[0])).toEqual([]);
+    }
+  });
+
+  it("rejects duplicate alarm identities and collisions across every hearing input", () => {
+    const current = fixture("one domain event cannot appear twice", { facing: "east" });
+    const alarm = unadmittedAlarmSoundSample("unique-alarm", OBSERVER_X + 2, OBSERVER_Y);
+    const impact = physicalSoundSample("unique-impact", OBSERVER_X + 2, OBSERVER_Y, "CRATE-1");
+    const player = soundSample("unique-step", OBSERVER_X + 2, OBSERVER_Y);
+    const voice = supplementalSoundSample("unique-voice", OBSERVER_X + 2, OBSERVER_Y);
+
+    for (const duplicate of [alarm, { ...alarm, id: "same-domain-event" }]) {
+      expect(collectExistingHumanObservations({
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [],
+        unadmittedAlarmSoundSamples: [alarm, duplicate],
+      })).toEqual([]);
+    }
+    for (const collision of [
+      { ...alarm, id: impact.id },
+      { ...alarm, id: player.id },
+      { ...alarm, id: voice.id },
+      { ...alarm, acousticEventId: impact.acousticEventId },
+    ]) {
+      expect(collectExistingHumanObservations({
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [player],
+        supplementalSoundSamples: [voice],
+        physicalSoundSamples: [impact],
+        unadmittedAlarmSoundSamples: [collision],
+      })).toEqual([]);
+    }
+  });
+
+  it("shares eight world-hearing slots without spending or increasing admitted expression capacity", () => {
+    const current = fixture("admitted and domain sound budgets stay independent", { facing: "east" });
+    const voices = Array.from({ length: HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES },
+      (_, index) => supplementalSoundSample(`admitted-${index}`, OBSERVER_X + 2, OBSERVER_Y));
+    const alarms = Array.from({ length: HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES },
+      (_, index) => unadmittedAlarmSoundSample(`domain-${index}`, OBSERVER_X + 2, OBSERVER_Y));
+    const impacts = Array.from({ length: HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES },
+      (_, index) => physicalSoundSample(`contact-${index}`, OBSERVER_X + 2, OBSERVER_Y, "CRATE-1"));
+
+    expect(HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES).toBe(8);
+    expect(HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES).toBe(8);
+    expect(HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT).toBe(48);
+    expect(observationsFor(current, [], 1, voices, [], [], alarms)).toHaveLength(16);
+    expect(observationsFor(current, [], 1, voices, impacts.slice(0, 4), [], alarms.slice(0, 4)))
+      .toHaveLength(16);
+    expect(observationsFor(current, [], 1, [], impacts.slice(0, 5), [], alarms.slice(0, 4)))
+      .toEqual([]);
+    expect(observationsFor(current, [], 1, [], [], [], [
+      ...alarms,
+      unadmittedAlarmSoundSample("ninth-domain-alarm", OBSERVER_X + 2, OBSERVER_Y),
+    ])).toEqual([]);
+  });
+
   it("hears an authenticated physical-world sound anonymously without inventing sight", () => {
     const current = fixture("physical contact remains an acoustic fact", { facing: "east" });
     const rustle = physicalSoundSample(
@@ -1220,6 +1456,7 @@ function observationsFor(
   supplementalSoundSamples: readonly SupplementalSoundSample[] = [],
   physicalSoundSamples: readonly PhysicalSoundSample[] = [],
   supplementalSemanticFacts: readonly SituatedExpressionSemanticFact[] = [],
+  unadmittedAlarmSoundSamples: readonly UnadmittedAlarmSoundSample[] = [],
 ) {
   return batchFor(collectExistingHumanObservations({
     world: current.world,
@@ -1229,6 +1466,7 @@ function observationsFor(
     supplementalSoundSamples,
     supplementalSemanticFacts,
     physicalSoundSamples,
+    unadmittedAlarmSoundSamples,
   }), current.resident.id)?.observations ?? [];
 }
 
@@ -1299,6 +1537,28 @@ function supplementalSoundSample(
     sourceActorId,
   });
   if (!sample) throw new Error("test supplemental sound must be valid");
+  return sample;
+}
+
+function unadmittedAlarmSoundSample(
+  id: string,
+  tileX: number,
+  tileY: number,
+  sourceActorId = "DEER-1",
+  overrides: Partial<Pick<UnadmittedAlarmSoundSample,
+    "acousticEventId" | "soundLoudness" | "soundRangeUnits">> = {},
+): UnadmittedAlarmSoundSample {
+  const sample = createUnadmittedAlarmSoundSample({
+    acousticEventId: overrides.acousticEventId ?? `ecology-alarm:test:${id}`,
+    id,
+    position: worldPoint(tileX, tileY),
+    soundLoudness: overrides.soundLoudness ?? FIXED_POINT,
+    soundRangeUnits: overrides.soundRangeUnits ?? 12_000,
+    soundClass: "animal-alarm",
+    soundInterrupt: "strong",
+    sourceActorId,
+  });
+  if (!sample) throw new Error("test domain alarm must be a valid hearing shape");
   return sample;
 }
 

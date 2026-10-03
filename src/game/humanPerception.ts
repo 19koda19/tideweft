@@ -74,11 +74,14 @@ const SAMPLE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,47}$/;
 const SOUND_CLASS_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const ACTOR_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const EXPRESSION_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,179}$/;
+const ACOUSTIC_EVENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,191}$/;
 const EMPTY_BATCHES: readonly HumanObservationBatch[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SOUND_SAMPLES: readonly SupplementalSoundSample[] = Object.freeze([]);
 const EMPTY_SUPPLEMENTAL_SEMANTIC_FACTS: readonly SituatedExpressionSemanticFact[] =
   Object.freeze([]);
 const EMPTY_PHYSICAL_SOUND_SAMPLES: readonly PhysicalSoundSample[] = Object.freeze([]);
+const EMPTY_UNADMITTED_ALARM_SOUND_SAMPLES: readonly UnadmittedAlarmSoundSample[] =
+  Object.freeze([]);
 
 /**
  * Shared physical acoustic fields. Player step samples retain these fields
@@ -104,6 +107,20 @@ export interface SupplementalSoundSample extends AcousticSample {
   readonly sourceActorId: string;
   /** Exact situated-expression event that emitted this one pending sound fact. */
   readonly expressionEventId: string;
+}
+
+/**
+ * A transient committed domain alarm whose optional expression was not admitted.
+ * This carrier validates acoustic shape, not the originating action: the caller
+ * authenticates cause, source, event, and locus before supplying it. It shares
+ * physical-world hearing capacity and never claims a situated-expression event.
+ */
+export interface UnadmittedAlarmSoundSample extends AcousticSample {
+  readonly sourceActorId: string;
+  /** Exact committed domain event that owns the audible alarm. */
+  readonly acousticEventId: string;
+  readonly soundClass: "animal-alarm";
+  readonly soundInterrupt: "strong";
 }
 
 /** One bounded, explicit physical player stimulus at a canonical world point. */
@@ -138,6 +155,8 @@ export interface HumanPerceptionInput {
   readonly supplementalSemanticFacts?: readonly SituatedExpressionSemanticFact[];
   /** Bounded physical-world sounds bound to committed acoustic events. */
   readonly physicalSoundSamples?: readonly PhysicalSoundSample[];
+  /** Shares the physical-world sound budget; never enters expression/save carry. */
+  readonly unadmittedAlarmSoundSamples?: readonly UnadmittedAlarmSoundSample[];
 }
 
 export interface HumanObservationBatch {
@@ -168,6 +187,44 @@ export function createSupplementalSoundSample(
   ) return null;
   return Object.freeze({
     expressionEventId: value.expressionEventId,
+    id: value.id,
+    position: createWorldPosition(
+      value.position.region,
+      value.position.localX,
+      value.position.localY,
+    ),
+    soundLoudness: value.soundLoudness,
+    soundRangeUnits: value.soundRangeUnits,
+    soundClass: value.soundClass,
+    soundInterrupt: value.soundInterrupt,
+    sourceActorId: value.sourceActorId,
+  });
+}
+
+/** Validates only one immutable domain-alarm hearing shape, without repair. */
+export function createUnadmittedAlarmSoundSample(
+  input: UnadmittedAlarmSoundSample,
+): UnadmittedAlarmSoundSample | null {
+  const value: unknown = input;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "acousticEventId",
+    "id",
+    "position",
+    "soundClass",
+    "soundInterrupt",
+    "soundLoudness",
+    "soundRangeUnits",
+    "sourceActorId",
+  ])
+    || !validSoundFields(value)
+    || value.soundClass !== "animal-alarm"
+    || value.soundInterrupt !== "strong"
+    || !validActorId(value.sourceActorId)
+    || typeof value.acousticEventId !== "string"
+    || !ACOUSTIC_EVENT_ID_PATTERN.test(value.acousticEventId)
+  ) return null;
+  return Object.freeze({
+    acousticEventId: value.acousticEventId,
     id: value.id,
     position: createWorldPosition(
       value.position.region,
@@ -234,16 +291,19 @@ export function collectExistingHumanObservations(
   const hasSupplementalSounds = Object.hasOwn(value, "supplementalSoundSamples");
   const hasSupplementalSemanticFacts = Object.hasOwn(value, "supplementalSemanticFacts");
   const hasPhysicalSounds = Object.hasOwn(value, "physicalSoundSamples");
+  const hasUnadmittedAlarmSounds = Object.hasOwn(value, "unadmittedAlarmSoundSamples");
   const expectedKeys = ["playerSamples", "targetTick", "window", "world"];
   if (hasSupplementalSounds) expectedKeys.push("supplementalSoundSamples");
   if (hasSupplementalSemanticFacts) expectedKeys.push("supplementalSemanticFacts");
   if (hasPhysicalSounds) expectedKeys.push("physicalSoundSamples");
+  if (hasUnadmittedAlarmSounds) expectedKeys.push("unadmittedAlarmSoundSamples");
   if (!exactKeys(value, expectedKeys)) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
   if (
     (hasSupplementalSounds && !Array.isArray(input.supplementalSoundSamples))
     || (hasSupplementalSemanticFacts && !Array.isArray(input.supplementalSemanticFacts))
     || (hasPhysicalSounds && !Array.isArray(input.physicalSoundSamples))
+    || (hasUnadmittedAlarmSounds && !Array.isArray(input.unadmittedAlarmSoundSamples))
   ) return EMPTY_BATCHES;
   const rawSupplementalSounds = input.supplementalSoundSamples
     ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
@@ -251,6 +311,8 @@ export function collectExistingHumanObservations(
     ?? EMPTY_SUPPLEMENTAL_SEMANTIC_FACTS;
   const rawPhysicalSounds = input.physicalSoundSamples
     ?? EMPTY_PHYSICAL_SOUND_SAMPLES;
+  const rawUnadmittedAlarmSounds = input.unadmittedAlarmSoundSamples
+    ?? EMPTY_UNADMITTED_ALARM_SOUND_SAMPLES;
   if (
     regionalWindowForWorld(world) !== window
     || !Number.isSafeInteger(targetTick)
@@ -263,6 +325,9 @@ export function collectExistingHumanObservations(
     || rawSupplementalSemanticFacts.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
     || !Array.isArray(rawPhysicalSounds)
     || rawPhysicalSounds.length > HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES
+    || !Array.isArray(rawUnadmittedAlarmSounds)
+    || rawPhysicalSounds.length + rawUnadmittedAlarmSounds.length
+      > HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES
     || !validRegionalWorld(world, window)
     || !validWeather(world)
   ) return EMPTY_BATCHES;
@@ -278,11 +343,14 @@ export function collectExistingHumanObservations(
     supplementalSounds,
   );
   const physicalSounds = canonicalPhysicalSoundSamples(rawPhysicalSounds);
+  const unadmittedAlarmSounds = canonicalUnadmittedAlarmSoundSamples(rawUnadmittedAlarmSounds);
   if (
     supplementalSounds === null
     || supplementalSemanticFacts === null
     || physicalSounds === null
-    || !disjointSampleIds(samples, supplementalSounds, physicalSounds)
+    || unadmittedAlarmSounds === null
+    || !disjointSampleIds(samples, supplementalSounds, physicalSounds, unadmittedAlarmSounds)
+    || !disjointAcousticEventIds(physicalSounds, unadmittedAlarmSounds)
   ) return EMPTY_BATCHES;
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
@@ -443,6 +511,12 @@ export function collectExistingHumanObservations(
       if (reception === null) return EMPTY_BATCHES;
       if (reception.kind === "heard") observations.push(reception.observation);
     }
+    for (const sample of unadmittedAlarmSounds) {
+      if (sample.sourceActorId === priorState.actorId) continue;
+      const targetPoint = projectedSamplePoint(frame, world, sample.position);
+      if (targetPoint === null) continue;
+      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+    }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
     }
@@ -572,17 +646,51 @@ function canonicalPhysicalSoundSamples(
   return Object.freeze(samples);
 }
 
+function canonicalUnadmittedAlarmSoundSamples(
+  value: readonly UnadmittedAlarmSoundSample[],
+): readonly UnadmittedAlarmSoundSample[] | null {
+  const samples: UnadmittedAlarmSoundSample[] = [];
+  const ids = new Set<string>();
+  const acousticEventIds = new Set<string>();
+  for (const raw of value) {
+    const sample = createUnadmittedAlarmSoundSample(raw);
+    if (
+      sample === null
+      || ids.has(sample.id)
+      || acousticEventIds.has(sample.acousticEventId)
+    ) return null;
+    ids.add(sample.id);
+    acousticEventIds.add(sample.acousticEventId);
+    samples.push(sample);
+  }
+  samples.sort((left, right) => compareText(left.id, right.id));
+  return Object.freeze(samples);
+}
+
+function disjointAcousticEventIds(
+  physicalSounds: readonly PhysicalSoundSample[],
+  unadmittedAlarmSounds: readonly UnadmittedAlarmSoundSample[],
+): boolean {
+  const ids = new Set(physicalSounds.map(({ acousticEventId }) => acousticEventId));
+  return unadmittedAlarmSounds.every(({ acousticEventId }) => !ids.has(acousticEventId));
+}
+
 function disjointSampleIds(
   playerSamples: readonly PlayerSenseSample[],
   supplementalSounds: readonly SupplementalSoundSample[],
   physicalSounds: readonly PhysicalSoundSample[],
+  unadmittedAlarmSounds: readonly UnadmittedAlarmSoundSample[],
 ): boolean {
   const ids = new Set(playerSamples.map(({ id }) => id));
   for (const { id } of supplementalSounds) {
     if (ids.has(id)) return false;
     ids.add(id);
   }
-  return physicalSounds.every(({ id }) => !ids.has(id));
+  for (const { id } of physicalSounds) {
+    if (ids.has(id)) return false;
+    ids.add(id);
+  }
+  return unadmittedAlarmSounds.every(({ id }) => !ids.has(id));
 }
 
 function projectedSamplePoint(

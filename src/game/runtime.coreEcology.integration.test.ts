@@ -9,12 +9,14 @@ import {
 import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
   WORLD_NEW_GAME_START_TICK,
+  assertWorldInvariants,
   createWorldView,
   deserializeWorld,
+  replaceResidentCircadian,
   serializeWorld,
 } from "../sim/public";
 import { regionLocalToGlobalTile } from "../sim/regions";
-import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
@@ -91,6 +93,7 @@ import {
 } from "./coreEcologyGroups";
 import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
 import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
+import * as coreEcologyPerception from "./coreEcologyPerception";
 import { adoptCoreEcologySettlementHomeFromV24 } from "./coreEcologySettlementHome";
 import {
   coreEcologySpeciesCanOwnActorAddress,
@@ -198,7 +201,10 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
-import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import {
+  playerWorldPositionInRegionalWindow,
+  resolveResidentWorldPlacement,
+} from "./residentSpatial";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
   REGION_HEIGHT_UNITS,
@@ -4613,9 +4619,38 @@ describe("runtime core-ecology vertical slice", () => {
 
   it("keeps a lawful boar grunt audible and interrupting when optional expression capacity is saturated", async () => {
     vi.resetModules();
+    const fallbackHearingFrames: Array<{
+      targetTick: number;
+      jointSampleCount: number;
+      samples: readonly import("./humanPerception").UnadmittedAlarmSoundSample[];
+      receipts: Array<{ observerId: string; observationIds: string[] }>;
+    }> = [];
     vi.doMock("./humanPerception", async (importOriginal) => {
       const actual = await importOriginal<typeof import("./humanPerception")>();
-      return { ...actual, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0 };
+      return {
+        ...actual,
+        HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+        collectExistingHumanObservations: (
+          input: Parameters<typeof actual.collectExistingHumanObservations>[0],
+        ) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          const samples = input.unadmittedAlarmSoundSamples ?? [];
+          if (samples.length > 0) {
+            fallbackHearingFrames.push({
+              targetTick: input.targetTick,
+              jointSampleCount: (input.physicalSoundSamples?.length ?? 0) + samples.length,
+              samples,
+              receipts: batches.flatMap((batch) => {
+                const observationIds = batch.observations.filter((observation) => (
+                  observation.channel === "hearing" && observation.perceivedClass === "animal-alarm"
+                )).map(({ id }) => id);
+                return observationIds.length > 0 ? [{ observerId: batch.observerId, observationIds }] : [];
+              }),
+            });
+          }
+          return batches;
+        },
+      };
     });
     let runtime: TideweftRuntime | null = null;
     try {
@@ -4651,6 +4686,34 @@ describe("runtime core-ecology vertical slice", () => {
       expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(
         ({ sourceActorId }) => sourceActorId === fixture.alarmActorId,
       )).toBe(false);
+      // createAlarmRuntime adopts protected legacy cohort bodies into the
+      // current47 roots; it is an honest controlled current-consumer fixture,
+      // not a fresh-native population or ordinary-travel encounter claim.
+      const sourceWorld = deserializeWorld(saved.world);
+      const alarmMemory = source.memories.find(({ kind, atTick, eventPosition }) => (
+        kind === "alarm" && atTick === sourceWorld.meta.completedTick && eventPosition !== undefined
+      ));
+      if (alarmMemory?.eventPosition === undefined) throw new Error("Boar fixture lost its committed event locus");
+      const porterActorId = deserializeBio0Ecology(saved.bio0Ecology)?.porterAddress.actorId;
+      const sourceView = createWorldView(sourceWorld);
+      const ordinaryListener = sourceWorld.residents.find((resident) => {
+        if (resident.identity.stableId === porterActorId) return false;
+        const placement = resolveResidentWorldPlacement(sourceView, resident);
+        if (placement === null) return false;
+        const delta = worldPositionDelta(placement.position, alarmMemory.eventPosition!);
+        return Math.hypot(delta.x, delta.y) < 7_000;
+      });
+      if (ordinaryListener === undefined) throw new Error("Boar fixture lacks a real nearby non-porter resident");
+      const targetTick = sourceWorld.meta.completedTick + 1;
+      const alarmHash = hashCanonical({
+        domain: "core-wildlife-alarm-hearing:v1", eventId: alarmMemory.eventId,
+        sourceActorId: fixture.alarmActorId, species: source.identity.species,
+      });
+      const sampleId = `caa-${alarmHash}`;
+      const ordinaryObservationId = `hp-h-${targetTick}-${ordinaryListener.id}-${sampleId}`;
+      const porter = sourceWorld.residents.find(({ identity }) => identity.stableId === porterActorId);
+      if (porter === undefined) throw new Error("Boar fixture lost its existing porter resident");
+      const porterObservationId = `hp-h-${targetTick}-${porter.id}-${sampleId}`;
 
       runtime.destroy();
       runtime = null;
@@ -4668,6 +4731,53 @@ describe("runtime core-ecology vertical slice", () => {
       advancePlayerSteps(runtime, 10);
       await runtime.save();
       const propagated = deserializeWorld(requiredEnvelope(fixture.repository).world);
+      expect(propagated.meta.completedTick, runtime.getUIView().announcement?.message).toBe(targetTick);
+      const ordinaryHearing = propagated.residents.find(({ identity }) => (
+        identity.stableId === ordinaryListener.identity.stableId
+      ))?.perception.beliefs.filter(({ channel, lastObservedTick, perceivedClass }) => (
+        channel === "hearing" && lastObservedTick === targetTick && perceivedClass === "animal-alarm"
+      )) ?? [];
+      expect(ordinaryHearing).toHaveLength(1);
+      expect(ordinaryHearing[0]).toMatchObject({
+        sourceObservationId: ordinaryObservationId, channel: "hearing", perceivedClass: "animal-alarm",
+        subjectId: null, identification: "anonymous", firstObservedTick: targetTick,
+        lastObservedTick: targetTick, strongInterrupt: true,
+      });
+      expect(fallbackHearingFrames).toHaveLength(1);
+      const fallbackFrame = fallbackHearingFrames[0];
+      expect(fallbackFrame?.targetTick).toBe(targetTick);
+      expect(fallbackFrame?.jointSampleCount).toBeLessThanOrEqual(8);
+      expect(fallbackFrame?.samples).toHaveLength(1);
+      expect(fallbackFrame?.samples[0]).toMatchObject({
+        id: sampleId, acousticEventId: alarmMemory.eventId,
+        sourceActorId: fixture.alarmActorId, position: alarmMemory.eventPosition,
+        soundClass: "animal-alarm", soundInterrupt: "strong",
+      });
+      expect(fallbackFrame?.samples[0]).not.toHaveProperty("expressionEventId");
+      expect(fallbackFrame?.receipts).toContainEqual({
+        observerId: ordinaryListener.identity.stableId, observationIds: [ordinaryObservationId],
+      });
+      expect(fallbackFrame?.receipts).toContainEqual({
+        observerId: porter.identity.stableId, observationIds: [porterObservationId],
+      });
+      const porterHearing = propagated.residents.find(({ identity }) => (
+        identity.stableId === porter.identity.stableId
+      ))?.perception.beliefs.filter(({ channel, lastObservedTick, perceivedClass }) => (
+        channel === "hearing" && lastObservedTick === targetTick && perceivedClass === "animal-alarm"
+      )) ?? [];
+      // Only the selected shared sample replaces this event's raw porter leg;
+      // the porter and the ordinary resident receive the same acoustic fact.
+      expect(porterHearing).toHaveLength(1);
+      expect(porterHearing[0]).toMatchObject({
+        sourceObservationId: porterObservationId, channel: "hearing", perceivedClass: "animal-alarm",
+        subjectId: null, identification: "anonymous", strongInterrupt: true,
+      });
+      expect(porterHearing[0]?.sourceObservationId).not.toBe(`alarm:${hashCanonical([
+        alarmMemory.eventId, porter.identity.stableId, targetTick,
+      ])}`);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => (
+        cue === "vocalization-boar-grunt" || cue === "wildlife-alarm"
+      ))).toEqual([]);
       const humanAlarmBeliefs = propagated.residents.flatMap((resident) => {
         const matching = resident.perception.beliefs.filter((belief) => (
           belief.channel === "hearing"
@@ -4681,11 +4791,184 @@ describe("runtime core-ecology vertical slice", () => {
         return matching;
       });
       expect(humanAlarmBeliefs.length).toBeGreaterThanOrEqual(1);
+      const propagatedEnvelope = requiredEnvelope(fixture.repository);
+      expect(propagatedEnvelope.perceptionCarry).not.toHaveProperty("unadmittedAlarmSoundSamples");
+      const hearingStateBeforeReload = propagated.residents.map(({ identity, perception }) => ({
+        actorId: identity.stableId, perception,
+      }));
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await saturatedRuntimeModule.createTideweftRuntime(fixture.repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => (
+        cue === "vocalization-boar-grunt" || cue === "wildlife-alarm"
+      ))).toEqual([]);
+      await runtime.save();
+      const restored = deserializeWorld(requiredEnvelope(fixture.repository).world);
+      expect(restored.residents.map(({ identity, perception }) => ({
+        actorId: identity.stableId, perception,
+      }))).toEqual(hearingStateBeforeReload);
+      // Consumed T+1 hearing persists; loading neither runs another sensory
+      // interval nor carries the transient refused-expression stimulus forward.
+      expect(fallbackHearingFrames).toHaveLength(1);
     } finally {
       runtime?.destroy();
       scheduledFrame = undefined;
       vi.doUnmock("./humanPerception");
       vi.resetModules();
+    }
+  }, 120_000);
+
+  it("preserves ordinary hearing of a fresh deer alarm from a genuinely remembered threat", async () => {
+    const collectVisual = coreEcologyPerception.collectCoreEcologyVisualObservationBatches;
+    let obscuredSourceId: string | null = null;
+    vi.spyOn(coreEcologyPerception, "collectCoreEcologyVisualObservationBatches")
+      .mockImplementation((input) => {
+        const batches = collectVisual(input);
+        if (batches === null || obscuredSourceId === null) return batches;
+        // Remove only new visual receipts for this source after its real first
+        // sighting. No threat, event, memory, or observation is manufactured.
+        return Object.freeze(batches.map((batch) => batch.observerId !== obscuredSourceId
+          ? batch
+          : Object.freeze({
+              ...batch,
+              observations: Object.freeze(batch.observations.filter(({ channel }) => channel !== "vision")),
+            })));
+      });
+    const fixture = await createAlarmRuntime(-4, "deer");
+    let runtime = fixture.runtime;
+    const { repository, alarmActorId } = fixture;
+    try {
+      // This is the existing controlled legacy-cohort adoption/current47
+      // consumer fixture, not a new native population or travel encounter.
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const firstEnvelope = requiredEnvelope(repository);
+      const firstWorld = deserializeWorld(firstEnvelope.world);
+      const firstSource = requiredCoreActor(requiredRegionalCoreOwner(firstEnvelope, alarmActorId), alarmActorId);
+      const firstAlarm = firstSource.memories.find(({ kind, atTick, eventPosition }) => (
+        kind === "alarm" && atTick === firstWorld.meta.completedTick && eventPosition !== undefined
+      ));
+      if (firstAlarm === undefined || firstAlarm.observationId === null) {
+        throw new Error("Remembered deer fixture lost its real initial alarm and sighting");
+      }
+      const firstThreat = firstSource.perception.beliefs.find(({ sourceObservationId }) => (
+        sourceObservationId === firstAlarm.observationId
+      ));
+      expect(firstThreat).toMatchObject({ channel: "vision", lastObservedTick: firstWorld.meta.completedTick });
+      obscuredSourceId = alarmActorId;
+
+      // Core cognition's four-tick alarm cooldown is inclusive: the first
+      // lawful repeat is T+5, after the existing threat belief has aged.
+      advancePlayerSteps(runtime, 50);
+      await runtime.save();
+      const repeatedEnvelope = requiredEnvelope(repository);
+      const repeatedWorld = deserializeWorld(repeatedEnvelope.world);
+      expect(repeatedWorld.meta.completedTick, runtime.getUIView().announcement?.message)
+        .toBe(firstWorld.meta.completedTick + 5);
+      const repeatedSource = requiredCoreActor(
+        requiredRegionalCoreOwner(repeatedEnvelope, alarmActorId), alarmActorId,
+      );
+      const repeatedAlarm = repeatedSource.memories.find(({ kind, atTick, eventPosition }) => (
+        kind === "alarm" && atTick === repeatedWorld.meta.completedTick && eventPosition !== undefined
+      ));
+      if (repeatedAlarm?.eventPosition === undefined) {
+        throw new Error("Existing deer cognition did not emit its remembered-threat repeat");
+      }
+      expect(repeatedAlarm.eventId).not.toBe(firstAlarm.eventId);
+      expect(repeatedAlarm.observationId).toBe(firstAlarm.observationId);
+      expect(repeatedSource.perception.beliefs.find(({ sourceObservationId }) => (
+        sourceObservationId === firstAlarm.observationId
+      ))?.lastObservedTick).toBe(firstWorld.meta.completedTick);
+      expect(repeatedSource.intent.kind).toBe("alarm");
+      const repeatedView = createWorldView(repeatedWorld);
+      const porterId = deserializeBio0Ecology(repeatedEnvelope.bio0Ecology)?.porterAddress.actorId;
+      const listener = repeatedWorld.residents.find(({ activeContractId, identity }) => (
+        activeContractId === null && identity.stableId !== porterId
+      ));
+      if (listener === undefined) throw new Error("Remembered deer fixture lacks an existing free ordinary resident");
+      // The deer fled away from the residents' original points. Preserve one
+      // actual person's identity/knowledge and stage only their current route
+      // location on a real generated segment, as the existing goat fixture
+      // does. This is controlled placement, not an ordinary travel claim.
+      let routePlacement: { routeId: number; progress: number; distance: number } | undefined;
+      for (const route of repeatedWorld.routes) {
+        if (route.path.length < 2) continue;
+        for (const [offset, tileIndex] of route.path.entries()) {
+          const tile = repeatedView.terrain.tiles[tileIndex];
+          if (tile === undefined) continue;
+          const point = createWorldPosition(
+            { x: 0, y: 0 },
+            Math.round((tile.x + 0.5) * WORLD_POSITION_UNITS_PER_TILE),
+            Math.round((tile.y + 0.5) * WORLD_POSITION_UNITS_PER_TILE),
+          );
+          const delta = worldPositionDelta(point, repeatedAlarm.eventPosition);
+          const distance = Math.hypot(delta.x, delta.y);
+          if (routePlacement === undefined || distance < routePlacement.distance) routePlacement = {
+            routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance,
+          };
+        }
+      }
+      if (routePlacement === undefined || routePlacement.distance >= 7_000) {
+        throw new Error("Remembered deer fixture lacks a real nearby route segment");
+      }
+      listener.location = { kind: "route", routeId: routePlacement.routeId, progress: routePlacement.progress };
+      if (listener.circadian !== undefined) {
+        // Use the same destination-loss reconciliation as simulation contract
+        // advance: route placement cannot retain a settlement-arrival receipt.
+        const current = listener.circadian;
+        repeatedWorld.residents[repeatedWorld.residents.indexOf(listener)] = replaceResidentCircadian(listener, {
+          atTick: repeatedWorld.meta.completedTick,
+          circadian: {
+            ...current,
+            restDestinationArrived: false,
+            posture: current.posture.state === "resting" || current.posture.state === "asleep"
+              ? { state: "awake", enteredAtTick: repeatedWorld.meta.completedTick }
+              : current.posture,
+          },
+        });
+      }
+      assertWorldInvariants(repeatedWorld);
+      const listenerPlacement = resolveResidentWorldPlacement(createWorldView(repeatedWorld), listener);
+      if (listenerPlacement === null) throw new Error("Remembered deer listener lost its actual route placement");
+      const listenerDelta = worldPositionDelta(listenerPlacement.position, repeatedAlarm.eventPosition);
+      expect(Math.hypot(listenerDelta.x, listenerDelta.y)).toBeLessThan(7_000);
+      const stagedEnvelope = resealedCurrentEnvelopeWithCorePatch(
+        repeatedEnvelope, requiredRegionalCoreOwner(repeatedEnvelope, alarmActorId),
+        { world: serializeWorld(repeatedWorld) },
+      );
+      expect(requiredCoreActor(requiredRegionalCoreOwner(stagedEnvelope, alarmActorId), alarmActorId))
+        .toEqual(repeatedSource);
+      runtime.destroy();
+      scheduledFrame = undefined;
+      await repository.save(recordWithEnvelope(repository.snapshot(), stagedEnvelope));
+      runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      const hearingTick = repeatedWorld.meta.completedTick + 1;
+
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const heardWorld = deserializeWorld(requiredEnvelope(repository).world);
+      expect(heardWorld.meta.completedTick, runtime.getUIView().announcement?.message).toBe(hearingTick);
+      const hearingId = `hp-h-${hearingTick}-${listener.id}-caa-${hashCanonical({
+        domain: "core-wildlife-alarm-hearing:v1", eventId: repeatedAlarm.eventId,
+        sourceActorId: alarmActorId, species: "deer",
+      })}`;
+      const freshHearing = heardWorld.residents.find(({ identity }) => (
+        identity.stableId === listener.identity.stableId
+      ))?.perception.beliefs.filter(({ channel, lastObservedTick, perceivedClass }) => (
+        channel === "hearing" && lastObservedTick === hearingTick && perceivedClass === "animal-alarm"
+      )) ?? [];
+      expect(freshHearing).toHaveLength(1);
+      expect(freshHearing[0]).toMatchObject({
+        sourceObservationId: hearingId, channel: "hearing", perceivedClass: "animal-alarm",
+        subjectId: null, identification: "anonymous", strongInterrupt: true,
+      });
+    } finally {
+      runtime.destroy();
+      scheduledFrame = undefined;
     }
   }, 120_000);
 

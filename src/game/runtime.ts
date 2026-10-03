@@ -486,8 +486,10 @@ import {
   createPhysicalSoundSample,
   createPlayerSenseSample,
   createSupplementalSoundSample,
+  createUnadmittedAlarmSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
+  type UnadmittedAlarmSoundSample,
 } from "./humanPerception";
 import {
   ambientNoiseAt,
@@ -7127,6 +7129,41 @@ function coreAlarmPhysicalSoundSample(
 }
 
 /**
+ * A refused caption has no admitted expression identity. Keep the already
+ * committed strong alarm's domain identity instead. The caller must first
+ * authenticate species/source/memory/locus through core alarm propagation.
+ * Lawful hearing does not require the fresh sighting needed for an optional
+ * Voice expression: core cognition can alarm from a remembered threat.
+ * This sample is never serialized.
+ */
+function coreAlarmUnadmittedSoundSample(
+  event: CoreWildlifeCausalEvent,
+): UnadmittedAlarmSoundSample | null {
+  if (event.kind !== "alarm" || !isExpressiveAlarmSpecies(event.species)) return null;
+  const meaning = coreWildlifeAlarmMeaningForSpecies(event.species);
+  if (situatedExpressionSoundClass(meaning) !== "animal-alarm") return null;
+  const signal = coreEcologyAlarmSignalProfile(event.species);
+  if (signal.interrupt !== "strong") return null;
+  const acoustics = situatedExpressionAcoustics({ meaning, volume: "shout" });
+  const eventHash = hashCanonical({
+    domain: "core-wildlife-alarm-hearing:v1",
+    eventId: event.eventId,
+    sourceActorId: event.actorId,
+    species: event.species,
+  });
+  return createUnadmittedAlarmSoundSample({
+    acousticEventId: event.eventId,
+    id: `caa-${eventHash}`,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: "animal-alarm",
+    soundInterrupt: "strong",
+    sourceActorId: event.actorId,
+  });
+}
+
+/**
  * Reprojects one authenticated pursuit yip into anonymous physical hearing
  * when the optional expression ledger had no capacity. Presentation and audio
  * remain separate; this sample exists only for the next bounded human-hearing
@@ -12807,6 +12844,7 @@ export async function createTideweftRuntime(
     targetTick: number,
     physicalSoundSamples: readonly PhysicalSoundSample[],
     porterVisual: RuntimePorterVisualFrame | null = null,
+    unadmittedAlarmSoundSamples: readonly UnadmittedAlarmSoundSample[] = [],
   ): ResidentPerceptionFrame {
     const batches = collectExistingHumanObservations({
       world: worldView,
@@ -12816,6 +12854,7 @@ export async function createTideweftRuntime(
       supplementalSoundSamples: actorVocalizationSamples,
       supplementalSemanticFacts: pendingAuthenticatedSituatedExpressionSemanticFacts(),
       physicalSoundSamples,
+      unadmittedAlarmSoundSamples,
     });
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
@@ -13821,12 +13860,13 @@ export async function createTideweftRuntime(
       });
       const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
         runtimeCoreAlarmEvents(patch)
-      )).filter(({ actorId }) => localMaterializedCoreActorIdSet.has(actorId));
+      )).filter((alarm) => localMaterializedCoreActorIdSet.has(alarm.actorId));
       const preparedCoreAlarms: Array<Readonly<{
         readonly alarm: CoreWildlifeCausalEvent;
         readonly humanSemanticBatches: readonly CoreEcologyObservationBatch[];
         readonly humanHearingOwnedByExpression: boolean;
         readonly alarmPhysicalFallback: PhysicalSoundSample | null;
+        readonly alarmSoundFallback: UnadmittedAlarmSoundSample | null;
       }>> = [];
       for (const alarm of coreAlarms) {
         const matchingAdmissions = situatedExpressionAdmissions.records.filter(
@@ -13892,51 +13932,86 @@ export async function createTideweftRuntime(
         ) {
           throw new Error("Core alarm could not enter shared physical hearing");
         }
+        const requiresAlarmFallback = isExpressiveAlarmSpecies(alarm.species)
+          && humanSoundClass === "animal-alarm" && !humanHearingOwnedByExpression;
+        const alarmSoundFallback = requiresAlarmFallback
+          ? coreAlarmUnadmittedSoundSample(alarm) : null;
+        if (requiresAlarmFallback && alarmSoundFallback === null) {
+          throw new Error("Core alarm could not enter shared anonymous hearing");
+        }
         preparedCoreAlarms.push(Object.freeze({
           alarm,
           humanSemanticBatches,
           humanHearingOwnedByExpression,
           alarmPhysicalFallback,
+          alarmSoundFallback,
         }));
       }
       // Expression admission and acoustic hearing have independent budgets.
       // Retained fox calls and core alarms compete by semantic priority for
-      // bounded human physical-hearing slots before routine contact carry, so
+      // bounded human world-hearing slots before routine contact carry, so
       // a full caption/sample ledger cannot make the world acoustically silent.
       // Dogs keep the original alarm-contact list and rabbit meaning through
       // core ecology; this slice makes no new dog interpretation claim for the
       // fox call. Repetition policy may coalesce only optional presentation.
-      const selectedExpressionPhysicalFallbacks = [
-        ...foxPursuitPhysicalFallbacks,
+      type ExpressionHearingFallback = Readonly<{
+        eventId: string;
+        priority: number;
+      }> & (
+        | Readonly<{ kind: "physical"; sample: PhysicalSoundSample }>
+        | Readonly<{ kind: "alarm"; sample: UnadmittedAlarmSoundSample }>
+      );
+      const selectedExpressionHearingFallbacks: readonly ExpressionHearingFallback[] = [
+        ...foxPursuitPhysicalFallbacks.map((fallback) => ({
+          ...fallback, kind: "physical" as const,
+        })),
         ...preparedCoreAlarms
-        .flatMap(({ alarm, alarmPhysicalFallback }) => (
-          alarmPhysicalFallback === null || !isExpressiveAlarmSpecies(alarm.species)
-            ? []
-            : [{
-                eventId: alarm.eventId,
-                priority: coreWildlifeAlarmExpressionPriority(alarm.species),
+        .flatMap<ExpressionHearingFallback>(({ alarm, alarmPhysicalFallback, alarmSoundFallback }) => {
+          if (!isExpressiveAlarmSpecies(alarm.species)) return [];
+          const shared = {
+            eventId: alarm.eventId,
+            priority: coreWildlifeAlarmExpressionPriority(alarm.species),
+          };
+          return alarmPhysicalFallback !== null
+            ? [{
+                ...shared,
+                kind: "physical",
                 sample: alarmPhysicalFallback,
               }]
-        )),
+            : alarmSoundFallback !== null ? [{
+                ...shared,
+                kind: "alarm",
+                sample: alarmSoundFallback,
+              }] : [];
+        }),
       ].sort((left, right) => (
         right.priority - left.priority
         || compareText(left.eventId, right.eventId)
       ))
         .slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES);
-      const selectedPhysicalFallbackEventIds = new Set(
-        selectedExpressionPhysicalFallbacks.map(({ eventId }) => eventId),
+      const selectedHearingFallbackEventIds = new Set(
+        selectedExpressionHearingFallbacks.map(({ eventId }) => eventId),
       );
+      const remainingPhysicalCapacity = HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES
+        - selectedExpressionHearingFallbacks.length;
       const humanPhysicalSoundSamples = Object.freeze([
-        ...selectedExpressionPhysicalFallbacks.map(({ sample }) => sample),
-        ...worldPhysicalSoundSamples,
-      ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
+        ...selectedExpressionHearingFallbacks.flatMap((fallback) => (
+          fallback.kind === "physical" ? [fallback.sample] : []
+        )),
+        ...worldPhysicalSoundSamples.slice(0, remainingPhysicalCapacity),
+      ]);
+      const humanUnadmittedAlarmSoundSamples = Object.freeze(
+        selectedExpressionHearingFallbacks.flatMap((fallback) => (
+          fallback.kind === "alarm" ? [fallback.sample] : []
+        )),
+      );
       for (const prepared of preparedCoreAlarms) {
-        const fallbackOwnsResidentHearing = selectedPhysicalFallbackEventIds.has(
+        const fallbackOwnsResidentHearing = selectedHearingFallbackEventIds.has(
           prepared.alarm.eventId,
         );
         // The core path remains authoritative for wildlife and dogs. An
         // admitted Living Voice sample owns every human leg. A selected
-        // physical fallback owns resident hearing (including the porter),
+        // domain-event fallback owns resident hearing (including the porter),
         // while the separate player/event-time core leg remains intact.
         const excludedHumanObserverIds = prepared.humanHearingOwnedByExpression
           ? humanCoreAlarmObserverIds
@@ -14053,7 +14128,7 @@ export async function createTideweftRuntime(
       const perceptionFrame = residentPerceptionFrame(targetTick, humanPhysicalSoundSamples, {
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
-      });
+      }, humanUnadmittedAlarmSoundSamples);
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorldWithPreparedResidentIntroduction(perceptionFrame);
       // The preceding frame consumed the prior interval exactly once. New

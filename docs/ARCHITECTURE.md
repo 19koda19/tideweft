@@ -232,14 +232,33 @@ calls from the authenticated ecology event when no admitted expression owns
 them; a selected fallback replaces, rather than duplicates, the porter's raw
 leg. Rabbit keeps its established physical sample identity, chicken/duck remain
 noninterrupting, and the goat's strong flag survives semantic conversion.
-Other raw animal-alarm classes retain their existing core owner; this does not
-claim unrestricted ordinary-resident hearing for every refused alarm class.
+Strong core `animal-alarm` events also enter that bounded human-hearing owner
+when no admitted expression owns them. A transient
+`UnadmittedAlarmSoundSample` retains the actual committed domain event and
+source, not a forged expression identity. Existing core propagation first
+authenticates the actor/species, alarm intent and memory, event timing and
+retained physical locus. Unlike protected Voice expression admission, lawful
+hearing does not require a new same-tick threat sighting: core cognition may
+alarm from a still-valid remembered threat. The transient carrier shares the
+physical budget of eight; admitted supplemental sounds retain their separate
+eight-slot budget and each resident retains the 48-observation ceiling.
+Priority/event-ID selection is deterministic, selected-only porter deduplication
+leaves the player/dog/wildlife core legs intact, and no source identity, cause,
+or domain-event identifier enters anonymous listener knowledge. The sample is
+not serialized; current domain state re-derives its one pending interval, while
+consumed listener beliefs persist without replay. Representative boar optional-
+refusal and remembered-threat deer fixtures use controlled legacy-cohort
+adoption into current47; they are not fresh-native travel proofs.
 This is controlled encounter evidence, not proof of an ordinary travel encounter,
 goat-specific sleeping runtime behavior, handling, hunting, broad repertoire,
 or new harmful bear behavior. Reload deliberately restarts session recap/UI
 metadata; it does not reset authoritative world or acoustic carry state.
-All nine current core alarm-source profiles now have shared Voice adapters;
-the defensive generic player fallback is not an additional live integration.
+All nine current core alarm-source profiles now have shared Voice adapters,
+but not every lawful domain alarm qualifies for a fresh Voice expression.
+The legacy generic player fallback can still handle a heard remembered-threat
+alarm lacking that fresh expression authority; its direct audio/announcement
+transaction boundary remains active reconciliation work, not an unreachable
+defensive branch. Protected expression freshness is not relaxed to hide that gap.
 Future alarm sources still require an explicit source-authenticated adapter.
 The narrow gull, elk, boar, chicken, duck, goat, cat, and fox representatives do not
 prove broad species repertoires, general hunting communication, or broad animal
@@ -882,8 +901,11 @@ alarms and the marsh-fox call retain their existing physical fallback when that
 optional admission is refused. Each real event keeps lawful event-time player
 audio and one bounded re-derived human-hearing opportunity without hidden
 motive knowledge or duplicate receipt. That hearing remains species-honest:
-rabbit is `physical-thud`, chicken and fox are non-interrupting `animal-call`,
-and the strong core calls remain anonymous `animal-alarm`. A quiet chicken call
+rabbit is `physical-thud`; chicken, duck and fox are non-interrupting
+`animal-call`; goat is a strong anonymous `animal-call`; crow, deer, gull, elk
+and boar retain strong anonymous `animal-alarm`. Unadmitted strong alarms use
+the transient domain-event carrier described in the audited frontier, not an
+invented admitted expression. A quiet chicken call
 recorded while the player was asleep canonically retains no player receipt;
 current v47/carry14 reload and later cancellation cannot invent one. The new
 meaning does not enter historical formats or frozen released catalogs.
