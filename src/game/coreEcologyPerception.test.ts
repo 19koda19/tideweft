@@ -150,6 +150,43 @@ describe("core ecology cross-species perception bridge", () => {
     ]);
   });
 
+  it("keeps visible aquatic birds neutral to a goat, human and dog", () => {
+    const current = fixture("aquatic bird is not a goat predator");
+    const goat = wildlife(current, "domestic-goat", OBSERVER_X, OBSERVER_Y, 0, 0);
+    const heron = wildlife(current, "great-blue-heron", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const human = actorAddress("H-neutral-bird", "human", OBSERVER_X, OBSERVER_Y, 0);
+    const dog = actorAddress("D-neutral-bird", "domestic-dog", OBSERVER_X, OBSERVER_Y, 0);
+    const batches = collectCoreEcologyVisualObservationBatches(frame(current, [goat, heron], {
+      participants: [human, dog].map((address) => ({ address, contactScope: "core-only" as const })),
+    }));
+    for (const observerId of [goat.identity.stableId, human.actorId, dog.actorId]) {
+      expect(observationsFor(batches, observerId)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          channel: "vision",
+          perceivedClass: "great-blue-heron",
+          subjectId: heron.identity.stableId,
+          identification: "identified",
+        }),
+      ]));
+      expect(observationsFor(batches, observerId).some(
+        ({ subjectId, perceivedClass }) => subjectId === heron.identity.stableId
+          && perceivedClass === "large-predator",
+      )).toBe(false);
+    }
+    const goatStep = stepCoreWildlifeActor(goat, {
+      tick: 1,
+      observations: observationsFor(batches, goat.identity.stableId),
+      foodOpportunities: [],
+      accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+    });
+    expect(goatStep).not.toBeNull();
+    expect(goatStep?.event.kind).not.toBe("alarm");
+    // Reordering contacts cannot manufacture or suppress a threat.
+    expect(collectCoreEcologyVisualObservationBatches(frame(current, [heron, goat], {
+      participants: [dog, human].map((address) => ({ address, contactScope: "core-only" as const })),
+    }))).toEqual(batches);
+  });
+
   it("lets a free-ranging cat and dog recognize one another without turning either into prey", () => {
     const current = fixture("cat and dog direct contact");
     const cat = wildlife(current, "domestic-cat", OBSERVER_X, OBSERVER_Y, 0, 0);
@@ -797,7 +834,9 @@ function wildlife(
     | "domestic-cat"
     | "marsh-rabbit"
     | "fish-crow"
-    | "northern-harrier",
+    | "northern-harrier"
+    | "domestic-goat"
+    | "great-blue-heron",
   tileX: number,
   tileY: number,
   heading: number,

@@ -37,6 +37,7 @@ export const CORE_ECOLOGY_SPECIES_RUNTIME_CAPABILITIES = Object.freeze([
   "food-investigation",
   "ground-movement-evidence",
   "group-coordination",
+  "large-predator-pressure",
   "mobbing",
   "movement-memory",
   "perch",
@@ -307,7 +308,12 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
       maximumAggregateAnchors: 0,
       aggregateResponseCadenceTicks: 0,
       aggregateResponseVerbs: [],
-      capabilities: ["actor-address", "food-investigation", "live-prey-pursuit"],
+      capabilities: [
+        "actor-address",
+        "food-investigation",
+        "large-predator-pressure",
+        "live-prey-pursuit",
+      ],
       activitySignals: [],
       evidenceKinds: [],
       presentationModel: "individual",
@@ -578,6 +584,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "food-investigation",
         "ground-movement-evidence",
         "group-coordination",
+        "large-predator-pressure",
         "live-prey-pursuit",
         "movement-memory",
         "predator-contact-damage",
@@ -595,6 +602,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "carcass-feeding",
         "carcass-guarding",
         "food-investigation",
+        "large-predator-pressure",
         "live-prey-pursuit",
         "predator-contact-damage",
       ],
@@ -611,6 +619,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "carcass-feeding",
         "carcass-guarding",
         "food-investigation",
+        "large-predator-pressure",
       ],
       activitySignals: [],
       evidenceKinds: [],
@@ -725,6 +734,7 @@ const RUNTIME_VALUES: Readonly<Record<CoreWildlifeSpecies, AuthoredRuntimePolicy
         "amphibious-route",
         "aquatic-locomotion",
         "food-investigation",
+        "large-predator-pressure",
         "live-prey-pursuit",
         "movement-memory",
         "water-depth-response",
@@ -1221,6 +1231,16 @@ export function validateCoreEcologySpeciesRuntimePolicies(
       policy.capabilities.includes("mobbing")
       && policy.capabilities.includes("aerial-predator")
     ) errors.push(`${policy.speciesId}:mobbing-predator-capability-collision`);
+    // Physical broad pressure is explicitly authored, not inferred from diet,
+    // pursuit or the intentionally narrower mortality/body contract.
+    if (
+      policy.capabilities.includes("large-predator-pressure")
+      && (
+        !policy.actorAddressable
+        || !getCoreWildlifeProfile(policy.speciesId).roles.includes("predator")
+        || getCoreWildlifeProfile(policy.speciesId).roles.includes("small-predator")
+      )
+    ) errors.push(`${policy.speciesId}:large-predator-pressure-policy-mismatch`);
     if (
       policy.capabilities.includes("shoreline-foraging")
       && (

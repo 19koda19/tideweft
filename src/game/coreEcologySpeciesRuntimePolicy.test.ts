@@ -92,6 +92,27 @@ describe("core ecology species runtime policy", () => {
     }
   });
 
+  it("declares broad pressure independently of pursuit, aquatic diet and mortality", () => {
+    const broad = CORE_ECOLOGY_SPECIES_RUNTIME_POLICIES.filter(
+      ({ capabilities }) => capabilities.includes("large-predator-pressure"),
+    );
+    expect(broad.map(({ speciesId }) => speciesId)).toEqual([
+      "black-bear", "gray-wolf", "cougar", "brown-bear", "polar-bear",
+    ]);
+    expect(coreEcologySpeciesHasRuntimeCapability("brown-bear", "live-prey-pursuit"))
+      .toBe(false);
+    for (const bird of ["golden-eagle", "great-blue-heron", "osprey", "double-crested-cormorant"] as const) {
+      expect(coreEcologySpeciesHasRuntimeCapability(bird, "large-predator-pressure"))
+        .toBe(false);
+      const policy = coreEcologySpeciesRuntimePolicy(bird);
+      if (policy === null) throw new Error("Bird policy is missing");
+      expect(isCoreEcologySpeciesRuntimePolicy({
+        ...policy,
+        capabilities: [...policy.capabilities, "large-predator-pressure"],
+      })).toBe(false);
+    }
+  });
+
   it("declares shared contact/body capabilities and orthogonal carcass consumers", () => {
     expect(coreEcologySpeciesRuntimePolicy("marsh-fox")).toMatchObject({
       mortality: {
@@ -411,6 +432,7 @@ describe("core ecology species runtime policy", () => {
           "amphibious-route",
           "aquatic-locomotion",
           "food-investigation",
+          "large-predator-pressure",
           "live-prey-pursuit",
           "movement-memory",
           "water-depth-response",

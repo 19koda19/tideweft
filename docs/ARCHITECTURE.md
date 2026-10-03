@@ -2223,6 +2223,18 @@ candidate.
 
 ## Bounded habitat-derived core-wildlife assemblage
 
+Current broad physical predator pressure requires the explicit
+`large-predator-pressure` runtime capability as well as the predator role and
+non-small-predator declaration. The current unpublished correction declares it
+for black bear, brown bear, gray wolf, cougar and polar bear. A predator diet
+alone cannot classify golden eagle, heron, osprey or cormorant as a large threat
+to a goat, human or dog; ordinary direct sight retains the bird's identity.
+Shared aquatic aggregate pressure, small-prey pressure and crow/aerial-predator
+relations retain their existing owners. This capability is independent of
+live-prey pursuit and the deliberately narrow mortality/body policy: a brown
+bear can exert nonlethal pressure without gaining a new attack or body verb.
+No species-pair alarm rule, generator change or save-schema change is implied.
+
 Release `0.3.3-alpha.31 — High Country Shadows` is **LIVE_VERIFIED** and extends the
 catalog to 24 records by appending cougar and brown bear at the exact existing
 deterministic remote temperate-upland/forest-edge source. The release gate gives active owners only

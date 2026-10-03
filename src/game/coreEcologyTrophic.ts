@@ -99,9 +99,14 @@ export function coreEcologyTrophicPerceivedClass(
     )
   ) return "aquatic-foraging-pressure";
 
-  // A broad predator is currently the large-predator capability. It pressures
-  // smaller predators, prey, domestic dogs and humans without implying combat.
-  if (subjectIsPredator && !subjectIsSmallPredator) return "large-predator";
+  // Broad physical pressure needs its own authored capability: a predator diet
+  // alone would turn aquatic birds into threats to goats, dogs and humans.
+  // This remains independent of pursuit or a currently supported body/kill.
+  if (
+    subjectIsPredator
+    && !subjectIsSmallPredator
+    && coreEcologySpeciesHasRuntimeCapability(subject, "large-predator-pressure")
+  ) return "large-predator";
 
   // The current domestic dog has no wildlife trophic profile. Its already-live
   // physical scale and canid behavior make it a plausible pressure source for
@@ -128,9 +133,6 @@ export function coreEcologyTrophicPerceivedClass(
   ) return "live-prey";
 
   if (observerIsSmallPrey && subjectIsPredator) return "predator";
-  if (observerIsPrey && subjectIsPredator && !subjectIsSmallPredator) {
-    return "large-predator";
-  }
   if (observerIsSmallPredator && subjectIsSmallPredator) return "food-competitor";
 
   return null;

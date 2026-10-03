@@ -84,6 +84,28 @@ describe("core ecology trophic capability resolver", () => {
     expect(coreEcologyTrophicPerceivedClass("deer", "domestic-cat")).toBeNull();
   });
 
+  it("does not promote a bird predator role into broad mammal pressure", () => {
+    for (const observer of ["human", "domestic-dog", "domestic-goat", "deer", "elk"] as const) {
+      for (const bird of ["golden-eagle", "great-blue-heron", "osprey", "double-crested-cormorant"] as const) {
+        expect(coreEcologyTrophicPerceivedClass(observer, bird), `${observer}->${bird}`)
+          .toBeNull();
+      }
+      for (const predator of ["black-bear", "brown-bear", "gray-wolf", "cougar", "polar-bear"] as const) {
+        expect(coreEcologyTrophicPerceivedClass(observer, predator))
+          .toBe("large-predator");
+      }
+    }
+    // An intentionally non-pursuing bear still exerts lawful pressure. The
+    // absence of a mortality/body contract is not a physical size statement.
+    expect(coreEcologyCanPursueLivingActor("brown-bear", "domestic-goat")).toBe(false);
+    expect(coreEcologyTrophicPerceivedClass("fish-crow", "golden-eagle"))
+      .toBe("aerial-predator");
+    expect(coreEcologyTrophicPerceivedClass("bay-anchovy", "great-blue-heron"))
+      .toBe("aquatic-foraging-pressure");
+    expect(coreEcologyTrophicPerceivedClass("american-pika", "golden-eagle"))
+      .toBe("predator");
+  });
+
   it("keeps crow mobbing separate from prey identity and requires observed mobbing for reverse pressure", () => {
     expect(coreEcologyTrophicPerceivedClass("fish-crow", "northern-harrier"))
       .toBe("aerial-predator");

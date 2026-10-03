@@ -1305,6 +1305,28 @@ At that boundary Alpha39 added no bite or disease, capture or consumption, new
 mortality or bodies, reproduction, sound/Living Voice, bounded Turning Day
 daily life, or continuous 3D flight, and it authorized 04_1A The Turning Day.
 
+### Broad pressure needs an explicit physical capability — 2026-10-03
+
+The current unpublished Living Voice producer audit found that `predator`
+without `small-predator` was sufficient to classify every subject as
+`large-predator`. That also classified golden eagle, great blue heron, osprey
+and double-crested cormorant as broad threats to people, dogs and goats. The
+existing tests rejected those birds' pursuit of large prey but did not test
+the inverse visual classification.
+
+New characterization tests in `coreEcologyTrophic.test.ts` and
+`coreEcologyPerception.test.ts` first failed on that exact classification. The
+shared runtime-policy correction makes `large-predator-pressure` explicit for
+the five currently applicable broad mammals; it is not inferred from diet,
+pursuit or edible body yield. Ordinary sight of an aquatic bird remains lawful
+identity instead of manufactured danger, and a goat does not alarm from that
+contact. Bear pressure, aquatic aggregate pressure, crow/aerial relations and
+small-prey pressure remain covered. The 12-file affected ecology set passed
+229 tests; maintained critical smoke passed 105 tests. These are local source/
+perception proofs, not a new public release or proof of an ordinary goat/bear
+travel encounter. Generation, mortality, saved schema and dependencies are
+unchanged; no complete cumulative, hardware or performance claim is made here.
+
 ### A complete day is a distributed invariant, not a scripted showcase
 
 The **LIVE_VERIFIED** `0.3.3-alpha.53 — The Turning Day` release establishes the
