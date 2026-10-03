@@ -2,6 +2,14 @@
 
 This file records evidence that changes the design. It is not an attempt to summarize every article about games; it captures the sources and constraints that can be turned into mechanics or verification.
 
+Local artifact retention — 2026-10-02: obsolete optimization working notes,
+profiling captures, source-map dumps and frozen experimental builds were moved
+to a recoverable archive outside the checkout. Historical artifact paths below
+remain provenance, not promises that those files are still present. The local
+workflow record retains recovery locations. Future comparisons must recover
+the matching artifacts or capture a fresh baseline; no measured result, durable
+performance rule or current validation certificate was removed by this cleanup.
+
 ## What makes play rewarding and restorative
 
 ### Psychological needs beat a pile of prizes
@@ -471,8 +479,10 @@ Baseline harness SHA256:
 browser harness:
 `83cc78ee40fe21c3275b0d5971d4076022753a9cff2dd447f04b0f9ae310b4cc`.
 Synthetic frozen builds, JSON captures, validation logs and pre-edit budgets
-are retained locally under `artifacts/world-advance-repair/`; they are ignored,
-not shipped telemetry, fixtures or build assets.
+were captured under `artifacts/world-advance-repair/`, then recoverably archived
+outside the checkout during the cleanup noted above. They are historical local
+evidence, not shipped telemetry, fixtures or build assets. The current cumulative
+certificate remains in `artifacts/validation/`.
 
 Before editing, completion ceilings for world-step mean/p95/p99/max were
 50/70/80/100ms Electron estuary,60/80/90/110ms dense and70/90/100/125ms Firefox.
