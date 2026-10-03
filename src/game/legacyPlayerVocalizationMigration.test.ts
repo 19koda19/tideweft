@@ -284,6 +284,14 @@ describe("legacy v33 player-vocalization migration", () => {
     });
     expect(migrateLegacyV33PlayerVocalizations(duck.state, [], 108, 0)).toBeNull();
 
+    const goat = accept(createSituatedExpressionState(), {
+      ...baseIntent("legacy:future-goat"),
+      meaning: "domestic-goat-alarm-call", family: "animal-signal",
+      tone: "alarmed", volume: "shout", knowledgeBasis: "self-perceived-threat",
+      priority: 760_000, salience: 840_000, durationSteps: 6,
+    });
+    expect(migrateLegacyV33PlayerVocalizations(goat.state, [], 108, 0)).toBeNull();
+
     const marshRabbit = accept(createSituatedExpressionState(), {
       ...baseIntent("legacy:future-marsh-rabbit"),
       meaning: "marsh-rabbit-alarm-thump",

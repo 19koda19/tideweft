@@ -175,6 +175,7 @@ export type CoreWildlifeAlarmExpressionSpecies =
   | "wild-boar"
   | "domestic-chicken"
   | "american-black-duck"
+  | "domestic-goat"
   | "gull";
 
 /**
@@ -1380,6 +1381,7 @@ function canonicalCoreWildlifeAlarmRecord(
       && value.sourceSpecies !== "wild-boar"
       && value.sourceSpecies !== "domestic-chicken"
       && value.sourceSpecies !== "american-black-duck"
+      && value.sourceSpecies !== "domestic-goat"
       && value.sourceSpecies !== "gull")
     || !validId(value.sourceOwnerKey)
     || !validId(value.sourceObservationId)

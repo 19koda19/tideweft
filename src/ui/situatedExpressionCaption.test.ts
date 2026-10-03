@@ -326,6 +326,25 @@ describe("situated expression caption", () => {
       .toBe("[A bird calls; the sound seems all around.]");
   });
 
+  it("describes a visible goat bleat without identifying an unseen source or its cause", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:opaque-event", speakerLabel: "Domestic goat", text: "MAAA!",
+      tone: "alarmed", presentationKind: "animal-call", animalCallKind: "goat-call",
+      assertive: true,
+    };
+    expect(situatedExpressionCaptionCopy(visible)).toBe("[A goat bleats.]");
+    expect(situatedExpressionCaptionVisibleText(visible)).toBe("MAAA!");
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible, speakerLabel: "An animal", text: "CALL!", animalCallKind: "animal-call",
+      directionLabel: "west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen)).toBe("[An animal calls somewhere west.]");
+    expect(situatedExpressionCaptionVisibleText(unseen)).toBe("CALL! · west");
+    expect(JSON.stringify(unseen)).not.toMatch(/goat|MAAA|predator|threat|custody/iu);
+    expect(situatedExpressionCaptionCopy({ ...unseen, directionLabel: "direction unclear" }))
+      .toBe("[An animal calls; direction unclear.]");
+  });
+
   it("presents a boar grunt only for a visible source and keeps unseen hearing anonymous", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:boar:alarm",

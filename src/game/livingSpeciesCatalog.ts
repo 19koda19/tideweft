@@ -1195,6 +1195,13 @@ const currentDuckVoiceSound = (): LivingSpeciesSoundContract => ({
   communicationSignals: ["duck-alarm-quack"],
   accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
 });
+const currentGoatVoiceSound = (): LivingSpeciesSoundContract => ({
+  implementation: "active",
+  ownerId: LIVING_VOICE_SOUND_OWNER_ID,
+  repertoire: ["goat-alarm-bleat"],
+  communicationSignals: ["goat-alarm-bleat"],
+  accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+});
 const WORLD_ACOUSTIC_SOUND_OWNER_ID = "game:world-acoustics:v1" as const;
 const currentBrownRatContactSound = (): LivingSpeciesSoundContract => ({
   implementation: "active",
@@ -2011,7 +2018,7 @@ const CORE_WILDLIFE_CATALOG_VALUES: Readonly<
     includeDogInteraction: true,
     groupModel: "group",
     crossRegion: false,
-    sound: noSound(),
+    sound: currentGoatVoiceSound(),
     evidence: {
       status: "unimplemented",
       ownerId: null,
@@ -5774,6 +5781,7 @@ const HISTORICAL_PRE_VOICE_SOUND_SPECIES: ReadonlySet<string> = new Set([
   "deer",
   "domestic-chicken",
   "domestic-dog",
+  "domestic-goat",
   "gull",
   "human",
 ]);

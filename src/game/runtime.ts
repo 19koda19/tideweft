@@ -604,6 +604,7 @@ import {
   canonicalizeCoreEcologyAggregatePatch,
   canonicalizeCoreEcologyPatch,
   coreEcologyAggregatePatchActor,
+  coreEcologyAlarmSignalProfile,
   createCoreEcologyAggregatePatch,
   deserializeCoreEcologyAggregatePatch,
   migrateLegacyCoreEcologyAggregatePatch,
@@ -1130,6 +1131,7 @@ function recentMeaningAcousticTuples(
     case "gull-alarm-call":
     case "elk-alarm-call":
     case "wild-boar-alarm-call":
+    case "domestic-goat-alarm-call":
     case "human-danger-warning":
       return [{ volume: "shout", interrupt: "strong" }];
   }
@@ -7041,7 +7043,7 @@ function coreAlarmBatchesForHumanHearing(
         confidence: observation.confidence,
         salience: observation.salience,
         identification: "anonymous",
-        interrupt: "none",
+        interrupt: observation.interrupt,
       });
       if (physical === null) return null;
       observations.push(physical);
@@ -7082,6 +7084,44 @@ function rabbitAlarmPhysicalSoundSample(
     soundRangeUnits: acoustics.rangeUnits,
     soundClass: "physical-thud",
     soundInterrupt: "none",
+    sourceId: event.actorId,
+  });
+}
+
+/**
+ * Optional expression capacity never owns whether an ordinary resident hears
+ * a committed alarm. Re-derive its anonymous sound from the same ecology event
+ * for the existing bounded physical-hearing input; do not persist or replay it.
+ * Rabbit retains its already-established physical sample identity.
+ */
+function coreAlarmPhysicalSoundSample(
+  event: CoreWildlifeCausalEvent,
+): PhysicalSoundSample | null {
+  if (event.kind !== "alarm" || !isExpressiveAlarmSpecies(event.species)) return null;
+  if (event.species === "marsh-rabbit") return rabbitAlarmPhysicalSoundSample(event);
+  const signal = coreEcologyAlarmSignalProfile(event.species);
+  const meaning = coreWildlifeAlarmMeaningForSpecies(event.species);
+  const soundClass = situatedExpressionSoundClass(meaning);
+  // The current physical carrier admits anonymous calls/contact, not decoded
+  // alarm semantics. Other alarm classes retain their existing core owner.
+  if (soundClass !== "animal-call") return null;
+  const acoustics = situatedExpressionAcoustics({
+    meaning, volume: signal.interrupt === "strong" ? "shout" : "murmur",
+  });
+  const eventHash = hashCanonical({
+    domain: "core-wildlife-alarm-physical:v1",
+    eventId: event.eventId,
+    sourceActorId: event.actorId,
+    species: event.species,
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: `core-alarm:v1:${eventHash}`,
+    id: `cap-${eventHash}`,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass,
+    soundInterrupt: signal.interrupt,
     sourceId: event.actorId,
   });
 }
@@ -12346,6 +12386,7 @@ export async function createTideweftRuntime(
       && expression.meaning !== "gull-alarm-call"
       && expression.meaning !== "elk-alarm-call"
       && expression.meaning !== "wild-boar-alarm-call"
+      && expression.meaning !== "domestic-goat-alarm-call"
       && expression.meaning !== "human-danger-warning"
     ) return null;
     const listenerPosition = playerWorldPositionInRegionalWindow(
@@ -13785,7 +13826,7 @@ export async function createTideweftRuntime(
         readonly alarm: CoreWildlifeCausalEvent;
         readonly humanSemanticBatches: readonly CoreEcologyObservationBatch[];
         readonly humanHearingOwnedByExpression: boolean;
-        readonly rabbitPhysicalFallback: PhysicalSoundSample | null;
+        readonly alarmPhysicalFallback: PhysicalSoundSample | null;
       }>> = [];
       for (const alarm of coreAlarms) {
         const matchingAdmissions = situatedExpressionAdmissions.records.filter(
@@ -13838,26 +13879,28 @@ export async function createTideweftRuntime(
             wildlifeAlarmAuthority,
             wildlifeAlarmAdmission.triggerEventId,
           ) !== null;
-        const rabbitPhysicalFallback = alarm.species === "marsh-rabbit"
+        const requiresPhysicalFallback = isExpressiveAlarmSpecies(alarm.species)
+          && (humanSoundClass === "animal-call" || humanSoundClass === "physical-thud");
+        const alarmPhysicalFallback = requiresPhysicalFallback
           && !humanHearingOwnedByExpression
-          ? rabbitAlarmPhysicalSoundSample(alarm)
+          ? coreAlarmPhysicalSoundSample(alarm)
           : null;
         if (
-          alarm.species === "marsh-rabbit"
+          requiresPhysicalFallback
           && !humanHearingOwnedByExpression
-          && rabbitPhysicalFallback === null
+          && alarmPhysicalFallback === null
         ) {
-          throw new Error("Rabbit alarm could not enter shared physical hearing");
+          throw new Error("Core alarm could not enter shared physical hearing");
         }
         preparedCoreAlarms.push(Object.freeze({
           alarm,
           humanSemanticBatches,
           humanHearingOwnedByExpression,
-          rabbitPhysicalFallback,
+          alarmPhysicalFallback,
         }));
       }
       // Expression admission and acoustic hearing have independent budgets.
-      // Retained fox calls and rabbit alarms compete by semantic priority for
+      // Retained fox calls and core alarms compete by semantic priority for
       // bounded human physical-hearing slots before routine contact carry, so
       // a full caption/sample ledger cannot make the world acoustically silent.
       // Dogs keep the original alarm-contact list and rabbit meaning through
@@ -13866,13 +13909,13 @@ export async function createTideweftRuntime(
       const selectedExpressionPhysicalFallbacks = [
         ...foxPursuitPhysicalFallbacks,
         ...preparedCoreAlarms
-        .flatMap(({ alarm, rabbitPhysicalFallback }) => (
-          rabbitPhysicalFallback === null
+        .flatMap(({ alarm, alarmPhysicalFallback }) => (
+          alarmPhysicalFallback === null || !isExpressiveAlarmSpecies(alarm.species)
             ? []
             : [{
                 eventId: alarm.eventId,
-                priority: coreWildlifeAlarmExpressionPriority("marsh-rabbit"),
-                sample: rabbitPhysicalFallback,
+                priority: coreWildlifeAlarmExpressionPriority(alarm.species),
+                sample: alarmPhysicalFallback,
               }]
         )),
       ].sort((left, right) => (
@@ -13880,17 +13923,15 @@ export async function createTideweftRuntime(
         || compareText(left.eventId, right.eventId)
       ))
         .slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES);
-      const selectedRabbitPhysicalFallbackEventIds = new Set(
-        selectedExpressionPhysicalFallbacks.flatMap(({ eventId, sample }) => (
-          sample.soundClass === "physical-thud" ? [eventId] : []
-        )),
+      const selectedPhysicalFallbackEventIds = new Set(
+        selectedExpressionPhysicalFallbacks.map(({ eventId }) => eventId),
       );
       const humanPhysicalSoundSamples = Object.freeze([
         ...selectedExpressionPhysicalFallbacks.map(({ sample }) => sample),
         ...worldPhysicalSoundSamples,
       ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
       for (const prepared of preparedCoreAlarms) {
-        const fallbackOwnsResidentHearing = selectedRabbitPhysicalFallbackEventIds.has(
+        const fallbackOwnsResidentHearing = selectedPhysicalFallbackEventIds.has(
           prepared.alarm.eventId,
         );
         // The core path remains authoritative for wildlife and dogs. An
@@ -20371,6 +20412,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "wild-boar-alarm-call"
       && meaning !== "domestic-chicken-alarm-call"
       && meaning !== "american-black-duck-alarm-call"
+      && meaning !== "domestic-goat-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20387,6 +20429,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "wild-boar-alarm-call"
       && active.meaning !== "domestic-chicken-alarm-call"
       && active.meaning !== "american-black-duck-alarm-call"
+      && active.meaning !== "domestic-goat-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20402,6 +20445,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.vocalization !== "boar-grunt"
       && active.vocalization !== "chicken-alarm-squawk"
       && active.vocalization !== "duck-alarm-quack"
+      && active.vocalization !== "goat-alarm-bleat"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"

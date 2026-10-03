@@ -11,6 +11,37 @@ import {
 } from "./situatedExpressionAcoustics";
 
 describe("situated expression acoustics", () => {
+  it("keeps a carrying goat bleat strong without teaching humans its private alarm intent", () => {
+    const expression = {
+      meaning: "domestic-goat-alarm-call" as const,
+      vocalization: "goat-alarm-bleat" as const,
+      volume: "shout" as const, tone: "alarmed" as const, variantSeed: 179,
+    };
+    expect(situatedExpressionAcoustics(expression)).toEqual({
+      loudness: 1_000_000, rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundClass(expression)).toBe("animal-call");
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("strong");
+    // Intensity and interruption stay ecology-owned, not inferred from captions.
+    expect(situatedExpressionAcoustics({ ...expression, volume: "murmur" }))
+      .toEqual({ loudness: 1_000_000, rangeUnits: 9_100 });
+    expect(situatedExpressionSoundInterrupt({ ...expression, volume: "murmur" }))
+      .toBe("strong");
+    const audio = situatedExpressionAudioPresentation(expression, {
+      certainty: 500_000, pan: -0.25,
+    });
+    expect(audio).toMatchObject({
+      sound: { kind: "vocalization", vocalization: "goat-alarm-bleat" },
+      variantSeed: 179, pan: -0.25,
+    });
+    expect(audio?.volume).toBeCloseTo(0.621, 12);
+    expect(situatedExpressionSemanticFactForMemory({
+      sourceActorId: "GOAT-current-acoustics", triggerEventId: "goat-alarm:1",
+      meaning: expression.meaning, family: "animal-signal", priority: 760_000,
+      meaningCooldownRemainingSteps: 24, familyCooldownRemainingSteps: 12,
+    })).toBeNull();
+  });
+
   it("preserves a chicken alarm's soft ecology envelope without decoding alarm intent for humans", () => {
     const expression = {
       meaning: "domestic-chicken-alarm-call" as const,

@@ -86,6 +86,7 @@ describe("situated vocalization cues", () => {
       "vocalization-boar-grunt",
       "vocalization-chicken-alarm-squawk",
       "vocalization-duck-alarm-quack",
+      "vocalization-goat-alarm-bleat",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -253,7 +254,25 @@ describe("situated vocalization cues", () => {
     expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).not.toContain("duck-alarm-quack");
   });
 
-  it.each(["chicken-alarm-squawk", "duck-alarm-quack"] as const)(
+  it("gives the goat alarm a deterministic bounded bleat rather than a generic alarm", () => {
+    const seed = 0x60a7;
+    const bleat = situatedVocalizationPattern("goat-alarm-bleat", seed);
+    expect(bleat).toEqual(situatedVocalizationPattern("goat-alarm-bleat", seed));
+    expect(bleat).toHaveLength(3);
+    expect(bleat[0]?.delay).toBe(0);
+    expect(bleat[1]!.frequency).toBeGreaterThan(bleat[0]!.frequency);
+    expect(bleat[2]!.frequency).toBeLessThan(bleat[1]!.frequency);
+    expect(Math.max(...bleat.map(({ delay, duration }) => delay + duration))).toBeLessThanOrEqual(0.25);
+    expect(bleat).not.toEqual(wildlifeAlarmPattern());
+    expect(bleat).not.toEqual(situatedVocalizationPattern("boar-grunt", seed));
+    expect(bleat).not.toEqual(situatedVocalizationPattern("duck-alarm-quack", seed));
+    expect(situatedVocalizationPattern("goat-alarm-bleat", Number.NaN))
+      .toEqual(situatedVocalizationPattern("goat-alarm-bleat", 0));
+    expect(bleat).not.toEqual(situatedVocalizationPattern("goat-alarm-bleat", seed + 1));
+    expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).not.toContain("goat-alarm-bleat");
+  });
+
+  it.each(["chicken-alarm-squawk", "duck-alarm-quack", "goat-alarm-bleat"] as const)(
     "plays the live %s cue through the unlocked Web Audio tone boundary",
     async (vocalization) => {
       const parameter = () => ({

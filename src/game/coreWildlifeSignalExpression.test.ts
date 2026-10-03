@@ -76,7 +76,7 @@ interface AlarmFixture {
 function alarmFixture(
   species: Extract<
     CoreWildlifeSpecies,
-    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar" | "domestic-chicken" | "american-black-duck"
+    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar" | "domestic-chicken" | "american-black-duck" | "domestic-goat"
   > = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
@@ -91,6 +91,7 @@ function alarmFixture(
             ? "OBS-boar-sees-wolf"
             : "OBS-gull-sees-harrier",
   perceivedThreatClass = species === "deer" || species === "elk" || species === "wild-boar"
+    || species === "domestic-goat"
     ? "large-predator"
     : species === "marsh-rabbit"
       ? "predator"
@@ -104,7 +105,7 @@ function alarmFixture(
 ): AlarmFixture {
   const position = createWorldPosition(ORIGIN, 23_000, 31_000);
   const groupedAlarmSource = species === "elk" || species === "wild-boar"
-    || species === "domestic-chicken";
+    || species === "domestic-chicken" || species === "domestic-goat";
   const population: CoreEcologyPopulationInput = {
     species,
     populationKey: `living-voice:${species}`,
@@ -195,6 +196,71 @@ function sourceActor(world: CoreEcologyAggregatePatchState): CoreWildlifeActorSt
 }
 
 describe("core-wildlife signal expression", () => {
+  it("authenticates one conserved goat-herd alarm without disclosing its threat", () => {
+    // This is an ecology/Voice contract fixture, not a generated runtime encounter.
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "domestic-goat", "BEAR-goat-threat", "OBS-goat-threat", "large-predator",
+    );
+    expect(initialWorld.groups.groups).toMatchObject([{
+      identity: { species: "domestic-goat", organization: "herd" },
+      memberOrdinals: [0, 1],
+    }]);
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(input.world),
+    );
+    if (restoredWorld === null) throw new Error("Goat fixture failed roundtrip");
+    const restored = { ...input, actor: sourceActor(restoredWorld), world: restoredWorld };
+    const intent = coreWildlifeAlarmExpressionIntent(restored);
+    expect(intent).toEqual(coreWildlifeAlarmExpressionIntent(input));
+    expect(intent).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      meaning: "domestic-goat-alarm-call", family: "animal-signal",
+      tone: "alarmed", volume: "shout", knowledgeBasis: "self-perceived-threat",
+      priority: 760_000, durationSteps: 6,
+    });
+    expect(coreWildlifeAlarmMeaningForSpecies("domestic-goat")).toBe("domestic-goat-alarm-call");
+    expect(coreWildlifeAlarmSpeciesForMeaning("domestic-goat-alarm-call")).toBe("domestic-goat");
+    if (intent === null) throw new Error("Goat intent failed authentication");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (reduction.event === null || reduction.state === null) throw new Error("Goat alarm rejected");
+    expect(projectSituatedExpression(reduction.event)).toMatchObject({
+      text: "MAAA!", vocalization: "goat-alarm-bleat",
+    });
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, reduction.event)).toBe(true);
+    expect(coreWildlifeAlarmExpressionEventForTrigger(restored, input.event.eventId)).toEqual(reduction.event);
+    const memory = advanceSituatedExpression(reduction.state, 6)?.recent[0];
+    if (memory === undefined) throw new Error("Goat memory missing");
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, memory)).toBe(true);
+    expect(JSON.stringify(reduction.event)).not.toMatch(/BEAR-goat-threat|OBS-goat-threat|large-predator/u);
+    const herdMate = restoredWorld.populations[0]?.members[1]?.actor;
+    if (herdMate === undefined) throw new Error("Goat fixture lost herd mate");
+    expect(coreWildlifeAlarmExpressionIntent({ ...restored, actor: herdMate })).toBeNull();
+    expect(coreWildlifeAlarmExpressionIntent({ ...restored, event: rawEvent })).toBeNull();
+    for (const event of [
+      { ...input.event, species: "wild-boar" as const },
+      { ...input.event, causeReferenceId: "OBS-forged-goat" },
+      { ...input.event, position: translateWorldPosition(input.event.position, 1, 0) },
+    ]) expect(coreWildlifeAlarmExpressionIntent({ ...restored, event })).toBeNull();
+    for (const event of [
+      { ...reduction.event, volume: "murmur" as const, priority: 160_000 },
+      { ...reduction.event, meaning: "wild-boar-alarm-call" as const, vocalization: "boar-grunt" as const },
+    ]) expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, event)).toBe(false);
+    expect(fishCrowAlarmExpressionIntent(restored)).toBeNull();
+    const quiet = stepCoreEcologyAggregatePatch(initialWorld, {
+      tick: 1,
+      actorSteps: initialWorld.populations[0]!.members.map(({ actor }) => ({
+        actorId: actor.identity.stableId, observations: [], foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      })),
+    });
+    if (quiet === null) throw new Error("Goat counterfactual source step failed");
+    expect(quiet.events.filter(({ kind }) => kind === "alarm")).toEqual([]);
+    expect(coreWildlifeAlarmExpressionIntent({
+      ...input, actor: sourceActor(quiet.patch), world: quiet.patch,
+    })).toBeNull();
+  });
+
   it("adapts one finite duck alarm without escalating its quiet acoustic policy", () => {
     const { input, initialWorld, rawEvent } = alarmFixture(
       "american-black-duck", "DOG-duck-threat", "OBS-duck-threat", "predator",

@@ -467,6 +467,32 @@ describe("situated-expression admission ledger", () => {
     })).toBeNull();
   });
 
+  it("retains exact goat alarm ownership without carrying hidden threat facts", () => {
+    const input = {
+      sourceActorId: "GOAT-current-alarm", triggerEventId: "GOAT-current-alarm:e:1:alarm",
+      sampleOrdinal: 0, admittedAtPlayerStepPhase: 0, sourceSpecies: "domestic-goat" as const,
+      sourceOwnerKey: "settlement-home:current", sourceObservationId: "OBS-current-bear",
+      acceptedAtTick: 1,
+    };
+    const admission = createCoreWildlifeAlarmExpressionAdmissionRecord(input);
+    expect(admission).toEqual({
+      version: 1, kind: "core-wildlife-alarm", ...input,
+      eventId: situatedExpressionEventIdForTrigger(input.sourceActorId, input.triggerEventId),
+    });
+    expect(Object.isFrozen(admission)).toBe(true);
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(admission)))
+      .toEqual(admission);
+    expect(canonicalizeSituatedExpressionAdmissionLedger(rawLedger([structuredClone(admission)]))
+      ?.records).toEqual([admission]);
+    for (const change of [
+      { sourceActorId: PLAYER_ID }, { admittedAtPlayerStepPhase: 1 },
+      { sourceOwnerKey: "" }, { sourceObservationId: "" },
+      { acceptedAtTick: -1 }, { sourceSpecies: "mountain-goat" },
+      { hiddenThreatId: "BEAR-secret" },
+    ]) expect(createCoreWildlifeAlarmExpressionAdmissionRecord({ ...input, ...change } as never))
+      .toBeNull();
+  });
+
   it("binds domestic-cat rain distress to exact phase-zero ecology evidence", () => {
     const input = {
       sourceActorId: DOMESTIC_CAT_ID,

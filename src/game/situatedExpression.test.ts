@@ -665,6 +665,38 @@ describe("generic situated-expression kernel", () => {
     }
   });
 
+  it("registers and roundtrips a carrying goat alarm bleat through the shared policy", () => {
+    const intent: SituatedExpressionIntent = {
+      ...boarAlarmIntent("GOAT-expression-test:e:1:alarm"),
+      sourceActorId: "GOAT-expression-test", meaning: "domestic-goat-alarm-call",
+      variantSeed: 617,
+    };
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    expect(reduction).toMatchObject({
+      accepted: true,
+      event: {
+        meaning: "domestic-goat-alarm-call", family: "animal-signal",
+        tone: "alarmed", volume: "shout", vocalization: "goat-alarm-bleat",
+        priority: 760_000, durationSteps: 6,
+      },
+    });
+    if (reduction.event === null || reduction.state === null) throw new Error("Goat alarm rejected");
+    expect(projectSituatedExpression(reduction.event)).toEqual({
+      text: "MAAA!", realizationKey: "situated-expression.en.v1.domestic-goat-alarm-call.0",
+      vocalization: "goat-alarm-bleat",
+    });
+    expect(canonicalizeSituatedExpressionState(structuredClone(reduction.state)))
+      .toEqual(reduction.state);
+    for (const forged of [
+      { ...intent, volume: "murmur" }, { ...intent, tone: "restrained" },
+      { ...intent, knowledgeBasis: "self-heard-anonymous-alarm" },
+    ]) expect(reduceSituatedExpression(createSituatedExpressionState(), forged))
+      .toMatchObject({ accepted: false, reason: "invalid-intent" });
+    expect(canonicalizeSituatedExpressionState({
+      ...reduction.state, active: { ...reduction.event, vocalization: "boar-grunt" },
+    })).toBeNull();
+  });
+
   it("registers the marsh-rabbit foot-thump without promoting it to a shout", () => {
     const reduction = reduceSituatedExpression(
       createSituatedExpressionState(),

@@ -271,6 +271,7 @@ function policy(
     case "wild-boar-alarm-call": throw new Error("Boar calls are not player authority");
     case "domestic-chicken-alarm-call": throw new Error("Chicken calls are not player authority");
     case "american-black-duck-alarm-call": throw new Error("Duck calls are not player authority");
+    case "domestic-goat-alarm-call": throw new Error("Goat calls are not player authority");
     case "marsh-rabbit-alarm-thump": throw new Error("Rabbit calls are not player authority");
     case "marsh-fox-pursuit-yip": throw new Error("Fox calls are not player authority");
     case "human-danger-warning":
@@ -882,6 +883,38 @@ describe("player situated-expression authority", () => {
     expect(playerExpressionEventMatchesAuthority(foxEvent, evidence)).toBe(false);
     expect(playerExpressionMemoryMatchesAuthority(memoryFor(foxEvent, 2), evidence))
       .toBe(false);
+  });
+
+  it("cannot launder a goat call through player traversal or legacy authority", () => {
+    const evidence = authority(noIncidentFeedback(), emptyPhysicalCargo());
+    for (const sourceActorId of ["GOAT-current-authority", "player:local"]) {
+      const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+        version: 1, sourceActorId, triggerEventId: `goat-alarm:${sourceActorId}`,
+        position: POSITION, meaning: "domestic-goat-alarm-call", family: "animal-signal",
+        tone: "alarmed", volume: "shout", knowledgeBasis: "self-perceived-threat",
+        priority: 760_000, salience: 840_000, variantSeed: 179, durationSteps: 6,
+      });
+      const event = reduction.event;
+      if (!reduction.accepted || event === null) throw new Error("Missing goat expression fixture");
+      expect(playerExpressionEventMatchesAuthority(event, evidence)).toBe(false);
+      expect(playerExpressionMemoryMatchesAuthority(memoryFor(event, 2), evidence)).toBe(false);
+      const admission = sourceActorId === "player:local"
+        ? createLegacyV33PlayerExpressionAdmissionRecord({
+            sourceActorId, triggerEventId: event.triggerEventId,
+            sampleOrdinal: 0, admittedAtPlayerStepPhase: 0,
+          })
+        : createCoreWildlifeAlarmExpressionAdmissionRecord({
+            sourceActorId, triggerEventId: event.triggerEventId,
+            sampleOrdinal: 0, admittedAtPlayerStepPhase: 0,
+            sourceSpecies: "domestic-goat", sourceOwnerKey: "settlement-home:current",
+            sourceObservationId: "OBS-current-authority", acceptedAtTick: 72,
+          });
+      if (admission === null) throw new Error("Missing goat admission fixture");
+      expect(playerExpressionEventMatchesAdmission(event, admission, evidence)).toBe(false);
+      expect(playerExpressionMemoryMatchesAdmission(memoryFor(event, 2), admission, evidence))
+        .toBe(false);
+      expect(playerExpressionAdmissionSoundPolicy(admission, evidence)).toBeNull();
+    }
   });
 
   it("cannot launder a duck call through player traversal or legacy authority", () => {

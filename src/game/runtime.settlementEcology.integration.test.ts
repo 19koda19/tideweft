@@ -144,6 +144,7 @@ import {
   regionLocalToWindowTile,
 } from "./regionalTravel";
 import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
+import { createCoreEcologyRegionalResidentPatchForRoot } from "./regionalEcologyResidents";
 import {
   createRegionalEcologyState,
   regionalEcologyRegionalResidentsForActiveRegions,
@@ -1242,6 +1243,10 @@ function requireAuthenticatedLegacyCore(envelope: Readonly<Record<string, unknow
 function withCurrentSettlementHomeCore(
   record: SaveRecord,
   patch: CoreEcologyAggregatePatchState,
+  sources: Readonly<{
+    root?: RegionalEcologyStateV1["root"];
+    activeResidents?: readonly RegionalEcologyActiveResidentInput[];
+  }> = {},
 ): SaveRecord {
   const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
   const regionalV6 = deserializeRegionalEcologyStateV6(envelope.regionalEcology);
@@ -1255,13 +1260,13 @@ function withCurrentSettlementHomeCore(
     throw new Error("settlement-home fixture changed its signed source key");
   }
   const replacedBase = createRegionalEcologyState({
-    root: regional.root,
+    root: sources.root ?? regional.root,
     settlementHome: {
       sourceKey: regional.settlementHome.sourceKey,
       patch,
     },
     activeRegions: regional.activeRegions,
-    activeResidents: regional.activeResidents.map(({
+    activeResidents: sources.activeResidents ?? regional.activeResidents.map(({
       kind,
       sourceKey,
       patch: residentPatch,
@@ -2198,7 +2203,418 @@ async function createChickenAlarmRuntime(
   return { runtime, repository, memberActorIds: custody.memberActorIds, guardianActorId: guardian.identity.stableId };
 }
 
+/**
+ * Finite current home goats and one genuinely generated signed native bear.
+ * Physical positions/group anchors and clear weather are staged; no alarm,
+ * observation or population is injected. Ordinary runtime perception owns the
+ * cause, alarm, materialization and listener receipts. The displaced bear
+ * keeps its remote source/identity through the existing sparse residence law.
+ */
+async function createGoatAlarmRuntime(
+  options: Readonly<{ threat?: boolean; humanListener?: boolean }> = {},
+): Promise<{
+  runtime: TideweftRuntime;
+  repository: MemoryRepository;
+  memberActorIds: readonly string[];
+  bearActorId: string;
+  bearSourceKey: string;
+  initialSettlement: string;
+  initialGroupId: string;
+  listenerActorId: string | null;
+}> {
+  const sourceRepository = new MemoryRepository();
+  const source = await createTideweftRuntime(sourceRepository);
+  source.dispatchUI({
+    type: "new-world", seed: "goat-runtime-1", posture: "gale", sessionShape: "wander",
+  });
+  await source.save();
+  source.destroy();
+  scheduledFrame = undefined;
+  const record = sourceRepository.snapshot();
+  const envelope = savedEnvelope(sourceRepository);
+  const world = deserializeWorld(String(envelope.world));
+  world.weather.kind = "clear";
+  world.weather.intensity = 0;
+  world.weather.windX = 0;
+  world.weather.windY = 0;
+  world.weather.nextChangeTick = world.meta.completedTick + 100_000;
+  const view = createWorldView(world);
+  const settlement = deserializeSettlementEcologyState(envelope.settlementEcology);
+  const custody = settlement.domesticCustodies.find(({ species }) => species === "domestic-goat");
+  if (custody === undefined) throw new Error("Goat fixture omitted its generated custody");
+  const nativeGoatPosition = requireCurrentCoreEcology(envelope).populations
+    .find(({ species }) => species === "domestic-goat")?.members[0]?.actor.address.position;
+  if (nativeGoatPosition === undefined) throw new Error("Goat fixture omitted its original finite body");
+  // The exact pen is beyond current human hearing range from generated routes.
+  // Hearing tests use the first goat's existing generated grazing address,
+  // retaining its original home/custody and staging the same finite group.
+  const position = options.humanListener === true ? nativeGoatPosition : custody.homeStructure.position;
+  const bearPosition = translateWorldPosition(position, 300, 0);
+  let listenerActorId: string | null = null;
+  if (options.humanListener === true) {
+    const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
+    const listener = world.residents.find(({ activeContractId, identity }) => (
+      activeContractId === null && identity.stableId !== settlement.identity.keeperActorId
+      && identity.stableId !== bio0?.porterAddress.actorId
+    ));
+    if (listener === undefined) throw new Error("Goat fixture lacks an existing free human");
+    // Compatibility humans have a settlement/route location owner, not an
+    // arbitrary world-point setter. Stage this same finite resident on an
+    // actual generated route's closest real segment; preserve all knowledge,
+    // identity, needs and custody. This is controlled placement, not travel.
+    let placement: { routeId: number; progress: number; distance: number } | undefined;
+    for (const route of world.routes) for (const [offset, tileIndex] of route.path.entries()) {
+      if (route.path.length < 2) continue;
+      const tile = view.terrain.tiles[tileIndex];
+      if (tile === undefined) continue;
+      const distance = Math.hypot((tile.x + 0.5) * WORLD_POSITION_UNITS_PER_TILE - position.localX,
+        (tile.y + 0.5) * WORLD_POSITION_UNITS_PER_TILE - position.localY);
+      if (placement === undefined || distance < placement.distance) placement = {
+        routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance,
+      };
+    }
+    if (placement === undefined || placement.distance > 10_000) {
+      throw new Error("Goat fixture lacks a real nearby human route segment");
+    }
+    listener.location = { kind: "route", routeId: placement.routeId, progress: placement.progress };
+    assertWorldInvariants(world);
+    listenerActorId = listener.identity.stableId;
+    const physical = resolveResidentWorldPlacement(createWorldView(world), listener);
+    if (physical === null) throw new Error("Goat fixture could not resolve its real human route place");
+    const delta = worldPositionDelta(position, physical.position);
+    expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(10_000);
+  }
+  for (const point of [position, bearPosition]) {
+    const tile = view.terrain.tiles[Math.floor(point.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * WORLD_WIDTH + Math.floor(point.localX / WORLD_POSITION_UNITS_PER_TILE)];
+    if (point.region.x !== 0 || point.region.y !== 0 || tile === undefined
+      || tile.terrain === "ridge" || tile.waterDepth > ADRIFT_STAND_DEPTH
+      || tile.roughness >= 650_000
+      || coreWildlifeTraversabilityCell("domestic-goat", tile).access !== "open"
+      || coreWildlifeTraversabilityCell("brown-bear", tile).access !== "open") {
+      throw new Error("Goat fixture needs unchanged shared safe meadow footing");
+    }
+  }
+  let core = requireCurrentCoreEcology(envelope);
+  const goats = core.populations.find(({ species }) => species === "domestic-goat")?.members;
+  const group = core.groups.groups.find(({ identity }) => identity.stableId === custody.memberGroupId);
+  if (goats === undefined || goats.length !== 2 || group === undefined) {
+    throw new Error("Goat fixture omitted its finite generated herd");
+  }
+  expect(goats.map(({ actor }) => actor.identity.stableId).sort())
+    .toEqual([...custody.memberActorIds].sort());
+  for (const { actor } of goats) core = replaceCoreEcologyAggregatePatchActor(core,
+    repositionCoreWildlifeActor(actor, {
+      atTick: core.updatedAtTick, position, heading: headingFromRadians(0),
+    }));
+  // Coarse herd addresses are dormant history; current group anchors own
+  // ordinary rematerialization. Keep the same finite herd and its topology at
+  // the staged pen, rather than forcing materialization or observations.
+  const anchoredGroup = reconcileCoreEcologyGroupAnchors(group, {
+    atTick: core.updatedAtTick,
+    componentAnchors: group.components.map(({ componentId }) => ({ componentId, anchor: position })),
+    rendezvousAnchor: position,
+  });
+  if (anchoredGroup === null) throw new Error("Goat fixture could not retain its physical herd anchors");
+  const anchoredCore = canonicalizeCoreEcologyAggregatePatch({
+    ...core,
+    groups: createCoreEcologyGroupSet(core.groups.groups.map((candidate) => (
+      candidate.identity.stableId === group.identity.stableId ? anchoredGroup : candidate
+    ))),
+  });
+  if (anchoredCore === null) throw new Error("Goat fixture could not retain its conserved herd");
+  core = anchoredCore;
+  const regional = requireRegionalEcology(envelope.regionalEcology);
+  expect(regional.root.legacyCohort).toBeNull();
+  const native = createCoreEcologyRegionalResidentPatchForRoot({
+    seed: world.meta.rootSeed, root: regional.root, region: createRegionCoord(-6, -24),
+  });
+  const bear = native?.populations.find(({ species }) => species === "brown-bear")?.members[0]?.actor;
+  if (native === null || bear === undefined) throw new Error("Goat fixture omitted its real native bear");
+  expect(native.derivation.kind).toBe("regional-habitat-v1");
+  expect(native.patchKey).toBe("regional-habitat-v1:eb39097919c23ecf");
+  const bearPatch = options.threat === false ? native : replaceCoreEcologyAggregatePatchActor(native,
+    repositionCoreWildlifeActor(bear, {
+      atTick: native.updatedAtTick, position: bearPosition, heading: headingFromRadians(Math.PI),
+    }));
+  const root = putRegionalEcologyResidentDeviation(regional.root, {
+    rootSeed: world.meta.rootSeed, patch: bearPatch,
+  });
+  const entrants = regionalEcologyRegionalResidentsForActiveRegions(root, world.meta.rootSeed,
+    regional.activeRegions);
+  if (entrants === null) throw new Error("Goat fixture could not admit its native resident by residence");
+  const retained = new Map(regional.activeResidents.map((resident) => [resident.sourceKey, resident]));
+  const activeResidents = entrants.map((entrant): RegionalEcologyActiveResidentInput => ({
+    kind: "regional-habitat", sourceKey: entrant.sourceKey,
+    patch: retained.get(entrant.sourceKey)?.patch ?? entrant.patch,
+  }));
+  expect(activeResidents.some(({ sourceKey }) => sourceKey === native.patchKey))
+    .toBe(options.threat !== false);
+  const prepared = withCurrentEnvelopeFields(withCurrentSettlementHomeCore(record, core, {
+    root, activeResidents,
+  }), { world: serializeWorld(world) });
+  const repository = new MemoryRepository(withPlayerWitnessingWorldPosition(
+    prepared, position, bearPosition, 800_000,
+  ));
+  const runtime = await createTideweftRuntime(repository);
+  expect(runtime.getUIView().saveWarning).toBeUndefined();
+  await runtime.save();
+  const restored = requireRegionalEcology(savedEnvelope(repository).regionalEcology);
+  const restoredBear = restored.activeResidents.find(({ sourceKey }) => sourceKey === native.patchKey)
+    ?.patch.populations.find(({ species }) => species === "brown-bear")?.members[0]?.actor;
+  if (options.threat !== false) expect(restoredBear?.address.position).toEqual(bearPosition);
+  expect(requireCurrentCoreEcology(savedEnvelope(repository)).populations
+    .find(({ species }) => species === "domestic-goat")?.members.map(({ actor }) => actor.address.position))
+    .toEqual([position, position]);
+  return {
+    runtime, repository, memberActorIds: custody.memberActorIds,
+    bearActorId: bear.identity.stableId, bearSourceKey: native.patchKey,
+    initialSettlement: stableStringify(settlement), initialGroupId: group.identity.stableId,
+    listenerActorId,
+  };
+}
+
 describe("runtime settlement ecology integration", () => {
+  it("routes finite current goat alarms from a real native bear through strong Voice and WAIT", async () => {
+    const fixture = await createGoatAlarmRuntime();
+    const { runtime, repository } = fixture;
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 10);
+    await runtime.save();
+    const saved = savedEnvelope(repository);
+    const core = requireCurrentCoreEcology(saved);
+    const goats = core.populations.filter(({ species }) => species === "domestic-goat")
+      .flatMap(({ members }) => members.map(({ actor }) => actor));
+    expect(goats.map(({ identity }) => identity.stableId).sort())
+      .toEqual([...fixture.memberActorIds].sort());
+    expect(goats.every(({ intent, perception }) => intent.kind === "alarm"
+      && perception.beliefs.some(({ subjectId, perceivedClass, sourceObservationId }) => (
+        subjectId === fixture.bearActorId && perceivedClass === "large-predator"
+        && sourceObservationId === intent.cause.referenceId
+      )))).toBe(true);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-goat-alarm-bleat"))
+      .toHaveLength(goats.length);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().controls?.waitActive).toBe(false);
+    const carry = saved.perceptionCarry as ChickenVoiceCarry;
+    const admissions = carry.situatedExpressionAdmissions.records.filter((candidate) => (
+      candidate.kind === "core-wildlife-alarm" && candidate.sourceSpecies === "domestic-goat"
+    ));
+    expect(admissions).toHaveLength(goats.length);
+    for (const admission of admissions) expect(carry.actorVocalizationSamples[admission.sampleOrdinal])
+      .toMatchObject({ soundClass: "animal-call", soundInterrupt: "strong", soundLoudness: 1_000_000 });
+    expect(runtime.getRenderView().expressions?.some(({ sourceActorId, text }) => (
+      fixture.memberActorIds.includes(sourceActorId) && text === "MAAA!"
+    ))).toBe(true);
+    expect(core.groups.groups.find(({ identity }) => identity.stableId === fixture.initialGroupId)
+      ?.memberOrdinals).toEqual(goats.map(({ identity }) => identity.populationOrdinal));
+    expect(deserializeSettlementEcologyState(saved.settlementEcology).domesticCustodies)
+      .toEqual((JSON.parse(fixture.initialSettlement) as ReturnType<typeof deserializeSettlementEcologyState>)
+        .domesticCustodies);
+    const regional = requireRegionalEcology(saved.regionalEcology);
+    const bearSources = regional.activeResidents.filter(({ sourceKey }) => sourceKey === fixture.bearSourceKey);
+    expect(bearSources).toHaveLength(1);
+    expect(bearSources[0]?.patch.originRegion).toEqual(createRegionCoord(-6, -24));
+    expect(bearSources[0]?.patch.populations.find(({ species }) => species === "brown-bear")
+      ?.members.map(({ actor }) => actor.identity.stableId)).toEqual([fixture.bearActorId]);
+    expect(saved.version).toBe(47);
+    expect((saved.perceptionCarry as { version: number }).version).toBe(14);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    const reloaded = savedEnvelope(repository);
+    expect(Object.keys(saved).filter((key) => key !== "session" && key !== "integrity"
+      && stableStringify(reloaded[key]) !== stableStringify(saved[key]))).toEqual([]);
+    const beforeSession = saved.session as Record<string, unknown>;
+    const afterSession = reloaded.session as Record<string, unknown>;
+    // The current loader intentionally begins a new session and announces its
+    // continuation. World/physical/perception roots above remain byte-exact;
+    // only the explicitly reinitialized session fields are excluded here.
+    const restartFields = new Set([
+      "sessionStartedTick", "sessionPlayMilliseconds", "sessionBaseline", "announcement", "nextAnnouncementId",
+    ]);
+    expect(Object.keys(beforeSession).filter((key) => (
+      !restartFields.has(key) && stableStringify(beforeSession[key]) !== stableStringify(afterSession[key])
+    ))).toEqual([]);
+    expect(afterSession.sessionStartedTick).toBe(deserializeWorld(String(saved.world)).meta.completedTick);
+    expect(afterSession.sessionPlayMilliseconds).toBe(0);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-goat-alarm-bleat" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    resumed.destroy();
+    const forgedCarry = structuredClone(carry);
+    const forgedRepository = new MemoryRepository(withCurrentEnvelopeFields(repository.snapshot(), {
+      perceptionCarry: {
+        ...forgedCarry,
+        situatedExpressionAdmissions: {
+          ...forgedCarry.situatedExpressionAdmissions,
+          records: forgedCarry.situatedExpressionAdmissions.records.map((record) => (
+            record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-goat"
+              ? { ...record, sourceSpecies: "gull" as const } : record
+          )),
+        },
+      },
+    }));
+    const untouched = stableStringify(forgedRepository.snapshot());
+    const rejected = await createTideweftRuntime(forgedRepository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(stableStringify(forgedRepository.snapshot())).toBe(untouched);
+    rejected.destroy();
+  }, 60_000);
+
+  it("interrupts actual REST through the real goat bleat without generic duplicate audio", async () => {
+    const { runtime } = await createGoatAlarmRuntime();
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    expect(runtime.getUIView().controls).toMatchObject({ recoveryActive: true, recoveryKind: "rest" });
+    soundscapePlay.mockClear();
+    advanceWaitFrames(runtime, 1);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-goat-alarm-bleat"))
+      .toHaveLength(2);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().controls?.recoveryActive).toBe(false);
+    runtime.destroy();
+  }, 60_000);
+
+  it.each([false, true])("preserves exact anonymous goat hearing and audio at T+1 (optional refusal=%s)", async (saturated) => {
+    let runtime: TideweftRuntime | null = null;
+    const actualReduction = situatedExpressionChannels.reduceSituatedExpressionChannelBank;
+    // Refuse only optional presentation, not an acoustic cause, observation,
+    // population, physical action or listener. Real channel capacity is tested
+    // by its own owner; this boundary proves lawful downstream hearing survives.
+    const refused = saturated ? vi.spyOn(situatedExpressionChannels, "reduceSituatedExpressionChannelBank")
+      .mockImplementation((bankValue, intent, reception) => {
+        if (typeof intent === "object" && intent !== null && "meaning" in intent
+          && intent.meaning === "domestic-goat-alarm-call") return {
+          accepted: false, reason: "channel-capacity-reached", event: null,
+          bank: situatedExpressionChannels.canonicalizeSituatedExpressionChannelBank(bankValue),
+        };
+        return actualReduction(bankValue, intent, reception);
+      }) : null;
+    try {
+      const fixture = await createGoatAlarmRuntime({ humanListener: true });
+      runtime = fixture.runtime;
+      soundscapePlay.mockClear();
+      runtime.dispatchUI({ type: "wait", action: "begin" });
+      advanceWaitFrames(runtime, 10);
+      expect(runtime.getUIView().controls?.waitActive).toBe(false);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-goat-alarm-bleat"))
+        .toHaveLength(fixture.memberActorIds.length);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+      await runtime.save();
+      const saved = savedEnvelope(fixture.repository);
+      const carry = saved.perceptionCarry as ChickenVoiceCarry;
+      const admissions = carry.situatedExpressionAdmissions.records.filter((record) => (
+        record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-goat"
+      ));
+      expect(admissions).toHaveLength(saturated ? 0 : fixture.memberActorIds.length);
+      if (saturated) {
+        expect(carry.actorVocalizationSamples.some(({ sourceActorId }) => (
+          fixture.memberActorIds.includes(sourceActorId)
+        ))).toBe(false);
+        expect(carry.situatedExpressionChannels.channels.some(({ sourceActorId }) => (
+          fixture.memberActorIds.includes(sourceActorId)
+        ))).toBe(false);
+      }
+      const sourceWorld = deserializeWorld(String(saved.world));
+      const sourceGoats = requireCurrentCoreEcology(saved).populations
+        .find(({ species }) => species === "domestic-goat")?.members.map(({ actor }) => actor);
+      if (sourceGoats === undefined) throw new Error("Goat hearing fixture lost its finite source");
+      // The same resident's existing route location establishes physical range;
+      // only the ensuing ordinary simulation may create a hearing receipt.
+      const view = createWorldView(sourceWorld);
+      const listener = sourceWorld.residents.find(({ identity }) => (
+        identity.stableId === fixture.listenerActorId
+      ));
+      if (listener === undefined) throw new Error("Goat pen lacks a genuine nearby human listener");
+      const placement = resolveResidentWorldPlacement(view, listener);
+      if (placement === null) throw new Error("Goat listener lost its physical route place");
+      const distance = worldPositionDelta(placement.position, sourceGoats[0]!.address.position);
+      expect(Math.hypot(distance.x, distance.y)).toBeLessThanOrEqual(10_000);
+      const targetTick = sourceWorld.meta.completedTick + 1;
+      // Refusal enters the same bounded physical-hearing owner as other world
+      // sounds, not the former porter-only ecology leg. Preserve exact event
+      // identity, anonymous class/strength and one receipt per real bleat.
+      const expectedIds = saturated ? sourceGoats.map(({ identity, intent }) => {
+        const eventHash = hashCanonical({
+          domain: "core-wildlife-alarm-physical:v1",
+          eventId: `${identity.stableId}:e:${intent.enteredAtTick.toString(36)}:alarm`,
+          sourceActorId: identity.stableId,
+          species: identity.species,
+        });
+        return `hp-h-${targetTick}-${listener.id}-cap-${eventHash}`;
+      }) : admissions.map(({ sampleOrdinal }) => {
+        const sample = carry.actorVocalizationSamples[sampleOrdinal];
+        if (sample === undefined) throw new Error("Goat admission omitted its acoustic sample");
+        return `hp-h-${targetTick}-${listener.id}-${sample.id}`;
+      });
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await createTideweftRuntime(fixture.repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-goat-alarm-bleat"))
+        .toEqual([]);
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const world = deserializeWorld(String(savedEnvelope(fixture.repository).world));
+      expect(world.meta.completedTick, runtime.getUIView().announcement?.message).toBe(targetTick);
+      const heard = world.residents.find(({ identity }) => identity.stableId === listener.identity.stableId)
+        ?.perception.beliefs.filter(({ sourceObservationId }) => expectedIds.includes(sourceObservationId)) ?? [];
+      expect(heard.map(({ sourceObservationId }) => sourceObservationId).sort()).toEqual(expectedIds.sort());
+      for (const belief of heard) expect(belief).toMatchObject({
+        channel: "hearing", perceivedClass: "animal-call", identification: "anonymous", subjectId: null,
+        firstObservedTick: targetTick, lastObservedTick: targetTick, strongInterrupt: true,
+      });
+      const animalHearing = world.residents.find(({ identity }) => identity.stableId === listener.identity.stableId)
+        ?.perception.beliefs.filter(({ channel, lastObservedTick, perceivedClass, strongInterrupt }) => (
+          channel === "hearing" && lastObservedTick === targetTick
+          && perceivedClass === "animal-call" && strongInterrupt
+        )) ?? [];
+      expect(animalHearing).toHaveLength(heard.length);
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+      refused?.mockRestore();
+    }
+  }, 120_000);
+
+  it("removing the displaced real bear removes the goat alarm without deleting its native source", async () => {
+    const fixture = await createGoatAlarmRuntime({ threat: false });
+    const { runtime, repository } = fixture;
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    advanceWaitFrames(runtime, 10);
+    await runtime.save();
+    const saved = savedEnvelope(repository);
+    const goats = requireCurrentCoreEcology(saved).populations
+      .find(({ species }) => species === "domestic-goat")?.members.map(({ actor }) => actor);
+    expect(goats?.map(({ identity }) => identity.stableId).sort())
+      .toEqual([...fixture.memberActorIds].sort());
+    expect(goats?.every(({ intent, perception }) => intent.kind !== "alarm"
+      && !perception.beliefs.some(({ subjectId }) => subjectId === fixture.bearActorId))).toBe(true);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-goat-alarm-bleat" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    const regional = requireRegionalEcology(saved.regionalEcology);
+    expect(regional.activeResidents.some(({ sourceKey }) => sourceKey === fixture.bearSourceKey)).toBe(false);
+    const native = createCoreEcologyRegionalResidentPatchForRoot({
+      seed: deserializeWorld(String(saved.world)).meta.rootSeed,
+      root: regional.root, region: createRegionCoord(-6, -24),
+    });
+    expect(native?.patchKey).toBe(fixture.bearSourceKey);
+    expect(native?.populations.find(({ species }) => species === "brown-bear")?.members
+      .map(({ actor }) => actor.identity.stableId)).toEqual([fixture.bearActorId]);
+    runtime.destroy();
+  }, 60_000);
+
   it("routes generated chicken alarms through soft Voice without legacy playback, WAIT interruption or reload replay", async () => {
     const fixture = await createChickenAlarmRuntime();
     const { runtime, repository } = fixture;
@@ -2445,7 +2861,7 @@ describe("runtime settlement ecology integration", () => {
         ?.perception.beliefs.filter((belief) => belief.channel === "hearing"
           && belief.lastObservedTick === afterWorld.meta.completedTick
           && (belief.perceivedClass === "animal-call" || belief.perceivedClass === "animal-alarm")) ?? [];
-      expect(hearing).toHaveLength(fixture.memberActorIds.length);
+      expect(hearing, runtime.getUIView().announcement?.message).toHaveLength(fixture.memberActorIds.length);
       expect(new Set(hearing.map(({ sourceObservationId }) => sourceObservationId)).size).toBe(hearing.length);
       for (const belief of hearing) expect(belief).toMatchObject({
         perceivedClass: "animal-call", identification: "anonymous", subjectId: null, strongInterrupt: false,

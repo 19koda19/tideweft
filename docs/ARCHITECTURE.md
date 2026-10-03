@@ -160,7 +160,8 @@ In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
 one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, one domestic-
-chicken alarm squawk, one American-black-duck alarm quack, the rabbit thump,
+chicken alarm squawk, one American-black-duck alarm quack, one domestic-goat
+alarm bleat, the rabbit thump,
 the aggregate frog chorus, and one aggregate brown-rat
 physical rustle are live representative paths. One domestic-cat representative
 is also live: a freshly committed rain-caused retreat with matching rain
@@ -211,11 +212,36 @@ Optional expression capacity may suppress text but cannot suppress lawful
 committed alarm audio, applicable interruption, or the ecology-owned hearing
 leg. Refused optional chicken or duck admission still preserves each real alarm's
 audio and next-interval anonymous human hearing, without duplicate receipts.
-The generic wildlife-alarm fallback still serves domestic goat through the
-legacy player-audio/session-announcement path. That presentation leg remains a
-`BYPASS` seam to migrate or retire during Living Voice; the underlying ecology
-alarm already propagates to wildlife, dogs and the applicable porter listener.
-The narrow gull, elk, boar, chicken, duck, cat, and fox representatives do not
+The existing finite settlement-home goat herd now supplies one narrow alarm
+bleat through those same authenticated source, group, observation, memory and
+committed-locus owners. Its existing strong policy remains loudness1,000,000
+and explicit interruption `strong`, rather than inheriting the chicken/duck
+murmur. A heard-visible authenticated goat may carry `MAAA!`; heard-unseen
+receipt remains an anonymous animal `CALL!`, and human hearing receives
+`animal-call`, not the hidden threat or decoded alarm intent. The representative
+runtime fixture stages the existing herd and a genuinely generated signed-
+region brown bear on unchanged safe terrain. Ordinary perception must supply
+the real threat belief; there is no injected alarm or fabricated population.
+WAIT/REST interruption, exact current authoritative-state restore without cue
+replay, forged-species rejection without overwrite, and threat-removal are
+tested. The human-hearing scene additionally stages one existing resident on
+an actual generated route near the same conserved herd. Its next-interval
+anonymous receipt remains exact even when optional caption admission is refused.
+The existing eight-slot physical-hearing seam now re-derives anonymous core
+calls from the authenticated ecology event when no admitted expression owns
+them; a selected fallback replaces, rather than duplicates, the porter's raw
+leg. Rabbit keeps its established physical sample identity, chicken/duck remain
+noninterrupting, and the goat's strong flag survives semantic conversion.
+Other raw animal-alarm classes retain their existing core owner; this does not
+claim unrestricted ordinary-resident hearing for every refused alarm class.
+This is controlled encounter evidence, not proof of an ordinary travel encounter,
+goat-specific sleeping runtime behavior, handling, hunting, broad repertoire,
+or new harmful bear behavior. Reload deliberately restarts session recap/UI
+metadata; it does not reset authoritative world or acoustic carry state.
+All nine current core alarm-source profiles now have shared Voice adapters;
+the defensive generic player fallback is not an additional live integration.
+Future alarm sources still require an explicit source-authenticated adapter.
+The narrow gull, elk, boar, chicken, duck, goat, cat, and fox representatives do not
 prove broad species repertoires, general hunting communication, or broad animal
 Voice.
 

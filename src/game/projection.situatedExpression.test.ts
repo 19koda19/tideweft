@@ -1581,6 +1581,73 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toMatch(/CHICKEN-projection|chicken|SQUAWK|predator|custody/iu);
   });
 
+  it("anchors only an authenticated goat and keeps unseen bleats anonymous", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+      version: 1, sourceActorId: "GOAT-projection-test", triggerEventId: "goat-signal:alarm",
+      position: wildlifePositionInWindow(window), meaning: "domestic-goat-alarm-call",
+      family: "animal-signal", tone: "alarmed", volume: "shout",
+      knowledgeBasis: "self-perceived-threat", priority: 760_000, salience: 820_000,
+      variantSeed: 158, durationSteps: 6,
+    });
+    const expression = reduction.event;
+    if (expression === null) throw new Error("Goat projection fixture rejected");
+    const source: CoreWildlifeExpressionSource = {
+      actorId: expression.sourceActorId, species: "domestic-goat", position: expression.position,
+    };
+    const options = {
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+      coreWildlifeExpressionSources: [source],
+    };
+    const visible = projectGameView(world, player, options);
+    expect(visible.expressions).toEqual([expect.objectContaining({
+      id: expression.eventId, sourceActorId: expression.sourceActorId, sourceKind: "animal",
+      speakerLabel: "Domestic goat", text: "MAAA!", acousticKind: "animal-call", priority: 760_000,
+    })]);
+    expect(visible.acousticText?.[0]).toBe(visible.expressions?.[0]);
+    expect(projectUIView(world, player, session, { economyWorld: compatibility, ...options })
+      .expressionCaption).toMatchObject({
+        speakerLabel: "Domestic goat", text: "MAAA!", animalCallKind: "goat-call",
+        presentationKind: "animal-call", assertive: true,
+      });
+    const invalidSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
+      [], [{ ...source, species: "domestic-chicken" }], [{ ...source, actorId: "GOAT-other" }],
+      [{ ...source, position: wildlifePositionInWindow(window, 19, 22) }], [source, source],
+    ];
+    for (const coreWildlifeExpressionSources of invalidSources) {
+      const forgedOptions = { ...options, coreWildlifeExpressionSources };
+      expect(projectGameView(world, player, forgedOptions).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility, ...forgedOptions,
+      }).expressionCaption).toBeUndefined();
+    }
+    const unheard = { ...options, situatedExpressionReception: null };
+    expect(projectGameView(world, player, unheard).expressions).toEqual([]);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility, ...unheard,
+    }).expressionCaption).toBeUndefined();
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 2_000, maximum: 5_000 }, certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Goat unseen fixture rejected");
+    const unseenView = projectGameView(world, player, {
+      ...options, situatedExpressionReception: unseen,
+    });
+    expect(unseenView.expressions).toEqual([]);
+    expect(unseenView.acousticText).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility, situatedExpression: expression, situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal", text: "CALL!", animalCallKind: "animal-call",
+      presentationKind: "animal-call", directionLabel: "west", assertive: true,
+    });
+    expect(JSON.stringify(caption)).not.toMatch(/GOAT|MAAA|predator|threat|custody|herd/iu);
+  });
+
   it("anchors only an authenticated duck and keeps its soft unseen call bird-anonymous", () => {
     const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
     const session = createSessionState(world.seedText);

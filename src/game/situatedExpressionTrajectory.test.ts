@@ -216,6 +216,15 @@ function duckIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function goatIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowIntent(triggerEventId),
+    sourceActorId: "GOAT-expression-trajectory-current",
+    meaning: "domestic-goat-alarm-call",
+    variantSeed: 179,
+  };
+}
+
 function marshRabbitIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     ...fishCrowIntent(triggerEventId),
@@ -615,7 +624,7 @@ function fishCrowFixture(
 }
 
 function deerAlarmFixture(
-  species: "deer" | "wild-boar" | "domestic-chicken" | "american-black-duck" = "deer",
+  species: "deer" | "wild-boar" | "domestic-chicken" | "american-black-duck" | "domestic-goat" = "deer",
 ): Fixture {
   const phase = 3;
   const acceptedAtTick = 40;
@@ -623,7 +632,8 @@ function deerAlarmFixture(
   const admitted = accept(createSituatedExpressionState(), species === "deer"
     ? deerIntent(triggerEventId)
     : species === "wild-boar" ? boarIntent(triggerEventId)
-      : species === "american-black-duck" ? duckIntent(triggerEventId) : chickenIntent(triggerEventId));
+      : species === "domestic-goat" ? goatIntent(triggerEventId)
+        : species === "american-black-duck" ? duckIntent(triggerEventId) : chickenIntent(triggerEventId));
   const sourceActorId = admitted.event.sourceActorId;
   const current = advanceSituatedExpression(admitted.state, phase);
   if (current === null || current.active === null) {
@@ -1430,6 +1440,41 @@ describe("situated-expression admission trajectory", () => {
     erasedInterrupt[0]!.soundInterrupt = "none";
     expect(situatedExpressionTrajectoryIsCanonical(
       fixture.bank, fixture.ledger, fixture.phase, erasedInterrupt,
+    )).toBe(false);
+  });
+
+  it("authenticates a goat trajectory without converting anonymous human hearing into alarm knowledge", () => {
+    const fixture = deerAlarmFixture("domestic-goat");
+    expect(accepts(fixture)).toBe(true);
+    expect(accepts(JSON.parse(JSON.stringify(fixture)) as Fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      meaning: "domestic-goat-alarm-call", vocalization: "goat-alarm-bleat",
+      volume: "shout", priority: 760_000, durationSteps: 6, remainingSteps: 3,
+    });
+    expect(fixture.samples[0]).toMatchObject({
+      soundClass: "animal-call", soundInterrupt: "strong", soundLoudness: 1_000_000,
+      soundRangeUnits: 9_100,
+    });
+    const wrongSpecies = mutable(fixture.ledger);
+    if (wrongSpecies.records[0]?.kind !== "core-wildlife-alarm") throw new Error("Missing goat receipt");
+    wrongSpecies.records[0].sourceSpecies = "wild-boar";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, wrongSpecies, fixture.phase, fixture.samples,
+    )).toBe(false);
+    for (const changed of [
+      { soundInterrupt: "none" as const }, { soundClass: "animal-alarm" as const },
+      { soundLoudness: 420_000 }, { soundRangeUnits: 36_000 },
+    ]) {
+      const samples = mutable(fixture.samples);
+      Object.assign(samples[0]!, changed);
+      expect(situatedExpressionTrajectoryIsCanonical(
+        fixture.bank, fixture.ledger, fixture.phase, samples,
+      )).toBe(false);
+    }
+    const quiet = mutable(fixture.bank);
+    quiet.channels[0]!.state.active!.volume = "murmur";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      quiet, fixture.ledger, fixture.phase, fixture.samples,
     )).toBe(false);
   });
 

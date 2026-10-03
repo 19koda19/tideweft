@@ -523,6 +523,7 @@ function policyFor(
     case "wild-boar-alarm-call":
     case "domestic-chicken-alarm-call":
     case "american-black-duck-alarm-call":
+    case "domestic-goat-alarm-call":
     case "marsh-rabbit-alarm-thump":
     case "marsh-fox-pursuit-yip":
     case "human-danger-warning":

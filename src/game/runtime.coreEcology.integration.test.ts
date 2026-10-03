@@ -2635,10 +2635,17 @@ describe("runtime core-ecology vertical slice", () => {
         kind === "alarm" && atTick === world.meta.completedTick + 1
       ));
       if (sourceEvent === undefined) throw new Error("Duck fixture lost its retained source event");
+      // Refused optional captions now use the same bounded anonymous physical
+      // carrier as other core calls, rather than a porter-only raw alarm leg.
+      // Keep exact event-derived receipt IDs and the unchanged count/meaning.
+      const fallbackSampleId = `cap-${hashCanonical({
+        domain: "core-wildlife-alarm-physical:v1",
+        eventId: sourceEvent.eventId,
+        sourceActorId: committedDuck.identity.stableId,
+        species: committedDuck.identity.species,
+      })}`;
       const hearing = propagated.residents.flatMap((resident) => {
-        const observationId = `alarm:${hashCanonical([
-          sourceEvent.eventId, resident.identity.stableId, propagated.meta.completedTick,
-        ])}`;
+        const observationId = `hp-h-${propagated.meta.completedTick}-${resident.id}-${fallbackSampleId}`;
         const matches = resident.perception.beliefs.filter(({ sourceObservationId }) => (
           sourceObservationId === observationId
         ));

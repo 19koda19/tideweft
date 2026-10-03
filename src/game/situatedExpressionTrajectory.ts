@@ -474,6 +474,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "wild-boar-alarm-call": return 6;
     case "domestic-chicken-alarm-call": return 6;
     case "american-black-duck-alarm-call": return 6;
+    case "domestic-goat-alarm-call": return 6;
     case "marsh-rabbit-alarm-thump": return 6;
     case "domestic-cat-rain-distress-call": return 6;
     case "marsh-fox-pursuit-yip": return 6;
@@ -522,6 +523,7 @@ function coreWildlifeAlarmMeaning(
     case "wild-boar": return "wild-boar-alarm-call";
     case "domestic-chicken": return "domestic-chicken-alarm-call";
     case "american-black-duck": return "american-black-duck-alarm-call";
+    case "domestic-goat": return "domestic-goat-alarm-call";
     case "marsh-rabbit": return "marsh-rabbit-alarm-thump";
   }
 }

@@ -2196,7 +2196,9 @@ describe("Living Weft species release gate", () => {
           stableIdentity: true,
         },
       },
-      sound: { implementation: "unimplemented", repertoire: [] },
+      // Current Voice adds the one alarm representative; historical Alpha25
+      // readiness still reads its separately authenticated frozen noSound.
+      sound: { implementation: "active", repertoire: ["goat-alarm-bleat"] },
       evidence: { status: "unimplemented", produces: [] },
       lifeHistory: { mortality: "unimplemented", reproduction: "unimplemented" },
       aftermath: { implementation: "unimplemented", carcassModel: "none" },
