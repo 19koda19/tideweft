@@ -11,7 +11,26 @@ import type { RootSeed } from "../sim/rng";
 import { FIXED_POINT, type WorldState } from "../sim/types";
 import type { FieldResourceEcologyState } from "../sim/fieldResources";
 import type { TideweftView } from "../render/types";
+import {
+  actorCalloutViewport,
+  layoutAcousticTextCallouts,
+} from "../render/playerPresentation";
+import { acousticTextRectsOverlap } from "../render/acousticTextLayout";
+import { stableStringify } from "../sim/util";
 import * as humanPerception from "./humanPerception";
+import {
+  replaceDogActorCircadian,
+  replaceDogActorPhysiology,
+  repositionDogActor,
+} from "./dogActor";
+import {
+  deserializeDogActorRoster,
+  replaceDogActorInRoster,
+  serializeDogActorRoster,
+} from "./dogActorRoster";
+import { deserializeSettlementEcologyState } from "./settlementEcology";
+import { deserializeSettlementWorkingAnimalState } from "./settlementWorkingAnimals";
+import { projectSettlementWorkingDogCircadian } from "./settlementWorkingDogCircadian";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
   gameSaveEnvelopeIntegrity,
@@ -62,7 +81,7 @@ import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelB
 import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
 import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
-import type { WorldPosition } from "./worldPosition";
+import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -1077,6 +1096,179 @@ describe("production terrain fall and physical cargo", () => {
       runtime.destroy();
     }
   }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it("composes a current storm shelter whine with real Promise fall and cargo impact", async () => {
+    const repository = new MemoryRepository();
+    const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
+    if (fixture.contractId === null || fixture.sourceLotId === null) {
+      throw new Error("mixed scene omitted its genuinely acquired Promise cargo");
+    }
+    const before = decodeCurrent(repository.snapshot());
+    const world = deserializeWorld(before.world);
+    const travel = restorePlayerRegionalTravel(world.meta.rootSeed, before.player, before.regionalTravel);
+    const playerPosition = travel === null ? null
+      : playerWorldPositionInRegionalWindow(travel.window, before.player);
+    const roster = deserializeDogActorRoster(before.dogActorRoster);
+    const work = deserializeSettlementWorkingAnimalState(before.settlementWorkingAnimals);
+    const settlement = deserializeSettlementEcologyState(before.settlementEcology);
+    const assignment = work?.assignments[0];
+    const guardian = roster?.actors.find(({ identity }) => identity.stableId === assignment?.workerActorId);
+    const custody = settlement.domesticCustodies.find(({ relationshipId }) => (
+      relationshipId === assignment?.workerCustodyRelationshipId
+    ));
+    if (playerPosition === null || roster === null || guardian === undefined || custody === undefined
+      || assignment === undefined) {
+      throw new Error("mixed scene omitted its current physical guardian/custody/travel");
+    }
+    // Stage the same body's wet condition, low competing needs and physical
+    // location near the existing fall. No observation, intent, work
+    // transaction, expression or sound is supplied by this test.
+    const dogPosition = translateWorldPosition(playerPosition, 75, 75);
+    const kennelDelta = worldPositionDelta(dogPosition, custody.homeStructure.position);
+    expect(Math.hypot(kennelDelta.x, kennelDelta.y)).toBeGreaterThan(custody.homeStructure.radiusUnits);
+    let wetGuardian = repositionDogActor(replaceDogActorPhysiology(guardian, {
+      needs: { hunger: 0, thirst: 0, rest: 0, safety: 0, company: 0 },
+      condition: { ...guardian.condition, wetness: FIXED_POINT, injuries: [...guardian.condition.injuries] },
+      humanFamiliarity: guardian.humanFamiliarity,
+      atTick: world.meta.completedTick,
+    }), {
+      position: dogPosition, heading: guardian.address.heading, atTick: world.meta.completedTick,
+    });
+    const circadian = projectSettlementWorkingDogCircadian({
+      dog: wetGuardian, custody, assignment, atTick: world.meta.completedTick,
+      kennelArrived: Math.hypot(kennelDelta.x, kennelDelta.y) <= custody.homeStructure.radiusUnits,
+    });
+    if (circadian === null) throw new Error("mixed scene could not reproject actual kennel arrival");
+    wetGuardian = replaceDogActorCircadian(wetGuardian, {
+      atTick: world.meta.completedTick, circadian: circadian.receipt,
+    });
+    const stagedRoster = replaceDogActorInRoster(roster, wetGuardian);
+    if (stagedRoster === null) throw new Error("mixed scene rejected its same finite guardian");
+    replaceEnvelope(repository, { ...before, dogActorRoster: serializeDogActorRoster(stagedRoster) });
+
+    soundscapePlay.mockClear();
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    runtime.dispatchUI({ type: "resume-world" });
+    // Nine accepted neutral steps are real simulation, not an edited phase.
+    // Fall on the due world step so short physical cues coexist with the call.
+    advancePlayerSteps(runtime, 9);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const mixedView = runtime.getRenderView();
+    expect(mixedView.player.incident?.kind).toBe("fall");
+    await runtime.save();
+    const saved = decodeCurrent(repository.snapshot());
+    expect(mixedView.acousticText).toEqual(expect.arrayContaining([
+      expect.objectContaining({ acousticKind: "speech", sourceActorId: "player:local" }),
+      expect.objectContaining({ acousticKind: "physical", sourceId: "player:local", semanticFamily: "thud" }),
+      expect.objectContaining({ acousticKind: "physical", sourceKind: "object" }),
+    ]));
+    // This real dog is heard outside direct sight. Hearing must not manufacture
+    // a fourth exact world anchor, and the stronger cargo warning may suppress
+    // optional directional text without deleting the whine or its receipt.
+    const whineAdmission = saved.perceptionCarry.situatedExpressionAdmissions.records.find(({ kind }) => (
+      kind === "guardian-dog-shelter-whine"
+    ));
+    const whineChannel = saved.perceptionCarry.situatedExpressionChannels.channels.find(({ sourceActorId }) => (
+      sourceActorId === guardian.identity.stableId
+    ));
+    expect(whineAdmission).toMatchObject({
+      sourceActorId: guardian.identity.stableId,
+      assignmentId: assignment.assignmentId,
+      acceptedAtTick: world.meta.completedTick + 1,
+    });
+    expect(whineChannel).toMatchObject({
+      state: {
+        active: {
+          eventId: whineAdmission?.eventId,
+          meaning: "guardian-dog-shelter-whine",
+          audioAcknowledged: true,
+        },
+      },
+      reception: {
+        eventId: whineAdmission?.eventId,
+        kind: "heard-unseen",
+        directVisualReceipt: false,
+      },
+    });
+    expect(whineChannel?.reception?.certainty).toBeGreaterThan(0);
+    expect(mixedView.acousticText?.some((item) => (
+      item.acousticKind !== "physical" && item.sourceActorId === guardian.identity.stableId
+    ))).toBe(false);
+    const cargoSpeech = mixedView.acousticText?.find(({ acousticKind }) => acousticKind === "speech");
+    expect(runtime.getUIView().expressionCaption).toMatchObject({
+      id: cargoSpeech?.id, text: "We've lost cargo!", presentationKind: "speech",
+    });
+    expect(incidentCueCalls("vocalization-dog-shelter-whine")).toBe(1);
+    expect(incidentCueCalls("vocalization-alarm")).toBe(1);
+
+    // Use actual runtime candidates with a deterministic test camera. These
+    // are production layout envelopes, not browser font/glyph measurements.
+    for (const [width, height] of [[1_280, 720], [390, 844]] as const) {
+      const viewport = actorCalloutViewport(width, height);
+      const anchor = (item: NonNullable<TideweftView["acousticText"]>[number]) => ({
+        x: width / 2 + (item.position.x - mixedView.player.position.x) * 0.05,
+        y: height / 2 + (item.position.y - mixedView.player.position.y) * 0.05,
+      });
+      const layout = layoutAcousticTextCallouts(mixedView.acousticText ?? [], viewport, anchor);
+      expect(layout.placements.length).toBeGreaterThan(0);
+      expect(layout.placements.length).toBeLessThanOrEqual(4);
+      expect(new Set(layout.placements.map(({ candidate }) => candidate.sourceId)).size)
+        .toBe(layout.placements.length);
+      expect(layout.placements.some(({ candidate }) => candidate.acousticText.acousticKind === "speech"))
+        .toBe(true);
+      expect(layout.suppressions.some(({ candidate, reason }) => (
+        candidate.acousticText.acousticKind === "physical" && candidate.sourceId === "player:local"
+        && reason === "per-source-cap"
+      ))).toBe(true);
+      for (let index = 0; index < layout.placements.length; index += 1) {
+        for (const other of layout.placements.slice(index + 1)) {
+          expect(acousticTextRectsOverlap(layout.placements[index]!.rect, other.rect)).toBe(false);
+        }
+      }
+      expect(layoutAcousticTextCallouts([...(mixedView.acousticText ?? [])].reverse(), viewport, anchor))
+        .toEqual(layout);
+    }
+
+    const incident = saved.traversalFeedback.incident;
+    if (incident === null) throw new Error("mixed scene omitted its authoritative fall incident");
+    expect(incidentCueCalls(incident.cue)).toBe(2);
+    const savedWork = deserializeSettlementWorkingAnimalState(saved.settlementWorkingAnimals);
+    const savedGuardian = deserializeDogActorRoster(saved.dogActorRoster)?.actors.find(({ identity }) => (
+      identity.stableId === guardian.identity.stableId
+    ));
+    expect(savedGuardian?.intent).toMatchObject({
+      kind: "seek-shelter", enteredAtTick: world.meta.completedTick + 1,
+      cause: { kind: "condition", referenceId: "condition:weather-exposure" },
+    });
+    expect(savedWork?.assignments.find(({ workerActorId }) => workerActorId === guardian.identity.stableId)
+      ?.currentActivity).toMatchObject({
+      activity: "defer-to-actor", acceptedAtTick: world.meta.completedTick + 1,
+      cause: { kind: "actor-disposition", referenceId: "actor-intent:seek-shelter" },
+    });
+    expect(deserializeSettlementEcologyState(saved.settlementEcology).domesticCustodies)
+      .toEqual(settlement.domesticCustodies);
+    expect(promiseQuantity(saved.physicalCargo, fixture.contractId)).toBe(fixture.promiseQuantity);
+    expect(saved.physicalCargo.looseWorld.entities.some(({ payload }) => (
+      payload.kind === "promise" && payload.contractId === fixture.contractId
+    ))).toBe(true);
+    const calls = [...soundscapePlay.mock.calls];
+    runtime.destroy();
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay.mock.calls).toEqual(calls);
+    expect(reloaded.getRenderView().acousticText?.some(({ acousticKind }) => acousticKind === "physical"))
+      .toBe(false);
+    await reloaded.save();
+    const roundtrip = decodeCurrent(repository.snapshot());
+    for (const key of ["world", "player", "regionalEcology", "physicalCargo", "dogActorRoster",
+      "settlementWorkingAnimals", "perceptionCarry"] as const) {
+      expect(stableStringify(roundtrip[key])).toBe(stableStringify(saved[key]));
+    }
+    reloaded.destroy();
+  }, 60_000);
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
