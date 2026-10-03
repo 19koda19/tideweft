@@ -1989,6 +1989,74 @@ describe("Relief water camera invariant", () => {
   });
 });
 
+describe("Relief ambient-water acoustic authority", () => {
+  it.each([
+    ["ohm", false],
+    ["whissh", false],
+    ["ohm", true],
+    ["whissh", true],
+  ] as const)("suppresses raw %s labels with shared acoustic text (reduced motion: %s)", (voice, reducedMotion) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    const base = warmWaterView("water-acoustic-authority");
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile,
+          waterDepth: voice === "ohm" ? 0.2 : 0.9,
+          roughness: voice === "ohm" ? 0 : 1,
+        })),
+      },
+      tide: { ...base.tide, level: 0.5, surfaceCurrent: { x: 1, y: 0 } },
+    };
+    const harness = renderHarness(current);
+    const line = harness.instance.line as ReturnType<typeof vi.fn>;
+    const point = harness.instance.point as ReturnType<typeof vi.fn>;
+    const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
+    const labels = (): FakeElement[] => layer?.children.filter((child) => (
+      !child.removed && (child.textContent === "ohm" || child.textContent === "whissh")
+    )) ?? [];
+    try {
+      harness.draw();
+      const legacyLabels = labels();
+      expect(legacyLabels.map(({ textContent }) => textContent)).toContain(voice);
+      const flowStrokeCount = line.mock.calls.length;
+      const foamCount = point.mock.calls.length;
+      expect(flowStrokeCount).toBeGreaterThan(0);
+      if (voice === "whissh") expect(foamCount).toBeGreaterThan(0);
+
+      line.mockClear();
+      point.mockClear();
+      harness.setView({ ...current, acousticText: [] });
+      harness.draw();
+      expect(labels()).toEqual([]);
+      expect(legacyLabels.every(({ removed }) => removed)).toBe(true);
+      expect(line).toHaveBeenCalledTimes(flowStrokeCount);
+      expect(point).toHaveBeenCalledTimes(foamCount);
+
+      harness.setView({ ...current, acousticText: [{
+        acousticKind: "physical", id: "shared-thud", sourceId: "object:crate",
+        sourceKind: "object", text: "shared thud", position: base.player.position,
+        progress: 0.2, priority: 9, salience: 7, tone: "restrained",
+        variantSeed: 1, semanticFamily: "thud",
+      }] });
+      harness.draw();
+      expect(labels()).toEqual([]);
+      expect(layer?.children.some((child) => (
+        !child.removed && child.textContent === "shared thud"
+      ))).toBe(true);
+
+      harness.setView(current);
+      harness.draw();
+      expect(labels().map(({ textContent }) => textContent)).toContain(voice);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+});
+
 describe("Relief ADRIFT presentation path", () => {
   it("keeps the ADRIFT DOM label visually panel-free", () => {
     const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");

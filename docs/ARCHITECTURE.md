@@ -513,10 +513,17 @@ correctness; current-schema fail-closed validation must remain intact during
 repair.
 
 These are representative producers, not false whole-world completion.
-Production views suppress the old renderer-created ADRIFT syllables whenever
-the shared `acousticText` projection is present; their fallback remains only for
-legacy views and tests that omit the field. Ambient-water syllables still lack
-the structured event/receipt boundary. Broad addressable non-dog animal
+Production views suppress both old renderer-created ADRIFT syllables and raw
+ambient-water `ohm`/`whissh` whenever the shared `acousticText` projection is
+present, including an empty list. Their fallback remains only for legacy views
+and tests that omit the field. Continuous water ambience remains a restrained
+environmental audio loop driven by local hydrology; it is not a discrete
+acoustic attention event. Surface-current strokes, foam, soundings and scan
+disclosure remain unchanged. Renderer wall time cannot fabricate new heard
+water captions, and this classification creates no splash/contact producer or
+watercraft mechanic. Chart and Relief share the same rule under normal and
+reduced-motion presentation; Relief removes stale legacy label nodes when a
+current projection takes over. Broad addressable non-dog animal
 contact, arbitrary object and foliage contact, broader tool/material work, violence, vessel
 producers, and coarse/cross-frame physical hearing remain incomplete. A
 heard-unseen physical event still receives no exact world anchor or source

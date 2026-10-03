@@ -1390,6 +1390,86 @@ describe("Chart wind production path", () => {
   });
 });
 
+describe("Chart ambient-water acoustic authority", () => {
+  it.each([
+    ["ohm", false],
+    ["whissh", false],
+    ["ohm", true],
+    ["whissh", true],
+  ] as const)("suppresses raw %s labels with shared acoustic text (reduced motion: %s)", (voice, reducedMotion) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    const base = view("water-acoustic-authority", { x: 48, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      terrain: {
+        columns: 4,
+        rows: 4,
+        tileSize: 24,
+        origin: { x: 0, y: 0 },
+        revision: "visible-flow",
+        tiles: Array.from({ length: 16 }, () => ({
+          kind: "channel" as const,
+          elevation: 0,
+          waterDepth: voice === "ohm" ? 0.2 : 0.9,
+          roughness: voice === "ohm" ? 0 : 1,
+          discovered: 1,
+          currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+      tide: { ...base.tide, level: 0.5, surfaceCurrent: { x: 1, y: 0 } },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
+    const bezier = p5Harness.instance?.bezier as ReturnType<typeof vi.fn>;
+    const point = p5Harness.instance?.point as ReturnType<typeof vi.fn>;
+    const labels = (): string[] => text.mock.calls
+      .map(([copy]) => String(copy))
+      .filter((copy) => copy === "ohm" || copy === "whissh");
+    try {
+      draw();
+      expect(labels()).toContain(voice);
+      const flowStrokeCount = bezier.mock.calls.length;
+      const foamCount = point.mock.calls.length;
+      expect(flowStrokeCount).toBeGreaterThan(0);
+      if (voice === "whissh") expect(foamCount).toBeGreaterThan(0);
+
+      text.mockClear();
+      bezier.mockClear();
+      point.mockClear();
+      current = { ...current, acousticText: [] };
+      draw();
+      expect(labels()).toEqual([]);
+      expect(bezier).toHaveBeenCalledTimes(flowStrokeCount);
+      expect(point).toHaveBeenCalledTimes(foamCount);
+
+      text.mockClear();
+      current = { ...current, acousticText: [{
+        acousticKind: "physical", id: "shared-thud", sourceId: "object:crate",
+        sourceKind: "object", text: "shared thud", position: base.player.position,
+        progress: 0.2, priority: 9, salience: 7, tone: "restrained",
+        variantSeed: 1, semanticFamily: "thud",
+      }] };
+      draw();
+      expect(labels()).toEqual([]);
+      expect(text.mock.calls.some(([copy]) => copy === "shared thud")).toBe(true);
+
+      text.mockClear();
+      const { acousticText: _acousticText, ...legacyView } = current;
+      current = legacyView;
+      draw();
+      expect(labels()).toContain(voice);
+    } finally {
+      renderer.destroy();
+    }
+  });
+});
+
 describe("Chart sounding disclosure", () => {
   it("cuts exact depth labels immediately even while terrain memory is fading", () => {
     vi.stubGlobal("performance", { now: () => 100 });

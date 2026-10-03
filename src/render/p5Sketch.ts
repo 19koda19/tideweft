@@ -1744,7 +1744,11 @@ export function createTideweftRenderer(
         p.strokeWeight((1.2 + cue.turbulence * 1.8) / camera.zoom);
         for (const fleck of cue.foam) p.point(fleck.x, fleck.y);
       }
-      const voices = buildWaterVoiceLabels(cues, now, reducedMotion, 4);
+      // Renderer-derived syllables survive only for legacy views without
+      // shared acoustic authority; an empty current list must not create captions.
+      const voices = view.acousticText === undefined
+        ? buildWaterVoiceLabels(cues, now, reducedMotion, 4)
+        : [];
       p.textAlign(p.CENTER, p.CENTER);
       p.textSize(9 / camera.zoom);
       p.noStroke();

@@ -1152,7 +1152,12 @@ export function createTideweftReliefRenderer(
       maxCues: 120,
       requireDetailDisclosure: view.perception !== undefined,
     });
-    for (const voice of buildWaterVoiceLabels(currentCues, now, reducedMotion, 3)) {
+    // Renderer-derived syllables survive only for legacy views without
+    // shared acoustic authority; an empty current list must not create captions.
+    const waterVoices = view.acousticText === undefined
+      ? buildWaterVoiceLabels(currentCues, now, reducedMotion, 3)
+      : [];
+    for (const voice of waterVoices) {
       const surface = discoveredReliefSurfaceHeightAt(
         view.terrain,
         voice.point,
