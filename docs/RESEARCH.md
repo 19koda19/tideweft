@@ -10,6 +10,16 @@ workflow record retains recovery locations. Future comparisons must recover
 the matching artifacts or capture a fresh baseline; no measured result, durable
 performance rule or current validation certificate was removed by this cleanup.
 
+Cleanup follow-up — 2026-10-02: the earlier external profiling archive is no
+longer available at its recorded location; historical capture recovery is not
+verified. Forty-one remaining ignored screenshot, log, probe and metadata files
+were removed from the checkout into a separate recoverable local archive. This
+includes two seed-discovery probes previously included in local test discovery,
+not maintained product regression tests. Canonical evidence, supported profiling
+tools, current builds and validation certificates remain. Future performance
+comparisons must capture a fresh baseline if exact historical artifacts cannot
+be recovered; the recorded measurements are historical, not a current rerun.
+
 ## What makes play rewarding and restorative
 
 ### Psychological needs beat a pile of prizes
