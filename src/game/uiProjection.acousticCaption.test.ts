@@ -193,7 +193,95 @@ function expression(
   return reduced.event;
 }
 
+function anonymousAlarm(sourcePosition: WorldPosition): WorldAcousticEvent {
+  const event = createWorldAcousticEvent({
+    triggerEventId: "ecology:existing-alarm:0",
+    domain: "actor-vocalization",
+    sourceId: "animal:private-alarm-source",
+    sourceCategory: "animal",
+    sourcePosition,
+    occurredAtTick: 0,
+    action: "vocalize",
+    sourceMaterial: "body",
+    surfaceMaterial: "unknown",
+    semanticFamily: "vocalization",
+    soundClass: "animal-alarm",
+    interrupt: "strong",
+    intensity: 1_000_000,
+    rangeUnits: 14_000,
+    durationSteps: 6,
+    priority: 720_000,
+    salience: 750_000,
+    repetitionKey: "animal:private-alarm-repeat",
+    textualEligibility: "salience-gated",
+    accessibilityRelevance: "urgent",
+    variantSeed: 0,
+  });
+  if (event === null) throw new Error("anonymous alarm contract was rejected");
+  return event;
+}
+
 describe("UI acoustic-caption arbitration", () => {
+  it("represents an existing animal alarm only as an anonymous directional call", () => {
+    const context = fixture();
+    const event = anonymousAlarm(context.sourcePosition);
+    const reception = createHeardUnseenWorldAcousticReception(event, {
+      bearing: { centerRadians: 0, uncertaintyRadians: 0.3 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.75,
+    });
+    if (reception === null) throw new Error("anonymous alarm hearing was rejected");
+    const options = {
+      economyWorld: context.compatibility,
+      worldAcousticEvent: event,
+      worldAcousticRemainingSteps: 6,
+      worldAcousticReception: reception,
+    };
+    const caption = projectUIView(context.world, context.player, context.session, options).expressionCaption;
+    expect(caption).toMatchObject({
+      id: event.eventId,
+      speakerLabel: "Sound",
+      text: "call",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      directionLabel: "east",
+      assertive: true,
+    });
+    expect(caption).not.toHaveProperty("physicalSoundKind");
+    expect(caption).not.toHaveProperty("position");
+    expect(caption).not.toHaveProperty("sourceId");
+    expect(JSON.stringify(caption)).not.toContain(event.sourceId);
+    expect(JSON.stringify(caption)).not.toContain(event.triggerEventId);
+    expect(projectUIView(context.world, context.player, context.session, {
+      ...options, worldAcousticReception: null,
+    }).expressionCaption).toBeUndefined();
+    expect(projectUIView(context.world, context.player, context.session, {
+      ...options, worldAcousticReception: { ...reception, eventId: "wrong-event" },
+    }).expressionCaption).toBeUndefined();
+  });
+
+  it("keeps important speech ahead of an anonymous alarm without changing its receipt", () => {
+    const context = fixture();
+    const alarm = anonymousAlarm(context.sourcePosition);
+    const reception = createHeardUnseenWorldAcousticReception(alarm, {
+      bearing: { centerRadians: 0, uncertaintyRadians: 0.3 },
+      distanceBand: { minimum: 2_000, maximum: 8_000 },
+      certainty: 0.75,
+    });
+    const warning = expression(context.sourcePosition, 900_000, 700_000, true);
+    const warningReception = createSelfSituatedExpressionReception(warning, 0);
+    const before = structuredClone(reception);
+    expect(projectUIView(context.world, context.player, context.session, {
+      economyWorld: context.compatibility,
+      situatedExpression: warning,
+      situatedExpressionReception: warningReception,
+      worldAcousticEvent: alarm,
+      worldAcousticRemainingSteps: 6,
+      worldAcousticReception: reception,
+    }).expressionCaption?.id).toBe(warning.eventId);
+    expect(reception).toEqual(before);
+  });
+
   it("projects one visible physical semantic without exposing source identity or position", () => {
     const context = fixture();
     const event = acousticEvent(context.sourcePosition, 520_000, 740_000);

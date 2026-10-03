@@ -100,7 +100,7 @@ export type AcousticTextEligibility = "audio-only" | "salience-gated";
 export type AcousticAccessibilityRelevance = "routine" | "informative" | "urgent";
 export type AcousticInterrupt = "none" | "strong";
 export type PhysicalSoundClass = `physical-${AcousticSemanticFamily}`;
-export type WorldAcousticSoundClass = PhysicalSoundClass | "animal-call";
+export type WorldAcousticSoundClass = PhysicalSoundClass | "animal-call" | "animal-alarm";
 
 /** Closed world-acoustic vocabulary shared by producers and hearing consumers. */
 export const WORLD_ACOUSTIC_SOUND_CLASSES: readonly WorldAcousticSoundClass[] = Object.freeze([
@@ -108,6 +108,7 @@ export const WORLD_ACOUSTIC_SOUND_CLASSES: readonly WorldAcousticSoundClass[] = 
     (family): PhysicalSoundClass => `physical-${family}`,
   ),
   "animal-call",
+  "animal-alarm",
 ]);
 const WORLD_ACOUSTIC_SOUND_CLASS_SET = new Set<unknown>(WORLD_ACOUSTIC_SOUND_CLASSES);
 
@@ -329,7 +330,7 @@ function soundClassMatchesSemantics(input: WorldAcousticEventInput): boolean {
       && input.action === "vocalize";
   }
   if (input.soundClass === undefined) return true;
-  if (input.soundClass === "animal-call") {
+  if (input.soundClass === "animal-call" || input.soundClass === "animal-alarm") {
     return input.domain === "actor-vocalization"
       && input.sourceCategory === "animal"
       && input.action === "vocalize"

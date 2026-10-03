@@ -431,6 +431,7 @@ import {
 } from "./coreEcologyRuntime";
 import { projectRuntimeCoreEcologyPresentationBatch } from "./runtimeCoreEcologyPresentationBatch";
 import {
+  CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS,
   collectCoreEcologyRootAggregateActivityObservationBatches,
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
@@ -14645,7 +14646,8 @@ export async function createTideweftRuntime(
       }
       settlementDomesticAnimalRecovery = topologyAdvancedRecovery;
       const playerEventTimeAlarmObservationsByEvent: Array<Readonly<{
-        readonly eventId: string;
+        readonly event: CoreWildlifeCausalEvent;
+        readonly contact: AudibleContact | null;
         readonly observations: readonly ActorObservation[];
       }>> = [];
       const playerEventTimeHumanObserverIds = new Set([playerAddress.actorId]);
@@ -14687,18 +14689,21 @@ export async function createTideweftRuntime(
             throw new Error("Core ecology event-time player hearing could not be resolved");
           }
           playerEventTimeAlarmObservationsByEvent.push(Object.freeze({
-            eventId: event.eventId,
+            event,
+            contact: propagated?.find(({ observerId }) => (
+              observerId === playerAddress.actorId
+            ))?.audibleContact ?? null,
             observations: heardByPlayer,
           }));
         }
       }
       const canonicalPlayerEventTimeAlarmsByEvent = playerEventTimeAlarmObservationsByEvent
-        .map(({ eventId, observations }) => {
+        .map(({ event, contact, observations }) => {
           const canonical = canonicalizeActorObservations(observations);
           if (canonical.length !== observations.length) {
             throw new Error("Core ecology event-time player hearing could not be canonicalized");
           }
-          return Object.freeze({ eventId, observations: canonical });
+          return Object.freeze({ event, contact, observations: canonical });
         });
       const resolvedRegionalResources = resolveRuntimeRegionalCoreResourceClaims(
         coreSteps.map(({ sourceKey, result: sourceStep, validateAcceptedPatch }) => ({
@@ -15644,13 +15649,10 @@ export async function createTideweftRuntime(
         [animal.actorId, animal] as const
       )));
       const unclaimedPlayerEventTimeAlarms = canonicalPlayerEventTimeAlarmsByEvent
-        .filter(({ eventId }) => !claimedExpressiveAlarmEventIds.has(eventId))
+        .filter(({ event }) => !claimedExpressiveAlarmEventIds.has(event.eventId));
+      const unclaimedPlayerAlarmObservations = unclaimedPlayerEventTimeAlarms
         .flatMap(({ observations }) => observations);
-      const lawfullyHeardAlarm = unclaimedPlayerEventTimeAlarms.some((observation) => (
-        observation.channel === "hearing"
-        && observation.perceivedClass === "animal-alarm"
-      ));
-      const lawfullyHeardStrongAlarm = unclaimedPlayerEventTimeAlarms
+      const lawfullyHeardStrongAlarm = unclaimedPlayerAlarmObservations
         .some((observation) => (
           observation.channel === "hearing"
           && observation.perceivedClass === "animal-alarm"
@@ -15659,6 +15661,54 @@ export async function createTideweftRuntime(
       if (lawfullyHeardStrongAlarm) {
         playerWaitDisturbedThisStep = true;
         playerRecoveryDisturbedThisStep = true;
+      }
+      // A remembered threat can produce a real new alarm without the fresh
+      // sighting needed for a Voice expression. Keep that gate intact and use
+      // the exact domain-hearing contact in the existing optional text queue.
+      // The historical collapsed audio remains one cue, independent of text.
+      const anonymousPlayerAlarm = unclaimedPlayerEventTimeAlarms
+        .filter(({ observations }) => observations.some((observation) => (
+          observation.channel === "hearing"
+          && observation.perceivedClass === "animal-alarm"
+        )))
+        .sort((left, right) => compareText(left.event.eventId, right.event.eventId))[0];
+      if (anonymousPlayerAlarm !== undefined) {
+        const { event, contact, observations } = anonymousPlayerAlarm;
+        const signal = coreEcologyAlarmSignalProfile(event.species);
+        const acoustic = createWorldAcousticEvent({
+          triggerEventId: event.eventId,
+          domain: "actor-vocalization",
+          sourceId: event.actorId,
+          sourceCategory: "animal",
+          sourcePosition: event.position,
+          occurredAtTick: event.atTick,
+          action: "vocalize",
+          sourceMaterial: "body",
+          surfaceMaterial: "unknown",
+          semanticFamily: "vocalization",
+          soundClass: "animal-alarm",
+          interrupt: signal.interrupt,
+          intensity: signal.sourceLoudness,
+          rangeUnits: CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS,
+          durationSteps: 6,
+          priority: 720_000,
+          salience: Math.max(...observations.map(({ salience }) => salience)),
+          repetitionKey: `core-alarm-repeat:${hashCanonical(event.actorId)}`,
+          textualEligibility: "salience-gated",
+          accessibilityRelevance: "urgent",
+          variantSeed: 0,
+        });
+        const reception = acoustic === null || contact === null
+          ? null
+          : createHeardUnseenWorldAcousticReception(acoustic, contact);
+        if (acoustic === null || reception === null) {
+          throw new Error("Anonymous core alarm lost its event-time acoustic receipt");
+        }
+        activeWorldAcousticPresentations = admitWorldAcousticPresentation(
+          activeWorldAcousticPresentations,
+          acoustic,
+          reception,
+        );
       }
       const heardAggregateCues = player.timeAction?.kind === "sleep"
         ? []
@@ -15704,7 +15754,6 @@ export async function createTideweftRuntime(
           pan: heardAggregateCue.pan,
         }));
       }
-      let ecologyConsequenceAnnounced = false;
       for (const event of allCoreMortalityEvents) {
         if (!directlyWitnessedMortalityEventIds.has(event.eventId)) continue;
         const victim = witnessedCoreBeforeById.get(event.victimId);
@@ -15724,7 +15773,6 @@ export async function createTideweftRuntime(
         );
         playerWaitDisturbedThisStep = true;
         playerRecoveryDisturbedThisStep = true;
-        ecologyConsequenceAnnounced = true;
       }
       if (
         settlementFoodLossApplied
@@ -15734,7 +15782,6 @@ export async function createTideweftRuntime(
           session,
           "One produce bundle is ruined inside the open storehouse.",
         );
-        ecologyConsequenceAnnounced = true;
       }
       for (const consumption of resolvedRegionalResources.consumed) {
         const animal = witnessedCoreById.get(consumption.actorId);
@@ -15756,7 +15803,6 @@ export async function createTideweftRuntime(
               ? `${animal.identityLabel} feeds from the remains. One physical resource unit is consumed.`
               : `${animal.identityLabel} takes the exposed food. The physical parcel is gone.`,
         );
-        ecologyConsequenceAnnounced = true;
       }
       if (bio0Step.event?.kind === "food-consumed") {
         const witnessedDog = projectDogPresentation({
@@ -15780,48 +15826,16 @@ export async function createTideweftRuntime(
             "The porter offers one provision. The dog accepts it, and the food leaves the pack.",
           );
           soundscape.play("accept", 0.38);
-          ecologyConsequenceAnnounced = true;
         }
       }
-      // Compatibility-only generic alarm presentation. This legacy fallback
-      // collapses real ecology-owned alarms that already propagate to wildlife,
-      // dogs and humans into a player-only cue/announcement. That presentation
-      // preserves neither per-event identity nor shared Voice receipts/layout,
-      // and cannot count as Living Voice coverage. Migrate remaining producers
-      // before retiring it; do not erase their existing ecological hearing.
-      const ecologyCues: Array<Readonly<{
-        cue: "wildlife-alarm";
-        volume: number;
-        variantSeed: number;
-        caption: string;
-        pan?: number;
-      }>> = [];
-      if (lawfullyHeardAlarm) {
-        ecologyCues.push(Object.freeze({
+      // Preserve the existing collapsed cue's release order and synthesis.
+      // Optional caption arbitration cannot erase this committed sound.
+      if (anonymousPlayerAlarm !== undefined) {
+        deferredWorldAcousticAudio.push(Object.freeze({
           cue: "wildlife-alarm",
           volume: 0.44,
           variantSeed: 0,
-          caption: "ANIMAL ALARM — source unclear.",
         }));
-      }
-      // Keep this final compatibility channel bounded even though the boolean
-      // fallback currently yields at most one cue. Aggregate chorus, physical
-      // contact, and migrated species calls use the shared Voice queues above
-      // and never compete through this announcement channel.
-      const emittedEcologyCues = ecologyCues.slice(0, 2);
-      deferredWorldAcousticAudio.push(...emittedEcologyCues);
-      if (emittedEcologyCues.length > 0) {
-        const cueCaption = emittedEcologyCues.map(({ caption }) => caption).join(" ");
-        if (ecologyConsequenceAnnounced && session.announcement !== null) {
-          const consequence = session.announcement;
-          announce(
-            session,
-            `${consequence.message} ${cueCaption}`,
-            consequence.assertive,
-          );
-        } else {
-          announce(session, cueCaption);
-        }
       }
       if (worldAdvancePhaseStartedAtMs !== null) {
         const finishedAtMs = runtimePerformanceNow();

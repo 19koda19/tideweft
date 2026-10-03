@@ -47,14 +47,18 @@ export interface PhysicalSoundSample {
   /** Fixed-point 0..1 source loudness; zero means no sound. */
   readonly soundLoudness: number;
   readonly soundRangeUnits: number;
-  readonly soundClass: WorldAcousticSoundClass;
+  /** Strong unadmitted alarms keep their separate authenticated hearing carrier. */
+  readonly soundClass: Exclude<WorldAcousticSoundClass, "animal-alarm">;
   readonly soundInterrupt: ObservationInterrupt;
   readonly sourceId: string;
   /** Committed world-acoustic fact; never exposed as perceived identity. */
   readonly acousticEventId: string;
 }
 
-export type PhysicalSoundSampleInput = PhysicalSoundSample;
+/** The constructor validates a world class before returning the narrower carrier. */
+export type PhysicalSoundSampleInput = Omit<PhysicalSoundSample, "soundClass"> & {
+  readonly soundClass: WorldAcousticSoundClass;
+};
 
 export interface PhysicalAcousticListenerInput {
   readonly observationId: string;
@@ -106,6 +110,7 @@ export function createPhysicalSoundSample(
     || !nonnegativeSafeInteger(value.soundRangeUnits)
     || value.soundRangeUnits > PHYSICAL_ACOUSTIC_MAX_RANGE_UNITS
     || !isWorldAcousticSoundClass(value.soundClass)
+    || value.soundClass === "animal-alarm"
     || (value.soundInterrupt !== "none" && value.soundInterrupt !== "strong")
     || !validSourceId(value.sourceId)
     || !validAcousticEventId(value.acousticEventId)

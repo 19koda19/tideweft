@@ -255,13 +255,31 @@ or new harmful bear behavior. Reload deliberately restarts session recap/UI
 metadata; it does not reset authoritative world or acoustic carry state.
 All nine current core alarm-source profiles now have shared Voice adapters,
 but not every lawful domain alarm qualifies for a fresh Voice expression.
-The legacy generic player fallback can still handle a heard remembered-threat
-alarm lacking that fresh expression authority. Its audio now shares the
-post-commit queue: a genuine remembered-deer repeat proves lawful player hearing,
-one successful cue, and no leaked cue on later closure failure. Its bounded
-legacy announcement still needs explicit shared-presentation reconciliation;
-it is not an unreachable defensive branch. Protected expression freshness is
-not relaxed to hide that gap.
+Heard remembered-threat alarms lacking fresh expression authority now adapt
+their actual domain event into the shared acoustic presenter, without creating
+a fresh Voice admission. Core propagation retains its exact transient
+`AudibleContact`; the adapter does not reconstruct direction from an anonymous
+observation area or rerun a different acoustic evaluator. One event-ID-ordered
+representative of the already-heard unclaimed alarms receives an anonymous
+`animal-alarm` vocal event and heard-unseen receipt, even if some source ground
+is visible. Its restrained `call` caption can disclose only the heard direction,
+never caller, species, threat, or an exact floating anchor. It joins the existing
+eight-entry queue and source/repetition cooldown; critical human warnings retain
+priority over it. The old `ANIMAL ALARM` session announcement is retired.
+
+The collapsed player audio remains exactly one existing `wildlife-alarm` cue
+at its prior release-order position, volume, variant and undefined pan, released
+only after interval closure. Text refusal cannot remove that audio, strong
+interruption, or the separate bounded ordinary-human/ecology hearing leg.
+The new presentation class is permitted only for animal vocal semantics;
+`PhysicalSoundSample` still rejects it because strong unadmitted alarms retain
+their separately authenticated hearing carrier. The caption/receipt is ephemeral,
+not a new save field or saved expression. A controlled remembered-deer fixture
+also produces a real higher-priority human warning: the warning wins with or
+without optional alarm text. Late-failure rollback and silent current47/carry14
+restore preserve the authoritative roots. This is not ordinary native travel,
+literal crowd saturation, a species repertoire expansion, or permission to
+relax protected expression freshness.
 Future alarm sources still require an explicit source-authenticated adapter.
 The narrow gull, elk, boar, chicken, duck, goat, cat, and fox representatives do not
 prove broad species repertoires, general hunting communication, or broad animal

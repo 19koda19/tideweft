@@ -51,6 +51,7 @@ import {
   calculateAmbientNoise,
   evaluateAudibleContact,
   evaluateVisualContact,
+  type AudibleContact,
   type PerceptionCell,
 } from "./perception";
 import {
@@ -138,6 +139,11 @@ export interface CoreEcologyPerceptionFrameInput {
 export interface CoreEcologyObservationBatch {
   readonly observerId: string;
   readonly observations: readonly ActorObservation[];
+}
+
+/** Transient hearing detail; never persisted as actor identity or exact position. */
+export interface CoreEcologyAlarmObservationBatch extends CoreEcologyObservationBatch {
+  readonly audibleContact: AudibleContact | null;
 }
 
 export interface CoreEcologyAggregateActivityPerceptionFrameInput
@@ -451,7 +457,7 @@ export function propagateCoreEcologyAlarmObservationBatches(
   eventValue: unknown,
   frameValue: unknown,
   freshEmitterValue?: unknown,
-): readonly CoreEcologyObservationBatch[] | null {
+): readonly CoreEcologyAlarmObservationBatch[] | null {
   const frame = canonicalPerceptionFrame(frameValue);
   const event = canonicalAlarmEvent(eventValue, frame, freshEmitterValue);
   if (frame === null || event === null) return null;
@@ -464,10 +470,11 @@ export function propagateCoreEcologyAlarmObservationBatches(
   });
   if (ambientNoise === null) return null;
   const emission = coreEcologyAlarmSignalProfile(event.species);
-  const batches: CoreEcologyObservationBatch[] = [];
+  const batches: CoreEcologyAlarmObservationBatch[] = [];
 
   for (const observer of frame.observers) {
     let observations = EMPTY_OBSERVATIONS;
+    let audibleContact: AudibleContact | null = null;
     if (observer.actorId !== event.actorId) {
       const listenerPlacement = frame.placements.get(observer.actorId);
       if (listenerPlacement === undefined) return null;
@@ -479,7 +486,7 @@ export function propagateCoreEcologyAlarmObservationBatches(
         // An event outside the exact representable acoustic delta cannot be
         // heard by this bounded observer; it must not make the whole world
         // step fail merely because the active regional frame moved.
-        batches.push(Object.freeze({ observerId: observer.actorId, observations }));
+        batches.push(Object.freeze({ observerId: observer.actorId, observations, audibleContact }));
         continue;
       }
       const heard = evaluateAudibleContact({
@@ -507,9 +514,14 @@ export function propagateCoreEcologyAlarmObservationBatches(
         const canonical = canonicalizeActorObservations([observation]);
         if (canonical.length !== 1) return null;
         observations = canonical;
+        // Preserve this exact evaluation instead of recovering a falsely
+        // precise bearing from the lossy anonymous observation area later.
+        Object.freeze(heard.bearing);
+        Object.freeze(heard.distanceBand);
+        audibleContact = Object.freeze(heard);
       }
     }
-    batches.push(Object.freeze({ observerId: observer.actorId, observations }));
+    batches.push(Object.freeze({ observerId: observer.actorId, observations, audibleContact }));
   }
 
   return Object.freeze(batches);

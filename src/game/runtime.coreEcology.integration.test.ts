@@ -99,6 +99,10 @@ import {
 import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
 import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
 import * as coreEcologyPerception from "./coreEcologyPerception";
+import type { AudibleContact } from "./perception";
+import type { WorldAcousticEvent } from "./worldAcoustics";
+import type { WorldAcousticPresentationReception } from "./worldAcousticPresentation";
+import * as acousticPresentationQueue from "./worldAcousticPresentationQueue";
 import { adoptCoreEcologySettlementHomeFromV24 } from "./coreEcologySettlementHome";
 import {
   coreEcologySpeciesCanOwnActorAddress,
@@ -4026,6 +4030,7 @@ describe("runtime core-ecology vertical slice", () => {
 
   it("does not turn direct visual alarm knowledge into out-of-range audio", async () => {
     const { runtime, alarmActorId } = await createAlarmRuntime(9);
+    const presentations = vi.spyOn(acousticPresentationQueue, "admitWorldAcousticPresentation");
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
       .toBe(true);
     soundscapePlay.mockClear();
@@ -4037,6 +4042,9 @@ describe("runtime core-ecology vertical slice", () => {
     )).toEqual([]);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
     expect(runtime.getUIView().expressionCaption?.text).not.toBe("SNORT!");
+    expect(presentations.mock.calls.filter(([, event]) => (
+      event.sourceId === alarmActorId && event.soundClass === "animal-alarm"
+    ))).toEqual([]);
     runtime.destroy();
   }, 45_000);
 
@@ -4605,6 +4613,7 @@ describe("runtime core-ecology vertical slice", () => {
 
   it.each(["elk", "wild-boar"] as const)("keeps an authentic out-of-hearing %s alarm in the world without player audio or text", async (species) => {
     const { runtime, repository, alarmActorId } = await createAlarmRuntime(-12, species);
+    const presentations = vi.spyOn(acousticPresentationQueue, "admitWorldAcousticPresentation");
     const cue = species === "elk" ? "vocalization-elk-alarm-bark" : "vocalization-boar-grunt";
     soundscapePlay.mockClear();
     advancePlayerSteps(runtime, 10);
@@ -4616,6 +4625,9 @@ describe("runtime core-ecology vertical slice", () => {
     expect(runtime.getRenderView().expressions?.some(({ sourceActorId }) => (
       sourceActorId === alarmActorId
     ))).toBe(false);
+    expect(presentations.mock.calls.filter(([, event]) => (
+      event.sourceId === alarmActorId && event.soundClass === "animal-alarm"
+    ))).toEqual([]);
     await runtime.save();
     const saved = requiredEnvelope(repository);
     const source = requiredCoreActor(requiredRegionalCoreOwner(saved, alarmActorId), alarmActorId);
@@ -4829,7 +4841,17 @@ describe("runtime core-ecology vertical slice", () => {
 
   it("preserves ordinary hearing of a fresh deer alarm from a genuinely remembered threat", async () => {
     const collectVisual = coreEcologyPerception.collectCoreEcologyVisualObservationBatches;
+    const admitPresentation = acousticPresentationQueue.admitWorldAcousticPresentation;
+    const refusedPresentations: WorldAcousticEvent[] = [];
     let obscuredSourceId: string | null = null;
+    vi.spyOn(acousticPresentationQueue, "admitWorldAcousticPresentation")
+      .mockImplementation((active, event, reception) => {
+        if (event.sourceId === obscuredSourceId && event.soundClass === "animal-alarm") {
+          refusedPresentations.push(event);
+          return active;
+        }
+        return admitPresentation(active, event, reception);
+      });
     vi.spyOn(coreEcologyPerception, "collectCoreEcologyVisualObservationBatches")
       .mockImplementation((input) => {
         const batches = collectVisual(input);
@@ -4868,6 +4890,7 @@ describe("runtime core-ecology vertical slice", () => {
 
       // Core cognition's four-tick alarm cooldown is inclusive: the first
       // lawful repeat is T+5, after the existing threat belief has aged.
+      soundscapePlay.mockClear();
       advancePlayerSteps(runtime, 50);
       await runtime.save();
       const repeatedEnvelope = requiredEnvelope(repository);
@@ -4885,6 +4908,20 @@ describe("runtime core-ecology vertical slice", () => {
       }
       expect(repeatedAlarm.eventId).not.toBe(firstAlarm.eventId);
       expect(repeatedAlarm.observationId).toBe(firstAlarm.observationId);
+      // Optional text refusal is independent of the real acoustic event and
+      // next-interval hearing. Refuse only this source's authentic carrier,
+      // never a fabricated crowd, observation, event or expression admission.
+      const refusedRepeat = refusedPresentations.filter(({ triggerEventId }) => (
+        triggerEventId === repeatedAlarm.eventId
+      ));
+      expect(refusedRepeat).toHaveLength(1);
+      expect(refusedRepeat[0]).toMatchObject({
+        sourceId: alarmActorId, occurredAtTick: repeatedWorld.meta.completedTick,
+        soundClass: "animal-alarm", interrupt: "strong",
+      });
+      expect(runtime.getUIView().expressionCaption?.id).not.toBe(refusedRepeat[0]?.eventId);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm"))
+        .toEqual([["wildlife-alarm", 0.44, 0, undefined]]);
       expect(repeatedSource.perception.beliefs.find(({ sourceObservationId }) => (
         sourceObservationId === firstAlarm.observationId
       ))?.lastObservedTick).toBe(firstWorld.meta.completedTick);
@@ -4978,9 +5015,28 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
-  it.each([false, true])("releases a real remembered-threat player alarm only after successful closure (failure=%s)", async (failClosure) => {
+  it.each([[false, false], [true, false], [false, true]] as const)("releases a real remembered-threat player alarm only after successful closure (failure=%s, caption refusal=%s)", async (failClosure, refuseCaption) => {
     const fixture = await createRememberedDeerPlayerAlarmRuntime();
     const { runtime, repository, alarmActorId, firstObservedTick, threatObservationId, playerAlarmReceipts } = fixture;
+    const targetTick = firstObservedTick + 5;
+    const admittedPresentations: Array<{
+      event: WorldAcousticEvent;
+      reception: WorldAcousticPresentationReception;
+      retained: boolean;
+    }> = [];
+    const admitPresentation = acousticPresentationQueue.admitWorldAcousticPresentation;
+    vi.spyOn(acousticPresentationQueue, "admitWorldAcousticPresentation")
+      .mockImplementation((active, event, reception) => {
+        const target = event.sourceId === alarmActorId && event.occurredAtTick === targetTick
+          && event.soundClass === "animal-alarm";
+        // Refuse only this optional caption. The actual domain event, acoustic
+        // contact, hearing, interruption and committed audio remain untouched.
+        const next = target && refuseCaption ? active : admitPresentation(active, event, reception);
+        if (target) admittedPresentations.push({
+          event, reception, retained: next.some(({ event: retained }) => retained.eventId === event.eventId),
+        });
+        return next;
+      });
     try {
       // The fixture is at T+4/phase nine without another save or player
       // relocation. Only the last step asks cognition to emit its real T+5
@@ -5003,7 +5059,6 @@ describe("runtime core-ecology vertical slice", () => {
       advancePlayerSteps(runtime, 1);
       await Promise.resolve();
 
-      const targetTick = firstObservedTick + 5;
       const dueReceipts = playerAlarmReceipts.filter(({ event }) => event.atTick === targetTick);
       expect(dueReceipts).toHaveLength(1);
       expect(dueReceipts[0]?.event).toMatchObject({
@@ -5015,6 +5070,28 @@ describe("runtime core-ecology vertical slice", () => {
         channel: "hearing", perceivedClass: "animal-alarm", subjectId: null,
         identification: "anonymous", interrupt: "strong",
       });
+      const audibleContact = dueReceipts[0]?.audibleContact;
+      if (audibleContact === null || audibleContact === undefined) {
+        throw new Error("Real remembered alarm lost its native anonymous hearing contact");
+      }
+      expect(admittedPresentations).toHaveLength(1);
+      const presentation = admittedPresentations[0]!;
+      expect(presentation.event).toMatchObject({
+        triggerEventId: dueReceipts[0]?.event.eventId, sourceId: alarmActorId,
+        domain: "actor-vocalization", sourceCategory: "animal", action: "vocalize",
+        semanticFamily: "vocalization", soundClass: "animal-alarm", interrupt: "strong",
+        occurredAtTick: targetTick, priority: 720_000, durationSteps: 6,
+        accessibilityRelevance: "urgent",
+      });
+      expect(presentation.reception).toMatchObject({
+        kind: "heard-unseen", directVisualReceipt: false, contact: audibleContact,
+      });
+      expect(presentation.reception).not.toHaveProperty("position");
+      expect(presentation.reception).not.toHaveProperty("sourcePosition");
+      expect(presentation.retained).toBe(!refuseCaption);
+      expect(runtime.getRenderView().acousticText?.some(({ id }) => (
+        id === presentation.event.eventId
+      ))).not.toBe(true);
       const playerCues = soundscapePlay.mock.calls.filter(([cue]) => (
         cue === "wildlife-alarm" || cue === "vocalization-deer-alarm-snort"
       ));
@@ -5027,12 +5104,27 @@ describe("runtime core-ecology vertical slice", () => {
         const { active, ...restoredPhysicalPlayer } = runtime.getRenderView().player;
         expect(active).toBe(false);
         expect(restoredPhysicalPlayer).toEqual(priorPhysicalPlayer);
+        expect(runtime.getUIView().expressionCaption?.id).not.toBe(presentation.event.eventId);
       } else {
         expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
         expect(playerCues).toEqual([["wildlife-alarm", 0.44, 0, undefined]]);
+        expect(runtime.getUIView().announcement?.message).not.toContain("ANIMAL ALARM");
+        const caption = runtime.getUIView().expressionCaption;
+        // This real scene also produces an actual human warning. Its greater
+        // priority wins the shared caption slot with or without optional alarm
+        // text; never suppress that warning or inflate the alarm to force a win.
+        expect(caption).toMatchObject({
+          speakerLabel: "Someone", text: "Heads up!", presentationKind: "speech",
+          directionLabel: "east", assertive: true,
+        });
+        expect(caption?.id).not.toBe(presentation.event.eventId);
         await runtime.save();
         const completed = requiredEnvelope(repository);
         expect(deserializeWorld(completed.world).meta.completedTick).toBe(targetTick);
+        const warning = completed.perceptionCarry.situatedExpressionChannels.channels
+          .find(({ state }) => state.active?.eventId === caption?.id)?.state.active;
+        expect(warning?.meaning).toBe("human-danger-warning");
+        expect(warning?.priority).toBeGreaterThan(presentation.event.priority);
         const source = requiredCoreActor(requiredRegionalCoreOwner(completed, alarmActorId), alarmActorId);
         expect(source.memories).toContainEqual(expect.objectContaining({
           kind: "alarm", atTick: targetTick, observationId: threatObservationId,
@@ -5041,6 +5133,32 @@ describe("runtime core-ecology vertical slice", () => {
         expect(source.perception.beliefs.find(({ sourceObservationId }) => (
           sourceObservationId === threatObservationId
         ))?.lastObservedTick).toBe(firstObservedTick);
+        // This anonymous shared carrier is ephemeral presentation, not another
+        // saved Voice admission. Its real domain alarm and hearing still persist.
+        expect(JSON.stringify(completed)).not.toContain(presentation.event.eventId);
+        runtime.destroy();
+        scheduledFrame = undefined;
+        soundscapePlay.mockClear();
+        const resumed = await createTideweftRuntime(repository);
+        try {
+          expect(resumed.getUIView().saveWarning).toBeUndefined();
+          expect(resumed.getUIView().expressionCaption?.id).not.toBe(presentation.event.eventId);
+          expect(resumed.getRenderView().acousticText?.some(({ id }) => (
+            id === presentation.event.eventId
+          ))).not.toBe(true);
+          expect(soundscapePlay.mock.calls).toEqual([]);
+          await resumed.save();
+          const restored = requiredEnvelope(repository);
+          expect(restored.world).toBe(completed.world);
+          expect(restored.regionalEcology).toBe(completed.regionalEcology);
+          expect(restored.player).toEqual(completed.player);
+          expect(restored.physicalCargo).toEqual(completed.physicalCargo);
+          expect(restored.perceptionCarry).toEqual(completed.perceptionCarry);
+          expect(soundscapePlay.mock.calls).toEqual([]);
+        } finally {
+          resumed.destroy();
+          scheduledFrame = undefined;
+        }
       }
     } finally {
       runtime.destroy();
@@ -7942,12 +8060,12 @@ async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 |
   alarmActorId: string;
   firstObservedTick: number;
   threatObservationId: string;
-  playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[] }>;
+  playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[]; audibleContact: AudibleContact | null }>;
 }> {
   const collectVisual = coreEcologyPerception.collectCoreEcologyVisualObservationBatches;
   const propagateAlarm = coreEcologyPerception.propagateCoreEcologyAlarmObservationBatches;
   let sourceId: string | null = null;
-  const playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[] }> = [];
+  const playerAlarmReceipts: Array<{ event: CoreWildlifeCausalEvent; observations: readonly ActorObservation[]; audibleContact: AudibleContact | null }> = [];
   vi.spyOn(coreEcologyPerception, "collectCoreEcologyVisualObservationBatches").mockImplementation((input) => {
     const batches = collectVisual(input);
     if (batches === null || sourceId === null) return batches;
@@ -7961,7 +8079,7 @@ async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 |
       const event = args[0] as CoreWildlifeCausalEvent;
       const playerBatch = batches.find(({ observerId }) => observerId === LOCAL_PLAYER_SUBJECT_ID);
       if (event.actorId === sourceId && playerBatch !== undefined && playerBatch.observations.length > 0) {
-        playerAlarmReceipts.push({ event, observations: playerBatch.observations });
+        playerAlarmReceipts.push({ event, observations: playerBatch.observations, audibleContact: playerBatch.audibleContact });
       }
     }
     return batches;

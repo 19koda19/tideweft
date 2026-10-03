@@ -579,19 +579,24 @@ export function projectUIView(
     && options.worldAcousticEvent.sourceCategory === "animal"
     && options.worldAcousticEvent.semanticFamily === "chorus"
     && options.worldAcousticEvent.soundClass === "animal-call";
+  const anonymousAnimalAlarm = worldAcousticContact !== null
+    && options.worldAcousticEvent?.domain === "actor-vocalization"
+    && options.worldAcousticEvent.sourceCategory === "animal"
+    && options.worldAcousticEvent.semanticFamily === "vocalization"
+    && options.worldAcousticEvent.soundClass === "animal-alarm";
   const worldAcousticCaptionCandidate: AcousticCaptionCandidate | null =
     worldAcousticRealization === null
       ? null
-      : anonymousAnimalChorus
+      : anonymousAnimalChorus || anonymousAnimalAlarm
         ? {
             caption: {
               id: options.worldAcousticEvent!.eventId,
-              // A chorus has no addressable actor or species-safe identity.
+              // This hearing receipt does not disclose a caller or species.
               speakerLabel: "Sound",
               text: worldAcousticRealization.text,
               tone: worldAcousticRealization.tone,
               presentationKind: "animal-call",
-              animalCallKind: "chorus",
+              animalCallKind: anonymousAnimalChorus ? "chorus" : "animal-call",
               directionLabel: audibleContactDirection(worldAcousticContact),
               assertive: options.worldAcousticEvent!.interrupt === "strong",
             },

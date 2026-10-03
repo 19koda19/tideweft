@@ -180,6 +180,30 @@ describe("shared physical-acoustic listener evaluation", () => {
     expect(result.observation).not.toHaveProperty("acousticEventId");
   });
 
+  it.each(["none", "strong"] as const)(
+    "rejects animal-alarm in the physical sample carrier even with interrupt %s",
+    (soundInterrupt) => {
+      // Strong unadmitted alarms retain their separate domain-authenticated
+      // carrier. Enlarging the world-event vocabulary cannot change this one.
+      const invalidSample = {
+        ...SAMPLE_INPUT,
+        soundClass: "animal-alarm",
+        soundInterrupt,
+      } as unknown as PhysicalSoundSampleInput;
+
+      expect(createPhysicalSoundSample(invalidSample)).toBeNull();
+      expect(evaluatePhysicalAcousticListener(listenerInput({
+        sample: invalidSample as unknown as PhysicalSoundSample,
+      }))).toBeNull();
+      expect(physicalSample()).toMatchObject({
+        soundClass: "physical-rustle",
+        soundInterrupt: "none",
+      });
+      expect(physicalSample({ soundClass: "animal-call", soundInterrupt }))
+        .toMatchObject({ soundClass: "animal-call", soundInterrupt });
+    },
+  );
+
   it("fails malformed samples and listener inputs closed", () => {
     expect(createPhysicalSoundSample({
       ...SAMPLE_INPUT,

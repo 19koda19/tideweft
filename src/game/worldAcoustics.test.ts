@@ -4,11 +4,16 @@ import { createRegionCoord } from "../sim/regions";
 import type { TraversalIncident } from "./traversalFeedback";
 import { createWorldPosition } from "./worldPosition";
 import {
+  ACOUSTIC_ACTIONS,
+  ACOUSTIC_SEMANTIC_FAMILIES,
+  ACOUSTIC_SOURCE_CATEGORIES,
+  WORLD_ACOUSTIC_DOMAINS,
   acousticVariantIndex,
   animalContactAcousticEvent,
   carriedGearBreakAcousticEvent,
   cargoImpactAcousticEvent,
   createWorldAcousticEvent,
+  isWorldAcousticSoundClass,
   traversalIncidentAcousticEvent,
   type TraversalAcousticEventInput,
   type WorldAcousticEventInput,
@@ -49,6 +54,78 @@ function traversalInput(
 }
 
 describe("structured world acoustics", () => {
+  it("retains animal-alarm only for an animal's structured vocalization contract", () => {
+    // This is the shared receiving contract, not a fabricated cognition alarm
+    // or evidence that a particular runtime encounter can be reached.
+    const alarmInput = {
+      triggerEventId: "ecology:alarm:contract:411",
+      domain: "actor-vocalization",
+      sourceId: "A-v1-alarm-contract-source",
+      sourceCategory: "animal",
+      sourcePosition: POSITION,
+      occurredAtTick: 411,
+      action: "vocalize",
+      sourceMaterial: "body",
+      surfaceMaterial: "unknown",
+      semanticFamily: "vocalization",
+      soundClass: "animal-alarm",
+      interrupt: "strong",
+      intensity: 1_000_000,
+      rangeUnits: 24_000,
+      durationSteps: 6,
+      priority: 760_000,
+      salience: 900_000,
+      repetitionKey: "animal-alarm:contract-source",
+      textualEligibility: "salience-gated",
+      accessibilityRelevance: "urgent",
+      variantSeed: 411,
+    } as const satisfies WorldAcousticEventInput;
+    const alarm = createWorldAcousticEvent(alarmInput);
+
+    expect(isWorldAcousticSoundClass("animal-alarm")).toBe(true);
+    expect(alarm).toMatchObject({
+      domain: "actor-vocalization",
+      sourceCategory: "animal",
+      sourcePosition: POSITION,
+      action: "vocalize",
+      semanticFamily: "vocalization",
+      soundClass: "animal-alarm",
+      interrupt: "strong",
+    });
+    expect(Object.isFrozen(alarm)).toBe(true);
+    expect(createWorldAcousticEvent(alarmInput)).toEqual(alarm);
+    expect(createWorldAcousticEvent({
+      ...alarmInput,
+      soundClass: "animal-call",
+      interrupt: "none",
+    })).toMatchObject({ soundClass: "animal-call", interrupt: "none" });
+
+    for (const domain of WORLD_ACOUSTIC_DOMAINS) {
+      if (domain !== "actor-vocalization") {
+        expect(createWorldAcousticEvent({ ...alarmInput, domain })).toBeNull();
+      }
+    }
+    for (const sourceCategory of ACOUSTIC_SOURCE_CATEGORIES) {
+      if (sourceCategory !== "animal") {
+        expect(createWorldAcousticEvent({ ...alarmInput, sourceCategory })).toBeNull();
+      }
+    }
+    for (const action of ACOUSTIC_ACTIONS) {
+      if (action !== "vocalize") {
+        expect(createWorldAcousticEvent({ ...alarmInput, action })).toBeNull();
+      }
+    }
+    for (const semanticFamily of ACOUSTIC_SEMANTIC_FAMILIES) {
+      if (semanticFamily !== "vocalization") {
+        expect(createWorldAcousticEvent({ ...alarmInput, semanticFamily })).toBeNull();
+      }
+    }
+    expect(createWorldAcousticEvent({
+      ...alarmInput,
+      soundClass: "physical-rustle",
+    })).toBeNull();
+  });
+
   it("retains an explicit animal-call class for an actor-vocalization chorus", () => {
     const chorusInput = {
       triggerEventId: "ecology:aggregate:marsh-frog-chorus:411",

@@ -624,11 +624,44 @@ describe("core ecology cross-species perception bridge", () => {
       }),
     ]);
     expect(observationsFor(batches, distantDeer.identity.stableId)).toEqual([]);
+    const heardContact = batches?.find(({ observerId }) => observerId === player.actorId)?.audibleContact;
+    expect(heardContact).toMatchObject({
+      bearing: { centerRadians: expect.any(Number), uncertaintyRadians: expect.any(Number) },
+      distanceBand: { minimum: expect.any(Number), maximum: expect.any(Number) },
+      certainty: expect.any(Number),
+    });
+    expect(observationsFor(batches, player.actorId)[0]?.confidence)
+      .toBe(Math.round((heardContact?.certainty ?? 0) * ACTOR_PERCEPTION_SCALE));
+    expect(heardContact).not.toHaveProperty("position");
+    expect(heardContact).not.toHaveProperty("sourceId");
+    expect(Object.isFrozen(heardContact)).toBe(true);
+    expect(Object.isFrozen(heardContact?.bearing)).toBe(true);
+    expect(Object.isFrozen(heardContact?.distanceBand)).toBe(true);
+    expect(batches?.find(({ observerId }) => observerId === gull.identity.stableId)?.audibleContact).toBeNull();
+    expect(batches?.find(({ observerId }) => observerId === distantDeer.identity.stableId)?.audibleContact).toBeNull();
     const serialized = JSON.stringify(heard);
     expect(serialized).not.toContain(gull.identity.stableId);
     expect(serialized).not.toContain(gull.identity.species);
     expect(serialized).not.toContain(event.eventId);
     expect(serialized).not.toContain(event.causeReferenceId);
+  });
+
+  it("retains no contact when real weather masking puts an alarm outside hearing range", () => {
+    const clear = fixture("weather-masked alarm contact");
+    const storm = fixture("weather-masked alarm contact", undefined, { kind: "storm", intensity: FIXED_POINT });
+    const gull = wildlife(clear, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const player = actorAddress("H-weather-alarm-player", "human", OBSERVER_X + 11, OBSERVER_Y, 500_000);
+    const clearBatches = propagateCoreEcologyAlarmObservationBatches(alarmed.event, {
+      ...frame(clear, [alarmed.actor], { playerAddress: player }), tick: 2,
+    });
+    const stormBatches = propagateCoreEcologyAlarmObservationBatches(alarmed.event, {
+      ...frame(storm, [alarmed.actor], { playerAddress: player }), tick: 2,
+    });
+    expect(observationsFor(clearBatches, player.actorId)).toHaveLength(1);
+    expect(clearBatches?.find(({ observerId }) => observerId === player.actorId)?.audibleContact).not.toBeNull();
+    expect(observationsFor(stormBatches, player.actorId)).toEqual([]);
+    expect(stormBatches?.find(({ observerId }) => observerId === player.actorId)?.audibleContact).toBeNull();
   });
 
   it("keeps a small-prey foot alarm audible nearby without treating it as a full alarm-call interrupt", () => {
