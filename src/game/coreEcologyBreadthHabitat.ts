@@ -1466,9 +1466,6 @@ export function canonicalCoreEcologyBreadthHabitatForWorld(
       region,
       cohortId: habitat.cohortId,
     });
-    // The existing world-keyed cache returns an authenticated frozen habitat.
-    // Only exact identity proves equality without encoding; clones still compare.
-    if (habitat === expected) return habitat;
     return stableStringify(habitat) === stableStringify(expected) ? habitat : null;
   } catch {
     return null;

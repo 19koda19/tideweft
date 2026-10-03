@@ -122,8 +122,8 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
     )).length;
     try {
       expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
-      // The exact immutable world-bound input no longer needs two whole encodes.
-      expect(habitatEncodes()).toBe(0);
+      // The measured shortcut was not retained: both paths keep exact encoding.
+      expect(habitatEncodes()).toBe(2);
       encoder.mockClear();
       expect(canonicalCoreEcologyBreadthHabitatForWorld(clone, SEED, region)).toBe(clone);
       expect(habitatEncodes()).toBe(2);
