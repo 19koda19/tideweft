@@ -85,6 +85,10 @@ import {
   type CoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
+import * as expressionTrajectory from "./situatedExpressionTrajectory";
+import { createHeardVisibleSituatedExpressionReception } from "./situatedExpressionReception";
+import { projectPerception } from "./projection";
+import { isWildlifeWorldPositionDirectlyObserved } from "./wildlifePresentation";
 import {
   createCoreEcologyGroup,
   createCoreEcologyGroupSet,
@@ -5044,6 +5048,116 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
+  it("saves a real completed remembered-threat interval at phase zero", async () => {
+    const { runtime, repository, alarmActorId, firstObservedTick } = await createRememberedDeerPlayerAlarmRuntime(40);
+    try {
+      expect(runtime.getRenderView().tick).toBe(firstObservedTick + 4);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      const trajectory = vi.spyOn(expressionTrajectory, "canonicalizeSituatedExpressionTrajectory");
+      const priorRecord = repository.snapshot();
+      let saveError: unknown;
+      try { await runtime.save(); } catch (error) { saveError = error; }
+      const actualTrajectory = trajectory.mock.results.at(-1)?.value;
+      expect(trajectory.mock.calls.at(-1)?.[2]).toBe(0);
+      expect(actualTrajectory).not.toBeNull();
+      // The obscured source retains its old real threat. A different existing
+      // herd member genuinely sees the bear and emits the new T+4 alarm.
+      const admission = actualTrajectory?.admissionLedger.records[0];
+      expect(actualTrajectory?.admissionLedger.records).toHaveLength(1);
+      expect(admission?.sourceActorId).not.toBe(alarmActorId);
+      expect(admission).toMatchObject({ kind: "core-wildlife-alarm", acceptedAtTick: firstObservedTick + 4 });
+      if (saveError !== undefined) expect(repository.snapshot()).toEqual(priorRecord);
+      expect(saveError).toBeUndefined();
+      const completed = requiredEnvelope(repository);
+      expect(deserializeWorld(completed.world).meta.completedTick).toBe(firstObservedTick + 4);
+      expect(completed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+      expect(completed.perceptionCarry.playerSenseSamples).toEqual([]);
+      expect(completed.perceptionCarry.situatedExpressionChannels).toEqual(actualTrajectory?.bank);
+      expect(completed.perceptionCarry.situatedExpressionAdmissions).toEqual(actualTrajectory?.admissionLedger);
+      expect(completed.perceptionCarry.actorVocalizationSamples).toEqual(actualTrajectory?.supplementalSoundSamples);
+      const channel = completed.perceptionCarry.situatedExpressionChannels.channels.find(({ sourceActorId }) => (
+        sourceActorId === admission?.sourceActorId
+      ));
+      const event = channel?.state.active;
+      if (channel?.reception?.kind !== "heard-unseen" || event === null || event === undefined) {
+        throw new Error("Completed deer interval lost its authentic unseen active call");
+      }
+      const world = deserializeWorld(completed.world);
+      const travel = restorePlayerRegionalTravel(world.meta.rootSeed, completed.player, completed.regionalTravel);
+      if (travel === null) throw new Error("Completed deer interval lost its current regional listener frame");
+      const active = projectRegionalEcologyStateV6ActiveState(requiredRegionalEcologyV6(completed), {
+        origin: travel.window.origin,
+        terrain: { width: travel.window.terrain.width, height: travel.window.terrain.height },
+      });
+      const sourceOwner = active?.base.base.base.base.base.residents.find(({ sourceKey }) => (
+        sourceKey === (admission?.kind === "core-wildlife-alarm" ? admission.sourceOwnerKey : null)
+      ));
+      if (sourceOwner === undefined) throw new Error("Completed deer interval lost its authenticated active source");
+      const source = requiredCoreActor(sourceOwner.patch, event.sourceActorId);
+      expect(source.address.position).not.toEqual(event.position);
+      const spatial = createRegionalWorldView(createWorldView(world), travel.window, {
+        discovered: completed.player.discovered, depthSoundings: completed.player.depthSoundings,
+      }, { immutable: true });
+      // The old acoustic locus is directly visible, but the actual source
+      // body is elsewhere. That empty visible point cannot identify the call.
+      expect(isWildlifeWorldPositionDirectlyObserved(event.position, {
+        window: { origin: travel.window.origin, terrain: {
+          width: travel.window.terrain.width, height: travel.window.terrain.height,
+        } },
+        perception: projectPerception(spatial, completed.player),
+      })).toBe(true);
+      runtime.destroy();
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      const resumed = await createTideweftRuntime(repository);
+      try {
+        expect(resumed.getUIView().saveWarning).toBeUndefined();
+        expect(soundscapePlay.mock.calls).toEqual([]);
+        await resumed.save();
+        expect(requiredEnvelope(repository).perceptionCarry).toEqual(completed.perceptionCarry);
+        expect(soundscapePlay.mock.calls).toEqual([]);
+      } finally {
+        resumed.destroy();
+        scheduledFrame = undefined;
+      }
+
+      const forgedVisible = createHeardVisibleSituatedExpressionReception(
+        event, world.meta.completedTick, channel.reception.certainty, true,
+      );
+      if (forgedVisible === null) throw new Error("Visible-receipt counterfactual must have valid public receipt shape");
+      const forgedCarry: CurrentPerceptionCarry = {
+        ...completed.perceptionCarry,
+        situatedExpressionChannels: {
+          ...completed.perceptionCarry.situatedExpressionChannels,
+          channels: completed.perceptionCarry.situatedExpressionChannels.channels.map((candidate) => (
+            candidate.sourceActorId === event.sourceActorId ? { ...candidate, reception: forgedVisible } : candidate
+          )),
+        },
+      };
+      const forgedRepository = new MemoryRepository(recordWithEnvelope(
+        repository.snapshot(), resealedEnvelope(completed, { perceptionCarry: forgedCarry }),
+      ));
+      const forgedRecord = forgedRepository.snapshot();
+      soundscapePlay.mockClear();
+      const rejected = await createTideweftRuntime(forgedRepository);
+      try {
+        expect(rejected.getUIView().title.hasSave).toBe(false);
+        expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+        expect(soundscapePlay.mock.calls).toEqual([]);
+        await expect(rejected.save()).rejects.toThrow(
+          "Choose a seed before replacing the unreadable or conflicting local autosave.",
+        );
+        expect(forgedRepository.snapshot()).toEqual(forgedRecord);
+      } finally {
+        rejected.destroy();
+        scheduledFrame = undefined;
+      }
+    } finally {
+      runtime.destroy();
+      scheduledFrame = undefined;
+    }
+  }, 120_000);
+
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
     const {
       runtime,
@@ -7822,7 +7936,7 @@ async function createAlarmRuntime(
   return { runtime, repository, alarmActorId: alarmActor.identity.stableId };
 }
 
-async function createRememberedDeerPlayerAlarmRuntime(): Promise<{
+async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 | 49 = 49): Promise<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   alarmActorId: string;
@@ -7871,7 +7985,7 @@ async function createRememberedDeerPlayerAlarmRuntime(): Promise<{
     }
     const threatObservationId = firstAlarm.observationId;
     sourceId = alarmActorId;
-    advancePlayerSteps(runtime, 49);
+    advancePlayerSteps(runtime, stepsAfterFirstAlarm);
     expect(runtime.getRenderView().tick).toBe(firstObservedTick + 4);
     return { runtime, repository, alarmActorId, firstObservedTick, threatObservationId, playerAlarmReceipts };
   } catch (error) {

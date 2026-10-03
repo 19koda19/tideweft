@@ -21015,6 +21015,7 @@ function playerPerceptionCarryMatchesPosition(
         spatialWorld,
         window: regionalTravel.window,
         playerTemplate: player,
+        authority,
         event,
         admission,
       });
@@ -21317,6 +21318,7 @@ function situatedExpressionChannelsMatchWorld(
               spatialWorld,
               window: regionalTravel.window,
               playerTemplate: player,
+              authority,
               event: active,
               admission,
               reception: channel.reception,
@@ -22555,6 +22557,7 @@ interface CoreWildlifeAlarmReceptionAuthorityInput {
   readonly spatialWorld: WorldView;
   readonly window: RegionalPlayerTravelState["window"];
   readonly playerTemplate: PlayerState;
+  readonly authority: CoreWildlifeAlarmExpressionInput;
   readonly event: SituatedExpressionEvent;
   readonly admission: CoreWildlifeAlarmAdmission;
   readonly reception: SituatedExpressionReception | null;
@@ -22577,6 +22580,7 @@ function coreWildlifeAlarmReceptionAtEventTime(
     spatialWorld,
     window,
     playerTemplate,
+    authority,
     event,
     admission,
   } = input;
@@ -22645,10 +22649,17 @@ function coreWildlifeAlarmReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
+  // A visible call locus alone does not authenticate a visible source body.
+  // Reuse the already-authenticated materialized source, matching live receipt
+  // classification; sound propagation remains at the committed event locus.
   // Visibility is replayed from the event-time pose. Strong calls may have
   // already woken the courier; a non-interrupting signal never does, so its
   // sleeping interval receives no player receipt before reaching this path.
-  const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
+  const sourceAtCallLocus = sameRuntimeWorldPosition(
+    authority.actor.address.position,
+    event.position,
+  );
+  const directlyVisible = sourceAtCallLocus && isWildlifeWorldPositionDirectlyObserved(event.position, {
     window: {
       origin: window.origin,
       terrain: {

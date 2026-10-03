@@ -622,7 +622,7 @@ authority.
 A fourth narrow signal consumes the existing core-wildlife fish-crow alarm
 rather than adding a bird-specific timer or second ecology event. Eligibility
 requires one materialized fish crow in the bounded active regional projections
-whose owning source, stable identity, post-commit final position, current tick,
+whose owning source, stable identity, retained sound position, current tick,
 new alarm intent, exact event, attended alarm-causing belief and threshold, and
 retained causal memory agree. The presentation sidecar derives from those
 same active roots, is sorted and duplicate-checked, and cannot exceed the global
@@ -643,8 +643,8 @@ bird direction.
 
 A fifth narrow signal adapts the existing core-deer alarm through the same
 species-aware admission instead of creating a deer-only sound path. The owning
-ecology root must prove the materialized actor, exact committed alarm and final
-locus, retained memory, and the same lawful core alarm-belief policy and
+ecology root must prove the materialized actor, exact committed alarm and retained
+sound locus, memory, and the same lawful core alarm-belief policy and
 threshold that produced the event.
 Living Voice realizes that one event as `SNORT!` and
 `vocalization-deer-alarm-snort`, owns its single human/player acoustic sample,
@@ -654,10 +654,25 @@ directional animal sound with no predator identity or hidden source position.
 The call uses the shared strong-alarm interruption rule and never restores the
 legacy direct player alarm cue beside the admitted sample.
 
+Alarm receipt replay uses that same authenticated V6 ACTIVE materialized source,
+not merely a serialized member address or visibility of an empty sound locus.
+Hearing still propagates from the committed event position. Visible-source
+classification additionally requires the active body's exact position to equal
+that locus and the event-time listener's detail sight to admit it, just like
+live admission. Otherwise a lawful sound stays heard-unseen with its original
+uncertainty. The real completed deer interval demonstrates an active projected
+body away from a directly visible retained locus; current47/carry14 roundtrip
+preserves its unseen receipt without replay. A structurally valid resealed
+visible-receipt forgery fails closed without overwriting the record. Source,
+event, memory, materialization, tick, sleep/interruption and masking validation
+remain; this adds no scan, reader, schema or event producer. Cat retreat's
+existing bounded body/locus tolerance and pursuit's exact body rule are distinct
+and unchanged.
+
 A sixth narrow signal adapts the marsh rabbit's existing ecology-owned alarm
 as embodied contact rather than pretending that every animal warning is a
-carrying vocal call. The exact materialized rabbit, committed alarm, final
-locus, retained memory, and attended threshold-passing belief still authorize
+carrying vocal call. The exact materialized rabbit, committed alarm, retained
+sound locus, memory, and attended threshold-passing belief still authorize
 the event. Living Voice may realize that event as one soft `thump` and the
 existing `rabbit-thump` synthesis, but human listeners receive anonymous
 `physical-thud` knowledge with no interruption strength. A visible, lawfully

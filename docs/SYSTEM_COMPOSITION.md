@@ -368,7 +368,7 @@ interaction suite.
 | Crafting/PACK | field harvesting, gear acquisition, four travel adaptations, wear, MEND, and dismantling | composed player loop; settlements/NPCs do not consume it |
 | Cartography | navigation, learned-terrain projection, soundings, recovery cues, and surveyed route reinforcement | narrow infrastructure consumer; no general paid information economy |
 | World time / Turning Day | weather, tides, needs, recipes, player time actions, physical light, forty-two human rest projections, one working dog, and seventeen wildlife routines | strongly composed for elapsed time and the named bounded roster; daily work, feeding, interiors, companion life, broad nocturnal ecology and time-aware Voice remain future |
-| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. All nine current core alarm sources have Voice adapters, but remembered-threat alarms can remain lawfully audible without fresh expression authority. Refused/unadmitted strong alarms now share bounded anonymous ordinary-resident hearing; actual core event removal removes that opportunity. The reachable generic player fallback now uses post-commit audio, with actual remembered-deer success/rollback proof; its legacy announcement remains a presentation seam, not an unreachable branch. Step/paddle audio now shares the post-commit queue without extra captions; renderer-time water syllables are retired in current views while hydrology ambience/flow remain. Current47 sweep entry now preserves actual sensory displacement and receipt-authenticated terminal reset at phase1/9; separate deer425 receipt replay remains active work. Broad animal/object/tool/violence/vessel producers are absent. Continuing resident state is deliberately non-acoustic. |
+| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | Removing the candidate changes real hearing, expression, warning/knowledge consequences, audio/captions and collision control. All nine current alarm profiles have adapters; lawful remembered alarms without fresh expression retain bounded anonymous hearing. Incidental/generic audio commits transactionally; renderer-time water words are retired while hydrology ambience/flow remain. Narrow current47 sweep and active-source receipt roundtrips are repaired without replay or relaxed validation. Generic alarm notification and mixed/stress closure remain; broad contact/tool/violence/vessel producers are future, and continuing resident state is non-acoustic. Detailed authority and proof limits belong to [Architecture](./ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline). |
 | Settlement stock/logistics core | shortages, Promises, residents, projects, routes, trust, and histories | strong finite loop; no HC/market and no infinite-world settlement bridge |
 | Deep Time / field gear / supernatural systems | almost no current gameplay | correctly marked future rather than falsely live |
 
@@ -435,8 +435,11 @@ interaction suite.
    source: accepted displacement supplies salience, and the latest movement
    receipt alone authenticates the exact terminal reset. Phase1/9 roundtrip
    preserves cargo/incident/carry without replay; all other trajectory guards
-   remain. The separate genuine deer425phase0 receipt-replay mismatch remains
-   active work, not a current format to erase or reset.
+   remain. The separate genuine deer425phase0 mismatch is repaired by replaying
+   live source visibility against its authenticated ACTIVE projected body and
+   retained call locus, not raw storage coordinates or visible empty ground.
+   Its unseen receipt roundtrips silently; a forged visible receipt rejects
+   without overwrite. No current format is erased, relaxed or reset.
 
 ## Deliberate initial abstractions
 
