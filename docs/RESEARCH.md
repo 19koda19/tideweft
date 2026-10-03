@@ -391,6 +391,264 @@ remain the lightweight regression entry points. Focused renderer tests passed
 4 files/161 tests; the explicitly reconstructed six-file critical smoke passed
 97 tests. No completed directive or gameplay resumption point was changed.
 
+### World-advance encoding experiments — 2026-10-02
+
+**Result: INCOMPLETE; no production repair retained.** Two small application
+experiments were characterized and measured, then removed because the complete
+frozen retention/no-regression criteria were not established. This is local,
+unpublished investigation evidence, not hitch resolution or a release.
+Starting executable `62151169cb6eed3a87cc2203a374820795a9ea31`; candidate-1
+commit `eaaf2d7`, characterization checkpoint `c08b540`, restored executable
+checkpoint `c1f7cd0e6d3ac59a61a21a9cf2375615d491552f`.
+The final production sources are byte-identical to the starting checkpoint;
+only five test files retain characterization. The earlier historical release
+gate issue was already repaired by `87272db`; it was not an outstanding
+prerequisite or changed in these experiments.
+
+#### Operation, attribution, and scope
+
+The operation is `src/game/runtime.ts:frame → runTickFailClosed → tick`, not
+just `src/sim/engine.ts:stepWorld`. The 100-ms authoritative player step
+accepts ten steps per advancing world tick/civil minute, with six ordinary
+catch-up steps per renderer callback and an autosave every 600 world ticks.
+`worldAdvanceStep` includes the fail-closed checkpoint, pre-world player and
+sensory work, world/actor/ecology commits, post-world presentation, interval
+closure and any due save preparation. Committed audio releases after the
+successful transaction and timing-finally boundary. No cadence, debt, pause,
+background, quality or transaction rules changed.
+
+The inspected ordering is ecology/perception, world and resident simulation,
+completed views and local/regional actors, ordered mortality/resource claims,
+post-arbitration aggregate perception and V6/V1–V5 commit, circadian/resource
+commit and updated view, Voice/aftermath, player reconciliation/presentation,
+interval closure/save preparation, then committed audio. The five existing
+disjoint phase spans do not cover this entire operation. Simulation,
+presentation, audio and browser save preparation share the renderer JS thread;
+`saveWorkerRunning` is an async queue drain, not a worker. Electron main
+lifecycle/resource serving is not on this reviewed path. Relief already uses
+WebGL; Chart intentionally uses Canvas 2D.
+
+The source-mapped diagnostic before the experiments sampled 19 advances over
+20 seconds at requested1-ms/actual mean1.25-ms sampling. V6 active commit accumulated461.600
+inclusive ms (~24.29/advance), including309.413ms of util encoding/hashing leaf
+work (~16.28/advance). All world-window util leaves accumulated512.517ms
+(~26.97/advance). Subsequent presentation was a separate326.170ms sampled owner
+(~17.17/advance). Inclusive ancestors overlap and must not be added. The
+NavigationStart-based profiler/page alignment was approximate, not a paired
+clock calibration. Large native structuredClone samples belonged to p5 drawing,
+not evidence for removing rollback cloning. These are measured attribution
+leads, not exact function durations or removable-work totals.
+
+Implementation coverage: relevant runtime scheduler/world transaction,
+canonical ecology/binding/receipt owners and downstream view/streaming/
+presentation/save/platform blocks were inspected; the source/import inventory
+was surveyed. Not every body of the large runtime, every module/test or every
+historical ledger was read in full. Existing caches, prepared receipts and the
+previous p5 policy repair were preserved rather than proposed as new work.
+
+#### Frozen artifacts and method
+
+AC Apple M4 MacBook Air,10logical cores/16GiB,macOS26.5.2,LowPowerMode off;
+build Node22.20.0/npm10.9.3, Electron44.1.0/Chromium152.0.7977.65, p5 2.3.2,
+Firefox157 headless. CI's unchanged .nvmrc selects24.20.0. Display refresh and
+presented-frame/GPU timing were not freshly measured. There were no concurrent
+profiler/test jobs during performance captures. Existing30-frame warmup,
+1440×900CSS and unchanged quality were used; Electron Relief2160×1350/
+density1.5 and Firefox DPR1. Diagnostic scheduling flags remain harness-only.
+
+BEFORE ASAR SHA256:
+`d14d63a50ed3c24a74ee12f71fed2876dab47f7876cdb39467032c036ce644d9`;
+BEFORE/final JS SHA256:
+`59d688322ef317cb117042249cab9aaa30cd096cef4292d0a8a19548e914f338`.
+Candidate1 ASAR:
+`e3d091f44dc2cf28f97f9e4e90fae87f305bdb8c941b40e0124c10b84a5b5e1f`;
+JS:
+`cd07cd936e512ffcd428ea77b923a12c03e04d80bd1013cff94158a62f80e59c`.
+Candidate2 ASAR:
+`b50effbeb3ab636b8c95f851a376a931c1e132c1ed9666a7875744623f3741c5`.
+Baseline harness SHA256:
+`dd120175a93f61808d2f40e33b84998042170b3f5f8bd4c2fc46773adbc7f3d2`;
+browser harness:
+`83cc78ee40fe21c3275b0d5971d4076022753a9cff2dd447f04b0f9ae310b4cc`.
+Synthetic frozen builds, JSON captures, validation logs and pre-edit budgets
+are retained locally under `artifacts/world-advance-repair/`; they are ignored,
+not shipped telemetry, fixtures or build assets.
+
+Before editing, completion ceilings for world-step mean/p95/p99/max were
+50/70/80/100ms Electron estuary,60/80/90/110ms dense and70/90/100/125ms Firefox.
+Retention required ≥2ms **and** ≥2% repeated mean improvement on each tested
+product plus no correlated-tail/input/throughput regression. Missing metrics
+remain UNVERIFIED. These are finite host-specific experiment decisions, not
+universal platform performance promises or budgets chosen from AFTER results.
+
+#### Experiments and equal-work characterization
+
+1. **Authenticated habitat identity — DISCARDED.** After existing structural,
+   root-seed, signed-region/cohort and exact world-cache binding,
+   `canonicalCoreEcologyBreadthHabitatForWorld` could avoid two whole encodes
+   only when the immutable input was literally the expected authenticated
+   object. Clone/load/cold/rederived/evicted/untrusted paths retained full
+   canonical comparison. No cache, receipt, hash, byte ordering or schema was
+   introduced. Actual scheduler fixtures at30accepted steps/3world advances
+   counted360whole-habitat encodes/15immutable inputs/3,937,656UTF16 code units
+   in estuary and252/10/2,916,840 in dense; candidate1 reduced these to zero.
+   Serialized current-world save payload bytes/hashes stayed equal. This
+   confirmed removable repeated input work and a stationary CPU gain, but broader tails/travel/
+   input qualification was incomplete, so the shortcut was removed.
+
+2. **Complete visitation derivation proof — DISCARDED.** A candidate compared
+   every own key/value of already-canonical derivations before omitting the
+   same proven-equal derivation from both ephemeral durable-signal comparisons.
+   Full persisted/root encoding and unequal/clone fallback remained intact.
+   The30-step fixtures retained114/86signal encodes but reduced their total
+   code units1,894,978→853,954 /1,656,057→887,823. Save digests stayed exact.
+   Incremental Electron estuary improvement was only0.511ms, dense1.144ms;
+   one Firefox run improved2.500ms but only1.65%. This failed the pre-edit
+   minimum and repetition requirements; only characterization tests remain.
+
+Both experiments used existing owners, not a serialization cache or new
+simulation. No third speculative renderer/pathfinding/worker experiment was
+implemented: measured presentation and nested encoding leads did not yet
+identify a separately proven safe, worthwhile duplicate.
+
+The two restored-source30-step current-v47 save witnesses remain:
+estuary1,814,914bytes SHA256
+`6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7`;
+dense1,870,814bytes
+`e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e`.
+Tests cover real128-entry eviction, clone/rederivation, foreign seeds/signed
+regions, altered self-consistent Unicode/lone-surrogate habitat and legacy/
+suppressed visitation lineage. They use the existing runtime scheduler,
+not a second simulator. Mocked timing/counters are not production performance;
+mocked soundscape and serialized save equality do not independently prove every
+nonserialized audio/event trace, movement sequence, periodic task or autosave.
+Existing fail-closed interval-closure rollback/current-save checks also passed.
+
+#### Stationary production comparisons
+
+Two fresh BEFORE and two candidate1 windows per row,60seconds each, no CPU
+sampler or hitch trace. Seeds `runtime baseline estuary` and
+`breathing room regional density 8`. Means are medians of per-run means;
+not per-advance medians. Callback p99 below is the renderer interval proxy,
+not an operation-correlated or presented/GPU quantile.
+
+| Product/scenario | World mean ms BEFORE → candidate | World max ms BEFORE / candidate, repetitions | Renderer interval p99 ms BEFORE / candidate |
+| --- | ---: | --- | --- |
+| Electron estuary | 87.393 → 82.214 (5.93% lower) | 117.1,115.4 /111.1,112.8 | 91.6,91.9 /85.3,87.4 |
+| Electron dense | 100.016 → 96.197 (3.82% lower) | 130.7,129.4 /127.5,126.3 | 105.2,104.6 /101.3,101.0 |
+| Firefox estuary | 160.899 → 151.700 (5.72% lower) | 190,191 /200,188 | 163,164 /154,153 |
+
+Renderer worsts were124.5,122.2→118.1,119.3ms estuary;138.2,137.3→135.7,133.7
+dense;196,198→206,193 Firefox. Browser worsts are mixed, not established as
+improved. Each run has59–60world samples/599–601accepted steps over60.001–60.233s,
+accepted throughput9.978–9.983steps/s. Window endpoints differ in some repeats;
+these are not equal-terminal authoritative histories. World empirical p99
+equals max with this count: low-sample evidence, not a strong population p99.
+Existing telemetry does not retain raw world p50/p95 or measured input/debt
+time series. SaveSnapshot count was zero throughout stationary windows.
+
+Estuary72actors/54materialized/950aggregate units; dense76/66/881; both3visible
+actors and0visible wildlife. This exercises simulation occupancy, not visual/
+acoustic saturation. End-sample resource counts match in every before/candidate
+pair; all pending queues are zero. Short Electron point-in-time JS heap readings
+are mixed; Firefox omits those Chromium heap metrics. No retained-memory
+improvement, leak-free soak or zero-memory claim follows from these snapshots.
+
+#### Travel, platform validation, and remaining limits
+
+Travel seed `breathing-room all-tide corridor 187`; unchanged harness enforces
+≥210seconds even with the ordinary60-second sample argument. Fresh control and
+two candidate1 runs each accepted2099steps/209world advances, tick420→629,
+156.390263tiles across3regions/2transitions, with zero discontinuity/projection
+mismatch and matching endpoint occupancy. Adaptive wall-driven commands differ;
+equal endpoints do not prove identical accepted-command/event histories.
+
+| Travel metric | Fresh BEFORE | Candidate1 | Candidate1 repeat |
+| --- | ---: | ---: | ---: |
+| World mean / p99 / max, ms (209samples) | 65.080 /92.9 /103.0 | 72.758 /104.7 /136.8 | 64.844 /92.2 /100.9 |
+| Full-window rAF p99 / worst, ms | 82.9 /333.3 | 100.0 /433.3 | 83.3 /316.7 |
+| Full-window gaps >80ms | 98 | 157 | 126 |
+
+The older exploratory BEFORE61.233ms/349.1ms worst was not a substitute for the
+fresh control. The slower candidate run affected all five disjoint phases,
+not just the changed owner; the repeat did not reproduce that broad slowdown
+but did not establish consistent no-regression behavior. Largest recorded gaps
+have tick delta0 near a spatial recenter. This is a streaming/recentering
+temporal association, not exclusive causal attribution or a GC diagnosis.
+Full-window rAF worsts survive ring rollover; the renderer4096-tail worst must
+not replace them. Fixed-step/detail rings retain the newest2048samples only.
+No run crossed the first autosave boundary at tick1020; short travel cannot
+certify autosave, long-session retention or the queued prolonged soak.
+
+Candidate1 web/typecheck/build613modules and nested static smoke passed.
+Interactive Firefox157 production-artifact smoke passed both views, keyboard
+brace/orbit, resize, title pause/continue, context-loss fallback and byte-exact
+v47 primary/fallback save across refresh (1,810,458bytes,
+SHA256`6e78579d7419cf703e790d1c656c3dbef9fedf2b9c9c87e362f3e8aa4ab37176`).
+Native audio graph ran/five oscillator starts; hardware audibility was NOT RUN.
+Two existing startup/refresh CSP eval-fallback logs were observed; no additional
+gameplay errors or HTTP/fetch failures. Visual Chart/Relief images were inspected.
+These stages exercised candidate1; final bundle identity is separately equal
+to BEFORE, not a claim that every lifecycle stage was rerun on every artifact.
+
+After restoring the application, final static smoke passed all5byte-identical
+BEFORE files (4,705,503served bytes). The same interactive Firefox harness was
+rerun against that final artifact: PASS, both views/input/orbit/resize/pause/
+refresh/fallback and byte-exact current-v47 primary/fallback save,
+1,810,989bytes SHA256
+`15274503c5af5b4abec4d2a3de3108cf7d36a12b42fc71257c9a1f4fbac2d73c`.
+The same two known CSP fallback logs, no HTTP/fetch failures, and running native
+audio graph were observed. Final Chart/Relief screenshots were inspected.
+
+Macarm64 direct unchanged Forge packaging and candidate1 generated-app smoke
+passed runtime-only10-entry ASAR, secure app:// boot, Node globals absent,
+views/input/resize/title/menu/gameplay/current-save fixtures. Desktop/compact/
+title images were inspected; compact desktop viewport is not mobile hardware.
+The smoke/profiler scheduling mode is not a normal shipping cold-relaunch test.
+Final desktop smoke was also rerun on the restored BEFORE archive: PASS with
+no reported resource/navigation/renderer warnings; all three images inspected.
+The generated release directory no longer contains the rejected candidate2.
+`npm run package:desktop` correctly rejects unpublished release metadata;
+that release-wrapper condition was not bypassed by altering its policy.
+No final ZIP/install/sign/notarization or other-platform run is claimed.
+Pages workflow/config was inspected unchanged; deployment/exact-live-build
+verification NOT RUN. No push, merge, publishing or remote job was authorized.
+
+DEPENDENCY CHANGES: NONE. Application configuration changes: NONE.
+Upstream p5 source modified: NO. Upstream Electron source modified: NO.
+No node_modules patch, worker, IPC bridge, new API/platform requirement,
+storage namespace, security bypass, real-save reset or schema change.
+Current outer47/carry14 remain unchanged. Synthetic ignored profiles/evidence
+remain outside the five-file dist and runtime-only ASAR.
+
+Final restored-source focused validation:5files/65tests; critical6files/105;
+web/typecheck PASS. The immutable restored
+checkpoint c1f7cd0 passed354files/3529tests in1621.01s, exit0/
+JSON success:true with no failed/pending tests. Context-index23 and player-facing
+policy39 self-tests also passed. Command:
+`caffeinate -i env CI=true npm run test:ci -- --reporter=default --reporter=json
+--outputFile.json=artifacts/validation/c1f7cd0-hitch-cumulative.json`.
+That exact executable certificate remains valid through subsequent prose-only
+reconciliation; it is not Voice closure, remote CI or release readiness.
+
+Reproduction uses existing commands and the frozen matching artifacts:
+
+```sh
+npm run build:web
+npm run smoke:web
+npx electron-forge package
+npm run profile:baseline -- --executable <frozen-executable> --scenario estuary-desktop-relief --sample-ms 60000 --output <ignored-output>
+npm run profile:baseline -- --executable <frozen-executable> --scenario dense-biodiversity-relief --sample-ms 60000 --output <ignored-output>
+npm run profile:baseline -- --executable <frozen-executable> --scenario continuous-regional-travel-relief --sample-ms 60000 --trace-hitches --output <ignored-output>
+npm run profile:browser -- --packaged-baseline <matching-electron-json> --sample-ms 60000 --output <ignored-output>
+```
+
+The unresolved work is finer paired-clock/raw-tail/input/debt measurement of
+nested canonical encoding, post-world publication and ordinary-step spatial
+recentering, plus exact movement/event traces and actual autosave/current-save/
+normal-lifecycle/long-soak witnesses. Existing owners retain that work; no
+concurrency, broad rewrite or loss of simulation truth is implied by this lead.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
