@@ -368,7 +368,7 @@ interaction suite.
 | Crafting/PACK | field harvesting, gear acquisition, four travel adaptations, wear, MEND, and dismantling | composed player loop; settlements/NPCs do not consume it |
 | Cartography | navigation, learned-terrain projection, soundings, recovery cues, and surveyed route reinforcement | narrow infrastructure consumer; no general paid information economy |
 | World time / Turning Day | weather, tides, needs, recipes, player time actions, physical light, forty-two human rest projections, one working dog, and seventeen wildlife routines | strongly composed for elapsed time and the named bounded roster; daily work, feeding, interiors, companion life, broad nocturnal ecology and time-aware Voice remain future |
-| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. All nine current core alarm sources have Voice adapters, but remembered-threat alarms can remain lawfully audible without fresh expression authority. Refused/unadmitted strong alarms now share bounded anonymous ordinary-resident hearing; actual core event removal removes that opportunity. The reachable generic player fallback now uses post-commit audio, with actual remembered-deer success/rollback proof; its legacy announcement remains a presentation seam, not an unreachable branch. Step/paddle audio now shares the post-commit queue without extra captions; renderer-time water syllables are retired in current views while hydrology ambience/flow remain; newly exposed current47 sweep/deer save refusals remain active authority gaps, and broad animal/object/tool/violence/vessel producers are absent. Continuing resident state is deliberately non-acoustic. |
+| Living Voice / embodied-acoustics candidate | current event-owned player/human/dog/wildlife expression plus traversal/cargo/gear acoustics, lawful hearing and shared bounded presentation | removing the candidate changes real expression, hearing, warning/knowledge consequences, audio/captions and collision control. All nine current core alarm sources have Voice adapters, but remembered-threat alarms can remain lawfully audible without fresh expression authority. Refused/unadmitted strong alarms now share bounded anonymous ordinary-resident hearing; actual core event removal removes that opportunity. The reachable generic player fallback now uses post-commit audio, with actual remembered-deer success/rollback proof; its legacy announcement remains a presentation seam, not an unreachable branch. Step/paddle audio now shares the post-commit queue without extra captions; renderer-time water syllables are retired in current views while hydrology ambience/flow remain. Current47 sweep entry now preserves actual sensory displacement and receipt-authenticated terminal reset at phase1/9; separate deer425 receipt replay remains active work. Broad animal/object/tool/violence/vessel producers are absent. Continuing resident state is deliberately non-acoustic. |
 | Settlement stock/logistics core | shortages, Promises, residents, projects, routes, trust, and histories | strong finite loop; no HC/market and no infinite-world settlement bridge |
 | Deep Time / field gear / supernatural systems | almost no current gameplay | correctly marked future rather than falsely live |
 
@@ -431,10 +431,12 @@ interaction suite.
    ambience and current/foam geometry remain, not a fabricated discrete heard
    event. Routine step/paddle playback uses the existing post-commit queue
    without inventing new captions or actions.
-9. A real current47 mid-interval sweep save refuses despite accepted physical
-   steps; the completed-interval reload witness is insufficient. Active Voice
-   owns the sensory-carry/actual-displacement reconciliation, retaining strict
-   fail-closed persistence rather than relaxing its validation.
+9. The current47 mid-interval sweep refusal is repaired at its actual sensory
+   source: accepted displacement supplies salience, and the latest movement
+   receipt alone authenticates the exact terminal reset. Phase1/9 roundtrip
+   preserves cargo/incident/carry without replay; all other trajectory guards
+   remain. The separate genuine deer425phase0 receipt-replay mismatch remains
+   active work, not a current format to erase or reset.
 
 ## Deliberate initial abstractions
 

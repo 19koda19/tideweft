@@ -503,14 +503,18 @@ movement releases one cue after interval closure, while rejected steps restore
 physical state and release no step/paddle cue. This adds no footstep captions,
 new watercraft action, or independent sound framework.
 
-A separate pre-existing current47 save gap remains under investigation: a real
-sweep-entry step followed by eight accepted floating beats refuses a phase-nine
-save. Sweep entry moves the body and then resets velocity, while sensory capture
-uses terminal velocity and save replay checks actual displacement. That is a
-static causal lead, not yet a repaired or fully isolated validation leaf. The
-passing completed-interval ADRIFT reload fixture does not prove mid-interval
-correctness; current-schema fail-closed validation must remain intact during
-repair.
+Current fixed-step hearing records accepted physical displacement, not terminal
+velocity: sweep entry moves the body before resetting velocity for the next
+step. Current47/carry14 saves at phase one and phase nine preserve that sensory
+trajectory, physical cargo, incident and interrupted movement state exactly,
+without replaying audio. Replay permits zero terminal velocity only when the
+exact latest validated movement receipt proves entry from a nonswept mode into
+`swept`; that receipt requires the reset rather than optionally accepting the
+entry displacement as terminal velocity. Every other latest step retains exact
+displacement/velocity equality. An earlier entry, missing receipt or ordinary
+mode never exempts a later drift sample. Position, facing, step ceiling, water
+contact, ordinal, stamina/mode and causal-authority guards remain binding; no
+schema, migration or save retirement changes.
 
 These are representative producers, not false whole-world completion.
 Production views suppress both old renderer-created ADRIFT syllables and raw
@@ -868,8 +872,8 @@ closed.
 The current carry also records the exact segmented player position, facing,
 and sleeping state at phase zero. Load replays every retained fixed step
 against the movement owner's exact displacement ceiling, movement salience,
-facing changes, final
-velocity, and final player pose. Player traversal/recovery speech must also
+facing changes, final velocity (including the receipt-proven sweep-entry reset
+above), and final player pose. Player traversal/recovery speech must also
 match its separately retained current-interval causal-authority record; effort
 must additionally match the independently retained movement-owned step-state
 trajectory described above. Porter departure receipts exist only at phase

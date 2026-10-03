@@ -164,6 +164,7 @@ import {
   regionalStorageRegionsInView,
 } from "./regionalWorldView";
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import { worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 export const ALPHA34_POLAR_RUNTIME_V27_OWNER_INTENT =
   "test:alpha34-polar-runtime-v27:v1" as const;
@@ -4659,6 +4660,273 @@ describe("runtime clarity guards", () => {
     expect(reloaded.physicalCargo).toEqual(cargoAtSave);
     resumed.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
+
+  it.each([1, 9] as const)(
+    "roundtrips a real sweep-entry current save at player phase %s",
+    async (phase) => {
+      const { repository, runtime } = await createCurrentAdriftFootingFixture();
+      let resumed: TideweftRuntime | null = null;
+      const beforeRecord = repository.snapshot();
+      const beforeEnvelope = decodeGameSave(beforeRecord);
+      const beforeWorld = deserializeWorld(beforeEnvelope.world);
+      const beforeRegional = restorePlayerRegionalTravel(
+        beforeWorld.meta.rootSeed,
+        beforeEnvelope.player,
+        beforeEnvelope.regionalTravel ?? "",
+      );
+      if (beforeRegional === null) throw new Error("fixture lost its current regional authority");
+      const beforePosition = playerWorldPositionInRegionalWindow(
+        beforeRegional.window,
+        beforeEnvelope.player,
+      );
+      if (beforePosition === null) throw new Error("fixture lost its initial physical position");
+      expect(beforeEnvelope.perceptionCarry).toMatchObject({
+        version: 14,
+        playerStepsSinceWorldTick: 0,
+      });
+      const beforeRender = structuredClone(runtime.getRenderView().player);
+      const createSample = humanPerception.createPlayerSenseSample;
+      const capturedSamples: humanPerception.PlayerSenseSample[] = [];
+      vi.spyOn(humanPerception, "createPlayerSenseSample").mockImplementation((input) => {
+        // Observe the public factory without changing the runtime-owned sample.
+        const sample = createSample(input);
+        if (sample !== null) capturedSamples.push(sample);
+        return sample;
+      });
+      try {
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 1 } });
+        advancePlayerSteps(runtime, 1);
+        const entryRender = runtime.getRenderView().player;
+        expect(entryRender).toMatchObject({
+          mode: "swept",
+          incident: { kind: "sweep" },
+          velocity: { x: 0, y: 0 },
+        });
+        expect(entryRender.position).not.toEqual(beforeRender.position);
+        expect(capturedSamples).toHaveLength(1);
+        const entrySample = capturedSamples[0];
+        if (entrySample === undefined) throw new Error("real sweep entry did not produce its sensory sample");
+        const entryDelta = worldPositionDelta(beforePosition, entrySample.position);
+        const entryDistance = Math.hypot(entryDelta.x, entryDelta.y);
+        expect(entryDistance).toBeGreaterThan(0);
+        const expectedEntrySalience = Math.min(
+          FIXED_POINT,
+          Math.round(entryDistance * FIXED_POINT / 164),
+        );
+        if (phase === 9) {
+          runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+          advancePlayerSteps(runtime, 8);
+        }
+        expect(runtime.getRenderView().player.mode).toBe("swept");
+        expect(capturedSamples).toHaveLength(phase);
+        const sourceSamples = [...capturedSamples];
+        // These are accepted physical steps, not a resealed phase or fabricated
+        // trajectory. Record both the incorrect source fact and save refusal.
+        expect.soft(entrySample.movementSalience).toBe(expectedEntrySalience);
+        let saveFailure: unknown = null;
+        try {
+          await runtime.save();
+        } catch (error) {
+          saveFailure = error;
+        }
+        expect.soft(saveFailure).toBeNull();
+        if (saveFailure !== null) {
+          expect(repository.snapshot()).toEqual(beforeRecord);
+          return;
+        }
+
+        const savedRecord = repository.snapshot();
+        const saved = decodeGameSave(savedRecord);
+        expect(savedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+        expect(saved.version).toBe(CURRENT_GAME_SAVE_VERSION);
+        expect(saved.player.mode).toBe("swept");
+        expect(saved.perceptionCarry).toMatchObject({
+          version: 14,
+          playerStepsSinceWorldTick: phase,
+          nextPlayerSenseSampleOrdinal: phase,
+          playerSenseSamples: sourceSamples,
+          playerStepStateSamples: [expect.objectContaining({
+            sampleOrdinal: 0,
+            becameSwept: true,
+            modeAfter: "swept",
+            moved: true,
+            acceptedDistanceUnits: Math.round(entryDistance),
+          }), ...Array.from({ length: phase - 1 }, () => expect.any(Object))],
+        });
+        const renderAtSave = structuredClone(runtime.getRenderView().player);
+        runtime.destroy();
+        soundscapePlay.mockClear();
+        resumed = await createTideweftRuntime(repository);
+        expect(resumed.getRenderView().player).toMatchObject({
+          position: renderAtSave.position,
+          velocity: renderAtSave.velocity,
+          stamina: renderAtSave.stamina,
+          mode: "swept",
+          incident: renderAtSave.incident,
+        });
+        expect(soundscapePlay).not.toHaveBeenCalled();
+        await resumed.save();
+        const roundTripped = decodeGameSave(repository.snapshot());
+        expect(roundTripped.player).toEqual(saved.player);
+        expect(roundTripped.world).toEqual(saved.world);
+        expect(roundTripped.regionalTravel).toEqual(saved.regionalTravel);
+        expect(roundTripped.perceptionCarry).toEqual(saved.perceptionCarry);
+        expect(roundTripped.physicalCargo).toEqual(saved.physicalCargo);
+        expect(roundTripped.traversalFeedback).toEqual(saved.traversalFeedback);
+      } finally {
+        runtime.destroy();
+        resumed?.destroy();
+      }
+    },
+    process.env.CI === "true" ? 90_000 : 30_000,
+  );
+
+  it("rejects resealed swept current saves that forge physical movement receipts", async () => {
+    interface MutableSweepCarry {
+      intervalStartPosition: WorldPosition;
+      playerStepsSinceWorldTick: number;
+      playerSenseSamples: Array<{
+        position: WorldPosition;
+        movementSalience: number;
+      }>;
+      playerStepStateAnchor: {
+        sampleOrdinal: number;
+        stamina: number;
+        mode: PlayerState["mode"];
+      };
+      playerStepStateSamples: Array<{
+        becameSwept: boolean;
+        modeBefore: PlayerState["mode"];
+        modeAfter: PlayerState["mode"];
+        acceptedDistanceUnits: number;
+      } | null>;
+    }
+    const { repository, runtime } = await createCurrentAdriftFootingFixture();
+    let entryRecord: SaveRecord;
+    let continuingRecord: SaveRecord;
+    try {
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 1 } });
+      advancePlayerSteps(runtime, 1);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+      await runtime.save();
+      entryRecord = repository.snapshot();
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      advancePlayerSteps(runtime, 8);
+      expect(runtime.getRenderView().player.mode).toBe("swept");
+      await runtime.save();
+      continuingRecord = repository.snapshot();
+    } finally {
+      runtime.destroy();
+    }
+    const entry = decodeGameSave(entryRecord);
+    const entryCarry = entry.perceptionCarry as MutableSweepCarry;
+    const entrySample = entryCarry.playerSenseSamples[0];
+    if (entrySample === undefined) throw new Error("genuine entry save omitted its physical sample");
+    const entryDelta = worldPositionDelta(entryCarry.intervalStartPosition, entrySample.position);
+    expect(Math.hypot(entryDelta.x, entryDelta.y)).toBeGreaterThan(0);
+    expect(entryCarry.playerStepsSinceWorldTick).toBe(1);
+    expect(entryCarry.playerStepStateSamples[0]?.becameSwept).toBe(true);
+    const continuing = decodeGameSave(continuingRecord);
+    const continuingCarry = continuing.perceptionCarry as MutableSweepCarry;
+    const priorSample = continuingCarry.playerSenseSamples[7];
+    const latestSample = continuingCarry.playerSenseSamples[8];
+    if (priorSample === undefined || latestSample === undefined) {
+      throw new Error("genuine continuing save omitted its last physical step");
+    }
+    const continuingDelta = worldPositionDelta(priorSample.position, latestSample.position);
+    expect(Math.hypot(continuingDelta.x, continuingDelta.y)).toBeGreaterThan(0);
+    expect(continuingCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(continuingCarry.playerStepStateSamples[0]?.becameSwept).toBe(true);
+    expect(continuingCarry.playerStepStateSamples[8]?.becameSwept).toBe(false);
+    expect(continuing.player.velocityX).toBe(continuingDelta.x);
+    expect(continuing.player.velocityY).toBe(continuingDelta.y);
+
+    const variants: ReadonlyArray<{
+      readonly label: string;
+      readonly record: SaveRecord;
+      readonly mutate: (envelope: TestGameSaveEnvelope, carry: MutableSweepCarry) => void;
+    }> = [
+      {
+        label: "entry retains its displacement as nonzero terminal velocity",
+        record: entryRecord,
+        mutate: (envelope) => {
+          envelope.player.velocityX = entryDelta.x;
+          envelope.player.velocityY = entryDelta.y;
+        },
+      },
+      {
+        label: "zero entry velocity without the became-swept receipt",
+        record: entryRecord,
+        mutate: (_envelope, carry) => {
+          carry.playerStepStateSamples[0]!.becameSwept = false;
+        },
+      },
+      {
+        label: "zero entry velocity behind a null latest receipt",
+        record: entryRecord,
+        mutate: (envelope, carry) => {
+          // A consistent historical-prefix anchor must not grant an otherwise
+          // unproven terminal velocity reset to this forged current record.
+          carry.playerStepStateSamples[0] = null;
+          carry.playerStepStateAnchor.sampleOrdinal = 1;
+          carry.playerStepStateAnchor.stamina = envelope.player.stamina;
+          carry.playerStepStateAnchor.mode = "swept";
+        },
+      },
+      {
+        label: "repeated swept-to-swept entry with a matching state anchor",
+        record: entryRecord,
+        mutate: (_envelope, carry) => {
+          carry.playerStepStateSamples[0]!.modeBefore = "swept";
+          carry.playerStepStateAnchor.mode = "swept";
+        },
+      },
+      {
+        label: "earlier entry exempts a later nonzero drift from terminal velocity",
+        record: continuingRecord,
+        mutate: (envelope) => {
+          envelope.player.velocityX = 0;
+          envelope.player.velocityY = 0;
+        },
+      },
+      {
+        label: "entry salience does not match its physical displacement",
+        record: entryRecord,
+        mutate: (_envelope, carry) => {
+          carry.playerSenseSamples[0]!.movementSalience = 0;
+        },
+      },
+      {
+        label: "entry receipt invents an extra unit of accepted distance",
+        record: entryRecord,
+        mutate: (_envelope, carry) => {
+          carry.playerStepStateSamples[0]!.acceptedDistanceUnits += 1;
+        },
+      },
+    ];
+    for (const variant of variants) {
+      const forgedRecord = structuredClone(variant.record);
+      const envelope = decodeGameSave(forgedRecord);
+      expect(envelope.version, variant.label).toBe(CURRENT_GAME_SAVE_VERSION);
+      variant.mutate(envelope, envelope.perceptionCarry as MutableSweepCarry);
+      resealGameSave(envelope);
+      forgedRecord.worldJson = JSON.stringify(envelope);
+      const forgedRepository = new MemoryRepository(forgedRecord);
+      const rejected = await createTideweftRuntime(forgedRepository);
+      try {
+        expect(rejected.getUIView().saveWarning?.message, variant.label)
+          .toBe("LOCAL AUTOSAVE UNREADABLE");
+        expect(rejected.getUIView().title, variant.label).toMatchObject({
+          visible: true,
+          hasSave: false,
+        });
+        await expect(rejected.save(), variant.label).rejects.toThrow();
+        expect(forgedRepository.snapshot(), variant.label).toEqual(forgedRecord);
+      } finally {
+        rejected.destroy();
+      }
+    }
+  }, process.env.CI === "true" ? 120_000 : 60_000);
 
   it("explains ADRIFT control and ignores scan and pace commands while swept", async () => {
     const world = createWorld("runtime swept guard", "calm");

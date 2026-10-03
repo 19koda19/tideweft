@@ -12333,9 +12333,12 @@ export async function createTideweftRuntime(
   ): void {
     const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
     if (position === null) throw new Error("Player has no canonical sensory position");
+    // Sweep entry commits displacement before resetting terminal velocity.
+    // Both points are rebased together; hearing retains the accepted movement,
+    // not the control state selected for the following fixed step.
     const movementSalience = playerMovementSalienceForDelta(
-      player.velocityX,
-      player.velocityY,
+      player.x - player.previousX,
+      player.y - player.previousY,
     );
     const moved = movementSalience > 0;
     const inWater = player.mode === "wading" || player.mode === "skiff" || player.mode === "swept";
@@ -20727,6 +20730,17 @@ function playerPerceptionCarryMatchesPosition(
     )
   ) return false;
   const latestPhysical = carry.playerSenseSamples[carry.playerSenseSamples.length - 1];
+  const latestStepState = carry.playerStepStateSamples[carry.playerSenseSamples.length - 1];
+  // Only this exact latest movement receipt may explain a terminal reset.
+  // An earlier sweep entry cannot exempt a later drift sample, and an entry
+  // cannot retain the pre-reset displacement as its terminal velocity.
+  const terminalVelocityMatches = latestStepState?.becameSwept === true
+    ? latestStepState.modeBefore !== "swept"
+      && latestStepState.modeAfter === "swept"
+      && player.mode === "swept"
+      && player.velocityX === 0
+      && player.velocityY === 0
+    : finalDeltaX === player.velocityX && finalDeltaY === player.velocityY;
   if (
     latestPhysical === undefined
     && (
@@ -20743,8 +20757,7 @@ function playerPerceptionCarryMatchesPosition(
       || position.localX !== latestPhysical.position.localX
       || position.localY !== latestPhysical.position.localY
       || replayedFacingMilliRadians !== player.facingMilliRadians
-      || finalDeltaX !== player.velocityX
-      || finalDeltaY !== player.velocityY
+      || !terminalVelocityMatches
     )
   ) return false;
 
