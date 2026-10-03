@@ -344,6 +344,18 @@ npm run build:web
 npm run preview
 ```
 
+For a native Living Voice presentation check in an installed Firefox, build
+first, then run `npm run profile:browser -- --voice-presentation`.
+Output defaults to a fresh timestamped name; an explicit `--output` requires an
+unused JSON/screenshot stem under ignored `artifacts/` and preserves old evidence.
+Add `--reduced-motion` for that accessibility preference. This opt-in functional
+mode uses a disposable profile and real resident selection/GREET, then freezes
+the committed caption to inspect Chart/Relief at desktop and portrait sizes.
+It checks DOM bounds, caption/ARIA parity and announcement deduplication, and
+retains local screenshots for visual review. It is not a performance benchmark,
+screen-reader speech test, mobile-hardware proof or packaged-desktop check;
+the default performance mode still requires `--packaged-baseline`.
+
 ## Desktop release
 
 ```bash

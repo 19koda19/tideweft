@@ -6953,7 +6953,8 @@ export function createTideweftReliefRenderer(
     focusWorld: (point, zoom) => {
       refreshLatestView();
       orbit.focusPoint = { ...point };
-      orbit.focusUntil = performance.now() + (reducedMotion ? 1 : 1_800);
+      // Reduced motion removes easing, not the time to inspect a focused source.
+      orbit.focusUntil = performance.now() + 1_800;
       if (zoom !== undefined) {
         orbit.manualZoom = clamp(zoom, MIN_RELIEF_MANUAL_ZOOM, MAX_RELIEF_MANUAL_ZOOM);
       }

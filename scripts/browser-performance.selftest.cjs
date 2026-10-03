@@ -8,6 +8,8 @@ const {
   BASE_PATH,
   SCENARIO,
   assertAdvancingWorldMeasurement,
+  assertVoicePresentationSnapshot,
+  assertFreshVoicePresentationOutput,
   assertDiagnosticSnapshot,
   assertNoGuardedDiagnosticIncrease,
   decodeRemoteValue,
@@ -78,6 +80,46 @@ assert.throws(
   /ignored artifacts/u,
 );
 assert.throws(() => parseArguments([]), /--packaged-baseline is required/u);
+const functional = parseArguments(['--voice-presentation', '--reduced-motion',
+  '--output', 'artifacts/validation/voice.json']);
+assert.equal(functional.voicePresentation, true);
+assert.equal(functional.reducedMotion, true);
+assert.equal(functional.packagedBaseline, null);
+assert.equal(parsed.voicePresentation, false);
+assert.throws(() => parseArguments(['--voice-presentation', '--sample-ms', '5000']), /functional check/u);
+assert.throws(() => parseArguments(['--voice-presentation', '--packaged-baseline', 'artifacts/a.json']), /functional check/u);
+assert.throws(() => parseArguments(['--voice-presentation', '--output', 'docs/voice.json']), /ignored artifacts/u);
+assert.throws(() => parseArguments(['--reduced-motion', '--packaged-baseline', 'artifacts/a.json']), /requires --voice-presentation/u);
+
+const voiceSnapshot = {
+  mode: 'relief-3d', viewport: { width: 390, height: 844 }, labelLayerAriaHidden: 'true',
+  caption: { rect: { x: 20, y: 600, width: 350, height: 80 }, matchesProjection: true,
+    ariaMatches: true, announcementCount: 1, horizontalOverflow: false, verticalOverflow: false },
+  labels: [{ rect: { x: 90, y: 230, width: 200, height: 40 }, matchesProjection: true,
+    horizontalOverflow: false, verticalOverflow: false }],
+};
+assert.equal(assertVoicePresentationSnapshot(voiceSnapshot, 'relief-3d'), voiceSnapshot);
+const chartSnapshot = { ...voiceSnapshot, mode: 'chart-2d', labels: [] };
+assert.equal(assertVoicePresentationSnapshot(chartSnapshot, 'chart-2d'), chartSnapshot);
+for (const caption of [null, { ...voiceSnapshot.caption, ariaMatches: false },
+  { ...voiceSnapshot.caption, announcementCount: 2 },
+  { ...voiceSnapshot.caption, matchesProjection: false },
+  { ...voiceSnapshot.caption, rect: { x: 390, y: 1, width: 50, height: 50 } },
+  { ...voiceSnapshot.caption, horizontalOverflow: true }]) {
+  assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot, caption }, 'relief-3d'), /caption/u);
+}
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot, labels: [] }, 'relief-3d'), /active renderer/u);
+assert.throws(() => assertVoicePresentationSnapshot(voiceSnapshot, 'chart-2d'), /caption/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  labels: [...voiceSnapshot.labels, { ...voiceSnapshot.labels[0] }] }, 'relief-3d'), /overlap/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  labels: [{ ...voiceSnapshot.labels[0], matchesProjection: false }] }, 'relief-3d'), /current heard projection/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  labels: [{ ...voiceSnapshot.labels[0], verticalOverflow: true }] }, 'relief-3d'), /clipped/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  labelLayerAriaHidden: 'false' }, 'relief-3d'), /accessibility/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  liveRegionOverflow: true }, 'relief-3d'), /accessibility/u);
 assert.throws(
   () => parseArguments(['--packaged-baseline', 'artifacts/a.json', '--sample-ms', '4999']),
   /whole number/u,
@@ -271,6 +313,14 @@ async function testArtifactPathBoundary() {
       reference,
     );
     assert.equal(await validateArtifactPath(output, 'synthetic output'), output);
+    assert.equal(await assertFreshVoicePresentationOutput(output), output);
+    await assert.rejects(assertFreshVoicePresentationOutput(reference), /fresh --output stem/u);
+    assert.equal(await fs.readFile(reference, 'utf8'), '{}\n');
+    const screenshot = path.join(testDirectory, 'output-390-relief-3d.png');
+    await fs.writeFile(screenshot, 'retained synthetic image', { flag: 'wx' });
+    await assert.rejects(assertFreshVoicePresentationOutput(output), /fresh --output stem/u);
+    assert.equal(await fs.readFile(screenshot, 'utf8'), 'retained synthetic image');
+    await assert.rejects(fs.access(output), { code: 'ENOENT' });
     assert.equal(await existingPathsShareFileIdentity(reference, reference), true);
     assert.equal(await existingPathsShareFileIdentity(reference, output), false);
     await fs.link(reference, hardLink);

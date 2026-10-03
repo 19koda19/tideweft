@@ -437,6 +437,37 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("Chart focus accessibility", () => {
+  it("retains an explicit reduced-motion focus through the next frame without easing or extending its lease", () => {
+    p5Harness.reducedMotion = true;
+    let now = 1_000;
+    vi.stubGlobal("performance", { now: () => now });
+    const current = view("focus", { x: 20, y: 30 });
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    draw();
+    const translate = p5Harness.instance?.translate as ReturnType<typeof vi.fn>;
+    renderer.focusWorld({ x: 80, y: 70 });
+    for (now of [1_016, 1_400, 2_799]) {
+      translate.mockClear();
+      draw();
+      expect(translate).toHaveBeenCalledWith(-80, -70);
+    }
+    now = 2_800;
+    translate.mockClear();
+    draw();
+    expect(translate).toHaveBeenCalledWith(-20, -30);
+    expect(translate).not.toHaveBeenCalledWith(-80, -70);
+    expect(commands).toEqual([]);
+    expect(current.player.position).toEqual({ x: 20, y: 30 });
+    renderer.destroy();
+  });
+});
+
 describe("Chart renderer telemetry", () => {
   it("measures completed draw CPU time and publishes cheap truthful draw counts", () => {
     let clock = 0;

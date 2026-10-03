@@ -169,10 +169,17 @@ function parseArguments(argv) {
   let packagedBaseline = '';
   let output = '';
   let sampleMs = DEFAULT_SAMPLE_MS;
+  let voicePresentation = false;
+  let reducedMotion = false;
+  let sampleMsSpecified = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === '--browser-executable') {
+    if (argument === '--voice-presentation') {
+      voicePresentation = true;
+    } else if (argument === '--reduced-motion') {
+      reducedMotion = true;
+    } else if (argument === '--browser-executable') {
       browserExecutable = requiredArgumentValue(argv, index, '--browser-executable');
       index += 1;
     } else if (argument.startsWith('--browser-executable=')) {
@@ -191,6 +198,7 @@ function parseArguments(argv) {
       output = argument.slice('--output='.length);
       if (output.length === 0) throw new Error('--output requires a value');
     } else if (argument === '--sample-ms') {
+      sampleMsSpecified = true;
       sampleMs = parseWholeNumber(
         requiredArgumentValue(argv, index, '--sample-ms'),
         '--sample-ms',
@@ -199,6 +207,7 @@ function parseArguments(argv) {
       );
       index += 1;
     } else if (argument.startsWith('--sample-ms=')) {
+      sampleMsSpecified = true;
       sampleMs = parseWholeNumber(
         argument.slice('--sample-ms='.length),
         '--sample-ms',
@@ -210,14 +219,22 @@ function parseArguments(argv) {
     }
   }
 
-  if (packagedBaseline.length === 0) {
+  if (!voicePresentation && packagedBaseline.length === 0) {
     throw new Error('--packaged-baseline is required so browser truth is compared with packaged truth');
+  }
+  if (reducedMotion && !voicePresentation) {
+    throw new Error('--reduced-motion requires --voice-presentation; performance conditions remain fixed');
+  }
+  if (voicePresentation && (packagedBaseline.length > 0 || sampleMsSpecified)) {
+    throw new Error('--voice-presentation is a functional check, not a packaged performance comparison');
   }
   return {
     browserExecutable: browserExecutable ? path.resolve(browserExecutable) : '',
-    packagedBaseline: artifactJsonPath(packagedBaseline, '--packaged-baseline'),
-    output: artifactJsonPath(output, '--output', 'browser-performance'),
+    packagedBaseline: voicePresentation ? null : artifactJsonPath(packagedBaseline, '--packaged-baseline'),
+    output: artifactJsonPath(output, '--output', voicePresentation ? 'browser-voice' : 'browser-performance'),
     sampleMs,
+    voicePresentation,
+    reducedMotion,
   };
 }
 
@@ -1032,10 +1049,224 @@ function assertIdentityUnchanged(label, before, after) {
   return true;
 }
 
+// Actual DOM border boxes, not font estimates or a replacement label renderer.
+// This deliberately does not claim glyph-ink, screen-reader speech or hardware proof.
+function assertVoicePresentationSnapshot(snapshot, mode) {
+  const finiteRect = (rect) => rect && ['x', 'y', 'width', 'height'].every(
+    (key) => Number.isFinite(rect[key]),
+  ) && rect.width > 0 && rect.height > 0;
+  const inside = (rect) => finiteRect(rect) && rect.x >= -0.5 && rect.y >= -0.5
+    && rect.x + rect.width <= snapshot.viewport.width + 0.5
+    && rect.y + rect.height <= snapshot.viewport.height + 0.5;
+  const caption = snapshot.caption;
+  if (snapshot.mode !== mode || !inside(caption?.rect) || !caption?.matchesProjection
+    || caption.horizontalOverflow || caption.verticalOverflow || !caption.ariaMatches
+    || caption.announcementCount !== 1 || snapshot.liveRegionOverflow
+    || snapshot.labelLayerAriaHidden !== 'true') {
+    throw new Error(`Invalid Voice caption/accessibility presentation: ${JSON.stringify(snapshot)}`);
+  }
+  if (!Array.isArray(snapshot.labels) || snapshot.labels.length > 4
+    || (mode === 'relief-3d' && snapshot.labels.length === 0)
+    || (mode === 'chart-2d' && snapshot.labels.length !== 0)) {
+    throw new Error('Voice functional probe did not observe the expected bounded active renderer');
+  }
+  for (const label of snapshot.labels) {
+    if (!inside(label.rect) || !label.matchesProjection || label.horizontalOverflow
+      || label.verticalOverflow) throw new Error('Voice label is clipped or is not a current heard projection');
+  }
+  for (let left = 0; left < snapshot.labels.length; left += 1) {
+    for (let right = left + 1; right < snapshot.labels.length; right += 1) {
+      const a = snapshot.labels[left].rect;
+      const b = snapshot.labels[right].rect;
+      if (a.x < b.x + b.width && a.x + a.width > b.x
+        && a.y < b.y + b.height && a.y + a.height > b.y) {
+        throw new Error('Actual Voice DOM labels overlap');
+      }
+    }
+  }
+  return snapshot;
+}
+
+function voiceScreenshotPath(output, width, mode) {
+  return path.join(path.dirname(output), `${path.basename(output, '.json')}-${width}-${mode}.png`);
+}
+
+async function assertFreshVoicePresentationOutput(output) {
+  const paths = [output];
+  for (const width of [1280, 390]) {
+    for (const mode of ['chart-2d', 'relief-3d']) paths.push(voiceScreenshotPath(output, width, mode));
+  }
+  for (const candidate of paths) {
+    try {
+      await fs.lstat(candidate);
+    } catch (error) {
+      if (error?.code === 'ENOENT') continue;
+      throw error;
+    }
+    throw new Error('Voice evidence already exists; use a fresh --output stem or omit --output');
+  }
+  return output;
+}
+
+async function physicalBrowserClick(client, rect) {
+  if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
+    || rect.width <= 0 || rect.height <= 0) throw new Error('Voice input target has no physical rectangle');
+  await client.command('input.performActions', {
+    context: client.context,
+    actions: [{ type: 'pointer', id: 'voice-mouse', parameters: { pointerType: 'mouse' }, actions: [
+      { type: 'pointerMove', origin: 'viewport', x: Math.round(rect.x + rect.width / 2),
+        y: Math.round(rect.y + rect.height / 2) },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pointerUp', button: 0 },
+    ] }],
+  });
+}
+
+async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
+  const target = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getRenderView();
+    const candidates = view.porters.map((porter) => ({ porter, distance: Math.hypot(
+      porter.position.x - view.player.position.x, porter.position.y - view.player.position.y,
+    ) })).filter(({ distance }) => distance <= 70).sort((a, b) =>
+      Number(a.porter.state !== 'waiting') - Number(b.porter.state !== 'waiting')
+      || a.distance - b.distance || String(a.porter.id).localeCompare(String(b.porter.id)));
+    const chosen = candidates[0];
+    if (!chosen) return null;
+    bridge.renderer.setMode('chart-2d');
+    bridge.renderer.focusWorld(chosen.porter.position, 1.65);
+    bridge.runtime.start();
+    return { id: chosen.porter.id, actorId: chosen.porter.actorId };
+  })()`);
+  if (!target) throw new Error('Voice probe has no actual nearby resident');
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await client.evaluate(`(() => {
+      const bridge = window.__TIDEWEFT__;
+      const porter = bridge.runtime.getRenderView().porters.find(
+        (candidate) => String(candidate.id) === ${JSON.stringify(String(target.id))});
+      if (!porter) throw new Error('Resident left actual visibility before selection');
+      bridge.renderer.focusWorld(porter.position, 1.65);
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  }
+  const rectangleOf = async (selector) => client.evaluate(`(() => {
+    const node = document.querySelector(${JSON.stringify(selector)});
+    if (!node || node.hidden || node.disabled) return null;
+    const r = node.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
+  await client.waitFor(`(() => {
+    const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
+    const greet = document.querySelector('.resident-about__greet');
+    return selected?.id === ${JSON.stringify(String(target.id))}
+      && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
+  })()`);
+  await client.evaluate(`(() => {
+    const node = document.querySelector('#announcer');
+    if (!node) throw new Error('No accessible live region');
+    const entries = [];
+    const state = { entries, overflow: false };
+    const observer = new MutationObserver(() => {
+      const text = node.textContent.trim();
+      if (!text) return;
+      if (entries.length >= 32 || text.length > 1024) state.overflow = true;
+      else entries.push(text);
+    });
+    observer.observe(node, { childList: true, subtree: true, characterData: true });
+    window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer });
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
+  const committed = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getUIView();
+    const caption = view.expressionCaption;
+    if (view.selectedResident?.id !== ${JSON.stringify(String(target.id))}
+      || view.selectedResident.knowledgeLabel !== 'Acquainted' || !caption
+      || !bridge.runtime.getRenderView().acousticText.some((cue) => cue.id === caption.id
+        && cue.sourceActorId === ${JSON.stringify(target.actorId)}
+        && cue.sourceKind === 'human' && cue.acousticKind === 'speech')) return false;
+    bridge.runtime.stop();
+    return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id };
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
+  const snapshots = [];
+  await fs.mkdir(path.dirname(output), { recursive: true });
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+    await client.command('browsingContext.setViewport', {
+      context: client.context, viewport, devicePixelRatio: 1,
+    });
+    await client.waitFor(`innerWidth === ${viewport.width} && innerHeight === ${viewport.height}`);
+    for (const mode of ['chart-2d', 'relief-3d']) {
+      await client.evaluate(`(() => {
+        const bridge = window.__TIDEWEFT__;
+        bridge.renderer.setMode(${JSON.stringify(mode)});
+        const cue = bridge.runtime.getRenderView().acousticText.find(
+          (item) => item.id === ${JSON.stringify(committed.captionId)});
+        if (!cue) throw new Error('Committed greeting disappeared');
+        bridge.renderer.focusWorld(cue.position, 1.65);
+        for (let index = 0; index < 5; index += 1) bridge.ui.update(bridge.runtime.getUIView());
+      })()`);
+      await client.waitFor(`Boolean(document.querySelector(
+        '#p5-mount canvas[data-renderer="${mode}"]:not([hidden])'))`);
+      await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
+      const snapshot = await client.evaluate(`(() => {
+        const bridge = window.__TIDEWEFT__;
+        const view = bridge.runtime.getUIView();
+        const expected = view.expressionCaption;
+        const cues = bridge.runtime.getRenderView().acousticText;
+        const geometry = (node) => {
+          const r = node.getBoundingClientRect();
+          return { rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+            horizontalOverflow: node.scrollWidth > node.clientWidth + 1,
+            verticalOverflow: node.scrollHeight > node.clientHeight + 1 };
+        };
+        const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+        const aria = caption?.getAttribute('aria-label');
+        return {
+          mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
+          tick: bridge.runtime.getRenderView().tick,
+          sameCommittedCaption: expected?.id === ${JSON.stringify(committed.captionId)},
+          reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
+          labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
+          caption: caption && !caption.hidden ? { ...geometry(caption),
+            matchesProjection: caption.dataset.expressionId === expected?.id
+              && caption.querySelector('.situated-expression-caption__text')?.textContent === expected?.text,
+            ariaMatches: aria === expected?.speakerLabel + ': ' + expected?.text,
+            announcementCount: window.__TIDEWEFT_VOICE_PROBE__.entries.filter((text) => text === aria).length,
+          } : null,
+          labels: [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
+            .filter((node) => !node.hidden && node.getClientRects().length > 0)
+            .map((node) => ({ ...geometry(node), matchesProjection: cues.some((cue) =>
+              cue.text === node.textContent && cue.acousticKind === node.dataset.acousticKind
+              && cue.sourceKind === node.dataset.sourceKind) })),
+        };
+      })()`);
+      if (snapshot.tick !== committed.tick || !snapshot.sameCommittedCaption
+        || snapshot.reducedMotion !== reducedMotion) throw new Error('Voice authority or motion preference changed');
+      assertVoicePresentationSnapshot(snapshot, mode);
+      const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
+      const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
+      const filename = path.basename(screenshotPath);
+      const bytes = Buffer.from(screenshot.data, 'base64');
+      if (bytes.length < 1024) throw new Error('Voice screenshot is empty');
+      await fs.writeFile(screenshotPath, bytes, { flag: 'wx', mode: 0o600 });
+      snapshots.push({ ...snapshot, screenshot: { file: filename, bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex') } });
+    }
+  }
+  await client.evaluate('window.__TIDEWEFT_VOICE_PROBE__.observer.disconnect()');
+  await client.command('input.releaseActions', { context: client.context });
+  return { producer: 'native resident GREET via physical Chart selection and button input',
+    committedTick: committed.tick, snapshots,
+    limitation: 'One naturally available introduction, then frozen committed presentation across views/viewports; DOM boxes and live-region mutations, not mixed crowd saturation, glyph ink, audible screen reader, mobile hardware, continuous performance or desktop packaging' };
+}
+
 async function runBrowserWitness(options) {
   options = {
     ...options,
-    packagedBaseline: await validateArtifactPath(
+    packagedBaseline: options.voicePresentation ? null : await validateArtifactPath(
       options.packagedBaseline,
       '--packaged-baseline',
       { mustExist: true },
@@ -1043,13 +1274,14 @@ async function runBrowserWitness(options) {
     output: await validateArtifactPath(options.output, '--output'),
   };
   if (
-    options.output === options.packagedBaseline
-    || await existingPathsShareFileIdentity(options.output, options.packagedBaseline)
+    options.packagedBaseline !== null && (options.output === options.packagedBaseline
+    || await existingPathsShareFileIdentity(options.output, options.packagedBaseline))
   ) {
     throw new Error('--output must not overwrite the packaged baseline');
   }
   await validateArtifactPath(options.output, '--output');
-  await fs.rm(options.output, { force: true });
+  if (options.voicePresentation) await assertFreshVoicePresentationOutput(options.output);
+  else await fs.rm(options.output, { force: true });
   const browserExecutable = await resolveBrowserExecutable(options.browserExecutable);
   const browserBinary = await fileIdentity(browserExecutable);
   const browserVersion = (await execFileAsync(browserExecutable, ['--version'])).stdout.trim();
@@ -1057,10 +1289,10 @@ async function runBrowserWitness(options) {
   const repository = await repositoryAtCapture();
   if (repository === null) throw new Error('Could not capture repository identity');
   const profilerHarness = await runtimeHarnessIdentities();
-  await validateArtifactPath(options.packagedBaseline, '--packaged-baseline', { mustExist: true });
-  const packagedReferenceIdentity = await fileIdentity(options.packagedBaseline);
-  await validateArtifactPath(options.packagedBaseline, '--packaged-baseline', { mustExist: true });
-  const packagedSource = await readPackagedReference(options.packagedBaseline);
+  if (!options.voicePresentation) await validateArtifactPath(options.packagedBaseline, '--packaged-baseline', { mustExist: true });
+  const packagedReferenceIdentity = options.voicePresentation ? null : await fileIdentity(options.packagedBaseline);
+  if (!options.voicePresentation) await validateArtifactPath(options.packagedBaseline, '--packaged-baseline', { mustExist: true });
+  const packagedSource = options.voicePresentation ? null : await readPackagedReference(options.packagedBaseline);
   const basePath = normalizeBasePath(BASE_PATH);
   const server = createPagesServer(basePath);
   let profileDirectory = null;
@@ -1070,6 +1302,7 @@ async function runBrowserWitness(options) {
   let preloadScript = null;
   let subscription = null;
   let completed = false;
+  let publishedOutput = false;
   let browserClosedCleanly = false;
   let interruptedBy = null;
   let signalCount = 0;
@@ -1101,7 +1334,7 @@ async function runBrowserWitness(options) {
     await fs.writeFile(path.join(profileDirectory, 'user.js'), [
       'user_pref("browser.shell.checkDefaultBrowser", false);',
       'user_pref("browser.startup.page", 0);',
-      'user_pref("ui.prefersReducedMotion", 0);',
+      `user_pref("ui.prefersReducedMotion", ${options.reducedMotion ? 1 : 0});`,
       '',
     ].join('\n'), { mode: 0o600 });
 
@@ -1195,7 +1428,7 @@ async function runBrowserWitness(options) {
     )`);
     const startupDiagnostics = await waitForStableBrowserDiagnostics(client);
     eventMonitor.beginGuarded();
-    await installResourceInputGuard(client);
+    if (!options.voicePresentation) await installResourceInputGuard(client);
     await client.command('browsingContext.setViewport', {
       context: client.context,
       viewport: { width: SCENARIO.viewport.width, height: SCENARIO.viewport.height },
@@ -1205,14 +1438,16 @@ async function runBrowserWitness(options) {
       `innerWidth === ${SCENARIO.viewport.width} && innerHeight === ${SCENARIO.viewport.height} `
       + `&& Math.abs(devicePixelRatio - ${SCENARIO.viewport.deviceScaleFactor}) < 0.001`,
     );
-    await rebaseResourceInputGuardAfterViewport(client, SCENARIO.viewport);
+    if (!options.voicePresentation) await rebaseResourceInputGuardAfterViewport(client, SCENARIO.viewport);
 
-    const bootstrap = await bootstrapWorldDocument(client, SCENARIO.seed);
+    const bootstrap = await bootstrapWorldDocument(client, options.voicePresentation ? 'phase ten glass ebb' : SCENARIO.seed);
     if (bootstrap.graphics?.available !== true) {
       throw new Error(`Browser WebGL is unavailable: ${JSON.stringify(bootstrap.graphics)}`);
     }
-    const packagedComparison = validatePackagedReference(packagedSource, bootstrap);
-    const rawMeasurement = await measureScenario(
+    const packagedComparison = options.voicePresentation ? null : validatePackagedReference(packagedSource, bootstrap);
+    const voicePresentation = options.voicePresentation
+      ? await exerciseBrowserVoicePresentation(client, options.output, options.reducedMotion) : null;
+    const rawMeasurement = options.voicePresentation ? null : await measureScenario(
       client,
       SCENARIO,
       options.sampleMs,
@@ -1220,12 +1455,14 @@ async function runBrowserWitness(options) {
       true,
       { captureCdpMetrics: false },
     );
-    if (Object.hasOwn(rawMeasurement, 'browser')) {
+    if (rawMeasurement !== null && Object.hasOwn(rawMeasurement, 'browser')) {
       throw new Error('Browser witness unexpectedly retained Chromium-only diagnostics');
     }
-    assertAdvancingWorldMeasurement(rawMeasurement);
-    assertGuardedBaselineMeasurements([rawMeasurement], [SCENARIO.id]);
-    const finalGuard = normalizeBrowserGuardEvidence(
+    if (!options.voicePresentation) {
+      assertAdvancingWorldMeasurement(rawMeasurement);
+      assertGuardedBaselineMeasurements([rawMeasurement], [SCENARIO.id]);
+    }
+    const finalGuard = options.voicePresentation ? null : normalizeBrowserGuardEvidence(
       await captureInputGuardEvidence(client, 'browser performance witness'),
     );
     const documentStateWithLocation = await client.evaluate(`(() => ({
@@ -1264,20 +1501,21 @@ async function runBrowserWitness(options) {
     assertNoGuardedDiagnosticIncrease(startupDiagnostics, finalDiagnostics);
     const lifecycleEvidence = eventMonitor.assertClean();
     eventMonitor.complete();
-    const measurement = {
+    const measurement = options.voicePresentation ? null : {
       ...rawMeasurement,
       viewportAndInput: normalizeBrowserGuardEvidence(rawMeasurement.viewportAndInput),
     };
-    const relativeReference = path.relative(projectRoot, options.packagedBaseline).split(path.sep).join('/');
+    const relativeReference = options.voicePresentation ? null
+      : path.relative(projectRoot, options.packagedBaseline).split(path.sep).join('/');
     const result = {
-      schema: 'tideweft-browser-performance-witness/v1',
+      schema: options.voicePresentation ? 'tideweft-browser-voice-presentation/v1' : 'tideweft-browser-performance-witness/v1',
       capturedAt: new Date().toISOString(),
       repositoryAtCapture: repository,
       captureScope: {
-        kind: 'real-browser-gameplay',
+        kind: options.voicePresentation ? 'functional-voice-presentation' : 'real-browser-gameplay',
         complete: true,
-        expectedScenarioIds: [SCENARIO.id],
-        selectedScenarioIds: [SCENARIO.id],
+        expectedScenarioIds: options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
+        selectedScenarioIds: options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
       },
       profilerHarness,
       host: {
@@ -1299,19 +1537,17 @@ async function runBrowserWitness(options) {
         serving: 'loopback HTTP using the same nested-path server as production web smoke; ephemeral port omitted',
         ...webArtifact,
       },
-      packagedComparison: {
+      ...(options.voicePresentation ? { voicePresentation } : { packagedComparison: {
         sourceArtifact: relativeReference,
         sourceArtifactIdentity: packagedReferenceIdentity,
         ...packagedComparison,
         fingerprintMatches: true,
         startTickMatches: true,
         releaseBuildAndGameplayIdentityMatch: true,
-      },
+      } }),
       bootstrap,
-      scenario: SCENARIO,
-      requestedSampleWindowMs: options.sampleMs,
-      measurement,
-      finalGuard,
+      ...(options.voicePresentation ? {} : { scenario: SCENARIO,
+        requestedSampleWindowMs: options.sampleMs, measurement, finalGuard }),
       documentState,
       runtimeErrors: {
         startup: {
@@ -1359,12 +1595,18 @@ async function runBrowserWitness(options) {
         },
         policy: 'reported separately; any counter increase after the stable startup baseline invalidates the witness',
       },
-      metricScope: {
+      metricScope: options.voicePresentation ? {
+        authoritative: 'Native current-world selection/GREET transaction, then unchanged committed presentation across views and viewport sizes',
+        limitation: voicePresentation.limitation,
+        omitted: 'No performance measurement, packaged comparison, glyph-ink or hardware certification',
+      } : {
         authoritative: 'the same browser-pure fixed-step/runtime, renderer, UI, save, scene-count, and requestAnimationFrame telemetry assertions used by the packaged harness',
         omitted: 'Chromium-only CDP process/task/heap metrics are deliberately discarded rather than relabeled as Firefox evidence',
         limitation: 'one representative desktop Relief scene in one installed Firefox build; packaged Chart/mobile/travel/resource/soak evidence remains separate',
       },
-      privacy: 'no save payload, actor identity, cache key, browser profile path, ephemeral port, console message, or private planning path is retained',
+      privacy: options.voicePresentation
+        ? 'Local synthetic world only: JSON omits actor IDs/names and save payloads; screenshots retain legitimately visible game text and learned generated names. No real profile/save, private planning, personal data or telemetry service; artifacts remain ignored.'
+        : 'no save payload, actor identity, cache key, browser profile path, ephemeral port, console message, or private planning path is retained',
     };
     assertNotInterrupted('before browser shutdown');
     await client.command('session.unsubscribe', { subscriptions: [subscription] });
@@ -1383,7 +1625,7 @@ async function runBrowserWitness(options) {
     await client.close().catch(() => undefined);
     assertNotInterrupted('after browser shutdown');
 
-    await validateArtifactPath(
+    if (!options.voicePresentation) await validateArtifactPath(
       options.packagedBaseline,
       '--packaged-baseline',
       { mustExist: true },
@@ -1394,14 +1636,14 @@ async function runBrowserWitness(options) {
       webArtifactManifest(),
       fileIdentity(browserExecutable),
       runtimeHarnessIdentities(),
-      fileIdentity(options.packagedBaseline),
+      options.voicePresentation ? null : fileIdentity(options.packagedBaseline),
     ]);
     assertNotInterrupted('during post-capture identity verification');
     assertIdentityUnchanged('Repository identity', repository, repositoryAfter);
     assertIdentityUnchanged('Production web artifact', webArtifact, webArtifactAfter);
     assertIdentityUnchanged('Firefox executable', browserBinary, browserBinaryAfter);
     assertIdentityUnchanged('Browser performance harness', profilerHarness, profilerHarnessAfter);
-    assertIdentityUnchanged(
+    if (!options.voicePresentation) assertIdentityUnchanged(
       'Packaged comparison artifact',
       packagedReferenceIdentity,
       packagedReferenceAfter,
@@ -1413,6 +1655,7 @@ async function runBrowserWitness(options) {
       flag: 'wx',
       mode: 0o600,
     });
+    publishedOutput = true;
     assertNotInterrupted('during artifact publication');
     completed = true;
     return result;
@@ -1449,7 +1692,7 @@ async function runBrowserWitness(options) {
         retryDelay: 100,
       });
     }
-    if (!completed) {
+    if (!completed && (!options.voicePresentation || publishedOutput)) {
       await validateArtifactPath(options.output, '--output')
         .then(() => fs.rm(options.output, { force: true }))
         .catch(() => undefined);
@@ -1462,6 +1705,10 @@ async function runBrowserWitness(options) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   const result = await runBrowserWitness(options);
+  if (options.voicePresentation) {
+    process.stdout.write(`Browser Voice functional witness written to ${options.output}\n`);
+    return;
+  }
   process.stdout.write(`Browser performance witness written to ${options.output}\n`);
   process.stdout.write(
     `${result.scenario.id}: `
@@ -1476,6 +1723,8 @@ module.exports = {
   BiDiClient,
   SCENARIO,
   assertAdvancingWorldMeasurement,
+  assertVoicePresentationSnapshot,
+  assertFreshVoicePresentationOutput,
   decodeRemoteValue,
   assertDiagnosticSnapshot,
   assertNoGuardedDiagnosticIncrease,

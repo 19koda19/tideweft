@@ -3316,6 +3316,11 @@ Relief cord roots and bell/label placement sample the discovery-masked surface r
 
 The composed controller stops and hides the inactive p5 instance, releases held movement/brace input during a switch, retains the shared terrain-only impression across a quick view handoff, and falls back to Chart 2D if WebGL setup fails or its context is lost. A frame shift rebases the active Chart or Relief camera, held pointer target, and queued route in one render command rather than canceling input or snapping to a new center. The explicit view preference and terrain impression are local presentation state and are deliberately outside the authoritative save/checksum.
 
+Explicit camera focus retains the same bounded 1.8-second inspection lease in
+Chart and Relief. Reduced motion snaps without easing; it does not expire that
+focus before a render frame can show it. The lease returns to the projected
+camera target afterward and cannot change actor position or hearing.
+
 The shared world-tap router distinguishes fine from coarse pointers. In the
 current compatibility network, whose seven harbors are treated as known,
 fine-pointer harbor input retains selection/inspection and coarse-pointer

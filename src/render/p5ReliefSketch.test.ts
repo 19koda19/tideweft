@@ -672,6 +672,30 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Relief focus accessibility", () => {
+  it("retains an explicit reduced-motion focus through the next frame without easing or extending its lease", () => {
+    p5Harness.reducedMotion = true;
+    let now = 1_000;
+    vi.stubGlobal("performance", { now: () => now });
+    const current = view("focus", { x: 8, y: 12 });
+    const harness = renderHarness(current);
+    harness.draw();
+    harness.renderer.focusWorld({ x: 44, y: 52 });
+    for (now of [1_016, 1_400, 2_799]) {
+      harness.draw();
+      expect(harness.camera.mock.calls.at(-1)?.[3]).toBe(44);
+      expect(harness.camera.mock.calls.at(-1)?.[5]).toBe(52);
+    }
+    now = 2_800;
+    harness.draw();
+    expect(harness.camera.mock.calls.at(-1)?.[3]).toBe(8);
+    expect(harness.camera.mock.calls.at(-1)?.[5]).toBe(12);
+    expect(harness.dispatch).not.toHaveBeenCalled();
+    expect(current.player.position).toEqual({ x: 8, y: 12 });
+    harness.renderer.destroy();
+  });
+});
+
 describe("Relief renderer telemetry", () => {
   it("measures completed draw CPU time and publishes cheap truthful draw counts", () => {
     let clock = 0;

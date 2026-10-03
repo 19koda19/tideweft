@@ -6027,7 +6027,8 @@ export function createTideweftRenderer(
     focusWorld: (point, zoom) => {
       observeCurrentSpatialEpoch();
       camera.focusPoint = { ...point };
-      camera.focusUntil = performance.now() + (reducedMotion ? 1 : 1_800);
+      // Reduced motion removes easing, not the time to inspect a focused source.
+      camera.focusUntil = performance.now() + 1_800;
       if (zoom !== undefined) camera.manualZoom = clamp(zoom, 0.58, 2.4);
     },
     pulseScan,
