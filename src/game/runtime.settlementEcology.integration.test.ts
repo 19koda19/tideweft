@@ -12,6 +12,7 @@ import {
   LIVING_CIRCADIAN_VERSION,
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
   WORLD_DAWN_START_TICK,
+  WORLD_DUSK_START_TICK,
   WORLD_NIGHT_START_TICK,
   WORLD_TICKS_PER_DAY,
   assertWorldInvariants,
@@ -176,6 +177,9 @@ import {
 } from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import { SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE } from "./situatedExpressionAcoustics";
+import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
+import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
+import * as situatedExpressionChannels from "./situatedExpressionChannelBank";
 import {
   canonicalizeSettlementEcologyState,
   deserializeSettlementEcologyState,
@@ -2091,7 +2095,368 @@ async function advanceUntilDomesticFoodUse(
   })}`);
 }
 
+interface ChickenVoiceCarry {
+  readonly intervalStartWasSleeping: boolean;
+  readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+  readonly situatedExpressionChannels: SituatedExpressionChannelBank;
+  readonly actorVocalizationSamples: readonly humanPerception.SupplementalSoundSample[];
+}
+
+/** Current generated custody and real dog threat; no injected observations or alarm events. */
+async function createChickenAlarmRuntime(
+  runtimeFactory = createTideweftRuntime,
+  options: Readonly<{ observer?: "visible" | "unseen" | "unheard" | "sleep" | "store"; threat?: boolean }> = {},
+): Promise<{
+  runtime: TideweftRuntime;
+  repository: MemoryRepository;
+  memberActorIds: readonly string[];
+  guardianActorId: string;
+}> {
+  const observer = options.observer ?? "visible";
+  let nightRecord: SaveRecord | undefined;
+  if (observer === "sleep") {
+    const night = createWorld("domestic chicken shared store claim", "wild");
+    runTicks(night, WORLD_DUSK_START_TICK - night.meta.completedTick);
+    night.weather.kind = "clear";
+    night.weather.intensity = 0;
+    night.weather.windX = 0;
+    night.weather.windY = 0;
+    night.weather.nextChangeTick = night.meta.completedTick + 100_000;
+    assertWorldInvariants(night);
+    // Existing supported world fixture initializes fresh current ecology;
+    // all following staging and reload use current47 generated-home authority.
+    nightRecord = legacyRuntimeSaveRecord(night);
+  }
+  const sourceRepository = new MemoryRepository(nightRecord);
+  const source = await runtimeFactory(sourceRepository);
+  if (nightRecord === undefined) source.dispatchUI({
+    type: "new-world", seed: "domestic chicken shared store claim",
+    posture: "gale", sessionShape: "wander",
+  });
+  await source.save();
+  source.destroy();
+  scheduledFrame = undefined;
+  const record = sourceRepository.snapshot();
+  const envelope = savedEnvelope(sourceRepository);
+  const world = deserializeWorld(String(envelope.world));
+  const view = createWorldView(world);
+  const store = deserializeSettlementEcologyState(envelope.settlementEcology);
+  const custody = store.domesticCustodies.find(({ species }) => species === "domestic-chicken");
+  const roster = deserializeDogActorRoster(envelope.dogActorRoster);
+  const guardian = roster?.actors[0];
+  const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
+  if (custody === undefined || roster === null || guardian === undefined || bio0 === null) {
+    throw new Error("Generated chicken fixture omitted real custody or guardian");
+  }
+  const position = observer === "sleep" || observer === "store" ? store.identity.position
+    : connectedOpenDogPositionOutside(view, custody.homeStructure.position, 3_000);
+  const distantDogPosition = connectedOpenDogPositionOutside(view, store.identity.position, 20_000);
+  const dogPosition = options.threat === false ? distantDogPosition
+    : translateWorldPosition(position, 300, 0);
+  for (const point of [position, dogPosition]) {
+    const index = Math.floor(point.localY / WORLD_POSITION_UNITS_PER_TILE) * WORLD_WIDTH
+      + Math.floor(point.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const tile = view.terrain.tiles[index];
+    if (tile === undefined || coreWildlifeTraversabilityCell("domestic-chicken", tile).access !== "open") {
+      throw new Error("Chicken fixture needs actual shared traversable footing");
+    }
+  }
+  let core = requireCurrentCoreEcology(envelope);
+  core = setCoreEcologyAggregatePatchMaterializedActors(core, {
+    atTick: core.updatedAtTick, actorIds: custody.memberActorIds,
+  });
+  const chickens = core.populations.filter(({ species }) => species === "domestic-chicken")
+    .flatMap(({ members }) => members.map(({ actor }) => actor));
+  expect(chickens.map(({ identity }) => identity.stableId).sort())
+    .toEqual([...custody.memberActorIds].sort());
+  for (const chicken of chickens) {
+    core = replaceCoreEcologyAggregatePatchActor(core, repositionCoreWildlifeActor(chicken, {
+      atTick: core.updatedAtTick, position, heading: headingFromRadians(0),
+    }));
+  }
+  const movedRoster = replaceDogActorInRoster(roster, repositionDogActor(guardian, {
+    position: dogPosition, heading: guardian.address.heading, atTick: world.meta.completedTick,
+  }));
+  if (movedRoster === null) throw new Error("Chicken fixture guardian replacement rejected");
+  const staged = withCurrentEnvelopeFields(withCurrentSettlementHomeCore(record, core), {
+    dogActorRoster: serializeDogActorRoster(movedRoster),
+    bio0Ecology: serializeBio0Ecology({
+      ...bio0, dog: repositionDogActor(bio0.dog, {
+        position: distantDogPosition, heading: bio0.dog.address.heading, atTick: bio0.tick,
+      }),
+    }),
+  });
+  const observerPosition = observer === "unseen" ? translateWorldPosition(position, -3_000, 0)
+    : observer === "unheard" ? translateWorldPosition(position, -7_000, 0) : position;
+  const lookAt = observer === "unseen" || observer === "unheard"
+    ? translateWorldPosition(observerPosition, -1_000, 0) : dogPosition;
+  const repository = new MemoryRepository(withPlayerWitnessingWorldPosition(
+    staged, observerPosition, lookAt, 800_000,
+  ));
+  const runtime = await runtimeFactory(repository);
+  expect(runtime.getUIView().saveWarning).toBeUndefined();
+  return { runtime, repository, memberActorIds: custody.memberActorIds, guardianActorId: guardian.identity.stableId };
+}
+
 describe("runtime settlement ecology integration", () => {
+  it("routes generated chicken alarms through soft Voice without legacy playback, WAIT interruption or reload replay", async () => {
+    const fixture = await createChickenAlarmRuntime();
+    const { runtime, repository } = fixture;
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    advanceWaitFrames(runtime, 10);
+    await runtime.save();
+    const saved = savedEnvelope(repository);
+    const core = requireCurrentCoreEcology(saved);
+    const alarms = core.populations.filter(({ species }) => species === "domestic-chicken")
+      .flatMap(({ members }) => members.map(({ actor }) => actor))
+      .filter(({ intent }) => intent.kind === "alarm");
+    expect(alarms.length).toBeGreaterThan(0);
+    expect(alarms.every(({ identity }) => fixture.memberActorIds.includes(identity.stableId))).toBe(true);
+    expect(alarms.every(({ perception }) => perception.beliefs.some(({ subjectId, perceivedClass }) => (
+      subjectId === fixture.guardianActorId && perceivedClass === "predator"
+    )))).toBe(true);
+    const calls = soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk");
+    expect(calls).toHaveLength(alarms.length);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    expect(runtime.getUIView().controls?.waitActive).toBe(true);
+    expect(runtime.getUIView().announcement?.message ?? "").not.toContain("ANIMAL ALARM");
+    expect(runtime.getRenderView().expressions?.some(({ sourceActorId, text }) => (
+      fixture.memberActorIds.includes(sourceActorId) && text === "SQUAWK."
+    ))).toBe(true);
+    const carry = saved.perceptionCarry as {
+      situatedExpressionAdmissions: { records: Array<{ kind: string; sourceSpecies?: string; sourceActorId: string; sampleOrdinal: number }> };
+      actorVocalizationSamples: Array<{ soundClass: string; soundInterrupt: string; soundLoudness: number }>;
+    };
+    const admissions = carry.situatedExpressionAdmissions.records.filter(({ kind, sourceSpecies }) => (
+      kind === "core-wildlife-alarm" && sourceSpecies === "domestic-chicken"
+    ));
+    expect(admissions).toHaveLength(alarms.length);
+    for (const admission of admissions) expect(carry.actorVocalizationSamples[admission.sampleOrdinal])
+      .toMatchObject({ soundClass: "animal-call", soundInterrupt: "none", soundLoudness: 420_000 });
+    const durableCarry = stableStringify(saved.perceptionCarry);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    expect(stableStringify(savedEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-chicken-alarm-squawk" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    resumed.destroy();
+    const wrongSpecies = structuredClone(saved.perceptionCarry) as ChickenVoiceCarry;
+    const forged = {
+      ...wrongSpecies,
+      situatedExpressionAdmissions: {
+        ...wrongSpecies.situatedExpressionAdmissions,
+        records: wrongSpecies.situatedExpressionAdmissions.records.map((record) => (
+          record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-chicken"
+            ? { ...record, sourceSpecies: "gull" as const } : record
+        )),
+      },
+    };
+    const forgedRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      repository.snapshot(), { perceptionCarry: forged },
+    ));
+    const untouched = stableStringify(forgedRepository.snapshot());
+    const rejected = await createTideweftRuntime(forgedRepository);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(stableStringify(forgedRepository.snapshot())).toBe(untouched);
+    rejected.destroy();
+  }, 60_000);
+
+  it("re-sources the chicken alarm to a remaining real cat rather than an absent guardian", async () => {
+    const { runtime, repository, guardianActorId } = await createChickenAlarmRuntime(
+      createTideweftRuntime, { threat: false },
+    );
+    soundscapePlay.mockClear();
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const core = requireCurrentCoreEcology(savedEnvelope(repository));
+    const chickens = core.populations.filter(({ species }) => species === "domestic-chicken")
+      .flatMap(({ members }) => members.map(({ actor }) => actor));
+    expect(chickens.every(({ perception }) => !perception.beliefs.some(({ subjectId }) => (
+      subjectId === guardianActorId
+    )))).toBe(true);
+    // Removing one predator is not removing every causal input. This seed also
+    // contains a real cat; the same world must notice that remaining threat.
+    expect(chickens.every(({ intent, perception }) => intent.kind === "alarm"
+      && perception.beliefs.some(({ subjectId, sourceObservationId, perceivedClass }) => (
+        subjectId?.startsWith("CAT-v1-") && perceivedClass === "predator"
+        && sourceObservationId === intent.cause.referenceId
+      )))).toBe(true);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk"))
+      .toHaveLength(chickens.length);
+    runtime.destroy();
+  }, 60_000);
+
+  it.each(["unseen", "unheard"] as const)("keeps a real %s chicken alarm knowledge-honest", async (observer) => {
+    const { runtime, repository, memberActorIds } = await createChickenAlarmRuntime(
+      createTideweftRuntime, { observer },
+    );
+    soundscapePlay.mockClear();
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const chickens = requireCurrentCoreEcology(savedEnvelope(repository)).populations
+      .filter(({ species }) => species === "domestic-chicken")
+      .flatMap(({ members }) => members.map(({ actor }) => actor));
+    expect(chickens.some(({ intent }) => intent.kind === "alarm")).toBe(true);
+    expect(runtime.getRenderView().expressions?.some(({ sourceActorId }) => memberActorIds.includes(sourceActorId)))
+      .toBe(false);
+    const calls = soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk");
+    if (observer === "unseen") {
+      expect(calls.length).toBeGreaterThan(0);
+      const carry = savedEnvelope(repository).perceptionCarry as ChickenVoiceCarry;
+      const sourceChannels = carry.situatedExpressionChannels.channels.filter(({ sourceActorId }) => (
+        memberActorIds.includes(sourceActorId)
+      ));
+      expect(sourceChannels.length).toBeGreaterThan(0);
+      expect(sourceChannels.every(({ reception }) => reception?.kind === "heard-unseen")).toBe(true);
+      const caption = runtime.getUIView().expressionCaption;
+      // The single caption arbiter may prefer a genuine nearby impact over this
+      // quiet call. When selected, the bird remains anonymous; its receipt and
+      // committed audio survive either outcome.
+      if (caption?.animalCallKind === "bird-call") expect(caption).toMatchObject({
+        speakerLabel: "A bird", text: "CALL.", assertive: false,
+      });
+      expect(JSON.stringify(caption)).not.toMatch(/chicken|SQUAWK|predator|custody/iu);
+    } else {
+      expect(calls).toEqual([]);
+      expect(runtime.getUIView().expressionCaption?.animalCallKind).not.toBe("chicken-call");
+    }
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+    runtime.destroy();
+  }, 60_000);
+
+  it("keeps actual REST active through a chicken call", async () => {
+    const { runtime } = await createChickenAlarmRuntime();
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    expect(runtime.getUIView().controls).toMatchObject({ recoveryActive: true, recoveryKind: "rest" });
+    soundscapePlay.mockClear();
+    advanceWaitFrames(runtime, 1);
+    expect(soundscapePlay.mock.calls.some(([cue]) => cue === "vocalization-chicken-alarm-squawk")).toBe(true);
+    expect(runtime.getUIView().controls).toMatchObject({ recoveryActive: true, recoveryKind: "rest" });
+    runtime.destroy();
+  }, 60_000);
+
+  it("keeps a real sleeping courier asleep and current reload cannot invent chicken hearing", async () => {
+    const { runtime, repository, memberActorIds } = await createChickenAlarmRuntime(
+      createTideweftRuntime, { observer: "sleep" },
+    );
+    expect(runtime.getUIView().controls).toMatchObject({ canRecover: true, recoveryKind: "sleep" });
+    runtime.dispatchUI({ type: "recover", action: "begin" });
+    soundscapePlay.mockClear();
+    advanceWaitFrames(runtime, 1);
+    expect(runtime.getUIView().controls).toMatchObject({ recoveryActive: true, recoveryKind: "sleep" });
+    await runtime.save();
+    const saved = savedEnvelope(repository);
+    const carry = saved.perceptionCarry as ChickenVoiceCarry;
+    expect(carry.intervalStartWasSleeping).toBe(true);
+    expect(carry.situatedExpressionAdmissions.records.some((record) => (
+      record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-chicken"
+    ))).toBe(true);
+    const channels = carry.situatedExpressionChannels.channels.filter(({ sourceActorId }) => (
+      memberActorIds.includes(sourceActorId)
+    ));
+    expect(channels.length).toBeGreaterThan(0);
+    expect(channels.every(({ reception, state }) => reception === null && state.active?.audioAcknowledged === true))
+      .toBe(true);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-chicken-alarm-squawk" || cue === "wildlife-alarm"
+    ))).toEqual([]);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    await resumed.save();
+    expect(stableStringify(savedEnvelope(repository).perceptionCarry)).toBe(stableStringify(saved.perceptionCarry));
+    resumed.dispatchUI({ type: "recover", action: "cancel" });
+    expect(resumed.getRenderView().expressions?.some(({ sourceActorId }) => memberActorIds.includes(sourceActorId)))
+      .toBe(false);
+    resumed.destroy();
+  }, 90_000);
+
+
+  it.each([false, true])("preserves anonymous keeper hearing and chicken audio at T+1 (optional capacity refusal=%s)", async (saturated) => {
+    let runtime: TideweftRuntime | null = null;
+    const actualReduction = situatedExpressionChannels.reduceSituatedExpressionChannelBank;
+    // A contract fixture at the optional presentation boundary, not a fake
+    // physical event or listener. Keep one module/receipt-custody instance.
+    // The channel-bank suite separately proves the real sixteen-channel cap.
+    const refused = saturated ? vi.spyOn(situatedExpressionChannels, "reduceSituatedExpressionChannelBank")
+      .mockImplementation((bankValue, intent, reception) => {
+        if (typeof intent === "object" && intent !== null && "meaning" in intent
+          && intent.meaning === "domestic-chicken-alarm-call") {
+          return {
+            accepted: false, reason: "channel-capacity-reached", event: null,
+            bank: situatedExpressionChannels.canonicalizeSituatedExpressionChannelBank(bankValue),
+          };
+        }
+        return actualReduction(bankValue, intent, reception);
+      }) : null;
+    try {
+      const factory = createTideweftRuntime;
+      const fixture = await createChickenAlarmRuntime(factory, { observer: "store" });
+      runtime = fixture.runtime;
+      soundscapePlay.mockClear();
+      runtime.dispatchUI({ type: "wait", action: "begin" });
+      advanceWaitFrames(runtime, 10);
+      expect(runtime.getUIView().controls?.waitActive).toBe(true);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk"))
+        .toHaveLength(fixture.memberActorIds.length);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "wildlife-alarm")).toEqual([]);
+      await runtime.save();
+      const saved = savedEnvelope(fixture.repository);
+      const carry = saved.perceptionCarry as ChickenVoiceCarry;
+      const admissions = carry.situatedExpressionAdmissions.records.filter((record) => (
+        record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-chicken"
+      ));
+      expect(admissions).toHaveLength(saturated ? 0 : fixture.memberActorIds.length);
+      if (saturated) {
+        expect(carry.actorVocalizationSamples).toEqual([]);
+        expect(carry.situatedExpressionChannels.channels.some(({ sourceActorId }) => (
+          fixture.memberActorIds.includes(sourceActorId)
+        ))).toBe(false);
+      }
+      const store = deserializeSettlementEcologyState(saved.settlementEcology);
+      const beforeWorld = deserializeWorld(String(saved.world));
+      const keeper = beforeWorld.residents.find(({ identity }) => identity.stableId === store.identity.keeperActorId);
+      if (keeper === undefined) throw new Error("Generated chicken fixture omitted its keeper");
+      const placement = resolveResidentWorldPlacement(createWorldView(beforeWorld), keeper);
+      if (placement === null) throw new Error("Keeper lacks actual physical placement");
+      const distance = worldPositionDelta(store.identity.position, placement.position);
+      expect(Math.hypot(distance.x, distance.y)).toBeLessThan(2_000);
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await factory(fixture.repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk")).toEqual([]);
+      runtime.dispatchUI({ type: "wait", action: "cancel" });
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const afterWorld = deserializeWorld(String(savedEnvelope(fixture.repository).world));
+      const hearing = afterWorld.residents.find(({ identity }) => identity.stableId === keeper.identity.stableId)
+        ?.perception.beliefs.filter((belief) => belief.channel === "hearing"
+          && belief.lastObservedTick === afterWorld.meta.completedTick
+          && (belief.perceivedClass === "animal-call" || belief.perceivedClass === "animal-alarm")) ?? [];
+      expect(hearing).toHaveLength(fixture.memberActorIds.length);
+      expect(new Set(hearing.map(({ sourceObservationId }) => sourceObservationId)).size).toBe(hearing.length);
+      for (const belief of hearing) expect(belief).toMatchObject({
+        perceivedClass: "animal-call", identification: "anonymous", subjectId: null, strongInterrupt: false,
+      });
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+      refused?.mockRestore();
+    }
+  }, 120_000);
+
   it("routes one ecology-owned frog chorus through shared actor hearing and Living Voice", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);

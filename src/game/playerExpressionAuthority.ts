@@ -521,6 +521,7 @@ function policyFor(
     case "gull-alarm-call":
     case "elk-alarm-call":
     case "wild-boar-alarm-call":
+    case "domestic-chicken-alarm-call":
     case "marsh-rabbit-alarm-thump":
     case "marsh-fox-pursuit-yip":
     case "human-danger-warning":

@@ -5214,14 +5214,20 @@ Alpha24DomesticChickenBoundedReadinessReport {
   const livestockTarget = module?.interactions.targets.find(({ targetClass }) => (
     targetClass === "livestock"
   ));
+  // Only the historical sound exclusion is superseded by current Voice.
+  // Keep current structural, custody and conservation checks below intact.
+  const historicalSound = LIVING_SPECIES_ALPHA32_CATALOG.modules.find(
+    (candidate) => candidate.speciesId === speciesId,
+  )?.sound;
   const excludedClaimIntegrityReady = module !== null
     && runtimePolicy !== null
     && criterion("sound")?.status === "unimplemented"
     && criterion("environmental-evidence")?.status === "unimplemented"
     && criterion("seamless-region-crossing")?.status === "unimplemented"
-    && module.sound.implementation === "unimplemented"
-    && module.sound.repertoire.length === 0
-    && module.sound.communicationSignals.length === 0
+    && historicalSound !== undefined
+    && historicalSound.implementation === "unimplemented"
+    && historicalSound.repertoire.length === 0
+    && historicalSound.communicationSignals.length === 0
     && module.evidence.status === "unimplemented"
     && module.evidence.produces.length === 0
     && runtimePolicy.evidenceKinds.length === 0
@@ -5666,9 +5672,18 @@ Alpha25SharedDomesticLivestockReadinessReport {
     && goatHasOwner("ecological-niche", "game:settlement-ecology:v3")
     && goatHasOwner("player-independent-scenario", "game:settlement-ecology:v3");
 
+  const historicalSoundExcluded = (module: NonNullable<typeof chicken>): boolean => {
+    const sound = LIVING_SPECIES_ALPHA32_CATALOG.modules.find(
+      (candidate) => candidate.speciesId === module.speciesId,
+    )?.sound;
+    return sound !== undefined
+      && sound.implementation === "unimplemented"
+      && sound.repertoire.length === 0;
+  };
   const excludedModuleReady = (module: NonNullable<typeof chicken>): boolean => (
-    module.sound.implementation === "unimplemented"
-    && module.sound.repertoire.length === 0
+    // An authenticated pre-Voice declaration owns only this old sound claim;
+    // current-module safeguards for every other capability remain unchanged.
+    historicalSoundExcluded(module)
     && module.evidence.status === "unimplemented"
     && module.evidence.produces.length === 0
     && module.health.implementation === "foundation"

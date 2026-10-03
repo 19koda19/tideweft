@@ -115,6 +115,7 @@ function isLiveSituatedVocalization(
     case "gull-alarm-cry":
     case "elk-alarm-bark":
     case "boar-grunt":
+    case "chicken-alarm-squawk":
       return true;
     case "domestic-cat-rain-distress":
     case "marsh-rabbit-alarm-thump":
@@ -257,6 +258,7 @@ const ANIMAL_ALARM_MEANINGS = new Set<SituatedExpressionMeaning>([
 ]);
 
 const ANIMAL_CALL_MEANINGS = new Set<SituatedExpressionMeaning>([
+  "domestic-chicken-alarm-call",
   "guardian-dog-shelter-whine",
   "domestic-cat-rain-distress-call",
   "marsh-fox-pursuit-yip",
@@ -278,15 +280,16 @@ export function situatedExpressionSoundClass(
 
 /**
  * One semantic urgency owner for simulation interruption and accessible-caption
- * priority. Alarmed tone alone is not sufficient: a rabbit's local foot-thump
- * communicates danger without becoming a wake-up or screen-reader interruption.
+ * priority. Alarmed tone alone is not sufficient: small-prey calls and local
+ * foot-thumps do not become wake-up or screen-reader interruptions.
  */
 export function situatedExpressionSoundInterrupt(
   value: Pick<SituatedExpressionEvent, "meaning" | "tone" | "volume">
     | Pick<SituatedExpressionIntent, "meaning" | "tone" | "volume">,
 ): AcousticInterrupt {
-  if (value.meaning === "marsh-rabbit-alarm-thump") {
-    return coreEcologyAlarmSignalProfile("marsh-rabbit").interrupt;
+  const alarmSpecies = coreWildlifeAlarmSpeciesForMeaning(value.meaning);
+  if (alarmSpecies !== null) {
+    return coreEcologyAlarmSignalProfile(alarmSpecies).interrupt;
   }
   return value.tone === "alarmed" || value.volume === "shout" ? "strong" : "none";
 }

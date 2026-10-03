@@ -415,6 +415,15 @@ describe("situated-expression admission ledger", () => {
     expect(canonicalizeSituatedExpressionAdmissionRecord(
       JSON.parse(JSON.stringify(boarAdmission)),
     )).toEqual(boarAdmission);
+    const chickenAdmission = createCoreWildlifeAlarmExpressionAdmissionRecord({
+      sourceActorId: "CHICKEN-current-alarm", triggerEventId: "CHICKEN-current-alarm:e:1:alarm",
+      sampleOrdinal: 0, admittedAtPlayerStepPhase: 0, sourceSpecies: "domestic-chicken",
+      sourceOwnerKey: "settlement-home:current", sourceObservationId: "OBS-current-dog",
+      acceptedAtTick: 1,
+    });
+    expect(chickenAdmission?.sourceSpecies).toBe("domestic-chicken");
+    expect(canonicalizeSituatedExpressionAdmissionRecord(structuredClone(chickenAdmission)))
+      .toEqual(chickenAdmission);
     expect(canonicalizeSituatedExpressionAdmissionRecord({
       ...canonical,
       sourceSpecies: "gray-wolf",

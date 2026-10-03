@@ -24,6 +24,7 @@ import {
   situatedExpressionSoundInterrupt,
 } from "./situatedExpressionAcoustics";
 import { HUMAN_DANGER_WARNING_PRIORITY } from "./humanDangerWarningExpression";
+import { coreEcologyAlarmSignalProfile } from "./coreEcology";
 import { coreWildlifeAlarmExpressionPriority } from "./coreWildlifeSignalExpression";
 import { DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY } from "./coreWildlifeWeatherDistressExpression";
 import { MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY } from "./coreWildlifePursuitExpression";
@@ -471,6 +472,7 @@ function expressionDurationSteps(meaning: SituatedExpressionMemory["meaning"]): 
     case "gull-alarm-call": return 6;
     case "elk-alarm-call": return 6;
     case "wild-boar-alarm-call": return 6;
+    case "domestic-chicken-alarm-call": return 6;
     case "marsh-rabbit-alarm-thump": return 6;
     case "domestic-cat-rain-distress-call": return 6;
     case "marsh-fox-pursuit-yip": return 6;
@@ -517,6 +519,7 @@ function coreWildlifeAlarmMeaning(
     case "gull": return "gull-alarm-call";
     case "elk": return "elk-alarm-call";
     case "wild-boar": return "wild-boar-alarm-call";
+    case "domestic-chicken": return "domestic-chicken-alarm-call";
     case "marsh-rabbit": return "marsh-rabbit-alarm-thump";
   }
 }
@@ -527,7 +530,7 @@ function coreWildlifeAlarmVolume(
     { readonly kind: "core-wildlife-alarm" }
   >["sourceSpecies"],
 ): "murmur" | "shout" {
-  return species === "marsh-rabbit" ? "murmur" : "shout";
+  return coreEcologyAlarmSignalProfile(species).interrupt === "none" ? "murmur" : "shout";
 }
 
 function isLegacyV33PlayerMeaning(

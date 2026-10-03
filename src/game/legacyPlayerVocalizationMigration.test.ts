@@ -268,6 +268,14 @@ describe("legacy v33 player-vocalization migration", () => {
     });
     expect(migrateLegacyV33PlayerVocalizations(boar.state, [], 108, 0)).toBeNull();
 
+    const chicken = accept(createSituatedExpressionState(), {
+      ...baseIntent("legacy:future-chicken"),
+      meaning: "domestic-chicken-alarm-call", family: "animal-signal",
+      tone: "alarmed", volume: "murmur", knowledgeBasis: "self-perceived-threat",
+      priority: 160_000, salience: 840_000, durationSteps: 6,
+    });
+    expect(migrateLegacyV33PlayerVocalizations(chicken.state, [], 108, 0)).toBeNull();
+
     const marshRabbit = accept(createSituatedExpressionState(), {
       ...baseIntent("legacy:future-marsh-rabbit"),
       meaning: "marsh-rabbit-alarm-thump",

@@ -193,6 +193,17 @@ function boarIntent(triggerEventId: string): SituatedExpressionIntent {
   };
 }
 
+function chickenIntent(triggerEventId: string): SituatedExpressionIntent {
+  return {
+    ...fishCrowIntent(triggerEventId),
+    sourceActorId: "CHICKEN-expression-trajectory-chicken",
+    meaning: "domestic-chicken-alarm-call",
+    volume: "murmur",
+    priority: 160_000,
+    variantSeed: 131,
+  };
+}
+
 function marshRabbitIntent(triggerEventId: string): SituatedExpressionIntent {
   return {
     ...fishCrowIntent(triggerEventId),
@@ -591,13 +602,13 @@ function fishCrowFixture(
   };
 }
 
-function deerAlarmFixture(species: "deer" | "wild-boar" = "deer"): Fixture {
+function deerAlarmFixture(species: "deer" | "wild-boar" | "domestic-chicken" = "deer"): Fixture {
   const phase = 3;
   const acceptedAtTick = 40;
   const triggerEventId = `core-wildlife:alarm:${species}:trajectory`;
   const admitted = accept(createSituatedExpressionState(), species === "deer"
     ? deerIntent(triggerEventId)
-    : boarIntent(triggerEventId));
+    : species === "wild-boar" ? boarIntent(triggerEventId) : chickenIntent(triggerEventId));
   const sourceActorId = admitted.event.sourceActorId;
   const current = advanceSituatedExpression(admitted.state, phase);
   if (current === null || current.active === null) {
@@ -1404,6 +1415,42 @@ describe("situated-expression admission trajectory", () => {
     erasedInterrupt[0]!.soundInterrupt = "none";
     expect(situatedExpressionTrajectoryIsCanonical(
       fixture.bank, fixture.ledger, fixture.phase, erasedInterrupt,
+    )).toBe(false);
+  });
+
+  it("authenticates a soft chicken call and rejects species, loudness, urgency or meaning escalation", () => {
+    const fixture = deerAlarmFixture("domestic-chicken");
+    expect(accepts(fixture)).toBe(true);
+    expect(accepts(JSON.parse(JSON.stringify(fixture)) as Fixture)).toBe(true);
+    expect(fixture.bank.channels[0]?.state.active).toMatchObject({
+      meaning: "domestic-chicken-alarm-call", vocalization: "chicken-alarm-squawk",
+      volume: "murmur", priority: 160_000, remainingSteps: 3,
+    });
+    expect(fixture.samples[0]).toMatchObject({
+      soundClass: "animal-call", soundInterrupt: "none", soundLoudness: 420_000,
+      soundRangeUnits: 9_100,
+    });
+    const wrongSpecies = mutable(fixture.ledger);
+    if (wrongSpecies.records[0]?.kind !== "core-wildlife-alarm") throw new Error("Missing chicken receipt");
+    wrongSpecies.records[0].sourceSpecies = "gull";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      fixture.bank, wrongSpecies, fixture.phase, fixture.samples,
+    )).toBe(false);
+    for (const changed of [
+      { soundInterrupt: "strong" as const },
+      { soundClass: "animal-alarm" as const },
+      { soundLoudness: 1_000_000 },
+    ]) {
+      const samples = mutable(fixture.samples);
+      Object.assign(samples[0]!, changed);
+      expect(situatedExpressionTrajectoryIsCanonical(
+        fixture.bank, fixture.ledger, fixture.phase, samples,
+      )).toBe(false);
+    }
+    const shouted = mutable(fixture.bank);
+    shouted.channels[0]!.state.active!.volume = "shout";
+    expect(situatedExpressionTrajectoryIsCanonical(
+      shouted, fixture.ledger, fixture.phase, fixture.samples,
     )).toBe(false);
   });
 

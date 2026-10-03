@@ -11,6 +11,26 @@ import {
 } from "./situatedExpressionAcoustics";
 
 describe("situated expression acoustics", () => {
+  it("preserves a chicken alarm's soft ecology envelope without decoding alarm intent for humans", () => {
+    const expression = {
+      meaning: "domestic-chicken-alarm-call" as const,
+      vocalization: "chicken-alarm-squawk" as const,
+      volume: "murmur" as const, tone: "alarmed" as const, variantSeed: 157,
+    };
+    expect(situatedExpressionAcoustics(expression)).toEqual({
+      loudness: 420_000, rangeUnits: 9_100,
+    });
+    expect(situatedExpressionSoundClass(expression)).toBe("animal-call");
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
+    expect(situatedExpressionAudioPresentation(expression, { certainty: 500_000, pan: 0.25 }))
+      .toMatchObject({
+        sound: { kind: "vocalization", vocalization: "chicken-alarm-squawk" },
+        variantSeed: 157, pan: 0.25,
+      });
+    expect(situatedExpressionAudioPresentation(expression, { certainty: 500_000, pan: 0.25 })?.volume)
+      .toBeCloseTo(0.2835, 12);
+  });
+
   it("classifies alarm-bearing dog calls separately from a neutral shelter whine", () => {
     expect(situatedExpressionSoundClass("guardian-dog-warning")).toBe("animal-alarm");
     expect(situatedExpressionSoundClass("guardian-dog-defensive-growl"))

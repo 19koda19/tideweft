@@ -51,6 +51,7 @@ export const CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES = Object.freeze([
   "fish-crow",
   "elk",
   "wild-boar",
+  "domestic-chicken",
 ] as const);
 export type ExpressiveAlarmSpecies =
   (typeof CORE_WILDLIFE_EXPRESSIVE_ALARM_SPECIES)[number];
@@ -82,18 +83,20 @@ export function coreWildlifeAlarmMeaningForSpecies(
 }
 
 /**
- * A foot-thump is meaningful ecological communication, but its restrained
- * listener-facing text must yield to ordinary nearby speech. Ecology keeps
+ * A local small-prey signal is meaningful ecological communication, but its
+ * restrained listener-facing text must yield to ordinary nearby speech. Ecology keeps
  * the alarm's own salience; this value governs only Living Voice arbitration.
  */
 export const MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY = 160_000 as const;
+export const RESTRAINED_WILDLIFE_ALARM_EXPRESSION_PRIORITY =
+  MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY;
 export const CARRYING_WILDLIFE_ALARM_EXPRESSION_PRIORITY = 760_000 as const;
 
 export function coreWildlifeAlarmExpressionPriority(
   species: ExpressiveAlarmSpecies,
 ): number {
-  return species === "marsh-rabbit"
-    ? MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY
+  return coreEcologyAlarmSignalProfile(species).interrupt === "none"
+    ? RESTRAINED_WILDLIFE_ALARM_EXPRESSION_PRIORITY
     : CARRYING_WILDLIFE_ALARM_EXPRESSION_PRIORITY;
 }
 
@@ -148,6 +151,11 @@ const ALARM_EXPRESSION_PROFILE_BY_SPECIES: Readonly<
     species: "wild-boar",
     meaning: "wild-boar-alarm-call",
     variantDomain: "wild-boar-alarm-expression:v1",
+  }),
+  "domestic-chicken": Object.freeze({
+    species: "domestic-chicken",
+    meaning: "domestic-chicken-alarm-call",
+    variantDomain: "domestic-chicken-alarm-expression:v1",
   }),
 });
 

@@ -5426,6 +5426,7 @@ describe("runtime core-ecology vertical slice", () => {
       atTick: admission.acceptedAtTick,
     })]);
     const sample = saved.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+    if (sample === undefined) throw new Error("Fox pursuit voice fixture omitted its sample");
     const acoustics = situatedExpressionAcoustics({
       meaning: "marsh-fox-pursuit-yip",
       volume: "spoken",
@@ -5469,7 +5470,9 @@ describe("runtime core-ecology vertical slice", () => {
     soundscapePlay.mockClear();
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
-    expect(resumed.getUIView().expressionCaption).toBeUndefined();
+    // Other real animal events may retain their own unexpired presentation.
+    // Reload must not resurrect this consumed heard-unseen fox call.
+    expect(resumed.getUIView().expressionCaption?.id).not.toBe(admission.eventId);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
     await resumed.save();
     expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
@@ -5484,13 +5487,18 @@ describe("runtime core-ecology vertical slice", () => {
         && belief.lastObservedTick === propagatedWorld.meta.completedTick
         && belief.perceivedClass === "animal-call"
       ));
-      expect(matching.length).toBeLessThanOrEqual(1);
+      expect(new Set(matching.map(({ sourceObservationId }) => sourceObservationId)).size)
+        .toBe(matching.length);
+      const foxReceipts = matching.filter(({ sourceObservationId }) => (
+        sourceObservationId === `hp-h-${propagatedWorld.meta.completedTick}-${resident.id}-${sample.id}`
+      ));
+      expect(foxReceipts.length).toBeLessThanOrEqual(1);
       expect(matching.every(({ identification, subjectId, sourceObservationId }) => (
         identification === "anonymous"
         && subjectId === null
         && sourceObservationId.includes("-av-")
       ))).toBe(true);
-      return matching;
+      return foxReceipts;
     });
     expect(humanCallBeliefs.length).toBeGreaterThanOrEqual(2);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
@@ -5501,6 +5509,7 @@ describe("runtime core-ecology vertical slice", () => {
     vi.resetModules();
     const fallbackHumanObserverFrames: string[][] = [];
     const fallbackPhysicalSampleCounts: number[] = [];
+    const fallbackFoxSampleIds: string[] = [];
     vi.doMock("./humanPerception", async (importOriginal) => {
       const actual = await importOriginal<typeof import("./humanPerception")>();
       return {
@@ -5515,11 +5524,13 @@ describe("runtime core-ecology vertical slice", () => {
             && sample.acousticEventId.startsWith("fox-pursuit-call:v1:")
           ));
           if (foxPhysicalSamples.length > 0) {
+            fallbackFoxSampleIds.push(...foxPhysicalSamples.map(({ id }) => id));
             fallbackPhysicalSampleCounts.push(input.physicalSoundSamples?.length ?? 0);
             fallbackHumanObserverFrames.push(batches.flatMap((batch) => (
               batch.observations.some((observation) => (
                 observation.channel === "hearing"
                 && observation.perceivedClass === "animal-call"
+                && foxPhysicalSamples.some(({ id }) => observation.id.endsWith(`-${id}`))
               ))
                 ? [batch.observerId]
                 : []
@@ -5573,16 +5584,24 @@ describe("runtime core-ecology vertical slice", () => {
           && belief.lastObservedTick === propagatedWorld.meta.completedTick
           && belief.perceivedClass === "animal-call"
         ));
-        expect(matching).toHaveLength(matching.length > 0 ? 1 : 0);
+        // Chicken and fox calls can coexist. Conservation is one receipt per
+        // physical event, not one animal-call belief for the entire world.
+        expect(new Set(matching.map(({ sourceObservationId }) => sourceObservationId)).size)
+          .toBe(matching.length);
+        const foxReceipts = matching.filter(({ sourceObservationId }) => (
+          fallbackFoxSampleIds.some((id) => sourceObservationId.endsWith(`-${id}`))
+        ));
+        expect(foxReceipts.length).toBeLessThanOrEqual(1);
         expect(matching.every(({ identification, subjectId }) => (
           identification === "anonymous" && subjectId === null
         ))).toBe(true);
-        return matching.length > 0 ? [resident.identity.stableId] : [];
+        return foxReceipts.length > 0 ? [resident.identity.stableId] : [];
       }).sort();
       expect(fallbackHumanObserverFrames).toHaveLength(1);
       expect(fallbackHumanObserverFrames[0]?.length).toBeGreaterThanOrEqual(2);
       expect(freshHumanHearingByResident).toEqual(fallbackHumanObserverFrames[0]);
       expect(fallbackPhysicalSampleCounts).toHaveLength(1);
+      expect(fallbackFoxSampleIds).toHaveLength(1);
       expect(fallbackPhysicalSampleCounts[0]).toBeLessThanOrEqual(8);
     } finally {
       runtime?.destroy();

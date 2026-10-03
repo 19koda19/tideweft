@@ -1104,6 +1104,7 @@ function recentMeaningAcousticTuples(
     case "guardian-dog-shelter-whine":
     case "need-rest-after-exertion":
     case "marsh-rabbit-alarm-thump":
+    case "domestic-chicken-alarm-call":
     case "domestic-cat-rain-distress-call":
       return [{ volume: "murmur", interrupt: "none" }];
     case "marsh-fox-pursuit-yip":
@@ -7003,14 +7004,15 @@ function coreWildlifeAlarmAdmissionSpecies(
 }
 
 /**
- * A rabbit foot-thump remains an ecological alarm for wildlife, but humans
- * hear only a physical impact unless another lawful knowledge path teaches
- * them more. This conversion is independent of expression/text admission so
+ * Wildlife retains its ecological alarm meaning, but humans hear a local
+ * foot-thump or small-prey call without decoding the animal's intent. This
+ * conversion is independent of expression/text admission so
  * a saturated presentation channel cannot change NPC knowledge.
  */
-function rabbitAlarmBatchesForHumanHearing(
+function coreAlarmBatchesForHumanHearing(
   batches: readonly CoreEcologyObservationBatch[],
   humanObserverIds: ReadonlySet<string>,
+  soundClass: ReturnType<typeof situatedExpressionSoundClass>,
 ): readonly CoreEcologyObservationBatch[] | null {
   const converted: CoreEcologyObservationBatch[] = [];
   for (const batch of batches) {
@@ -7032,7 +7034,7 @@ function rabbitAlarmBatchesForHumanHearing(
         observerId: observation.observerId,
         observedAtTick: observation.observedAtTick,
         channel: "hearing",
-        perceivedClass: "physical-thud",
+        perceivedClass: soundClass,
         subjectId: null,
         area: observation.area,
         confidence: observation.confidence,
@@ -12620,9 +12622,9 @@ export async function createTideweftRuntime(
     ) => SituatedExpressionAdmissionRecord | null,
   ): boolean {
     if (intent === null) return false;
-    // Sound, memory, causal authority, and presentation are one atomic admission.
-    // At the bounded sound budget the ninth candidate remains silent instead
-    // of creating a channel that nearby humans could never receive.
+    // Sound carry, memory, causal authority, and optional presentation are one
+    // atomic admission. A full budget refuses another retained channel; it
+    // does not erase the producer's committed audio or separate ecology hearing.
     if (
       actorVocalizationSamples.length >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
       || situatedExpressionAdmissions.records.length
@@ -13808,14 +13810,18 @@ export async function createTideweftRuntime(
         if (rawPropagated === null) {
           throw new Error("Core ecology alarm perception could not be resolved");
         }
-        const humanSemanticBatches = alarm.species === "marsh-rabbit"
-          ? rabbitAlarmBatchesForHumanHearing(
+        const humanSoundClass = isExpressiveAlarmSpecies(alarm.species)
+          ? situatedExpressionSoundClass(coreWildlifeAlarmMeaningForSpecies(alarm.species))
+          : "animal-alarm";
+        const humanSemanticBatches = humanSoundClass !== "animal-alarm"
+          ? coreAlarmBatchesForHumanHearing(
               rawPropagated,
               humanCoreAlarmObserverIds,
+              humanSoundClass,
             )
           : rawPropagated;
         if (humanSemanticBatches === null) {
-          throw new Error("Rabbit alarm could not enter knowledge-honest human hearing");
+          throw new Error("Core alarm could not enter knowledge-honest human hearing");
         }
         const retainedSample = wildlifeAlarmAdmission === undefined
           ? undefined
@@ -14540,11 +14546,15 @@ export async function createTideweftRuntime(
                 corePerceptionFrame,
                 eventActorAuthority,
               );
-          const humanSemanticBatches = event.species === "marsh-rabbit"
+          const humanSoundClass = isExpressiveAlarmSpecies(event.species)
+            ? situatedExpressionSoundClass(coreWildlifeAlarmMeaningForSpecies(event.species))
+            : "animal-alarm";
+          const humanSemanticBatches = humanSoundClass !== "animal-alarm"
             && propagated !== null
-            ? rabbitAlarmBatchesForHumanHearing(
+            ? coreAlarmBatchesForHumanHearing(
                 propagated,
                 playerEventTimeHumanObserverIds,
+                humanSoundClass,
               )
             : propagated;
           const heardByPlayer = humanSemanticBatches === null
@@ -20358,6 +20368,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && meaning !== "gull-alarm-call"
       && meaning !== "elk-alarm-call"
       && meaning !== "wild-boar-alarm-call"
+      && meaning !== "domestic-chicken-alarm-call"
       && meaning !== "marsh-rabbit-alarm-thump"
       && meaning !== "domestic-cat-rain-distress-call"
       && meaning !== "marsh-fox-pursuit-yip"
@@ -20372,6 +20383,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.meaning !== "gull-alarm-call"
       && active.meaning !== "elk-alarm-call"
       && active.meaning !== "wild-boar-alarm-call"
+      && active.meaning !== "domestic-chicken-alarm-call"
       && active.meaning !== "marsh-rabbit-alarm-thump"
       && active.meaning !== "domestic-cat-rain-distress-call"
       && active.meaning !== "marsh-fox-pursuit-yip"
@@ -20385,6 +20397,7 @@ function perceptionCarryUsesOnlyPreKeeperResponseSemantics(
       && active.vocalization !== "gull-alarm-cry"
       && active.vocalization !== "elk-alarm-bark"
       && active.vocalization !== "boar-grunt"
+      && active.vocalization !== "chicken-alarm-squawk"
       && active.vocalization !== "marsh-rabbit-alarm-thump"
       && active.vocalization !== "domestic-cat-rain-distress"
       && active.vocalization !== "marsh-fox-pursuit-yip"
@@ -22438,13 +22451,13 @@ function coreWildlifeAlarmReceptionAtEventTime(
       coreWildlifeAlarmAdmissionSpecies(admission),
     )
   ) return null;
-  // Unlike the carrying fish-crow, deer, and gull alarms, core ecology classifies a
-  // rabbit foot-thump as a local, non-interrupting signal. Admission therefore
+  // Core ecology classifies small-prey calls and foot-thumps as local,
+  // non-interrupting signals. Admission therefore
   // leaves a sleeping courier asleep and records no player receipt. Recreate
   // that exact event-time gate before evaluating otherwise-audible contact so
   // current-schema reload cannot invent hearing that never occurred.
   if (
-    coreWildlifeAlarmAdmissionSpecies(admission) === "marsh-rabbit"
+    situatedExpressionSoundInterrupt(event) === "none"
     && carry.intervalStartWasSleeping
   ) {
     return Object.freeze({ audible: false, reception: null });
@@ -22495,7 +22508,7 @@ function coreWildlifeAlarmReceptionAtEventTime(
     return Object.freeze({ audible: false, reception: null });
   }
   // Visibility is replayed from the event-time pose. Strong calls may have
-  // already woken the courier; the rabbit's local thump never does, so its
+  // already woken the courier; a non-interrupting signal never does, so its
   // sleeping interval receives no player receipt before reaching this path.
   const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
     window: {

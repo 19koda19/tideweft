@@ -321,6 +321,7 @@ export type AnimalCallKind =
   | "gull-call"
   | "elk-call"
   | "boar-call"
+  | "chicken-call"
   | "marsh-fox-call";
 
 /** Presentation classification comes from authoritative meaning, never rendered prose. */
@@ -343,6 +344,7 @@ export function animalCallKind(
     case "gull-alarm-call": return "gull-call";
     case "elk-alarm-call": return "elk-call";
     case "wild-boar-alarm-call": return "boar-call";
+    case "domestic-chicken-alarm-call": return "chicken-call";
     case "domestic-cat-rain-distress-call": return "cat-call";
     case "marsh-fox-pursuit-yip": return "marsh-fox-call";
     default: return guardianDogCallKind(meaning);
@@ -357,12 +359,14 @@ const coreWildlifeAlarmSourceLabel = (species: ExpressiveAlarmSpecies): string =
     case "gull": return "Gull";
     case "elk": return "Elk";
     case "wild-boar": return "Wild boar";
+    case "domestic-chicken": return "Domestic chicken";
   }
 };
 
 const coreWildlifeAlarmSourceIsBird = (species: ExpressiveAlarmSpecies): boolean => (
   species === "fish-crow"
   || species === "gull"
+  || species === "domestic-chicken"
 );
 
 /**

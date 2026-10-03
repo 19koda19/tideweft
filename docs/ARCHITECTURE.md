@@ -159,7 +159,8 @@ The shared schema is deliberately broader than the current set of producers.
 In the unpublished candidate, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
-one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
+one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, one domestic-
+chicken alarm squawk, the rabbit thump, the aggregate frog chorus, and one aggregate brown-rat
 physical rustle are live representative paths. One domestic-cat representative
 is also live: a freshly committed rain-caused retreat with matching rain
 observation and event-owned wet-track evidence may create one restrained,
@@ -185,14 +186,26 @@ synthesis foundation only. A freshly committed wild-boar alarm joins that same
 source-bound path and reuses the existing grunt synthesis; visible receipt may
 identify the boar and its grunt, while unseen hearing remains an anonymous
 animal call. Boar squealing and routine social grunts remain foundation-only.
+The generated settlement-home flock now supplies one narrow chicken alarm
+through those same source, cause, group, memory and committed-locus owners.
+Its small-prey policy remains a restrained murmur: loudness420,000,
+priority160,000 and interruption `none`. A heard-visible authenticated chicken
+may carry `SQUAWK.`; heard-unseen presentation remains an anonymous bird call
+(`CALL.`), never chicken identity or threat detail. Humans receive anonymous
+`animal-call`, not decoded alarm intent. It does not interrupt WAIT or REST,
+and an already sleeping player receives no new quiet-call hearing or playback,
+including after current-save reload and cancellation. Clucking, crowing and
+routine flock conversation are not live.
 Optional expression capacity may suppress text but cannot suppress lawful
-committed alarm audio, strong interruption, or the ecology-owned hearing leg.
+committed alarm audio, applicable interruption, or the ecology-owned hearing
+leg. Refused optional chicken admission still preserves each real alarm's
+audio and next-interval anonymous human hearing, without duplicate receipts.
 The generic wildlife-alarm fallback still serves
-American black duck, domestic chicken and domestic goat through the
+American black duck and domestic goat through the
 legacy player-audio/session-announcement path. That presentation leg remains a
 `BYPASS` seam to migrate or retire during Living Voice; the underlying ecology
 alarm already propagates to wildlife, dogs and the applicable porter listener.
-The narrow gull, elk, boar, cat, and fox representatives do not prove broad species
+The narrow gull, elk, boar, chicken, cat, and fox representatives do not prove broad species
 repertoires, general hunting communication, or broad animal Voice.
 
 Tool/material, violence, and vehicle acoustic domains are reusable contract
@@ -826,13 +839,18 @@ retained regional owner to the same materialized actor, final position,
 same-tick alarm event, species-valid causal belief, and retained alarm memory;
 reception replays from the event-time listener pose, the species acoustic
 profile, waking perception, and exact visible-source authority. Ordinary
-admitted expression keeps sound capacity atomic, so a ninth candidate stays
-silent instead of creating unconserved knowledge. Ecology-owned rabbit and
-marsh-fox fallbacks are the narrow exceptions: presentation saturation
-preserves one authenticated physical consequence without creating an
-expression channel, sample, caption, or hidden motive knowledge. The rabbit
-retains a bounded physical-thud leg; the fox retains event-time player audio and
-one re-derived anonymous `animal-call` human-hearing leg. Resealed remote,
+admitted expression keeps sound capacity atomic: a ninth candidate cannot
+create an expression channel, sample or caption. Adapted ecology-owned core
+alarms and the marsh-fox call retain their existing physical fallback when that
+optional admission is refused. Each real event keeps lawful event-time player
+audio and one bounded re-derived human-hearing opportunity without hidden
+motive knowledge or duplicate receipt. That hearing remains species-honest:
+rabbit is `physical-thud`, chicken and fox are non-interrupting `animal-call`,
+and the strong core calls remain anonymous `animal-alarm`. A quiet chicken call
+recorded while the player was asleep canonically retains no player receipt;
+current v47/carry14 reload and later cancellation cannot invent one. The new
+meaning does not enter historical formats or frozen released catalogs.
+Resealed remote,
 acoustically altered,
 temporally reset, or causally forged expression samples fail before becoming
 NPC knowledge.

@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES,
   SITUATED_VOCALIZATIONS,
+  TideweftSoundscape,
   ambienceParameters,
   ecologyVoicePattern,
   incidentSoundPattern,
@@ -83,6 +84,7 @@ describe("situated vocalization cues", () => {
       "vocalization-gull-alarm-cry",
       "vocalization-elk-alarm-bark",
       "vocalization-boar-grunt",
+      "vocalization-chicken-alarm-squawk",
     ]);
     expect(new Set(cues).size).toBe(SITUATED_VOCALIZATIONS.length);
   });
@@ -208,6 +210,88 @@ describe("situated vocalization cues", () => {
     expect(situatedVocalizationPattern("boar-grunt", variantSeed))
       .not.toEqual(situatedVocalizationPattern("elk-alarm-bark", variantSeed));
     expect(SITUATED_VOCALIZATIONS).not.toContain("boar-squeal");
+  });
+
+  it("gives the chicken alarm its own deterministic short rise-and-fall squawk", () => {
+    const variantSeed = 0xc41;
+    const squawk = situatedVocalizationPattern("chicken-alarm-squawk", variantSeed);
+    expect(squawk).toEqual(situatedVocalizationPattern("chicken-alarm-squawk", variantSeed));
+    expect(squawk).toHaveLength(3);
+    expect(squawk[0]?.delay).toBe(0);
+    expect(squawk[1]?.frequency ?? 0).toBeGreaterThan(squawk[0]?.frequency ?? 0);
+    expect(squawk[2]?.frequency ?? Number.POSITIVE_INFINITY)
+      .toBeLessThan(squawk[0]?.frequency ?? 0);
+    expect(Math.max(...squawk.map(({ delay, duration }) => delay + duration)))
+      .toBeLessThanOrEqual(0.2);
+    expect(squawk).not.toEqual(wildlifeAlarmPattern());
+    expect(squawk).not.toEqual(situatedVocalizationPattern("gull-alarm-cry", variantSeed));
+    expect(squawk).not.toEqual(situatedVocalizationPattern("fish-crow-alarm", variantSeed));
+    expect(situatedVocalizationPattern("chicken-alarm-squawk", Number.NaN))
+      .toEqual(situatedVocalizationPattern("chicken-alarm-squawk", 0));
+    expect(squawk).not.toEqual(situatedVocalizationPattern("chicken-alarm-squawk", variantSeed + 1));
+    expect(ALPHA30_FOUNDATION_ECOLOGY_VOICE_CUES).not.toContain("chicken-alarm-squawk");
+  });
+
+  it("plays the live chicken cue through the unlocked Web Audio tone boundary", async () => {
+    const parameter = () => ({
+      value: 0,
+      setValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
+      setTargetAtTime: vi.fn(),
+    });
+    const context = {
+      currentTime: 12,
+      sampleRate: 8_000,
+      state: "running",
+      destination: {},
+      createGain: () => ({ gain: parameter(), connect: vi.fn() }),
+      createBiquadFilter: () => ({
+        type: "lowpass",
+        frequency: parameter(),
+        Q: parameter(),
+        connect: vi.fn(),
+      }),
+      createStereoPanner: () => ({ pan: parameter(), connect: vi.fn() }),
+      createBuffer: (_channels: number, length: number) => ({
+        getChannelData: () => new Float32Array(length),
+      }),
+      createBufferSource: () => ({
+        buffer: null,
+        loop: false,
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      }),
+      createOscillator: vi.fn(() => ({
+        type: "sine",
+        frequency: parameter(),
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      })),
+      close: vi.fn(),
+    };
+    vi.stubGlobal("AudioContext", function AudioContextFixture() { return context; });
+    const soundscape = new TideweftSoundscape();
+    try {
+      await soundscape.unlock();
+      const variantSeed = 0xc41;
+      soundscape.play("vocalization-chicken-alarm-squawk", 0.4, variantSeed);
+      const pattern = situatedVocalizationPattern("chicken-alarm-squawk", variantSeed);
+      expect(context.createOscillator).toHaveBeenCalledTimes(pattern.length);
+      for (const [index, step] of pattern.entries()) {
+        const oscillator = context.createOscillator.mock.results[index]!.value;
+        expect(oscillator.type).toBe(step.type);
+        expect(oscillator.frequency.setValueAtTime)
+          .toHaveBeenCalledWith(step.frequency, context.currentTime + step.delay);
+        expect(oscillator.start).toHaveBeenCalledWith(context.currentTime + step.delay);
+        expect(oscillator.stop)
+          .toHaveBeenCalledWith(context.currentTime + step.delay + step.duration + 0.02);
+      }
+    } finally {
+      soundscape.destroy();
+      vi.unstubAllGlobals();
+    }
   });
 });
 

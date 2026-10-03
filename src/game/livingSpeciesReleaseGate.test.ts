@@ -1781,6 +1781,43 @@ describe("Living Weft species release gate", () => {
     });
   });
 
+  it("keeps Alpha-24/25 sound exclusions historical when current chickens gain Living Voice", () => {
+    const current = livingSpeciesModule("domestic-chicken");
+    const historical = LIVING_SPECIES_ALPHA32_CATALOG.modules.find(({ speciesId }) => (
+      speciesId === "domestic-chicken"
+    ));
+    expect(current?.sound).toMatchObject({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["chicken-alarm-squawk"],
+    });
+    expect(historical?.sound).toEqual({
+      implementation: "unimplemented",
+      ownerId: null,
+      repertoire: [],
+      communicationSignals: [],
+      accessibilityCues: [],
+    });
+    expect(current).not.toBe(historical);
+    expect(Object.isFrozen(historical)).toBe(true);
+    expect(Object.isFrozen(historical?.sound)).toBe(true);
+    expect(alpha24DomesticChickenBoundedReadiness()).toMatchObject({
+      ownerCoherenceReady: true,
+      physicalFoodConservationReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+    });
+    expect(alpha25SharedDomesticLivestockReadiness()).toMatchObject({
+      historicalChickenBaselineReady: true,
+      physicalResourceBoundaryReady: true,
+      persistenceAndPresentationReady: true,
+      excludedClaimIntegrityReady: true,
+      boundedCandidateReady: true,
+      blockingCapabilities: [],
+    });
+  });
+
   it("authenticates Alpha-24 as one bounded domestic flock over shared owners", () => {
     const readiness = alpha24DomesticChickenBoundedReadiness();
     const releaseGate = gate("domestic-chicken");
@@ -1948,7 +1985,12 @@ describe("Living Weft species release gate", () => {
         },
         territory: { model: "none" },
       },
-      sound: { implementation: "unimplemented", repertoire: [] },
+      // Current capability may advance while the frozen release excludes it.
+      sound: {
+        implementation: "active",
+        ownerId: "game:situated-expression:v1",
+        repertoire: ["chicken-alarm-squawk"],
+      },
       evidence: { status: "unimplemented", produces: [] },
       lifeHistory: { reproduction: "unimplemented", mortality: "unimplemented" },
       health: {

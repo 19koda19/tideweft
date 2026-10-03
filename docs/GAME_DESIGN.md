@@ -253,7 +253,7 @@ does not yet add general NPC conversation or a broad animal-expression system.
 
 The current unpublished status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
-signals, fish-crow/deer/gull/elk/boar calls, the rabbit thump, and the frog chorus are live in
+signals, fish-crow/deer/gull/elk/boar/chicken calls, the rabbit thump, and the frog chorus are live in
 the candidate. The aggregate rat rustle and one exact domestic-cat rain-distress
 call are also live through the shared acoustic path; the cat representative
 requires a freshly committed rain-caused retreat plus matching rain memory and
@@ -269,8 +269,16 @@ an identified elk or hidden predator. Elk bugling remains foundation-only.
 A visible wild boar may grunt **GRUNT!**; unseen hearing remains **An animal** /
 **CALL!**, without source identity or hidden threat. Boar squeals and routine
 social grunts remain foundation-only. Suppressing optional captions cannot
-silence a lawful alarm or erase its strong WAIT interruption and bounded
-ecology hearing. The generic wildlife-alarm fallback remains for duck, chicken and goat
+silence a lawful alarm or erase its applicable interruption and bounded
+ecology hearing. The real settlement-home chicken flock now uses that shared
+path for one restrained **SQUAWK.** after a committed ecology alarm. Unseen
+hearing stays **A bird** / **CALL.**, and nearby humans receive anonymous
+`animal-call` rather than learning the chicken's alarm intent or threat. The quiet call
+does not interrupt WAIT or REST and does not wake an already sleeping player;
+reload cannot manufacture a missed receipt or replay audio. Optional caption
+refusal preserves lawful audio and human hearing. This is not routine clucking,
+crowing or a complete chicken repertoire. The generic wildlife-alarm fallback
+remains for duck and goat
 as a player audio/session-announcement bypass of shared Voice presentation.
 Their underlying ecology alarms already propagate to applicable wildlife,
 dog and porter listeners; this does not establish the missing Voice leg.

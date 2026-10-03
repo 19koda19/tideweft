@@ -474,6 +474,15 @@ describe("Living Weft species module catalog", () => {
       communicationSignals: ["boar-grunt"],
       accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
     });
+    expect(livingSpeciesModule("domestic-chicken")?.sound).toEqual({
+      implementation: "active",
+      ownerId: "game:situated-expression:v1",
+      repertoire: ["chicken-alarm-squawk"],
+      communicationSignals: ["chicken-alarm-squawk"],
+      accessibilityCues: ["direct-observation-caption", "directional-hearing-caption"],
+    });
+    expect(livingSpeciesModule("domestic-goat")?.sound.implementation).toBe("unimplemented");
+    expect(livingSpeciesModule("american-black-duck")?.sound.implementation).toBe("unimplemented");
     expect(livingSpeciesModule("brown-rat")?.sound).toEqual({
       implementation: "active",
       ownerId: "game:world-acoustics:v1",
@@ -516,7 +525,7 @@ describe("Living Weft species module catalog", () => {
           communicationSignals: ["elk-alarm-bark", "elk-bugle"],
           accessibilityCues: ["direct-observation-caption"],
         });
-      for (const speciesId of ["deer", "domestic-dog", "gull", "human"] as const) {
+      for (const speciesId of ["deer", "domestic-chicken", "domestic-dog", "gull", "human"] as const) {
         expect(catalog.modules.find((module) => module.speciesId === speciesId)?.sound)
           .toEqual({
             implementation: "unimplemented",

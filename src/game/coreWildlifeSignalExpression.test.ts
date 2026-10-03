@@ -76,7 +76,7 @@ interface AlarmFixture {
 function alarmFixture(
   species: Extract<
     CoreWildlifeSpecies,
-    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar"
+    "fish-crow" | "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar" | "domestic-chicken"
   > = "fish-crow",
   predatorId = PREDATOR_ID,
   observationId = species === "fish-crow"
@@ -103,7 +103,8 @@ function alarmFixture(
   }> = {},
 ): AlarmFixture {
   const position = createWorldPosition(ORIGIN, 23_000, 31_000);
-  const groupedAlarmSource = species === "elk" || species === "wild-boar";
+  const groupedAlarmSource = species === "elk" || species === "wild-boar"
+    || species === "domestic-chicken";
   const population: CoreEcologyPopulationInput = {
     species,
     populationKey: `living-voice:${species}`,
@@ -194,6 +195,71 @@ function sourceActor(world: CoreEcologyAggregatePatchState): CoreWildlifeActorSt
 }
 
 describe("core-wildlife signal expression", () => {
+  it("keeps a committed chicken flock alarm soft and source-bound after restoration", () => {
+    const { input, initialWorld, rawEvent } = alarmFixture(
+      "domestic-chicken", "DOG-chicken-threat", "OBS-chicken-threat", "predator",
+    );
+    expect(initialWorld.groups.groups).toMatchObject([{
+      identity: { species: "domestic-chicken", organization: "flock" },
+      memberOrdinals: [0, 1],
+    }]);
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(
+      serializeCoreEcologyAggregatePatch(input.world),
+    );
+    if (restoredWorld === null) throw new Error("Chicken fixture failed roundtrip");
+    const restored = { ...input, actor: sourceActor(restoredWorld), world: restoredWorld };
+    const intent = coreWildlifeAlarmExpressionIntent(restored);
+    expect(intent).toEqual(coreWildlifeAlarmExpressionIntent(input));
+    expect(intent).toMatchObject({
+      sourceActorId: input.actor.identity.stableId,
+      triggerEventId: input.event.eventId,
+      meaning: "domestic-chicken-alarm-call",
+      family: "animal-signal", tone: "alarmed", volume: "murmur",
+      knowledgeBasis: "self-perceived-threat", priority: 160_000, durationSteps: 6,
+    });
+    if (intent === null) throw new Error("Chicken intent failed authentication");
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+    if (reduction.event === null || reduction.state === null) throw new Error("Chicken alarm rejected");
+    expect(projectSituatedExpression(reduction.event)).toMatchObject({
+      text: "SQUAWK.", vocalization: "chicken-alarm-squawk",
+    });
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, reduction.event)).toBe(true);
+    const memory = advanceSituatedExpression(reduction.state, 6)?.recent[0];
+    if (memory === undefined) throw new Error("Chicken memory missing");
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(restored, memory)).toBe(true);
+    expect(coreWildlifeAlarmExpressionIntent({ ...input, event: rawEvent })).toBeNull();
+    expect(JSON.stringify(reduction.event)).not.toMatch(/DOG-chicken-threat|OBS-chicken-threat|predator/u);
+    const flockmate = restoredWorld.populations[0]?.members[1]?.actor;
+    if (flockmate === undefined) throw new Error("Chicken fixture lost flockmate");
+    expect(coreWildlifeAlarmExpressionIntent({ ...restored, actor: flockmate })).toBeNull();
+    for (const event of [
+      { ...input.event, species: "gull" as const },
+      { ...input.event, causeReferenceId: "OBS-forged-chicken" },
+      { ...input.event, position: translateWorldPosition(input.event.position, 1, 0) },
+    ]) expect(coreWildlifeAlarmExpressionIntent({ ...restored, event })).toBeNull();
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(restored, {
+      ...reduction.event, volume: "shout", priority: 760_000,
+    })).toBe(false);
+  });
+
+  it("cannot mint a chicken voice when the bounded source step has no threat observation", () => {
+    const { input, initialWorld } = alarmFixture(
+      "domestic-chicken", "DOG-chicken-threat", "OBS-chicken-threat", "predator",
+    );
+    const quiet = stepCoreEcologyAggregatePatch(initialWorld, {
+      tick: 1,
+      actorSteps: initialWorld.populations[0]!.members.map(({ actor }) => ({
+        actorId: actor.identity.stableId, observations: [], foodOpportunities: [],
+        accessibility: CORE_WILDLIFE_ALL_ACTIONS_ACCESSIBLE,
+      })),
+    });
+    if (quiet === null) throw new Error("Counterfactual source step failed");
+    expect(quiet.events.filter(({ kind }) => kind === "alarm")).toEqual([]);
+    expect(coreWildlifeAlarmExpressionIntent({
+      ...input, actor: sourceActor(quiet.patch), world: quiet.patch,
+    })).toBeNull();
+  });
+
   it("derives one deterministic semantic crow alarm from the exact committed roots", () => {
     const { input, initialWorld, rawEvent } = alarmFixture();
     const first = fishCrowAlarmExpressionIntent(input);

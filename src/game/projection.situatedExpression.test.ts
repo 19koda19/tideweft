@@ -1528,6 +1528,59 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toContain("DEER-living-voice");
   });
 
+  it("anchors only an authenticated chicken and anonymizes its soft hidden call", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const reduction = reduceSituatedExpression(createSituatedExpressionState(), {
+      version: 1, sourceActorId: "CHICKEN-projection-test", triggerEventId: "chicken-signal:alarm",
+      position: wildlifePositionInWindow(window), meaning: "domestic-chicken-alarm-call",
+      family: "animal-signal", tone: "alarmed", volume: "murmur",
+      knowledgeBasis: "self-perceived-threat", priority: 160_000, salience: 820_000,
+      variantSeed: 156, durationSteps: 6,
+    });
+    const expression = reduction.event;
+    if (expression === null) throw new Error("Chicken projection fixture rejected");
+    const source: CoreWildlifeExpressionSource = {
+      actorId: expression.sourceActorId, species: "domestic-chicken", position: expression.position,
+    };
+    const options = {
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+      coreWildlifeExpressionSources: [source],
+    };
+    expect(projectGameView(world, player, options).expressions).toEqual([expect.objectContaining({
+      sourceActorId: expression.sourceActorId, speakerLabel: "Domestic chicken", text: "SQUAWK.",
+      acousticKind: "animal-call",
+    })]);
+    expect(projectUIView(world, player, session, { economyWorld: compatibility, ...options })
+      .expressionCaption).toMatchObject({
+        speakerLabel: "Domestic chicken", text: "SQUAWK.", animalCallKind: "chicken-call",
+        presentationKind: "animal-call", assertive: false,
+      });
+    expect(projectGameView(world, player, {
+      ...options, coreWildlifeExpressionSources: [{ ...source, species: "gull" }],
+    }).expressions).toEqual([]);
+    expect(projectGameView(world, player, {
+      ...options, situatedExpressionReception: null,
+    }).expressions).toEqual([]);
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 2_000, maximum: 5_000 }, certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Chicken unseen fixture rejected");
+    expect(projectGameView(world, player, {
+      ...options, situatedExpressionReception: unseen,
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility, situatedExpression: expression, situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "A bird", text: "CALL.", animalCallKind: "bird-call",
+      presentationKind: "animal-call", directionLabel: "west", assertive: false,
+    });
+    expect(JSON.stringify(caption)).not.toMatch(/CHICKEN-projection|chicken|SQUAWK|predator|custody/iu);
+  });
+
   it("anchors a visible gull cry and anonymizes the heard-unseen bird call", () => {
     const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
     const session = createSessionState(world.seedText);

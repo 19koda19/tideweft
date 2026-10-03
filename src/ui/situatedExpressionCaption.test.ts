@@ -290,6 +290,21 @@ describe("situated expression caption", () => {
     expect(JSON.stringify(unseen)).not.toMatch(/elk|BARK|bear|threat/iu);
   });
 
+  it("describes a visible chicken call without making it an assertive warning", () => {
+    const visible: SituatedExpressionCaptionUIView = {
+      id: "expression:opaque-event", speakerLabel: "Domestic chicken", text: "SQUAWK.",
+      tone: "alarmed", presentationKind: "animal-call", animalCallKind: "chicken-call",
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionCopy(visible)).toBe("[A chicken squawks.]");
+    const unseen: SituatedExpressionCaptionUIView = {
+      ...visible, speakerLabel: "A bird", text: "CALL.", animalCallKind: "bird-call",
+      directionLabel: "west",
+    };
+    expect(situatedExpressionCaptionCopy(unseen)).toBe("[A bird calls somewhere west.]");
+    expect(JSON.stringify(unseen)).not.toMatch(/chicken|SQUAWK/iu);
+  });
+
   it("presents a boar grunt only for a visible source and keeps unseen hearing anonymous", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:boar:alarm",
