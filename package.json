@@ -14,6 +14,7 @@
     "dev": "concurrently -k -n web,electron -c cyan,magenta \"npm:dev:web\" \"npm:dev:electron\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
+    "test:smoke": "vitest run src/sim/simulation.test.ts src/sim/rng.test.ts src/sim/worldTime.test.ts src/sim/regions.test.ts src/game/player.test.ts src/platform/persistence.test.ts --maxWorkers=2",
     "test:context-index": "node scripts/repository-context.selftest.cjs",
     "test:player-facing-sync": "node scripts/check-player-facing-sync.selftest.cjs",
     "test:ci": "npm run test:context-index && npm run test:player-facing-sync && vitest run --maxWorkers=2",

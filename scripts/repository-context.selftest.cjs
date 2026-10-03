@@ -558,6 +558,8 @@ test("task routing returns relevant owners, implementation, tests, and constrain
       invariants.includes("Hidden receipt does not reveal source identity.")
     )));
     assert.equal(packet.optionalExpansion.some(({ path: sourcePath }) => sourcePath === "src/game/water.ts"), false);
+    assert.ok(packet.selectionBudget.additionalMechanicalMatches > 0);
+    assert.equal(packet.selectionBudget.next, "narrow with --file/--symbol");
     assert.ok(packet.mandatorySourcesToOpen.some(({ path: sourcePath }) => (
       sourcePath === "docs/REPOSITORY_CONTEXT.md"
     )));
@@ -577,6 +579,124 @@ test("an exact contract request returns its constraint and owning route", async 
     assert.ok(packet.canonicalSourcesToOpen.some(({ path: sourcePath }) => (
       sourcePath === "docs/ARCHITECTURE.md"
     )));
+  } finally {
+    fixture.destroy();
+  }
+});
+
+test("an exact file without a route returns only that source and its bounded links", async () => {
+  const fixture = createFixture("exact-file");
+  try {
+    const { index } = await generateIndex(publicOptions(fixture));
+    const packet = routeContext(index, { file: "./src/game/voice.ts" }, { limit: 25 });
+    assert.equal(packet.matchedRoutes.length, 0);
+    assert.deepEqual(packet.optionalExpansion.map((entry) => entry.path), ["src/game/voice.ts"]);
+    const source = packet.optionalExpansion[0];
+    assert.deepEqual(source.associatedTests, ["src/game/voice.test.ts"]);
+    assert.deepEqual(source.dependencies, ["src/game/helper.ts"]);
+    assert.deepEqual(source.affectedConsumers, ["src/game/resident.ts"]);
+    assert.ok(packet.mandatorySourcesToOpen.some((entry) => entry.path === "docs/REPOSITORY_CONTEXT.md"));
+    assert.deepEqual(packet.selectionBudget, {
+      additionalMechanicalMatches: 0,
+      next: null,
+      optionalRecordsReturned: 1,
+    });
+    assert.ok(packet.uncertainty.some((entry) => entry.includes("incomplete")));
+  } finally {
+    fixture.destroy();
+  }
+});
+
+test("an exact symbol scopes every result and counts only remaining exact matches", async () => {
+  const fixture = createFixture("exact-symbol");
+  try {
+    write(fixture.root, "src/game/anotherHelper.ts", "export function bounded(value: string): string { return value; }\n");
+    const { index } = await generateIndex(publicOptions(fixture));
+    const request = { symbol: "bounded" };
+    const complete = routeContext(index, request, { limit: 25 });
+    assert.equal(complete.matchedRoutes.length, 0);
+    assert.deepEqual(complete.optionalExpansion.map((entry) => entry.path), [
+      "src/game/anotherHelper.ts",
+      "src/game/helper.ts",
+    ]);
+    assert.equal(complete.selectionBudget.additionalMechanicalMatches, 0);
+    for (const entry of complete.optionalExpansion) {
+      assert.ok(entry.locators.some((locator) => locator.symbol === "bounded"));
+    }
+    const bounded = routeContext(index, request, { limit: 1 });
+    assert.equal(bounded.optionalExpansion.length, 1);
+    assert.equal(bounded.selectionBudget.additionalMechanicalMatches, 1);
+    assert.match(bounded.selectionBudget.next, /--limit|--file/u);
+  } finally {
+    fixture.destroy();
+  }
+});
+
+test("file and symbol selectors intersect while keeping matching canonical routes", async () => {
+  const fixture = createFixture("exact-intersection");
+  try {
+    const { index } = await generateIndex(publicOptions(fixture));
+    const packet = routeContext(index, {
+      file: "src/game/voice.ts",
+      query: "voice acoustic hearing",
+      symbol: "speak",
+    });
+    assert.deepEqual(packet.optionalExpansion.map((entry) => entry.path), ["src/game/voice.ts"]);
+    assert.ok(packet.optionalExpansion[0].locators.some((entry) => entry.symbol === "speak"));
+    assert.ok(packet.matchedRoutes.some((entry) => entry.id === "voice-acoustics"));
+    assert.ok(packet.canonicalSourcesToOpen.some((entry) => entry.path === "docs/ARCHITECTURE.md"));
+    assert.ok(packet.criticalConstraints.some((entry) => entry.id === "voice-contract"));
+    assert.equal(packet.selectionBudget.additionalMechanicalMatches, 0);
+    assert.equal(packet.selectionBudget.next, null);
+  } finally {
+    fixture.destroy();
+  }
+});
+
+test("unmatched exact selectors preserve required routes without unrelated expansion", async () => {
+  const fixture = createFixture("exact-no-match");
+  try {
+    const { index } = await generateIndex(publicOptions(fixture));
+    for (const selectors of [
+      { file: "src/game/missing.ts" },
+      { symbol: "missingSymbol" },
+      { file: "src/game/water.ts", symbol: "speak" },
+    ]) {
+      const packet = routeContext(index, { ...selectors, query: "voice acoustic hearing" });
+      assert.deepEqual(packet.optionalExpansion, []);
+      assert.deepEqual(packet.selectionBudget, {
+        additionalMechanicalMatches: 0,
+        next: null,
+        optionalRecordsReturned: 0,
+      });
+      assert.ok(packet.uncertainty.some((entry) => entry.includes("all explicit file/symbol selectors")));
+      assert.ok(packet.uncertainty.some((entry) => entry.includes("does not prove")));
+      assert.ok(packet.mandatorySourcesToOpen.some((entry) => entry.path === "docs/REPOSITORY_CONTEXT.md"));
+      assert.ok(packet.canonicalSourcesToOpen.some((entry) => entry.path === "docs/ARCHITECTURE.md"));
+      assert.ok(packet.criticalConstraints.some((entry) => entry.id === "voice-contract"));
+    }
+  } finally {
+    fixture.destroy();
+  }
+});
+
+test("exact context packets reject dirty source state without a separate freshness check", async () => {
+  const fixture = createFixture("exact-dirty-packet");
+  try {
+    const options = { ...publicOptions(fixture), request: { file: "src/game/voice.ts", symbol: "speak" } };
+    await generateIndex(options);
+    const current = contextPacket(options);
+    assert.equal(current.code, EXIT_CURRENT);
+    assert.deepEqual(current.packet.optionalExpansion.map((entry) => entry.path), ["src/game/voice.ts"]);
+    const head = fixture.git("rev-parse", "HEAD");
+    write(fixture.root, "src/game/voice.ts", `${voiceSource}\nexport const changed = true;\n`);
+    assert.equal(fixture.git("rev-parse", "HEAD"), head);
+    const stale = contextPacket(options);
+    assert.equal(stale.code, EXIT_STALE);
+    assert.equal(stale.packet.freshness, "STALE");
+    assert.equal(stale.packet.optionalExpansion, undefined);
+    assert.ok(stale.packet.issues.includes("Source changed: src/game/voice.ts"));
+    assert.ok(stale.packet.fallback.some((entry) => entry.includes("current canonical source")));
   } finally {
     fixture.destroy();
   }

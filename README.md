@@ -297,13 +297,45 @@ npm run dev
 
 Both p5 presentations consume the same immutable projection and emit the same commands; changing view cannot fork simulation state. The selector safely persists an explicit choice, falls back when WebGL is unavailable, and starts reduced-motion users in Chart 2D unless they deliberately selected Relief 3D before.
 
-Run all web quality gates:
+During iteration, run the tests for the changed components and the maintained
+critical regression smoke:
+
+```bash
+npm test -- --run --maxWorkers=2 <affected-test-path>...
+npm run test:smoke
+```
+
+`test:smoke` runs the simulation, RNG, world time, regions, player, and platform
+persistence test files. It supplements affected tests; it does not certify all
+cross-system behavior. Use the [context tool](docs/REPOSITORY_CONTEXT.md) to find
+likely owners and test candidates, then inspect their actual requirements and
+consumers before choosing coverage.
+
+| Change or checkpoint | Validation commands and scope |
+| --- | --- |
+| Prose only, with no executable, configuration, schema, generated-asset, or packaging impact | Check changed references, factual consistency, and `git diff --check`; run the relevant documentation checks. |
+| Implementation slice | Affected tests, `npm run test:smoke`, and necessary narrow integration; `npm run typecheck` for TypeScript changes. |
+| Interacting slices or a shared authority boundary | Broader affected-domain tests before changing subsystem focus or accumulating dependent changes. |
+| Substantial coding-session end or directive closure | `npm run test:ci` on the frozen committed state; record the commit, command, result, counts, and relevant environment. |
+| Production web artifact | `npm run build:web`, then `npm run smoke:web`; interactive browser and performance evidence remain separate. |
+| Packaged desktop artifact | The [desktop release commands](#desktop-release), testing the newly generated executable. |
+| Release checkpoint | `npm run check:player-facing-sync` and the applicable cumulative, artifact, security, performance, and distribution gates. |
+
+Player-facing synchronization validates release truth. An ordinary unpublished
+player-facing slice may correctly fail that gate until its intentional release
+checkpoint. Preserve the gate and record the unpublished state; do not repeat
+the wrapper on unchanged inputs or manufacture a release to satisfy it.
+
+Run the assembled web quality gates for a release candidate:
 
 ```bash
 npm run check
 ```
 
-Or run them separately:
+`check` includes release synchronization, cumulative tests, the production build,
+and static artifact smoke. `smoke:web` checks the emitted nested-path files; it
+does not replace `test:smoke` or interactive browser verification. Individual
+commands are also available:
 
 ```bash
 npm run typecheck

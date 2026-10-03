@@ -1126,6 +1126,8 @@ function routeContext(index, request, { limit = 3 } = {}) {
     ? Math.min(limit, MAX_CONTEXT_RESULTS)
     : 3;
   const requestedContract = String(request.contract || "").trim();
+  const requestedFile = request.file ? normalizeRepoPath(request.file) : null;
+  const hasExactScope = Boolean(requestedFile || request.symbol);
   const tokens = tokenize([
     request.query,
     request.domain,
@@ -1185,7 +1187,7 @@ function routeContext(index, request, { limit = 3 } = {}) {
       scored.score += 5;
       scored.reasons.push("selected-domain-route");
     }
-    if (request.file && record.source.path === normalizeRepoPath(request.file)) {
+    if (requestedFile && record.source.path === requestedFile) {
       scored.score += 100;
       scored.reasons.push("exact-file");
     }
@@ -1252,14 +1254,16 @@ function routeContext(index, request, { limit = 3 } = {}) {
     addCanonical(match.summary.source.path, match.summary.source.locator, match.summary.id);
   }
   const canonical = [...canonicalByPath.values()];
-  const expansionCandidates = routeMatches.length > 0
+  const expansionCandidates = hasExactScope
     ? fileMatches.filter((entry) => (
-      entry.reasons.includes("exact-file")
-      || entry.reasons.includes("exact-symbol")
-    )).slice(0, boundedLimit)
-    : fileMatches.slice(0, boundedLimit);
-  const selectedFiles = expansionCandidates.map((entry) => ({
+      (!requestedFile || entry.reasons.includes("exact-file"))
+      && (!request.symbol || entry.reasons.includes("exact-symbol"))
+    ))
+    : (routeMatches.length > 0 ? [] : fileMatches);
+  const mechanicalMatchCount = hasExactScope ? expansionCandidates.length : fileMatches.length;
+  const selectedFiles = expansionCandidates.slice(0, boundedLimit).map((entry) => ({
     associatedTests: entry.record.associatedTests.slice(0, 2).map((test) => test.path),
+    ...(hasExactScope ? { affectedConsumers: directConsumers([entry.record.source.path]) } : {}),
     dependencies: entry.record.directImports
       .map((dependency) => dependency.resolvedPath)
       .filter(Boolean)
@@ -1271,7 +1275,9 @@ function routeContext(index, request, { limit = 3 } = {}) {
         .slice(0, 2)
         .map((heading) => ({ heading: heading.text, line: heading.line })),
       ...entry.record.symbols
-        .filter((symbol) => tokens.some((token) => symbol.name.toLowerCase().includes(token)))
+        .filter((symbol) => request.symbol
+          ? symbol.name === request.symbol
+          : tokens.some((token) => symbol.name.toLowerCase().includes(token)))
         .slice(0, 2)
         .map((symbol) => ({ line: symbol.line, symbol: symbol.name })),
     ],
@@ -1283,6 +1289,11 @@ function routeContext(index, request, { limit = 3 } = {}) {
   const uncertainty = [];
   if (tokens.length === 0) {
     uncertainty.push("No searchable task terms were supplied.");
+  }
+  if (hasExactScope && expansionCandidates.length === 0) {
+    uncertainty.push(
+      "No indexed source matches all explicit file/symbol selectors. This does not prove that the source or symbol is absent; use ordinary repository search.",
+    );
   }
   if (routeMatches.length === 0 && fileMatches.length === 0 && summaryMatches.length === 0) {
     uncertainty.push(
@@ -1328,9 +1339,9 @@ function routeContext(index, request, { limit = 3 } = {}) {
     optionalExpansion: selectedFiles,
     requestedScope: request,
     selectionBudget: {
-      additionalMechanicalMatches: Math.max(0, fileMatches.length - selectedFiles.length),
-      next: fileMatches.length > selectedFiles.length
-        ? "narrow with --file/--symbol"
+      additionalMechanicalMatches: Math.max(0, mechanicalMatchCount - selectedFiles.length),
+      next: mechanicalMatchCount > selectedFiles.length
+        ? (hasExactScope ? "raise --limit or narrow with --file" : "narrow with --file/--symbol")
         : null,
       optionalRecordsReturned: selectedFiles.length,
     },

@@ -12,8 +12,9 @@ Use the tool in this order:
 
 1. read all applicable repository instructions;
 2. establish the live worktree and current execution state;
-3. check or generate a fresh task-relevant index;
-4. use a bounded context packet to locate likely owners;
+3. request a bounded context packet for the task;
+4. if it reports `STALE` or `UNAVAILABLE`, refresh the requested index or use
+   ordinary repository search;
 5. open the original canonical requirements, implementation, and tests before
    making a consequential change.
 
@@ -65,6 +66,19 @@ while charging both paths for the same required original-source reading.
 Queries may be narrowed by domain, file, symbol, reviewed contract ID, or
 directive reference; `--limit` bounds optional expansion from 1 through 25.
 
+`context` and `recover` check freshness themselves before returning indexed
+navigation. A successful `CURRENT` packet needs no preceding `context:check`.
+Use the standalone check to diagnose freshness without requesting a packet.
+Generate only when needed, and use the same public/private mode for generation
+and the subsequent query.
+
+Explicit `--file` and `--symbol` selectors restrict optional expansion to exact
+matches; when both are supplied, the symbol must occur in that file. Associated
+test candidates and bounded direct imports/consumers remain navigation hints.
+Mandatory references and matched canonical contracts remain present. A missing
+exact selector returns uncertainty rather than unrelated optional files; remove
+the selector or use `rg` to broaden the investigation deliberately.
+
 Generated indexes are written atomically below
 `artifacts/repository-context/<worktree-id>/`. They contain no generation
 timestamp, so identical inputs produce identical stable output. The worktree ID
@@ -109,6 +123,16 @@ rejected rather than followed across repository or publication boundaries.
 
 The stable index deliberately excludes volatile timing and generation dates.
 Live branch, HEAD, and dirty paths are gathered only for a recovery packet.
+
+Read this guide once in a retained working context and reread it when its bytes
+change or that context is lost. A source pointer or fingerprint in a packet
+does not mean its contents are already understood. Preserve mandatory initial
+contract reads and full rereads of changed execution contracts; for unchanged
+material already read, refresh the relevant original sections and inspect
+intervening worktree changes. See [local development](../README.md#local-development)
+for existing validation commands. Neither navigation nor a cached test result
+can certify a changed source, test, configuration, dependency, toolchain, target,
+or relevant environment.
 
 ## Privacy
 
