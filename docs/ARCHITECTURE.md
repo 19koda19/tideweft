@@ -51,7 +51,7 @@ contracts and exchange meaningful causes or consequences with the world where
 the fiction requires it. Completed directives remain read-only execution
 history; composition findings update current canonical truth instead.
 
-Four performance responsibilities remain distinct and cumulative:
+Three performance responsibilities remain distinct and cumulative:
 
 - **Early performance / scalability — The Breathing Room** establishes safe
   implementation habits and restores development headroom: fixed-step
@@ -59,15 +59,6 @@ Four performance responsibilities remain distinct and cumulative:
   of full-world and hidden N-squared hot paths, deterministic cadence classes,
   explicit cache invalidation, bounded materialization, offscreen UI/render
   cleanup, sparse persistence, and release of unloaded-region resources.
-- **Post-Living-Voice performance / FPS — Directive 04_2A** is a queued,
-  one-time measured stabilization pass. After Living Voice closes, it profiles
-  the real expanded game, with particular attention to expression, acoustics,
-  hearing, localization, acoustic-text arbitration, Chart, Relief, allocations,
-  streaming, and frame-time tails, then repairs only demonstrated bottlenecks
-  before the next gameplay directive begins. The full queued pass remains
-  blocked while Living Voice is active. Separately authorized eligible runtime
-  integration evidence is recorded in RESEARCH; it does not close this owner
-  or certify the final expanded workload.
 - **Per-directive performance regression** is the permanent lightweight gate:
   every major directive runs representative checks before transition. Healthy
   work continues; a material regression is profiled, repaired at its measured
@@ -135,9 +126,9 @@ The runtime-only packaged ASAR contains 10 entries totalling 4,599,453 bytes.
 Outer save v32, simulation v4, `RegionalEcologyStateV6`, wildlife actor v1, and
 gameplay contract 51 remain unchanged; Field Manual 70 records this release
 boundary. Directive 04_1B **The Breathing Room** is closed, and 04_2 **The
-Living Voice** is active. The future 04_2A post-Living-Voice performance/FPS
-pass begins only after Living Voice's transition gates and must close before
-05_1 Living Foliage; it does not reopen Breathing Room or replace Lean World.
+Living Voice** is active. The standing per-directive performance-regression
+gate applies to its transition and later gameplay work; Breathing Room remains
+completed history and Lean World retains its separate mature-scale role.
 
 ### Living Voice: situated-expression foundation
 
