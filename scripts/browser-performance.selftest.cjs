@@ -9,10 +9,12 @@ const {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  assertRestoredVoiceSnapshot,
   assertFreshVoicePresentationOutput,
   assertDiagnosticSnapshot,
   assertNoGuardedDiagnosticIncrease,
   decodeRemoteValue,
+  createBrowserEventMonitor,
   existingPathsShareFileIdentity,
   isErrorLogEntry,
   manifestIntegrity,
@@ -86,6 +88,132 @@ assert.equal(functional.voicePresentation, true);
 assert.equal(functional.reducedMotion, true);
 assert.equal(functional.packagedBaseline, null);
 assert.equal(parsed.voicePresentation, false);
+
+const startupCounters = { errors: 0, unhandledRejections: 0, securityPolicyViolations: 0,
+  evalPolicyViolations: 0, inlinePolicyViolations: 0, otherPolicyViolations: 0 };
+const evalDenial = {
+  level: 'error', type: 'javascript',
+  text: "Content-Security-Policy: The page’s settings blocked a JavaScript eval (script-src) from being executed because it violates the following directive: “script-src 'self'” (Missing 'unsafe-eval')",
+  source: { context: 'target', realm: 'initial-realm' }, stackTrace: { callFrames: [] },
+};
+const startupWithProbe = { ...startupCounters, securityPolicyViolations: 1, evalPolicyViolations: 1 };
+function eventMonitorFixture(functionalReload = false, probes = []) {
+  const listeners = new Map();
+  const client = {
+    onEvent(name, handler) { listeners.set(name, handler); return () => listeners.delete(name); },
+    throwIfNotificationFailed() {},
+  };
+  const monitor = createBrowserEventMonitor(client, 'target', 'http://127.0.0.1/tideweft/', { functionalReload });
+  const emit = (name, event) => listeners.get(name)?.({ context: 'target', ...event });
+  emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+  probes.forEach((event) => emit('log.entryAdded', event));
+  monitor.beginGuarded(probes.length ? startupWithProbe : startupCounters, 'initial-realm');
+  return { monitor, emit };
+}
+
+const ordinaryMonitor = eventMonitorFixture();
+assert.throws(() => ordinaryMonitor.monitor.allowOneFunctionalReload(), /unavailable/u);
+ordinaryMonitor.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+assert.throws(() => ordinaryMonitor.monitor.assertClean(), /contaminated/u);
+const reloadMonitor = eventMonitorFixture(true);
+reloadMonitor.monitor.allowOneFunctionalReload();
+assert.throws(() => reloadMonitor.monitor.assertClean(), /contaminated/u);
+reloadMonitor.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+reloadMonitor.monitor.finishFunctionalReloadStartup(startupCounters, 'reloaded-realm');
+assert.equal(reloadMonitor.monitor.assertClean().functionalReloads, 1);
+assert.throws(() => reloadMonitor.monitor.allowOneFunctionalReload(), /already used/u);
+reloadMonitor.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+assert.throws(() => reloadMonitor.monitor.assertClean(), /contaminated/u);
+const wrongReload = eventMonitorFixture(true);
+wrongReload.monitor.allowOneFunctionalReload();
+wrongReload.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/other/' });
+assert.throws(() => wrongReload.monitor.assertClean(), /contaminated/u);
+for (const [name, event] of [
+  ['log.entryAdded', { level: 'error' }],
+  ['browsingContext.userPromptOpened', {}],
+  ['browsingContext.contextDestroyed', {}],
+]) {
+  const guardedReload = eventMonitorFixture(true);
+  guardedReload.monitor.allowOneFunctionalReload();
+  guardedReload.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+  guardedReload.emit(name, event);
+  assert.throws(() => guardedReload.monitor.assertClean(), /contaminated/u);
+}
+
+function beginProbeReload() {
+  const fixture = eventMonitorFixture(true, [evalDenial]);
+  fixture.monitor.allowOneFunctionalReload();
+  fixture.emit('browsingContext.navigationStarted', { url: 'http://127.0.0.1/tideweft/' });
+  return fixture;
+}
+const expectedReload = beginProbeReload();
+expectedReload.emit('log.entryAdded', { ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' } });
+expectedReload.monitor.finishFunctionalReloadStartup(startupWithProbe, 'reloaded-realm');
+assert.equal(expectedReload.monitor.assertClean().verifiedReloadStartupEvalDenials, 1);
+assert.equal(expectedReload.monitor.assertClean().guardedErrorLogs, 1);
+// The same denial during resumed play remains a new guarded failure.
+expectedReload.emit('log.entryAdded', { ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' } });
+assert.throws(() => expectedReload.monitor.assertClean(), /contaminated/u);
+for (const changes of [
+  { text: evalDenial.text + ' changed' }, { text: 'Unexpected application error' },
+  { text: evalDenial.text + 'x'.repeat(1024) }, { type: 'console' },
+  { source: { context: 'target', realm: 'initial-realm' } }, { source: { context: 'target' } },
+  { stackTrace: { callFrames: [{ functionName: 'unexpected', url: 'test.js', lineNumber: 1, columnNumber: 0 }] } },
+  { stackTrace: { callFrames: 'not-an-array' } },
+  { stackTrace: null }, { stackTrace: 'not-a-record' }, { stackTrace: { callFrames: null } },
+  { stackTrace: undefined },
+]) {
+  const fixture = beginProbeReload();
+  fixture.emit('log.entryAdded', { ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' }, ...changes });
+  assert.throws(() => fixture.monitor.finishFunctionalReloadStartup(startupWithProbe, 'reloaded-realm'), /baseline/u);
+}
+for (const count of [0, 2]) {
+  const fixture = beginProbeReload();
+  for (let index = 0; index < count; index += 1) fixture.emit('log.entryAdded', {
+    ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' },
+  });
+  assert.throws(() => fixture.monitor.finishFunctionalReloadStartup(startupWithProbe, 'reloaded-realm'), /baseline/u);
+}
+for (const realm of [null, 'initial-realm', '']) {
+  const fixture = beginProbeReload();
+  assert.throws(() => fixture.monitor.finishFunctionalReloadStartup(startupWithProbe, realm), /realm/u);
+}
+for (const [name, event] of [
+  ['log.entryAdded', { level: 'error', text: 'Unexpected application error' }],
+  ['browsingContext.userPromptOpened', {}], ['browsingContext.contextDestroyed', {}],
+]) {
+  const fixture = beginProbeReload();
+  fixture.emit('log.entryAdded', { ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' } });
+  fixture.emit(name, event);
+  if (name === 'log.entryAdded') {
+    assert.throws(() => fixture.monitor.finishFunctionalReloadStartup(startupWithProbe, 'reloaded-realm'), /baseline/u);
+  } else {
+    fixture.monitor.finishFunctionalReloadStartup(startupWithProbe, 'reloaded-realm');
+    assert.throws(() => fixture.monitor.assertClean(), /contaminated/u);
+  }
+}
+for (const armed of [false, true]) {
+  const fixture = eventMonitorFixture(true, [evalDenial]);
+  if (armed) fixture.monitor.allowOneFunctionalReload();
+  fixture.emit('log.entryAdded', evalDenial);
+  assert.throws(() => fixture.monitor.assertClean(), /contaminated/u);
+}
+for (const changes of [{ errors: 1 }, { unhandledRejections: 1 }, { securityPolicyViolations: 2,
+  inlinePolicyViolations: 1 }, { securityPolicyViolations: 2, evalPolicyViolations: 2 }]) {
+  const fixture = beginProbeReload();
+  fixture.emit('log.entryAdded', { ...evalDenial, source: { context: 'target', realm: 'reloaded-realm' } });
+  assert.throws(() => fixture.monitor.finishFunctionalReloadStartup({ ...startupWithProbe, ...changes }, 'reloaded-realm'), /diagnostics/u);
+}
+
+const restoredVoice = { mode: 'chart-2d', tick: 430, viewport: { width: 390, height: 844 },
+  expiredEventAbsent: true, currentSaveAccepted: true, observerPresent: true,
+  observerOverflow: false, oldGreetingAnnouncements: 0 };
+assert.equal(assertRestoredVoiceSnapshot(restoredVoice, 'chart-2d', 430), restoredVoice);
+for (const change of [
+  { expiredEventAbsent: false }, { currentSaveAccepted: false }, { observerPresent: false },
+  { observerOverflow: true }, { oldGreetingAnnouncements: 1 }, { oldGreetingAnnouncements: null },
+  { mode: 'relief-3d' }, { tick: 429 }, { viewport: { width: 0, height: 844 } },
+]) assert.throws(() => assertRestoredVoiceSnapshot({ ...restoredVoice, ...change }, 'chart-2d', 430), /stale speech/u);
 assert.throws(() => parseArguments(['--voice-presentation', '--sample-ms', '5000']), /functional check/u);
 assert.throws(() => parseArguments(['--voice-presentation', '--packaged-baseline', 'artifacts/a.json']), /functional check/u);
 assert.throws(() => parseArguments(['--voice-presentation', '--output', 'docs/voice.json']), /ignored artifacts/u);

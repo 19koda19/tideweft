@@ -353,7 +353,12 @@ mode uses a disposable profile and real resident selection/GREET, then freezes
 the committed caption to inspect Chart/Relief at desktop, portrait and short
 landscape sizes. It checks DOM bounds, separation of speech/event feedback from
 journey controls, caption/ARIA parity and announcement deduplication, and
-retains local screenshots for visual review. It is not a performance benchmark,
+retains local screenshots for visual review.
+After natural greeting expiry it saves, reloads the same production page and
+physically continues/reselects the resident, checking learned facts and no
+expired caption/announcement replay. Reload retains strict error guards and
+must match the original startup CSP-probe evidence in a distinct document.
+This is not a performance benchmark,
 screen-reader speech test, mobile-hardware proof or packaged-desktop check;
 the default performance mode still requires `--packaged-baseline`.
 

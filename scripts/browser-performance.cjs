@@ -570,6 +570,7 @@ class BiDiClient {
         || 'Browser evaluation failed',
       );
     }
+    this.evaluationRealm = response.realm;
     return decodeRemoteValue(response.result);
   }
 
@@ -926,7 +927,7 @@ async function closePagesServer(server) {
   });
 }
 
-async function installBrowserDiagnosticPreload(client, context) {
+async function installBrowserDiagnosticPreload(client, context, expiredVoiceAnnouncement = null) {
   const installed = await client.command('script.addPreloadScript', {
     contexts: [context],
     functionDeclaration: `() => {
@@ -952,6 +953,29 @@ async function installBrowserDiagnosticPreload(client, context) {
         writable: false,
         value: state,
       });
+      if (${JSON.stringify(expiredVoiceAnnouncement)} !== null) {
+        const probe = { repeats: 0, overflow: false, observer: null };
+        const bindAnnouncer = () => {
+          const node = document.querySelector('#announcer');
+          if (!node) return;
+          finder.disconnect();
+          const record = () => {
+            const text = node.textContent || '';
+            if (text.length > 8192) probe.overflow = true;
+            if (text.includes(${JSON.stringify(expiredVoiceAnnouncement)})) {
+              if (probe.repeats >= 32) probe.overflow = true;
+              else probe.repeats += 1;
+            }
+          };
+          probe.observer = new MutationObserver(record);
+          probe.observer.observe(node, { childList: true, subtree: true, characterData: true });
+          record();
+        };
+        const finder = new MutationObserver(bindAnnouncer);
+        finder.observe(document, { childList: true, subtree: true });
+        window.__TIDEWEFT_VOICE_RELOAD_PROBE__ = probe;
+        bindAnnouncer();
+      }
     }`,
   });
   if (typeof installed?.script !== 'string' || installed.script.length === 0) {
@@ -987,22 +1011,60 @@ function isErrorLogEntry(event) {
   return event?.level === 'error';
 }
 
-function createBrowserEventMonitor(client, context, expectedUrl) {
+// The existing CSP intentionally denies p5's startup eval capability probe.
+// Match complete bounded evidence, never a truncated or generic error string.
+function startupEvalDenialSignature(event) {
+  if (event?.type !== 'javascript' || typeof event.text !== 'string'
+    || event.text.length > 1024 || !event.text.startsWith('Content-Security-Policy:')
+    || !event.text.includes('blocked a JavaScript eval')
+    || !event.text.includes("script-src 'self'") || !event.text.includes("Missing 'unsafe-eval'")) return null;
+  const hasStackTrace = event.stackTrace !== undefined;
+  if (hasStackTrace && (event.stackTrace === null || typeof event.stackTrace !== 'object'
+    || !Array.isArray(event.stackTrace.callFrames))) return null;
+  const frames = hasStackTrace ? event.stackTrace.callFrames : [];
+  if (!Array.isArray(frames) || frames.length > 6 || frames.some((frame) =>
+    typeof frame?.functionName !== 'string' || frame.functionName.length > 128
+    || typeof frame.url !== 'string' || frame.url.length > 256
+    || !Number.isSafeInteger(frame.lineNumber) || frame.lineNumber < 0
+    || !Number.isSafeInteger(frame.columnNumber) || frame.columnNumber < 0)) return null;
+  return JSON.stringify({ type: event.type, text: event.text, hasStackTrace,
+    frames: frames.map(({ functionName, url, lineNumber, columnNumber }) => (
+      { functionName, url, lineNumber, columnNumber })) });
+}
+
+function createBrowserEventMonitor(client, context, expectedUrl, { functionalReload = false } = {}) {
   const evidence = {
     startupNavigations: 0,
     guardedNavigations: 0,
     guardedErrorLogs: 0,
     prompts: 0,
     contextDestroyed: 0,
+    ...(functionalReload ? { functionalReloads: 0, verifiedReloadStartupEvalDenials: 0 } : {}),
   };
   let guarded = false;
   let completed = false;
+  let reloadArmed = false;
+  let reloadConsumed = false;
+  let reloadStartupOpen = false;
+  let initialRealm;
+  let initialDiagnostics;
+  const initialProbeLogs = [];
+  const reloadProbeLogs = [];
+  const errorSamples = [];
+  const probeLog = (event) => ({ signature: startupEvalDenialSignature(event), realm: event.source?.realm });
   const relevantContext = (event) => event?.context === context
     || event?.source?.context === context;
   const off = [
     client.onEvent('browsingContext.navigationStarted', (event) => {
       if (!relevantContext(event) || completed) return;
-      if (guarded) evidence.guardedNavigations += 1;
+      if (guarded) {
+        if (functionalReload && reloadArmed && !reloadConsumed && event.url === expectedUrl) {
+          reloadArmed = false;
+          reloadConsumed = true;
+          reloadStartupOpen = true;
+          evidence.functionalReloads += 1;
+        } else evidence.guardedNavigations += 1;
+      }
       else {
         evidence.startupNavigations += 1;
         if (evidence.startupNavigations !== 1 || event.url !== expectedUrl) {
@@ -1017,16 +1079,67 @@ function createBrowserEventMonitor(client, context, expectedUrl) {
       if (relevantContext(event) && !completed) evidence.prompts += 1;
     }),
     client.onEvent('log.entryAdded', (event) => {
+      if (functionalReload && relevantContext(event) && !guarded && !completed && isErrorLogEntry(event)) {
+        // One extra sentinel proves overflow instead of dropping extra errors.
+        if (initialProbeLogs.length <= 8) initialProbeLogs.push(probeLog(event));
+      }
       if (
         relevantContext(event)
         && guarded
         && !completed
         && isErrorLogEntry(event)
-      ) evidence.guardedErrorLogs += 1;
+      ) {
+        evidence.guardedErrorLogs += 1;
+        if (functionalReload && reloadStartupOpen && reloadProbeLogs.length <= initialProbeLogs.length) {
+          reloadProbeLogs.push(probeLog(event));
+        }
+        if (functionalReload && errorSamples.length < 4) {
+          errorSamples.push({
+            type: event.type ?? null,
+            text: String(event.text ?? '').slice(0, 512),
+            frames: (Array.isArray(event.stackTrace?.callFrames) ? event.stackTrace.callFrames : []).slice(0, 6).map((frame) => ({
+              functionName: String(frame?.functionName ?? '').slice(0, 128),
+              url: String(frame?.url ?? '').slice(0, 256),
+              line: frame?.lineNumber ?? null, column: frame?.columnNumber ?? null,
+            })),
+          });
+        }
+      }
     }),
   ];
   return {
-    beginGuarded() { guarded = true; },
+    beginGuarded(diagnostics, realm) {
+      if (functionalReload) {
+        assertDiagnosticSnapshot(diagnostics, 'first document startup');
+        if (typeof realm !== 'string' || !realm || initialProbeLogs.length > 8
+          || initialProbeLogs.length !== diagnostics.evalPolicyViolations
+          || initialProbeLogs.some((log) => log.signature === null || log.realm !== realm)) {
+          throw new Error('Voice startup lacks an exact bounded CSP-probe baseline and document realm');
+        }
+        initialRealm = realm;
+        initialDiagnostics = { ...diagnostics };
+      }
+      guarded = true;
+    },
+    allowOneFunctionalReload() {
+      if (!functionalReload || !guarded || completed || reloadArmed || reloadConsumed) {
+        throw new Error('A functional reload is unavailable or already used');
+      }
+      reloadArmed = true;
+    },
+    finishFunctionalReloadStartup(diagnostics, realm) {
+      if (!functionalReload || !reloadStartupOpen || typeof realm !== 'string' || !realm || realm === initialRealm) {
+        throw new Error('No distinct authorized reload startup realm');
+      }
+      assertNoGuardedDiagnosticIncrease(initialDiagnostics, diagnostics);
+      const signatures = (logs) => logs.map((log) => log.signature).sort();
+      if (reloadProbeLogs.some((log) => log.signature === null || log.realm !== realm)
+        || !stableEqual(signatures(initialProbeLogs), signatures(reloadProbeLogs))) {
+        throw new Error('Reload startup does not match its original CSP-probe baseline');
+      }
+      evidence.verifiedReloadStartupEvalDenials = reloadProbeLogs.length;
+      reloadStartupOpen = false;
+    },
     complete() { completed = true; },
     snapshot() { return { ...evidence }; },
     assertClean() {
@@ -1034,11 +1147,14 @@ function createBrowserEventMonitor(client, context, expectedUrl) {
       if (
         evidence.startupNavigations !== 1
         || evidence.guardedNavigations !== 0
-        || evidence.guardedErrorLogs !== 0
+        || evidence.guardedErrorLogs !== (evidence.verifiedReloadStartupEvalDenials ?? 0)
         || evidence.prompts !== 0
         || evidence.contextDestroyed !== 0
+        || reloadArmed || reloadStartupOpen
       ) {
-        throw new Error(`Browser lifecycle evidence is contaminated: ${JSON.stringify(evidence)}`);
+        throw new Error(`Browser lifecycle evidence is contaminated: ${JSON.stringify({
+          ...evidence, ...(functionalReload ? { errorSamples } : {}),
+        })}`);
       }
       return { ...evidence };
     },
@@ -1140,7 +1256,7 @@ async function physicalBrowserClick(client, rect) {
   });
 }
 
-async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
+async function exerciseBrowserVoicePresentation(client, output, reducedMotion, reloadProductionPage) {
   const target = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getRenderView();
@@ -1205,7 +1321,9 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
         && cue.sourceActorId === ${JSON.stringify(target.actorId)}
         && cue.sourceKind === 'human' && cue.acousticKind === 'speech')) return false;
     bridge.runtime.stop();
-    return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id };
+    return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id,
+      announcement: caption.speakerLabel + ': ' + caption.text,
+      heading: view.selectedResident.heading, known: view.selectedResident.known };
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
   const snapshots = [];
@@ -1278,11 +1396,119 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
         sha256: createHash('sha256').update(bytes).digest('hex') } });
     }
   }
-  await client.evaluate('window.__TIDEWEFT_VOICE_PROBE__.observer.disconnect()');
+  await client.evaluate('window.__TIDEWEFT__.runtime.start()');
+  const expired = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const render = bridge.runtime.getRenderView();
+    if (render.tick < ${committed.tick + 6}
+      || render.acousticText.some((cue) => cue.id === ${JSON.stringify(committed.captionId)})
+      || bridge.runtime.getUIView().expressionCaption?.id === ${JSON.stringify(committed.captionId)}) return false;
+    bridge.runtime.stop();
+    const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+    const probe = window.__TIDEWEFT_VOICE_PROBE__;
+    if (!caption || (!caption.hidden && caption.dataset.expressionId === ${JSON.stringify(committed.captionId)})
+      || probe.overflow || probe.entries.filter((text) => text.includes(${JSON.stringify(committed.announcement)})).length !== 1) {
+      throw new Error('Expired greeting remains visible or was announced again');
+    }
+    probe.observer.disconnect();
+    return { tick: render.tick, expiredEventAbsent: true, originalAnnouncementCount: 1 };
+  })()`);
+  await client.evaluate('window.__TIDEWEFT__.runtime.save()');
+  const reloadDiagnostics = await reloadProductionPage(committed.announcement);
+  await client.command('browsingContext.setViewport', {
+    context: client.context, viewport: VOICE_PRESENTATION_VIEWPORTS[0], devicePixelRatio: 1,
+  });
+  await client.waitFor('innerWidth === 1280 && innerHeight === 720');
+  // Current loads resume directly. Exercise the real title/CONTINUE controls
+  // instead of assuming a load creates title state or assigning it ourselves.
+  await physicalBrowserClick(client, await rectangleOf('.title-menu-button'));
+  await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === true');
+  await physicalBrowserClick(client, await rectangleOf('.continue-card'));
+  await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === false');
+  await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const porter = bridge.runtime.getRenderView().porters.find((candidate) =>
+      String(candidate.id) === ${JSON.stringify(String(target.id))}
+      && candidate.actorId === ${JSON.stringify(target.actorId)});
+    if (!porter) throw new Error('Known resident is no longer lawfully visible after reload');
+    bridge.renderer.setMode('chart-2d');
+    bridge.renderer.focusWorld(porter.position, 1.65);
+  })()`);
+  await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
+  await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
+  await client.waitFor(`window.__TIDEWEFT__.runtime.getUIView().selectedResident?.id === ${JSON.stringify(String(target.id))}`);
+  // Selection commits before the independent UI frame paints ABOUT. Wait for
+  // both lawful projection and its real DOM; do not manually force a UI paint.
+  const knowledge = await client.waitFor(`(() => {
+    const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
+    const preserved = selected.knowledgeLabel === 'Acquainted'
+      && selected.heading === ${JSON.stringify(committed.heading)}
+      && JSON.stringify(selected.known) === ${JSON.stringify(JSON.stringify(committed.known))};
+    if (!preserved) throw new Error('Reload lost learned resident facts in the current projection');
+    const panel = document.querySelector('.resident-about');
+    const domPreserved = panel && !panel.hidden
+      && panel.textContent.includes(${JSON.stringify(committed.heading)})
+      && ${JSON.stringify(committed.known)}.every((fact) => panel.textContent.includes(fact.value))
+      && panel.querySelector('.resident-about__knowledge')?.textContent === 'Acquainted'
+      && document.querySelector('.resident-about__greet')?.hidden === true;
+    if (!domPreserved) return false;
+    return { sameVisibleResident: true, acquainted: true, learnedFactsPreserved: true, aboutDOMMatches: true };
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
+  const restoredTick = await client.evaluate('window.__TIDEWEFT__.runtime.getRenderView().tick');
+  await client.evaluate('window.__TIDEWEFT__.runtime.start()');
+  const continuedTick = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    if (bridge.runtime.getRenderView().tick <= ${restoredTick}) return false;
+    bridge.runtime.stop();
+    return bridge.runtime.getRenderView().tick;
+  })()`);
+  const restoredSnapshots = [];
+  for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
+    await client.command('browsingContext.setViewport', {
+      context: client.context, viewport, devicePixelRatio: 1,
+    });
+    await client.waitFor(`innerWidth === ${viewport.width} && innerHeight === ${viewport.height}`);
+    for (const mode of ['chart-2d', 'relief-3d']) {
+      await client.evaluate(`window.__TIDEWEFT__.renderer.setMode(${JSON.stringify(mode)})`);
+      await client.evaluate('new Promise((resolve) => setTimeout(resolve, 200))');
+      const restored = await client.evaluate(`(() => {
+        const bridge = window.__TIDEWEFT__;
+        const view = bridge.runtime.getUIView();
+        const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+        const probe = window.__TIDEWEFT_VOICE_RELOAD_PROBE__;
+        const absent = !bridge.runtime.getRenderView().acousticText.some((cue) => cue.id === ${JSON.stringify(committed.captionId)})
+          && view.expressionCaption?.id !== ${JSON.stringify(committed.captionId)}
+          && Boolean(caption && (caption.hidden || caption.dataset.expressionId !== ${JSON.stringify(committed.captionId)}));
+        return { mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
+          tick: bridge.runtime.getRenderView().tick, expiredEventAbsent: absent,
+          oldGreetingAnnouncements: probe?.repeats ?? null, currentSaveAccepted: view.title.hasSave,
+          observerPresent: Boolean(probe?.observer), observerOverflow: probe?.overflow ?? true };
+      })()`);
+      assertRestoredVoiceSnapshot(restored, mode, continuedTick);
+      restoredSnapshots.push(restored);
+    }
+  }
+  await client.evaluate('window.__TIDEWEFT_VOICE_RELOAD_PROBE__.observer.disconnect()');
+  await client.evaluate('window.__TIDEWEFT__.runtime.save()');
   await client.command('input.releaseActions', { context: client.context });
   return { producer: 'native resident GREET via physical Chart selection and button input',
     committedTick: committed.tick, snapshots,
-    limitation: 'One naturally available introduction, then frozen committed presentation across views/viewports; DOM boxes and live-region mutations, not mixed crowd saturation, glyph ink, audible screen reader, mobile hardware, continuous performance or desktop packaging' };
+    lifecycle: { expired, restoredTick, continuedTick, knowledge, restoredSnapshots, reloadDiagnostics },
+    limitation: 'One natural introduction, frozen viewports, ordinary expiry and current-save browser reload; visible facts/DOM and bounded live-region observations, not exact all-root equivalence, audible audio/screen reader, mobile hardware, crowd/soak performance or desktop packaging. Old-document window counters end at pre-reload capture; guarded BiDi logs span teardown.' };
+}
+
+function assertRestoredVoiceSnapshot(snapshot, mode, tick) {
+  if (!snapshot || snapshot.mode !== mode || snapshot.tick !== tick
+    || !Number.isSafeInteger(tick) || tick < 0
+    || snapshot.expiredEventAbsent !== true || snapshot.currentSaveAccepted !== true
+    || snapshot.observerPresent !== true || snapshot.observerOverflow !== false
+    || snapshot.oldGreetingAnnouncements !== 0
+    || !Number.isSafeInteger(snapshot.viewport?.width) || snapshot.viewport.width <= 0
+    || !Number.isSafeInteger(snapshot.viewport?.height) || snapshot.viewport.height <= 0) {
+    throw new Error('Restored voice presentation replays stale speech or lacks valid lifecycle evidence');
+  }
+  return snapshot;
 }
 
 async function runBrowserWitness(options) {
@@ -1418,7 +1644,9 @@ async function runBrowserWitness(options) {
     ) {
       throw new Error('Firefox did not isolate exactly one active target context');
     }
-    eventMonitor = createBrowserEventMonitor(client, client.context, entryUrl);
+    eventMonitor = createBrowserEventMonitor(client, client.context, entryUrl, {
+      functionalReload: options.voicePresentation,
+    });
     const subscribed = await client.command('session.subscribe', {
       events: [
         'log.entryAdded',
@@ -1448,8 +1676,8 @@ async function runBrowserWitness(options) {
       && window.__TIDEWEFT__?.ui
       && document.querySelector('#game-ui .ui-layer')?.getAttribute('data-ready') === 'true'
     )`);
-    const startupDiagnostics = await waitForStableBrowserDiagnostics(client);
-    eventMonitor.beginGuarded();
+    let startupDiagnostics = await waitForStableBrowserDiagnostics(client);
+    eventMonitor.beginGuarded(startupDiagnostics, client.evaluationRealm);
     if (!options.voicePresentation) await installResourceInputGuard(client);
     await client.command('browsingContext.setViewport', {
       context: client.context,
@@ -1467,8 +1695,34 @@ async function runBrowserWitness(options) {
       throw new Error(`Browser WebGL is unavailable: ${JSON.stringify(bootstrap.graphics)}`);
     }
     const packagedComparison = options.voicePresentation ? null : validatePackagedReference(packagedSource, bootstrap);
+    const reloadProductionPage = async (expiredVoiceAnnouncement) => {
+      const oldFinal = await captureBrowserDiagnostics(client, 'pre-reload document');
+      assertNoGuardedDiagnosticIncrease(startupDiagnostics, oldFinal);
+      eventMonitor.assertClean();
+      const oldStartup = startupDiagnostics;
+      preloadScript = await installBrowserDiagnosticPreload(client, client.context, expiredVoiceAnnouncement);
+      eventMonitor.allowOneFunctionalReload();
+      await client.command('browsingContext.navigate', {
+        context: client.context, url: entryUrl, wait: 'complete',
+      }, BOOT_TIMEOUT_MS);
+      await client.command('script.removePreloadScript', { script: preloadScript });
+      preloadScript = null;
+      const restored = await client.waitFor(`(() => {
+        const bridge = window.__TIDEWEFT__;
+        if (location.href !== ${JSON.stringify(entryUrl)} || document.readyState !== 'complete'
+          || !bridge?.runtime || !bridge.renderer || !bridge.ui
+          || document.querySelector('#game-ui .ui-layer')?.dataset.ready !== 'true') return false;
+        bridge.runtime.stop();
+        return bridge.runtime.getUIView().title.hasSave;
+      })()`);
+      if (!restored) throw new Error('Production reload did not accept its current save');
+      startupDiagnostics = await waitForStableBrowserDiagnostics(client);
+      eventMonitor.finishFunctionalReloadStartup(startupDiagnostics, client.evaluationRealm);
+      return { firstDocument: { startup: oldStartup, preReload: oldFinal },
+        reloadedDocumentStartup: startupDiagnostics };
+    };
     const voicePresentation = options.voicePresentation
-      ? await exerciseBrowserVoicePresentation(client, options.output, options.reducedMotion) : null;
+      ? await exerciseBrowserVoicePresentation(client, options.output, options.reducedMotion, reloadProductionPage) : null;
     const rawMeasurement = options.voicePresentation ? null : await measureScenario(
       client,
       SCENARIO,
@@ -1522,6 +1776,9 @@ async function runBrowserWitness(options) {
     const finalDiagnostics = await captureBrowserDiagnostics(client, 'browser final');
     assertNoGuardedDiagnosticIncrease(startupDiagnostics, finalDiagnostics);
     const lifecycleEvidence = eventMonitor.assertClean();
+    if (options.voicePresentation && lifecycleEvidence.functionalReloads !== 1) {
+      throw new Error('Voice lifecycle did not consume exactly one authorized production reload');
+    }
     eventMonitor.complete();
     const measurement = options.voicePresentation ? null : {
       ...rawMeasurement,
@@ -1618,7 +1875,7 @@ async function runBrowserWitness(options) {
         policy: 'reported separately; any counter increase after the stable startup baseline invalidates the witness',
       },
       metricScope: options.voicePresentation ? {
-        authoritative: 'Native current-world selection/GREET transaction, then unchanged committed presentation across views and viewport sizes',
+        authoritative: 'Native selection/GREET, frozen presentation, ordinary expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
         limitation: voicePresentation.limitation,
         omitted: 'No performance measurement, packaged comparison, glyph-ink or hardware certification',
       } : {
@@ -1743,9 +2000,11 @@ async function main() {
 module.exports = {
   BASE_PATH,
   BiDiClient,
+  createBrowserEventMonitor,
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  assertRestoredVoiceSnapshot,
   assertFreshVoicePresentationOutput,
   decodeRemoteValue,
   assertDiagnosticSnapshot,
