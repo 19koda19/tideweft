@@ -56,6 +56,30 @@ export interface PlayerExpressionAdmissionSoundPolicy {
   readonly interrupt: "none" | "strong";
 }
 
+/** The two existing footing meanings, re-derived without prose or old audio. */
+export function playerFootingExpressionAdmissionPolicy(
+  admissionValue: unknown,
+): Readonly<Omit<PlayerExpressionPolicy, "triggerEventId" | "variantSeed">> | null {
+  const admission = canonicalizeSituatedExpressionAdmissionRecord(admissionValue);
+  if (admission?.kind !== "player-traversal"
+    || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID) return null;
+  // The committed traversal adapter selects cargo protection before footing.
+  if (admission.cargoOutcome === "impacted-carried"
+    && (admission.selectedPayloadKind === "promise" || admission.selectedPayloadKind === "gear")
+    && admission.cargoShock >= 260_000) return null;
+  if (admission.causalClass === "ordinary-stumble") return Object.freeze({
+    meaning: "steady-after-stumble", family: "footing", tone: "restrained",
+    volume: "murmur", knowledgeBasis: "self-felt-stumble",
+    priority: 180_000, salience: 260_000, durationSteps: 7,
+  });
+  if (admission.causalClass === "serious-stumble") return Object.freeze({
+    meaning: "relief-after-near-fall", family: "footing", tone: "relieved",
+    volume: "spoken", knowledgeBasis: "self-felt-near-fall",
+    priority: 420_000, salience: 650_000, durationSteps: 10,
+  });
+  return null;
+}
+
 interface LocatedCargoHistory {
   readonly world: LooseCargoWorldState;
   readonly record: LooseCargoHistoryRecord;
@@ -333,27 +357,11 @@ function policyForAdmission(
     : retainedIncident.variantSeed >>> 0;
   switch (admission.causalClass) {
     case "ordinary-stumble":
-      return receiptTraversalPolicy(admission.triggerEventId, variantSeed, {
-        meaning: "steady-after-stumble",
-        family: "footing",
-        tone: "restrained",
-        volume: "murmur",
-        knowledgeBasis: "self-felt-stumble",
-        priority: 180_000,
-        salience: 260_000,
-        durationSteps: 7,
-      });
-    case "serious-stumble":
-      return receiptTraversalPolicy(admission.triggerEventId, variantSeed, {
-        meaning: "relief-after-near-fall",
-        family: "footing",
-        tone: "relieved",
-        volume: "spoken",
-        knowledgeBasis: "self-felt-near-fall",
-        priority: 420_000,
-        salience: 650_000,
-        durationSteps: 10,
-      });
+    case "serious-stumble": {
+      const policy = playerFootingExpressionAdmissionPolicy(admission);
+      return policy === null ? null
+        : receiptTraversalPolicy(admission.triggerEventId, variantSeed, policy);
+    }
     case "important-cargo-impact":
       return receiptTraversalPolicy(admission.triggerEventId, variantSeed, {
         meaning: "protect-important-cargo",
