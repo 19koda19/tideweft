@@ -1021,6 +1021,36 @@ completed-work event exists; it also does not claim complete bark/growl/whine
 breadth, broader distress/play, general animal-call networks,
 language/relationship realization, or complete Living Voice.
 
+#### Development expression inspection
+
+The unpublished development runtime exposes a default-off
+`expressionDiagnostics` observer, implemented by
+`src/game/situatedExpressionDiagnostics.ts`. It retains at most 64 detached,
+immutable decisions from existing producers: semantic intent, source-local
+prior kernel state, exact runtime refusal or acceptance, committed admission,
+retained player receipt, catalog realization, current weather and an exact
+causal belief only when that producer already holds it. Resident introductions
+also supply their authenticated contextual text; catalog fallback wording is
+not claimed as the final caption. Missing context remains explicitly null.
+Filtered records retain global total/eviction counters, not filter-specific
+counts. The observer does not scan the world for hypothetical causes.
+
+Fixed-step records publish only after the existing fallible transaction and
+deferred introduction-save preparation succeed; rollback discards provisional
+records. Immediate UI transactions retain their existing authority boundary.
+Diagnostic failure cannot veto gameplay. These records never enter saves,
+hearing, RNG, audio or caption queues, and production builds expose no observer.
+
+The read-only preview reruns only the existing expression kernel from copied
+prior state, with explicitly supported semantic overrides. It cannot submit an
+event or simulate a domain action, physical recency, capacity, propagation,
+listener knowledge, personality, relationships, full emotion, contextual
+realization or presentation. A successful hypothetical preview does not
+overrule the recorded runtime refusal. This is a partial debugging spine, not
+the complete selectable producer-context expression lab. See
+[Local development](../README.md#local-development) for access and
+`runtime.expressionDiagnostics.test.ts` for current-state/audio/save parity.
+
 ### Repository asset and storage law
 
 The tracked repository stays below 1 GB, targets roughly 600 MB, and requires

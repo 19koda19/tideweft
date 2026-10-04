@@ -954,6 +954,7 @@ describe("production terrain fall and physical cargo", () => {
       const repository = new MemoryRepository(prepared);
       soundscapePlay.mockClear();
       runtime = await refusedModule.createTideweftRuntime(repository);
+      runtime.expressionDiagnostics!.setEnabled(true);
       runtime.dispatchUI({ type: "resume-world" });
       advancePlayerSteps(runtime, 6);
       runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
@@ -961,6 +962,8 @@ describe("production terrain fall and physical cargo", () => {
       expect(runtime.getUIView().announcement?.message ?? "").not.toContain("INTEGRITY HALT");
       expect(runtime.getRenderView().player.incident?.id).toBe("player:0:traversal:73");
       expect(incidentCueCalls("vocalization-relief")).toBe(0);
+      expect(runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records)
+        .toEqual([expect.objectContaining({ reason: "sound-budget", event: null, admission: null })]);
       await runtime.save();
       const actual = decodeCurrent(repository.snapshot());
       expect(actual.playerExpressionRecency.footing).toEqual([]);
@@ -1560,6 +1563,9 @@ describe("production terrain fall and physical cargo", () => {
     const run = async (reloadAt: number | null) => {
       const repository = new MemoryRepository(initialRecord);
       let runtime = await createTideweftRuntime(repository);
+      // Enabled uninterrupted run is compared with the unchanged, disabled
+      // reload run below: instrumentation cannot create a different outcome.
+      runtime.expressionDiagnostics!.setEnabled(reloadAt === null);
       const events: { step: number; eventId: string; triggerEventId: string }[] = [];
       const boundaryCarries: CurrentGameSaveEnvelope["perceptionCarry"][] = [];
       const modes: { step: number; mode: string; stamina: number }[] = [];
@@ -1633,7 +1639,12 @@ describe("production terrain fall and physical cargo", () => {
         await runtime.save();
         const final = decodeCurrent(repository.snapshot());
         audioCalls += incidentCueCalls("vocalization-strained");
-        return { events, boundaryCarries, modes, final, audioCalls };
+        return {
+          events, boundaryCarries, modes, final, audioCalls,
+          diagnosticRecords: runtime.expressionDiagnostics!.getSnapshot({
+            sourceActorId: "player:local",
+          }).records,
+        };
       } finally {
         runtime.destroy();
       }
@@ -1645,6 +1656,11 @@ describe("production terrain fall and physical cargo", () => {
     expect(restored.modes).toEqual(uninterrupted.modes);
     expect(restored.boundaryCarries).toEqual(uninterrupted.boundaryCarries);
     expect(restored.audioCalls).toBe(uninterrupted.audioCalls);
+    expect(restored.diagnosticRecords).toEqual([]);
+    expect(uninterrupted.diagnosticRecords.some(({ reason }) => reason === "effort-recency"))
+      .toBe(true);
+    expect(uninterrupted.diagnosticRecords.filter(({ reason }) => reason === "accepted"))
+      .toHaveLength(uninterrupted.events.length);
     expect(uninterrupted.audioCalls).toBe(uninterrupted.events.length);
     // The actual physical sequence is unchanged. Consuming sound no longer
     // truncates the accepted expression's independently retained cooldown.

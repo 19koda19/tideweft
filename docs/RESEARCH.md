@@ -970,6 +970,62 @@ denial, not a console-clean result. These observations add ordinary gameplay
 evidence, not hours, dense/mixed-scene, audible/assistive, full conservation or
 replay, mobile hardware, performance, directive closure or public-release proof.
 
+A later twelve-minute ordinary-control capture on clean `10cbe5a` used that
+same frozen artifact and power/platform settings. Actual journey lasted 721.041
+seconds; 726.598 seconds / 4,514 projection reads ended at tick 1306. It first
+observed 61 player, one human and 68 physical candidates, thirteen player
+wordings and three adjacent sampled repeats. No animal was observed. At most
+four candidates appeared together; 4,125 reads were empty, the largest gap was
+2,039 ms and the longest empty-projection sample span was 106.540 seconds.
+Neither empty samples nor candidate counts prove audible silence or rendered
+physical glyphs. There was no census overflow or incompleteness.
+
+Two handoffs occurred; the last Reed Promise remained unfinished with nine of
+fourteen units carried and five loose. Input-attempt counts do not certify
+transactions or full-root conservation. The guarded probe actually followed
+the current RECOVER objective's coarse compass hint when the parcel marker
+was outside the window; it never reconstructed hidden coordinates. A preceding
+320-second failed capture had refused that legitimate public hint, a probe
+limitation rather than a demonstrated game-navigation defect. This finite
+result does not close hours, annoyance, mixed/animal presentation or release
+acceptance. Browser exit was normal and its disposable profile was removed.
+Result SHA256: `3374d0b5c8900cd7ce86fb6aebb98827af8f44a26e8f77830f72a79b3c9519a3`;
+probe SHA256: `152b7d22261f2eeb80f380e25b582cfd4a5d8cf6c94eddd64f43e3b344070aef`.
+
+#### Bounded development expression inspection — 2026-10-04
+
+Local work over `10cbe5a` adds a default-off, development-only observer at the
+existing expression admission boundaries, not a new gameplay producer. Its
+64 copied records separate actual intent, source-local prior state, exact
+pre-kernel/runtime refusal, committed event/admission/player receipt, catalog
+realization and optional authenticated contextual introduction text. The
+kernel-only preview is explicitly hypothetical and cannot submit events or
+simulate physical recency, hearing, relationships or unrecorded causes.
+The [canonical contract](ARCHITECTURE.md#development-expression-inspection)
+owns these limits; this remains a partial debugger, not the full configurable
+expression lab.
+
+Focused kernel/channel/reception/acoustics/observer/runtime tests pass: six
+files / eighty tests. Four selected existing runtime/fall tests pass, covering
+successful contextual GREET, later interval-closure rollback, saturated sound
+capacity and held-input exhaustion across current reload. The keeper fixture
+compares enabled/disabled world-save bytes, view and audio; injected observer
+failure cannot veto closure. Critical smoke passes six files / 105 tests.
+Typecheck, production web build and nested-path static smoke pass. The emitted
+bundle SHA256 is `fa2a5a62f375d5e117b55c37d8deaf4fcffe84ee78ac2b95e4ab390718b08efc`;
+inspection finds no observer API, kernel-preview or diagnostic-only contextual
+markers. Unit coverage separately checks the production API is absent.
+
+Release synchronization deliberately fails on this unpublished runtime change:
+the release-only wrapper requires a new tutorial/build/package identity. It
+was not weakened, and no public version was manufactured for development
+tooling. Fresh desktop packaging, native developer-console usage, complete
+cumulative regression, audible/assistive quality and release verification have
+not been run for this slice. Existing older packaged evidence does not certify
+it. Save49/carry14, dependencies, platform configuration, RNG, physical causes,
+audio and player presentation rules are unchanged. No upstream code, deployment
+or completed directive changed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

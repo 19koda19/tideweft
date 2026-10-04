@@ -38,6 +38,7 @@ import {
   createActorObservation,
   stepActorPerception,
   type ActorObservation,
+  type ActorBelief,
   type ActorPerceptionState,
 } from "../sim/actorPerception";
 import {
@@ -174,12 +175,24 @@ import {
 import type { FallRiskEvaluation } from "./fallRisk";
 import {
   SITUATED_EXPRESSION_VERSION,
+  createSituatedExpressionState,
   situatedExpressionVocalizationFor,
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
   type SituatedExpressionMeaning,
   type SituatedExpressionMemory,
+  type SituatedExpressionState,
 } from "./situatedExpression";
+import {
+  appendExpressionDiagnostic,
+  createExpressionDiagnosticState,
+  previewExpressionDiagnostic,
+  selectExpressionDiagnostics,
+  setExpressionDiagnosticEnabled,
+  type ExpressionDiagnosticReason,
+  type ExpressionDiagnosticSnapshot,
+  type SituatedExpressionDiagnostics,
+} from "./situatedExpressionDiagnostics";
 import {
   acknowledgeSituatedExpressionChannelBank,
   advanceSituatedExpressionChannelBank,
@@ -561,6 +574,7 @@ import {
   residentIntroductionExpressionEventMatchesWorld,
   residentIntroductionExpressionIntent,
   residentIntroductionExpressionMemoryMatchesWorld,
+  projectResidentIntroductionExpression,
 } from "./residentIntroductionExpression";
 import {
   residentWeatherHoldExpressionEventForTrigger,
@@ -1417,6 +1431,8 @@ export interface TideweftRuntime {
   readonly destroy: () => void;
   readonly getRenderView: () => TideweftView;
   readonly getUIView: () => TideweftUIView;
+  /** Present only in development builds; not a gameplay command or save root. */
+  readonly expressionDiagnostics?: SituatedExpressionDiagnostics;
   readonly getPerformanceTelemetry: () => TideweftRuntimePerformanceTelemetry;
   readonly setPerformanceTelemetryEnabled: (
     enabled: boolean,
@@ -11072,6 +11088,12 @@ export async function createTideweftRuntime(
   const audioProjectionPerformance = createRuntimePerformanceTelemetry();
   const saveSnapshotPerformance = createRuntimePerformanceTelemetry();
   let performanceTelemetryEnabled = false;
+  let expressionDiagnosticState = import.meta.env.DEV
+    ? createExpressionDiagnosticState()
+    : null;
+  // Fixed-step decisions remain unpublished until every fallible operation
+  // succeeds. Read-only queries cannot observe a provisional accepted event.
+  let stagedExpressionDiagnosticState: ExpressionDiagnosticSnapshot | null = null;
   let performanceCounts: TideweftRuntimePerformanceCounts = Object.freeze({
     actorsTotal: 0,
     actorsMaterialized: 0,
@@ -12770,6 +12792,42 @@ export async function createTideweftRuntime(
     return restored;
   }
 
+  function recordExpressionDecision(
+    intent: SituatedExpressionIntent,
+    reason: ExpressionDiagnosticReason,
+    event: SituatedExpressionEvent | null = null,
+    admission: SituatedExpressionAdmissionRecord | null = null,
+    reception: SituatedExpressionReception | null = null,
+    priorState?: SituatedExpressionState,
+    sourceBelief: ActorBelief | null = null,
+    contextualText: string | null = null,
+  ): void {
+    if (!import.meta.env.DEV) return;
+    const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
+    if (state?.enabled !== true) return;
+    try {
+      const next = appendExpressionDiagnostic(state, {
+        completedTick: world.meta.completedTick,
+        playerStepPhase: playerStepsSinceWorldTick,
+        intent,
+        priorState: priorState ?? situatedExpressionChannels.channels.find(
+          ({ sourceActorId }) => sourceActorId === intent.sourceActorId,
+        )?.state ?? createSituatedExpressionState(),
+        reason,
+        event,
+        admission,
+        playerReception: reception,
+        sourceBelief,
+        weather: world.weather.kind,
+        contextualText,
+      });
+      if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
+      else expressionDiagnosticState = next;
+    } catch {
+      // Optional developer instrumentation cannot veto a physical transaction.
+    }
+  }
+
   function acceptSituatedExpression(
     intent: SituatedExpressionIntent | null,
     reception: Readonly<{
@@ -12787,6 +12845,7 @@ export async function createTideweftRuntime(
       event: SituatedExpressionEvent,
       sampleOrdinal: number,
     ) => SituatedExpressionAdmissionRecord | null,
+    diagnosticBelief: ActorBelief | null = null,
   ): boolean {
     if (intent === null) return false;
     // Sound carry, memory, causal authority, and optional presentation are one
@@ -12796,7 +12855,16 @@ export async function createTideweftRuntime(
       actorVocalizationSamples.length >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
       || situatedExpressionAdmissions.records.length
         >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
-    ) return false;
+    ) {
+      if (import.meta.env.DEV) recordExpressionDecision(intent, "sound-budget");
+      return false;
+    }
+    const diagnosticPriorState = import.meta.env.DEV
+      && expressionDiagnosticState?.enabled === true
+      ? situatedExpressionChannels.channels.find(
+          ({ sourceActorId }) => sourceActorId === intent.sourceActorId,
+        )?.state ?? createSituatedExpressionState()
+      : undefined;
     const receptionInput = reception.kind === "none"
       ? null
       : (event: SituatedExpressionEvent) => reception.kind === "self"
@@ -12870,8 +12938,22 @@ export async function createTideweftRuntime(
       situatedExpressionAdmissions = nextAdmissions;
       situatedExpressionCausalAuthority = nextCausalAuthority;
       actorVocalizationSamples.push(sample);
+      if (import.meta.env.DEV) recordExpressionDecision(
+        intent,
+        reduction.reason,
+        reduction.event,
+        admission,
+        reduction.bank.channels.find(
+          ({ sourceActorId }) => sourceActorId === intent.sourceActorId,
+        )?.reception ?? null,
+        diagnosticPriorState,
+        diagnosticBelief,
+      );
       return true;
     }
+    if (import.meta.env.DEV) recordExpressionDecision(
+      intent, reduction.reason, null, null, null, diagnosticPriorState, diagnosticBelief,
+    );
     return false;
   }
 
@@ -13677,6 +13759,11 @@ export async function createTideweftRuntime(
         traversalAdmissionFor(traversalExpressionIntent!, actorVocalizationSamples.length),
       );
       if (footingAllowed === null) throw new Error("Player footing recency lost its authority");
+      if (import.meta.env.DEV && !footingAllowed && traversalExpressionIntent !== null) {
+        recordExpressionDecision(
+          traversalExpressionIntent, footingBudgetAvailable ? "footing-recency" : "sound-budget",
+        );
+      }
       const acceptedTraversal = footingAllowed && acceptSituatedExpression(
         traversalExpressionIntent,
         { kind: "self" },
@@ -13735,6 +13822,9 @@ export async function createTideweftRuntime(
         },
       );
       if (effortAllowed === null) throw new Error("Player effort recency lost its authority");
+      if (import.meta.env.DEV && !effortAllowed && effortIntent !== null) {
+        recordExpressionDecision(effortIntent, "effort-recency");
+      }
       const acceptedEffort = effortAllowed && acceptSituatedExpression(
         effortIntent,
         { kind: "self" },
@@ -15374,6 +15464,7 @@ export async function createTideweftRuntime(
                   shelterIntentScore: guardianDogShelterIntentScore!,
                   listenerWasSleepingAtAdmission,
                 }),
+          sourceBelief,
         );
         if (
           admitted
@@ -15453,7 +15544,10 @@ export async function createTideweftRuntime(
         const intent = workingPeopleExpressionIntent({ world: economyView, event });
         if (intent === null) continue;
         const audible = playerExpressionAudibility(intent);
-        if (audible === null || !playerDirectlyObservesExpressionSource(intent)) continue;
+        if (audible === null || !playerDirectlyObservesExpressionSource(intent)) {
+          if (import.meta.env.DEV) recordExpressionDecision(intent, "porter-not-heard-or-visible");
+          continue;
+        }
         const listenerPosition = playerWorldPositionInRegionalWindow(
           regionalTravel.window,
           player,
@@ -15595,6 +15689,11 @@ export async function createTideweftRuntime(
               acceptedAtTick: candidate.event.atTick,
             })
           ),
+          import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+            ? authority.actor.perception.beliefs.find(
+                ({ sourceObservationId }) => sourceObservationId === candidate.event.observationId,
+              ) ?? null
+            : null,
         );
         // Channel/caption capacity may suppress the optional retained
         // expression, but it cannot make an otherwise-heard physical alarm
@@ -15682,6 +15781,11 @@ export async function createTideweftRuntime(
               acceptedAtTick: candidate.event.atTick,
             })
           ),
+          import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+            ? authority.actor.perception.beliefs.find(
+                ({ sourceObservationId }) => sourceObservationId === candidate.event.observationId,
+              ) ?? null
+            : null,
         );
         // Optional caption capacity cannot erase the already committed cat
         // call. Retain its ordinary audibility, variant and transactional audio.
@@ -15770,6 +15874,11 @@ export async function createTideweftRuntime(
               acceptedAtTick: candidate.event.atTick,
             })
           ),
+          import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+            ? authority.actor.perception.beliefs.find(
+                ({ sourceObservationId }) => sourceObservationId === candidate.event.observationId,
+              ) ?? null
+            : null,
         );
         // The pursuit and its sound are already committed ecology truth.
         // Optional expression/sample capacity may suppress retained text, but
@@ -16611,6 +16720,18 @@ export async function createTideweftRuntime(
             })
         ) {
           throw new Error("Committed resident introduction lost its causal acoustic authority");
+        }
+        if (import.meta.env.DEV && expressionDiagnosticState?.enabled === true) {
+          try {
+            const intent = residentIntroductionExpressionIntent({ world: economyView, event: introduction });
+            if (intent !== null) recordExpressionDecision(
+              intent, "prepared-introduction-committed", channel.state.active,
+              prepared.admission, channel.reception, undefined, null,
+              projectResidentIntroductionExpression(economyView, channel.state.active)?.text ?? null,
+            );
+          } catch {
+            // Optional contextual inspection cannot veto a committed greeting.
+          }
         }
         situatedExpressionChannels = prepared.channelBankAfter;
         const introductionPair: ActiveSituatedExpressionChannelPair = Object.freeze({
@@ -17896,6 +18017,9 @@ export async function createTideweftRuntime(
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
     situatedExpressionChannels = createSituatedExpressionChannelBank();
+    if (import.meta.env.DEV && expressionDiagnosticState !== null) {
+      expressionDiagnosticState = createExpressionDiagnosticState(expressionDiagnosticState.enabled);
+    }
     playerExpressionRecency = createPlayerExpressionRecencyState(world.meta.rootSeed);
     // Reload-only suppression belongs to the replaced save generation. A
     // confirmed new world may deterministically reuse the same seed, actor,
@@ -19690,6 +19814,8 @@ export async function createTideweftRuntime(
       );
     }
     let committedWorldAcousticAudio: readonly CommittedAudioCue[];
+    let committedExpressionDiagnostics: ExpressionDiagnosticSnapshot | null = null;
+    if (import.meta.env.DEV) stagedExpressionDiagnosticState = expressionDiagnosticState;
     try {
       committedWorldAcousticAudio = tick(present);
       // The introduction snapshot is captured only after every fallible tick
@@ -19700,6 +19826,7 @@ export async function createTideweftRuntime(
         residentIntroductionSavePending = false;
         saveInBackground();
       }
+      if (import.meta.env.DEV) committedExpressionDiagnostics = stagedExpressionDiagnosticState;
     } catch (error) {
       if (priorWorld) {
         world = priorWorld;
@@ -19781,6 +19908,7 @@ export async function createTideweftRuntime(
       refreshViews();
       return false;
     } finally {
+      if (import.meta.env.DEV) stagedExpressionDiagnosticState = null;
       if (startedAtMs !== null) {
         const finishedAtMs = runtimePerformanceNow();
         fixedStepPerformance.recordSpan(startedAtMs, finishedAtMs);
@@ -19793,6 +19921,7 @@ export async function createTideweftRuntime(
     // the fallible authoritative tick has returned successfully. A fail-closed
     // rollback can restore the event/text queue, but cannot unplay an escaped
     // sound.
+    if (import.meta.env.DEV) expressionDiagnosticState = committedExpressionDiagnostics;
     releaseCommittedAudio(committedWorldAcousticAudio);
     return true;
   }
@@ -19871,6 +20000,7 @@ export async function createTideweftRuntime(
       saveRetryTimer = undefined;
     }
     stop();
+    if (import.meta.env.DEV) expressionDiagnosticState = createExpressionDiagnosticState();
     soundscape.destroy();
   }
 
@@ -20054,6 +20184,22 @@ export async function createTideweftRuntime(
     destroy,
     getRenderView: () => renderView,
     getUIView: () => uiView,
+    ...(import.meta.env.DEV ? {
+      expressionDiagnostics: Object.freeze({
+        setEnabled: (enabled: boolean) => {
+          expressionDiagnosticState = setExpressionDiagnosticEnabled(expressionDiagnosticState!, enabled);
+          return expressionDiagnosticState;
+        },
+        getSnapshot: (query) => selectExpressionDiagnostics(expressionDiagnosticState!, query),
+        reset: () => {
+          expressionDiagnosticState = createExpressionDiagnosticState(expressionDiagnosticState!.enabled);
+          return expressionDiagnosticState;
+        },
+        preview: (sequence, overrides) => previewExpressionDiagnostic(
+          expressionDiagnosticState!, sequence, overrides,
+        ),
+      } satisfies SituatedExpressionDiagnostics),
+    } : {}),
     getPerformanceTelemetry,
     setPerformanceTelemetryEnabled,
     resetPerformanceTelemetry,

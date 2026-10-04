@@ -311,6 +311,28 @@ cross-system behavior. Use the [context tool](docs/REPOSITORY_CONTEXT.md) to fin
 likely owners and test candidates, then inspect their actual requirements and
 consumers before choosing coverage.
 
+The local development build also provides an optional expression inspector.
+After `npm run dev:web`, enable it in the browser's developer console and cause
+a real in-game interaction:
+
+```js
+const inspector = window.__TIDEWEFT__.runtime.expressionDiagnostics;
+inspector.setEnabled(true);
+const snapshot = inspector.getSnapshot({ sourceActorId: "player:local" });
+// Use a retained record's sequence for a read-only kernel preview:
+inspector.preview(snapshot.records[0]?.sequence, { variantSeed: 43 });
+```
+
+It is default-off, development-only and bounded to 64 copied decisions.
+`getSnapshot()` without a filter includes all recorded sources; filters include
+actor ID, trigger ID, meaning and exact decision reason. Total/eviction counts
+are global. `reset()` clears history without changing gameplay. Catalog wording,
+optional contextual text and player receipt are separate; absent context does
+not establish silence or unheard audio. Previews are hypothetical kernel
+results, not domain/hearing/personality/relationship simulations or a complete
+expression lab. Production web and packaged builds expose no inspector. See
+the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
+
 | Change or checkpoint | Validation commands and scope |
 | --- | --- |
 | Prose only, with no executable, configuration, schema, generated-asset, or packaging impact | Check changed references, factual consistency, and `git diff --check`; run the relevant documentation checks. |

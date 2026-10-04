@@ -1459,6 +1459,9 @@ describe("perpetual new worlds", () => {
     expect(runtime.getUIView().selectedResident?.knowledgeLabel).toBe(
       "Recognized",
     );
+    const inspector = runtime.expressionDiagnostics;
+    expect(inspector).toBeDefined();
+    inspector!.setEnabled(true);
     soundscapePlay.mockClear();
     runtime.dispatchUI({
       type: "resident",
@@ -1500,6 +1503,16 @@ describe("perpetual new worlds", () => {
       speakerLabel: introductionLabel.speakerLabel,
       text: introductionLabel.text,
     });
+    const introductionDecision = inspector!.getSnapshot({ reason: "prepared-introduction-committed" });
+    expect(introductionDecision.records).toHaveLength(1);
+    expect(introductionDecision.records[0]).toMatchObject({
+      intent: { meaning: "resident-introduction" },
+      event: { eventId: introductionLabel.id },
+      admission: { kind: "resident-introduction" },
+      playerReception: { kind: "heard-visible" },
+      contextualText: introductionLabel.text,
+      realization: { text: "Let me introduce myself." },
+    });
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
       .toHaveLength(1);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "ui")).toHaveLength(0);
@@ -1522,6 +1535,7 @@ describe("perpetual new worlds", () => {
       };
     };
     expect(saved.version).toBe(49);
+    expect(repository.snapshot().worldJson).not.toContain("contextualText");
     expect(carry.version).toBe(14);
     const introductionAdmission = carry.situatedExpressionAdmissions.records.find(
       ({ kind }) => kind === "resident-introduction",
@@ -1821,6 +1835,9 @@ describe("perpetual new worlds", () => {
     advancePlayerSteps(runtime, 10);
     await runtime.save();
     const recognizedSave = repository.snapshot();
+    const inspector = runtime.expressionDiagnostics;
+    expect(inspector).toBeDefined();
+    inspector!.setEnabled(true);
     const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
     let closureCalls = 0;
     vi.spyOn(
@@ -1845,6 +1862,9 @@ describe("perpetual new worlds", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
       .toHaveLength(0);
     expect(repository.snapshot()).toEqual(recognizedSave);
+    expect(inspector!.getSnapshot().records.some(({ intent }) => (
+      intent.meaning === "resident-introduction"
+    ))).toBe(false);
     const persisted = deserializeWorld(decodeGameSave(repository.snapshot()).world);
     const resident = persisted.residents.find(({ id }) => String(id) === porter.id);
     expect(resident?.playerKnowledge).toMatchObject({
