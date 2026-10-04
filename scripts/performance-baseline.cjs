@@ -412,6 +412,75 @@ function outputPath(rawOutput, defaultStem = 'runtime-baseline') {
   return resolved;
 }
 
+/** Local opt-in observation of public projections, never sound/hearing authority. */
+function createVoicePresentationObservation() {
+  return {
+    capacity: 512,
+    candidateCapacity: 64,
+    events: new Set(),
+    anchoredEvents: new Set(),
+    captionEvents: new Set(),
+    summary: {
+      schema: 'tideweft-public-voice-observation/v1',
+      scope: '100ms public render/UI projection samples plus initial/terminal reads; unique animal-call IDs, not emitted audio, NPC hearing, DOM/glyph or complete event counts',
+      capacity: 512,
+      snapshots: 0,
+      uniqueAnimalEvents: 0,
+      anchoredAnimalEvents: 0,
+      animalCaptionEvents: 0,
+      firstAnimalObservedAtTick: null,
+      lastAnimalObservedAtTick: null,
+      maximumProjectedCandidates: 0,
+      mixedSpeechAndAnimalSnapshots: 0,
+      overflow: false,
+    },
+  };
+}
+
+function observePublicVoicePresentation(state, renderView, uiView) {
+  const summary = state.summary;
+  summary.snapshots += 1;
+  const candidates = Array.isArray(renderView?.acousticText) ? renderView.acousticText : [];
+  summary.maximumProjectedCandidates = Math.max(summary.maximumProjectedCandidates, candidates.length);
+  if (candidates.length > state.candidateCapacity) summary.overflow = true;
+  let animalObserved = false;
+  let speechObserved = uiView?.expressionCaption?.presentationKind === 'speech';
+  const retain = (id, channel) => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 512
+      || !Number.isSafeInteger(renderView?.tick) || renderView.tick < 0) {
+      summary.overflow = true;
+      return;
+    }
+    if (!state.events.has(id)) {
+      if (state.events.size >= state.capacity) {
+        summary.overflow = true;
+        return;
+      }
+      state.events.add(id);
+      summary.uniqueAnimalEvents = state.events.size;
+      if (summary.firstAnimalObservedAtTick === null) summary.firstAnimalObservedAtTick = renderView.tick;
+    }
+    channel.add(id);
+    summary.lastAnimalObservedAtTick = renderView.tick;
+    animalObserved = true;
+  };
+  for (let index = 0; index < Math.min(candidates.length, state.candidateCapacity); index += 1) {
+    const candidate = candidates[index];
+    if (candidate?.acousticKind === 'speech') speechObserved = true;
+    // Animal contact/physical text is not a vocal call. Aggregate choruses
+    // have no individual anchor and are observed through the public caption.
+    if (candidate?.acousticKind === 'animal-call' && candidate.sourceKind === 'animal') {
+      retain(candidate.id, state.anchoredEvents);
+    }
+  }
+  const caption = uiView?.expressionCaption;
+  if (caption?.presentationKind === 'animal-call') retain(caption.id, state.captionEvents);
+  summary.anchoredAnimalEvents = state.anchoredEvents.size;
+  summary.animalCaptionEvents = state.captionEvents.size;
+  if (animalObserved && speechObserved) summary.mixedSpeechAndAnimalSnapshots += 1;
+  return summary;
+}
+
 function parseArguments(argv) {
   let executable = process.env.TIDEWEFT_PACKAGED_EXECUTABLE || '';
   let output = '';
@@ -419,6 +488,7 @@ function parseArguments(argv) {
   let sampleMsSpecified = false;
   let scenarioId = '';
   let traceHitches = false;
+  let observeVoice = false;
   let resourceShakedown = false;
   let resourceSoak = false;
   let packagedPersistenceWitness = false;
@@ -452,6 +522,8 @@ function parseArguments(argv) {
       if (scenarioId.length === 0) throw new Error('--scenario requires a value');
     } else if (argument === '--trace-hitches') {
       traceHitches = true;
+    } else if (argument === '--observe-voice') {
+      observeVoice = true;
     } else if (argument === '--resource-shakedown') {
       resourceShakedown = true;
     } else if (argument === '--resource-soak') {
@@ -473,6 +545,9 @@ function parseArguments(argv) {
   }
   if (resourceDiagnostic && traceHitches) {
     throw new Error(`${resourceFlag} cannot be combined with --trace-hitches`);
+  }
+  if (resourceDiagnostic && observeVoice) {
+    throw new Error('--observe-voice is separate from resource shakedown/soak certification');
   }
   if (resourceDiagnostic && sampleMsSpecified) {
     throw new Error(`${resourceFlag} uses a fixed route and cannot be combined with --sample-ms`);
@@ -498,6 +573,7 @@ function parseArguments(argv) {
     sampleMs,
     scenarioId,
     traceHitches,
+    observeVoice,
     resourceShakedown,
     resourceSoak,
     packagedPersistenceWitness,
@@ -4047,7 +4123,7 @@ async function measureScenario(
   sampleMs,
   traceHitches,
   viewportAlreadyPrepared = false,
-  { captureCdpMetrics = true } = {},
+  { captureCdpMetrics = true, observeVoice = false } = {},
 ) {
   await requirePerformanceInstrumentation(client, scenario);
   const warmupFrames = await warmTargetRenderer(client, scenario, viewportAlreadyPrepared);
@@ -4065,6 +4141,17 @@ async function measureScenario(
     const retainBoundedHitchSnapshot = ${retainBoundedHitchSnapshot.toString()};
     const buildHitchDelta = ${buildHitchDelta.toString()};
     const hitchSnapshotReasons = ${hitchSnapshotReasons.toString()};
+    const voiceObservation = ${JSON.stringify(observeVoice)}
+      ? (${createVoicePresentationObservation.toString()})() : null;
+    const observePublicVoicePresentation = ${observePublicVoicePresentation.toString()};
+    let nextVoiceObservationAt = 0;
+    const observeVoice = (elapsedMs, force = false) => {
+      if (voiceObservation === null || (!force && elapsedMs < nextVoiceObservationAt)) return;
+      nextVoiceObservationAt = elapsedMs + 100;
+      observePublicVoicePresentation(
+        voiceObservation, bridge.runtime.getRenderView(), bridge.runtime.getUIView(),
+      );
+    };
     const missing = [
       ['runtime.setPerformanceTelemetryEnabled', bridge.runtime?.setPerformanceTelemetryEnabled],
       ['runtime.resetPerformanceTelemetry', bridge.runtime?.resetPerformanceTelemetry],
@@ -4362,6 +4449,7 @@ async function measureScenario(
       }
       return position;
     };
+    observeVoice(0, true);
     observeTravel(0, initialRendererFrameCount, 0);
     const finish = () => {
       if (settled) return;
@@ -4369,6 +4457,8 @@ async function measureScenario(
       bridge.runtime.stop();
       const finishedAt = performance.now();
       const durationMs = finishedAt - startedAt;
+      // Read only; never call the input-dispatching travel observer at closure.
+      observeVoice(durationMs, true);
       const statistics = (samples) => {
         const ordered = [...samples].sort((left, right) => left - right);
         const p99Index = Math.max(0, Math.ceil(ordered.length * 0.99) - 1);
@@ -4432,6 +4522,7 @@ async function measureScenario(
         },
         telemetry,
       };
+      if (voiceObservation !== null) result.voiceObservation = { ...voiceObservation.summary };
       if (hitchTrace !== null) {
         result.hitchTrace = {
           schema: 'tideweft-hitch-trace/v1',
@@ -4461,6 +4552,7 @@ async function measureScenario(
       if (gapMs !== null) browserRafGaps.push(gapMs);
       priorBrowserRafAt = now;
       browserRafCallbacks += 1;
+      observeVoice(performance.now() - startedAt);
       const rendererTelemetry = bridge.renderer.telemetry();
       const rendererFrameCount = rendererTelemetry.frameCount;
       const before = previousTravelObservation;
@@ -5330,6 +5422,7 @@ async function runIsolatedScenario(
   resourceShakedown = false,
   resourceSoak = false,
   packagedPersistenceWitness = false,
+  observeVoice = false,
 ) {
   const port = await openPort();
   const userDataDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'tideweft-performance-'));
@@ -5448,6 +5541,7 @@ async function runIsolatedScenario(
           : Math.max(sampleMs, scenario.minimumSampleMs),
         traceHitches,
         true,
+        { observeVoice },
       );
     assertNotInterrupted('after the resource diagnostic');
     if (packagedPersistenceWitness) {
@@ -5686,6 +5780,7 @@ async function main() {
       options.resourceShakedown,
       options.resourceSoak,
       options.packagedPersistenceWitness,
+      options.observeVoice,
     );
     const packagedAfterScenario = await executableIdentity(executable);
     if (JSON.stringify(packagedAfterScenario) !== packagedIdentityJson) {
@@ -5834,6 +5929,7 @@ async function main() {
   if (options.traceHitches) {
     result.hitchTraceEnabled = true;
   }
+  if (options.observeVoice) result.voiceObservationEnabled = true;
   await fs.mkdir(path.dirname(options.output), { recursive: true });
   await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { mode: 0o600 });
   if (options.resourceSoak) {
@@ -5908,6 +6004,8 @@ module.exports = {
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
+  createVoicePresentationObservation,
+  observePublicVoicePresentation,
   createV31PackagedPersistenceRecord,
   forceRendererGarbageCollection,
   hitchSnapshotReasons,

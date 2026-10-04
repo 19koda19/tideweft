@@ -354,6 +354,7 @@ the committed caption to inspect Chart/Relief at desktop, portrait and short
 landscape sizes. It checks DOM bounds, separation of speech/event feedback from
 journey controls, caption/ARIA parity and announcement deduplication, and
 retains local screenshots for visual review.
+
 After natural greeting expiry it saves, reloads the same production page and
 physically continues/reselects the resident, checking learned facts and no
 expired caption/announcement replay. Reload retains strict error guards and
@@ -361,6 +362,16 @@ must match the original startup CSP-probe evidence in a distinct document.
 This is not a performance benchmark,
 screen-reader speech test, mobile-hardware proof or packaged-desktop check;
 the default performance mode still requires `--packaged-baseline`.
+
+For ordinary animal exposure, add `--observe-voice` to a packaged
+`profile:baseline` scenario (including the existing 210-second travel scenario)
+or a matched `profile:browser -- --packaged-baseline <artifact>` run. This opt-in
+diagnostic samples current public animal-call projections/captions with bounded
+deduplication; output contains counts, not actor/event identities. Zero calls
+means no exposure was observed, not that animals are silent. It does not prove
+audio, NPC hearing, actual glyph placement or a Voice soak, and its extra
+observation cost must not be mixed into uninstrumented performance comparisons.
+Do not combine it with frozen `--voice-presentation` or resource shakedown/soak.
 
 ## Desktop release
 

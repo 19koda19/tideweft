@@ -34,6 +34,8 @@ const {
   captureInputGuardEvidence,
   classifyElectronProcessRole,
   createWebAudioLifecycleTracker,
+  createVoicePresentationObservation,
+  observePublicVoicePresentation,
   createV31PackagedPersistenceRecord,
   forceRendererGarbageCollection,
   hitchSnapshotReasons,
@@ -51,6 +53,85 @@ const {
   retainBoundedHitchSnapshot,
   sanitizeRuntimeResourceCounts,
 } = require('./performance-baseline.cjs');
+
+// This observer counts only lawful public projections. It is not a producer,
+// an audio spy, a coverage oracle or access to hidden world/save state.
+{
+  const state = createVoicePresentationObservation();
+  const call = Object.freeze({ id: 'synthetic-animal-call', acousticKind: 'animal-call', sourceKind: 'animal' });
+  const physical = Object.freeze({ id: 'synthetic-rustle', acousticKind: 'physical', sourceKind: 'animal' });
+  const render = Object.freeze({ tick: 420, acousticText: Object.freeze([call, physical,
+    Object.freeze({ id: 'synthetic-speech', acousticKind: 'speech', sourceKind: 'human' })]) });
+  const ui = Object.freeze({ expressionCaption: Object.freeze({ id: call.id, presentationKind: 'animal-call' }) });
+  observePublicVoicePresentation(state, render, ui);
+  observePublicVoicePresentation(state, render, ui);
+  assert.equal(state.summary.uniqueAnimalEvents, 1);
+  assert.equal(state.summary.anchoredAnimalEvents, 1);
+  assert.equal(state.summary.animalCaptionEvents, 1);
+  assert.equal(state.summary.mixedSpeechAndAnimalSnapshots, 2);
+  assert.equal(state.summary.maximumProjectedCandidates, 3);
+  assert.equal(state.summary.firstAnimalObservedAtTick, 420);
+  assert.equal(state.summary.overflow, false);
+  assert.equal(JSON.stringify(state.summary).includes(call.id), false);
+
+  // Aggregate/unseen hearing has a caption, not an invented animal anchor.
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [] }, {
+    expressionCaption: { id: 'synthetic-unseen-chorus', presentationKind: 'animal-call' },
+  });
+  assert.equal(state.summary.uniqueAnimalEvents, 2);
+  assert.equal(state.summary.anchoredAnimalEvents, 1);
+  assert.equal(state.summary.animalCaptionEvents, 2);
+  assert.equal(state.summary.lastAnimalObservedAtTick, 421);
+  const quiet = createVoicePresentationObservation();
+  observePublicVoicePresentation(quiet, { tick: 420, acousticText: [physical] }, {});
+  assert.equal(quiet.summary.uniqueAnimalEvents, 0);
+  assert.equal(quiet.summary.firstAnimalObservedAtTick, null);
+  const reordered = createVoicePresentationObservation();
+  observePublicVoicePresentation(reordered, { ...render, acousticText: [...render.acousticText].reverse() }, ui);
+  assert.equal(reordered.summary.uniqueAnimalEvents, 1);
+  assert.equal(reordered.summary.mixedSpeechAndAnimalSnapshots, 1);
+
+  // The exact functions embedded in the browser run without module globals.
+  const standalone = require('node:vm').runInNewContext(`(() => {
+    const state = (${createVoicePresentationObservation.toString()})();
+    (${observePublicVoicePresentation.toString()})(state,
+      { tick: 420, acousticText: [] }, { expressionCaption: { id: 'standalone', presentationKind: 'animal-call' } });
+    return JSON.stringify(state.summary);
+  })()`);
+  assert.equal(JSON.parse(standalone).uniqueAnimalEvents, 1);
+}
+{
+  const state = createVoicePresentationObservation();
+  for (let index = 0; index < 513; index += 1) {
+    observePublicVoicePresentation(state, { tick: index, acousticText: [
+      { id: `bounded-${index}`, acousticKind: 'animal-call', sourceKind: 'animal' },
+    ] }, { expressionCaption: { id: `bounded-${index}`, presentationKind: 'animal-call' } });
+  }
+  assert.equal(state.summary.overflow, true);
+  assert.equal(state.summary.uniqueAnimalEvents, 512);
+  assert.equal(state.events.size, 512);
+  assert.equal(state.anchoredEvents.size, 512);
+  assert.equal(state.captionEvents.size, 512);
+  const oversize = createVoicePresentationObservation();
+  observePublicVoicePresentation(oversize, { tick: 420, acousticText: Array.from({ length: 65 }, (_, index) => (
+    { id: `candidate-${index}`, acousticKind: 'animal-call', sourceKind: 'animal' }
+  )) }, {});
+  assert.equal(oversize.summary.overflow, true);
+  assert.equal(oversize.summary.uniqueAnimalEvents, 64);
+  for (const candidate of [{ id: '', tick: 420 }, { id: 'bad-tick', tick: NaN }, { id: 'x'.repeat(513), tick: 420 }]) {
+    const invalid = createVoicePresentationObservation();
+    observePublicVoicePresentation(invalid, { tick: candidate.tick, acousticText: [
+      { id: candidate.id, acousticKind: 'animal-call', sourceKind: 'animal' },
+    ] }, {});
+    assert.equal(invalid.summary.overflow, true);
+    assert.equal(invalid.summary.uniqueAnimalEvents, 0);
+  }
+  assert.equal(parseArguments([]).observeVoice, false);
+  assert.equal(parseArguments(['--observe-voice']).observeVoice, true);
+  for (const mode of ['--resource-shakedown', '--resource-soak']) {
+    assert.throws(() => parseArguments([mode, '--observe-voice']), /separate from resource/u);
+  }
+}
 
 function runtimePerformanceSnapshot({
   capacity = 2_048,

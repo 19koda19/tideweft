@@ -174,6 +174,7 @@ function parseArguments(argv) {
   let output = '';
   let sampleMs = DEFAULT_SAMPLE_MS;
   let voicePresentation = false;
+  let observeVoice = false;
   let reducedMotion = false;
   let sampleMsSpecified = false;
 
@@ -181,6 +182,8 @@ function parseArguments(argv) {
     const argument = argv[index];
     if (argument === '--voice-presentation') {
       voicePresentation = true;
+    } else if (argument === '--observe-voice') {
+      observeVoice = true;
     } else if (argument === '--reduced-motion') {
       reducedMotion = true;
     } else if (argument === '--browser-executable') {
@@ -232,12 +235,16 @@ function parseArguments(argv) {
   if (voicePresentation && (packagedBaseline.length > 0 || sampleMsSpecified)) {
     throw new Error('--voice-presentation is a functional check, not a packaged performance comparison');
   }
+  if (voicePresentation && observeVoice) {
+    throw new Error('--observe-voice samples ordinary gameplay; do not combine it with frozen --voice-presentation');
+  }
   return {
     browserExecutable: browserExecutable ? path.resolve(browserExecutable) : '',
     packagedBaseline: voicePresentation ? null : artifactJsonPath(packagedBaseline, '--packaged-baseline'),
     output: artifactJsonPath(output, '--output', voicePresentation ? 'browser-voice' : 'browser-performance'),
     sampleMs,
     voicePresentation,
+    observeVoice,
     reducedMotion,
   };
 }
@@ -1729,7 +1736,7 @@ async function runBrowserWitness(options) {
       options.sampleMs,
       false,
       true,
-      { captureCdpMetrics: false },
+      { captureCdpMetrics: false, observeVoice: options.observeVoice },
     );
     if (rawMeasurement !== null && Object.hasOwn(rawMeasurement, 'browser')) {
       throw new Error('Browser witness unexpectedly retained Chromium-only diagnostics');

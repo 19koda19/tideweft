@@ -88,6 +88,11 @@ assert.equal(functional.voicePresentation, true);
 assert.equal(functional.reducedMotion, true);
 assert.equal(functional.packagedBaseline, null);
 assert.equal(parsed.voicePresentation, false);
+assert.equal(parsed.observeVoice, false);
+assert.equal(parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
+  '--observe-voice']).observeVoice, true);
+assert.throws(() => parseArguments(['--voice-presentation', '--observe-voice']), /do not combine/u);
+assert.throws(() => parseArguments(['--observe-voice']), /--packaged-baseline is required/u);
 
 const startupCounters = { errors: 0, unhandledRejections: 0, securityPolicyViolations: 0,
   evalPolicyViolations: 0, inlinePolicyViolations: 0, otherPolicyViolations: 0 };
