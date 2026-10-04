@@ -870,6 +870,48 @@ The wrapper/CI/Pages policies were not bypassed or changed. No distributable,
 installation, signing, other-platform, actual-mobile, hours or publication proof
 is added; the larger Voice closure remains open.
 
+#### Ordinary keeper response and physical parcel controls — 2026-10-04
+
+A finite Firefox 157 headless check on clean local `9cc87d3` used the existing
+production artifact below `/tideweft/` at 1440×900/DPR1. Its ignored one-off
+probe reused the existing BiDi transport and static server, not a new shipping
+harness. Physical seed entry, START, the exposed keeper warning, Promise pickup,
+view toggle, keyboard movement and KIT/drop/recovery controls ran while ordinary
+simulation continued. No actor, weather, event, inventory, position or save was
+injected; no runtime dispatch or clock stop manufactured the result.
+
+The real keeper replied “Storehouse door's barred.” at tick 420; its source-
+associated Relief text was visually inspected and readable. Actual pickup
+committed eight fresh-water units by tick 423. A short 0.7-tile carry retained
+them; KIT DROP created a reachable physical parcel at tick 425, changed guidance
+to RECOVER, and the native Interact action recovered all eight units into the
+expected `loose:<parcel-id>` carrier lot with DELIVER restored. The original lot
+was not expected to retain its ID. Ordinary environmental steps worsened sampled
+condition from 0.999958 to 0.999937 before recovery; equality with an earlier
+sample would incorrectly require time to stop. Exact commit-time material-state
+equivalence was not established by these asynchronous public samples.
+
+Final capture lasted 21.256 seconds / 139 samples through tick 440, with a
+538-ms largest sample gap, one observed speech event and no overflow. No animal,
+physical-caption or mixed scene was observed; these are coverage limits, not
+silent-world or annoyance claims. The retained first probe failed a stale
+condition-equality assumption; the second sampled an unready Interact DOM
+control after KIT close. A bounded actual-control wait resolved the latter
+without changing gameplay; its exact missing/hidden/disabled cause was not
+established. Both diagnostic failures remain local, not hidden by a game fix.
+
+The existing persistent Promise drop/recovery test passes unchanged (one selected
+case; 79 excluded), as does critical smoke (105 tests). Bundle SHA256 remains
+`9f84e08011bc6b8364a08a08defe2a7c56dc382998eef146c82040a258dd8e94`.
+Ignored final `native-play-9cc87d3-3.json` SHA256 is
+`80a61a5a514bbbf1f4c1690db2b4dc90b0284e5627745560b357746eb2aac2fb`;
+probe SHA256 `76105c36430d6be67d3568bd864d6d38b1ea40087ec95114cd47f73147d34227`.
+Only the already known startup CSP eval-probe denial was logged. This finite
+functional check is not native reload/full-root equivalence, delivered cargo,
+audible/assistive quality, hours of play, a performance result or public release.
+The disposable profile was removed after its own browser closed; the user's
+browser and data were untouched. No application, schema or dependency changed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
