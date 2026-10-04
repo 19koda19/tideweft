@@ -15825,7 +15825,11 @@ export async function createTideweftRuntime(
             session,
             "The porter offers one provision. The dog accepts it, and the food leaves the pack.",
           );
-          soundscape.play("accept", 0.38);
+          deferredWorldAcousticAudio.push(Object.freeze({
+            cue: "accept",
+            volume: 0.38,
+            variantSeed: 0,
+          }));
         }
       }
       // Preserve the existing collapsed cue's release order and synthesis.

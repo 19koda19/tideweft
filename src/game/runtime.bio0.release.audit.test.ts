@@ -41,6 +41,8 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   translateWorldPosition,
@@ -186,6 +188,104 @@ describe("BIO0 release-level player loop", () => {
     expect(reloadedEcology.cargo).toEqual(ecology.cargo);
     expect(reloadedEcology.dog.memories).toEqual(ecology.dog.memories);
     resumed.destroy();
+  });
+
+  it.each([false, true])("releases witnessed meal audio only after interval commit (reject=%s)", async (reject) => {
+    const repository = new MemoryRepository();
+    const setup = await createTideweftRuntime(repository);
+    setup.dispatchUI({ type: "resume-world" });
+    const initialDog = requiredVisibleDog(setup);
+    await setup.save();
+    setup.destroy();
+    prepareHungryDaylightMealFixture(repository);
+
+    const runtime = await createTideweftRuntime(repository);
+    const hungryDog = requiredVisibleDog(runtime);
+    expect(hungryDog.actorId).toBe(initialDog.actorId);
+    selectDog(runtime, hungryDog);
+    runtime.dispatchUI({
+      type: "living-actor",
+      action: "interact",
+      interaction: "help",
+      target: { species: "domestic-dog", actorId: hungryDog.actorId },
+    });
+
+    const mealAnnouncement = "The porter offers one provision. The dog accepts it, and the food leaves the pack.";
+    const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
+    let mealClosureCalls = 0;
+    let acceptSeenInsideClosure = false;
+    vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+      .mockImplementation((...args) => {
+        // Fault the genuine witnessed meal, not a playback mock or fabricated
+        // event. Presentation is published before this last fallible boundary.
+        if (runtime.getUIView().announcement?.message === mealAnnouncement) {
+          mealClosureCalls += 1;
+          acceptSeenInsideClosure = soundscapeControl.plays.some(({ cue }) => cue === "accept");
+          if (reject) return null;
+        }
+        return close(...args);
+      });
+    soundscapeControl.plays.length = 0;
+    runtime.start();
+    advanceFrames(1);
+
+    let beforeMeal: SaveRecord | undefined;
+    for (let tick = 0; tick < 12 && mealClosureCalls === 0; tick += 1) {
+      // Save at the real phase-nine boundary, so a rejected world step must
+      // restore the accepted trajectory and every conserved root exactly.
+      advanceFrames(9);
+      await runtime.save();
+      beforeMeal = repository.snapshot();
+      expect(requiredEcology(repository).events.some(({ kind }) => kind === "food-consumed"))
+        .toBe(false);
+      advanceFrames(1);
+    }
+    runtime.stop();
+    expect(mealClosureCalls).toBe(1);
+    if (!beforeMeal) throw new Error("meal transaction fixture never reached a world step");
+    expect(acceptSeenInsideClosure).toBe(false);
+    expect(soundscapeControl.plays.filter(({ cue }) => cue === "accept")).toEqual(
+      reject ? [] : [{ cue: "accept", gain: 0.38 }],
+    );
+
+    if (reject) {
+      expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      expect(soundscapeControl.plays).toContainEqual({ cue: "warning", gain: 1 });
+      expect(repository.snapshot()).toEqual(beforeMeal);
+    } else {
+      expect(runtime.getUIView().announcement?.message).toBe(mealAnnouncement);
+    }
+    await runtime.save();
+    const afterMeal = repository.snapshot();
+    const beforeEnvelope = JSON.parse(beforeMeal.worldJson) as Record<string, unknown>;
+    const afterEnvelope = JSON.parse(afterMeal.worldJson) as Record<string, unknown>;
+    expect(beforeEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(afterEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(beforeEnvelope.perceptionCarry).toMatchObject({ version: 14, playerStepsSinceWorldTick: 9 });
+    expect(afterEnvelope.perceptionCarry).toMatchObject({ version: 14 });
+    if (reject) {
+      // The halt deliberately changes session presentation/pause state and
+      // its integrity seal; all other current-schema roots remain exact.
+      const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = beforeEnvelope;
+      const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = afterEnvelope;
+      expect(afterRoots).toEqual(beforeRoots);
+    }
+    const ecology = requiredEcology(repository);
+    expect(ecology.events.filter(({ kind }) => kind === "food-consumed")).toHaveLength(reject ? 0 : 1);
+    expect(ecology.cargo.containers.find(({ id }) => id === ecology.foodSource.providerContainerId)
+      ?.carrier.lots[0]?.payload).toMatchObject({ quantity: reject ? 4 : 3 });
+    expect(ecology.cargo.containers.find(({ id }) => id === ecology.foodSource.receiverContainerId)
+      ?.carrier.retiredLotIds).toHaveLength(reject ? 0 : 1);
+    runtime.destroy();
+
+    soundscapeControl.plays.length = 0;
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().title.hasSave).toBe(true);
+    expect(soundscapeControl.plays.some(({ cue }) => cue === "accept")).toBe(false);
+    await reloaded.save();
+    expect(requiredEcology(repository).cargo).toEqual(ecology.cargo);
+    expect(requiredEcology(repository).dog.memories).toEqual(ecology.dog.memories);
+    reloaded.destroy();
   });
 
   it("lets SECURE FOOD close the exact pack without inventing a meal", async () => {
