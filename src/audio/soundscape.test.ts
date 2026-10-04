@@ -16,6 +16,160 @@ import {
   type SoundCue,
 } from "./soundscape";
 
+describe("soundscape lifetime", () => {
+  const suspendedGraph = () => {
+    const parameter = () => ({ value: 0, setTargetAtTime: vi.fn() });
+    let resumeResolve!: () => void;
+    let resumeReject!: (error: unknown) => void;
+    const resumed = new Promise<void>((resolve, reject) => {
+      resumeResolve = resolve;
+      resumeReject = reject;
+    });
+    const noise = {
+      buffer: null, loop: false, connect: vi.fn(), start: vi.fn(), stop: vi.fn(),
+    };
+    const context = {
+      currentTime: 0,
+      sampleRate: 8_000,
+      state: "suspended",
+      destination: {},
+      createGain: () => ({ gain: parameter(), connect: vi.fn() }),
+      createBiquadFilter: () => ({
+        type: "lowpass", frequency: parameter(), Q: parameter(), connect: vi.fn(),
+      }),
+      createStereoPanner: () => ({ pan: parameter(), connect: vi.fn() }),
+      createBuffer: (_channels: number, length: number) => ({
+        getChannelData: () => new Float32Array(length),
+      }),
+      createBufferSource: () => noise,
+      createOscillator: vi.fn(),
+      resume: vi.fn(() => resumed),
+      close: vi.fn(() => {
+        context.state = "closed";
+        resumeReject(new DOMException("Closed before resume completed", "InvalidStateError"));
+        return Promise.resolve();
+      }),
+    };
+    const constructor = vi.fn(function AudioContextFixture() { return context; });
+    vi.stubGlobal("AudioContext", constructor);
+    return { context, constructor, noise, resumeResolve, resumeReject };
+  };
+
+  it("cancels an in-flight resume during destruction without reopening audio", async () => {
+    const { context, constructor, noise } = suspendedGraph();
+    const soundscape = new TideweftSoundscape();
+    try {
+      const completion = Promise.allSettled([soundscape.unlock()]);
+      soundscape.destroy();
+      expect(await completion).toEqual([{ status: "fulfilled", value: undefined }]);
+      await soundscape.unlock();
+      soundscape.play("accept");
+      soundscape.destroy();
+      expect(constructor).toHaveBeenCalledOnce();
+      expect(context.close).toHaveBeenCalledOnce();
+      expect(noise.stop).toHaveBeenCalledOnce();
+      expect(context.createOscillator).not.toHaveBeenCalled();
+    } finally {
+      soundscape.destroy();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves every later resume attempt rather than hiding a trusted input behind an autoplay-blocked promise", async () => {
+    const { context, resumeResolve } = suspendedGraph();
+    const soundscape = new TideweftSoundscape();
+    try {
+      const completion = Promise.allSettled([
+        soundscape.unlock(), soundscape.unlock(), soundscape.unlock(),
+      ]);
+      expect(context.resume).toHaveBeenCalledTimes(3);
+      context.state = "running";
+      resumeResolve();
+      expect(await completion).toEqual(Array.from({ length: 3 }, () => ({
+        status: "fulfilled", value: undefined,
+      })));
+      await soundscape.unlock();
+      expect(context.resume).toHaveBeenCalledTimes(3);
+    } finally {
+      soundscape.destroy();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(["InvalidStateError", "NotSupportedError"])(
+    "still rejects an active %s and permits a subsequent legitimate retry",
+    async (name) => {
+      const { context, resumeResolve } = suspendedGraph();
+      const soundscape = new TideweftSoundscape();
+      const error = new DOMException("Active audio failure", name);
+      context.resume.mockImplementationOnce(() => Promise.reject(error));
+      try {
+        await expect(soundscape.unlock()).rejects.toBe(error);
+        const retry = soundscape.unlock();
+        expect(context.resume).toHaveBeenCalledTimes(2);
+        context.state = "running";
+        resumeResolve();
+        await expect(retry).resolves.toBeUndefined();
+      } finally {
+        soundscape.destroy();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it("does not hide an unrelated pending failure merely because destruction occurred", async () => {
+    const { context, resumeReject } = suspendedGraph();
+    const soundscape = new TideweftSoundscape();
+    const error = new DOMException("Output device failed", "NotSupportedError");
+    context.close.mockImplementationOnce(() => {
+      context.state = "closed";
+      return Promise.resolve();
+    });
+    try {
+      const completion = Promise.allSettled([soundscape.unlock()]);
+      soundscape.destroy();
+      resumeReject(error);
+      expect(await completion).toEqual([{ status: "rejected", reason: error }]);
+    } finally {
+      soundscape.destroy();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each(["InvalidStateError", "NotSupportedError"])(
+    "handles a pending close's %s without hiding unrelated shutdown failures",
+    async (name) => {
+      const { context } = suspendedGraph();
+      const soundscape = new TideweftSoundscape();
+      let closeReject!: (error: unknown) => void;
+      const closing = new Promise<void>((_resolve, reject) => { closeReject = reject; });
+      const handled = vi.spyOn(closing, "catch");
+      context.close.mockImplementationOnce(() => {
+        // The close is in flight; native public state need not update before
+        // the document's destruction rejects its pending promise.
+        return closing;
+      });
+      context.state = "running";
+      try {
+        await soundscape.unlock();
+        soundscape.destroy();
+        expect(handled).toHaveBeenCalledOnce();
+        const completion = Promise.allSettled([handled.mock.results[0]!.value]);
+        const error = new DOMException("Navigated away from page", name);
+        closeReject(error);
+        expect(await completion).toEqual([name === "InvalidStateError"
+          ? { status: "fulfilled", value: undefined }
+          : { status: "rejected", reason: error }]);
+        soundscape.destroy();
+        expect(context.close).toHaveBeenCalledOnce();
+      } finally {
+        soundscape.destroy();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+});
+
 describe("title crescendo", () => {
   it("is a deterministic short low-to-glass chord", () => {
     const pattern = titleCrescendoPattern();

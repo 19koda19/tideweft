@@ -155,15 +155,28 @@ export class TideweftSoundscape {
   private noise: AudioBufferSourceNode | undefined;
   private settings: AudioSettings;
   private lastStep = 0;
+  private destroyed = false;
 
   constructor(settings: Partial<AudioSettings> = {}) {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
   }
 
   async unlock(): Promise<void> {
-    if (!this.settings.enabled) return;
+    if (this.destroyed || !this.settings.enabled) return;
     if (!this.context) this.createGraph();
-    if (this.context?.state === "suspended") await this.context.resume();
+    const context = this.context;
+    if (!context || context.state !== "suspended") return;
+    // Each input must still attempt resume inside its user-activation scope:
+    // an earlier autoplay-blocked promise cannot replace a trusted gesture.
+    // Closing this exact graph may cancel it; live failures stay observable.
+    try {
+      await context.resume();
+    } catch (error: unknown) {
+      if (!this.destroyed || !(error instanceof DOMException)
+        || error.name !== "InvalidStateError") {
+        throw error;
+      }
+    }
   }
 
   setSettings(next: Partial<AudioSettings>): void {
@@ -355,10 +368,21 @@ export class TideweftSoundscape {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     this.noise?.stop();
     this.noise = undefined;
-    void this.context?.close();
+    const context = this.context;
     this.context = undefined;
+    // Document destruction can also reject the pending close itself. Only
+    // cancellation of this owner's closed graph is expected; other failures
+    // still surface instead of being hidden by page-lifecycle cleanup.
+    void context?.close()?.catch((error: unknown) => {
+      if (!this.destroyed || !(error instanceof DOMException)
+        || error.name !== "InvalidStateError") {
+        throw error;
+      }
+    });
   }
 
   private createGraph(): void {
