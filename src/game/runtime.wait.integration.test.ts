@@ -8,11 +8,14 @@ import type { TideweftUIView } from "../ui/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { GameSessionState } from "./sessionTypes";
+import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
+
+const soundscapePlay = vi.hoisted(() => vi.fn());
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(...args: unknown[]): void { soundscapePlay(...args); }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -98,6 +101,7 @@ let nextFrameTime: number;
 beforeEach(() => {
   scheduledFrame = undefined;
   nextFrameTime = 100;
+  soundscapePlay.mockReset();
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
     scheduledFrame = callback;
     return 1;
@@ -218,6 +222,101 @@ async function beginFreshWorld(
 }
 
 describe("bounded runtime WAIT", () => {
+  it.each([false, true])("releases WAIT completion audio only after its final interval commits (reject=%s)", async (reject) => {
+    const repository = new MemoryRepository();
+    const runtime = await beginFreshWorld(repository, "bounded wait ordinary authority");
+    await runtime.save();
+    const baselineTick = completedTick(decodeCurrent(repository.snapshot()));
+    runtime.dispatchUI({ type: "wait", action: "begin" });
+    // Beginning the action is already an immediate accepted input. Only its
+    // later fixed-step completion belongs to the enclosing tick transaction.
+    expect(soundscapePlay.mock.calls).toContainEqual(["rest", 0.42]);
+    advanceWaitFrames(runtime, 99);
+    expect(waitControls(runtime).waitActive).toBe(true);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decodeCurrent(beforeRecord);
+    expect(completedTick(before)).toBe(baselineTick + 9);
+    expect(playerStepPhase(before)).toBe(9);
+    const completionChanges = (session: GameSessionState) => session.sessionChanges
+      .filter((change) => change.startsWith("Waited ten minutes;"));
+    expect(completionChanges(before.session)).toEqual([]);
+
+    const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
+    let closureCalls = 0;
+    let closureCommitted = false;
+    let completionAudioInsideClosure = false;
+    let completionWasPresented = false;
+    const releaseCommitStates: boolean[] = [];
+    const completionAudio = () => soundscapePlay.mock.calls.filter(([cue]) => cue === "rest");
+    soundscapePlay.mockReset();
+    soundscapePlay.mockImplementation((cue: string) => {
+      if (cue === "rest") releaseCommitStates.push(closureCommitted);
+    });
+    vi.spyOn(
+      situatedExpressionChannelBank,
+      "closeSituatedExpressionChannelBankInterval",
+    ).mockImplementation((...args) => {
+      closureCalls += 1;
+      completionWasPresented ||= waitControls(runtime).waitActive === false
+        && (runtime.getUIView().announcement?.message.startsWith("Ten minutes pass.") ?? false);
+      completionAudioInsideClosure ||= completionAudio().length > 0;
+      if (reject) return null;
+      const closed = close(...args);
+      closureCommitted = closed !== null;
+      return closed;
+    });
+    // Keep this live receipt: reloading the 99-step save deliberately drops
+    // transient WAIT and would not exercise the real completion producer.
+    advanceWaitFrames(runtime, 1);
+    await Promise.resolve();
+    expect(closureCalls).toBe(1);
+    expect(completionWasPresented).toBe(true);
+    expect(completionAudioInsideClosure).toBe(false);
+    expect(completionAudio()).toEqual(reject ? [] : [["rest", 0.7, 0, undefined]]);
+    expect(releaseCommitStates).toEqual(reject ? [] : [true]);
+    expect(waitControls(runtime).waitActive).toBe(false);
+    if (reject) {
+      expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      expect(waitControls(runtime).canWait).toBe(false);
+      expect(soundscapePlay.mock.calls).toContainEqual(["warning", 1]);
+      expect(repository.snapshot()).toEqual(beforeRecord);
+    }
+    await runtime.save();
+    const after = decodeCurrent(repository.snapshot());
+    expect(completedTick(after)).toBe(baselineTick + (reject ? 9 : 10));
+    expect(playerStepPhase(after)).toBe(reject ? 9 : 0);
+    expect(completionChanges(after.session)).toHaveLength(reject ? 0 : 1);
+    if (reject) {
+      const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = before;
+      const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+      expect(afterRoots).toEqual(beforeRoots);
+      // Only the explicit integrity halt may change session presentation.
+      // Keep sessionChanges in the comparison so rejected completion cannot
+      // leave a false ten-minute receipt behind.
+      const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeAnnouncementId, ...beforeSession } = before.session;
+      const { paused: _afterPaused, announcement: _afterAnnouncement, nextAnnouncementId: _afterAnnouncementId, ...afterSession } = after.session;
+      expect(afterSession).toEqual(beforeSession);
+    }
+    runtime.destroy();
+    soundscapePlay.mockReset();
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().title.hasSave).toBe(true);
+    expect(waitControls(reloaded).waitActive).toBe(false);
+    expect(completionAudio()).toEqual([]);
+    await reloaded.save();
+    const restored = decodeCurrent(repository.snapshot());
+    expect(restored.world).toBe(after.world);
+    expect(restored.physicalCargo).toEqual(after.physicalCargo);
+    expect(completedTick(restored)).toBe(completedTick(after));
+    expect(playerStepPhase(restored)).toBe(playerStepPhase(after));
+    // Reload deliberately starts a new session recap, not another WAIT. The
+    // completed world/phase survives; its transient summary is not replayed.
+    expect(restored.session.sessionChanges).toEqual([]);
+    expect(restored.session.sessionPlayMilliseconds).toBe(0);
+    reloaded.destroy();
+  });
+
   it("produces identical authoritative state across two ordinary render cadences", async () => {
     const setupRepository = new MemoryRepository();
     const setup = await beginFreshWorld(

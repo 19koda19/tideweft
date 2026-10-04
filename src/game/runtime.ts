@@ -11975,6 +11975,7 @@ export async function createTideweftRuntime(
   function completePlayerWait(
     wait: PendingPlayerWait,
     finalStepAnnouncementChanged: boolean,
+    deferredAudio: CommittedAudioCue[],
   ): void {
     pendingPlayerWait = null;
     accumulator = 0;
@@ -11997,7 +11998,7 @@ export async function createTideweftRuntime(
         session,
         `Ten minutes pass. It is ${clockLabel}; weather, tide, cargo, actors, and Promises kept moving.`,
       );
-      soundscape.play("rest", 0.7);
+      deferredAudio.push(Object.freeze({ cue: "rest", volume: 0.7, variantSeed: 0 }));
     }
   }
 
@@ -16018,6 +16019,7 @@ export async function createTideweftRuntime(
         completePlayerWait(
           advancedWait,
           (session.announcement?.id ?? null) !== announcementIdBeforePlayerTimeStep,
+          deferredWorldAcousticAudio,
         );
       }
     }
