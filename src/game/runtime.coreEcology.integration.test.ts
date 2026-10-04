@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  actorCalloutViewport,
+  layoutAcousticTextCallouts,
+} from "../render/playerPresentation";
+import { acousticTextRectsOverlap } from "../render/acousticTextLayout";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import {
@@ -100,7 +105,8 @@ import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
 import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
 import * as coreEcologyPerception from "./coreEcologyPerception";
 import type { AudibleContact } from "./perception";
-import type { WorldAcousticEvent } from "./worldAcoustics";
+import { traversalIncidentAcousticEvent, type WorldAcousticEvent } from "./worldAcoustics";
+import type { TraversalFeedbackState } from "./traversalFeedback";
 import type { WorldAcousticPresentationReception } from "./worldAcousticPresentation";
 import * as acousticPresentationQueue from "./worldAcousticPresentationQueue";
 import { adoptCoreEcologySettlementHomeFromV24 } from "./coreEcologySettlementHome";
@@ -124,7 +130,7 @@ import {
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
-import { repositionDogActor } from "./dogActor";
+import { repositionDogActor, replaceDogActorPhysiology, replaceDogActorCircadian } from "./dogActor";
 import {
   deserializeDogActorRoster,
   replaceDogActorInRoster,
@@ -147,7 +153,12 @@ import {
   type PhysicalCargoState,
   type SerializedPhysicalCargoState,
 } from "./physicalCargoState";
-import { LOCAL_PLAYER_SUBJECT_ID, type SupplementalSoundSample } from "./humanPerception";
+import {
+  LOCAL_PLAYER_SUBJECT_ID,
+  type PlayerSenseSample,
+  type SupplementalSoundSample,
+} from "./humanPerception";
+import * as humanPerception from "./humanPerception";
 import type { PlayerState } from "./player";
 import {
   LOOSE_CARGO_TILE_UNITS,
@@ -158,7 +169,11 @@ import {
 } from "./looseCargo";
 import { createCraftingInventory } from "./crafting";
 import { PROVISION_DEFINITIONS } from "./provisions";
-import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
+import {
+  capturePlayerRegionalTravel,
+  restorePlayerRegionalTravel,
+  serializePlayerRegionalTravel,
+} from "./regionalPlayerTravel";
 import {
   adoptRegionalEcologyFromV24,
 } from "./regionalEcology";
@@ -239,6 +254,8 @@ import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import {
   deserializeSettlementDomesticAnimalRecoveryState,
 } from "./settlementDomesticAnimalRecovery";
+import { deserializeSettlementEcologyState } from "./settlementEcology";
+import { projectSettlementWorkingDogCircadian } from "./settlementWorkingDogCircadian";
 import {
   deserializeSettlementWorkingAnimalState,
   settlementGuardianAlarmInvestigation,
@@ -283,6 +300,7 @@ interface CurrentEnvelope {
   readonly settlementWorkingAnimals: string;
   readonly settlementDomesticAnimalRecovery: string;
   readonly regionalTravel: string;
+  readonly traversalFeedback: TraversalFeedbackState;
   readonly integrity: string;
   readonly [key: string]: unknown;
 }
@@ -5580,6 +5598,278 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
+  it("composes real warning, guardian bark, fall and acquired cargo without suppressing NPC hearing", async () => {
+    const { runtime, repository, crowActorId, guardianActorId, promiseLot } = await createFishCrowAlarmRuntime(
+      "guardian-work",
+    );
+    const observations = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+    try {
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const first = requiredEnvelope(repository);
+      const firstRoster = deserializeDogActorRoster(first.dogActorRoster);
+      const firstGuardian = firstRoster?.actors.find(({ identity }) => (
+        identity.stableId === guardianActorId
+      ));
+      expect(firstGuardian?.intent.kind).toBe("observe");
+      const crowAdmissions = first.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        (record) => record.kind === "core-wildlife-alarm"
+          && record.sourceSpecies === "fish-crow" && record.sourceActorId === crowActorId,
+      );
+      expect(crowAdmissions).toHaveLength(1);
+      const crowAdmission = crowAdmissions[0];
+      if (crowAdmission === undefined || promiseLot === null) throw new Error("Mixed scene lost its real sources");
+      const crowSample = first.perceptionCarry.actorVocalizationSamples[crowAdmission.sampleOrdinal];
+      expect(crowSample).toMatchObject({
+        expressionEventId: crowAdmission.eventId, sourceActorId: crowActorId,
+        soundClass: "animal-alarm", soundInterrupt: "strong",
+        position: requiredCoreActor(requiredCore(first), crowActorId).address.position,
+      });
+
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const second = requiredEnvelope(repository);
+      const roster = deserializeDogActorRoster(second.dogActorRoster);
+      const guardian = roster?.actors.find(({ identity }) => (
+        identity.stableId === guardianActorId
+      ));
+      const work = deserializeSettlementWorkingAnimalState(second.settlementWorkingAnimals);
+      const assignment = work?.assignments.find(({ workerActorId }) => (
+        workerActorId === guardianActorId
+      ));
+      if (guardian === undefined || assignment === undefined || work === null) {
+        throw new Error("Moderate alarm fixture lost its real guardian work");
+      }
+      const investigation = settlementGuardianAlarmInvestigation(
+        work,
+        guardian.perception,
+        guardianActorId,
+        assignment.currentActivity.transactionId,
+        deserializeWorld(second.world).meta.completedTick,
+      );
+      expect(investigation, stableStringify({
+        intent: guardian.intent,
+        circadian: guardian.circadian,
+        activity: assignment.currentActivity,
+        beliefs: guardian.perception.beliefs,
+      })).not.toBeNull();
+      const warningTick = deserializeWorld(second.world).meta.completedTick;
+      const guardianObservationId = `alarm:${hashCanonical([
+        crowAdmission.triggerEventId, guardianActorId, warningTick,
+      ])}`;
+      expect(investigation?.belief).toMatchObject({
+        sourceObservationId: guardianObservationId, channel: "hearing",
+        perceivedClass: "animal-alarm", subjectId: null, identification: "anonymous",
+        area: { center: crowSample?.position },
+      });
+      expect(investigation?.belief.salience).toBeGreaterThanOrEqual(180_000);
+      expect(investigation?.belief.salience).toBeLessThan(450_000);
+      const barkAdmissions = second.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        ({ kind }) => kind === "guardian-dog-warning",
+      );
+      const warningAdmissions = second.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        ({ kind }) => kind === "human-danger-warning",
+      );
+      expect(barkAdmissions).toHaveLength(1);
+      expect(warningAdmissions).toHaveLength(1);
+      const bark = barkAdmissions[0];
+      const warning = warningAdmissions[0];
+      if (bark === undefined || warning === undefined) throw new Error("Mixed scene lost its actual voices");
+      expect(bark).toMatchObject({
+        sourceActorId: guardianActorId, triggerEventId: assignment.currentActivity.transactionId,
+        sourceObservationId: guardianObservationId, acceptedAtTick: warningTick,
+      });
+      expect(second.perceptionCarry.actorVocalizationSamples[bark.sampleOrdinal]).toMatchObject({
+        expressionEventId: bark.eventId, sourceActorId: guardianActorId,
+        position: guardian.address.position, soundClass: "animal-alarm", soundInterrupt: "strong",
+      });
+      const warningSpeaker = deserializeWorld(second.world).residents.find(({ identity }) => (
+        identity.stableId === warning.sourceActorId
+      ));
+      if (warningSpeaker === undefined || crowSample === undefined) throw new Error("Mixed warning lost its lawful speaker");
+      const humanCrowReceipt = `hp-h-${warningTick}-${warningSpeaker.id}-${crowSample.id}`;
+      expect(warning).toMatchObject({ sourceObservationId: humanCrowReceipt, acceptedAtTick: warningTick });
+      expect(warningSpeaker.perception.beliefs).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          sourceObservationId: humanCrowReceipt, channel: "hearing",
+          perceivedClass: "animal-alarm", subjectId: null, identification: "anonymous", strongInterrupt: true,
+        }),
+      ]));
+      expect(second.perceptionCarry.actorVocalizationSamples[warning.sampleOrdinal]).toMatchObject({
+        expressionEventId: warning.eventId, sourceActorId: warning.sourceActorId,
+        soundClass: "danger-sound", soundInterrupt: "strong",
+      });
+      const warningChannel = second.perceptionCarry.situatedExpressionChannels.channels.find(
+        ({ sourceActorId }) => sourceActorId === warning.sourceActorId,
+      );
+      expect(warningChannel?.reception).toMatchObject({
+        kind: "heard-unseen", eventId: warning.eventId, directVisualReceipt: false,
+      });
+      expect(runtime.getUIView().expressionCaption?.id).toBe(warning.eventId);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-alarm"))
+        .toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-dog-warning-bark"))
+        .toHaveLength(1);
+
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: -1 } });
+      advancePlayerSteps(runtime, 1);
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      const mixed = runtime.getRenderView();
+      expect(mixed.player.incident?.kind).toBe("fall");
+      expect(mixed.acousticText).toEqual(expect.arrayContaining([
+        expect.objectContaining({ acousticKind: "speech", sourceActorId: "player:local" }),
+        expect.objectContaining({ acousticKind: "animal-call", id: bark.eventId, sourceActorId: guardianActorId }),
+        expect.objectContaining({ acousticKind: "physical", sourceId: "player:local", semanticFamily: "thud" }),
+        expect.objectContaining({
+          acousticKind: "physical", sourceKind: "object", sourceId: `cargo-lot:${promiseLot.id}`,
+          semanticFamily: "thud",
+        }),
+      ]));
+      // Hearing a warning does not authorize an exact hidden-source anchor.
+      // The higher-priority cargo line may replace its optional caption, but
+      // the committed warning and its pending hearing sample remain intact.
+      expect(mixed.acousticText?.some(({ id }) => id === warning.eventId)).toBe(false);
+      await runtime.save();
+      const fallen = requiredEnvelope(repository);
+      expect(fallen.perceptionCarry.actorVocalizationSamples[warning.sampleOrdinal])
+        .toEqual(second.perceptionCarry.actorVocalizationSamples[warning.sampleOrdinal]);
+      const retainedWarning = fallen.perceptionCarry.situatedExpressionChannels.channels.find(
+        ({ sourceActorId }) => sourceActorId === warning.sourceActorId,
+      );
+      expect(retainedWarning?.state.active).toMatchObject({
+        eventId: warning.eventId, audioAcknowledged: true,
+      });
+      expect(retainedWarning?.reception).toEqual(warningChannel?.reception);
+      const cargoSpeech = mixed.acousticText?.find((item) => (
+        item.acousticKind === "speech" && item.sourceActorId === "player:local"
+      ));
+      if (cargoSpeech === undefined) throw new Error("Mixed scene lost its actual cargo reaction");
+      expect(runtime.getUIView().expressionCaption?.id).toBe(cargoSpeech.id);
+      expect(cargoSpeech.id).not.toBe(warning.eventId);
+      expect(fallen.perceptionCarry.playerStepStateSamples[0]).toMatchObject({
+        traversalIncidentKind: "fall", becameSwept: false, rescued: false,
+        startingWaterDepth: 0, endingWaterDepth: 0,
+      });
+      const travel = restorePlayerRegionalTravel(deserializeWorld(fallen.world).meta.rootSeed,
+        fallen.player, fallen.regionalTravel);
+      const incident = fallen.traversalFeedback.incident;
+      const incidentPosition = travel === null || incident === null ? null
+        : playerWorldPositionInRegionalWindow(travel.window, {
+            ...fallen.player, x: incident.position.x, y: incident.position.y,
+          });
+      if (incident === null || incidentPosition === null) throw new Error("Mixed scene lost its physical body impact");
+      expect(incident.cue).toBe("impact");
+      const bodyEvent = traversalIncidentAcousticEvent({
+        incident, sourceId: "player:local", sourcePosition: incidentPosition, occurredAtTick: warningTick,
+      });
+      if (bodyEvent === null) throw new Error("Mixed body impact lost its committed semantics");
+      expect(soundscapePlay.mock.calls.filter(([cue, volume, variantSeed, pan]) => (
+        cue === "impact" && volume === bodyEvent.intensity / FIXED_POINT
+          && variantSeed === bodyEvent.presentationVariantSeed && pan === 0
+      ))).toHaveLength(1);
+      expect(mixed.acousticText).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: bodyEvent.eventId, acousticKind: "physical", sourceId: "player:local" }),
+      ]));
+      const impactSample = fallen.perceptionCarry.playerSenseSamples[0] as PlayerSenseSample;
+      expect(impactSample).toMatchObject({
+        position: bodyEvent.sourcePosition, soundClass: bodyEvent.soundClass,
+        soundLoudness: bodyEvent.intensity, soundRangeUnits: bodyEvent.rangeUnits,
+        soundInterrupt: bodyEvent.interrupt,
+      });
+      const remaining = fallen.physicalCargo.carrier.lots.filter(({ payload }) => (
+        payload.kind === "promise" && payload.contractId === promiseLot.contractId
+      )).reduce((sum, { payload }) => sum + (payload.kind === "promise" ? payload.quantity : 0), 0);
+      const dropped = fallen.physicalCargo.looseWorld.entities.filter(({ payload }) => (
+        payload.kind === "promise" && payload.contractId === promiseLot.contractId
+      )).reduce((sum, { payload }) => sum + (payload.kind === "promise" ? payload.quantity : 0), 0);
+      expect(dropped).toBeGreaterThan(0);
+      expect(remaining + dropped).toBe(promiseLot.quantity);
+      for (const [width, height] of [[1_280, 720], [390, 844]] as const) {
+        const viewport = actorCalloutViewport(width, height);
+        const anchor = (item: NonNullable<typeof mixed.acousticText>[number]) => ({
+          x: width / 2 + (item.position.x - mixed.player.position.x) * 0.05,
+          y: height / 2 + (item.position.y - mixed.player.position.y) * 0.05,
+        });
+        const layout = layoutAcousticTextCallouts(mixed.acousticText ?? [], viewport, anchor);
+        expect(layout.placements.length).toBeGreaterThan(0);
+        expect(layout.placements.length).toBeLessThanOrEqual(4);
+        expect(new Set(layout.placements.map(({ candidate }) => candidate.sourceId)).size)
+          .toBe(layout.placements.length);
+        expect(layout.placements.some(({ candidate }) => candidate.id === bark.eventId)).toBe(true);
+        expect(layout.placements.some(({ candidate }) => candidate.acousticText.acousticKind === "speech"))
+          .toBe(true);
+        expect(layout.suppressions).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            candidate: expect.objectContaining({ id: bodyEvent.eventId, sourceId: "player:local" }),
+            reason: "per-source-cap",
+          }),
+        ]));
+        for (let index = 0; index < layout.placements.length; index += 1) {
+          for (const other of layout.placements.slice(index + 1)) {
+            expect(acousticTextRectsOverlap(layout.placements[index]!.rect, other.rect)).toBe(false);
+          }
+        }
+        expect(layoutAcousticTextCallouts([...(mixed.acousticText ?? [])].reverse(), viewport, anchor))
+          .toEqual(layout);
+      }
+
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      const heard = requiredEnvelope(repository);
+      const receiptTick = warningTick + 1;
+      expect(deserializeWorld(heard.world).meta.completedTick).toBe(receiptTick);
+      const impactCalls = observations.mock.calls.filter(([input]) => input.targetTick === receiptTick
+        && input.playerSamples.some(({ id }) => id === impactSample.id));
+      expect(impactCalls).toHaveLength(1);
+      const impactCall = impactCalls[0];
+      if (impactCall === undefined) throw new Error("Mixed scene lost its actual impact hearing input");
+      const impactResult = observations.mock.results[observations.mock.calls.indexOf(impactCall)];
+      if (impactResult?.type !== "return") throw new Error("Actual human hearing did not complete");
+      const batches = impactResult.value as ReturnType<typeof humanPerception.collectExistingHumanObservations>;
+      const impactObservations = batches.flatMap(({ observerId, residentId, observations: receipt }) => (
+        receipt.filter(({ id }) => (
+          id === `hp-h-${receiptTick}-${residentId}-${impactSample.id}`
+        )).map((observation) => ({ observerId, observation }))
+      ));
+      expect(impactObservations.length).toBeGreaterThan(0);
+      for (const { observation } of impactObservations) {
+        expect(observation).toMatchObject({
+          channel: "hearing", perceivedClass: "physical-thud", subjectId: null, identification: "anonymous",
+        });
+      }
+      const heardWorld = deserializeWorld(heard.world);
+      expect(impactObservations.some(({ observerId, observation }) => (
+        heardWorld.residents.find(({ identity }) => identity.stableId === observerId)
+          ?.perception.beliefs.some(({ sourceObservationId }) => sourceObservationId === observation.id)
+      ))).toBe(true);
+      // Only the strongest current player contact enters this bridge. This
+      // proves the suppressed body thud, not separate NPC receipts for cargo.
+      runtime.destroy();
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      const restored = await createTideweftRuntime(repository);
+      try {
+        expect(restored.getUIView().saveWarning).toBeUndefined();
+        expect(soundscapePlay.mock.calls).toEqual([]);
+        const oldIds = new Set((mixed.acousticText ?? []).map(({ id }) => id));
+        expect(restored.getRenderView().acousticText?.some(({ id }) => oldIds.has(id))).not.toBe(true);
+        await restored.save();
+        const reloaded = requiredEnvelope(repository);
+        for (const key of ["world", "player", "physicalCargo", "regionalEcology", "dogActorRoster",
+          "settlementWorkingAnimals", "settlementEcology", "perceptionCarry", "regionalTravel", "promiseJourney"] as const) {
+          expect(reloaded[key], key).toEqual(heard[key]);
+        }
+      } finally {
+        restored.destroy();
+        scheduledFrame = undefined;
+      }
+    } finally {
+      runtime.destroy();
+      scheduledFrame = undefined;
+    }
+  }, 120_000);
+
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
     const {
       runtime,
@@ -8462,7 +8752,7 @@ async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 |
 }
 
 async function createFishCrowAlarmRuntime(
-  mode: "single-source" | "candidate-order" = "single-source",
+  mode: "single-source" | "candidate-order" | "guardian-work" = "single-source",
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
@@ -8471,15 +8761,29 @@ async function createFishCrowAlarmRuntime(
   deerActorId: string;
   guardianActorId: string;
   initialCrowPosition: CoreWildlifeActorState["address"]["position"];
+  promiseLot: Readonly<{ id: string; contractId: number; quantity: number }> | null;
 }>> {
   const repository = new MemoryRepository();
-  const initial = await createTideweftRuntime(repository);
+  let initial = await createTideweftRuntime(repository);
   initial.dispatchUI({
     type: "new-world",
     seed: "rain-chorus-runtime-2",
     posture: "gale",
     sessionShape: "wander",
   });
+  if (mode === "guardian-work") {
+    await initial.save();
+    await adoptUntouchedFixtureCoreAsCurrent(repository, initial, requiredEnvelope(repository), (source) => (
+      coreActors(source).filter(({ identity }) => (
+        identity.species === "fish-crow" || identity.species === "northern-harrier" || identity.species === "deer"
+      )).map(({ identity }) => identity.stableId)
+    ));
+    initial = await createTideweftRuntime(repository);
+    const offer = initial.getUIView().contracts.find(({ actionLabel }) => actionLabel === "Pick up cargo here");
+    if (offer === undefined) throw new Error("Mixed alarm scene has no real Promise offer");
+    initial.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
+    advancePlayerSteps(initial, 10);
+  }
   await initial.save();
   const record = repository.snapshot();
   const envelope = requiredEnvelope(repository);
@@ -8490,7 +8794,16 @@ async function createFishCrowAlarmRuntime(
   const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
   if (regional === null) throw new Error("Fish-crow voice fixture could not restore its frame");
 
-  const sourcePatch = requiredCore(envelope);
+  if (mode === "guardian-work") {
+    // Adopt while pristine, acquire through the real Promise action, then
+    // stage only a quiet current-schema interval. Never strip pickup history
+    // by translating its live carry back through a historical fixture.
+    expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(envelope.perceptionCarry.actorVocalizationSamples).toEqual([]);
+    expect(envelope.perceptionCarry.situatedExpressionAdmissions.records).toEqual([]);
+    expect(envelope.perceptionCarry.animalContactAcousticCarry).toMatchObject({ records: [] });
+  }
+  const sourcePatch = mode === "guardian-work" ? requiredActiveLegacyCore(envelope) : requiredCore(envelope);
   const sourceCrowPopulation = sourcePatch.populations.find(
     ({ species }) => species === "fish-crow",
   );
@@ -8524,7 +8837,7 @@ async function createFishCrowAlarmRuntime(
   ) {
     throw new Error("Fish-crow voice fixture omitted its source or alarm consumers");
   }
-  const adoptedEnvelope = resealedEnvelope(envelope, {
+  const adoptedEnvelope = mode === "guardian-work" ? envelope : resealedEnvelope(envelope, {
     coreEcology: serializeCoreEcologyAggregatePatch(promoteFixtureActors(sourcePatch, [
       ...sourceCrowPopulation.members.map(({ actor }) => actor.identity.stableId),
       sourceHarrier.identity.stableId,
@@ -8552,7 +8865,10 @@ async function createFishCrowAlarmRuntime(
     0,
     6 * WORLD_POSITION_UNITS_PER_TILE,
   );
-  const intendedPlayerPosition = mode === "single-source"
+  let intendedPlayerPosition = mode === "guardian-work"
+    ? translateWorldPosition(sourceAssignment.dutyArea.center,
+        -WORLD_POSITION_UNITS_PER_TILE, WORLD_POSITION_UNITS_PER_TILE)
+    : mode === "single-source"
     ? translateWorldPosition(crowPosition, -4 * WORLD_POSITION_UNITS_PER_TILE, 0)
     // The deterministic post-commit flock loci are 120 units apart. This
     // listener point straddles the clear-air fish-crow hearing boundary.
@@ -8564,6 +8880,26 @@ async function createFishCrowAlarmRuntime(
         }).rangeUnits - 183,
         0,
       );
+  if (mode === "guardian-work") {
+    intendedPlayerPosition = translateWorldPosition(intendedPlayerPosition,
+      999 - intendedPlayerPosition.localX % WORLD_POSITION_UNITS_PER_TILE,
+      201 - intendedPlayerPosition.localY % WORLD_POSITION_UNITS_PER_TILE,
+    );
+    if (intendedPlayerPosition.region.x !== 0 || intendedPlayerPosition.region.y !== 0) {
+      throw new Error("Mixed alarm contact left the compatibility terrain fixture");
+    }
+    const x = Math.floor(intendedPlayerPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const y = Math.floor(intendedPlayerPosition.localY / WORLD_POSITION_UNITS_PER_TILE);
+    const start = world.terrain.tiles[y * world.terrain.width + x];
+    const ridge = world.terrain.tiles[y * world.terrain.width + x + 1];
+    if (start === undefined || ridge === undefined) throw new Error("Mixed alarm scene lost its finite contact pair");
+    start.elevation = FIXED_POINT;
+    ridge.elevation = 600_000;
+    ridge.roughness = FIXED_POINT;
+    ridge.terrain = "ridge";
+    player.stamina = 300_000;
+    player.stability = 0;
+  }
   const playerPlacement = livingActorAddressInRegionalWindow({
     ...sourceGuardian.address,
     position: intendedPlayerPosition,
@@ -8575,8 +8911,8 @@ async function createFishCrowAlarmRuntime(
   player.y = playerPlacement.point.y;
   player.previousX = player.x;
   player.previousY = player.y;
-  player.facingMilliRadians = mode === "single-source"
-    ? 0
+  player.facingMilliRadians = mode !== "candidate-order"
+    ? mode === "guardian-work" ? -Math.round(Math.PI * 500) : 0
     : Math.round(Math.PI * 1_000);
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null || stableStringify(playerPosition) !== stableStringify(
@@ -8592,7 +8928,11 @@ async function createFishCrowAlarmRuntime(
     0,
     -6 * WORLD_POSITION_UNITS_PER_TILE,
   );
-  const guardianPosition = sourceGuardian.address.position;
+  // A moderate, actually heard alarm can invite work. A nearer strong alarm
+  // must still startle this dog and defer to its own safety, not force a bark.
+  const guardianPosition = mode === "guardian-work"
+    ? translateWorldPosition(sourceAssignment.dutyArea.center, 0, -4 * WORLD_POSITION_UNITS_PER_TILE)
+    : sourceGuardian.address.position;
   const readyCrow = replaceCoreWildlifeActorPhysiology(crow, {
     atTick: patch.updatedAtTick,
     needs: { hunger: 0, safety: 0, rest: 0 },
@@ -8623,11 +8963,38 @@ async function createFishCrowAlarmRuntime(
     position: deerPosition,
     heading: 500_000,
   }));
-  const positionedGuardian = repositionDogActor(sourceGuardian, {
+  const readyGuardian = mode === "guardian-work"
+    ? replaceDogActorPhysiology(sourceGuardian, {
+        atTick: patch.updatedAtTick,
+        needs: { hunger: 0, thirst: 0, safety: 0, rest: 0, company: 0 },
+        condition: sourceGuardian.condition,
+        humanFamiliarity: sourceGuardian.humanFamiliarity,
+      })
+    : sourceGuardian;
+  let positionedGuardian = repositionDogActor(readyGuardian, {
     atTick: patch.updatedAtTick,
     position: guardianPosition,
     heading: 750_000,
   });
+  if (mode === "guardian-work") {
+    const settlement = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const custody = settlement.domesticCustodies.find(({ relationshipId }) => (
+      relationshipId === sourceAssignment.workerCustodyRelationshipId
+    ));
+    if (custody === undefined) throw new Error("Mixed alarm scene lost real guardian home custody");
+    const delta = worldPositionDelta(guardianPosition, custody.homeStructure.position);
+    const circadian = projectSettlementWorkingDogCircadian({
+      dog: positionedGuardian,
+      custody,
+      assignment: sourceAssignment,
+      atTick: patch.updatedAtTick,
+      kennelArrived: Math.hypot(delta.x, delta.y) <= custody.homeStructure.radiusUnits,
+    });
+    if (circadian === null) throw new Error("Mixed alarm scene could not reproject its actual guardian pose");
+    positionedGuardian = replaceDogActorCircadian(positionedGuardian, {
+      atTick: patch.updatedAtTick, circadian: circadian.receipt,
+    });
+  }
   const positionedRoster = replaceDogActorInRoster(sourceRoster, positionedGuardian);
   if (positionedRoster === null) {
     throw new Error("Fish-crow voice fixture rejected its guardian position");
@@ -8671,7 +9038,7 @@ async function createFishCrowAlarmRuntime(
     });
     const needsCrowCooldown = actor.identity.species === "fish-crow"
       && (
-        mode === "single-source"
+        mode !== "candidate-order"
         || actor.identity.stableId !== laterCandidateCrow.identity.stableId
       );
     const preparedActor = !needsCrowCooldown
@@ -8698,12 +9065,32 @@ async function createFishCrowAlarmRuntime(
     else displacedOrdinal += 1;
   }
   patch = reconcileFixtureGroupAnchors(patch);
-  const prepared = resealedEnvelope(adoptedEnvelope, {
-    world: serializeWorld(world),
-    player,
-    coreEcology: serializeCoreEcologyAggregatePatch(patch),
-    dogActorRoster: serializeDogActorRoster(positionedRoster),
-  });
+  const positionedEnvelope = mode === "guardian-work"
+    ? {
+        ...adoptedEnvelope,
+        regionalTravel: serializePlayerRegionalTravel(capturePlayerRegionalTravel(regional, player)),
+        promiseJourney: {
+          version: 1, contractId: player.activeContractId,
+          detoured: true, compatibilityTrace: [],
+        },
+      }
+    : adoptedEnvelope;
+  const prepared = mode === "guardian-work"
+    ? resealedCurrentEnvelopeWithCorePatch(positionedEnvelope, patch, {
+        world: serializeWorld(world), player,
+        dogActorRoster: serializeDogActorRoster(positionedRoster),
+        perceptionCarry: {
+          ...envelope.perceptionCarry,
+          intervalStartPosition: playerPosition,
+          intervalStartFacingMilliRadians: player.facingMilliRadians,
+          playerStepStateAnchor: { version: 1, sampleOrdinal: 0, stamina: player.stamina, mode: player.mode },
+        },
+      })
+    : resealedEnvelope(positionedEnvelope, {
+        world: serializeWorld(world), player,
+        coreEcology: serializeCoreEcologyAggregatePatch(patch),
+        dogActorRoster: serializeDogActorRoster(positionedRoster),
+      });
   await repository.save(recordWithEnvelope(record, prepared));
   initial.destroy();
   scheduledFrame = undefined;
@@ -8721,7 +9108,7 @@ async function createFishCrowAlarmRuntime(
     .filter(({ identity }) => (
       identity.stableId !== crow.identity.stableId
       && (
-        mode === "single-source"
+        mode !== "candidate-order"
         || identity.stableId !== laterCandidateCrow.identity.stableId
       )
     ))
@@ -8747,6 +9134,14 @@ async function createFishCrowAlarmRuntime(
     deerActorId: deer.identity.stableId,
     guardianActorId: sourceGuardian.identity.stableId,
     initialCrowPosition: crowPosition,
+    promiseLot: (() => {
+      const lot = envelope.physicalCargo.carrier.lots.find(({ payload }) => (
+        payload.kind === "promise" && payload.contractId === envelope.player.activeContractId
+      ));
+      return lot?.payload.kind === "promise"
+        ? Object.freeze({ id: lot.id, contractId: lot.payload.contractId, quantity: lot.payload.quantity })
+        : null;
+    })(),
   });
 }
 
