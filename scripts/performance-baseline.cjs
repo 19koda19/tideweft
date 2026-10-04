@@ -417,67 +417,164 @@ function createVoicePresentationObservation() {
   return {
     capacity: 512,
     candidateCapacity: 64,
-    events: new Set(),
+    events: new Map(),
+    animalEvents: new Set(),
     anchoredEvents: new Set(),
     captionEvents: new Set(),
+    lastTick: null,
+    lastElapsedMs: null,
+    emptySinceMs: null,
     summary: {
-      schema: 'tideweft-public-voice-observation/v1',
-      scope: '100ms public render/UI projection samples plus initial/terminal reads; unique animal-call IDs, not emitted audio, NPC hearing, DOM/glyph or complete event counts',
+      schema: 'tideweft-public-voice-observation/v2',
+      scope: '100ms public render/UI projection samples plus initial/terminal reads; first-observed IDs include already-active boundary cues, not emitted audio, silence, NPC hearing, DOM/glyph or complete event counts',
       capacity: 512,
       snapshots: 0,
+      uniqueProjectionEvents: 0,
+      candidateProjectionEvents: 0,
+      captionProjectionEvents: 0,
+      eventKinds: { playerSpeech: 0, humanSpeech: 0, unattributedSpeech: 0,
+        animalCall: 0, embodiedSignal: 0, physical: 0 },
       uniqueAnimalEvents: 0,
       anchoredAnimalEvents: 0,
       animalCaptionEvents: 0,
       firstAnimalObservedAtTick: null,
       lastAnimalObservedAtTick: null,
       maximumProjectedCandidates: 0,
+      speechProjectionSnapshots: 0,
+      animalProjectionSnapshots: 0,
+      physicalProjectionSnapshots: 0,
       mixedSpeechAndAnimalSnapshots: 0,
+      emptyProjectionSnapshots: 0,
+      unclassifiedProjectionRecords: 0,
+      firstSampleAtMs: null,
+      lastSampleAtMs: null,
+      observedWindowMs: null,
+      maximumSampleGapMs: 0,
+      longestEmptyProjectionSampleSpanMs: 0,
+      uniqueProjectionEventsPerObservedMinute: null,
+      incomplete: false,
       overflow: false,
     },
   };
 }
 
-function observePublicVoicePresentation(state, renderView, uiView) {
+function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = null) {
   const summary = state.summary;
   summary.snapshots += 1;
+  const tick = renderView?.tick;
+  if (!Number.isSafeInteger(tick) || tick < 0) summary.incomplete = true;
+  else {
+    if (state.lastTick !== null && tick < state.lastTick) {
+      summary.incomplete = true;
+      state.emptySinceMs = null;
+    }
+    state.lastTick = tick;
+  }
   const candidates = Array.isArray(renderView?.acousticText) ? renderView.acousticText : [];
+  if (renderView?.acousticText !== undefined && !Array.isArray(renderView.acousticText)) {
+    summary.incomplete = true;
+  }
   summary.maximumProjectedCandidates = Math.max(summary.maximumProjectedCandidates, candidates.length);
   if (candidates.length > state.candidateCapacity) summary.overflow = true;
   let animalObserved = false;
-  let speechObserved = uiView?.expressionCaption?.presentationKind === 'speech';
-  const retain = (id, channel) => {
+  let speechObserved = false;
+  let physicalObserved = false;
+  const classify = (kind, sourceKind) => {
+    if (kind === 'speech') return sourceKind === 'player' ? 'playerSpeech'
+      : sourceKind === 'human' ? 'humanSpeech' : 'unattributedSpeech';
+    if (kind === 'animal-call') return 'animalCall';
+    if (kind === 'embodied-signal') return 'embodiedSignal';
+    if (kind === 'physical') return 'physical';
+    summary.unclassifiedProjectionRecords += 1;
+    summary.incomplete = true;
+    return null;
+  };
+  const retain = (id, kind, channel) => {
+    if (kind === null) return;
+    if (kind.endsWith('Speech')) speechObserved = true;
+    if (kind === 'animalCall') animalObserved = true;
+    if (kind === 'physical') physicalObserved = true;
     if (typeof id !== 'string' || id.length === 0 || id.length > 512
-      || !Number.isSafeInteger(renderView?.tick) || renderView.tick < 0) {
+      || !Number.isSafeInteger(tick) || tick < 0) {
       summary.overflow = true;
       return;
     }
-    if (!state.events.has(id)) {
+    let record = state.events.get(id);
+    if (record === undefined) {
       if (state.events.size >= state.capacity) {
         summary.overflow = true;
         return;
       }
-      state.events.add(id);
-      summary.uniqueAnimalEvents = state.events.size;
-      if (summary.firstAnimalObservedAtTick === null) summary.firstAnimalObservedAtTick = renderView.tick;
+      record = { kind, channels: 0, captionOnlySpeech: kind === 'unattributedSpeech' && channel === 2 };
+      state.events.set(id, record);
+      summary.eventKinds[kind] += 1;
+    } else if (record.kind === 'unattributedSpeech' && record.captionOnlySpeech
+      && (kind === 'playerSpeech' || kind === 'humanSpeech')) {
+      // Only an explicit lawful render source can refine caption attribution.
+      summary.eventKinds.unattributedSpeech -= 1;
+      summary.eventKinds[kind] += 1;
+      record.kind = kind;
+    } else if (record.kind !== kind
+      && !(kind === 'unattributedSpeech' && record.kind.endsWith('Speech'))) {
+      summary.incomplete = true;
+      return;
     }
-    channel.add(id);
-    summary.lastAnimalObservedAtTick = renderView.tick;
-    animalObserved = true;
+    if ((record.channels & channel) === 0) {
+      record.channels |= channel;
+      if (channel === 1) summary.candidateProjectionEvents += 1;
+      else summary.captionProjectionEvents += 1;
+    }
+    if (channel === 1) record.captionOnlySpeech = false;
+    if (kind === 'animalCall') {
+      state.animalEvents.add(id);
+      (channel === 1 ? state.anchoredEvents : state.captionEvents).add(id);
+      if (summary.firstAnimalObservedAtTick === null) summary.firstAnimalObservedAtTick = tick;
+      summary.lastAnimalObservedAtTick = tick;
+    }
   };
   for (let index = 0; index < Math.min(candidates.length, state.candidateCapacity); index += 1) {
     const candidate = candidates[index];
-    if (candidate?.acousticKind === 'speech') speechObserved = true;
-    // Animal contact/physical text is not a vocal call. Aggregate choruses
-    // have no individual anchor and are observed through the public caption.
-    if (candidate?.acousticKind === 'animal-call' && candidate.sourceKind === 'animal') {
-      retain(candidate.id, state.anchoredEvents);
-    }
+    // Category is explicit. Physical animal contact and embodied signals are
+    // not vocal calls; no vocabulary, source ID or speaker label is parsed.
+    retain(candidate?.id, classify(candidate?.acousticKind, candidate?.sourceKind), 1);
   }
   const caption = uiView?.expressionCaption;
-  if (caption?.presentationKind === 'animal-call') retain(caption.id, state.captionEvents);
+  if (caption != null) retain(caption.id, classify(caption.presentationKind, null), 2);
+  summary.uniqueProjectionEvents = state.events.size;
+  summary.uniqueAnimalEvents = state.animalEvents.size;
   summary.anchoredAnimalEvents = state.anchoredEvents.size;
   summary.animalCaptionEvents = state.captionEvents.size;
+  if (speechObserved) summary.speechProjectionSnapshots += 1;
+  if (animalObserved) summary.animalProjectionSnapshots += 1;
+  if (physicalObserved) summary.physicalProjectionSnapshots += 1;
   if (animalObserved && speechObserved) summary.mixedSpeechAndAnimalSnapshots += 1;
+  const empty = Number.isSafeInteger(tick) && tick >= 0
+    && (renderView?.acousticText === undefined || Array.isArray(renderView.acousticText))
+    && candidates.length === 0 && caption == null;
+  if (empty) summary.emptyProjectionSnapshots += 1;
+  if (elapsedMs !== null) {
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 0
+      || (state.lastElapsedMs !== null && elapsedMs < state.lastElapsedMs)) {
+      summary.incomplete = true;
+      state.emptySinceMs = null;
+    } else {
+      if (summary.firstSampleAtMs === null) summary.firstSampleAtMs = elapsedMs;
+      if (state.lastElapsedMs !== null) {
+        summary.maximumSampleGapMs = Math.max(summary.maximumSampleGapMs, elapsedMs - state.lastElapsedMs);
+      }
+      if (empty) {
+        if (state.emptySinceMs === null) state.emptySinceMs = elapsedMs;
+        summary.longestEmptyProjectionSampleSpanMs = Math.max(
+          summary.longestEmptyProjectionSampleSpanMs, elapsedMs - state.emptySinceMs,
+        );
+      } else state.emptySinceMs = null;
+      state.lastElapsedMs = elapsedMs;
+      summary.lastSampleAtMs = elapsedMs;
+      summary.observedWindowMs = elapsedMs - summary.firstSampleAtMs;
+    }
+  } else state.emptySinceMs = null;
+  summary.uniqueProjectionEventsPerObservedMinute = summary.observedWindowMs > 0
+    ? summary.uniqueProjectionEvents * 60_000 / summary.observedWindowMs : null;
   return summary;
 }
 
@@ -4150,6 +4247,7 @@ async function measureScenario(
       nextVoiceObservationAt = elapsedMs + 100;
       observePublicVoicePresentation(
         voiceObservation, bridge.runtime.getRenderView(), bridge.runtime.getUIView(),
+        elapsedMs,
       );
     };
     const missing = [

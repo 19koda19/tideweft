@@ -375,11 +375,16 @@ replay. It does not identify the caller, prove audible audio or hardware
 assistive output, or replace mixed-scene, repetition/soak and performance gates.
 Use a fresh ignored output stem; do not combine the two functional producers.
 
-For ordinary animal exposure, add `--observe-voice` to a packaged
+For ordinary acoustic-text exposure, add `--observe-voice` to a packaged
 `profile:baseline` scenario (including the existing 210-second travel scenario)
 or a matched `profile:browser -- --packaged-baseline <artifact>` run. This opt-in
-diagnostic samples current public animal-call projections/captions with bounded
-deduplication; output contains counts, not actor/event identities. Zero calls
+diagnostic samples current public speech, animal, embodied-signal and physical
+projections/captions with a shared 512-event union and 64-candidate scan limit.
+Only explicit render source kinds identify player/human speech; caption-only
+speech stays unattributed. Output contains counts, not identities or wording.
+First-observed rates include already-active boundary cues. Timing reports the
+observation window, maximum sample gap and consecutive empty-projection sample
+span—not uninterrupted acoustic silence or actual glyph placement. Zero calls
 means no exposure was observed, not that animals are silent. It does not prove
 audio, NPC hearing, actual glyph placement or a Voice soak, and its extra
 observation cost must not be mixed into uninstrumented performance comparisons.

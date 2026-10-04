@@ -72,6 +72,9 @@ const {
   assert.equal(state.summary.maximumProjectedCandidates, 3);
   assert.equal(state.summary.firstAnimalObservedAtTick, 420);
   assert.equal(state.summary.overflow, false);
+  assert.equal(state.summary.uniqueProjectionEvents, 3);
+  assert.deepEqual(state.summary.eventKinds, { playerSpeech: 0, humanSpeech: 1,
+    unattributedSpeech: 0, animalCall: 1, embodiedSignal: 0, physical: 1 });
   assert.equal(JSON.stringify(state.summary).includes(call.id), false);
 
   // Aggregate/unseen hearing has a caption, not an invented animal anchor.
@@ -132,6 +135,141 @@ const {
     assert.throws(() => parseArguments([mode, '--observe-voice']), /separate from resource/u);
   }
 }
+
+// Public source-kind attribution is not speaker-name or event-ID inference.
+{
+  const state = createVoicePresentationObservation();
+  const caption = { id: 'opaque-unseen-player-name', presentationKind: 'speech',
+    speakerLabel: 'player:local', text: 'A learned name must not become source authority.' };
+  observePublicVoicePresentation(state, { tick: 420, acousticText: [] }, { expressionCaption: caption }, 0);
+  assert.equal(state.summary.eventKinds.unattributedSpeech, 1);
+  assert.equal(state.summary.eventKinds.playerSpeech, 0);
+  const candidate = { id: caption.id, acousticKind: 'speech', sourceKind: 'human',
+    sourceActorId: 'private-source-not-collected', text: caption.text };
+  for (let index = 1; index <= 10; index += 1) {
+    observePublicVoicePresentation(state, { tick: 420 + index, acousticText: [candidate] },
+      { expressionCaption: caption }, index * 100);
+  }
+  assert.equal(state.summary.uniqueProjectionEvents, 1);
+  assert.equal(state.summary.eventKinds.unattributedSpeech, 0);
+  assert.equal(state.summary.eventKinds.humanSpeech, 1);
+  assert.equal(state.summary.candidateProjectionEvents, 1);
+  assert.equal(state.summary.captionProjectionEvents, 1);
+  assert.equal(state.summary.uniqueProjectionEventsPerObservedMinute, 60);
+  const output = JSON.stringify(state.summary);
+  for (const secret of [caption.id, caption.text, caption.speakerLabel, candidate.sourceActorId]) {
+    assert.equal(output.includes(secret), false);
+  }
+  // Same visible text from another actual event is not the same event.
+  observePublicVoicePresentation(state, { tick: 431, acousticText: [
+    { ...candidate, id: 'second-public-event', sourceKind: 'player' },
+  ] }, {}, 1_100);
+  assert.equal(state.summary.uniqueProjectionEvents, 2);
+  assert.equal(state.summary.eventKinds.playerSpeech, 1);
+  assert.equal(state.summary.incomplete, false);
+}
+{
+  const state = createVoicePresentationObservation();
+  const candidates = [
+    { id: 'embodied', acousticKind: 'embodied-signal', sourceKind: 'animal' },
+    { id: 'physical', acousticKind: 'physical', sourceKind: 'object' },
+    { id: 'animal', acousticKind: 'animal-call', sourceKind: 'animal' },
+    { id: 'speech', acousticKind: 'speech', sourceKind: 'player' },
+  ];
+  observePublicVoicePresentation(state, { tick: 420, acousticText: candidates }, {
+    expressionCaption: { id: 'physical', presentationKind: 'physical' },
+  }, 0);
+  assert.equal(state.summary.uniqueProjectionEvents, 4);
+  assert.equal(state.summary.uniqueAnimalEvents, 1);
+  assert.equal(state.summary.eventKinds.embodiedSignal, 1);
+  assert.equal(state.summary.eventKinds.physical, 1);
+  assert.equal(state.summary.eventKinds.playerSpeech, 1);
+  assert.equal(state.summary.mixedSpeechAndAnimalSnapshots, 1);
+  assert.equal(state.summary.physicalProjectionSnapshots, 1);
+  assert.equal(state.summary.emptyProjectionSnapshots, 0);
+  const reversed = createVoicePresentationObservation();
+  observePublicVoicePresentation(reversed, { tick: 420, acousticText: [...candidates].reverse() }, {
+    expressionCaption: { id: 'physical', presentationKind: 'physical' },
+  }, 0);
+  assert.deepEqual(reversed.summary, state.summary);
+  const independent = createVoicePresentationObservation();
+  observePublicVoicePresentation(independent, { tick: 420, acousticText: [] }, {}, 0);
+  assert.equal(independent.summary.uniqueProjectionEvents, 0);
+  assert.equal(state.summary.uniqueProjectionEvents, 4);
+}
+{
+  const state = createVoicePresentationObservation();
+  for (const elapsedMs of [0, 100, 400]) {
+    observePublicVoicePresentation(state, { tick: 420, acousticText: [] }, {}, elapsedMs);
+  }
+  assert.equal(state.summary.emptyProjectionSnapshots, 3);
+  assert.equal(state.summary.longestEmptyProjectionSampleSpanMs, 400);
+  const caption = { id: 'window-caption', presentationKind: 'speech' };
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [] }, { expressionCaption: caption }, 500);
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [] }, { expressionCaption: caption }, 500);
+  for (const elapsedMs of [600, 800, 1_400]) {
+    observePublicVoicePresentation(state, { tick: 422, acousticText: [] }, {}, elapsedMs);
+  }
+  assert.equal(state.summary.emptyProjectionSnapshots, 6);
+  assert.equal(state.summary.longestEmptyProjectionSampleSpanMs, 800);
+  assert.equal(state.summary.maximumSampleGapMs, 600);
+  assert.equal(state.summary.observedWindowMs, 1_400);
+  assert.equal(state.summary.uniqueProjectionEventsPerObservedMinute, 60_000 / 1_400);
+  assert.equal(state.summary.uniqueProjectionEvents, 1);
+  assert.equal(state.summary.incomplete, false);
+  assert.equal(state.summary.overflow, false);
+  // Regression never resets deduplication or masquerades as another window.
+  observePublicVoicePresentation(state, { tick: 1, acousticText: [] }, { expressionCaption: caption }, 1_300);
+  assert.equal(state.summary.incomplete, true);
+  assert.equal(state.summary.uniqueProjectionEvents, 1);
+  assert.equal(state.summary.lastSampleAtMs, 1_400);
+}
+{
+  const capped = createVoicePresentationObservation();
+  for (let index = 0; index < 513; index += 1) {
+    observePublicVoicePresentation(capped, { tick: index, acousticText: [
+      { id: `union-${index}`, acousticKind: index % 2 === 0 ? 'speech' : 'physical',
+        sourceKind: 'player' },
+    ] }, {}, index * 100);
+  }
+  assert.equal(capped.summary.uniqueProjectionEvents, 512);
+  assert.equal(capped.summary.eventKinds.playerSpeech, 256);
+  assert.equal(capped.summary.eventKinds.physical, 256);
+  assert.equal(capped.events.size, 512);
+  assert.equal(capped.summary.overflow, true);
+  const unknown = createVoicePresentationObservation();
+  observePublicVoicePresentation(unknown, { tick: 420, acousticText: [
+    { id: 'unknown', acousticKind: 'undeclared-kind' },
+  ] }, {}, 0);
+  assert.equal(unknown.summary.unclassifiedProjectionRecords, 1);
+  assert.equal(unknown.summary.incomplete, true);
+  assert.equal(unknown.summary.emptyProjectionSnapshots, 0);
+  observePublicVoicePresentation(unknown, { tick: 421, acousticText: {} }, {}, NaN);
+  assert.equal(unknown.summary.emptyProjectionSnapshots, 0);
+  assert.equal(unknown.summary.lastSampleAtMs, 0);
+  const conflicting = createVoicePresentationObservation();
+  observePublicVoicePresentation(conflicting, { tick: 420, acousticText: [
+    { id: 'conflict', acousticKind: 'speech', sourceKind: 'player' },
+  ] }, {}, 0);
+  observePublicVoicePresentation(conflicting, { tick: 421, acousticText: [
+    { id: 'conflict', acousticKind: 'speech', sourceKind: 'human' },
+  ] }, {}, 100);
+  assert.equal(conflicting.summary.incomplete, true);
+  assert.equal(conflicting.summary.eventKinds.playerSpeech, 1);
+  assert.equal(conflicting.summary.eventKinds.humanSpeech, 0);
+  // An explicit non-human source is not a caption-only attribution gap.
+  const explicitOther = createVoicePresentationObservation();
+  observePublicVoicePresentation(explicitOther, { tick: 420, acousticText: [
+    { id: 'other', acousticKind: 'speech', sourceKind: 'animal' },
+  ] }, {}, 0);
+  observePublicVoicePresentation(explicitOther, { tick: 421, acousticText: [
+    { id: 'other', acousticKind: 'speech', sourceKind: 'human' },
+  ] }, {}, 100);
+  assert.equal(explicitOther.summary.incomplete, true);
+  assert.equal(explicitOther.summary.eventKinds.unattributedSpeech, 1);
+  assert.equal(explicitOther.summary.eventKinds.humanSpeech, 0);
+}
+
 
 function runtimePerformanceSnapshot({
   capacity = 2_048,
