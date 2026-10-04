@@ -9,6 +9,8 @@ const {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  anonymousAnimalCaptionExpectation,
+  countAnimalAnnouncementCopies,
   assertRestoredVoiceSnapshot,
   assertFreshVoicePresentationOutput,
   assertDiagnosticSnapshot,
@@ -88,6 +90,16 @@ assert.equal(functional.voicePresentation, true);
 assert.equal(functional.reducedMotion, true);
 assert.equal(functional.packagedBaseline, null);
 assert.equal(parsed.voicePresentation, false);
+assert.equal(parsed.animalPresentation, false);
+const animalFunctional = parseArguments(['--animal-presentation', '--reduced-motion']);
+assert.equal(animalFunctional.voicePresentation, true);
+assert.equal(animalFunctional.animalPresentation, true);
+assert.equal(animalFunctional.packagedBaseline, null);
+assert.equal(animalFunctional.reducedMotion, true);
+assert.throws(() => parseArguments(['--animal-presentation', '--voice-presentation']), /Choose one/u);
+assert.throws(() => parseArguments(['--animal-presentation', '--observe-voice']), /do not combine/u);
+assert.throws(() => parseArguments(['--animal-presentation', '--sample-ms', '5000']), /functional check/u);
+assert.throws(() => parseArguments(['--animal-presentation', '--packaged-baseline', 'artifacts/a.json']), /functional check/u);
 assert.equal(parsed.observeVoice, false);
 assert.equal(parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
   '--observe-voice']).observeVoice, true);
@@ -236,6 +248,45 @@ const voiceSnapshot = {
 assert.equal(assertVoicePresentationSnapshot(voiceSnapshot, 'relief-3d'), voiceSnapshot);
 const chartSnapshot = { ...voiceSnapshot, mode: 'chart-2d', labels: [] };
 assert.equal(assertVoicePresentationSnapshot(chartSnapshot, 'chart-2d'), chartSnapshot);
+const anonymousAnimal = { ...voiceSnapshot, labels: [], anonymousSourceUnanchored: true };
+assert.equal(assertVoicePresentationSnapshot(anonymousAnimal, 'relief-3d', { anonymousAnimal: true }), anonymousAnimal);
+assert.throws(() => assertVoicePresentationSnapshot({ ...anonymousAnimal, anonymousSourceUnanchored: false },
+  'relief-3d', { anonymousAnimal: true }), /active renderer/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...anonymousAnimal, labels: voiceSnapshot.labels },
+  'relief-3d', { anonymousAnimal: true }), /active renderer/u);
+const publicAnimalCaption = Object.freeze({ id: 'synthetic-call', speakerLabel: 'Sound',
+  text: 'call', presentationKind: 'animal-call', animalCallKind: 'animal-call', directionLabel: 'east' });
+assert.deepEqual(anonymousAnimalCaptionExpectation(publicAnimalCaption), {
+  visibleText: 'call · east', announcement: '[An animal calls somewhere east.]',
+});
+assert.deepEqual(anonymousAnimalCaptionExpectation({ ...publicAnimalCaption,
+  animalCallKind: 'chorus', text: 'chorus', directionLabel: 'all around' }), {
+  visibleText: 'chorus · all around', announcement: '[A chorus sounds; the sound seems all around.]',
+});
+assert.equal(anonymousAnimalCaptionExpectation({ ...publicAnimalCaption, directionLabel: 'all around' })
+  .announcement, '[An animal calls; the sound seems all around.]');
+assert.equal(anonymousAnimalCaptionExpectation({ ...publicAnimalCaption, directionLabel: 'direction unclear' })
+  .announcement, '[An animal calls; direction unclear.]');
+assert.deepEqual(anonymousAnimalCaptionExpectation({ ...publicAnimalCaption,
+  speakerLabel: 'A bird', animalCallKind: 'bird-call', text: 'CALL! CALL!', directionLabel: 'direction unclear' }), {
+  visibleText: 'CALL! CALL! · direction unclear', announcement: '[A bird calls; direction unclear.]',
+});
+assert.equal(anonymousAnimalCaptionExpectation({ ...publicAnimalCaption, speakerLabel: 'An animal' })
+  .announcement, '[An animal calls somewhere east.]');
+for (const change of [{ speakerLabel: 'Secret caller' }, { animalCallKind: 'goat-call' },
+  { speakerLabel: 'A bird' }, { directionLabel: 'exact hidden coordinates' },
+  { presentationKind: 'physical' }, { directionLabel: undefined }, { id: '' }, { text: '' }]) {
+  assert.throws(() => anonymousAnimalCaptionExpectation({ ...publicAnimalCaption, ...change }), /anonymous/u);
+}
+const animalCopy = '[A bird calls; direction unclear.]';
+assert.equal(countAnimalAnnouncementCopies(Object.freeze([animalCopy]), animalCopy), 1);
+assert.equal(countAnimalAnnouncementCopies([`${animalCopy} ${animalCopy}`], animalCopy), 2);
+assert.equal(countAnimalAnnouncementCopies(['unrelated', `earlier ${animalCopy} later`, animalCopy], animalCopy), 2);
+assert.equal(countAnimalAnnouncementCopies([], animalCopy), 0);
+assert.throws(() => countAnimalAnnouncementCopies([animalCopy], ''), /bounded/u);
+assert.throws(() => countAnimalAnnouncementCopies([null], animalCopy), /bounded/u);
+assert.throws(() => countAnimalAnnouncementCopies(['x'.repeat(1025)], animalCopy), /bounded/u);
+assert.throws(() => countAnimalAnnouncementCopies(Array(33).fill('x'), animalCopy), /bounded/u);
 for (const caption of [null, { ...voiceSnapshot.caption, ariaMatches: false },
   { ...voiceSnapshot.caption, announcementCount: 2 },
   { ...voiceSnapshot.caption, matchesProjection: false },

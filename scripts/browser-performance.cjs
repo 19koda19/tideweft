@@ -174,6 +174,7 @@ function parseArguments(argv) {
   let output = '';
   let sampleMs = DEFAULT_SAMPLE_MS;
   let voicePresentation = false;
+  let animalPresentation = false;
   let observeVoice = false;
   let reducedMotion = false;
   let sampleMsSpecified = false;
@@ -182,6 +183,8 @@ function parseArguments(argv) {
     const argument = argv[index];
     if (argument === '--voice-presentation') {
       voicePresentation = true;
+    } else if (argument === '--animal-presentation') {
+      animalPresentation = true;
     } else if (argument === '--observe-voice') {
       observeVoice = true;
     } else if (argument === '--reduced-motion') {
@@ -226,6 +229,10 @@ function parseArguments(argv) {
     }
   }
 
+  if (voicePresentation && animalPresentation) {
+    throw new Error('Choose one functional producer: --voice-presentation or --animal-presentation');
+  }
+  voicePresentation ||= animalPresentation;
   if (!voicePresentation && packagedBaseline.length === 0) {
     throw new Error('--packaged-baseline is required so browser truth is compared with packaged truth');
   }
@@ -244,6 +251,7 @@ function parseArguments(argv) {
     output: artifactJsonPath(output, '--output', voicePresentation ? 'browser-voice' : 'browser-performance'),
     sampleMs,
     voicePresentation,
+    animalPresentation,
     observeVoice,
     reducedMotion,
   };
@@ -1178,7 +1186,7 @@ function assertIdentityUnchanged(label, before, after) {
 
 // Actual DOM border boxes, not font estimates or a replacement label renderer.
 // This deliberately does not claim glyph-ink, screen-reader speech or hardware proof.
-function assertVoicePresentationSnapshot(snapshot, mode) {
+function assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal = false } = {}) {
   const finiteRect = (rect) => rect && ['x', 'y', 'width', 'height'].every(
     (key) => Number.isFinite(rect[key]),
   ) && rect.width > 0 && rect.height > 0;
@@ -1193,7 +1201,8 @@ function assertVoicePresentationSnapshot(snapshot, mode) {
     throw new Error(`Invalid Voice caption/accessibility presentation: ${JSON.stringify(snapshot)}`);
   }
   if (!Array.isArray(snapshot.labels) || snapshot.labels.length > 4
-    || (mode === 'relief-3d' && snapshot.labels.length === 0)
+    || (mode === 'relief-3d' && !anonymousAnimal && snapshot.labels.length === 0)
+    || (anonymousAnimal && (snapshot.labels.length !== 0 || snapshot.anonymousSourceUnanchored !== true))
     || (mode === 'chart-2d' && snapshot.labels.length !== 0)) {
     throw new Error('Voice functional probe did not observe the expected bounded active renderer');
   }
@@ -1518,6 +1527,197 @@ function assertRestoredVoiceSnapshot(snapshot, mode, tick) {
   return snapshot;
 }
 
+// Deliberately limited to the three anonymous public call forms. These expected
+// copies follow src/ui/situatedExpressionCaption.ts, not hidden producer facts.
+function anonymousAnimalCaptionExpectation(caption) {
+  const anonymousLabelMatches = caption?.animalCallKind === 'bird-call'
+    ? caption.speakerLabel === 'A bird'
+    : caption?.animalCallKind === 'chorus' ? caption.speakerLabel === 'Sound'
+      : caption?.animalCallKind === 'animal-call' && ['Sound', 'An animal'].includes(caption.speakerLabel);
+  if (!caption || caption.presentationKind !== 'animal-call' || !anonymousLabelMatches
+    || typeof caption.id !== 'string' || !caption.id || typeof caption.text !== 'string'
+    || !caption.text || !['east', 'south-east', 'south', 'south-west', 'west',
+      'north-west', 'north', 'north-east', 'all around', 'direction unclear'].includes(caption.directionLabel)) {
+    throw new Error(`Animal probe requires a genuine anonymous directional public caption: ${JSON.stringify({
+      kind: caption?.animalCallKind, label: caption?.speakerLabel, direction: caption?.directionLabel,
+    })}`);
+  }
+  const chorus = caption.animalCallKind === 'chorus';
+  const sound = chorus ? 'A chorus sounds' : caption.animalCallKind === 'bird-call'
+    ? 'A bird calls' : 'An animal calls';
+  const direction = caption.directionLabel;
+  const announcement = direction === 'all around'
+    ? `[${sound}; the sound seems all around.]`
+    : direction === 'direction unclear' ? `[${sound}; direction unclear.]`
+      : `[${sound} somewhere ${direction}.]`;
+  return { visibleText: `${caption.text} · ${direction}`, announcement };
+}
+
+// The live region batches messages. Count copies, not entries containing one.
+function countAnimalAnnouncementCopies(entries, copy) {
+  if (!Array.isArray(entries) || entries.length > 32 || typeof copy !== 'string' || !copy
+    || entries.some((entry) => typeof entry !== 'string' || entry.length > 1024)) {
+    throw new Error('Invalid bounded animal announcement history');
+  }
+  let count = 0;
+  for (const entry of entries) {
+    let from = 0;
+    for (let at = entry.indexOf(copy, from); at !== -1; at = entry.indexOf(copy, from)) {
+      count += 1;
+      from = at + copy.length;
+    }
+  }
+  return count;
+}
+
+async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, reloadProductionPage) {
+  // No state/event injection: an existing ordinary move-target adapter starts
+  // the same first segment as the production travel witness. Quiet is failure.
+  await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const node = document.querySelector('#announcer');
+    if (!node) throw new Error('No accessible live region');
+    const state = { entries: [], overflow: false };
+    const observer = new MutationObserver(() => {
+      const text = node.textContent.trim();
+      if (!text) return;
+      if (state.entries.length >= 32 || text.length > 1024) state.overflow = true;
+      else state.entries.push(text);
+    });
+    observer.observe(node, { childList: true, subtree: true, characterData: true });
+    window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer });
+    const view = bridge.runtime.getRenderView();
+    const p = view.player.position;
+    const size = view.terrain.tileSize;
+    const distance = Math.min(26, p.y / size - 1.5);
+    if (!Number.isFinite(distance) || distance < 0.5) throw new Error('No bounded ordinary travel target');
+    bridge.renderer.setMode('relief-3d');
+    bridge.renderer.setActive(true);
+    bridge.ui.start();
+    bridge.runtime.dispatchRenderer({ type: 'move-target',
+      point: { x: p.x, y: p.y - distance * size }, additive: false });
+    bridge.runtime.start();
+  })()`);
+  const committed = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const caption = bridge.runtime.getUIView().expressionCaption;
+    if (caption?.presentationKind !== 'animal-call') return false;
+    bridge.runtime.stop();
+    return { tick: bridge.runtime.getRenderView().tick, caption };
+  })()`, 30_000);
+  const expected = anonymousAnimalCaptionExpectation(committed.caption);
+  const eventId = committed.caption.id;
+  const snapshots = [];
+  await fs.mkdir(path.dirname(output), { recursive: true });
+  for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
+    await client.command('browsingContext.setViewport', {
+      context: client.context, viewport, devicePixelRatio: 1,
+    });
+    await client.waitFor(`innerWidth === ${viewport.width} && innerHeight === ${viewport.height}`);
+    for (const mode of ['chart-2d', 'relief-3d']) {
+      await client.evaluate(`window.__TIDEWEFT__.renderer.setMode(${JSON.stringify(mode)})`);
+      await client.waitFor(`Boolean(document.querySelector(
+        '#p5-mount canvas[data-renderer="${mode}"]:not([hidden])'))`);
+      await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
+      const snapshot = await client.evaluate(`(() => {
+        const bridge = window.__TIDEWEFT__;
+        const view = bridge.runtime.getUIView();
+        const cue = view.expressionCaption;
+        const render = bridge.runtime.getRenderView();
+        const geometry = (node) => {
+          if (!node) return null;
+          const r = node.getBoundingClientRect();
+          return { rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+            horizontalOverflow: node.scrollWidth > node.clientWidth + 1,
+            verticalOverflow: node.scrollHeight > node.clientHeight + 1 };
+        };
+        const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+        const labels = [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
+          .filter((node) => !node.hidden && node.getClientRects().length > 0);
+        return { mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
+          tick: render.tick, sameCommittedCaption: cue?.id === ${JSON.stringify(eventId)},
+          reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          anonymousSourceUnanchored: render.acousticText.length === 0
+            && render.expressions.length === 0,
+          liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
+          labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
+          feedback: {
+            chronicle: geometry(document.querySelector('.chronicle-panel > .panel-summary'))?.rect,
+            dock: geometry(document.querySelector('.action-dock'))?.rect,
+          },
+          caption: caption && !caption.hidden ? { ...geometry(caption),
+            matchesProjection: caption.dataset.expressionId === cue?.id
+              && caption.querySelector('.situated-expression-caption__text')?.textContent === ${JSON.stringify(expected.visibleText)}
+              && caption.querySelector('.situated-expression-caption__speaker')?.textContent === '',
+            ariaMatches: caption.getAttribute('aria-label') === ${JSON.stringify(expected.announcement)},
+            announcementCount: (${countAnimalAnnouncementCopies.toString()})(
+              window.__TIDEWEFT_VOICE_PROBE__.entries, ${JSON.stringify(expected.announcement)}),
+          } : null,
+          labels: labels.map((node) => geometry(node)),
+        };
+      })()`);
+      if (snapshot.tick !== committed.tick || !snapshot.sameCommittedCaption
+        || snapshot.reducedMotion !== reducedMotion) throw new Error('Animal presentation changed authority or motion preference');
+      assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal: true });
+      const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
+      const bytes = Buffer.from(screenshot.data, 'base64');
+      if (bytes.length < 1024) throw new Error('Animal screenshot is empty');
+      const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
+      await fs.writeFile(screenshotPath, bytes, { flag: 'wx', mode: 0o600 });
+      snapshots.push({ ...snapshot, screenshot: { file: path.basename(screenshotPath), bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex') } });
+    }
+  }
+  await client.evaluate('window.__TIDEWEFT__.runtime.start()');
+  const expiredTick = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const render = bridge.runtime.getRenderView();
+    if (render.tick < ${committed.tick + 6}
+      || bridge.runtime.getUIView().expressionCaption?.id === ${JSON.stringify(eventId)}
+      || render.acousticText.some((cue) => cue.id === ${JSON.stringify(eventId)})) return false;
+    const nativeCaption = document.querySelector('[data-ui="situated-expression-caption"]');
+    if (!nativeCaption) throw new Error('Animal caption surface disappeared');
+    if (!nativeCaption.hidden && nativeCaption.dataset.expressionId === ${JSON.stringify(eventId)}) return false;
+    bridge.runtime.stop();
+    const probe = window.__TIDEWEFT_VOICE_PROBE__;
+    if (probe.overflow || (${countAnimalAnnouncementCopies.toString()})(
+      probe.entries, ${JSON.stringify(expected.announcement)}) !== 1)
+      throw new Error('Animal caption repeated or announcement history overflowed');
+    probe.observer.disconnect();
+    return render.tick;
+  })()`);
+  await client.evaluate('window.__TIDEWEFT__.runtime.save()');
+  const reloadDiagnostics = await reloadProductionPage(expected.announcement);
+  const restoredTick = await client.evaluate('window.__TIDEWEFT__.runtime.getRenderView().tick');
+  await client.evaluate('window.__TIDEWEFT__.runtime.start()');
+  const continuedTick = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    if (bridge.runtime.getRenderView().tick <= ${restoredTick}) return false;
+    bridge.runtime.stop();
+    return bridge.runtime.getRenderView().tick;
+  })()`);
+  const restored = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getUIView();
+    const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+    const probe = window.__TIDEWEFT_VOICE_RELOAD_PROBE__;
+    return { mode: bridge.renderer.mode(), tick: bridge.runtime.getRenderView().tick,
+      viewport: { width: innerWidth, height: innerHeight }, currentSaveAccepted: view.title.hasSave,
+      expiredEventAbsent: view.expressionCaption?.id !== ${JSON.stringify(eventId)}
+        && !bridge.runtime.getRenderView().acousticText.some((cue) => cue.id === ${JSON.stringify(eventId)})
+        && Boolean(caption && (caption.hidden || caption.dataset.expressionId !== ${JSON.stringify(eventId)})),
+      oldGreetingAnnouncements: probe?.repeats ?? null, observerPresent: Boolean(probe?.observer),
+      observerOverflow: probe?.overflow ?? true };
+  })()`);
+  assertRestoredVoiceSnapshot(restored, restored.mode, continuedTick);
+  await client.evaluate('window.__TIDEWEFT_VOICE_RELOAD_PROBE__.observer.disconnect()');
+  return { producer: 'ordinary move-target first segment; actual anonymous animal caption, no supplied source/event',
+    committedTick: committed.tick, callKind: committed.caption.animalCallKind, snapshots,
+    lifecycle: { expiredTick, expiredNativeCaptionAbsent: true,
+      restoredTick, continuedTick, restored, reloadDiagnostics },
+    limitation: 'One genuine anonymous call in a synthetic corridor world, frozen native DOM/viewports and live-region deduplication, natural expiry and current-save browser reload. No exact producer identity, animal translation, visible-source glyph, emitted/audio/AT hardware, all-root equivalence, crowd/soak or performance certification.' };
+}
+
 async function runBrowserWitness(options) {
   options = {
     ...options,
@@ -1697,7 +1897,8 @@ async function runBrowserWitness(options) {
     );
     if (!options.voicePresentation) await rebaseResourceInputGuardAfterViewport(client, SCENARIO.viewport);
 
-    const bootstrap = await bootstrapWorldDocument(client, options.voicePresentation ? 'phase ten glass ebb' : SCENARIO.seed);
+    const bootstrap = await bootstrapWorldDocument(client, options.animalPresentation
+      ? 'breathing-room all-tide corridor 187' : options.voicePresentation ? 'phase ten glass ebb' : SCENARIO.seed);
     if (bootstrap.graphics?.available !== true) {
       throw new Error(`Browser WebGL is unavailable: ${JSON.stringify(bootstrap.graphics)}`);
     }
@@ -1729,7 +1930,8 @@ async function runBrowserWitness(options) {
         reloadedDocumentStartup: startupDiagnostics };
     };
     const voicePresentation = options.voicePresentation
-      ? await exerciseBrowserVoicePresentation(client, options.output, options.reducedMotion, reloadProductionPage) : null;
+      ? await (options.animalPresentation ? exerciseBrowserAnimalPresentation : exerciseBrowserVoicePresentation)(
+        client, options.output, options.reducedMotion, reloadProductionPage) : null;
     const rawMeasurement = options.voicePresentation ? null : await measureScenario(
       client,
       SCENARIO,
@@ -1800,8 +2002,8 @@ async function runBrowserWitness(options) {
       captureScope: {
         kind: options.voicePresentation ? 'functional-voice-presentation' : 'real-browser-gameplay',
         complete: true,
-        expectedScenarioIds: options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
-        selectedScenarioIds: options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
+        expectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
+        selectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
       },
       profilerHarness,
       host: {
@@ -1882,7 +2084,9 @@ async function runBrowserWitness(options) {
         policy: 'reported separately; any counter increase after the stable startup baseline invalidates the witness',
       },
       metricScope: options.voicePresentation ? {
-        authoritative: 'Native selection/GREET, frozen presentation, ordinary expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
+        authoritative: options.animalPresentation
+          ? 'Ordinary travel opportunity with actual anonymous animal caption; frozen native DOM/bounds/ARIA, no hidden anchor, natural expiry and current-save reload without old announcement replay'
+          : 'Native selection/GREET, frozen presentation, ordinary expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
         limitation: voicePresentation.limitation,
         omitted: 'No performance measurement, packaged comparison, glyph-ink or hardware certification',
       } : {
@@ -2011,6 +2215,8 @@ module.exports = {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  anonymousAnimalCaptionExpectation,
+  countAnimalAnnouncementCopies,
   assertRestoredVoiceSnapshot,
   assertFreshVoicePresentationOutput,
   decodeRemoteValue,

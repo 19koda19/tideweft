@@ -363,6 +363,18 @@ This is not a performance benchmark,
 screen-reader speech test, mobile-hardware proof or packaged-desktop check;
 the default performance mode still requires `--packaged-baseline`.
 
+For a genuine anonymous animal-caption check, run
+`npm run profile:browser -- --animal-presentation` (optionally `--reduced-motion`).
+This separate functional producer follows one ordinary movement target in a
+synthetic corridor world and waits up to 30 seconds for an actual animal call;
+no call or an unsupported caption form fails rather than injecting an event.
+It checks uncertain wording, absence of hidden-source anchors, native caption
+bounds/ARIA and exactly one announcement across the same four viewports and
+both views, then natural DOM expiry and current-save reload without old-call
+replay. It does not identify the caller, prove audible audio or hardware
+assistive output, or replace mixed-scene, repetition/soak and performance gates.
+Use a fresh ignored output stem; do not combine the two functional producers.
+
 For ordinary animal exposure, add `--observe-voice` to a packaged
 `profile:baseline` scenario (including the existing 210-second travel scenario)
 or a matched `profile:browser -- --packaged-baseline <artifact>` run. This opt-in
@@ -371,7 +383,7 @@ deduplication; output contains counts, not actor/event identities. Zero calls
 means no exposure was observed, not that animals are silent. It does not prove
 audio, NPC hearing, actual glyph placement or a Voice soak, and its extra
 observation cost must not be mixed into uninstrumented performance comparisons.
-Do not combine it with frozen `--voice-presentation` or resource shakedown/soak.
+Do not combine it with either frozen functional mode or resource shakedown/soak.
 
 ## Desktop release
 
