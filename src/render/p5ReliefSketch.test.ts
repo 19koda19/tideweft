@@ -2236,6 +2236,92 @@ describe("Relief ADRIFT presentation path", () => {
 
 describe("Relief situated expression presentation", () => {
   it.each([
+    [1_280, 720, false], [390, 844, false], [320, 640, false], [844, 390, false],
+    [1_280, 720, true], [390, 844, true], [320, 640, true], [844, 390, true],
+  ] as const)("lets optional harbor names yield to placed speech at %sx%s (reduced motion: %s)", (width, height, reducedMotion) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    const base = view("harbor-acoustic-conflict", { x: 48, y: 48 });
+    const settlement = {
+      id: "harbor-label", name: "Harbor Label", position: { x: 48, y: 48 },
+      population: 20, status: "steady" as const, connection: 1, stress: 0, discovered: true,
+    };
+    const speech: AcousticTextView = {
+      acousticKind: "speech", id: "harbor-speech", sourceActorId: "human:speaker",
+      sourceKind: "human", speakerLabel: "Nearby person", text: "Good day.",
+      position: { x: 48, y: 48 }, progress: 0.2, priority: 900_000,
+      salience: 900_000, tone: "restrained", variantSeed: 1,
+    };
+    let current: TideweftView = { ...base, settlements: [settlement], acousticText: [] };
+    const harness = renderHarness(current, { viewport: { width, height } });
+    const sharedLayout = vi.spyOn(playerPresentation, "layoutAcousticTextCallouts");
+    try {
+      harness.draw();
+      const layer = harness.mount.children.find(({ className }) => className === "relief-label-layer");
+      const harbor = layer?.children.find(({ textContent }) => textContent === settlement.name);
+      if (!harbor || !layer) throw new Error("Expected ordinary harbor label");
+      expect(harbor.hidden).toBe(false);
+      const originalPosition = { ...harbor.style };
+      // Use the ordinary label's final eased/clamped position. The fixture
+      // supplies a lawful presentation placement, not a new runtime event or
+      // browser-glyph proof. Native paired-GREET evidence covers actual CSS.
+      const rect = {
+        x: Number.parseFloat(harbor.style.left!) - 40,
+        y: Number.parseFloat(harbor.style.top!) - 18, width: 80, height: 22,
+      };
+      const placed = {
+        candidate: { id: speech.id, sourceId: speech.sourceActorId, priority: speech.priority,
+          salience: speech.salience, anchor: { x: rect.x, y: rect.y },
+          box: { width: rect.width, height: rect.height }, acousticText: speech },
+        laneId: "above", rect,
+      };
+      const result = { placements: [placed], suppressions: [] };
+      sharedLayout.mockReturnValue(result);
+      vi.spyOn(harbor, "getBoundingClientRect").mockImplementation(() => {
+        throw new Error("Ordinary label arbitration must not force DOM measurement");
+      });
+      current = { ...current, acousticText: [speech] };
+      harness.setView(current);
+      harness.draw();
+      expect(harbor.hidden).toBe(true);
+      expect(harbor.style).toEqual(originalPosition);
+      const acoustic = layer.children.find(({ dataset, removed }) => dataset.acousticKind === "speech" && !removed);
+      expect(acoustic?.hidden).toBe(false);
+      expect(acoustic?.style.left).toBe(`${(rect.x + rect.width / 2).toFixed(1)}px`);
+      expect(sharedLayout).toHaveBeenLastCalledWith(current.acousticText,
+        playerPresentation.actorCalloutViewport(width, height), expect.any(Function));
+
+      sharedLayout.mockReturnValue({ ...result,
+        placements: [{ ...placed, rect: { ...rect, y: rect.y + 140 } }] });
+      harness.draw();
+      expect(harbor.hidden).toBe(false);
+      // Essential destination guidance is not silently removed by this narrow
+      // optional-name correction, even if its envelope conflicts with speech.
+      sharedLayout.mockReturnValue(result);
+      harness.setView({ ...current, player: { ...base.player, destination: settlement.position } });
+      harness.draw();
+      expect(harbor.dataset.tone).toBe("destination");
+      expect(harbor.hidden).toBe(false);
+
+      sharedLayout.mockReturnValue({ placements: [], suppressions: [] });
+      harness.setView(current);
+      harness.draw();
+      expect(harbor.dataset.tone).toBe("harbor");
+      expect(harbor.hidden).toBe(false);
+      // A candidate that is layout-suppressed spends no screen occupancy.
+      const { acousticText: _acousticText, ...legacy } = current;
+      for (const restored of [{ ...current, acousticText: [] }, legacy]) {
+        harness.setView(restored);
+        harness.draw();
+        expect(harbor.hidden).toBe(false);
+      }
+    } finally {
+      sharedLayout.mockRestore();
+      harness.renderer.destroy();
+    }
+  });
+
+  it.each([
     [1_280, 720, false],
     [390, 844, false],
     [1_280, 720, true],

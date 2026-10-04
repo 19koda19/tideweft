@@ -354,6 +354,7 @@ assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
 const pairedSpeech = {
   cueCount: 2, sourceCount: 2, uniqueSignatureCount: 2,
   captionFromPair: true, labelsMatchOneToOne: true, visibleLabelCount: 2,
+  ordinaryWorldLabelCount: 1, ordinaryWorldLabelOverlapCount: 0,
 };
 const pairedDesktop = {
   ...voiceSnapshot,
@@ -381,6 +382,14 @@ const pairedCompactTwo = { ...voiceSnapshot,
     { ...voiceSnapshot.labels[0], rect: { x: 90, y: 300, width: 200, height: 40 } }],
   pairedSpeech };
 assert.equal(assertPairedGreetingSnapshot(pairedCompactTwo, 'relief-3d'), pairedCompactTwo);
+for (const ordinaryWorldLabelCount of [-1, 65, 0.5, '1', undefined, Number.NaN]) {
+  assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+    pairedSpeech: { ...pairedSpeech, ordinaryWorldLabelCount } }, 'relief-3d'), /ordinary Relief/u);
+}
+for (const ordinaryWorldLabelOverlapCount of [1, '0', undefined, Number.NaN]) {
+  assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+    pairedSpeech: { ...pairedSpeech, ordinaryWorldLabelOverlapCount } }, 'relief-3d'), /ordinary Relief/u);
+}
 assert.throws(() => assertPairedGreetingSnapshot({ ...pairedCompactTwo,
   labels: [...pairedCompactTwo.labels,
     { ...voiceSnapshot.labels[0], rect: { x: 90, y: 350, width: 200, height: 40 } }],

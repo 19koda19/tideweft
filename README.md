@@ -381,8 +381,8 @@ both lawful speech cues coexist; only then is presentation frozen for inspection
 Desktop Relief must show two distinct, nonoverlapping labels; compact-view
 suppression is reported. Both introductions expire naturally, and both learned
 ABOUT states survive current-save reload without old-cue announcements.
-Ordinary world-label overlap is recorded separately; this mode's speech-pair
-pass does not certify separation from every other world label.
+Actual DOM overlap with visible ordinary Relief world labels is also rejected.
+This finite scene check does not certify every world label, font or workload.
 Add `--reduced-motion` or a fresh ignored `--output` as above. This is two-human
 speech coverage, not animal/physical coexistence, hours or performance evidence;
 do not combine functional modes. Chart remains canvas/screenshot evidence.

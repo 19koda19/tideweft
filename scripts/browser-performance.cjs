@@ -1270,6 +1270,11 @@ function assertPairedGreetingSnapshot(snapshot, mode) {
       && snapshot.viewport.height === 720 && pair.visibleLabelCount !== 2)) {
     throw new Error('Paired greeting lacks distinct current cues or the claimed native label witness');
   }
+  if (mode === 'relief-3d' && (!Number.isSafeInteger(pair.ordinaryWorldLabelCount)
+    || pair.ordinaryWorldLabelCount < 0 || pair.ordinaryWorldLabelCount > 64
+    || pair.ordinaryWorldLabelOverlapCount !== 0)) {
+    throw new Error('Paired greeting overlaps an ordinary Relief world label or lacks its bounded witness');
+  }
   return snapshot;
 }
 

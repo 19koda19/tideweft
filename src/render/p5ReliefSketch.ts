@@ -87,6 +87,7 @@ import {
 } from "./wildlifeVisualProfile";
 import { visibleWildlifeGroupSuffix } from "./wildlifeLabel";
 import { visibleSettlementFoodStore } from "./settlementPresentation";
+import { acousticTextRectsOverlap } from "./acousticTextLayout";
 import { createRendererTelemetry } from "./rendererTelemetry";
 import { createRetainedGeometryPool } from "./retainedGeometryPool";
 import {
@@ -1084,6 +1085,21 @@ export function createTideweftReliefRenderer(
         tone === "adrift" ? 62 : 28,
         Math.max(tone === "adrift" ? 62 : 28, viewportHeight - 34),
       );
+      if (tone === "harbor" && acousticLayout?.placements.length) {
+        // Optional harbor names yield to already placed sound, not vice versa.
+        // Reserve the full ordinary CSS width and a conservative uppercase /
+        // wrapping envelope (bottom-anchored, unlike centered acoustic text).
+        // This is an estimate, not glyph measurement; native CSS is checked
+        // separately. No DOM reflow, world query, new queue or audio suppression.
+        const width = labelHalfWidth * 2;
+        const rows = Math.max(1, Math.ceil(
+          text.toUpperCase().length * 12 / Math.max(1, width - 16),
+        ));
+        const height = rows * 28;
+        const envelope = { x: labelX - labelHalfWidth, y: labelY - height, width, height };
+        node.hidden = acousticLayout.placements.some(({ rect }) =>
+          acousticTextRectsOverlap(envelope, rect));
+      }
       node.dataset.tone = tone;
       node.dataset.selected = selected ? "true" : "false";
       node.style.left = `${labelX.toFixed(1)}px`;
