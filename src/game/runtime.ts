@@ -13287,6 +13287,7 @@ export async function createTideweftRuntime(
     if (session.paused || session.titleVisible || session.quietHourVisible) {
       return Object.freeze([]);
     }
+    const deferredWorldAcousticAudio: CommittedAudioCue[] = [];
     activeWorldAcousticPresentations = advanceWorldAcousticPresentations(
       activeWorldAcousticPresentations,
     );
@@ -13306,7 +13307,7 @@ export async function createTideweftRuntime(
       : session.announcement?.id ?? null;
     let playerWaitDisturbedThisStep = false;
     let playerRecoveryDisturbedThisStep = false;
-    advancePendingParcelTarget();
+    advancePendingParcelTarget(deferredWorldAcousticAudio);
     const beforeX = player.x;
     const beforeY = player.y;
     const staminaBeforePlayerStep = player.stamina;
@@ -13418,7 +13419,6 @@ export async function createTideweftRuntime(
     }
     const traversalExpressionContext = applyPlayerStepToPhysicalCargo(result, incidentPosition);
     const stepAcousticEvents: WorldAcousticEvent[] = [];
-    const deferredWorldAcousticAudio: CommittedAudioCue[] = [];
     let stepAcousticEvent: WorldAcousticEvent | null = null;
     if (result.traversalIncident !== null && incidentWorldPosition !== null) {
       stepAcousticEvent = traversalIncidentAcousticEvent({
@@ -17926,7 +17926,13 @@ export async function createTideweftRuntime(
       === VISIBILITY_DIRECT;
   }
 
-  function recoverPhysicalParcel(parcelId: string, announceFailure = true): boolean {
+  // Automatic arrival shares the enclosing fail-closed tick's audio queue;
+  // immediate manual pickup keeps its already-committed input-time playback.
+  function recoverPhysicalParcel(
+    parcelId: string,
+    announceFailure = true,
+    deferredAudio?: CommittedAudioCue[],
+  ): boolean {
     if (physicalReceiptPending()) {
       if (announceFailure) {
         announce(session, "The harbor is sealing an exact receipt. Recover the parcel when that transaction settles.", true);
@@ -17982,7 +17988,11 @@ export async function createTideweftRuntime(
       autopilotPath = [];
     }
     announce(session, `${recovered.message} Its exact condition and history stayed with it.`, true);
-    soundscape.play("strand", 0.58);
+    if (deferredAudio === undefined) {
+      soundscape.play("strand", 0.58);
+    } else {
+      deferredAudio.push(Object.freeze({ cue: "strand", volume: 0.58, variantSeed: 0 }));
+    }
     if (recoveredFromFallSeparation) {
       const expressionPosition = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
       if (expressionPosition === null) {
@@ -18008,7 +18018,9 @@ export async function createTideweftRuntime(
           recoveredEntityId: parcelId,
         })
       ));
-      releaseCommittedAudio(acknowledgePendingSituatedExpression());
+      const expressionAudio = acknowledgePendingSituatedExpression();
+      if (deferredAudio === undefined) releaseCommittedAudio(expressionAudio);
+      else deferredAudio.push(...expressionAudio);
     }
     return true;
   }
@@ -18045,7 +18057,7 @@ export async function createTideweftRuntime(
     refreshViews();
   }
 
-  function advancePendingParcelTarget(): void {
+  function advancePendingParcelTarget(deferredAudio: CommittedAudioCue[]): void {
     const parcelId = pendingParcelTargetId;
     if (!parcelId || !pendingParcelRecoverOnArrival) return;
     const point = physicalParcelPosition(parcelId);
@@ -18060,7 +18072,7 @@ export async function createTideweftRuntime(
     // parcel's hidden live coordinates. Reacquiring direct detail sight lets
     // the target update again.
     if (!parcelPositionIsDirectlyObserved(point)) return;
-    if (recoverPhysicalParcel(parcelId, false)) return;
+    if (recoverPhysicalParcel(parcelId, false, deferredAudio)) return;
     if (!setAutopilot(point, false, false)) {
       pendingParcelTargetId = null;
       pendingParcelRecoverOnArrival = false;

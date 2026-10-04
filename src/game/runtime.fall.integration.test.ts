@@ -18,6 +18,7 @@ import {
 import { acousticTextRectsOverlap } from "../render/acousticTextLayout";
 import { stableStringify } from "../sim/util";
 import * as humanPerception from "./humanPerception";
+import * as uiProjection from "./uiProjection";
 import {
   replaceDogActorCircadian,
   replaceDogActorPhysiology,
@@ -735,6 +736,177 @@ function renderedTileIndex(view: TideweftView): number {
 }
 
 describe("production terrain fall and physical cargo", () => {
+  it.each([false, true])("commits automatic fall-parcel recovery audio only after presentation (reject=%s)", async (reject) => {
+    const repository = new MemoryRepository();
+    const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
+    if (fixture.contractId === null) throw new Error("recovery fixture needs its real Promise");
+    // The existing fixture stages a real downhill fall on a generated ridge.
+    // Give its eastward approach a bounded flat meadow corridor in that same
+    // initial physical world to keep the real target directly visible. The
+    // normal footing rules may still cause further accepted incidents; none
+    // may substitute a different parcel for this exact first-fall identity.
+    const prepared = decodeCurrent(repository.snapshot());
+    const preparedWorld = deserializeWorld(prepared.world);
+    const meadow = preparedWorld.terrain.tiles.find(({ terrain }) => terrain === "meadow");
+    if (meadow === undefined) throw new Error("recovery corridor has no meadow material");
+    for (let offset = 1; offset <= 5; offset += 1) {
+      const tile = preparedWorld.terrain.tiles[fixture.corner.y * preparedWorld.terrain.width + fixture.corner.x + offset];
+      if (tile === undefined) throw new Error("recovery corridor exceeds its generated region");
+      tile.elevation = 600_000;
+      if (offset > 1) {
+        tile.terrain = "meadow";
+        tile.roughness = 0;
+        tile.moisture = 0;
+        tile.baseTravelCost = meadow.baseTravelCost;
+      }
+    }
+    replaceEnvelope(repository, { ...prepared, world: serializeWorld(preparedWorld) });
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().title.hasSave).toBe(true);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    expect(runtime.getRenderView().player.incident?.kind).toBe("fall");
+    advancePlayerSteps(runtime, 10);
+    const parcel = runtime.getRenderView().looseCargo?.find(({ recovery }) => recovery === "reachable");
+    if (parcel === undefined) throw new Error("actual fall produced no reachable parcel");
+    const initialView = runtime.getRenderView();
+    const parcelPoint = {
+      x: (initialView.terrain.worldTileOrigin?.x ?? 0) + parcel.position.x / initialView.terrain.tileSize,
+      y: (initialView.terrain.worldTileOrigin?.y ?? 0) + parcel.position.y / initialView.terrain.tileSize,
+    };
+    const distanceFromOriginalParcel = () => {
+      const view = runtime.getRenderView();
+      return Math.abs((view.terrain.worldTileOrigin?.x ?? 0) + view.player.position.x / view.terrain.tileSize - parcelPoint.x)
+        + Math.abs((view.terrain.worldTileOrigin?.y ?? 0) + view.player.position.y / view.terrain.tileSize - parcelPoint.y);
+    };
+
+    // Leave pickup reach through ordinary accepted movement, then let the
+    // existing touch-target approach recover the same exact physical parcel.
+    // No post-fall position, elapsed phase, event or recovery result is injected.
+    runtime.dispatchRenderer({ type: "brace", active: true });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    for (let step = 0; step < 160 && distanceFromOriginalParcel() < 2.4; step += 1) {
+      advancePlayerSteps(runtime, 1);
+      expect(runtime.getRenderView().player.mode).not.toBe("swept");
+    }
+    expect(distanceFromOriginalParcel()).toBeGreaterThanOrEqual(2.4);
+    // Turning is a real accepted step: looking away does not grant exact sight
+    // of a parcel behind the player. Keep enough margin to remain out of reach.
+    runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const distantParcel = runtime.getRenderView().looseCargo?.find(({ id }) => id === parcel.id);
+    expect(distantParcel?.recovery).toBe("approach");
+    await runtime.save();
+    const beforeTarget = decodeCurrent(repository.snapshot());
+    expect(runtime.getRenderView().player.mode).not.toBe("swept");
+    const carriedPromiseQuantity = (lots: typeof beforeTarget.physicalCargo.carrier.lots) => (
+      lots.reduce((quantity, lot) => quantity + (
+        lot.payload.kind === "promise" && lot.payload.contractId === fixture.contractId
+          ? lot.payload.quantity
+          : 0
+      ), 0)
+    );
+    const carriedBeforeTarget = carriedPromiseQuantity(beforeTarget.physicalCargo.carrier.lots);
+    const cargoWorlds = (state: SerializedPhysicalCargoState) => (
+      [state.looseWorld, ...state.inactiveWorlds.map(({ world }) => world)]
+    );
+    expect(cargoWorlds(beforeTarget.physicalCargo).some(({ history }) => history.some((record) => (
+      record.kind === "scatter"
+      && record.step === 0
+      && record.entityIds.includes(parcel.id)
+      && record.causes.includes("fall-separation")
+    )))).toBe(true);
+    soundscapePlay.mockClear();
+    runtime.dispatchRenderer({ type: "parcel-target", parcelId: parcel.id, recoverOnArrival: true });
+    expect(runtime.getRenderView().looseCargo?.some(({ id }) => id === parcel.id)).toBe(true);
+    expect(runtime.getUIView().announcement?.message).toContain("Parcel marked");
+    expect(soundscapePlay.mock.calls.filter(([cue, gain]) => (
+      (cue === "strand" && gain === 0.58) || cue === "vocalization-relief"
+    ))).toHaveLength(0);
+
+    const project = uiProjection.projectUIView;
+    let recoveryPresentations = 0;
+    let recoveryAudioInsidePresentation = false;
+    const recoveryAudio = () => soundscapePlay.mock.calls.filter(([cue, gain]) => (
+      (cue === "strand" && gain === 0.58) || cue === "vocalization-relief"
+    ));
+    vi.spyOn(uiProjection, "projectUIView").mockImplementation((...args) => {
+      const options = args[3];
+      const worlds = [options?.looseCargoWorld, ...(options?.inactiveLooseCargoWorlds ?? [])];
+      const exactPickup = worlds.some((world) => world?.history.some((record) => (
+        record.entityIds.includes(parcel.id)
+        && (record.kind === "pickup" || record.kind === "merge")
+        && record.causes.includes("recovery")
+      )));
+      if (recoveryPresentations === 0
+        && exactPickup
+        && carriedPromiseQuantity(options?.looseCargoCarrier?.lots ?? []) === carriedBeforeTarget + parcel.quantity
+        && worlds.every((world) => !world?.entities.some(({ id }) => id === parcel.id))) {
+        recoveryPresentations += 1;
+        recoveryAudioInsidePresentation ||= recoveryAudio().length > 0;
+        if (reject) throw new Error("synthetic late recovery presentation fault");
+      }
+      return project(...args);
+    });
+    soundscapePlay.mockClear();
+    let beforeRecovery: SaveRecord | undefined;
+    for (let step = 0; step < 160 && recoveryPresentations === 0; step += 1) {
+      await runtime.save();
+      beforeRecovery = repository.snapshot();
+      advancePlayerSteps(runtime, 1);
+    }
+    expect(recoveryPresentations).toBe(1);
+    if (beforeRecovery === undefined) throw new Error("automatic recovery never reached its physical commit");
+    expect(recoveryAudioInsidePresentation).toBe(false);
+    expect(recoveryAudio().filter(([cue]) => cue === "strand")).toHaveLength(reject ? 0 : 1);
+    expect(recoveryAudio().filter(([cue]) => cue === "vocalization-relief")).toHaveLength(reject ? 0 : 1);
+    if (reject) {
+      expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      expect(repository.snapshot()).toEqual(beforeRecovery);
+    }
+    await runtime.save();
+    const before = decodeCurrent(beforeRecovery);
+    const after = decodeCurrent(repository.snapshot());
+    expect(after.perceptionCarry.version).toBe(14);
+    const looseQuantity = cargoWorlds(after.physicalCargo).flatMap(({ entities }) => entities)
+      .reduce((quantity, { payload }) => quantity + (
+        payload.kind === "promise" && payload.contractId === fixture.contractId ? payload.quantity : 0
+      ), 0);
+    expect(carriedPromiseQuantity(after.physicalCargo.carrier.lots) + looseQuantity).toBe(fixture.promiseQuantity);
+    if (reject) {
+      const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = before;
+      const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+      expect(afterRoots).toEqual(beforeRoots);
+      const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeAnnouncementId, ...beforeSession } = before.session;
+      const { paused: _afterPaused, announcement: _afterAnnouncement, nextAnnouncementId: _afterAnnouncementId, ...afterSession } = after.session;
+      expect(afterSession).toEqual(beforeSession);
+    } else {
+      const pickup = cargoWorlds(after.physicalCargo).flatMap(({ history }) => history).find((record) => (
+        record.entityIds.includes(parcel.id)
+        && (record.kind === "pickup" || record.kind === "merge")
+        && record.causes.includes("recovery")
+      ));
+      if (pickup === undefined) throw new Error("committed recovery lost its exact receipt");
+      expect(carriedPromiseQuantity(after.physicalCargo.carrier.lots)).toBe(carriedBeforeTarget + parcel.quantity);
+      expect(recoveryAudio()).toEqual([
+        ["strand", 0.58, 0, undefined],
+        ["vocalization-relief", 0.68, pickup.ordinal >>> 0, 0],
+      ]);
+      expect(runtime.getRenderView().looseCargo?.some(({ id }) => id === parcel.id)).toBe(false);
+    }
+    runtime.destroy();
+    soundscapePlay.mockClear();
+    const reloaded = await createTideweftRuntime(repository);
+    expect(reloaded.getUIView().title.hasSave).toBe(true);
+    expect(recoveryAudio()).toEqual([]);
+    await reloaded.save();
+    expect(decodeCurrent(repository.snapshot()).physicalCargo).toEqual(after.physicalCargo);
+    reloaded.destroy();
+  });
+
   it("rejects a resealed current player snapshot whose regional cartography was left stale", async () => {
     const repository = new MemoryRepository();
     await createCurrentFixture(repository, "stale regional fall fixture", false);
@@ -1534,6 +1706,9 @@ describe("production terrain fall and physical cargo", () => {
           : 0
       ), 0);
     const reliefCueCount = incidentCueCalls("vocalization-relief");
+    const confirmationCueCount = soundscapePlay.mock.calls.filter(([cue, gain]) => (
+      cue === "strand" && gain === 0.58
+    )).length;
     runtime.dispatchRenderer({
       type: "parcel-target",
       parcelId: recoverableParcel.id,
@@ -1542,6 +1717,12 @@ describe("production terrain fall and physical cargo", () => {
 
     const recoveryExpression = playerExpression(runtime, "relieved");
     const reliefCueCountAfterRecovery = incidentCueCalls("vocalization-relief");
+    // Within-reach manual targeting commits immediately, without requiring
+    // any RAF step. The automatic transaction change must not mute this path.
+    expect(soundscapePlay.mock.calls.filter(([cue, gain]) => (
+      cue === "strand" && gain === 0.58
+    ))).toHaveLength(confirmationCueCount + 1);
+    expect(soundscapePlay.mock.calls).toContainEqual(["strand", 0.58]);
     expect(recoveryExpression.id).not.toBe(cargoLossExpression.id);
     expect(reliefCueCountAfterRecovery).toBe(reliefCueCount + 1);
     expect((runtime.getRenderView().looseCargo ?? []).map(({ id }) => id))
