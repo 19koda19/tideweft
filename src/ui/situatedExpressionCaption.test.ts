@@ -534,9 +534,28 @@ describe("situated expression caption", () => {
     const compactRule = styles.match(
       /@media \(max-width: 58rem\) \{[\s\S]*?#game-ui \.situated-expression-caption \{([\s\S]*?)\n  \}/u,
     )?.[1] ?? "";
-    expect(compactRule).toContain(
-      "bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem)",
-    );
+    expect(compactRule).toContain("position: static");
+    expect(compactRule).toContain("transform: none");
+  });
+
+  it("flows compact speech and the latest observed event together above the journey dock", () => {
+    expect(uiSource).toContain('createElement("div", "field-feedback")');
+    expect(uiSource).toContain("fieldFeedback.append(chronicleDetails, expressionCaption, actionDock)");
+    const stack = styles.match(/\.field-feedback \{([\s\S]*?)\n\}/u)?.[1] ?? "";
+    expect(stack).toContain("display: grid");
+    expect(stack).toContain("gap: 0.45rem 0.75rem");
+    expect(stack).toContain("pointer-events: none");
+    const compactStack = styles.match(
+      /@media \(max-width: 58rem\) \{\s*#game-ui \.field-feedback \{([\s\S]*?)\n  \}/u,
+    )?.[1] ?? "";
+    expect(compactStack).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(compactStack).toContain("bottom: max(0.35rem, env(safe-area-inset-bottom))");
+    const compactChronicle = styles.match(
+      /#game-ui \.chronicle-panel \{([\s\S]*?)\n  \}/u,
+    )?.[1] ?? "";
+    expect(compactChronicle).toContain("position: static");
+    expect(compactChronicle).toContain("overflow: visible");
+    expect(compactChronicle).not.toContain("visibility: hidden");
   });
 
   it("deduplicates through the bounded caption-ID ledger and never infers urgency from tone", () => {

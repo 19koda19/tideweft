@@ -350,8 +350,9 @@ Output defaults to a fresh timestamped name; an explicit `--output` requires an
 unused JSON/screenshot stem under ignored `artifacts/` and preserves old evidence.
 Add `--reduced-motion` for that accessibility preference. This opt-in functional
 mode uses a disposable profile and real resident selection/GREET, then freezes
-the committed caption to inspect Chart/Relief at desktop and portrait sizes.
-It checks DOM bounds, caption/ARIA parity and announcement deduplication, and
+the committed caption to inspect Chart/Relief at desktop, portrait and short
+landscape sizes. It checks DOM bounds, separation of speech/event feedback from
+journey controls, caption/ARIA parity and announcement deduplication, and
 retains local screenshots for visual review. It is not a performance benchmark,
 screen-reader speech test, mobile-hardware proof or packaged-desktop check;
 the default performance mode still requires `--packaged-baseline`.

@@ -2231,6 +2231,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   const leftRail = createElement("div", "left-rail");
   leftRail.id = "field-hud-panels";
   leftRail.append(objectivePanel, contractDetails);
+  const fieldFeedback = createElement("div", "field-feedback");
+  fieldFeedback.append(chronicleDetails, expressionCaption, actionDock);
 
   shell.append(
     fieldSaveWarning.element,
@@ -2240,9 +2242,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     leftRail,
     inspector,
     residentAbout,
-    chronicleDetails,
-    expressionCaption,
-    actionDock,
+    fieldFeedback,
     titleDialog,
     quietDialog,
     tutorial.element,

@@ -95,6 +95,8 @@ const voiceSnapshot = {
   mode: 'relief-3d', viewport: { width: 390, height: 844 }, labelLayerAriaHidden: 'true',
   caption: { rect: { x: 20, y: 600, width: 350, height: 80 }, matchesProjection: true,
     ariaMatches: true, announcementCount: 1, horizontalOverflow: false, verticalOverflow: false },
+  feedback: { chronicle: { x: 20, y: 540, width: 350, height: 45 },
+    dock: { x: 20, y: 710, width: 350, height: 95 } },
   labels: [{ rect: { x: 90, y: 230, width: 200, height: 40 }, matchesProjection: true,
     horizontalOverflow: false, verticalOverflow: false }],
 };
@@ -120,6 +122,14 @@ assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   labelLayerAriaHidden: 'false' }, 'relief-3d'), /accessibility/u);
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   liveRegionOverflow: true }, 'relief-3d'), /accessibility/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  feedback: undefined }, 'relief-3d'), /clipped or absent/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  feedback: { ...voiceSnapshot.feedback, chronicle: { x: 20, y: 700, width: 350, height: 45 } } },
+  'relief-3d'), /overlaps.*journey controls/u);
+assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+  feedback: { ...voiceSnapshot.feedback, chronicle: { x: 20, y: 590, width: 350, height: 45 } } },
+  'relief-3d'), /overlaps.*journey controls/u);
 assert.throws(
   () => parseArguments(['--packaged-baseline', 'artifacts/a.json', '--sample-ms', '4999']),
   /whole number/u,

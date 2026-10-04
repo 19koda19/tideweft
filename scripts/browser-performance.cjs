@@ -31,6 +31,10 @@ const PROCESS_SHUTDOWN_TIMEOUT_MS = 10_000;
 const MAX_PROCESS_OUTPUT_CHARACTERS = 64 * 1_024;
 const BASE_PATH = '/tideweft/';
 const WORLD_SEED = 'runtime baseline estuary';
+const VOICE_PRESENTATION_VIEWPORTS = Object.freeze([
+  { width: 1280, height: 720 }, { width: 390, height: 844 },
+  { width: 320, height: 640 }, { width: 844, height: 390 },
+]);
 const SCENARIO = Object.freeze({
   id: 'browser-estuary-desktop-relief',
   label: 'Production web browser — fixed estuary desktop Relief 3D',
@@ -1070,6 +1074,20 @@ function assertVoicePresentationSnapshot(snapshot, mode) {
     || (mode === 'chart-2d' && snapshot.labels.length !== 0)) {
     throw new Error('Voice functional probe did not observe the expected bounded active renderer');
   }
+  const feedbackRects = [caption.rect, snapshot.feedback?.chronicle, snapshot.feedback?.dock];
+  if (feedbackRects.some((rect) => !inside(rect))) {
+    throw new Error('Voice feedback or journey controls are clipped or absent');
+  }
+  for (let left = 0; left < feedbackRects.length; left += 1) {
+    for (let right = left + 1; right < feedbackRects.length; right += 1) {
+      const a = feedbackRects[left];
+      const b = feedbackRects[right];
+      if (a.x < b.x + b.width && a.x + a.width > b.x
+        && a.y < b.y + b.height && a.y + a.height > b.y) {
+        throw new Error(`Voice feedback overlaps the chronicle or journey controls: ${JSON.stringify(feedbackRects)}`);
+      }
+    }
+  }
   for (const label of snapshot.labels) {
     if (!inside(label.rect) || !label.matchesProjection || label.horizontalOverflow
       || label.verticalOverflow) throw new Error('Voice label is clipped or is not a current heard projection');
@@ -1093,7 +1111,7 @@ function voiceScreenshotPath(output, width, mode) {
 
 async function assertFreshVoicePresentationOutput(output) {
   const paths = [output];
-  for (const width of [1280, 390]) {
+  for (const { width } of VOICE_PRESENTATION_VIEWPORTS) {
     for (const mode of ['chart-2d', 'relief-3d']) paths.push(voiceScreenshotPath(output, width, mode));
   }
   for (const candidate of paths) {
@@ -1192,7 +1210,7 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
   const snapshots = [];
   await fs.mkdir(path.dirname(output), { recursive: true });
-  for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+  for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
     await client.command('browsingContext.setViewport', {
       context: client.context, viewport, devicePixelRatio: 1,
     });
@@ -1230,6 +1248,10 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion) {
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
           labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
+          feedback: {
+            chronicle: geometry(document.querySelector('.chronicle-panel > .panel-summary')).rect,
+            dock: geometry(document.querySelector('.action-dock')).rect,
+          },
           caption: caption && !caption.hidden ? { ...geometry(caption),
             matchesProjection: caption.dataset.expressionId === expected?.id
               && caption.querySelector('.situated-expression-caption__text')?.textContent === expected?.text,

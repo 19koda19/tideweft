@@ -6624,6 +6624,43 @@ body {
   display: none;
 }
 
+/* Let real text and control heights reserve their own rows: fixed caption and
+   event offsets collide when a journey action wraps or the viewport narrows. */
+.field-feedback {
+  position: absolute;
+  right: var(--ui-gap);
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  left: var(--ui-gap);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 34rem) minmax(0, 1fr);
+  align-items: end;
+  gap: 0.45rem 0.75rem;
+  pointer-events: none;
+}
+
+.field-feedback > .chronicle-panel,
+.field-feedback > .action-dock {
+  position: static;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  max-width: 100%;
+  transform: none;
+  pointer-events: auto;
+}
+
+.field-feedback > .chronicle-panel {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+}
+
+.field-feedback > .action-dock {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: center;
+}
+
 .situated-expression-caption {
   position: absolute;
   z-index: 4;
@@ -6642,6 +6679,18 @@ body {
   text-shadow: var(--floating-type-shadow);
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.field-feedback > .situated-expression-caption {
+  position: static;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  max-width: 100%;
+  transform: none;
 }
 
 .situated-expression-caption[hidden] {
@@ -6667,23 +6716,44 @@ body {
 }
 
 @media (max-width: 58rem) {
+  #game-ui .field-feedback {
+    right: max(0.55rem, env(safe-area-inset-right));
+    bottom: max(0.35rem, env(safe-area-inset-bottom));
+    left: max(0.55rem, env(safe-area-inset-left));
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   #game-ui .situated-expression-caption {
+    position: static;
     right: auto;
-    bottom: calc(max(0.35rem, env(safe-area-inset-bottom)) + 6.65rem);
-    left: 50%;
+    bottom: auto;
+    left: auto;
+    grid-column: 1;
+    grid-row: 1;
     width: auto;
-    max-width: calc(100% - 1.1rem);
+    max-width: 100%;
     font-size: 0.68rem;
+    transform: none;
   }
 
   #game-ui .chronicle-panel {
-    right: 0.55rem;
-    bottom: calc(max(0.5rem, env(safe-area-inset-bottom)) + 4.35rem);
+    position: static;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    grid-column: 1;
+    grid-row: 2;
     display: block;
-    width: min(18rem, calc(100% - 1.1rem));
+    width: min(18rem, 100%);
     max-height: none;
     overflow: visible;
     pointer-events: none;
+  }
+
+  #game-ui .field-feedback > .action-dock {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: stretch;
   }
 
   #game-ui .chronicle-panel > .panel-summary {
