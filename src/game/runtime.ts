@@ -12792,6 +12792,17 @@ export async function createTideweftRuntime(
     return false;
   }
 
+  function visibleSituatedExpressionPan(sourcePosition: WorldPosition): number {
+    const listenerPosition = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+    if (listenerPosition === null) return 0;
+    try {
+      const delta = worldPositionDelta(listenerPosition, sourcePosition);
+      return spatialPanForBearing(Math.atan2(delta.y, delta.x));
+    } catch {
+      return 0;
+    }
+  }
+
   /**
    * Acknowledge pending player reception and return its external audio work.
    * Callers inside the fail-closed fixed step must release these cues only
@@ -12809,18 +12820,7 @@ export async function createTideweftRuntime(
     return Object.freeze(acknowledged.acknowledgements.map(({ event, reception }) => {
       let pan = 0;
       if (reception.kind === "heard-visible") {
-        const listenerPosition = playerWorldPositionInRegionalWindow(
-          regionalTravel.window,
-          player,
-        );
-        if (listenerPosition !== null) {
-          try {
-            const delta = worldPositionDelta(listenerPosition, event.position);
-            pan = spatialPanForBearing(Math.atan2(delta.y, delta.x));
-          } catch {
-            pan = 0;
-          }
-        }
+        pan = visibleSituatedExpressionPan(event.position);
       } else if (reception.kind === "heard-unseen") {
         const contact = situatedExpressionReceptionAudibleContact(reception);
         if (contact === null) {
@@ -15480,7 +15480,7 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
-        acceptSituatedExpression(
+        const expressionAdmitted = acceptSituatedExpression(
           intent,
           reception,
           (acceptedEvent, sampleOrdinal) => (
@@ -15495,6 +15495,23 @@ export async function createTideweftRuntime(
             })
           ),
         );
+        // Optional caption capacity cannot erase the already committed cat
+        // call. Retain its ordinary audibility, variant and transactional audio.
+        if (audible !== null && audible.contact !== null && !expressionAdmitted) {
+          const audio = committedAudioCueForSituatedExpression({
+            ...intent,
+            vocalization: situatedExpressionVocalizationFor(intent),
+          }, {
+            certainty: audible.certainty,
+            pan: reception.kind === "heard-visible"
+              ? visibleSituatedExpressionPan(intent.position)
+              : audible.pan,
+          });
+          if (audio === null) {
+            throw new Error("Cat weather-distress audio projection failed validation");
+          }
+          deferredWorldAcousticAudio.push(audio);
+        }
       }
       const pursuitCallCandidates = coreSteps.flatMap(({
         sourceKey,

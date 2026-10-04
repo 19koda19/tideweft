@@ -3703,6 +3703,150 @@ describe("runtime core-ecology vertical slice", () => {
     runtime.destroy();
   }, 45_000);
 
+  it.each([[false, 1], [true, 1], [false, 2]] as const)("keeps a genuine cat rain call independent of optional captions and transactional (reject=%s, catOffsetTiles=%s)", async (reject, catOffsetTiles) => {
+    // Preserve the existing prepared physical fixture before any rainy step.
+    // Optional capacity changes only presentation admission, not its source.
+    const prepared = await createCatWeatherRuntime("rain-distress", catOffsetTiles);
+    const preparedRecord = prepared.repository.snapshot();
+    const catActorId = prepared.catActorId;
+    const lawfullyHeard = catOffsetTiles === 1;
+    let admittedAudio: unknown[][] = [];
+    try {
+      soundscapePlay.mockClear();
+      advancePlayerSteps(prepared.runtime, 10);
+      admittedAudio = soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")
+        .map((args) => [...args]);
+      expect(admittedAudio).toHaveLength(lawfullyHeard ? 1 : 0);
+      if (lawfullyHeard) {
+        expect(prepared.runtime.getUIView().expressionCaption?.animalCallKind).toBe("cat-call");
+      } else {
+        // The same real weather retreat occurs two tiles away, beyond its
+        // quiet rain-masked range. Sight alone does not make a sound heard.
+        expect(prepared.runtime.getUIView().expressionCaption?.animalCallKind).not.toBe("cat-call");
+      }
+    } finally {
+      prepared.runtime.destroy();
+      scheduledFrame = undefined;
+    }
+    vi.resetModules();
+    vi.doMock("./humanPerception", async (importOriginal) => ({
+      ...await importOriginal<typeof import("./humanPerception")>(),
+      HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+    }));
+    let runtime: TideweftRuntime | null = null;
+    try {
+      const runtimeModule = await import("./runtime");
+      const weatherExpression = await import("./coreWildlifeWeatherDistressExpression");
+      const channels = await import("./situatedExpressionChannelBank");
+      const repository = new MemoryRepository(preparedRecord);
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      const beforeRecord = repository.snapshot();
+      const before = requiredEnvelope(repository);
+      const nextTick = deserializeWorld(before.world).meta.completedTick + 1;
+      expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+
+      const intentFor = weatherExpression.coreWildlifeWeatherDistressExpressionIntent;
+      const sourceEventIds = new Set<string>();
+      vi.spyOn(weatherExpression, "coreWildlifeWeatherDistressExpressionIntent")
+        .mockImplementation((input) => {
+          const intent = intentFor(input);
+          if (intent !== null && input.actor.identity.stableId === catActorId
+            && input.event.atTick === nextTick) sourceEventIds.add(input.event.eventId);
+          return intent;
+        });
+      const close = channels.closeSituatedExpressionChannelBankInterval;
+      let closureCalls = 0;
+      let closureCommitted = false;
+      let audioInsideClosure = false;
+      const releaseCommitStates: boolean[] = [];
+      const catAudio = () => soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call");
+      soundscapePlay.mockReset();
+      soundscapePlay.mockImplementation((cue: string) => {
+        if (cue === "cat-call") releaseCommitStates.push(closureCommitted);
+      });
+      vi.spyOn(channels, "closeSituatedExpressionChannelBankInterval")
+        .mockImplementation((...args) => {
+          closureCalls += 1;
+          audioInsideClosure ||= catAudio().length > 0;
+          if (reject) return null;
+          const closed = close(...args);
+          closureCommitted = closed !== null;
+          return closed;
+        });
+      advancePlayerSteps(runtime, 1);
+      await Promise.resolve();
+      expect(sourceEventIds.size).toBe(1);
+      expect(closureCalls).toBe(1);
+      expect(audioInsideClosure).toBe(false);
+      expect(catAudio()).toEqual(reject ? [] : admittedAudio);
+      expect(releaseCommitStates).toEqual(reject || !lawfullyHeard ? [] : [true]);
+      expect(runtime.getUIView().expressionCaption?.animalCallKind).not.toBe("cat-call");
+      if (reject) {
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(repository.snapshot()).toEqual(beforeRecord);
+      }
+      await runtime.save();
+      const after = requiredEnvelope(repository);
+      expect(after.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(after.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        (record) => record.kind === "core-wildlife-weather-distress",
+      )).toEqual([]);
+      expect(after.perceptionCarry.situatedExpressionChannels.channels.some(
+        ({ sourceActorId }) => sourceActorId === catActorId,
+      )).toBe(false);
+      if (reject) {
+        const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = before;
+        const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+        expect(afterRoots).toEqual(beforeRoots);
+        const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeAnnouncementId, ...beforeSession } = before.session as Record<string, unknown>;
+        const { paused: _afterPaused, announcement: _afterAnnouncement, nextAnnouncementId: _afterAnnouncementId, ...afterSession } = after.session as Record<string, unknown>;
+        expect(afterSession).toEqual(beforeSession);
+      } else {
+        const cat = requiredCoreActor(requiredRegionalCoreOwner(after, catActorId), catActorId);
+        expect(cat.intent.kind).toBe("retreat");
+        expect(cat.memories.filter(({ eventId }) => sourceEventIds.has(eventId))).toMatchObject([{
+          kind: "weather",
+          referenceId: "weather:rain",
+          atTick: nextTick,
+          environmentalEvidence: { kind: "wet-tracks", createdAtTick: nextTick },
+        }]);
+      }
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockReset();
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(catAudio()).toEqual([]);
+      await runtime.save();
+      const restored = requiredEnvelope(repository);
+      expect(restored.regionalEcology).toBe(after.regionalEcology);
+      expect(restored.physicalCargo).toEqual(after.physicalCargo);
+      expect(restored.perceptionCarry).toEqual(after.perceptionCarry);
+      if (!reject) {
+        // A consumed call remains consumed through the next real interval,
+        // not merely while construction is idle. Rejected work is different:
+        // its still-uncommitted rainy transition may legitimately happen later.
+        soundscapePlay.mockClear();
+        advancePlayerSteps(runtime, 10);
+        expect(catAudio()).toEqual([]);
+        await runtime.save();
+        const continued = requiredEnvelope(repository);
+        expect(deserializeWorld(continued.world).meta.completedTick).toBe(nextTick + 1);
+        const cat = requiredCoreActor(requiredRegionalCoreOwner(continued, catActorId), catActorId);
+        expect(cat.memories.filter(({ eventId }) => sourceEventIds.has(eventId))).toHaveLength(1);
+      }
+    } finally {
+      runtime?.destroy();
+      soundscapePlay.mockReset();
+      vi.doUnmock("./humanPerception");
+      vi.resetModules();
+    }
+  }, 45_000);
+
   it("voices one fresh rain-caused cat retreat through shared authority and reloads without replay", async () => {
     const { runtime, repository, catActorId } = await createCatWeatherRuntime("rain-distress");
     soundscapePlay.mockClear();
@@ -7729,6 +7873,7 @@ describe("runtime core-ecology vertical slice", () => {
 
 async function createCatWeatherRuntime(
   mode: "rain-distress" | "non-rain-control",
+  catOffsetTiles: 1 | 2 = 1,
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
@@ -7781,7 +7926,7 @@ async function createCatWeatherRuntime(
     // supplant rain as this fixture's causal observation.
     position: translateWorldPosition(
       playerPosition,
-      WORLD_POSITION_UNITS_PER_TILE,
+      catOffsetTiles * WORLD_POSITION_UNITS_PER_TILE,
       0,
     ),
     heading: 0,
