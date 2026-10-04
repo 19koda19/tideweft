@@ -375,6 +375,18 @@ replay. It does not identify the caller, prove audible audio or hardware
 assistive output, or replace mixed-scene, repetition/soak and performance gates.
 Use a fresh ignored output stem; do not combine the two functional producers.
 
+`npm run profile:browser -- --paired-greetings` checks two back-to-back actual
+resident introductions through physical controls. Simulation continues until
+both lawful speech cues coexist; only then is presentation frozen for inspection.
+Desktop Relief must show two distinct, nonoverlapping labels; compact-view
+suppression is reported. Both introductions expire naturally, and both learned
+ABOUT states survive current-save reload without old-cue announcements.
+Ordinary world-label overlap is recorded separately; this mode's speech-pair
+pass does not certify separation from every other world label.
+Add `--reduced-motion` or a fresh ignored `--output` as above. This is two-human
+speech coverage, not animal/physical coexistence, hours or performance evidence;
+do not combine functional modes. Chart remains canvas/screenshot evidence.
+
 For ordinary acoustic-text exposure, add `--observe-voice` to a packaged
 `profile:baseline` scenario (including the existing 210-second travel scenario)
 or a matched `profile:browser -- --packaged-baseline <artifact>` run. This opt-in

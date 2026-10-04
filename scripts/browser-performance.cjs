@@ -175,6 +175,7 @@ function parseArguments(argv) {
   let sampleMs = DEFAULT_SAMPLE_MS;
   let voicePresentation = false;
   let animalPresentation = false;
+  let pairedGreetings = false;
   let observeVoice = false;
   let reducedMotion = false;
   let sampleMsSpecified = false;
@@ -185,6 +186,8 @@ function parseArguments(argv) {
       voicePresentation = true;
     } else if (argument === '--animal-presentation') {
       animalPresentation = true;
+    } else if (argument === '--paired-greetings') {
+      pairedGreetings = true;
     } else if (argument === '--observe-voice') {
       observeVoice = true;
     } else if (argument === '--reduced-motion') {
@@ -229,10 +232,10 @@ function parseArguments(argv) {
     }
   }
 
-  if (voicePresentation && animalPresentation) {
-    throw new Error('Choose one functional producer: --voice-presentation or --animal-presentation');
+  if (Number(voicePresentation) + Number(animalPresentation) + Number(pairedGreetings) > 1) {
+    throw new Error('Choose one functional producer: --voice-presentation, --animal-presentation or --paired-greetings');
   }
-  voicePresentation ||= animalPresentation;
+  voicePresentation ||= animalPresentation || pairedGreetings;
   if (!voicePresentation && packagedBaseline.length === 0) {
     throw new Error('--packaged-baseline is required so browser truth is compared with packaged truth');
   }
@@ -252,6 +255,7 @@ function parseArguments(argv) {
     sampleMs,
     voicePresentation,
     animalPresentation,
+    pairedGreetings,
     observeVoice,
     reducedMotion,
   };
@@ -942,7 +946,21 @@ async function closePagesServer(server) {
   });
 }
 
+function normalizeExpiredVoiceAnnouncements(value) {
+  if (value === null) return [];
+  if (Array.isArray(value) && (value.length < 1 || value.length > 2)) {
+    throw new Error('Voice replay tracking requires one or two bounded announcements');
+  }
+  const announcements = Array.isArray(value) ? [...value] : [value];
+  if (announcements.length < 1 || announcements.length > 2
+    || announcements.some((text) => typeof text !== 'string' || !text || text.length > 1024)) {
+    throw new Error('Voice replay tracking requires one or two bounded announcements');
+  }
+  return announcements;
+}
+
 async function installBrowserDiagnosticPreload(client, context, expiredVoiceAnnouncement = null) {
+  const expiredAnnouncements = normalizeExpiredVoiceAnnouncements(expiredVoiceAnnouncement);
   const installed = await client.command('script.addPreloadScript', {
     contexts: [context],
     functionDeclaration: `() => {
@@ -968,7 +986,8 @@ async function installBrowserDiagnosticPreload(client, context, expiredVoiceAnno
         writable: false,
         value: state,
       });
-      if (${JSON.stringify(expiredVoiceAnnouncement)} !== null) {
+      if (${expiredAnnouncements.length} > 0) {
+        const expiredAnnouncements = ${JSON.stringify(expiredAnnouncements)};
         const probe = { repeats: 0, overflow: false, observer: null };
         const bindAnnouncer = () => {
           const node = document.querySelector('#announcer');
@@ -977,7 +996,7 @@ async function installBrowserDiagnosticPreload(client, context, expiredVoiceAnno
           const record = () => {
             const text = node.textContent || '';
             if (text.length > 8192) probe.overflow = true;
-            if (text.includes(${JSON.stringify(expiredVoiceAnnouncement)})) {
+            if (expiredAnnouncements.some((announcement) => text.includes(announcement))) {
               if (probe.repeats >= 32) probe.overflow = true;
               else probe.repeats += 1;
             }
@@ -1237,6 +1256,23 @@ function assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal = fal
   return snapshot;
 }
 
+function assertPairedGreetingSnapshot(snapshot, mode) {
+  assertVoicePresentationSnapshot(snapshot, mode);
+  const pair = snapshot.pairedSpeech;
+  if (!pair || pair.cueCount !== 2 || pair.sourceCount !== 2
+    || pair.uniqueSignatureCount !== 2 || pair.captionFromPair !== true
+    || pair.labelsMatchOneToOne !== true
+    || !Number.isSafeInteger(pair.visibleLabelCount)
+    || pair.visibleLabelCount < 0 || pair.visibleLabelCount > 2
+    || pair.visibleLabelCount !== snapshot.labels.length
+    || (mode === 'chart-2d' && pair.visibleLabelCount !== 0)
+    || (mode === 'relief-3d' && snapshot.viewport.width === 1280
+      && snapshot.viewport.height === 720 && pair.visibleLabelCount !== 2)) {
+    throw new Error('Paired greeting lacks distinct current cues or the claimed native label witness');
+  }
+  return snapshot;
+}
+
 function voiceScreenshotPath(output, width, mode) {
   return path.join(path.dirname(output), `${path.basename(output, '.json')}-${width}-${mode}.png`);
 }
@@ -1272,7 +1308,75 @@ async function physicalBrowserClick(client, rect) {
   });
 }
 
-async function exerciseBrowserVoicePresentation(client, output, reducedMotion, reloadProductionPage) {
+async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, rectangleOf) {
+  const secondTarget = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getRenderView();
+    const candidates = view.porters.filter((porter) => String(porter.id) !== ${JSON.stringify(String(firstTarget.id))})
+      .map((porter) => ({ porter, distance: Math.hypot(porter.position.x - view.player.position.x,
+        porter.position.y - view.player.position.y) })).filter(({ distance }) => distance <= 70)
+      .sort((a, b) => Number(a.porter.state !== 'waiting') - Number(b.porter.state !== 'waiting')
+        || a.distance - b.distance || String(a.porter.id).localeCompare(String(b.porter.id)));
+    const chosen = candidates[0];
+    if (!chosen) return null;
+    return { id: chosen.porter.id, actorId: chosen.porter.actorId };
+  })()`);
+  if (!secondTarget) throw new Error('No second actual nearby resident for paired greeting');
+  // Ordinary simulation continues throughout both real actions. Do not freeze
+  // the first utterance to manufacture a second simultaneous admission.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await client.evaluate(`(() => {
+      const bridge = window.__TIDEWEFT__;
+      const render = bridge.runtime.getRenderView();
+      if (!render.acousticText.some((cue) => cue.id === ${JSON.stringify(firstCommitted.captionId)})) {
+        throw new Error('First real greeting expired before the second could be reached');
+      }
+      const porter = render.porters.find((candidate) => String(candidate.id) === ${JSON.stringify(String(secondTarget.id))});
+      if (!porter) throw new Error('Second resident left actual visibility before selection');
+      bridge.renderer.focusWorld(porter.position, 1.65);
+    })()`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
+  await client.waitFor(`(() => {
+    const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
+    const greet = document.querySelector('.resident-about__greet');
+    return selected?.id === ${JSON.stringify(String(secondTarget.id))}
+      && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
+  const paired = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getUIView();
+    const render = bridge.runtime.getRenderView();
+    if (view.selectedResident?.id !== ${JSON.stringify(String(secondTarget.id))}
+      || view.selectedResident.knowledgeLabel !== 'Acquainted') return false;
+    const first = render.acousticText.find((cue) => cue.id === ${JSON.stringify(firstCommitted.captionId)}
+      && cue.sourceActorId === ${JSON.stringify(firstTarget.actorId)}
+      && cue.sourceKind === 'human' && cue.acousticKind === 'speech');
+    const second = render.acousticText.find((cue) => cue.sourceActorId === ${JSON.stringify(secondTarget.actorId)}
+      && cue.sourceKind === 'human' && cue.acousticKind === 'speech');
+    if (!first || !second || first.id === second.id || first.sourceActorId === second.sourceActorId) {
+      throw new Error('Both physically earned greetings did not coexist lawfully');
+    }
+    if (first.text === second.text) throw new Error('Paired DOM signatures are ambiguous; no identity claim is possible');
+    const caption = view.expressionCaption;
+    if (!caption || ![first.id, second.id].includes(caption.id)) return false;
+    bridge.runtime.stop();
+    return { tick: render.tick, captionId: caption.id,
+      announcement: caption.speakerLabel + ': ' + caption.text,
+      cueIds: [first.id, second.id], sourceIds: [first.sourceActorId, second.sourceActorId],
+      cueTexts: [first.text, second.text],
+      announcements: [${JSON.stringify(firstCommitted.announcement)},
+        view.selectedResident.heading + ': ' + second.text],
+      secondHeading: view.selectedResident.heading, secondKnown: view.selectedResident.known };
+  })()`);
+  await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
+  return { ...paired, secondTarget };
+}
+
+async function exerciseBrowserVoicePresentation(client, output, reducedMotion, reloadProductionPage,
+  { pairedGreetings = false } = {}) {
   const target = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getRenderView();
@@ -1327,7 +1431,7 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer });
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
-  const committed = await client.waitFor(`(() => {
+  let committed = await client.waitFor(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getUIView();
     const caption = view.expressionCaption;
@@ -1336,12 +1440,20 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
       || !bridge.runtime.getRenderView().acousticText.some((cue) => cue.id === caption.id
         && cue.sourceActorId === ${JSON.stringify(target.actorId)}
         && cue.sourceKind === 'human' && cue.acousticKind === 'speech')) return false;
-    bridge.runtime.stop();
+    if (!${pairedGreetings}) bridge.runtime.stop();
     return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id,
       announcement: caption.speakerLabel + ': ' + caption.text,
       heading: view.selectedResident.heading, known: view.selectedResident.known };
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
+  const firstCommitTick = committed.tick;
+  const pair = pairedGreetings
+    ? await commitSecondBrowserGreeting(client, target, committed, rectangleOf) : null;
+  if (pair !== null && pair.tick <= firstCommitTick) {
+    throw new Error('Second physical greeting did not advance beyond the first commit');
+  }
+  if (pair !== null) committed = { ...committed, tick: pair.tick,
+    captionId: pair.captionId, announcement: pair.announcement };
   const snapshots = [];
   await fs.mkdir(path.dirname(output), { recursive: true });
   for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
@@ -1356,7 +1468,14 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         const cue = bridge.runtime.getRenderView().acousticText.find(
           (item) => item.id === ${JSON.stringify(committed.captionId)});
         if (!cue) throw new Error('Committed greeting disappeared');
-        bridge.renderer.focusWorld(cue.position, 1.65);
+        const pairIds = ${JSON.stringify(pair?.cueIds ?? null)};
+        const pairedCues = pairIds === null ? [] : bridge.runtime.getRenderView().acousticText
+          .filter((item) => pairIds.includes(item.id));
+        const anchor = pairedCues.length === 2 ? {
+          x: (pairedCues[0].position.x + pairedCues[1].position.x) / 2,
+          y: (pairedCues[0].position.y + pairedCues[1].position.y) / 2,
+        } : cue.position;
+        bridge.renderer.focusWorld(anchor, 1.65);
         for (let index = 0; index < 5; index += 1) bridge.ui.update(bridge.runtime.getUIView());
       })()`);
       await client.waitFor(`Boolean(document.querySelector(
@@ -1375,6 +1494,24 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         };
         const caption = document.querySelector('[data-ui="situated-expression-caption"]');
         const aria = caption?.getAttribute('aria-label');
+        const pairIds = ${JSON.stringify(pair?.cueIds ?? null)};
+        const pairedCues = pairIds === null ? [] : cues.filter((cue) => pairIds.includes(cue.id));
+        const visibleLabels = [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
+          .filter((node) => !node.hidden && node.getClientRects().length > 0);
+        const pairedMatches = visibleLabels.map((node) => pairedCues.findIndex((cue) =>
+          cue.text === node.textContent && cue.acousticKind === node.dataset.acousticKind
+          && cue.sourceKind === node.dataset.sourceKind));
+        // Diagnostic only: the shared acoustic arbiter does not yet reserve
+        // ordinary world-label space. Do not mistake pair separation for that
+        // wider integration proof. Bound this opt-in frozen DOM inspection.
+        const ordinaryLabels = pairIds === null ? [] : [...document.querySelectorAll(
+          '.relief-world-label:not([data-acoustic-kind])')]
+          .filter((node) => !node.hidden && node.getClientRects().length > 0);
+        if (ordinaryLabels.length > 64) throw new Error('Paired ordinary-label inspection exceeds its bound');
+        const intersects = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x
+          && a.y < b.y + b.height && a.y + a.height > b.y;
+        const ordinaryOverlapCount = visibleLabels.reduce((count, node) => count + ordinaryLabels.filter(
+          (ordinary) => intersects(geometry(node).rect, geometry(ordinary).rect)).length, 0);
         return {
           mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
           tick: bridge.runtime.getRenderView().tick,
@@ -1392,16 +1529,27 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
             ariaMatches: aria === expected?.speakerLabel + ': ' + expected?.text,
             announcementCount: window.__TIDEWEFT_VOICE_PROBE__.entries.filter((text) => text === aria).length,
           } : null,
-          labels: [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
-            .filter((node) => !node.hidden && node.getClientRects().length > 0)
-            .map((node) => ({ ...geometry(node), matchesProjection: cues.some((cue) =>
+          labels: visibleLabels.map((node) => ({ ...geometry(node), matchesProjection: cues.some((cue) =>
               cue.text === node.textContent && cue.acousticKind === node.dataset.acousticKind
               && cue.sourceKind === node.dataset.sourceKind) })),
+          ...(pairIds === null ? {} : { pairedSpeech: {
+            cueCount: pairedCues.length,
+            sourceCount: new Set(pairedCues.map((cue) => cue.sourceActorId)).size,
+            uniqueSignatureCount: new Set(pairedCues.map((cue) => JSON.stringify(
+              [cue.text, cue.acousticKind, cue.sourceKind]))).size,
+            captionFromPair: pairIds.includes(expected?.id),
+            visibleLabelCount: pairedMatches.filter((index) => index >= 0).length,
+            labelsMatchOneToOne: pairedMatches.every((index) => index >= 0)
+              && new Set(pairedMatches).size === pairedMatches.length,
+            ordinaryWorldLabelCount: ordinaryLabels.length,
+            ordinaryWorldLabelOverlapCount: ordinaryOverlapCount,
+          } }),
         };
       })()`);
       if (snapshot.tick !== committed.tick || !snapshot.sameCommittedCaption
         || snapshot.reducedMotion !== reducedMotion) throw new Error('Voice authority or motion preference changed');
       assertVoicePresentationSnapshot(snapshot, mode);
+      if (pair !== null) assertPairedGreetingSnapshot(snapshot, mode);
       const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
       const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
       const filename = path.basename(screenshotPath);
@@ -1417,20 +1565,32 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     const bridge = window.__TIDEWEFT__;
     const render = bridge.runtime.getRenderView();
     if (render.tick < ${committed.tick + 6}
-      || render.acousticText.some((cue) => cue.id === ${JSON.stringify(committed.captionId)})
-      || bridge.runtime.getUIView().expressionCaption?.id === ${JSON.stringify(committed.captionId)}) return false;
+      || render.acousticText.some((cue) => ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(cue.id))
+      || ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(
+        bridge.runtime.getUIView().expressionCaption?.id)) return false;
     bridge.runtime.stop();
     const caption = document.querySelector('[data-ui="situated-expression-caption"]');
     const probe = window.__TIDEWEFT_VOICE_PROBE__;
-    if (!caption || (!caption.hidden && caption.dataset.expressionId === ${JSON.stringify(committed.captionId)})
+    if (!caption || (!caption.hidden
+        && ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(caption.dataset.expressionId))
       || probe.overflow || probe.entries.filter((text) => text.includes(${JSON.stringify(committed.announcement)})).length !== 1) {
       throw new Error('Expired greeting remains visible or was announced again');
     }
+    const pairedAnnouncements = ${JSON.stringify(pair?.announcements ?? null)};
+    const countCopies = ${countAnimalAnnouncementCopies.toString()};
+    const pairedAnnouncementCounts = pairedAnnouncements?.map((text) => countCopies(probe.entries, text));
+    if (pairedAnnouncementCounts?.some((count) => count > 1)
+      || (${pair !== null} && [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
+        .some((node) => !node.hidden && node.getClientRects().length > 0
+          && ${JSON.stringify(pair?.cueTexts ?? [])}.includes(node.textContent)))) {
+      throw new Error('Expired paired greeting remains visible or repeats an announcement');
+    }
     probe.observer.disconnect();
-    return { tick: render.tick, expiredEventAbsent: true, originalAnnouncementCount: 1 };
+    return { tick: render.tick, expiredEventAbsent: true, originalAnnouncementCount: 1,
+      ...(pairedAnnouncements === null ? {} : { pairedAnnouncementCounts, bothExpiredEventsAbsent: true }) };
   })()`);
   await client.evaluate('window.__TIDEWEFT__.runtime.save()');
-  const reloadDiagnostics = await reloadProductionPage(committed.announcement);
+  const reloadDiagnostics = await reloadProductionPage(pair?.announcements ?? committed.announcement);
   await client.command('browsingContext.setViewport', {
     context: client.context, viewport: VOICE_PRESENTATION_VIEWPORTS[0], devicePixelRatio: 1,
   });
@@ -1441,36 +1601,42 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
   await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === true');
   await physicalBrowserClick(client, await rectangleOf('.continue-card'));
   await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === false');
+  const verifyLearnedResident = async (residentTarget, learned) => {
   await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const porter = bridge.runtime.getRenderView().porters.find((candidate) =>
-      String(candidate.id) === ${JSON.stringify(String(target.id))}
-      && candidate.actorId === ${JSON.stringify(target.actorId)});
+      String(candidate.id) === ${JSON.stringify(String(residentTarget.id))}
+      && candidate.actorId === ${JSON.stringify(residentTarget.actorId)});
     if (!porter) throw new Error('Known resident is no longer lawfully visible after reload');
     bridge.renderer.setMode('chart-2d');
     bridge.renderer.focusWorld(porter.position, 1.65);
   })()`);
   await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
   await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
-  await client.waitFor(`window.__TIDEWEFT__.runtime.getUIView().selectedResident?.id === ${JSON.stringify(String(target.id))}`);
+  await client.waitFor(`window.__TIDEWEFT__.runtime.getUIView().selectedResident?.id === ${JSON.stringify(String(residentTarget.id))}`);
   // Selection commits before the independent UI frame paints ABOUT. Wait for
   // both lawful projection and its real DOM; do not manually force a UI paint.
   const knowledge = await client.waitFor(`(() => {
     const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
     const preserved = selected.knowledgeLabel === 'Acquainted'
-      && selected.heading === ${JSON.stringify(committed.heading)}
-      && JSON.stringify(selected.known) === ${JSON.stringify(JSON.stringify(committed.known))};
+      && selected.heading === ${JSON.stringify(learned.heading)}
+      && JSON.stringify(selected.known) === ${JSON.stringify(JSON.stringify(learned.known))};
     if (!preserved) throw new Error('Reload lost learned resident facts in the current projection');
     const panel = document.querySelector('.resident-about');
     const domPreserved = panel && !panel.hidden
-      && panel.textContent.includes(${JSON.stringify(committed.heading)})
-      && ${JSON.stringify(committed.known)}.every((fact) => panel.textContent.includes(fact.value))
+      && panel.textContent.includes(${JSON.stringify(learned.heading)})
+      && ${JSON.stringify(learned.known)}.every((fact) => panel.textContent.includes(fact.value))
       && panel.querySelector('.resident-about__knowledge')?.textContent === 'Acquainted'
       && document.querySelector('.resident-about__greet')?.hidden === true;
     if (!domPreserved) return false;
     return { sameVisibleResident: true, acquainted: true, learnedFactsPreserved: true, aboutDOMMatches: true };
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
+  return knowledge;
+  };
+  const knowledge = await verifyLearnedResident(target, committed);
+  const secondKnowledge = pair === null ? null : await verifyLearnedResident(pair.secondTarget,
+    { heading: pair.secondHeading, known: pair.secondKnown });
   const restoredTick = await client.evaluate('window.__TIDEWEFT__.runtime.getRenderView().tick');
   await client.evaluate('window.__TIDEWEFT__.runtime.start()');
   const continuedTick = await client.waitFor(`(() => {
@@ -1493,9 +1659,10 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         const view = bridge.runtime.getUIView();
         const caption = document.querySelector('[data-ui="situated-expression-caption"]');
         const probe = window.__TIDEWEFT_VOICE_RELOAD_PROBE__;
-        const absent = !bridge.runtime.getRenderView().acousticText.some((cue) => cue.id === ${JSON.stringify(committed.captionId)})
-          && view.expressionCaption?.id !== ${JSON.stringify(committed.captionId)}
-          && Boolean(caption && (caption.hidden || caption.dataset.expressionId !== ${JSON.stringify(committed.captionId)}));
+        const expiredIds = ${JSON.stringify(pair?.cueIds ?? [committed.captionId])};
+        const absent = !bridge.runtime.getRenderView().acousticText.some((cue) => expiredIds.includes(cue.id))
+          && !expiredIds.includes(view.expressionCaption?.id)
+          && Boolean(caption && (caption.hidden || !expiredIds.includes(caption.dataset.expressionId)));
         return { mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
           tick: bridge.runtime.getRenderView().tick, expiredEventAbsent: absent,
           oldGreetingAnnouncements: probe?.repeats ?? null, currentSaveAccepted: view.title.hasSave,
@@ -1508,10 +1675,17 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
   await client.evaluate('window.__TIDEWEFT_VOICE_RELOAD_PROBE__.observer.disconnect()');
   await client.evaluate('window.__TIDEWEFT__.runtime.save()');
   await client.command('input.releaseActions', { context: client.context });
-  return { producer: 'native resident GREET via physical Chart selection and button input',
+  return { producer: pair === null ? 'native resident GREET via physical Chart selection and button input'
+      : 'two native resident GREETs via back-to-back physical Chart selection and button input',
     committedTick: committed.tick, snapshots,
-    lifecycle: { expired, restoredTick, continuedTick, knowledge, restoredSnapshots, reloadDiagnostics },
-    limitation: 'One natural introduction, frozen viewports, ordinary expiry and current-save browser reload; visible facts/DOM and bounded live-region observations, not exact all-root equivalence, audible audio/screen reader, mobile hardware, crowd/soak performance or desktop packaging. Old-document window counters end at pre-reload capture; guarded BiDi logs span teardown.' };
+    lifecycle: { expired, restoredTick, continuedTick, knowledge, restoredSnapshots, reloadDiagnostics,
+      ...(pair === null ? {} : { secondKnowledge }) },
+    ...(pair === null ? {} : { pairedGreetings: { firstCommitTick,
+      bothCommitTick: committed.tick, distinctSources: 2, distinctEvents: 2,
+      worldContinuedBetweenGreetings: true } }),
+    limitation: pair === null
+      ? 'One natural introduction, frozen viewports, ordinary expiry and current-save browser reload; visible facts/DOM and bounded live-region observations, not exact all-root equivalence, audible audio/screen reader, mobile hardware, crowd/soak performance or desktop packaging. Old-document window counters end at pre-reload capture; guarded BiDi logs span teardown.'
+      : 'Two actual introductions compete after ordinary simulation and physical controls; desktop Relief requires two distinct nonoverlapping native labels. Compact suppression and ordinary-world-label overlap are reported; the latter is diagnostic, not a passing all-label integration gate. Chart uses canvas and screenshots, not DOM glyph bounds. Expired events and learned ABOUT facts survive one current-save reload without old announcements. Not animal/physical coexistence, active-lease restore, all-root equality, audible audio/AT, mobile hardware, hours or crowd/performance closure.' };
 }
 
 function assertRestoredVoiceSnapshot(snapshot, mode, tick) {
@@ -1931,7 +2105,8 @@ async function runBrowserWitness(options) {
     };
     const voicePresentation = options.voicePresentation
       ? await (options.animalPresentation ? exerciseBrowserAnimalPresentation : exerciseBrowserVoicePresentation)(
-        client, options.output, options.reducedMotion, reloadProductionPage) : null;
+        client, options.output, options.reducedMotion, reloadProductionPage,
+        { pairedGreetings: options.pairedGreetings }) : null;
     const rawMeasurement = options.voicePresentation ? null : await measureScenario(
       client,
       SCENARIO,
@@ -2002,8 +2177,10 @@ async function runBrowserWitness(options) {
       captureScope: {
         kind: options.voicePresentation ? 'functional-voice-presentation' : 'real-browser-gameplay',
         complete: true,
-        expectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
-        selectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
+        expectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal']
+          : options.pairedGreetings ? ['native-paired-greetings'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
+        selectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal']
+          : options.pairedGreetings ? ['native-paired-greetings'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
       },
       profilerHarness,
       host: {
@@ -2086,6 +2263,8 @@ async function runBrowserWitness(options) {
       metricScope: options.voicePresentation ? {
         authoritative: options.animalPresentation
           ? 'Ordinary travel opportunity with actual anonymous animal caption; frozen native DOM/bounds/ARIA, no hidden anchor, natural expiry and current-save reload without old announcement replay'
+          : options.pairedGreetings
+            ? 'Two real physical GREETs with simultaneous source-distinct speech; native Relief labels, caption/ARIA, ordinary expiry, both learned ABOUT states and expired-event nonreplay after current-save reload'
           : 'Native selection/GREET, frozen presentation, ordinary expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
         limitation: voicePresentation.limitation,
         omitted: 'No performance measurement, packaged comparison, glyph-ink or hardware certification',
@@ -2215,6 +2394,8 @@ module.exports = {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  assertPairedGreetingSnapshot,
+  normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,
   countAnimalAnnouncementCopies,
   assertRestoredVoiceSnapshot,

@@ -9,6 +9,8 @@ const {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  assertPairedGreetingSnapshot,
+  normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,
   countAnimalAnnouncementCopies,
   assertRestoredVoiceSnapshot,
@@ -87,24 +89,56 @@ assert.throws(() => parseArguments([]), /--packaged-baseline is required/u);
 const functional = parseArguments(['--voice-presentation', '--reduced-motion',
   '--output', 'artifacts/validation/voice.json']);
 assert.equal(functional.voicePresentation, true);
+assert.equal(functional.pairedGreetings, false);
 assert.equal(functional.reducedMotion, true);
 assert.equal(functional.packagedBaseline, null);
 assert.equal(parsed.voicePresentation, false);
 assert.equal(parsed.animalPresentation, false);
+assert.equal(parsed.pairedGreetings, false);
 const animalFunctional = parseArguments(['--animal-presentation', '--reduced-motion']);
 assert.equal(animalFunctional.voicePresentation, true);
 assert.equal(animalFunctional.animalPresentation, true);
+assert.equal(animalFunctional.pairedGreetings, false);
 assert.equal(animalFunctional.packagedBaseline, null);
 assert.equal(animalFunctional.reducedMotion, true);
 assert.throws(() => parseArguments(['--animal-presentation', '--voice-presentation']), /Choose one/u);
 assert.throws(() => parseArguments(['--animal-presentation', '--observe-voice']), /do not combine/u);
 assert.throws(() => parseArguments(['--animal-presentation', '--sample-ms', '5000']), /functional check/u);
 assert.throws(() => parseArguments(['--animal-presentation', '--packaged-baseline', 'artifacts/a.json']), /functional check/u);
+const pairedFunctional = parseArguments(['--paired-greetings', '--reduced-motion',
+  '--output', 'artifacts/validation/paired-greetings.json']);
+assert.equal(pairedFunctional.voicePresentation, true);
+assert.equal(pairedFunctional.pairedGreetings, true);
+assert.equal(pairedFunctional.animalPresentation, false);
+assert.equal(pairedFunctional.packagedBaseline, null);
+assert.equal(pairedFunctional.reducedMotion, true);
+assert.equal(pairedFunctional.observeVoice, false);
+assert.equal(parseArguments(['--paired-greetings']).reducedMotion, false);
+for (const conflict of [
+  ['--voice-presentation'], ['--animal-presentation'], ['--observe-voice'],
+  ['--sample-ms', '5000'], ['--sample-ms=5000'],
+  ['--packaged-baseline', 'artifacts/a.json'], ['--packaged-baseline=artifacts/a.json'],
+]) {
+  assert.throws(() => parseArguments(['--paired-greetings', ...conflict]));
+  assert.throws(() => parseArguments([...conflict, '--paired-greetings']));
+}
 assert.equal(parsed.observeVoice, false);
 assert.equal(parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
   '--observe-voice']).observeVoice, true);
+assert.equal(parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
+  '--observe-voice']).pairedGreetings, false);
 assert.throws(() => parseArguments(['--voice-presentation', '--observe-voice']), /do not combine/u);
 assert.throws(() => parseArguments(['--observe-voice']), /--packaged-baseline is required/u);
+
+assert.deepEqual(normalizeExpiredVoiceAnnouncements(null), []);
+assert.deepEqual(normalizeExpiredVoiceAnnouncements('First: hello'), ['First: hello']);
+const expiredPair = ['First: hello', 'Second: good day'];
+assert.deepEqual(normalizeExpiredVoiceAnnouncements(expiredPair), expiredPair);
+assert.notEqual(normalizeExpiredVoiceAnnouncements(expiredPair), expiredPair);
+for (const invalid of [undefined, '', [], Array(1), ['first', ...Array(1)], [''], [null], ['x'.repeat(1025)],
+  ['one', 'two', 'three'], Array(10000), 42, {}]) {
+  assert.throws(() => normalizeExpiredVoiceAnnouncements(invalid), /bounded announcements/u);
+}
 
 const startupCounters = { errors: 0, unhandledRejections: 0, securityPolicyViolations: 0,
   evalPolicyViolations: 0, inlinePolicyViolations: 0, otherPolicyViolations: 0 };
@@ -313,6 +347,88 @@ assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   'relief-3d'), /overlaps.*journey controls/u);
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   feedback: { ...voiceSnapshot.feedback, chronicle: { x: 20, y: 590, width: 350, height: 45 } } },
+  'relief-3d'), /overlaps.*journey controls/u);
+
+// These supplied public-projection counts characterize the validator only;
+// native acquisition of two lawful introductions is a separate functional proof.
+const pairedSpeech = {
+  cueCount: 2, sourceCount: 2, uniqueSignatureCount: 2,
+  captionFromPair: true, labelsMatchOneToOne: true, visibleLabelCount: 2,
+};
+const pairedDesktop = {
+  ...voiceSnapshot,
+  viewport: { width: 1280, height: 720 },
+  caption: { ...voiceSnapshot.caption, rect: { x: 20, y: 520, width: 350, height: 80 } },
+  feedback: {
+    chronicle: { x: 20, y: 455, width: 350, height: 45 },
+    dock: { x: 20, y: 615, width: 350, height: 90 },
+  },
+  labels: [
+    { ...voiceSnapshot.labels[0], rect: { x: 300, y: 150, width: 200, height: 40 } },
+    { ...voiceSnapshot.labels[0], rect: { x: 520, y: 150, width: 200, height: 40 } },
+  ],
+  pairedSpeech,
+};
+assert.equal(assertPairedGreetingSnapshot(pairedDesktop, 'relief-3d'), pairedDesktop);
+const pairedChart = { ...pairedDesktop, mode: 'chart-2d', labels: [],
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 0 } };
+assert.equal(assertPairedGreetingSnapshot(pairedChart, 'chart-2d'), pairedChart);
+const pairedCompactOne = { ...voiceSnapshot,
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 1 } };
+assert.equal(assertPairedGreetingSnapshot(pairedCompactOne, 'relief-3d'), pairedCompactOne);
+const pairedCompactTwo = { ...voiceSnapshot,
+  labels: [...voiceSnapshot.labels,
+    { ...voiceSnapshot.labels[0], rect: { x: 90, y: 300, width: 200, height: 40 } }],
+  pairedSpeech };
+assert.equal(assertPairedGreetingSnapshot(pairedCompactTwo, 'relief-3d'), pairedCompactTwo);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedCompactTwo,
+  labels: [...pairedCompactTwo.labels,
+    { ...voiceSnapshot.labels[0], rect: { x: 90, y: 350, width: 200, height: 40 } }],
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 3 } }, 'relief-3d'));
+// Compact layout may suppress one source, but the shared non-anonymous Relief
+// assertion still refuses a wholly absent visible speech presentation.
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedCompactOne, labels: [],
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 0 } }, 'relief-3d'), /active renderer/u);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  labels: [pairedDesktop.labels[0]],
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 1 } }, 'relief-3d'));
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedChart,
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 1 } }, 'chart-2d'));
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedCompactOne,
+  pairedSpeech: { ...pairedSpeech, visibleLabelCount: 2 } }, 'relief-3d'));
+for (const field of ['cueCount', 'sourceCount', 'uniqueSignatureCount']) {
+  for (const invalid of [0, 1, 3, 1.5, '2', undefined, Number.NaN]) {
+    assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+      pairedSpeech: { ...pairedSpeech, [field]: invalid } }, 'relief-3d'));
+  }
+}
+for (const field of ['captionFromPair', 'labelsMatchOneToOne']) {
+  for (const invalid of [false, 'true', 1, undefined]) {
+    assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+      pairedSpeech: { ...pairedSpeech, [field]: invalid } }, 'relief-3d'));
+  }
+}
+for (const invalid of [-1, 0.5, 3, '2', null, undefined, Number.NaN, Infinity]) {
+  assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+    pairedSpeech: { ...pairedSpeech, visibleLabelCount: invalid } }, 'relief-3d'));
+}
+for (const invalid of [null, undefined, []]) {
+  assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+    pairedSpeech: invalid }, 'relief-3d'));
+}
+// Pair metadata never bypasses the established native geometry/ARIA checks.
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  labels: [pairedDesktop.labels[0], { ...pairedDesktop.labels[0] }] }, 'relief-3d'), /overlap/u);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  labels: [{ ...pairedDesktop.labels[0], matchesProjection: false }, pairedDesktop.labels[1]] },
+  'relief-3d'), /current heard projection/u);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  labels: [pairedDesktop.labels[0], { ...pairedDesktop.labels[1],
+    rect: { x: 1200, y: 150, width: 200, height: 40 } }] }, 'relief-3d'), /clipped/u);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  caption: { ...pairedDesktop.caption, ariaMatches: false } }, 'relief-3d'), /caption/u);
+assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
+  feedback: { ...pairedDesktop.feedback, chronicle: { x: 20, y: 560, width: 350, height: 45 } } },
   'relief-3d'), /overlaps.*journey controls/u);
 assert.throws(
   () => parseArguments(['--packaged-baseline', 'artifacts/a.json', '--sample-ms', '4999']),
