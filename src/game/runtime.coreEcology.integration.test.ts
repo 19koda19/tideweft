@@ -225,7 +225,7 @@ import {
   translateWorldPosition,
   worldPositionDelta,
 } from "./worldPosition";
-import { livingActorAddressInRegionalWindow } from "./livingActor";
+import { headingFromRadians, livingActorAddressInRegionalWindow } from "./livingActor";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
 import type {
   CoreWildlifeAlarmExpressionAdmissionRecord,
@@ -3846,6 +3846,166 @@ describe("runtime core-ecology vertical slice", () => {
       vi.resetModules();
     }
   }, 45_000);
+
+  it.each([[false, false, 500], [true, false, 500], [true, true, 500], [true, false, 2_000]] as const)("carries one genuine cat rain call to a real human independently of optional captions (refuse=%s, reject=%s, distance=%s)", async (refuse, reject, listenerDistance) => {
+    // Stage only initial physical placement of one generated free resident
+    // on a real generated route. Cognition, rain, sound and hearing are real.
+    const prepared = await createCatWeatherRuntime("rain-distress", 1, listenerDistance);
+    const preparedRecord = prepared.repository.snapshot();
+    const { catActorId, listenerActorId } = prepared;
+    prepared.runtime.destroy();
+    scheduledFrame = undefined;
+    if (listenerActorId === null) throw new Error("Cat hearing fixture omitted its real resident");
+    vi.resetModules();
+    const heardFrames: Array<{ tick: number; observations: ActorObservation[];
+      positions: ReturnType<typeof createWorldPosition>[] }> = [];
+    const carrierCounts: number[] = [];
+    const physicalCounts: number[] = [];
+    vi.doMock("./humanPerception", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./humanPerception")>();
+      return {
+        ...actual,
+        HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: refuse
+          ? 0 : actual.HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
+        collectExistingHumanObservations: (
+          input: Parameters<typeof actual.collectExistingHumanObservations>[0],
+        ) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          const catSamples = [
+            ...(input.supplementalSoundSamples ?? []).filter(({ sourceActorId }) => sourceActorId === catActorId),
+            ...(input.physicalSoundSamples ?? []).filter(({ sourceId }) => sourceId === catActorId),
+          ];
+          if (catSamples.length > 0) {
+            carrierCounts.push(catSamples.length);
+            physicalCounts.push((input.physicalSoundSamples?.length ?? 0)
+              + (input.unadmittedAlarmSoundSamples?.length ?? 0));
+            heardFrames.push({
+              tick: input.targetTick,
+              positions: catSamples.map(({ position }) => position),
+              observations: batches.flatMap(({ observerId, observations }) => (
+                observerId === listenerActorId ? observations.filter((observation) => (
+                  observation.channel === "hearing"
+                  && catSamples.some(({ id }) => observation.id.endsWith(`-${id}`))
+                )) : []
+              )),
+            });
+          }
+          return batches;
+        },
+      };
+    });
+    let runtime: TideweftRuntime | null = null;
+    try {
+      const runtimeModule = await import("./runtime");
+      const channels = await import("./situatedExpressionChannelBank");
+      const repository = new MemoryRepository(preparedRecord);
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const pending = requiredEnvelope(repository);
+      const sourceTick = deserializeWorld(pending.world).meta.completedTick;
+      const cat = requiredCoreActor(requiredRegionalCoreOwner(pending, catActorId), catActorId);
+      const freshMemories = cat.memories.filter(({ kind, referenceId, atTick }) => (
+        kind === "weather" && referenceId === "weather:rain" && atTick === sourceTick
+      ));
+      expect(freshMemories).toHaveLength(1);
+      expect(cat.intent.kind).toBe("retreat");
+      const rainLocus = freshMemories[0]?.environmentalEvidence?.position;
+      expect(rainLocus).toBeDefined();
+      expect(cat.address.position).not.toEqual(rainLocus);
+      expect(pending.perceptionCarry.situatedExpressionAdmissions.records.filter(
+        ({ kind }) => kind === "core-wildlife-weather-distress",
+      )).toHaveLength(refuse ? 0 : 1);
+      if (refuse) expect(pending.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      const beforeReceipt = requiredEnvelope(repository);
+      const beforeReceiptRecord = repository.snapshot();
+      expect(beforeReceipt.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      if (reject) vi.spyOn(channels, "closeSituatedExpressionChannelBankInterval").mockReturnValue(null);
+      advancePlayerSteps(runtime, 1);
+      await Promise.resolve();
+      if (reject) {
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(repository.snapshot()).toEqual(beforeReceiptRecord);
+        expect(carrierCounts).toEqual([1]);
+        expect(heardFrames[0]?.observations).toHaveLength(1);
+        expect(heardFrames[0]?.positions).toEqual([rainLocus]);
+        // A real pre-step observation existed, but a failed transaction must
+        // not commit it into anybody's belief or any authoritative root.
+        await runtime.save();
+        const rejected = requiredEnvelope(repository);
+        const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = beforeReceipt;
+        const { session: _rejectedSession, integrity: _rejectedIntegrity, ...rejectedRoots } = rejected;
+        expect(rejectedRoots).toEqual(beforeRoots);
+        const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeAnnouncementId, ...beforeSession } = beforeReceipt.session as Record<string, unknown>;
+        const { paused: _rejectedPaused, announcement: _rejectedAnnouncement, nextAnnouncementId: _rejectedAnnouncementId, ...rejectedSession } = rejected.session as Record<string, unknown>;
+        expect(rejectedSession).toEqual(beforeSession);
+        expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+        return;
+      }
+      await runtime.save();
+      const propagated = requiredEnvelope(repository);
+      const world = deserializeWorld(propagated.world);
+      expect(world.meta.completedTick).toBe(sourceTick + 1);
+      expect(carrierCounts).toEqual([1]);
+      expect(physicalCounts.every((count) => count <= 8)).toBe(true);
+      expect(heardFrames).toHaveLength(1);
+      const frame = heardFrames[0];
+      expect(frame?.tick).toBe(sourceTick + 1);
+      expect(frame?.positions).toEqual([rainLocus]);
+      const lawfullyHeard = listenerDistance === 500;
+      expect(frame?.observations).toHaveLength(lawfullyHeard ? 1 : 0);
+      const observation = frame?.observations[0];
+      if (lawfullyHeard && observation === undefined) throw new Error("Real cat call did not reach the real human");
+      if (observation !== undefined) {
+        expect(observation).toMatchObject({
+          observerId: listenerActorId, channel: "hearing", perceivedClass: "animal-call",
+          identification: "anonymous", subjectId: null, interrupt: "none",
+        });
+        expect(observation.area.radiusUnits).toBeGreaterThan(0);
+        expect(observation.area.center).not.toEqual(freshMemories[0]?.environmentalEvidence?.position);
+      }
+      const listener = world.residents.find(({ identity }) => identity.stableId === listenerActorId);
+      if (observation !== undefined) {
+        expect(listener?.perception.beliefs.filter(({ sourceObservationId }) => sourceObservationId === observation.id))
+          .toMatchObject([{ perceivedClass: "animal-call", identification: "anonymous", subjectId: null,
+            firstObservedTick: sourceTick + 1, lastObservedTick: sourceTick + 1, strongInterrupt: false }]);
+      } else {
+        expect(listener?.perception.beliefs.filter(({ channel, perceivedClass, lastObservedTick }) => (
+          channel === "hearing" && perceivedClass === "animal-call" && lastObservedTick === sourceTick + 1
+        ))).toEqual([]);
+      }
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      expect(carrierCounts).toEqual([1]);
+      const continued = deserializeWorld(requiredEnvelope(repository).world);
+      expect(continued.meta.completedTick).toBe(sourceTick + 2);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+      if (observation !== undefined) expect(continued.residents.find(({ identity }) => identity.stableId === listenerActorId)
+        ?.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === observation.id)
+        ?.lastObservedTick).toBe(sourceTick + 1);
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+      vi.doUnmock("./humanPerception");
+      vi.resetModules();
+    }
+  }, 60_000);
 
   it("voices one fresh rain-caused cat retreat through shared authority and reloads without replay", async () => {
     const { runtime, repository, catActorId } = await createCatWeatherRuntime("rain-distress");
@@ -7874,10 +8034,12 @@ describe("runtime core-ecology vertical slice", () => {
 async function createCatWeatherRuntime(
   mode: "rain-distress" | "non-rain-control",
   catOffsetTiles: 1 | 2 = 1,
+  stageNearbyHuman: false | 500 | 2_000 = false,
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   catActorId: string;
+  listenerActorId: string | null;
 }>> {
   const repository = new MemoryRepository();
   const initial = await createTideweftRuntime(repository);
@@ -7913,6 +8075,51 @@ async function createCatWeatherRuntime(
   if (regional === null) throw new Error("Cat weather fixture could not restore its frame");
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null) throw new Error("Cat weather fixture could not locate its player");
+  let catPosition = translateWorldPosition(playerPosition, catOffsetTiles * WORLD_POSITION_UNITS_PER_TILE, 0);
+  let catHeading = 0;
+  let listenerActorId: string | null = null;
+  if (stageNearbyHuman) {
+    const porterId = deserializeBio0Ecology(envelope.bio0Ecology)?.porterAddress.actorId;
+    const listener = world.residents.find(({ identity, activeContractId }) => (
+      activeContractId === null && identity.stableId !== porterId
+    ));
+    if (listener === undefined) throw new Error("Cat hearing fixture lacks an actual free resident");
+    const view = createWorldView(world);
+    let routePlacement: { routeId: number; progress: number; distance: number } | undefined;
+    for (const route of world.routes) {
+      if (route.path.length < 2) continue;
+      for (const [offset, index] of route.path.entries()) {
+        const tile = view.terrain.tiles[index];
+        if (tile === undefined) continue;
+        const point = createWorldPosition({ x: 0, y: 0 },
+          (tile.x + 0.5) * WORLD_POSITION_UNITS_PER_TILE,
+          (tile.y + 0.5) * WORLD_POSITION_UNITS_PER_TILE);
+        const delta = worldPositionDelta(point, catPosition);
+        const distance = Math.hypot(delta.x, delta.y);
+        if (routePlacement === undefined || distance < routePlacement.distance) routePlacement = {
+          routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance,
+        };
+      }
+    }
+    if (routePlacement === undefined) throw new Error("Cat hearing fixture lacks a generated route");
+    listener.location = { kind: "route", routeId: routePlacement.routeId, progress: routePlacement.progress };
+    if (listener.circadian !== undefined) {
+      const current = listener.circadian;
+      world.residents[world.residents.indexOf(listener)] = replaceResidentCircadian(listener, {
+        atTick: world.meta.completedTick,
+        circadian: { ...current, restDestinationArrived: false,
+          posture: current.posture.state === "resting" || current.posture.state === "asleep"
+            ? { state: "awake", enteredAtTick: world.meta.completedTick } : current.posture },
+      });
+    }
+    const placement = resolveResidentWorldPlacement(createWorldView(world), listener);
+    if (placement === null) throw new Error("Cat hearing fixture could not resolve its real route placement");
+    catPosition = translateWorldPosition(placement.position, stageNearbyHuman, 0);
+    const away = worldPositionDelta(playerPosition, catPosition);
+    catHeading = headingFromRadians(Math.atan2(away.y, away.x));
+    listenerActorId = listener.identity.stableId;
+    assertWorldInvariants(world);
+  }
 
   let patch = requiredRegionalCoreOwner(envelope, sourceCatId);
   patch = setCoreEcologyAggregatePatchMaterializedActors(patch, {
@@ -7924,12 +8131,8 @@ async function createCatWeatherRuntime(
     atTick: patch.updatedAtTick,
     // The player sees the cat ahead; the cat faces away so the player cannot
     // supplant rain as this fixture's causal observation.
-    position: translateWorldPosition(
-      playerPosition,
-      catOffsetTiles * WORLD_POSITION_UNITS_PER_TILE,
-      0,
-    ),
-    heading: 0,
+    position: catPosition,
+    heading: catHeading,
   });
   const { circadian: _circadian, ...catWithoutCircadian } = positionedCat;
   const preparedCat = canonicalizeCoreWildlifeActorState({
@@ -8008,7 +8211,7 @@ async function createCatWeatherRuntime(
       runtime.getUIView().saveWarning,
     )}`);
   }
-  return Object.freeze({ runtime, repository, catActorId: sourceCatId });
+  return Object.freeze({ runtime, repository, catActorId: sourceCatId, listenerActorId });
 }
 
 async function createAlarmRuntime(

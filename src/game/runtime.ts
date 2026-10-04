@@ -292,6 +292,7 @@ import {
   type ExpressiveAlarmSpecies,
 } from "./coreWildlifeSignalExpression";
 import {
+  DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY,
   coreWildlifeWeatherDistressExpressionEventForTrigger,
   coreWildlifeWeatherDistressExpressionEventMatchesWorld,
   coreWildlifeWeatherDistressExpressionIntent,
@@ -6782,6 +6783,37 @@ function runtimeFreshCoreWildlifePursuitExpressionAuthorities(
   )));
 }
 
+/** Pending rain calls retain their ecology-owned locus, never a subtitle queue. */
+function runtimeFreshCoreWildlifeWeatherDistressExpressionAuthorities(
+  state: CoreEcologyAggregatePatchState,
+): readonly CoreWildlifeWeatherDistressExpressionInput[] {
+  return Object.freeze(state.populations.flatMap(({ members }) => members.flatMap((member) => {
+    const actor = member.actor;
+    if (
+      member.materialization !== "materialized"
+      || actor.identity.species !== "domestic-cat"
+      || actor.intent.kind !== "retreat"
+      || actor.intent.enteredAtTick !== state.updatedAtTick
+      || actor.intent.focusObservationId === null
+    ) return [];
+    const memories = actor.memories.filter((memory) => (
+      memory.kind === "weather"
+      && memory.referenceId === "weather:rain"
+      && memory.atTick === state.updatedAtTick
+      && memory.observationId === actor.intent.focusObservationId
+    ));
+    const memory = memories[0];
+    if (memories.length !== 1 || memory === undefined) return [];
+    const authority = runtimeCoreWildlifeWeatherDistressExpressionAuthority(state, {
+      actorId: actor.identity.stableId,
+      triggerEventId: memory.eventId,
+      sourceObservationId: actor.intent.focusObservationId,
+      acceptedAtTick: state.updatedAtTick,
+    });
+    return authority === null ? [] : [authority];
+  })).sort((left, right) => compareText(left.event.eventId, right.event.eventId)));
+}
+
 function runtimeCoreAlarmEventAt(
   actor: CoreWildlifeActorState,
   position: WorldPosition,
@@ -7183,6 +7215,29 @@ function foxPursuitPhysicalSoundSample(
   return createPhysicalSoundSample({
     acousticEventId: `fox-pursuit-call:v1:${eventHash}`,
     id: `fpc-${eventHash}`,
+    position: event.position,
+    soundLoudness: acoustics.loudness,
+    soundRangeUnits: acoustics.rangeUnits,
+    soundClass: "animal-call",
+    soundInterrupt: "none",
+    sourceId: event.sourceActorId,
+  });
+}
+
+/** One authenticated quiet cat call for caption-independent human hearing. */
+function catWeatherDistressPhysicalSoundSample(
+  event: SituatedExpressionEvent,
+): PhysicalSoundSample | null {
+  if (event.meaning !== "domestic-cat-rain-distress-call") return null;
+  const acoustics = situatedExpressionAcoustics(event);
+  const eventHash = hashCanonical({
+    domain: "domestic-cat-weather-call:v1",
+    eventId: event.eventId,
+    sourceActorId: event.sourceActorId,
+  });
+  return createPhysicalSoundSample({
+    acousticEventId: `cat-weather-call:v1:${eventHash}`,
+    id: `cwc-${eventHash}`,
     position: event.position,
     soundLoudness: acoustics.loudness,
     soundRangeUnits: acoustics.rangeUnits,
@@ -13809,6 +13864,44 @@ export async function createTideweftRuntime(
       const humanCoreAlarmObserverIds = new Set(corePerceptionFrame.participants.flatMap(
         ({ address }) => address.species === "human" ? [address.actorId] : [],
       ));
+      const pendingCatWeatherCalls = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
+        patch.updatedAtTick !== world.meta.completedTick ? []
+          : runtimeFreshCoreWildlifeWeatherDistressExpressionAuthorities(patch).map((authority) => ({
+              authority, sourceKey,
+            }))
+      )).filter(({ authority }) => (
+        localMaterializedCoreActorIdSet.has(authority.actor.identity.stableId)
+      )).sort((left, right) => (
+        compareText(left.authority.event.eventId, right.authority.event.eventId)
+        || compareText(left.sourceKey, right.sourceKey)
+      ));
+      const catWeatherPhysicalFallbacks = pendingCatWeatherCalls.flatMap(({ authority, sourceKey }) => {
+        const expression = coreWildlifeWeatherDistressExpressionEventForTrigger(
+          authority, authority.event.eventId,
+        );
+        if (expression === null) throw new Error("Fresh cat weather call lost its acoustic authority");
+        const matchingAdmissions = situatedExpressionAdmissions.records.filter(
+          (record): record is RuntimeCoreWildlifeWeatherDistressAdmission => (
+            record.kind === "core-wildlife-weather-distress"
+            && record.sourceOwnerKey === sourceKey
+            && record.sourceActorId === authority.actor.identity.stableId
+            && record.triggerEventId === authority.event.eventId
+          ),
+        );
+        const admission = matchingAdmissions[0];
+        const retainedSample = admission === undefined
+          ? undefined : actorVocalizationSamples[admission.sampleOrdinal];
+        if (
+          matchingAdmissions.length === 1 && admission !== undefined
+          && coreWildlifeWeatherDistressAdmissionMatchesWorld(admission, authority, world.meta.completedTick)
+          && retainedSample?.expressionEventId === admission.eventId
+          && retainedSample.sourceActorId === admission.sourceActorId
+        ) return [];
+        const sample = catWeatherDistressPhysicalSoundSample(expression);
+        if (sample === null) throw new Error("Cat weather call could not enter shared physical hearing");
+        return [{ eventId: authority.event.eventId,
+          priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample }];
+      });
       const pendingFoxPursuits = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
         runtimeFreshCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({
           authority,
@@ -13953,12 +14046,12 @@ export async function createTideweftRuntime(
         }));
       }
       // Expression admission and acoustic hearing have independent budgets.
-      // Retained fox calls and core alarms compete by semantic priority for
+      // Retained cat/fox calls and core alarms compete by semantic priority for
       // bounded human world-hearing slots before routine contact carry, so
       // a full caption/sample ledger cannot make the world acoustically silent.
       // Dogs keep the original alarm-contact list and rabbit meaning through
       // core ecology; this slice makes no new dog interpretation claim for the
-      // fox call. Repetition policy may coalesce only optional presentation.
+      // cat/fox calls. Repetition policy may coalesce only optional presentation.
       type ExpressionHearingFallback = Readonly<{
         eventId: string;
         priority: number;
@@ -13967,6 +14060,9 @@ export async function createTideweftRuntime(
         | Readonly<{ kind: "alarm"; sample: UnadmittedAlarmSoundSample }>
       );
       const selectedExpressionHearingFallbacks: readonly ExpressionHearingFallback[] = [
+        ...catWeatherPhysicalFallbacks.map((fallback) => ({
+          ...fallback, kind: "physical" as const,
+        })),
         ...foxPursuitPhysicalFallbacks.map((fallback) => ({
           ...fallback, kind: "physical" as const,
         })),
