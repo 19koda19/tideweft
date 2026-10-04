@@ -912,6 +912,64 @@ audible/assistive quality, hours of play, a performance result or public release
 The disposable profile was removed after its own browser closed; the user's
 browser and data were untouched. No application, schema or dependency changed.
 
+#### Ordinary travel, sampled quietness and a native bird call — 2026-10-04
+
+Clean local `936f7b3` reused the unchanged current-schema production artifact
+at `/tideweft/` in Firefox 157, 1440×900/DPR1, AC power and Low Power Mode off.
+Ignored probes used physical START, Chart keys and exposed controls, not actor,
+event, weather, inventory, save or position injection or a move-target adapter.
+No application, dependency, schema or release policy changed.
+
+The six-minute Promise check completed 361.319 seconds of journey / 366.703
+seconds of observation, through tick 960. Actual chronicle receipts confirm
+eight fresh-water units delivered to Latchmere at D1 09:38 and fourteen food
+units to Bellwake at D1 15:20. Fourteen Reed was then picked up for Latchmere.
+Action counters are input attempts, not transaction counts. Floating-window
+position deltas are not physical travel distance; a later probe uses public
+world origin plus local position for sampled global displacement instead.
+
+Its 2,387 public reads first observed 18 player speech, one human speech and
+21 physical-text IDs, with nine player wordings and no adjacent sampled player
+repeats. Player projection rate was approximately 2.95 IDs per observed minute,
+not emitted audio rate. There were 2,261 empty reads, at most three projected
+candidates, no animal, unclassified record, incomplete census or capacity
+overflow. Largest sampling gap was 1,163 ms. The 233.322-second empty-projection
+sample span is not proof of continuous audible silence. Brief footing, cargo
+loss and recovery words fit the encountered actions, but complete causal state
+at every cue was not retained; counts alone do not establish non-annoyance.
+
+Earlier extended captures remain failed evidence: one Interact control changed
+availability before the click; another lost its in-page census when the BiDi
+socket closed. The latter retained 96 stage records, with stationary Bellwake
+position after its delivery marker left the window, despite usable public
+south-west bearing. That was the probe's null-target stop, not a navigation
+defect. A guarded coarse-bearing fallback passes local direction/refusal checks;
+the finite run selected a different next Promise and did not exercise it
+natively. Bounded atomic local observer checkpoints now retain partial samples
+on disconnection. Nominal fifteen-minute windows close on the next callback;
+boundary IDs can be counted again and must not be summed as unique emissions.
+
+A separate 60.106-second ordinary animal attempt physically started the existing
+`breathing-room all-tide corridor 187` seed and held Chart W. At tick 424,
+3.864 seconds into that attempt, it heard one anonymous bird call. The captured
+Chart image visibly reads `CALL. · direction unclear`; public attribution is
+only “A bird,” not a hidden species or exact source. Movement was released
+after the encounter. The subsequent Relief image no longer shows the caption;
+it is not simultaneous two-view live-text proof. The 60.298-second observation
+retains 525 reads, one animal-caption ID, 521 empty reads, a 259-ms largest gap
+and no overflow or incomplete census. No Promise pickup was needed.
+
+Promise JSON SHA256 is `6339b7fe465a960e3fedf3a65fab2e60567e05888ee560e509e42abf1bbf0f38`;
+animal JSON is `34ecac834eedf714b673d6d28e2f277c3eeacd07f3c8ecba14b1dd8b8b9cd1fb`.
+Exact ignored probe versions are `a9b6c5b73e64da1db59e81c191a2ef2a94e5c2853aa8e7e4b1cdb1732566a17a`
+and `81d02ce69bba1c371bc0c14fd6b5550d329a26c3a229f79ba586eb757b752ee7`.
+Bundle remains `9f84e08011bc6b8364a08a08defe2a7c56dc382998eef146c82040a258dd8e94`.
+Both browsers exited normally and their disposable profiles were removed;
+the user's browser/data were untouched. Each logged the known CSP eval-probe
+denial, not a console-clean result. These observations add ordinary gameplay
+evidence, not hours, dense/mixed-scene, audible/assistive, full conservation or
+replay, mobile hardware, performance, directive closure or public-release proof.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
