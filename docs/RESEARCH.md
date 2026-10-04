@@ -800,6 +800,45 @@ Exact command: `caffeinate -i npm run profile:baseline -- --executable
 `268715755ae7f54e2a6d0477f2b512d24d0e6814d56b3feaeb097ae73802c93e`.
 No deployment or release gate is claimed.
 
+#### Native paired speech and an ordinary-label collision — 2026-10-04
+
+The existing production-browser functional harness now supports
+`--paired-greetings`. Physical selection and GREET controls introduce two
+different residents while ordinary simulation continues; freezing happens only
+after both committed speech cues coexist. Local tooling commit `f299cdc` changes
+no game producer, schema, dependency, simulation timing or release identity.
+
+Sequential Firefox 157 headless runs on AC power, Low Power Mode off, served the
+retained current-v49/carry-v14 artifact below `/tideweft/`. JavaScript SHA256 was
+`fddfd51adc42512d0da91d6c1c44e68bacda28ba41a0284a12c4dcd329e1a9fe`.
+Commands used `npm run profile:browser -- --paired-greetings [--reduced-motion]`
+and fresh ignored output stems. Both pairs committed at ticks 424/427. Two
+distinct labels remained mutually nonoverlapping in all four Relief viewport
+states (1280×720, 390×844, 320×640, 844×390). Both cues expired at tick 433;
+after real reload, both learned ABOUT states persisted and no old cue or
+announcement replayed. Existing single-GREET and anonymous-animal native modes
+also passed. The capture harness SHA256 was
+`3f9fe6b279e53f9fb88031513605aa919ba395695a2b8f062d0e57109d10152a`;
+after capture, the harness added a pre-copy length guard for unsupported arrays.
+Accepted single/pair inputs are unchanged; rejection selftests pass. Both
+harness selftests, typecheck and critical smoke (105 tests) passed.
+
+Screenshot inspection and bounded DOM diagnostics found a real remaining
+cross-layer defect: the ordinary harbor label intersects speech at desktop,
+320-wide and 844-wide Relief in both pair runs. `p5ReliefSketch` independently
+places that label without consulting acoustic bounds. The pair's passing result
+does **not** certify all-world-label readability. Chart has canvas/screenshot
+evidence, not DOM glyph bounds; zero DOM labels there proves no such separation.
+The next repair belongs to Relief presentation, not hearing or event generation.
+
+Ignored final evidence is under `artifacts/validation/voice-current49/`, stems
+`browser-paired-greetings[-reduced]-35a6e70-final` (JSON SHA256
+`f9f8e442a136c410507ca200b10c9a99afad5d4fffa2aa958e11a806e9bec27d` /
+`05a6a574e1f3f1e44eb53b66a5ea1d2f9eb72904b60a76950d7da5e64bee520c`).
+This is two-human presentation/reload evidence, not mixed animal/physical scenes,
+hours, audible audio, hardware assistive/mobile output, performance or release
+closure. No cumulative suite is rerun solely for this harness slice.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
