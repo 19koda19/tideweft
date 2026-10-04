@@ -12250,6 +12250,7 @@ export async function createTideweftRuntime(
   function completePlayerRecovery(
     completed: PlayerTimeActionState,
     finalStepAnnouncementChanged: boolean,
+    deferredAudio: CommittedAudioCue[],
   ): void {
     player.timeAction = null;
     playerTimeActionSuspended = false;
@@ -12269,7 +12270,9 @@ export async function createTideweftRuntime(
           ? `Dawn reaches the settlement at ${clock}. You wake to the world that continued around you.`
           : `Thirty minutes pass. It is ${clock}; ordinary stillness restored only what your current condition allowed.`,
       );
-      soundscape.play("rest", completed.kind === "sleep" ? 0.82 : 0.68);
+      deferredAudio.push(Object.freeze({
+        cue: "rest", volume: completed.kind === "sleep" ? 0.82 : 0.68, variantSeed: 0,
+      }));
     }
   }
 
@@ -16163,6 +16166,7 @@ export async function createTideweftRuntime(
         completePlayerRecovery(
           beforeAdvance,
           (session.announcement?.id ?? null) !== announcementIdBeforePlayerTimeStep,
+          deferredWorldAcousticAudio,
         );
       } else {
         player.timeAction = advanced.state;

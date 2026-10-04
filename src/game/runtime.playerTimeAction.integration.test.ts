@@ -16,13 +16,17 @@ import {
 import type { TideweftUIView } from "../ui/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer, type PlayerState } from "./player";
+import * as playerTimeAction from "./playerTimeAction";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
+import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
+
+const soundscapePlay = vi.hoisted(() => vi.fn());
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
-    play(): void {}
+    play(...args: unknown[]): void { soundscapePlay(...args); }
     updateAmbience(): void {}
     destroy(): void {}
   },
@@ -107,6 +111,7 @@ let scheduledFrame: ((now: number) => void) | undefined;
 let nextFrameTime: number;
 
 beforeEach(() => {
+  soundscapePlay.mockReset();
   scheduledFrame = undefined;
   nextFrameTime = 100;
   vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
@@ -262,6 +267,130 @@ function nightSettlementLegacyRecord(seed: string): SaveRecord {
 }
 
 describe("runtime player REST/SLEEP authority", () => {
+  it.each([false, true])("releases real SLEEP completion audio only after its final interval commits (reject=%s)", async (reject) => {
+    const repository = new MemoryRepository(nightSettlementLegacyRecord("player sleep dawn authority"));
+    let runtime: TideweftRuntime | null = await createTideweftRuntime(repository);
+    try {
+      // Real ordinary steps establish phase nine; the unchanged recovery
+      // authority therefore needs eleven steps to reach actual dawn.
+      advanceOrdinaryFixedSteps(runtime, 9);
+      runtime.dispatchUI({ type: "recover", action: "begin" });
+      expect(soundscapePlay.mock.calls).toContainEqual(["rest", 0.5]);
+      expect(recoveryControls(runtime)).toMatchObject({ recoveryActive: true, recoveryKind: "sleep" });
+      advanceRecoveryFrames(runtime, 1);
+      await runtime.save();
+      const partial = decodeCurrent(repository.snapshot());
+      expect(completedTick(partial)).toBe(WORLD_TICKS_PER_DAY + WORLD_DAWN_START_TICK - 1);
+      expect(playerStepPhase(partial)).toBe(9);
+      expect(partial.player.timeAction).toMatchObject({
+        kind: "sleep", startedAtPlayerStepPhase: 9, totalSteps: 11, completedSteps: 10,
+      });
+      expect(partial.perceptionCarry).toMatchObject({ version: 14, intervalStartWasSleeping: true });
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockReset();
+      runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rest")).toEqual([]);
+      await runtime.save();
+      const beforeRecord = repository.snapshot();
+      const before = decodeCurrent(beforeRecord);
+      expect(before.perceptionCarry).toMatchObject({ version: 14, intervalStartWasSleeping: true });
+      const completionChanges = (session: GameSessionState) => session.sessionChanges
+        .filter((change) => change.startsWith("Slept at "));
+      expect(completionChanges(before.session)).toEqual([]);
+
+      const advance = playerTimeAction.advancePlayerTimeActionOneStep;
+      let realCompletions = 0;
+      vi.spyOn(playerTimeAction, "advancePlayerTimeActionOneStep").mockImplementation((...args) => {
+        const result = advance(...args);
+        if (result?.status === "complete") {
+          expect(args[0]).toEqual(before.player.timeAction);
+          realCompletions += 1;
+        }
+        return result;
+      });
+      const close = situatedExpressionChannelBank.closeSituatedExpressionChannelBankInterval;
+      let closureCalls = 0;
+      let closureCommitted = false;
+      let completionAudioInsideClosure = false;
+      const releaseCommitStates: boolean[] = [];
+      const completionAudio = () => soundscapePlay.mock.calls.filter(
+        ([cue, volume]) => cue === "rest" && volume === 0.82,
+      );
+      soundscapePlay.mockReset();
+      soundscapePlay.mockImplementation((cue: string, volume: number) => {
+        if (cue === "rest" && volume === 0.82) releaseCommitStates.push(closureCommitted);
+      });
+      vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+        .mockImplementation((...args) => {
+          closureCalls += 1;
+          expect(realCompletions).toBe(1);
+          completionAudioInsideClosure ||= completionAudio().length > 0;
+          if (reject) return null;
+          const closed = close(...args);
+          closureCommitted = closed !== null;
+          return closed;
+        });
+      const automaticWrite = vi.spyOn(repository, "save");
+      advanceRecoveryFrames(runtime, 1);
+      await Promise.resolve();
+      expect(realCompletions).toBe(1);
+      expect(closureCalls).toBe(1);
+      expect(completionAudioInsideClosure).toBe(false);
+      expect(completionAudio()).toEqual(reject ? [] : [["rest", 0.82, 0, undefined]]);
+      expect(releaseCommitStates).toEqual(reject ? [] : [true]);
+      expect(recoveryControls(runtime).recoveryActive).toBe(false);
+
+      // Recovery's existing automatic save records either committed dawn or
+      // restored halt/cancellation, never a rejected completion transaction.
+      expect(automaticWrite).toHaveBeenCalledTimes(1);
+      const after = decodeCurrent(repository.snapshot());
+      expect(after.perceptionCarry).toMatchObject({ version: 14, intervalStartWasSleeping: true });
+      expect(completedTick(after)).toBe(completedTick(before) + (reject ? 0 : 1));
+      expect(playerStepPhase(after)).toBe(reject ? 9 : 0);
+      expect(after.player.timeAction).toBeNull();
+      expect(completionChanges(after.session)).toHaveLength(reject ? 0 : 1);
+      if (reject) {
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(soundscapePlay.mock.calls).toContainEqual(["warning", 1]);
+        const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = before;
+        const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+        expect(afterRoots).toEqual({ ...beforeRoots, player: { ...before.player, timeAction: null } });
+        const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeId, ...beforeSession } = before.session;
+        const { paused: _afterPaused, announcement: _afterAnnouncement, nextAnnouncementId: _afterId, ...afterSession } = after.session;
+        expect(afterSession).toEqual(beforeSession);
+      } else {
+        expect(runtime.getUIView().clock.timeLabel).toBe("06:00 · Dawn");
+        expect(runtime.getUIView().announcement?.message).toContain("Dawn reaches the settlement at 06:00");
+      }
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockReset();
+      runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(completionAudio()).toEqual([]);
+      await runtime.save();
+      const restored = decodeCurrent(repository.snapshot());
+      expect(restored.perceptionCarry).toMatchObject({ version: 14, intervalStartWasSleeping: true });
+      const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+      const { session: _restoredSession, integrity: _restoredIntegrity, ...restoredRoots } = restored;
+      expect(restoredRoots).toEqual(afterRoots);
+      expect(restored.session.sessionChanges).toEqual([]);
+      if (!reject) {
+        advanceOrdinaryFixedSteps(runtime, 1);
+        await runtime.save();
+        expect(playerStepPhase(decodeCurrent(repository.snapshot()))).toBe(1);
+        expect(completionAudio()).toEqual([]);
+      }
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+    }
+  });
+
   it("advances REST through ordinary fixed steps, persists exact partial progress, resumes, and cancels", async () => {
     const fresh = await freshSavedWorld("player rest ordinary authority");
     const tiredRecord = reseal(fresh, (envelope) => {
