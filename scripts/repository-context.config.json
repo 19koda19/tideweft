@@ -104,6 +104,7 @@
         "src/game/situatedExpressionCausalAuthority.ts",
         "src/game/situatedExpressionReception.ts",
         "src/game/situatedExpressionTrajectory.ts",
+        "src/game/playerEffortRecency.ts",
         "src/audio/soundscape.ts",
         "src/ui/situatedExpressionCaption.ts"
       ],
@@ -116,6 +117,8 @@
         "src/game/worldAcousticPresentation.test.ts",
         "src/game/worldAcousticPresentationQueue.test.ts",
         "src/game/situatedExpression.test.ts",
+        "src/game/playerEffortRecency.test.ts",
+        "src/game/runtime.fall.integration.test.ts",
         "src/game/situatedExpressionReception.test.ts",
         "src/ui/situatedExpressionCaption.test.ts"
       ],
@@ -187,7 +190,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "3c7ed94ecc7279235fadb5dd7f25739228a1e0b81c83790a2f3976f184dd682b",
+      "reviewedSourceFingerprint": "14bdfefbe14d29b71e6e692a2f3402a6b7793a63ffca1c4c7eb26b67cbf57047",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -215,7 +218,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current interval consumption also retires semantic memory; longer cross-interval vocal recency is an open integration gap, not a completed repetition guarantee."
+        "Dry exhaustion has one bounded cross-interval accepted-history receipt separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
       "evidence": [
@@ -234,7 +237,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "3c7ed94ecc7279235fadb5dd7f25739228a1e0b81c83790a2f3976f184dd682b",
+      "reviewedSourceFingerprint": "14bdfefbe14d29b71e6e692a2f3402a6b7793a63ffca1c4c7eb26b67cbf57047",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

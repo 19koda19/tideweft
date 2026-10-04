@@ -422,7 +422,10 @@ clear hearing yields only the expressed anonymous report at an uncertain area;
 weaker hearing remains generic vocalization. Authored prose, captions, hidden
 identity and domain details never become knowledge authority, and pending
 meaning is re-derived after reload rather than stored in a parallel dialogue
-queue.
+queue. Accepted-expression recency may outlive consumed hearing, but must be
+bounded, causal, fixed-step-owned and separate from replayable sound/presentation.
+The current dry-exhaustion representative is owned by `playerEffortRecency`;
+future consumers must not retain old acoustic admissions merely to stay quiet.
 
 The current unpublished aggregate-frog chorus and brown-rat redistribution
 rustle are representative aggregate proofs: ecology identity/activity or a

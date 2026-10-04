@@ -2,9 +2,12 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
+import { deserializeWorld } from "../sim/public";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
+import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import { createPlayerEffortRecencyState } from "./playerEffortRecency";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -160,13 +163,24 @@ describe("runtime performance telemetry", () => {
         uniqueDurableHabitats: durableHabitats.size,
         perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
       })}\n`);
-      // Captured on the unoptimized 6215116 authority at exactly30 accepted steps.
+      const envelope = JSON.parse(worldJson) as Record<string, unknown>;
+      expect(envelope.version).toBe(48);
+      expect(envelope.playerEffortRecency).toEqual(createPlayerEffortRecencyState(
+        deserializeWorld(envelope.world as string).meta.rootSeed,
+      ));
+      expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
+      // These stationary inputs create no effort history. Preserve the exact
+      // 6215116, 30-step oracle for every older root after explicitly removing
+      // only the new v48 root/version and recomputing its enclosing seal.
+      const { playerEffortRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
+      v47Base.version = 47;
+      const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });
+      const v47Digest = createHash("sha256").update(v47Json).digest("hex");
       const baselineDigests: Readonly<Record<string, string>> = {
         "runtime baseline estuary": "6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7",
         "breathing room regional density 8": "e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e",
       };
-      expect(digest).toBe(baselineDigests[seed]);
-      expect(JSON.parse(worldJson)).toMatchObject({ version: 47 });
+      expect(v47Digest).toBe(baselineDigests[seed]);
       runtime.destroy();
     },
   );

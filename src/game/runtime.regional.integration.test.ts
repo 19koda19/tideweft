@@ -73,7 +73,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 47;
+  readonly version: 48;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -83,6 +83,7 @@ interface CurrentGameSaveEnvelope {
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: unknown;
+  readonly playerEffortRecency: unknown;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
   readonly settlementEcology: string;
@@ -165,12 +166,12 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 47
-    || record.payloadVersion !== 47
-  ) throw new Error("fixture did not produce a current v47 regional save");
+    || value.version !== 48
+    || record.payloadVersion !== 48
+  ) throw new Error("fixture did not produce a current v48 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v47 outer envelope does not match its integrity seal");
+    throw new Error("fixture v48 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -182,6 +183,7 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
     "perceptionCarry",
     "physicalCargo",
     "player",
+    "playerEffortRecency",
     "porterResponse",
     "promiseJourney",
     "regionalEcology",
@@ -209,7 +211,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 47,
+    payloadVersion: 48,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });

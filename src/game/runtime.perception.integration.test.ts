@@ -192,7 +192,7 @@ describe("runtime existing-human perception path", () => {
     resumed.destroy();
   }, 30_000);
 
-  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v47", async () => {
+  it("loads the shape-compatible v38 fish-crow schema forward and rewrites v48", async () => {
     const fixture = perceptionFixture("runtime perception v38 forward read");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -201,7 +201,7 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(47);
+    expect(decoded.version).toBe(48);
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
@@ -210,7 +210,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v7Carry
     } = currentCarry;
-    const { integrity: _currentIntegrity, ...currentBase } = decoded;
+    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v38Base = {
       ...currentBase,
       version: 38,
@@ -230,8 +230,8 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(47);
-    expect(savedEnvelope(repository).version).toBe(47);
+    expect(repository.snapshot().payloadVersion).toBe(48);
+    expect(savedEnvelope(repository).version).toBe(48);
     resumed.destroy();
   }, 30_000);
 
@@ -251,7 +251,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v7Carry
     } = currentPerceptionCarry(decoded);
-    const { integrity: _integrity, ...currentBase } = decoded;
+    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v39Base = {
       ...currentBase,
       version: 39,
@@ -270,9 +270,9 @@ describe("runtime existing-human perception path", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     await resumed.save();
-    expect(repository.snapshot().payloadVersion).toBe(47);
+    expect(repository.snapshot().payloadVersion).toBe(48);
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 47,
+      version: 48,
       perceptionCarry: {
         version: 14,
         animalContactAcousticCarry: { version: 1, records: [] },
@@ -322,7 +322,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 47,
+      version: 48,
       perceptionCarry: {
         version: 14,
         intervalStartPosition: expect.any(Object),
@@ -396,7 +396,7 @@ describe("runtime existing-human perception path", () => {
       situatedExpressionChannels: _futureExpressionChannels,
       ...v1Carry
     } = currentCarry;
-    const { integrity: _currentIntegrity, ...currentBase } = decoded;
+    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v32Base = {
       ...currentBase,
       version: 32,
@@ -417,7 +417,7 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 47,
+      version: 48,
       player: { timeAction: null },
       perceptionCarry: {
         version: 14,
@@ -441,7 +441,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v33 perception-carry-v2 schema to current v47", async () => {
+  it("migrates the exact sealed v33 perception-carry-v2 schema to current v48", async () => {
     const fixture = perceptionFixture("runtime perception v33 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -458,7 +458,7 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 47,
+      version: 48,
       perceptionCarry: {
         version: 14,
         intervalStartPosition: expect.any(Object),
@@ -509,7 +509,7 @@ describe("runtime existing-human perception path", () => {
     migrated.destroy();
   }, 60_000);
 
-  it("migrates the exact sealed v34 carry-v3 schema to v47 without replay", async () => {
+  it("migrates the exact sealed v34 carry-v3 schema to v48 without replay", async () => {
     const fixture = perceptionFixture("runtime perception v34 carry migration");
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
@@ -526,7 +526,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v3Carry
     } = currentPerceptionCarry(decoded);
-    const { integrity: _integrity, ...currentBase } = decoded;
+    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v34Base = {
       ...currentBase,
       version: 34,
@@ -548,7 +548,7 @@ describe("runtime existing-human perception path", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 47,
+      version: 48,
       perceptionCarry: {
         version: 14,
         playerStepsSinceWorldTick: 3,
@@ -646,7 +646,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v3Carry
     } = carry;
-    const { integrity: _integrity, ...currentBase } = decoded;
+    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v34Base = {
       ...currentBase,
       version: 34,
@@ -747,7 +747,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v8Carry
     } = carry;
-    const { integrity: _integrity, ...currentBase } = decoded;
+    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v40Base = {
       ...currentBase,
       version: 40,
@@ -849,7 +849,7 @@ describe("runtime existing-human perception path", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v8Carry
     } = carry;
-    const { integrity: _integrity, ...currentBase } = decoded;
+    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
     const v40Base = {
       ...currentBase,
       version: 40,
@@ -1002,6 +1002,7 @@ describe("runtime existing-human perception path", () => {
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
     const {
       integrity: _currentIntegrity,
+      playerEffortRecency: _futurePlayerEffortRecency,
       perceptionCarry: _currentPerceptionCarry,
       regionalEcology: _currentRegionalEcology,
       bio0Ecology: _currentBio0Ecology,
@@ -1032,7 +1033,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 47,
+      version: 48,
       perceptionCarry: {
         version: 14,
         intervalStartPosition: expect.any(Object),
@@ -1403,7 +1404,7 @@ function replaceWithLegacyV33Envelope(
     situatedExpression: agedState,
   };
   tamperCarry?.(legacyCarry);
-  const { integrity: _integrity, ...currentBase } = decoded;
+  const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentBase } = decoded;
   const legacyBase = {
     ...currentBase,
     version: 33,

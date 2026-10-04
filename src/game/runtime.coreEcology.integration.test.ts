@@ -286,14 +286,14 @@ export const ALPHA30_NEW_WORLD_STRESS_OWNER_INTENT =
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 47;
+  readonly version: 48;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly perceptionCarry: CurrentPerceptionCarry;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
-  /** Historical fixtures only; current v47 envelopes never carry this field. */
+  /** Historical fixtures only; current v48 envelopes never carry this field. */
   readonly coreEcology?: string;
   readonly settlementEcology: string;
   readonly dogActorRoster: string;
@@ -547,6 +547,7 @@ describe("runtime core-ecology vertical slice", () => {
     const current = requiredEnvelope(repository);
     const {
       integrity: _currentIntegrity,
+      playerEffortRecency: _currentPlayerEffortRecency,
       settlementDomesticAnimalRecovery: expectedEmptyRecovery,
       regionalEcology: _currentRegionalEcology,
       version: _currentVersion,
@@ -583,6 +584,7 @@ describe("runtime core-ecology vertical slice", () => {
     );
     const {
       integrity: _adoptedIntegrity,
+      playerEffortRecency: _adoptedPlayerEffortRecency,
       regionalEcology: _adoptedRegionalEcology,
       settlementDomesticAnimalRecovery: _adoptedRecovery,
       version: _adoptedVersion,
@@ -597,8 +599,9 @@ describe("runtime core-ecology vertical slice", () => {
       ...durableAdoptedRoots
     } = adoptedEstablishedRoots;
 
-    expect(adoptedRecord.payloadVersion).toBe(47);
+    expect(adoptedRecord.payloadVersion).toBe(48);
     expect(durableAdoptedRoots).toEqual(durableV20Roots);
+    expect(adopted.playerEffortRecency).toEqual(current.playerEffortRecency);
     expect(adopted.settlementDomesticAnimalRecovery).toBe(expectedEmptyRecovery);
     expect(recovery).toMatchObject({
       revision: 0,
@@ -632,6 +635,7 @@ describe("runtime core-ecology vertical slice", () => {
     const currentCore = domesticPenCoreEcologyFromCurrent(requiredCore(current));
     const {
       integrity: _integrity,
+      playerEffortRecency: _futurePlayerEffortRecency,
       regionalEcology: _regionalEcology,
       version: _version,
       ...durableRoots
@@ -661,7 +665,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(adoptedRecord.payloadVersion).toBe(47);
+    expect(adoptedRecord.payloadVersion).toBe(48);
     expect(adoptedCore).toMatchObject({
       nextMortalityOrdinal: 0,
       mortalityTransactions: [],
@@ -741,6 +745,7 @@ describe("runtime core-ecology vertical slice", () => {
     const legacy = publishedV8CoreEcologyFixture(current);
     const {
       integrity: _currentIntegrity,
+      playerEffortRecency: _currentPlayerEffortRecency,
       settlementEcology: _currentSettlementEcology,
       dogActorRoster: _currentDogActorRoster,
       settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -772,7 +777,7 @@ describe("runtime core-ecology vertical slice", () => {
     await migrated.save();
     const adopted = requiredEnvelope(repository);
     const adoptedCore = requiredCore(adopted);
-    expect(repository.snapshot().payloadVersion).toBe(47);
+    expect(repository.snapshot().payloadVersion).toBe(48);
     expect(adoptedCore.derivation.kind).toBe("legacy-fixed-v1-with-habitat-v11");
     expect(adoptedCore.groups.groups).toEqual(currentCore.groups.groups.filter(
       ({ identity }) => (
@@ -888,7 +893,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(47);
+    expect(v13Record.payloadVersion).toBe(48);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v10Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v10Envelope.player));
@@ -969,7 +974,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(47);
+    expect(v13Record.payloadVersion).toBe(48);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v11Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v11Envelope.player));
@@ -1067,7 +1072,7 @@ describe("runtime core-ecology vertical slice", () => {
     const v13Record = repository.snapshot();
     const v13Envelope = requiredEnvelope(repository);
     const v13Ecology = requiredCore(v13Envelope);
-    expect(v13Record.payloadVersion).toBe(47);
+    expect(v13Record.payloadVersion).toBe(48);
     expect(v13Ecology.derivation.kind).toBe("habitat-v11");
     expect(v13Envelope.world).toBe(v12Envelope.world);
     expect(v13Envelope.player).toEqual(currentPlayerFromLegacy(v12Envelope.player));
@@ -1154,7 +1159,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(47);
+    expect(adoptedRecord.payloadVersion).toBe(48);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v13Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v13Envelope.player));
@@ -1224,7 +1229,7 @@ describe("runtime core-ecology vertical slice", () => {
     const adoptedRecord = repository.snapshot();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(adoptedRecord.payloadVersion).toBe(47);
+    expect(adoptedRecord.payloadVersion).toBe(48);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adoptedEnvelope.world).toBe(v14Envelope.world);
     expect(adoptedEnvelope.player).toEqual(currentPlayerFromLegacy(v14Envelope.player));
@@ -1423,6 +1428,7 @@ describe("runtime core-ecology vertical slice", () => {
       const legacy = publishedV8CoreEcologyFixture(current, variant);
       const {
         integrity: _currentIntegrity,
+        playerEffortRecency: _currentPlayerEffortRecency,
         settlementEcology: _currentSettlementEcology,
         dogActorRoster: _currentDogActorRoster,
         settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -1529,6 +1535,7 @@ describe("runtime core-ecology vertical slice", () => {
     const current = requiredEnvelope(repository);
     const {
       integrity: _integrity,
+      playerEffortRecency: _futurePlayerEffortRecency,
       settlementEcology: _currentSettlementEcology,
       dogActorRoster: _currentDogActorRoster,
       settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -1637,7 +1644,7 @@ describe("runtime core-ecology vertical slice", () => {
     ).map(({ identity }) => identity.stableId)).not.toEqual([]);
     const beforeCargo = requiredCargo(before);
     const seededProvisions = forageProvisions(beforeCargo);
-    expect(before.version).toBe(47);
+    expect(before.version).toBe(48);
     expect(beforeWorld.meta.completedTick).toBe(WORLD_NEW_GAME_START_TICK);
     expect(beforeCore.updatedAtTick).toBe(beforeWorld.meta.completedTick);
     expect(seededProvisions).toHaveLength(1);
@@ -2734,7 +2741,7 @@ describe("runtime core-ecology vertical slice", () => {
       soundLoudness: 420_000,
     });
     if (acousticSample === undefined) throw new Error("Duck fixture lost its committed sound leg");
-    expect(saved.version).toBe(47);
+    expect(saved.version).toBe(48);
     expect(saved.perceptionCarry.version).toBe(14);
     expect(requiredRegionalEcologyV6(saved).base.base.base.base.base.root.legacyCohort)
       .toBeNull();
@@ -5027,7 +5034,7 @@ describe("runtime core-ecology vertical slice", () => {
         ({ sourceActorId }) => sourceActorId === fixture.alarmActorId,
       )).toBe(false);
       // createAlarmRuntime adopts protected legacy cohort bodies into the
-      // current47 roots; it is an honest controlled current-consumer fixture,
+      // current48 roots; it is an honest controlled current-consumer fixture,
       // not a fresh-native population or ordinary-travel encounter claim.
       const sourceWorld = deserializeWorld(saved.world);
       const alarmMemory = source.memories.find(({ kind, atTick, eventPosition }) => (
@@ -5191,7 +5198,7 @@ describe("runtime core-ecology vertical slice", () => {
     let runtime = fixture.runtime;
     const { repository, alarmActorId } = fixture;
     try {
-      // This is the existing controlled legacy-cohort adoption/current47
+      // This is the existing controlled legacy-cohort adoption/current48
       // consumer fixture, not a new native population or travel encounter.
       advancePlayerSteps(runtime, 10);
       await runtime.save();
@@ -5999,7 +6006,7 @@ describe("runtime core-ecology vertical slice", () => {
         playerStepStateSamples: _futurePlayerStepStateSamples,
         ...v7Carry
       } = carry;
-      const { integrity: _futureIntegrity, ...v38Envelope } = envelope;
+      const { integrity: _futureIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...v38Envelope } = envelope;
       const v38Base = {
         ...v38Envelope,
         version: 38,
@@ -6261,7 +6268,7 @@ describe("runtime core-ecology vertical slice", () => {
     // downgrade must fail its semantic fence rather than smuggling the v39
     // admission/channel/sample through a shape-compatible carry-v7 record.
     const warningV39 = JSON.parse(activeWarningCheckpoint.worldJson) as Record<string, unknown>;
-    const { integrity: _warningIntegrity, ...warningBase } = warningV39;
+    const { integrity: _warningIntegrity, playerEffortRecency: _warningPlayerEffortRecency, ...warningBase } = warningV39;
     const warningCarry = warningV39.perceptionCarry as Readonly<Record<string, unknown>>;
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
@@ -6519,7 +6526,7 @@ describe("runtime core-ecology vertical slice", () => {
     )?.eventPosition).toBeUndefined();
 
     // Strip the fish-crow presentation interval so rejection below can only
-    // come from current-v47 ecology custody, not admission/sample reauth.
+    // come from current-v48 ecology custody, not admission/sample reauth.
     const ecologyOnlyCarry: CurrentPerceptionCarry = {
       ...validEnvelope.perceptionCarry,
       actorVocalizationSamples: [],
@@ -6545,10 +6552,10 @@ describe("runtime core-ecology vertical slice", () => {
     scheduledFrame = undefined;
 
     // The same authenticated no-locus V6 shape is legitimate under outer v37.
-    // It adopts the durable stored body address once, saves as v47, and never
+    // It adopts the durable stored body address once, saves as v48, and never
     // replays a Living Voice cue on either migration load or current reload.
     expect(serializedMissingLocusRegional).not.toContain('"eventPosition":');
-    const { integrity: _missingLocusIntegrity, ...missingLocusFields } = missingLocusEnvelope;
+    const { integrity: _missingLocusIntegrity, playerEffortRecency: _missingLocusPlayerEffortRecency, ...missingLocusFields } = missingLocusEnvelope;
     const {
       animalContactAcousticCarry: _currentAnimalContactCarry,
       intervalStartWasSleeping: _currentIntervalStartWasSleeping,
@@ -6578,7 +6585,7 @@ describe("runtime core-ecology vertical slice", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const upgradedLocusRecord = repository.snapshot();
     const upgradedLocusEnvelope = requiredEnvelope(repository);
-    expect(upgradedLocusRecord.payloadVersion).toBe(47);
+    expect(upgradedLocusRecord.payloadVersion).toBe(48);
     const upgradedLocusCrow = requiredCoreActor(
       requiredCore(upgradedLocusEnvelope),
       crowActorId,
@@ -6603,7 +6610,7 @@ describe("runtime core-ecology vertical slice", () => {
     // Outer v37/carry-v6 belongs to the shelter-whine generation. Resealing a
     // current fish-crow interval under those older labels must not smuggle new
     // semantics through the otherwise canonical carry schema.
-    const { integrity: _validIntegrity, ...validFields } = validEnvelope;
+    const { integrity: _validIntegrity, playerEffortRecency: _validPlayerEffortRecency, ...validFields } = validEnvelope;
     const {
       animalContactAcousticCarry: _currentAnimalContactCarryForSemanticFence,
       intervalStartWasSleeping: _currentIntervalStartWasSleepingForSemanticFence,
@@ -7199,6 +7206,7 @@ describe("runtime core-ecology vertical slice", () => {
     const alpha29Core = domesticPenCoreEcologyFromCurrent(historicalV24Core);
     const {
       integrity: _currentIntegrity,
+      playerEffortRecency: _currentPlayerEffortRecency,
       regionalEcology: _currentRegionalEcology,
       ...alpha29EnvelopeRoots
     } = currentEnvelope;
@@ -7226,7 +7234,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(47);
+    expect(repository.snapshot().payloadVersion).toBe(48);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha29Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -7262,6 +7270,7 @@ describe("runtime core-ecology vertical slice", () => {
     const alreadyAdoptedEnvelope = requiredEnvelope(repository);
     const {
       integrity: _alreadyAdoptedIntegrity,
+      playerEffortRecency: _alreadyAdoptedPlayerEffortRecency,
       regionalEcology: _alreadyAdoptedRegionalEcology,
       ...alreadyAdoptedRoots
     } = alreadyAdoptedEnvelope;
@@ -7328,6 +7337,7 @@ describe("runtime core-ecology vertical slice", () => {
     }
     const {
       integrity: _currentIntegrity,
+      playerEffortRecency: _currentPlayerEffortRecency,
       regionalEcology: _currentRegionalEcology,
       version: _currentVersion,
       ...alpha30Roots
@@ -7357,7 +7367,7 @@ describe("runtime core-ecology vertical slice", () => {
     await resumed.save();
     const adoptedEnvelope = requiredEnvelope(repository);
     const adopted = requiredCore(adoptedEnvelope);
-    expect(repository.snapshot().payloadVersion).toBe(47);
+    expect(repository.snapshot().payloadVersion).toBe(48);
     expect(adopted.derivation.kind).toBe("habitat-v11");
     expect(adopted.nextMortalityOrdinal).toBe(alpha30Core.nextMortalityOrdinal);
     expect(stableStringify(adopted.mortalityTransactions))
@@ -8722,7 +8732,7 @@ async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 |
     }
     return batches;
   });
-  // Existing controlled legacy-cohort adoption/current47 fixture; no new
+  // Existing controlled legacy-cohort adoption/current48 fixture; no new
   // species population, alarm event, or direct perception is manufactured.
   const fixture = await createAlarmRuntime(-4, "deer");
   const runtime = fixture.runtime;
@@ -9370,6 +9380,7 @@ function harborEdgeV10Record(current: SaveRecord): SaveRecord {
   }
   const {
     integrity: _integrity,
+    playerEffortRecency: _futurePlayerEffortRecency,
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -9452,6 +9463,7 @@ function marshEdgeV11Record(current: SaveRecord): SaveRecord {
   }
   const {
     integrity: _integrity,
+    playerEffortRecency: _futurePlayerEffortRecency,
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -9532,6 +9544,7 @@ function rainChorusV12Record(current: SaveRecord): SaveRecord {
   }
   const {
     integrity: _integrity,
+    playerEffortRecency: _futurePlayerEffortRecency,
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -9610,6 +9623,7 @@ function tidalTableV13Record(current: SaveRecord): SaveRecord {
   }
   const {
     integrity: _integrity,
+    playerEffortRecency: _futurePlayerEffortRecency,
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -9688,6 +9702,7 @@ function waterfowlV14Record(current: SaveRecord): SaveRecord {
   }
   const {
     integrity: _integrity,
+    playerEffortRecency: _futurePlayerEffortRecency,
     settlementEcology: _currentSettlementEcology,
     dogActorRoster: _currentDogActorRoster,
     settlementWorkingAnimals: _currentSettlementWorkingAnimals,
@@ -9767,10 +9782,10 @@ function requiredEnvelope(repository: MemoryRepository): CurrentEnvelope {
   const value = JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 47
+    || value.version !== 48
     || typeof value.regionalEcology !== "string"
   ) {
-    throw new Error("core-ecology runtime fixture did not save a v47 envelope");
+    throw new Error("core-ecology runtime fixture did not save a v48 envelope");
   }
   return value;
 }
@@ -9796,7 +9811,7 @@ function resealedEnvelope(
     const legacyCoreEcology = sourcePatch === null
       ? changes.coreEcology
       : serializeCoreEcologyAggregatePatch(sourcePatch);
-    const { regionalEcology: _regionalEcology, ...legacyPrior } = prior;
+    const { regionalEcology: _regionalEcology, playerEffortRecency: _legacyPlayerEffortRecency, ...legacyPrior } = prior;
     const legacyBase = {
       ...legacyPrior,
       ...changes,
@@ -9834,7 +9849,7 @@ function resealedEnvelope(
           }),
         });
         const { coreEcology: _legacyCoreEcology, ...v25Changes } = changes;
-        const { coreEcology: _priorCoreEcology, ...v25Prior } = prior;
+        const { coreEcology: _priorCoreEcology, playerEffortRecency: _v25PlayerEffortRecency, ...v25Prior } = prior;
         const v25Base = {
           ...v25Prior,
           ...v25Changes,
@@ -9891,7 +9906,7 @@ function resealedEnvelope(
         ],
       });
       const { coreEcology: _legacyCoreEcology, ...v25Changes } = changes;
-      const { coreEcology: _priorCoreEcology, ...v25Prior } = prior;
+      const { coreEcology: _priorCoreEcology, playerEffortRecency: _v25PlayerEffortRecency, ...v25Prior } = prior;
       const v25Base = {
         ...v25Prior,
         ...v25Changes,
@@ -9947,7 +9962,7 @@ function stripFixtureAlarmEventPositionsForV24(
 /**
  * Gives an untouched compatibility cohort its real durable owner before a
  * gameplay fixture mutates it. Historical migration runs exactly once; every
- * later edit targets the resulting current v47 active resident.
+ * later edit targets the resulting current v48 active resident.
  */
 async function adoptUntouchedFixtureCoreAsCurrent(
   repository: MemoryRepository,
@@ -10002,8 +10017,8 @@ function resealedCurrentEnvelopeWithCorePatch(
     | "world"
   >> = {},
 ): CurrentEnvelope {
-  if ((envelope as Readonly<{ version: number }>).version !== 47) {
-    throw new Error("current ecology fixture requires a v47 envelope");
+  if ((envelope as Readonly<{ version: number }>).version !== 48) {
+    throw new Error("current ecology fixture requires a v48 envelope");
   }
   const state = requiredRegionalEcologyV6(envelope);
   const v5 = state.base;
@@ -11003,7 +11018,8 @@ function requiredActiveLegacyCore(envelope: CurrentEnvelope): CoreEcologyAggrega
 function requiredRegionalEcology(envelope: CurrentEnvelope): RegionalEcologyStateV1 {
   const version = (envelope as unknown as Readonly<{ version: number }>).version;
   if (
-    version === 47
+    version === 48
+    || version === 47
     || version === 45
     || version === 40
     || version === 39

@@ -34,7 +34,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 47;
+  readonly version: 48;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -52,6 +52,7 @@ interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
     readonly situatedExpressionCausalAuthority: unknown;
     readonly nextPlayerSenseSampleOrdinal: number;
   };
+  readonly playerEffortRecency: unknown;
   readonly integrity: string;
 }
 
@@ -65,6 +66,7 @@ const CURRENT_ENVELOPE_KEYS = [
   "perceptionCarry",
   "physicalCargo",
   "player",
+  "playerEffortRecency",
   "porterResponse",
   "promiseJourney",
   "regionalEcology",
@@ -151,9 +153,9 @@ function advanceRecoveryFrames(runtime: TideweftRuntime, count: number): void {
 
 function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
-  expect(record.payloadVersion).toBe(47);
+  expect(record.payloadVersion).toBe(48);
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(47);
+  expect(envelope.version).toBe(48);
   expect(Object.keys(envelope).sort()).toEqual(CURRENT_ENVELOPE_KEYS);
   const { integrity, ...unsealed } = envelope;
   expect(integrity).toBe(gameSaveEnvelopeIntegrity(unsealed));
@@ -499,6 +501,7 @@ describe("runtime player REST/SLEEP authority", () => {
     const current = await freshSavedWorld("player recovery v31 migration");
     const legacy = reseal(current, (envelope) => {
       envelope.version = 31;
+      delete envelope.playerEffortRecency;
       const player = envelope.player as Record<string, unknown>;
       delete player.timeAction;
       const carry = envelope.perceptionCarry as Record<string, unknown>;

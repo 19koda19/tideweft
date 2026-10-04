@@ -982,15 +982,23 @@ until that interval is consumed. The closing presentation may still show the
 line once, but all pre-boundary active and cooldown-only state is then retired;
 new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
-This currently truncates semantic cooldowns longer than the ten-player-step
-interval: real dry exhaustion can speak again before its 36-step meaning
-cooldown would expire. Cross-interval sparse vocal choice is an open Living
-Voice integration gap, not a completed repetition guarantee. Its repair must
-retain bounded authenticated semantic recency separately from consumed sound
-and reception; retaining stale acoustic admissions or muting only captions is
-not equivalent. The current held-input/reload characterization lives in
-`runtime.fall.integration.test.ts`; physical camp/recovery behavior remains
-movement-owned and is not repaired by that proof.
+Cross-interval dry-exhaustion choice now has a separate, versioned
+`playerEffortRecency` owner. It retains at most one accepted admission and its
+narrow movement-owned predecessor/step/position facts, bound to the world seed.
+Age derives from the authoritative world tick and actual physical step ordinal;
+the tenth step is the next tick's phase zero, not the old admission's phase-nine
+compatibility clamp. Its 36-step meaning cooldown survives consumed hearing
+intervals and current save/reload, then the record is pruned. It contains no
+audio, caption or hearing queue and cannot replay an old event. New history
+commits only after expression admission and rolls back with a failed tick.
+Pending origins must exactly match the current physical/admission carry;
+consumed historical depths are not compared to a later tide. Canonical seals
+prove consistency, not secret attestation of an arbitrarily rewritten history.
+`playerEffortRecency.test.ts` and `runtime.fall.integration.test.ts` own exact
+expiry, phase-ten, no-replay, pause/recovery and fail-closed evidence. Other
+source meanings still have interval-local semantic memory; broader sparse
+choice and hours-of-play annoyance remain open Voice gates. Physical
+exhaustion/camp cycling remains movement-owned, not repaired by this policy.
 This slice does not yet claim other work expression where no authoritative
 completed-work event exists; it also does not claim complete bark/growl/whine
 breadth, broader distress/play, general animal-call networks,
@@ -3181,25 +3189,30 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 47 and the bounded perception carry through version 14;
-the current source writer emits outer version 47. The preceding v43/carry-v11
+session through version 48 and the bounded perception carry through version 14;
+the current source writer emits outer version 48. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
 v45/carry-v13 added the species-aware fish-crow/deer alarm admission and deer
 semantic trajectory. V46/carry-v14 added the marsh-rabbit embodied
 alarm-thump trajectory, its physical human-listener semantics, and explicit
-non-interrupting authority. Current v47 keeps carry v14 and adds the first
+non-interrupting authority. V47 kept carry v14 and added the first
 non-warning human-to-human structured fact receipt from the authenticated
 secured-store response. Its current species-aware alarm record also admits the
 gull; that additive semantic changes no save shape, and reload reauthenticates
-it without replaying audio or text. Outer v41 through v46 are explicitly retired under
+it without replaying audio or text. V48 keeps carry v14 and requires the bounded
+accepted-effort recency root separately from consumed sounds. Supported v47
+initializes it only from already authenticated pending exhaustion evidence;
+consumed historical recency initializes empty rather than inventing old events.
+Missing or contradictory current-v48 authority fails closed without overwrite;
+historical formats reject the future root. Outer v41 through v46 are explicitly retired under
 the pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v47 roundtrip
+promise to preserve every internal development format. Current-v48 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 

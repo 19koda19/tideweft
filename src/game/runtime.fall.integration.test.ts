@@ -35,7 +35,7 @@ import { projectSettlementWorkingDogCircadian } from "./settlementWorkingDogCirc
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { VISIBILITY_DIRECT } from "./perception";
 import { projectPerception } from "./projection";
-import { TILE_UNITS, type PlayerState } from "./player";
+import { PLAYER_MOVEMENT_STAMINA_GATE, TILE_UNITS, stepPlayer, type PlayerState } from "./player";
 import {
   gameSaveEnvelopeIntegrity,
   type SerializedPhysicalCargoState,
@@ -85,6 +85,8 @@ import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelB
 import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
 import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
+import type { PlayerEffortRecencyState } from "./playerEffortRecency";
+import * as expressionChannelBank from "./situatedExpressionChannelBank";
 import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
@@ -99,7 +101,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 47;
+  readonly version: 48;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -108,6 +110,7 @@ interface CurrentGameSaveEnvelope {
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
+  readonly playerEffortRecency: PlayerEffortRecencyState;
   readonly perceptionCarry: {
     readonly version: 14;
     readonly intervalStartPosition: WorldPosition;
@@ -210,10 +213,10 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 47
-    || record.payloadVersion !== 47
+    || envelope.version !== 48
+    || record.payloadVersion !== 48
   ) {
-    throw new Error("fixture did not produce a current v47 regional session save");
+    throw new Error("fixture did not produce a current v48 regional session save");
   }
   return envelope;
 }
@@ -234,7 +237,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 47,
+    payloadVersion: 48,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -634,6 +637,33 @@ function relocateForDryExhaustion(
       ...relocated.envelope.traversalFeedback,
       incident: null,
       lastAudibleIncidentId: null,
+    },
+  };
+}
+
+/** Calibrate only the initial reserve through the actual unchanged movement owner. */
+function dryExhaustionAtTenthStep(envelope: CurrentGameSaveEnvelope): CurrentGameSaveEnvelope {
+  const prepared = relocateForDryExhaustion(envelope);
+  const world = deserializeWorld(prepared.world);
+  const travel = restorePlayerRegionalTravel(world.meta.rootSeed, prepared.player, prepared.regionalTravel);
+  if (travel === null) throw new Error("phase-ten fixture lost its travel authority");
+  const spatial = createRegionalWorldView(createWorldView(world), travel.window, {
+    discovered: prepared.player.discovered, depthSoundings: prepared.player.depthSoundings,
+  });
+  const probe = structuredClone(prepared.player);
+  probe.stamina = 500_000;
+  stepPlayer(probe, spatial, { moveX: 1, moveY: 0, brace: false }, {
+    seed: world.meta.rootSeed, actorId: 0,
+    feedback: structuredClone(prepared.traversalFeedback), deferFallCargoConsequence: true,
+  });
+  const drain = 500_000 - probe.stamina;
+  if (drain <= 0 || probe.mode !== "foot") throw new Error("phase-ten fixture needs ordinary dry movement");
+  const stamina = PLAYER_MOVEMENT_STAMINA_GATE + 9 * drain + 1;
+  return {
+    ...prepared, player: { ...prepared.player, stamina },
+    perceptionCarry: {
+      ...prepared.perceptionCarry,
+      playerStepStateAnchor: { ...prepared.perceptionCarry.playerStepStateAnchor, stamina },
     },
   };
 }
@@ -1082,7 +1112,7 @@ describe("production terrain fall and physical cargo", () => {
     reloaded.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
-  it("characterizes held-input exhaustion recency across consumed intervals and current reload", async () => {
+  it("preserves held-input exhaustion cooldown across consumed intervals and current reload", async () => {
     const bootstrapRepository = new MemoryRepository();
     const bootstrap = await createTideweftRuntime(bootstrapRepository);
     try {
@@ -1169,6 +1199,7 @@ describe("production terrain fall and physical cargo", () => {
             expect(incidentCueCalls("vocalization-strained")).toBe(0);
             await runtime.save();
             expect(decodeCurrent(repository.snapshot()).perceptionCarry).toEqual(saved.perceptionCarry);
+            expect(decodeCurrent(repository.snapshot()).playerEffortRecency).toEqual(saved.playerEffortRecency);
             runtime.dispatchUI({ type: "resume-world" });
             runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
           }
@@ -1190,14 +1221,13 @@ describe("production terrain fall and physical cargo", () => {
     expect(restored.boundaryCarries).toEqual(uninterrupted.boundaryCarries);
     expect(restored.audioCalls).toBe(uninterrupted.audioCalls);
     expect(uninterrupted.audioCalls).toBe(uninterrupted.events.length);
-    // Current baseline characterization, NOT sparse-Voice acceptance: interval
-    // consumption retires the 36-step meaning cooldown early. A later bounded
-    // semantic-recency repair must change this explicit measured baseline, not
-    // retain stale acoustic admissions or change the physical exhaustion loop.
+    // The actual physical sequence is unchanged. Consuming sound no longer
+    // truncates the accepted expression's independently retained cooldown.
     expect(uninterrupted.events.length).toBeGreaterThan(1);
-    expect(uninterrupted.events.slice(1).some((event, index) => (
-      event.step - uninterrupted.events[index]!.step < 36
+    expect(uninterrupted.events.slice(1).every((event, index) => (
+      event.step - uninterrupted.events[index]!.step >= 36
     ))).toBe(true);
+    expect(uninterrupted.events.map(({ step }) => step)).toEqual([1, 38]);
     const { session: _firstSession, integrity: _firstIntegrity,
       regionalTravel: _firstTravel, ...firstRoots } = uninterrupted.final;
     const { session: _restoredSession, integrity: _restoredIntegrity,
@@ -1222,8 +1252,8 @@ describe("production terrain fall and physical cargo", () => {
     const restoredTravel = comparableTravel(restored.final);
     expect(restoredTravel.facts).toEqual(firstTravel.facts);
     expect(restoredTravel.revision).toBe(firstTravel.revision + 1);
-    console.info("Held-input exhaustion characterization", {
-      scope: "controlled current runtime, not natural play rate or sparse-Voice acceptance",
+    console.info("Held-input exhaustion cooldown proof", {
+      scope: "controlled current runtime, not natural play rate or hours annoyance acceptance",
       fixedSteps: 40,
       acceptedEventSteps: uninterrupted.events.map(({ step }) => step),
       actualVocalAudio: uninterrupted.audioCalls,
@@ -1233,6 +1263,189 @@ describe("production terrain fall and physical cargo", () => {
       excludedPublicationFields: ["session", "envelope integrity", "chart revision and seals"],
     });
   }, process.env.CI === "true" ? 120_000 : 60_000);
+
+  it.each([false, true])("normalizes phase-ten effort history and rolls it back on late failure (reject=%s)", async (reject) => {
+    const repository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(repository);
+    bootstrap.dispatchUI({ type: "new-world", seed: "dry exhaustion expression", posture: "gale", sessionShape: "wander" });
+    await bootstrap.save();
+    bootstrap.destroy();
+    replaceEnvelope(repository, dryExhaustionAtTenthStep(decodeCurrent(repository.snapshot())));
+    let runtime = await createTideweftRuntime(repository);
+    try {
+      runtime.dispatchUI({ type: "resume-world" });
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      const beforeRecord = repository.snapshot();
+      const before = decodeCurrent(beforeRecord);
+      expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      expect(before.playerEffortRecency.lastAccepted).toBeNull();
+      expect(before.perceptionCarry.playerStepStateSamples.every((step) => step?.exhausted === false)).toBe(true);
+      const close = expressionChannelBank.closeSituatedExpressionChannelBankInterval;
+      let closes = 0;
+      if (reject) vi.spyOn(expressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+        .mockImplementation((...args) => ++closes === 1 ? null : close(...args));
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 1);
+      if (reject) {
+        expect(closes).toBe(1);
+        expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(repository.snapshot()).toEqual(beforeRecord);
+        expect(incidentCueCalls("vocalization-strained")).toBe(0);
+        await runtime.save();
+        const rolledBack = decodeCurrent(repository.snapshot());
+        expect(rolledBack.playerEffortRecency).toEqual(before.playerEffortRecency);
+        expect(rolledBack.perceptionCarry).toEqual(before.perceptionCarry);
+        expect(rolledBack.player).toEqual(before.player);
+        expect(rolledBack.world).toEqual(before.world);
+      } else {
+        expect(incidentCueCalls("vocalization-strained")).toBe(1);
+        await runtime.save();
+        const closed = decodeCurrent(repository.snapshot());
+        expect(closed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+        expect(closed.perceptionCarry.situatedExpressionAdmissions.records.some((r) => r.kind === "player-exhaustion")).toBe(false);
+        expect(closed.playerEffortRecency.lastAccepted).toMatchObject({
+          step: { sampleOrdinal: 9, exhausted: true },
+          admission: { committedWorldTick: deserializeWorld(before.world).meta.completedTick, admittedAtPlayerStepPhase: 9 },
+        });
+        runtime.destroy();
+        soundscapePlay.mockClear();
+        runtime = await createTideweftRuntime(repository);
+        expect(runtime.getUIView().title.hasSave).toBe(true);
+        expect(incidentCueCalls("vocalization-strained")).toBe(0);
+        expect(runtime.getRenderView().expressions?.some((event) => event.sourceActorId === "player:local")).toBe(false);
+        await runtime.save();
+        expect(decodeCurrent(repository.snapshot()).playerEffortRecency).toEqual(closed.playerEffortRecency);
+      }
+    } finally { runtime.destroy(); }
+  }, 60_000);
+
+  it("preserves effort history during pause and deliberately initializes supported47 without replay", async () => {
+    const repository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(repository);
+    bootstrap.dispatchUI({ type: "new-world", seed: "dry exhaustion expression", posture: "gale", sessionShape: "wander" });
+    await bootstrap.save();
+    bootstrap.destroy();
+    replaceEnvelope(repository, relocateForDryExhaustion(decodeCurrent(repository.snapshot())));
+    const runtime = await createTideweftRuntime(repository);
+    try {
+      runtime.dispatchUI({ type: "resume-world" });
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+      advancePlayerSteps(runtime, 1);
+      await runtime.save();
+      const pendingRecord = repository.snapshot();
+      const pending = decodeCurrent(repository.snapshot());
+      expect(pending.playerEffortRecency.lastAccepted).not.toBeNull();
+      runtime.dispatchUI({ type: "open-title" });
+      advancePlayerSteps(runtime, 40);
+      await runtime.save();
+      expect(decodeCurrent(repository.snapshot()).playerEffortRecency).toEqual(pending.playerEffortRecency);
+      expect(decodeCurrent(repository.snapshot()).perceptionCarry).toEqual(pending.perceptionCarry);
+      runtime.dispatchUI({ type: "resume-world" });
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      advancePlayerSteps(runtime, 9);
+      await runtime.save();
+      const consumed = decodeCurrent(repository.snapshot());
+      expect(consumed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+      for (const saved of [pending, consumed]) {
+        const { playerEffortRecency: _newHistory, integrity: _oldSeal, ...legacyRoots } = saved;
+        const legacy = { ...legacyRoots, version: 47 };
+        const legacyRepository = new MemoryRepository({
+          ...repository.snapshot(), payloadVersion: 47,
+          playTicks: deserializeWorld(saved.world).meta.completedTick,
+          worldJson: JSON.stringify({ ...legacy, integrity: gameSaveEnvelopeIntegrity(legacy) }),
+        });
+        soundscapePlay.mockClear();
+        const loaded = await createTideweftRuntime(legacyRepository);
+        try {
+          expect(loaded.getUIView().title.hasSave).toBe(true);
+          expect(incidentCueCalls("vocalization-strained")).toBe(0);
+          await loaded.save();
+          const migrated = decodeCurrent(legacyRepository.snapshot());
+          expect(migrated.perceptionCarry).toEqual(saved.perceptionCarry);
+          expect(migrated.playerEffortRecency.lastAccepted).toEqual(
+            saved === pending ? pending.playerEffortRecency.lastAccepted : null,
+          );
+        } finally { loaded.destroy(); }
+        const forged = { ...legacy, playerEffortRecency: saved.playerEffortRecency };
+        const forgedRepository = new MemoryRepository({
+          ...legacyRepository.snapshot(), payloadVersion: 47,
+          worldJson: JSON.stringify({ ...forged, integrity: gameSaveEnvelopeIntegrity(forged) }),
+        });
+        const rejected = await createTideweftRuntime(forgedRepository);
+        try { expect(rejected.getUIView().title.hasSave).toBe(false); }
+        finally { rejected.destroy(); }
+      }
+      const recoveryRecency: PlayerEffortRecencyState[] = [];
+      for (const recovering of [false, true]) {
+        const branchRepository = new MemoryRepository(pendingRecord);
+        const branch = await createTideweftRuntime(branchRepository);
+        try {
+          branch.dispatchUI({ type: "resume-world" });
+          if (recovering) {
+            branch.dispatchUI({ type: "recover", action: "begin" });
+            expect(branch.getRenderView().player.recoveryKind).toBe("rest");
+            branch.start();
+            const callback = scheduledFrame;
+            if (!callback) throw new Error("REST did not schedule its bounded frame");
+            scheduledFrame = undefined;
+            callback(nextFrameTime);
+            nextFrameTime += 100;
+            branch.stop();
+          } else advancePlayerSteps(branch, 10);
+          await branch.save();
+          const after = decodeCurrent(branchRepository.snapshot());
+          expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
+          expect(deserializeWorld(after.world).meta.completedTick).toBe(deserializeWorld(pending.world).meta.completedTick + 1);
+          recoveryRecency.push(after.playerEffortRecency);
+        } finally { branch.destroy(); }
+      }
+      expect(recoveryRecency[0]).toEqual(recoveryRecency[1]);
+      expect(recoveryRecency[0]).toEqual(pending.playerEffortRecency);
+    } finally { runtime.destroy(); }
+  }, 60_000);
+
+  it("rejects resealed missing or contradictory effort history without overwriting the save", async () => {
+    const repository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(repository);
+    bootstrap.dispatchUI({ type: "new-world", seed: "dry exhaustion expression", posture: "gale", sessionShape: "wander" });
+    await bootstrap.save();
+    bootstrap.destroy();
+    replaceEnvelope(repository, relocateForDryExhaustion(decodeCurrent(repository.snapshot())));
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({ type: "resume-world" });
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advancePlayerSteps(runtime, 1);
+    await runtime.save();
+    runtime.destroy();
+    const saved = decodeCurrent(repository.snapshot());
+    const last = saved.playerEffortRecency.lastAccepted;
+    if (last === null) throw new Error("fixture lost accepted effort history");
+    const { playerEffortRecency: _removed, ...missing } = saved;
+    const variants = [
+      missing,
+      { ...saved, playerEffortRecency: null },
+      { ...saved, playerEffortRecency: { ...saved.playerEffortRecency, lastAccepted: null } },
+      { ...saved, playerEffortRecency: { ...saved.playerEffortRecency, remaining: 36 } },
+      { ...saved, playerEffortRecency: { ...saved.playerEffortRecency, rootSeed: [1, 2, 3, 4] } },
+      { ...saved, playerEffortRecency: { ...saved.playerEffortRecency, lastAccepted: { ...last, predecessor: { ...last.predecessor, stamina: 14_000 } } } },
+    ];
+    for (const invalid of variants) {
+      const badRepository = new MemoryRepository(repository.snapshot());
+      replaceEnvelope(badRepository, invalid as CurrentGameSaveEnvelope);
+      const before = badRepository.snapshot();
+      soundscapePlay.mockClear();
+      const rejected = await createTideweftRuntime(badRepository);
+      try {
+        expect(rejected.getUIView().title.hasSave).toBe(false);
+        expect(rejected.getUIView().saveWarning).toBeDefined();
+        await expect(rejected.save()).rejects.toThrow("Choose a seed");
+        expect(badRepository.snapshot()).toEqual(before);
+        expect(incidentCueCalls("vocalization-strained")).toBe(0);
+      } finally { rejected.destroy(); }
+    }
+  }, 60_000);
 
   it("rejects a resealed movement sample whose dry physical evidence contradicts the world", async () => {
     const repository = new MemoryRepository();
@@ -1738,7 +1951,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 47,
+      version: 48,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,
