@@ -105,6 +105,7 @@
         "src/game/situatedExpressionReception.ts",
         "src/game/situatedExpressionTrajectory.ts",
         "src/game/playerEffortRecency.ts",
+        "src/game/playerExpressionRecency.ts",
         "src/audio/soundscape.ts",
         "src/ui/situatedExpressionCaption.ts"
       ],
@@ -118,6 +119,7 @@
         "src/game/worldAcousticPresentationQueue.test.ts",
         "src/game/situatedExpression.test.ts",
         "src/game/playerEffortRecency.test.ts",
+        "src/game/playerExpressionRecency.test.ts",
         "src/game/runtime.fall.integration.test.ts",
         "src/game/situatedExpressionReception.test.ts",
         "src/ui/situatedExpressionCaption.test.ts"
@@ -190,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "14bdfefbe14d29b71e6e692a2f3402a6b7793a63ffca1c4c7eb26b67cbf57047",
+      "reviewedSourceFingerprint": "a10d915fe4fcdfd2eeaa1b1f341d28c8b356b33f0c09050671deb2f6196c574e",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -218,7 +220,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Dry exhaustion has one bounded cross-interval accepted-history receipt separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
+        "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
       "evidence": [
@@ -237,7 +239,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "14bdfefbe14d29b71e6e692a2f3402a6b7793a63ffca1c4c7eb26b67cbf57047",
+      "reviewedSourceFingerprint": "a10d915fe4fcdfd2eeaa1b1f341d28c8b356b33f0c09050671deb2f6196c574e",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

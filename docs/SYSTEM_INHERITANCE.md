@@ -424,7 +424,8 @@ identity and domain details never become knowledge authority, and pending
 meaning is re-derived after reload rather than stored in a parallel dialogue
 queue. Accepted-expression recency may outlive consumed hearing, but must be
 bounded, causal, fixed-step-owned and separate from replayable sound/presentation.
-The current dry-exhaustion representative is owned by `playerEffortRecency`;
+Current exhaustion and ordinary/serious footing representatives use the bounded
+`playerExpressionRecency` root, with the unchanged effort proof nested;
 future consumers must not retain old acoustic admissions merely to stay quiet.
 
 The current unpublished aggregate-frog chorus and brown-rat redistribution

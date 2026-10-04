@@ -42,11 +42,11 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 48;
+  readonly version: 49;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly perceptionCarry: unknown;
-  readonly playerEffortRecency: unknown;
+  readonly playerExpressionRecency: unknown;
   readonly regionalTravel: string;
   readonly regionalEcology: string;
   readonly integrity: string;
@@ -154,7 +154,7 @@ describe(`${ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT} retained Wave-F v26 child b
   it("authenticates an exact v25 child before wrapping it with raw envelope provenance", async () => {
     const current = requireCurrent(fixtureRecord);
     const currentState = requireState(current);
-    const { integrity: _integrity, playerEffortRecency: _futurePlayerEffortRecency, ...shared } = current as unknown as Readonly<Record<string, unknown>>;
+    const { integrity: _integrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...shared } = current as unknown as Readonly<Record<string, unknown>>;
     const { timeAction: _futureTimeAction, ...legacyPlayer } = current.player;
     const v25Base = {
       ...shared,
@@ -276,10 +276,10 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 48
-    || record.payloadVersion !== 48
+    || value.version !== 49
+    || record.payloadVersion !== 49
     || typeof value.regionalEcology !== "string"
-  ) throw new Error("runtime fixture did not produce a current v48 envelope");
+  ) throw new Error("runtime fixture did not produce a current v49 envelope");
   const { integrity, ...base } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(base as Readonly<Record<string, unknown>>)) {
     throw new Error("v34 envelope integrity did not authenticate");

@@ -829,8 +829,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 48 || current.version !== 48) {
-    throw new Error("runtime fixture is not a current v48 save");
+  if (record.payloadVersion !== 49 || current.version !== 49) {
+    throw new Error("runtime fixture is not a current v49 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1872,11 +1872,11 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 48) throw new Error("fixture is not a current save");
+  if (current.version !== 49) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
-    playerEffortRecency: _futurePlayerEffortRecency,
+    playerExpressionRecency: _futurePlayerExpressionRecency,
     regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -1903,11 +1903,11 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 48) throw new Error("fixture is not a current save");
+  if (current.version !== 49) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
-    playerEffortRecency: _futurePlayerEffortRecency,
+    playerExpressionRecency: _futurePlayerExpressionRecency,
     regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -1934,7 +1934,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 48 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 49 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1961,7 +1961,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   };
   const {
     integrity: _integrity,
-    playerEffortRecency: _futurePlayerEffortRecency,
+    playerExpressionRecency: _futurePlayerExpressionRecency,
     regionalEcology: _regionalEcology,
     dogActorRoster: _dogActorRoster,
     settlementWorkingAnimals: _settlementWorkingAnimals,
@@ -1989,7 +1989,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 48
+    current.version !== 49
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2022,7 +2022,7 @@ function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   };
   const {
     integrity: _integrity,
-    playerEffortRecency: _futurePlayerEffortRecency,
+    playerExpressionRecency: _futurePlayerExpressionRecency,
     regionalEcology: _regionalEcology,
     settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
     ...currentFields
@@ -2133,7 +2133,7 @@ async function createChickenAlarmRuntime(
     night.weather.nextChangeTick = night.meta.completedTick + 100_000;
     assertWorldInvariants(night);
     // Existing supported world fixture initializes fresh current ecology;
-    // all following staging and reload use current48 generated-home authority.
+    // all following staging and reload use current49 generated-home authority.
     nightRecord = legacyRuntimeSaveRecord(night);
   }
   const sourceRepository = new MemoryRepository(nightRecord);
@@ -2423,7 +2423,7 @@ describe("runtime settlement ecology integration", () => {
     expect(bearSources[0]?.patch.originRegion).toEqual(createRegionCoord(-6, -24));
     expect(bearSources[0]?.patch.populations.find(({ species }) => species === "brown-bear")
       ?.members.map(({ actor }) => actor.identity.stableId)).toEqual([fixture.bearActorId]);
-    expect(saved.version).toBe(48);
+    expect(saved.version).toBe(49);
     expect((saved.perceptionCarry as { version: number }).version).toBe(14);
     runtime.destroy();
     scheduledFrame = undefined;
@@ -3840,8 +3840,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(48);
-    expect(envelope.version).toBe(48);
+    expect(record.payloadVersion).toBe(49);
+    expect(envelope.version).toBe(49);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -3852,7 +3852,7 @@ describe("runtime settlement ecology integration", () => {
       "perceptionCarry",
       "physicalCargo",
       "player",
-      "playerEffortRecency",
+      "playerExpressionRecency",
       "porterResponse",
       "promiseJourney",
       "regionalEcology",
@@ -4124,7 +4124,7 @@ describe("runtime settlement ecology integration", () => {
       playerStepStateSamples: _futurePlayerStepStateSamples,
       ...v8CurrentCarry
     } = currentCarry;
-    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...currentFields } = current;
+    const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentFields } = current;
     const honestV40Base = {
       ...currentFields,
       version: 40,
@@ -4156,7 +4156,7 @@ describe("runtime settlement ecology integration", () => {
     advancePlayerSteps(migrated, 10);
     await migrated.save();
     const migratedEnvelope = savedEnvelope(honestRepository);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedEnvelope.version).toBe(49);
     expect(migratedEnvelope.perceptionCarry).toMatchObject({
       version: 14,
       actorVocalizationSamples: [],
@@ -4311,8 +4311,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(48);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedRecord.payloadVersion).toBe(49);
+    expect(migratedEnvelope.version).toBe(49);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -4399,8 +4399,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(48);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedRecord.payloadVersion).toBe(49);
+    expect(migratedEnvelope.version).toBe(49);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -4573,8 +4573,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(48);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedRecord.payloadVersion).toBe(49);
+    expect(migratedEnvelope.version).toBe(49);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -4729,8 +4729,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(48);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedRecord.payloadVersion).toBe(49);
+    expect(migratedEnvelope.version).toBe(49);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -4845,8 +4845,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(48);
-    expect(migratedEnvelope.version).toBe(48);
+    expect(migratedRecord.payloadVersion).toBe(49);
+    expect(migratedEnvelope.version).toBe(49);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -4882,7 +4882,7 @@ describe("runtime settlement ecology integration", () => {
     const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
     const {
       integrity: _integrity,
-      playerEffortRecency: _futurePlayerEffortRecency,
+      playerExpressionRecency: _futurePlayerExpressionRecency,
       settlementDomesticAnimalRecovery: _settlementDomesticAnimalRecovery,
       ...currentFields
     } = current;
@@ -5229,7 +5229,7 @@ describe("runtime settlement ecology integration", () => {
     // v35/carry-v4 already owned warning barks. Its exact nonempty interval
     // migrates by version alone; loading must not replay acknowledged audio or
     // duplicate the persisted sample/admission/channel.
-    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...committedFields } = committed;
+    const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
     expect(committedCarry.version).toBe(14);
     const {
@@ -5260,7 +5260,7 @@ describe("runtime settlement ecology integration", () => {
     await migratedWarning.save();
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(48);
+    expect(migratedWarningEnvelope.version).toBe(49);
     expect(migratedWarningEnvelope.perceptionCarry).toEqual({
       ...v7CommittedCarry,
       version: 14,
@@ -6334,7 +6334,7 @@ describe("runtime settlement ecology integration", () => {
     expect(tampered.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
     tampered.destroy();
 
-    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...growlFields } = growlEnvelope;
+    const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...growlFields } = growlEnvelope;
     const {
       animalContactAcousticCarry: _currentAnimalContactCarry,
       intervalStartWasSleeping: _currentIntervalStartWasSleeping,
@@ -6385,8 +6385,8 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedGrowlRecord = v36GrowlRepository.snapshot();
     const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(48);
-    expect(migratedGrowlEnvelope.version).toBe(48);
+    expect(migratedGrowlRecord.payloadVersion).toBe(49);
+    expect(migratedGrowlEnvelope.version).toBe(49);
     expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
       ...v7GrowlCarry,
       version: 14,
@@ -7092,7 +7092,7 @@ describe("runtime settlement ecology integration", () => {
     );
     rejectedSource.destroy();
 
-    const { integrity: _currentIntegrity, playerEffortRecency: _futurePlayerEffortRecency, ...whineFields } = whineEnvelope;
+    const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...whineFields } = whineEnvelope;
     const {
       animalContactAcousticCarry: _currentAnimalContactCarry,
       actorVocalizationSamples: _currentActorVocalizationSamples,
@@ -7168,8 +7168,8 @@ describe("runtime settlement ecology integration", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
     const migratedWhineRecord = v37WhineRepository.snapshot();
     const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(48);
-    expect(migratedWhineEnvelope.version).toBe(48);
+    expect(migratedWhineRecord.payloadVersion).toBe(49);
+    expect(migratedWhineEnvelope.version).toBe(49);
     expect(migratedWhineEnvelope.perceptionCarry).toEqual({
       ...v7WhineCarry,
       version: 14,

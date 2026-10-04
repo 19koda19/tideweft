@@ -147,6 +147,14 @@ import {
   type PlayerEffortRecencyState,
 } from "./playerEffortRecency";
 import {
+  canonicalizePlayerExpressionRecencyState,
+  createPlayerExpressionRecencyState,
+  playerFootingRecencyAllowsExpression,
+  recordAcceptedPlayerFootingExpression,
+  type PlayerExpressionRecencyState,
+  type PlayerFootingRecencyReceipt,
+} from "./playerExpressionRecency";
+import {
   PLAYER_TIME_ACTION_STEPS_PER_WORLD_MINUTE,
   advancePlayerTimeActionOneStep,
   canonicalizePlayerTimeAction,
@@ -1156,6 +1164,8 @@ const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
 /** Current outer save whose pending factual speech can become listener knowledge. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
+/** Supported predecessor with only accepted dry-exhaustion history. */
+const EFFORT_RECENCY_GAME_SAVE_VERSION = 48;
 /** Supported predecessor: factual speech/carry14 without cross-interval recency. */
 const FACTUAL_SPEECH_GAME_SAVE_VERSION = 47;
 /** Retired pre-1.0 save whose pending keeper speech remained acoustically generic. */
@@ -1290,6 +1300,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   HUMAN_DANGER_WARNING_GAME_SAVE_VERSION,
   ANIMAL_CONTACT_GAME_SAVE_VERSION,
   FACTUAL_SPEECH_GAME_SAVE_VERSION,
+  EFFORT_RECENCY_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -1336,7 +1347,9 @@ interface GameSaveEnvelope {
   regionalTravel: string;
   promiseJourney: RegionalPromiseJourneyState;
   perceptionCarry: PlayerPerceptionCarry;
-  playerEffortRecency: PlayerEffortRecencyState;
+  playerExpressionRecency: PlayerExpressionRecencyState;
+  /** Present only on deliberately supported v48 envelopes. */
+  playerEffortRecency?: PlayerEffortRecencyState;
   bio0Ecology: string;
   regionalEcology: string;
   /** Present only on v8-v24 envelopes during one-way migration. */
@@ -10898,12 +10911,12 @@ export async function createTideweftRuntime(
   let traversalFeedback = resumed?.traversalFeedback
     ?? createTraversalFeedbackState();
   // Pending presentation and interval-local cooldowns share the hearing carry.
-  // Longer effort recency has a separate finite owner, never stale sound.
+  // Longer accepted-choice recency has a separate finite owner, never stale sound.
   let situatedExpressionChannels: SituatedExpressionChannelBank =
     resumed?.perceptionCarry.situatedExpressionChannels
       ?? createSituatedExpressionChannelBank();
-  let playerEffortRecency = resumed?.playerEffortRecency
-    ?? createPlayerEffortRecencyState(world.meta.rootSeed);
+  let playerExpressionRecency = resumed?.playerExpressionRecency
+    ?? createPlayerExpressionRecencyState(world.meta.rootSeed);
   // An embodied impact word is ephemeral presentation, even when its exact
   // semantic event remains in the unfinished hearing interval for cognition
   // and save validation. Remember only the bounded active IDs present at
@@ -13616,10 +13629,8 @@ export async function createTideweftRuntime(
       if (traversalExpressionIntent !== null && expressionIncidentKind === null) {
         throw new Error("Traversal expression used a non-physical incident kind");
       }
-      acceptSituatedExpression(
-        traversalExpressionIntent,
-        { kind: "self" },
-        (event, sampleOrdinal) => createPlayerTraversalExpressionAdmissionRecord({
+      const traversalAdmissionFor = (event: SituatedExpressionIntent, sampleOrdinal: number) => (
+        createPlayerTraversalExpressionAdmissionRecord({
           sourceActorId: event.sourceActorId,
           triggerEventId: event.triggerEventId,
           sampleOrdinal,
@@ -13649,8 +13660,40 @@ export async function createTideweftRuntime(
           cargoShock: traversalExpressionContext.cargo.cargoShock,
           separatedEntityIds: traversalExpressionContext.cargo.separatedEntityIds,
           separationEventId: traversalExpressionContext.separationEventId,
-        }),
+        })
       );
+      const footingIntent = traversalExpressionIntent?.family === "footing";
+      const choiceClock = {
+        completedTick: world.meta.completedTick
+          + (playerStepStateSample.sampleOrdinal === 9 ? 1 : 0),
+        playerStepPhase: (playerStepStateSample.sampleOrdinal + 1) % PLAYER_STEPS_PER_WORLD_TICK,
+      };
+      const footingBudgetAvailable = actorVocalizationSamples.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+        && situatedExpressionAdmissions.records.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES;
+      const footingAllowed = !footingIntent ? true : !footingBudgetAvailable ? false : playerFootingRecencyAllowsExpression(
+        playerExpressionRecency,
+        world.meta.rootSeed,
+        choiceClock,
+        traversalAdmissionFor(traversalExpressionIntent!, actorVocalizationSamples.length),
+      );
+      if (footingAllowed === null) throw new Error("Player footing recency lost its authority");
+      const acceptedTraversal = footingAllowed && acceptSituatedExpression(
+        traversalExpressionIntent,
+        { kind: "self" },
+        traversalAdmissionFor,
+      );
+      if (acceptedTraversal && footingIntent) {
+        const admission = situatedExpressionAdmissions.records.at(-1);
+        const authority = situatedExpressionCausalAuthority.records.at(-1);
+        const recorded = recordAcceptedPlayerFootingExpression(
+          playerExpressionRecency,
+          world.meta.rootSeed,
+          choiceClock,
+          { admission, authority, step: playerStepStateSample },
+        );
+        if (recorded === null) throw new Error("Accepted footing lost its semantic history");
+        playerExpressionRecency = recorded;
+      }
     }
     const playerStepStatePredecessor = playerStepStateAnchor !== null
       && playerStepStateSample.sampleOrdinal === playerStepStateAnchor.sampleOrdinal
@@ -13683,7 +13726,7 @@ export async function createTideweftRuntime(
         resolution: "dry-exhaustion-camp",
       });
       const effortAllowed = playerEffortRecencyAllowsExpression(
-        playerEffortRecency,
+        playerExpressionRecency.effort,
         world.meta.rootSeed,
         {
           completedTick: world.meta.completedTick
@@ -13727,7 +13770,7 @@ export async function createTideweftRuntime(
               afterPosition: effortPosition,
             });
         if (recorded === null) throw new Error("Accepted effort lost its semantic history");
-        playerEffortRecency = recorded;
+        playerExpressionRecency = Object.freeze({ ...playerExpressionRecency, effort: recorded });
       }
     }
     const perceivedStepAcousticEvent = [...stepAcousticEvents].sort(
@@ -16218,12 +16261,12 @@ export async function createTideweftRuntime(
         player.timeAction = advanced.state;
       }
     }
-    const advancedEffortRecency = canonicalizePlayerEffortRecencyState(
-      playerEffortRecency, world.meta.rootSeed,
+    const advancedExpressionRecency = canonicalizePlayerExpressionRecencyState(
+      playerExpressionRecency, world.meta.rootSeed,
       { completedTick: world.meta.completedTick, playerStepPhase: playerStepsSinceWorldTick },
     );
-    if (advancedEffortRecency === null) throw new Error("Player effort recency clock failed validation");
-    playerEffortRecency = advancedEffortRecency;
+    if (advancedExpressionRecency === null) throw new Error("Player expression recency clock failed validation");
+    playerExpressionRecency = advancedExpressionRecency;
     if (present) refreshRuntimePresentation();
     if (closingSituatedExpressionInterval !== null) {
       const retainedPresentations = retainClosingSituatedExpressionPresentations(
@@ -17853,7 +17896,7 @@ export async function createTideweftRuntime(
     fieldResourceEcology = createFieldResourceEcologyState(world.meta.completedTick);
     traversalFeedback = createTraversalFeedbackState();
     situatedExpressionChannels = createSituatedExpressionChannelBank();
-    playerEffortRecency = createPlayerEffortRecencyState(world.meta.rootSeed);
+    playerExpressionRecency = createPlayerExpressionRecencyState(world.meta.rootSeed);
     // Reload-only suppression belongs to the replaced save generation. A
     // confirmed new world may deterministically reuse the same seed, actor,
     // tick, and causal event ID; retaining the old IDs would hide a legitimate
@@ -19450,11 +19493,11 @@ export async function createTideweftRuntime(
     if (livingActorPlayerChoiceSnapshot === null) {
       throw new Error("Refusing to save inconsistent living-actor player choice state");
     }
-    const playerEffortRecencySnapshot = runtimePlayerEffortRecency(
-      playerEffortRecency, worldSnapshot, perceptionCarrySnapshot,
+    const playerExpressionRecencySnapshot = runtimePlayerExpressionRecency(
+      playerExpressionRecency, worldSnapshot, perceptionCarrySnapshot,
     );
-    if (playerEffortRecencySnapshot === null) {
-      throw new Error("Refusing to save inconsistent player effort recency");
+    if (playerExpressionRecencySnapshot === null) {
+      throw new Error("Refusing to save inconsistent player expression recency");
     }
     const envelopeBase: Omit<GameSaveEnvelope, "integrity"> = {
       format: "tideweft-session",
@@ -19468,7 +19511,7 @@ export async function createTideweftRuntime(
       regionalTravel: serializePlayerRegionalTravel(regionalTravelSnapshot),
       promiseJourney: promiseJourneySnapshot,
       perceptionCarry: perceptionCarrySnapshot,
-      playerEffortRecency: playerEffortRecencySnapshot,
+      playerExpressionRecency: playerExpressionRecencySnapshot,
       bio0Ecology: serializeBio0Ecology(bio0EcologySnapshot),
       regionalEcology: serializeRegionalEcologyStateV6(regionalEcologySnapshot),
       settlementEcology: serializeSettlementEcologyState(settlementEcologySnapshot),
@@ -19603,7 +19646,7 @@ export async function createTideweftRuntime(
       activeWorldAcousticPresentations,
       situatedExpressionPresentationLeases,
       situatedExpressionChannels,
-      playerEffortRecency,
+      playerExpressionRecency,
       situatedExpressionAdmissions,
       situatedExpressionCausalAuthority,
       playerPerceptionIntervalStartPosition,
@@ -19681,7 +19724,7 @@ export async function createTideweftRuntime(
       activeWorldAcousticPresentations = prior.activeWorldAcousticPresentations;
       situatedExpressionPresentationLeases = prior.situatedExpressionPresentationLeases;
       situatedExpressionChannels = prior.situatedExpressionChannels;
-      playerEffortRecency = prior.playerEffortRecency;
+      playerExpressionRecency = prior.playerExpressionRecency;
       situatedExpressionAdmissions = prior.situatedExpressionAdmissions;
       situatedExpressionCausalAuthority = prior.situatedExpressionCausalAuthority;
       playerPerceptionIntervalStartPosition = prior.playerPerceptionIntervalStartPosition;
@@ -20053,7 +20096,7 @@ type LoadedAutosave = {
   readonly regionalTravel: RegionalPlayerTravelState;
   readonly promiseJourney: RegionalPromiseJourneyState;
   readonly perceptionCarry: PlayerPerceptionCarry;
-  readonly playerEffortRecency: PlayerEffortRecencyState;
+  readonly playerExpressionRecency: PlayerExpressionRecencyState;
   readonly saveGenerationEra: number;
   readonly saveGeneration: number;
   readonly updatedAt: number;
@@ -22122,6 +22165,71 @@ function runtimePlayerEffortRecency(
     ? null : state;
 }
 
+/** Called only after the complete carry's physical and acoustic facts validate. */
+function pendingPlayerFootingRecency(carry: PlayerPerceptionCarry): readonly PlayerFootingRecencyReceipt[] | null {
+  const footing: PlayerFootingRecencyReceipt[] = [];
+  for (const admission of carry.situatedExpressionAdmissions.records) {
+    if (admission.kind !== "player-traversal"
+      || (admission.causalClass !== "ordinary-stumble" && admission.causalClass !== "serious-stumble")) continue;
+    const ordinal = admission.admittedAtPlayerStepPhase - 1;
+    const step = carry.playerStepStateSamples[ordinal];
+    const authority = carry.situatedExpressionCausalAuthority.records.find(
+      (record) => record.eventId === admission.eventId,
+    );
+    // Supported old carries explicitly preserve a null physical-history prefix.
+    // Do not invent an accepted-choice origin for that missing historical proof.
+    if (step === null && carry.playerStepStateAnchor !== null
+      && ordinal < carry.playerStepStateAnchor.sampleOrdinal) continue;
+    if (step == null || authority === undefined || step.sampleOrdinal !== ordinal) return null;
+    footing.push({ admission, authority, step });
+  }
+  return footing.sort((left, right) => compareText(left.admission.causalClass, right.admission.causalClass));
+}
+
+/** Deliberately supported readers adopt only independently validated pending facts. */
+function migratePlayerExpressionRecency(
+  effort: PlayerEffortRecencyState,
+  world: WorldState,
+  carry: PlayerPerceptionCarry,
+): PlayerExpressionRecencyState | null {
+  // Supported historical carries never owned physical-step proof. The fully
+  // validated null-only prefix keeps its pending sound, not guessed recency;
+  // the constructor adopts a current anchor only after this migration.
+  const footing = carry.playerStepStateAnchor === null
+    ? carry.playerStepStateSamples.length === carry.playerStepsSinceWorldTick
+      && carry.playerStepStateSamples.every((sample) => sample === null)
+        ? [] : null
+    : pendingPlayerFootingRecency(carry);
+  if (footing === null) return null;
+  return canonicalizePlayerExpressionRecencyState({
+    ...createPlayerExpressionRecencyState(world.meta.rootSeed), effort, footing,
+  }, world.meta.rootSeed, {
+    completedTick: world.meta.completedTick, playerStepPhase: carry.playerStepsSinceWorldTick,
+  });
+}
+
+/** Current roots cannot invent pending choices or reopen consumed acoustic events. */
+function runtimePlayerExpressionRecency(
+  value: unknown,
+  world: WorldState,
+  carry: PlayerPerceptionCarry,
+): PlayerExpressionRecencyState | null {
+  const state = canonicalizePlayerExpressionRecencyState(value, world.meta.rootSeed, {
+    completedTick: world.meta.completedTick, playerStepPhase: carry.playerStepsSinceWorldTick,
+  });
+  const pending = pendingPlayerFootingRecency(carry);
+  if (state === null || pending === null || stableStringify(value) !== stableStringify(state)
+    || runtimePlayerEffortRecency(state.effort, world, carry) === null) return null;
+  for (const receipt of pending) {
+    if (!state.footing.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
+  }
+  for (const receipt of state.footing) {
+    if (receipt.authority.committedWorldTick === world.meta.completedTick
+      && !pending.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
+  }
+  return state;
+}
+
 function playerExpressionAdmissionPosition(
   admission: SituatedExpressionAdmissionRecord,
   carry: PlayerPerceptionCarry,
@@ -23294,8 +23402,11 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Historical save contains future wildlife event-locus authority");
     }
-    if (decoded.version < GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerEffortRecency")) {
+    if (decoded.version < EFFORT_RECENCY_GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerEffortRecency")) {
       throw new Error("Older save version contains future effort-recency authority");
+    }
+    if (decoded.version < GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerExpressionRecency")) {
+      throw new Error("Older save version contains future expression-recency authority");
     }
     if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
       if (
@@ -23304,6 +23415,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
           decoded.version === GAME_SAVE_VERSION
+        || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
         || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
         || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
@@ -23344,7 +23456,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             "traversalFeedback",
             "version",
             "world",
-            ...(decoded.version === GAME_SAVE_VERSION ? ["playerEffortRecency"] : []),
+            ...(decoded.version === GAME_SAVE_VERSION ? ["playerExpressionRecency"] : []),
+            ...(decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION ? ["playerEffortRecency"] : []),
           ])
           || typeof decoded.regionalTravel !== "string"
           || typeof decoded.bio0Ecology !== "string"
@@ -23649,6 +23762,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const persistedRegionalEcologyV6 = (
       decoded.version === GAME_SAVE_VERSION
+      || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
       || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
       || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
       || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
@@ -23684,6 +23798,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (
       (
         decoded.version === GAME_SAVE_VERSION
+        || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
         || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
         || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
         || decoded.version === HUMAN_DANGER_WARNING_GAME_SAVE_VERSION
@@ -24251,6 +24366,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Current save contains invalid living-actor player choice state");
     }
     let perceptionCarry = (decoded.version === GAME_SAVE_VERSION
+      || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
       || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION)
       ? canonicalPlayerPerceptionCarry(
           decoded.perceptionCarry,
@@ -24686,11 +24802,16 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Current save perception interval does not match its saved physical authority");
     }
-    const playerEffortRecency = decoded.version === GAME_SAVE_VERSION
-      ? runtimePlayerEffortRecency(decoded.playerEffortRecency, world, perceptionCarry)
-      : migratePlayerEffortRecency(world, perceptionCarry);
-    if (playerEffortRecency === null) {
-      throw new Error("Current save contains invalid player effort recency");
+    const playerExpressionRecency = decoded.version === GAME_SAVE_VERSION
+      ? runtimePlayerExpressionRecency(decoded.playerExpressionRecency, world, perceptionCarry)
+      : (() => {
+          const effort = decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
+            ? runtimePlayerEffortRecency(decoded.playerEffortRecency, world, perceptionCarry)
+            : migratePlayerEffortRecency(world, perceptionCarry);
+          return effort === null ? null : migratePlayerExpressionRecency(effort, world, perceptionCarry);
+        })();
+    if (playerExpressionRecency === null) {
+      throw new Error("Current save contains invalid player expression recency");
     }
     return {
       kind: "loaded",
@@ -24712,7 +24833,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       regionalTravel,
       promiseJourney,
       perceptionCarry,
-      playerEffortRecency,
+      playerExpressionRecency,
       saveGenerationEra: version.saveGenerationEra,
       saveGeneration: version.saveGeneration,
       updatedAt: record.updatedAt,

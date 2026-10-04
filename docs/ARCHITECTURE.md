@@ -982,20 +982,29 @@ until that interval is consumed. The closing presentation may still show the
 line once, but all pre-boundary active and cooldown-only state is then retired;
 new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
-Cross-interval dry-exhaustion choice now has a separate, versioned
-`playerEffortRecency` owner. It retains at most one accepted admission and its
-narrow movement-owned predecessor/step/position facts, bound to the world seed.
+Cross-interval player choice has a separate, versioned `playerExpressionRecency`
+owner. It nests the unchanged `playerEffortRecency` proof: at most one accepted
+exhaustion admission and its narrow movement-owned predecessor/step/position
+facts, bound to the world seed. Footing retains at most one latest origin per
+current ordinary/serious stumble meaning, two total. Each contains only the
+canonical admission, matching causal authority and actual movement-owned step;
+one newer footing meaning must not erase the other's still-live meaning lock.
+Cargo protection retains its existing precedence rather than being relabeled
+footing. Historical pairs obey the priority-qualified family law at their
+acceptance frontiers, not merely today's ages.
 Age derives from the authoritative world tick and actual physical step ordinal;
 the tenth step is the next tick's phase zero, not the old admission's phase-nine
-compatibility clamp. Its 36-step meaning cooldown survives consumed hearing
-intervals and current save/reload, then the record is pruned. It contains no
+compatibility clamp. Existing 36-step exhaustion and 12/16-step footing meaning
+cooldowns survive consumed hearing intervals and current save/reload; each
+record is pruned at expiry. It contains no
 audio, caption or hearing queue and cannot replay an old event. New history
 commits only after expression admission and rolls back with a failed tick.
 Pending origins must exactly match the current physical/admission carry;
 consumed historical depths are not compared to a later tide. Canonical seals
 prove consistency, not secret attestation of an arbitrarily rewritten history.
-`playerEffortRecency.test.ts` and `runtime.fall.integration.test.ts` own exact
-expiry, phase-ten, no-replay, pause/recovery and fail-closed evidence. Other
+`playerExpressionRecency.test.ts`, `playerEffortRecency.test.ts` and
+`runtime.fall.integration.test.ts` own exact
+expiry, phase-ten, no-replay, pause/recovery, capacity refusal and fail-closed evidence. Other
 source meanings still have interval-local semantic memory; broader sparse
 choice and hours-of-play annoyance remain open Voice gates. Physical
 exhaustion/camp cycling remains movement-owned, not repaired by this policy.
@@ -3189,8 +3198,8 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 48 and the bounded perception carry through version 14;
-the current source writer emits outer version 48. The preceding v43/carry-v11
+session through version 49 and the bounded perception carry through version 14;
+the current source writer emits outer version 49. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -3205,14 +3214,22 @@ it without replaying audio or text. V48 keeps carry v14 and requires the bounded
 accepted-effort recency root separately from consumed sounds. Supported v47
 initializes it only from already authenticated pending exhaustion evidence;
 consumed historical recency initializes empty rather than inventing old events.
-Missing or contradictory current-v48 authority fails closed without overwrite;
-historical formats reject the future root. Outer v41 through v46 are explicitly retired under
+V49 keeps carry14 and replaces the standalone effort root with bounded combined
+`playerExpressionRecency`: unchanged effort plus two accepted-footing origins.
+Supported v48 preserves its validated effort root and adopts footing only from
+independently authenticated pending admission/causal/physical-step facts. A
+validated legacy null physical-history prefix has no provable footing origin;
+consumed older footing likewise initializes empty, without replay or invented
+history. Current pending origins must agree exactly with those separate facts.
+Missing, extra or contradictory current-v49 authority fails closed without
+overwrite; historical formats reject the future combined root. No additional
+development format is retired. Outer v41 through v46 are explicitly retired under
 the pre-1.0 policy: load recognizes any such
 incompatible development record, leaves it untouched, and directs development
 to a clean current save rather than attempting partial deserialization.
 Supported pre-v41 migration readers remain implemented and tested where
 retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v48 roundtrip
+promise to preserve every internal development format. Current-v49 roundtrip
 and all conservation, determinism, integrity, and no-overwrite laws remain
 mandatory.
 
