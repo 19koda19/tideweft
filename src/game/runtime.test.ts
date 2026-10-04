@@ -48,6 +48,7 @@ import {
 } from "./player";
 import * as humanPerception from "./humanPerception";
 import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
+import { RESIDENT_INTRODUCTION_EXPRESSION_DURATION_STEPS } from "./residentIntroductionExpression";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
@@ -1612,7 +1613,57 @@ describe("perpetual new worlds", () => {
       id: introductionLabel.id,
       text: introductionLabel.text,
     }));
+
+    // The acknowledged remainder is readable on reload, but not a permanent
+    // subtitle. Eleven real accepted steps above have already spent its lease.
+    advancePlayerSteps(reloaded, RESIDENT_INTRODUCTION_EXPRESSION_DURATION_STEPS - 12);
+    expect(reloaded.getRenderView().acousticText).toContainEqual(expect.objectContaining({
+      id: introductionLabel.id,
+    }));
+    advancePlayerSteps(reloaded, 1);
+    expect(reloaded.getRenderView().acousticText?.some(({ id }) => id === introductionLabel.id))
+      .toBe(false);
+    expect(reloaded.getUIView().expressionCaption?.id).not.toBe(introductionLabel.id);
+    // Complete the same interval before checking durable receipt retirement.
+    advancePlayerSteps(reloaded, 4);
+    await reloaded.save();
+    const expired = decodeGameSave(repository.snapshot());
+    expect(expired.version).toBe(CURRENT_GAME_SAVE_VERSION);
+    const expiredCarry = expired.perceptionCarry as typeof carry;
+    expect(expiredCarry.version).toBe(14);
+    expect(expiredCarry.actorVocalizationSamples.some(
+      ({ expressionEventId }) => expressionEventId === introductionLabel.id,
+    )).toBe(false);
+    expect(expiredCarry.situatedExpressionAdmissions.records.some(
+      ({ eventId }) => eventId === introductionLabel.id,
+    )).toBe(false);
+    const introducedResident = deserializeWorld(saved.world).residents.find(
+      ({ identity }) => identity.stableId === introductionAdmission?.sourceActorId,
+    );
+    const expiredResident = deserializeWorld(expired.world).residents.find(
+      ({ identity }) => identity.stableId === introductionAdmission?.sourceActorId,
+    );
+    if (!introducedResident || !expiredResident) throw new Error("greeting expiry lost its real resident");
+    expect(expiredResident.playerKnowledge.level).toBe("acquainted");
+    expect(expiredResident.playerKnowledge).toEqual(introducedResident.playerKnowledge);
+    expect(expiredResident.identity).toEqual(introducedResident.identity);
+    expect(expiredResident.name).toBe(introducedResident.name);
+    expect(expiredResident.homeSettlementId).toBe(introducedResident.homeSettlementId);
+    expect(expiredResident.memories.filter(({ kind }) => kind === "met-player"))
+      .toEqual(introducedResident.memories.filter(({ kind }) => kind === "met-player"));
     reloaded.destroy();
+
+    soundscapePlay.mockClear();
+    const expiredReload = await createTideweftRuntime(repository);
+    expect(expiredReload.getUIView().title.hasSave).toBe(true);
+    expect(expiredReload.getRenderView().acousticText?.some(({ id }) => id === introductionLabel.id))
+      .toBe(false);
+    expect(expiredReload.getUIView().expressionCaption?.id).not.toBe(introductionLabel.id);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(0);
+    await expiredReload.save();
+    expect(decodeGameSave(repository.snapshot()).world).toBe(expired.world);
+    expiredReload.destroy();
   });
 
   it("rejects resident-introduction semantics smuggled through a sealed outer-v40 carry-v8", async () => {
