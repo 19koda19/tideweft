@@ -413,7 +413,36 @@ function outputPath(rawOutput, defaultStem = 'runtime-baseline') {
 }
 
 /** Local opt-in observation of public projections, never sound/hearing authority. */
-function createVoicePresentationObservation() {
+function createVoicePresentationObservation(options = {}) {
+  if (options === null || typeof options !== 'object' || Array.isArray(options)
+    || (options.playerWording !== undefined && typeof options.playerWording !== 'boolean')) {
+    throw new TypeError('Voice observation options require an optional boolean playerWording');
+  }
+  const playerWording = options.playerWording === true ? {
+    wordingCapacity: 64,
+    maximumTextCodeUnits: 256,
+    wordings: new Map(),
+    priorFingerprint: null,
+    summary: {
+      schema: 'tideweft-observed-player-wording/v1',
+      scope: 'exact public render speech explicitly attributed to the player, counted once per retained projection event; not semantic meaning, producer identity, emitted speech or hours acceptance',
+      fingerprint: 'non-authoritative two-lane UTF-16 comparison fingerprint/v1; collision-checked against bounded internal exact strings, not cryptography or secrecy',
+      wordingCapacity: 64,
+      maximumTextCodeUnits: 256,
+      countedPlayerEvents: 0,
+      uncountedPlayerEvents: 0,
+      distinctWordings: 0,
+      adjacentSingleObservationRepeats: 0,
+      adjacencyScope: 'successive single-new-player-event observations, ignoring no-new-event reads and resetting after ambiguous or invalid observations; not producer chronology',
+      ambiguousOrderingSamples: 0,
+      invalidTextEvents: 0,
+      changedTextEvents: 0,
+      fingerprintCollisions: 0,
+      wordings: [],
+      incomplete: false,
+      overflow: false,
+    },
+  } : null;
   return {
     capacity: 512,
     candidateCapacity: 64,
@@ -424,6 +453,7 @@ function createVoicePresentationObservation() {
     lastTick: null,
     lastElapsedMs: null,
     emptySinceMs: null,
+    playerWording,
     summary: {
       schema: 'tideweft-public-voice-observation/v2',
       scope: '100ms public render/UI projection samples plus initial/terminal reads; first-observed IDs include already-active boundary cues, not emitted audio, silence, NPC hearing, DOM/glyph or complete event counts',
@@ -454,12 +484,85 @@ function createVoicePresentationObservation() {
       uniqueProjectionEventsPerObservedMinute: null,
       incomplete: false,
       overflow: false,
+      ...(playerWording === null ? {} : { playerWordingCensus: playerWording.summary }),
     },
   };
 }
 
 function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = null) {
   const summary = state.summary;
+  const playerWording = state.playerWording ?? null;
+  let newPlayerEvents = 0;
+  let newPlayerFingerprint = null;
+  let invalidWordingObserved = false;
+  // This synchronous diagnostic fingerprint is deliberately not a save seal.
+  // Exact strings remain bounded and private in-page so a collision cannot
+  // silently merge two different projected wordings.
+  const wordingFingerprint = (text) => {
+    let first = 0x811c9dc5;
+    let second = 0x9e3779b9;
+    for (let index = 0; index < text.length; index += 1) {
+      const unit = text.charCodeAt(index);
+      first = Math.imul(first ^ unit, 0x01000193) >>> 0;
+      second = Math.imul(second ^ unit, 0x85ebca6b) >>> 0;
+    }
+    return `utf16-v1:${text.length}:${first.toString(16).padStart(8, '0')}${second.toString(16).padStart(8, '0')}`;
+  };
+  const observePlayerWording = (record, text) => {
+    if (playerWording === null || record === null) return;
+    const census = playerWording.summary;
+    if (record.playerWordingObserved === true) {
+      if (record.playerWordingFingerprint !== undefined) {
+        const known = playerWording.wordings.get(record.playerWordingFingerprint);
+        if (known?.text !== text) {
+          if (record.playerWordingChanged !== true) census.changedTextEvents += 1;
+          record.playerWordingChanged = true;
+          census.incomplete = true;
+          invalidWordingObserved = true;
+        }
+      }
+      return;
+    }
+    record.playerWordingObserved = true;
+    newPlayerEvents += 1;
+    if (typeof text !== 'string' || text.length === 0
+      || text.length > playerWording.maximumTextCodeUnits || text.trim().length === 0) {
+      census.invalidTextEvents += 1;
+      census.uncountedPlayerEvents += 1;
+      census.incomplete = true;
+      invalidWordingObserved = true;
+      return;
+    }
+    const fingerprint = wordingFingerprint(text);
+    let wording = playerWording.wordings.get(fingerprint);
+    if (wording !== undefined && wording.text !== text) {
+      census.fingerprintCollisions += 1;
+      census.uncountedPlayerEvents += 1;
+      census.incomplete = true;
+      invalidWordingObserved = true;
+      return;
+    }
+    if (wording === undefined) {
+      if (playerWording.wordings.size >= playerWording.wordingCapacity) {
+        census.uncountedPlayerEvents += 1;
+        census.incomplete = true;
+        census.overflow = true;
+        invalidWordingObserved = true;
+        return;
+      }
+      const row = { fingerprint, eventCount: 0 };
+      wording = { text, row };
+      playerWording.wordings.set(fingerprint, wording);
+      census.wordings.push(row);
+      census.wordings.sort((left, right) => left.fingerprint < right.fingerprint ? -1
+        : left.fingerprint > right.fingerprint ? 1 : 0);
+      census.distinctWordings = playerWording.wordings.size;
+    }
+    record.playerWordingFingerprint = fingerprint;
+    wording.row.eventCount += 1;
+    census.countedPlayerEvents += 1;
+    newPlayerFingerprint = fingerprint;
+  };
   summary.snapshots += 1;
   const tick = renderView?.tick;
   if (!Number.isSafeInteger(tick) || tick < 0) summary.incomplete = true;
@@ -490,20 +593,20 @@ function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = n
     return null;
   };
   const retain = (id, kind, channel) => {
-    if (kind === null) return;
+    if (kind === null) return null;
     if (kind.endsWith('Speech')) speechObserved = true;
     if (kind === 'animalCall') animalObserved = true;
     if (kind === 'physical') physicalObserved = true;
     if (typeof id !== 'string' || id.length === 0 || id.length > 512
       || !Number.isSafeInteger(tick) || tick < 0) {
       summary.overflow = true;
-      return;
+      return null;
     }
     let record = state.events.get(id);
     if (record === undefined) {
       if (state.events.size >= state.capacity) {
         summary.overflow = true;
-        return;
+        return null;
       }
       record = { kind, channels: 0, captionOnlySpeech: kind === 'unattributedSpeech' && channel === 2 };
       state.events.set(id, record);
@@ -517,7 +620,7 @@ function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = n
     } else if (record.kind !== kind
       && !(kind === 'unattributedSpeech' && record.kind.endsWith('Speech'))) {
       summary.incomplete = true;
-      return;
+      return null;
     }
     if ((record.channels & channel) === 0) {
       record.channels |= channel;
@@ -531,12 +634,15 @@ function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = n
       if (summary.firstAnimalObservedAtTick === null) summary.firstAnimalObservedAtTick = tick;
       summary.lastAnimalObservedAtTick = tick;
     }
+    return record;
   };
   for (let index = 0; index < Math.min(candidates.length, state.candidateCapacity); index += 1) {
     const candidate = candidates[index];
     // Category is explicit. Physical animal contact and embodied signals are
     // not vocal calls; no vocabulary, source ID or speaker label is parsed.
-    retain(candidate?.id, classify(candidate?.acousticKind, candidate?.sourceKind), 1);
+    const kind = classify(candidate?.acousticKind, candidate?.sourceKind);
+    const record = retain(candidate?.id, kind, 1);
+    if (kind === 'playerSpeech') observePlayerWording(record, candidate?.text);
   }
   const caption = uiView?.expressionCaption;
   if (caption != null) retain(caption.id, classify(caption.presentationKind, null), 2);
@@ -575,6 +681,22 @@ function observePublicVoicePresentation(state, renderView, uiView, elapsedMs = n
   } else state.emptySinceMs = null;
   summary.uniqueProjectionEventsPerObservedMinute = summary.observedWindowMs > 0
     ? summary.uniqueProjectionEvents * 60_000 / summary.observedWindowMs : null;
+  if (playerWording !== null) {
+    const census = playerWording.summary;
+    if (summary.incomplete || summary.overflow || elapsedMs === null) census.incomplete = true;
+    if (summary.overflow) census.overflow = true;
+    if (newPlayerEvents > 1) {
+      census.ambiguousOrderingSamples += 1;
+      playerWording.priorFingerprint = null;
+    } else if (invalidWordingObserved || summary.incomplete || summary.overflow || elapsedMs === null) {
+      playerWording.priorFingerprint = null;
+    } else if (newPlayerEvents === 1 && newPlayerFingerprint !== null) {
+      if (playerWording.priorFingerprint === newPlayerFingerprint) {
+        census.adjacentSingleObservationRepeats += 1;
+      }
+      playerWording.priorFingerprint = newPlayerFingerprint;
+    }
+  }
   return summary;
 }
 
@@ -4239,7 +4361,7 @@ async function measureScenario(
     const buildHitchDelta = ${buildHitchDelta.toString()};
     const hitchSnapshotReasons = ${hitchSnapshotReasons.toString()};
     const voiceObservation = ${JSON.stringify(observeVoice)}
-      ? (${createVoicePresentationObservation.toString()})() : null;
+      ? (${createVoicePresentationObservation.toString()})({ playerWording: true }) : null;
     const observePublicVoicePresentation = ${observePublicVoicePresentation.toString()};
     let nextVoiceObservationAt = 0;
     const observeVoice = (elapsedMs, force = false) => {

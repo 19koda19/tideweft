@@ -390,6 +390,22 @@ audio, NPC hearing, actual glyph placement or a Voice soak, and its extra
 observation cost must not be mixed into uninstrumented performance comparisons.
 Do not combine it with either frozen functional mode or resource shakedown/soak.
 
+The opt-in `--observe-voice` runs also collect a bounded player-wording
+census: only explicitly player-attributed public render speech counts, once per
+retained event. Caption-only speech cannot establish player ownership. Exact
+wording stays in a temporary in-page dictionary capped at 64 strings of 256
+UTF-16 units; output contains collision-checked comparison fingerprints and
+counts, never raw wording, speaker labels or actor/event IDs. These fingerprints
+are non-authoritative and reversible against a small vocabulary, not secrecy or
+cryptography. Changed wording, malformed input and exhausted limits mark the
+census incomplete. Multiple new player events in one sample have ambiguous
+order and reset adjacent-wording repetition. Adjacency compares successive
+single-new-player-event observations; no-new-event reads do not reset that
+sampled comparison, which is not producer chronology. This describes sampled
+projected wording, not inferred meaning/families, actual emissions, complete
+speech rates or an hours-long annoyance pass. The observer's ordinary
+no-option API and previous v2 fields remain unchanged.
+
 ## Desktop release
 
 ```bash

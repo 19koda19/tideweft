@@ -271,6 +271,213 @@ const {
 }
 
 
+// Optional wording observes only retained, explicitly player-attributed render
+// speech. It does not decode semantic families or inspect hidden producer state.
+{
+  const legacy = createVoicePresentationObservation();
+  const disabled = createVoicePresentationObservation({ playerWording: false });
+  assert.deepEqual(disabled.summary, legacy.summary);
+  assert.equal(Object.hasOwn(legacy.summary, 'playerWordingCensus'), false);
+  for (const options of [null, [], { playerWording: 'true' }]) {
+    assert.throws(() => createVoicePresentationObservation(options), /optional boolean/u);
+  }
+
+  const state = createVoicePresentationObservation({ playerWording: true });
+  const candidate = { id: 'private-player-event', acousticKind: 'speech', sourceKind: 'player',
+    sourceActorId: 'private-player-actor', speakerLabel: 'private-player-label',
+    text: 'PRIVATE EXACT PLAYER WORDING 👣' };
+  const caption = { id: candidate.id, presentationKind: 'speech', text: 'Different caption copy',
+    speakerLabel: candidate.speakerLabel };
+  // A caption cannot establish player ownership, even with a player-like name.
+  observePublicVoicePresentation(state, { tick: 420, acousticText: [] }, { expressionCaption: caption }, 0);
+  assert.equal(state.summary.playerWordingCensus.countedPlayerEvents, 0);
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [candidate] }, { expressionCaption: caption }, 100);
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [candidate, candidate] }, { expressionCaption: caption }, 200);
+  const census = state.summary.playerWordingCensus;
+  assert.equal(state.summary.uniqueProjectionEvents, 1);
+  assert.equal(state.summary.eventKinds.playerSpeech, 1);
+  assert.equal(census.countedPlayerEvents, 1);
+  assert.equal(census.distinctWordings, 1);
+  assert.equal(census.wordings[0].eventCount, 1);
+  assert.equal(census.incomplete, false);
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [] }, {}, 250);
+  observePublicVoicePresentation(state, { tick: 422, acousticText: [
+    { ...candidate, id: 'another-private-player-event' },
+  ] }, {}, 300);
+  assert.equal(census.countedPlayerEvents, 2);
+  assert.equal(census.wordings[0].eventCount, 2);
+  assert.equal(census.adjacentSingleObservationRepeats, 1);
+  const exported = JSON.stringify(state.summary);
+  for (const privateValue of [candidate.id, candidate.sourceActorId, candidate.speakerLabel,
+    candidate.text, caption.text, 'another-private-player-event']) {
+    assert.equal(exported.includes(privateValue), false);
+  }
+  assert.equal(state.playerWording.wordings.size, 1);
+  assert.equal([...state.playerWording.wordings.values()][0].text, candidate.text);
+
+  // Only the two embedded functions are available: no Node/hash/module helper.
+  const standalone = require('node:vm').runInNewContext(`(() => {
+    const state = (${createVoicePresentationObservation.toString()})({ playerWording: true });
+    const observe = (${observePublicVoicePresentation.toString()});
+    observe(state, { tick: 420, acousticText: [{ id: 'vm-player', acousticKind: 'speech',
+      sourceKind: 'player', text: 'Exact VM wording 🙂' }] }, {}, 0);
+    observe(state, { tick: 421, acousticText: [{ id: 'vm-player-next', acousticKind: 'speech',
+      sourceKind: 'player', text: 'Exact VM wording 🙂' }] }, {}, 100);
+    return JSON.stringify(state.summary);
+  })()`);
+  const isolated = JSON.parse(standalone).playerWordingCensus;
+  assert.equal(isolated.countedPlayerEvents, 2);
+  assert.equal(isolated.distinctWordings, 1);
+  assert.equal(isolated.adjacentSingleObservationRepeats, 1);
+  assert.equal(isolated.incomplete, false);
+  assert.equal(standalone.includes('Exact VM wording'), false);
+  assert.equal(standalone.includes('vm-player'), false);
+}
+{
+  const state = createVoicePresentationObservation({ playerWording: true });
+  const candidate = (id, text, sourceKind = 'player', acousticKind = 'speech') => (
+    { id, text, sourceKind, acousticKind, sourceActorId: 'player:local', speakerLabel: 'You' }
+  );
+  observePublicVoicePresentation(state, { tick: 420, acousticText: [
+    candidate('human-not-player', 'Human words', 'human'),
+    candidate('animal-not-player', 'Animal words', 'animal', 'animal-call'),
+    candidate('physical-not-player-speech', 'scrape', 'player', 'physical'),
+  ] }, { expressionCaption: { id: 'caption-player-name', presentationKind: 'speech',
+    speakerLabel: 'You', text: 'Player-like caption words' } }, 0);
+  assert.equal(state.summary.playerWordingCensus.countedPlayerEvents, 0);
+  assert.equal(state.summary.playerWordingCensus.distinctWordings, 0);
+  assert.equal(state.summary.playerWordingCensus.incomplete, false);
+  // Exact UTF-16 strings are not normalized into one authored realization.
+  observePublicVoicePresentation(state, { tick: 421, acousticText: [candidate('unicode-one', 'é🙂')] }, {}, 100);
+  observePublicVoicePresentation(state, { tick: 422, acousticText: [candidate('unicode-two', 'e\u0301🙂')] }, {}, 200);
+  assert.equal(state.summary.playerWordingCensus.distinctWordings, 2);
+  assert.equal(state.summary.playerWordingCensus.adjacentSingleObservationRepeats, 0);
+  const boundary = createVoicePresentationObservation({ playerWording: true });
+  observePublicVoicePresentation(boundary, { tick: 420, acousticText: [candidate('maximum-text', 'x'.repeat(256))] }, {}, 0);
+  assert.equal(boundary.summary.playerWordingCensus.countedPlayerEvents, 1);
+  assert.equal(boundary.summary.playerWordingCensus.incomplete, false);
+  const spacing = createVoicePresentationObservation({ playerWording: true });
+  observePublicVoicePresentation(spacing, { tick: 420, acousticText: [candidate('spaced-text', ' words ')] }, {}, 0);
+  observePublicVoicePresentation(spacing, { tick: 421, acousticText: [candidate('unspaced-text', 'words')] }, {}, 100);
+  assert.equal(spacing.summary.playerWordingCensus.distinctWordings, 2);
+  assert.equal(spacing.summary.playerWordingCensus.adjacentSingleObservationRepeats, 0);
+  observePublicVoicePresentation(state, { tick: 423, acousticText: [candidate('unicode-one', 'changed words')] }, {}, 300);
+  observePublicVoicePresentation(state, { tick: 424, acousticText: [candidate('unicode-one', 'changed words')] }, {}, 400);
+  assert.equal(state.summary.playerWordingCensus.changedTextEvents, 1);
+  assert.equal(state.summary.playerWordingCensus.countedPlayerEvents, 2);
+  assert.equal(state.summary.playerWordingCensus.incomplete, true);
+  assert.equal(state.summary.incomplete, false);
+}
+{
+  const run = (reverse) => {
+    const state = createVoicePresentationObservation({ playerWording: true });
+    const candidate = (id, text) => ({ id, text, acousticKind: 'speech', sourceKind: 'player' });
+    observePublicVoicePresentation(state, { tick: 420, acousticText: [candidate('prior', 'same words')] }, {}, 0);
+    const simultaneous = [candidate('second', 'same words'), candidate('third', 'other words')];
+    observePublicVoicePresentation(state, { tick: 421, acousticText: reverse ? simultaneous.reverse() : simultaneous }, {}, 100);
+    observePublicVoicePresentation(state, { tick: 422, acousticText: [candidate('after', 'same words')] }, {}, 200);
+    return state.summary;
+  };
+  const ordered = run(false);
+  assert.deepEqual(run(true), ordered);
+  assert.equal(ordered.playerWordingCensus.countedPlayerEvents, 4);
+  assert.equal(ordered.playerWordingCensus.ambiguousOrderingSamples, 1);
+  assert.equal(ordered.playerWordingCensus.adjacentSingleObservationRepeats, 0);
+  assert.equal(ordered.playerWordingCensus.incomplete, false);
+}
+{
+  for (const text of [undefined, null, 7, '', '   ', 'x'.repeat(257)]) {
+    const state = createVoicePresentationObservation({ playerWording: true });
+    const candidate = { id: 'invalid-text', acousticKind: 'speech', sourceKind: 'player', text };
+    observePublicVoicePresentation(state, { tick: 420, acousticText: [candidate] }, {}, 0);
+    observePublicVoicePresentation(state, { tick: 421, acousticText: [candidate] }, {}, 100);
+    assert.equal(state.summary.playerWordingCensus.countedPlayerEvents, 0);
+    assert.equal(state.summary.playerWordingCensus.uncountedPlayerEvents, 1);
+    assert.equal(state.summary.playerWordingCensus.invalidTextEvents, 1);
+    assert.equal(state.summary.playerWordingCensus.incomplete, true);
+    assert.equal(state.playerWording.wordings.size, 0);
+    assert.equal(state.summary.uniqueProjectionEvents, 1);
+  }
+  for (const probe of [
+    { tick: NaN, elapsed: 0, id: 'bad-tick', kind: 'speech', source: 'player' },
+    { tick: 420, elapsed: NaN, id: 'bad-clock', kind: 'speech', source: 'player' },
+    { tick: 420, elapsed: null, id: 'missing-clock', kind: 'speech', source: 'player' },
+    { tick: 420, elapsed: 0, id: '', kind: 'speech', source: 'player' },
+    { tick: 420, elapsed: 0, id: 'unknown-kind', kind: 'unknown', source: 'player' },
+  ]) {
+    const state = createVoicePresentationObservation({ playerWording: true });
+    observePublicVoicePresentation(state, { tick: probe.tick, acousticText: [
+      { id: probe.id, acousticKind: probe.kind, sourceKind: probe.source, text: 'Valid words' },
+    ] }, {}, probe.elapsed);
+    assert.equal(state.summary.playerWordingCensus.incomplete, true);
+  }
+  const regression = createVoicePresentationObservation({ playerWording: true });
+  observePublicVoicePresentation(regression, { tick: 420, acousticText: [] }, {}, 100);
+  observePublicVoicePresentation(regression, { tick: 421, acousticText: [
+    { id: 'regressing-player', acousticKind: 'speech', sourceKind: 'player', text: 'Words' },
+  ] }, {}, 99);
+  assert.equal(regression.summary.playerWordingCensus.incomplete, true);
+  assert.equal(regression.summary.lastSampleAtMs, 100);
+  const conflict = createVoicePresentationObservation({ playerWording: true });
+  for (const sourceKind of ['player', 'human']) observePublicVoicePresentation(conflict, {
+    tick: 420, acousticText: [{ id: 'source-conflict', acousticKind: 'speech', sourceKind, text: 'Words' }],
+  }, {}, 0);
+  assert.equal(conflict.summary.playerWordingCensus.countedPlayerEvents, 1);
+  assert.equal(conflict.summary.playerWordingCensus.incomplete, true);
+}
+{
+  const state = createVoicePresentationObservation({ playerWording: true });
+  for (let index = 0; index < 65; index += 1) {
+    observePublicVoicePresentation(state, { tick: 420 + index, acousticText: [
+      { id: `wording-${index}`, acousticKind: 'speech', sourceKind: 'player', text: `Exact wording ${index}` },
+    ] }, {}, index * 100);
+  }
+  assert.equal(state.playerWording.wordings.size, 64);
+  assert.equal(state.summary.playerWordingCensus.wordings.length, 64);
+  assert.equal(state.summary.playerWordingCensus.countedPlayerEvents, 64);
+  assert.equal(state.summary.playerWordingCensus.uncountedPlayerEvents, 1);
+  assert.equal(state.summary.playerWordingCensus.incomplete, true);
+  assert.equal(state.summary.playerWordingCensus.overflow, true);
+  assert.equal(state.summary.overflow, false);
+  assert.equal([...state.playerWording.wordings.values()].every(({ text }) => text.length <= 256), true);
+
+  const events = createVoicePresentationObservation({ playerWording: true });
+  for (let index = 0; index < 513; index += 1) observePublicVoicePresentation(events, {
+    tick: index, acousticText: [{ id: `bounded-player-${index}`, acousticKind: 'speech',
+      sourceKind: 'player', text: 'Same bounded words' }],
+  }, {}, index * 100);
+  assert.equal(events.events.size, 512);
+  assert.equal(events.playerWording.wordings.size, 1);
+  assert.equal(events.summary.playerWordingCensus.countedPlayerEvents, 512);
+  assert.equal(events.summary.playerWordingCensus.overflow, true);
+  assert.equal(events.summary.playerWordingCensus.incomplete, true);
+
+  const candidates = createVoicePresentationObservation({ playerWording: true });
+  observePublicVoicePresentation(candidates, { tick: 420, acousticText: Array.from({ length: 65 }, (_, index) => ({
+    id: `candidate-player-${index}`, acousticKind: 'speech', sourceKind: 'player', text: 'Same words',
+  })) }, {}, 0);
+  assert.equal(candidates.summary.playerWordingCensus.countedPlayerEvents, 64);
+  assert.equal(candidates.summary.playerWordingCensus.overflow, true);
+  assert.equal(candidates.summary.playerWordingCensus.incomplete, true);
+
+  // Stage a conflicting internal bucket to characterize collision handling,
+  // not a searched hash collision or a persisted/runtime authority mutation.
+  const collision = createVoicePresentationObservation({ playerWording: true });
+  observePublicVoicePresentation(collision, { tick: 420, acousticText: [
+    { id: 'collision-first', acousticKind: 'speech', sourceKind: 'player', text: 'Collision probe words' },
+  ] }, {}, 0);
+  const fingerprint = collision.summary.playerWordingCensus.wordings[0].fingerprint;
+  collision.playerWording.wordings.get(fingerprint).text = 'A distinct synthetic bucket string';
+  observePublicVoicePresentation(collision, { tick: 421, acousticText: [
+    { id: 'collision-second', acousticKind: 'speech', sourceKind: 'player', text: 'Collision probe words' },
+  ] }, {}, 100);
+  assert.equal(collision.summary.playerWordingCensus.fingerprintCollisions, 1);
+  assert.equal(collision.summary.playerWordingCensus.countedPlayerEvents, 1);
+  assert.equal(collision.summary.playerWordingCensus.uncountedPlayerEvents, 1);
+  assert.equal(collision.summary.playerWordingCensus.wordings[0].eventCount, 1);
+  assert.equal(collision.summary.playerWordingCensus.incomplete, true);
+}
+
 function runtimePerformanceSnapshot({
   capacity = 2_048,
   count = 12,
