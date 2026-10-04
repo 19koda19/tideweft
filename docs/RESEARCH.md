@@ -839,6 +839,37 @@ This is two-human presentation/reload evidence, not mixed animal/physical scenes
 hours, audible audio, hardware assistive/mobile output, performance or release
 closure. No cumulative suite is rerun solely for this harness slice.
 
+Follow-up local renderer fix `c5bbc56` makes the optional Relief harbor name
+yield to already placed acoustic text using its final eased/clamped conservative
+envelope and at most four rectangle comparisons. No DOM reflow query, simulation,
+hearing, save, dependency or release change is introduced. Destination/ADRIFT
+guidance remains visible; conservative reservation can briefly hide a nearby
+name that would not collide. Eight new characterization cases fail before the
+fix; the four-file Chart/Relief/shared-layout set passes 207 tests, typecheck and
+critical smoke pass (105 tests), and both harness selftests pass.
+
+Browser captures used the dirty `1706059` candidate later preserved as `c5bbc56`
+(tracked diff SHA256 `93456939d94627daf191da41cad94e1596896339fd4a79bc0e55a5ad2a4a821a`).
+Normal/reduced Firefox production pairs retain the same 424/427→433→434 learned-
+ABOUT/nonreplay facts. All four Relief sizes now have two separate speech labels
+and zero visible harbor labels/ordinary overlaps; desktop and 320-wide images
+were inspected. The updated harness rejects measured ordinary Relief overlap,
+but Chart remains screenshot-only and this is not every-label/font certification.
+Bundle SHA256 is `9f84e08011bc6b8364a08a08defe2a7c56dc382998eef146c82040a258dd8e94`.
+Final ignored stems `browser-paired-greetings[-reduced]-1706059-harbor` retain
+JSON SHA256 `1d41c5bac17243af274610737580219a9dfda8156a9e3734d751316c9ff07a5b` /
+`892f52f1f170167c298572d157e2b191b6eb825828aef4085265131a0cf0d161`.
+
+Nested-path static web smoke passes five files. The unchanged desktop wrapper
+correctly rejects the initial dirty authoritative candidate; after its validated
+local commit, normal `package:desktop` and `smoke:desktop` pass on macOS arm64,
+including runtime-only ASAR, functional input, views, resize, save/reload and
+desktop/mobile-sized screenshots. ASAR SHA256 is
+`ca5e888ec33c64b4f3b9c082e39c96847d3a72b40c3dac4d6cd459a55e1fe6b1`.
+The wrapper/CI/Pages policies were not bypassed or changed. No distributable,
+installation, signing, other-platform, actual-mobile, hours or publication proof
+is added; the larger Voice closure remains open.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

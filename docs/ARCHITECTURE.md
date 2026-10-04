@@ -591,6 +591,14 @@ retain their lawful state, and a layout-suppressed callout does not erase its
 source's state. This join uses actor identity rather than screen proximity.
 Presentation loss never erases audio or actor hearing.
 
+In Relief, optional harbor names also yield when their final eased/clamped
+conservative text envelope conflicts with a placed acoustic label, then return
+when occupancy clears. Only the existing bounded acoustic placements are queried;
+no DOM measurement, hearing suppression or new queue is introduced. Essential
+destination and ADRIFT guidance are not hidden by this narrow optional-name rule.
+The envelope may briefly suppress a nearby noncolliding name; it is not an
+arbitrary-font or all-world-label collision guarantee.
+
 The layout envelopes, bounded active physical queue, and fade progress are ephemeral
 and neither persist nor replay after load. Chart and Relief share the bounded
 world-text arbitration; the accessible caption path consumes the same lawful
