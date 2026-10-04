@@ -669,6 +669,91 @@ recentering, plus exact movement/event traces and actual autosave/current-save/
 normal-lifecycle/long-soak witnesses. Existing owners retain that work; no
 concurrency, broad rewrite or loss of simulation truth is implied by this lead.
 
+### Living Voice ordinary repetition remeasurement — 2026-10-04
+
+The local, unpublished accepted-effort repair (`c7d5a74`) separates recent
+vocal choice from consumed acoustic events. Its packaged-smoke save expectation
+is aligned with current schema 48 in `ee28a7d`; carry 14 and supported v47 remain.
+The [canonical acoustic owner](./ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline)
+owns that behavior; this record owns only the measured evidence.
+
+All new captures used clean executable checkpoint
+`ee28a7d0383855ef076387687bc4aef4d119b875`, AC power/Low Power Mode off on
+Apple M4/16 GiB, Node 22.20/npm 10.9, Electron 44.1/Chromium 152 and headless
+Firefox 157. Settings stayed at 1440×900 CSS, normal quality and the existing
+requested 30-frame renderer warmup; platforms ran sequentially without tests or CPU
+sampling. The unchanged desktop/browser harness hashes are respectively
+`20d4db6ec302440fcf7b45f6f7ea49e471e2ee43805f072d51c94cb9f3cc44b7` and
+`534f53e3d05e8850aa27cba89ee9579810d230539833330197a54c595fb78835`.
+New ASAR SHA256 is
+`c53423db7b7fadeff4436b742cffbf444499a6dd02ed17a6d9025e2a7b919103`;
+five-file static integrity is
+`2b13c04720293fb479c89e523db7f758e47801da304df3869cecb3ea72c897c9`.
+Historical BEFORE ASAR/dist and synthetic JSON remain ignored local evidence,
+not distributable assets; no real saves or private plans entered the package.
+
+The existing public observer samples projections approximately every 100 ms,
+with 512 retained IDs and 64-candidate capacity. It does not inspect wording,
+hidden identities, actual audio, NPC hearing or DOM/glyph placement. Initial
+and terminal reads can include already-active events; gaps can miss brief
+events. All four new observations report no overflow/incompleteness, but the
+selected scenarios are not the complete performance matrix.
+
+| Current production witness | Actual seconds | Accepted steps | Projection samples | Observed player / animal IDs | Largest sample gap ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Electron estuary | 30.001 | 299 | 269 | 0 / 0 | 243.2 |
+| Firefox estuary | 30.350 | 300 | 186 | 0 / 0 | 497 |
+| Firefox repeat, same artifact | 30.008 | 299 | 220 | 0 / 0 | 359 |
+| Electron regional travel | 210.021 | 2,099 | 1,746 | 18 / 1 | 525.4 |
+
+The comparable historical travel capture observed 71 player speech IDs and one
+anonymous animal-call caption. Current travel observes 18 and the same one-call
+representative at tick 424. Both report 420→629, 209 world advances,
+156.390263 tiles, three regions, 158 foot/camp transitions and zero continuity or
+projection mismatches. Current samples contain 132 speech, 4 animal and 1,610 empty
+projections; the longest empty sampled span is 134.475 seconds. This demonstrates
+reduced observed speech exposure without stopping travel. It does **not** prove
+full authoritative/event/save equality, every emission, acoustic silence,
+semantic attribution of all native speech, or an hours-long annoyance pass.
+The held-input runtime tests separately prove the repaired cause, exact
+36-step expiry, reload/rollback and physical continuation. Physical camp cycling
+is unchanged, and 18 late speech cues do not by themselves close sparse-Voice.
+
+Timing remains observational, not an optimization claim. Electron renderer
+callback rates remain about 54.53/s stationary and 35.94/s travelling. Firefox
+varied 19.47→32.59/s across two captures of the same new artifact; world-advance
+means varied 312.53→218.14 ms, versus 207.07 ms in the historical sample. No cause
+for that variance, presented-FPS/GPU gain, universal platform equivalence or
+hitch repair is established. The windows process different terminal counts;
+world-tail estimates have only 29–30 observations. No result is discarded or
+replaced by the faster repeat.
+
+`npm run package:desktop` (including typecheck/production build), static
+`npm run smoke:web` and normal `npm run smoke:desktop -- --executable
+<generated-executable>` passed. The packaged smoke checked the runtime-only
+10-entry ASAR, current v48 save/renderer reload, input, both views and responsive
+surfaces; desktop/mobile screenshots were inspected. These are not mobile
+hardware, fresh process relaunch, ZIP/install/signing, other desktop targets,
+long soak, trusted-audibility, CI, Pages or deployed-build certification.
+Both Firefox captures report zero guarded error/rejection/CSP deltas.
+Dependencies, upstream sources, quality and shipping lifecycle are unchanged.
+
+Reproduce with the current production artifact and existing commands:
+
+```sh
+npm run package:desktop
+npm run smoke:web
+npm run profile:baseline -- --executable <generated-executable> --scenario estuary-desktop-relief --sample-ms 30000 --observe-voice --output <ignored-electron-json>
+npm run profile:browser -- --packaged-baseline <matching-electron-json> --sample-ms 30000 --observe-voice --output <ignored-browser-json>
+npm run profile:baseline -- --executable <generated-executable> --scenario continuous-regional-travel-relief --sample-ms 30000 --observe-voice --output <ignored-travel-json>
+```
+
+Travel intentionally enforces a 210-second minimum despite the 30-second flag.
+Evidence is retained under ignored `artifacts/validation/voice3AW/`, alongside
+the historical `voice3AT/` observations. The remaining line/family/profanity,
+mixed-scene, hardware-accessibility and hours-of-play requirements remain open;
+neither Living Voice nor a performance/release checkpoint closes here.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
