@@ -1026,6 +1026,36 @@ it. Save49/carry14, dependencies, platform configuration, RNG, physical causes,
 audio and player presentation rules are unchanged. No upstream code, deployment
 or completed directive changed.
 
+#### Ordinary Relief physical glyph — 2026-10-04
+
+Clean local `37e9555` reused the newly built production bundle above in Firefox
+157 at `/tideweft/`, 1440×900/DPR1. Physical START and the exposed Promise pickup
+committed eight fresh-water units at tick 422. A short camera-relative W+D
+crossing in Relief then produced a real traversal `scrape` at tick 427. No
+event, actor, weather, inventory, position or save was injected; the clock was
+not stopped. This was exploratory movement, not a routed delivery.
+
+A bounded page-local observer matched the actual visible physical DOM label
+uniquely to the current public candidate's text/category/source-kind/family.
+DOM exposes no event/source ID, so this is tuple association, not exact DOM
+identity authentication. The recorded rectangle was 86×15.22 CSS pixels,
+within viewport and label layer, with no text overflow or collision with
+visible ordinary labels. At most two acoustic labels appeared. The screenshot
+was independently inspected: `scrape` above the player and a separate `thud`
+below were readable. Public candidate and DOM association disappeared by tick
+428; this does not establish hidden authoritative event expiry.
+
+The sixty-second opportunity ended early after its first encounter: actual
+movement/confirmation lasted 7.931 seconds, total observation 10.109 seconds /
+74 reads / 217 glyph-observer frames. No overflow or ambiguous tuple occurred.
+Result SHA256: `64de6b34f842e35f5f250a3d09a8eb12dcfbe21625e429a1183ca9e1cfbe8765`;
+probe SHA256: `1361973bd601fe951a43b1901714f58d4d8067b4c9e0939ab30319068615a94e`.
+Browser exited normally, the disposable profile was removed, and only the
+known startup CSP eval-probe denial was logged. This proves one ordinary native
+physical-glyph encounter, not dog/human/physical coexistence, audio, assistive
+output, replay, full conservation, hours, performance, mobile hardware or
+directive closure. No application change or public release was made.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
