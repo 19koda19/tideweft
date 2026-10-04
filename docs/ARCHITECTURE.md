@@ -982,6 +982,15 @@ until that interval is consumed. The closing presentation may still show the
 line once, but all pre-boundary active and cooldown-only state is then retired;
 new same-tick source state survives as the next interval's authority. Physical
 incidents, cargo custody, and recovery history remain their own durable owners.
+This currently truncates semantic cooldowns longer than the ten-player-step
+interval: real dry exhaustion can speak again before its 36-step meaning
+cooldown would expire. Cross-interval sparse vocal choice is an open Living
+Voice integration gap, not a completed repetition guarantee. Its repair must
+retain bounded authenticated semantic recency separately from consumed sound
+and reception; retaining stale acoustic admissions or muting only captions is
+not equivalent. The current held-input/reload characterization lives in
+`runtime.fall.integration.test.ts`; physical camp/recovery behavior remains
+movement-owned and is not repaired by that proof.
 This slice does not yet claim other work expression where no authoritative
 completed-work event exists; it also does not claim complete bark/growl/whine
 breadth, broader distress/play, general animal-call networks,

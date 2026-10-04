@@ -1082,6 +1082,158 @@ describe("production terrain fall and physical cargo", () => {
     reloaded.destroy();
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
+  it("characterizes held-input exhaustion recency across consumed intervals and current reload", async () => {
+    const bootstrapRepository = new MemoryRepository();
+    const bootstrap = await createTideweftRuntime(bootstrapRepository);
+    try {
+      bootstrap.dispatchUI({
+        type: "new-world",
+        seed: "dry exhaustion expression",
+        posture: "gale",
+        sessionShape: "wander",
+      });
+      await bootstrap.save();
+    } finally {
+      bootstrap.destroy();
+    }
+    replaceEnvelope(
+      bootstrapRepository,
+      relocateForDryExhaustion(decodeCurrent(bootstrapRepository.snapshot())),
+    );
+    const initialRecord = bootstrapRepository.snapshot();
+
+    const run = async (reloadAt: number | null) => {
+      const repository = new MemoryRepository(initialRecord);
+      let runtime = await createTideweftRuntime(repository);
+      const events: { step: number; eventId: string; triggerEventId: string }[] = [];
+      const boundaryCarries: CurrentGameSaveEnvelope["perceptionCarry"][] = [];
+      const modes: { step: number; mode: string; stamina: number }[] = [];
+      const seen = new Set<string>();
+      soundscapePlay.mockClear();
+      let audioCalls = 0;
+      try {
+        runtime.dispatchUI({ type: "resume-world" });
+        // The normal movement adapter owns every physical step. No voice,
+        // stamina, camp, admission or sound is injected after initial setup.
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+        for (let step = 1; step <= 40; step += 1) {
+          advancePlayerSteps(runtime, 1);
+          const expression = runtime.getRenderView().expressions?.find(({ sourceActorId }) => (
+            sourceActorId === "player:local"
+          ));
+          const newEvent = expression !== undefined && !seen.has(expression.id);
+          // Both runs perform the same explicit save actions.
+          if (newEvent || step % 10 === 0 || step === 19) {
+            await runtime.save();
+            const saved = decodeCurrent(repository.snapshot());
+            if (newEvent) {
+              const admission = saved.perceptionCarry.situatedExpressionAdmissions.records.find(
+                ({ eventId }) => eventId === expression.id,
+              );
+              const active = saved.perceptionCarry.situatedExpressionChannels.channels.find(
+                ({ sourceActorId }) => sourceActorId === "player:local",
+              )?.state.active;
+              expect(admission?.kind).toBe("player-exhaustion");
+              expect(active).toMatchObject({
+                eventId: expression.id,
+                meaning: "need-rest-after-exertion",
+                audioAcknowledged: true,
+              });
+              if (admission === undefined) throw new Error("actual effort lost its admission");
+              seen.add(expression.id);
+              events.push({ step, eventId: expression.id, triggerEventId: admission.triggerEventId });
+            }
+            if (step % 10 === 0) {
+              expect(saved.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+              expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(
+                ({ sourceActorId }) => sourceActorId === "player:local",
+              )).toBe(false);
+              expect(saved.perceptionCarry.situatedExpressionAdmissions.records.some(
+                ({ sourceActorId }) => sourceActorId === "player:local",
+              )).toBe(false);
+              boundaryCarries.push(saved.perceptionCarry);
+            }
+          }
+          modes.push({
+            step,
+            mode: runtime.getRenderView().player.mode,
+            stamina: runtime.getUIView().player.stamina,
+          });
+          if (step === reloadAt) {
+            const saved = decodeCurrent(repository.snapshot());
+            audioCalls += incidentCueCalls("vocalization-strained");
+            runtime.destroy();
+            soundscapePlay.mockClear();
+            runtime = await createTideweftRuntime(repository);
+            expect(runtime.getUIView().title.hasSave).toBe(true);
+            expect(incidentCueCalls("vocalization-strained")).toBe(0);
+            await runtime.save();
+            expect(decodeCurrent(repository.snapshot()).perceptionCarry).toEqual(saved.perceptionCarry);
+            runtime.dispatchUI({ type: "resume-world" });
+            runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+          }
+        }
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+        await runtime.save();
+        const final = decodeCurrent(repository.snapshot());
+        audioCalls += incidentCueCalls("vocalization-strained");
+        return { events, boundaryCarries, modes, final, audioCalls };
+      } finally {
+        runtime.destroy();
+      }
+    };
+
+    const uninterrupted = await run(null);
+    const restored = await run(19);
+    expect(restored.events).toEqual(uninterrupted.events);
+    expect(restored.modes).toEqual(uninterrupted.modes);
+    expect(restored.boundaryCarries).toEqual(uninterrupted.boundaryCarries);
+    expect(restored.audioCalls).toBe(uninterrupted.audioCalls);
+    expect(uninterrupted.audioCalls).toBe(uninterrupted.events.length);
+    // Current baseline characterization, NOT sparse-Voice acceptance: interval
+    // consumption retires the 36-step meaning cooldown early. A later bounded
+    // semantic-recency repair must change this explicit measured baseline, not
+    // retain stale acoustic admissions or change the physical exhaustion loop.
+    expect(uninterrupted.events.length).toBeGreaterThan(1);
+    expect(uninterrupted.events.slice(1).some((event, index) => (
+      event.step - uninterrupted.events[index]!.step < 36
+    ))).toBe(true);
+    const { session: _firstSession, integrity: _firstIntegrity,
+      regionalTravel: _firstTravel, ...firstRoots } = uninterrupted.final;
+    const { session: _restoredSession, integrity: _restoredIntegrity,
+      regionalTravel: _restoredTravel, ...restoredRoots } = restored.final;
+    expect(restoredRoots).toEqual(firstRoots);
+    const comparableTravel = (saved: CurrentGameSaveEnvelope) => {
+      const travel = restorePlayerRegionalTravel(
+        deserializeWorld(saved.world).meta.rootSeed, saved.player, saved.regionalTravel,
+      );
+      if (travel === null) throw new Error("terminal travel failed its actual owner validation");
+      // Save captures a dirty chart snapshot without replacing runtime travel.
+      // Reload adopts that published revision; later captures can legitimately
+      // have one extra revision and derived seals. Compare every actual mark,
+      // seed, origin, stream and version, not those publication counters/seals.
+      const { revision, integrity: _chartSeal, ...chart } = travel.cartography;
+      const { integrity: _travelSeal, cartography: _serializedChart, ...frame } = JSON.parse(
+        saved.regionalTravel,
+      ) as Record<string, unknown>;
+      return { revision, facts: { chart, frame } };
+    };
+    const firstTravel = comparableTravel(uninterrupted.final);
+    const restoredTravel = comparableTravel(restored.final);
+    expect(restoredTravel.facts).toEqual(firstTravel.facts);
+    expect(restoredTravel.revision).toBe(firstTravel.revision + 1);
+    console.info("Held-input exhaustion characterization", {
+      scope: "controlled current runtime, not natural play rate or sparse-Voice acceptance",
+      fixedSteps: 40,
+      acceptedEventSteps: uninterrupted.events.map(({ step }) => step),
+      actualVocalAudio: uninterrupted.audioCalls,
+      consumedIntervals: uninterrupted.boundaryCarries.length,
+      reloadAtStep: 19,
+      currentReloadEventAndPhysicalEquivalence: true,
+      excludedPublicationFields: ["session", "envelope integrity", "chart revision and seals"],
+    });
+  }, process.env.CI === "true" ? 120_000 : 60_000);
+
   it("rejects a resealed movement sample whose dry physical evidence contradicts the world", async () => {
     const repository = new MemoryRepository();
     const bootstrap = await createTideweftRuntime(repository);
