@@ -6818,6 +6818,7 @@ describe("runtime settlement ecology integration", () => {
     }
     const whineCarry = whineEnvelope.perceptionCarry as {
       version: number;
+      playerStepsSinceWorldTick: number;
       intervalStartPosition: WorldPosition;
       animalContactAcousticCarry: unknown;
       actorVocalizationSamples: Array<{
@@ -6951,7 +6952,214 @@ describe("runtime settlement ecology integration", () => {
       startedAtWorldTick: preWhineRest.startedAtWorldTick,
     });
     expect(runtime.getRenderView().player.recoveryKind).toBe("rest");
+
+    // This is a controlled weather/source continuation, not a natural-play
+    // call-rate or hours-long annoyance witness. The existing guardian sensory
+    // filter remains in place; cognition, work, movement and shelter stay real.
+    // Cancel accelerated REST before using the ordinary fixed-step helper.
+    const originalWhineAudio = soundscapePlay.mock.calls.filter(([cue]) => (
+      cue === "vocalization-dog-shelter-whine"
+    ));
+    expect(originalWhineAudio).toHaveLength(1);
+    runtime.dispatchUI({ type: "recover", action: "cancel" });
+    expect(runtime.getRenderView().player.recoveryKind).toBeUndefined();
+    const acceptedClock = (envelope: Record<string, unknown>): number => {
+      const phase = (envelope.perceptionCarry as typeof whineCarry).playerStepsSinceWorldTick;
+      expect(Number.isSafeInteger(phase) && phase >= 0 && phase < 10).toBe(true);
+      return deserializeWorld(String(envelope.world)).meta.completedTick * 10 + phase;
+    };
+    const originClock = acceptedClock(whineEnvelope);
+    let audioFrontier = soundscapePlay.mock.calls.length;
+    let hearingFrontier = perceptionSpy.mock.calls.length;
+    const captureContinuation = async (
+      branch: TideweftRuntime,
+      branchRepository: MemoryRepository,
+      acceptedSteps: number,
+    ) => {
+      await branch.save();
+      const envelope = savedEnvelope(branchRepository);
+      const carry = envelope.perceptionCarry as typeof whineCarry;
+      const tick = deserializeWorld(String(envelope.world)).meta.completedTick;
+      expect(acceptedClock(envelope) - originClock).toBe(acceptedSteps);
+      const source = deserializeDogActorRoster(envelope.dogActorRoster)?.actors.find(
+        ({ identity }) => identity.stableId === whineGuardian.identity.stableId,
+      );
+      const sourceAssignment = deserializeSettlementWorkingAnimalState(
+        envelope.settlementWorkingAnimals,
+      )?.assignments.find(({ assignmentId }) => assignmentId === whineAssignment.assignmentId);
+      const sourceCustody = deserializeSettlementEcologyState(envelope.settlementEcology)
+        .domesticCustodies.find(({ relationshipId }) => (
+          relationshipId === whineAssignment.workerCustodyRelationshipId
+        ));
+      if (source === undefined || sourceAssignment === undefined || sourceCustody === undefined
+        || sourceCustody.homeStructure.kind !== "kennel") {
+        throw new Error("Shelter continuation lost its actual dog, work or kennel custody");
+      }
+      const kennelDelta = worldPositionDelta(source.address.position, sourceCustody.homeStructure.position);
+      const insideKennel = Math.hypot(kennelDelta.x, kennelDelta.y) <= sourceCustody.homeStructure.radiusUnits;
+      const admissions = carry.situatedExpressionAdmissions.records.filter(({ sourceActorId }) => (
+        sourceActorId === source.identity.stableId
+      ));
+      for (const admission of admissions) {
+        if (admission.kind !== "guardian-dog-shelter-whine" || admission.eventId === whineAdmission.eventId) continue;
+        // A genuinely new cause is allowed. It must independently own a fresh
+        // weather-backed actor/work edge, not resurrect the continuing request.
+        expect(source.intent).toMatchObject({ kind: "seek-shelter", enteredAtTick: admission.acceptedAtTick,
+          cause: { kind: "condition", referenceId: "condition:weather-exposure" } });
+        expect(sourceAssignment.currentActivity).toMatchObject({ activity: "defer-to-actor",
+          transactionId: admission.activityTransactionId, acceptedAtTick: admission.acceptedAtTick,
+          cause: { kind: "actor-disposition", referenceId: "actor-intent:seek-shelter" } });
+        expect(admission.acceptedAtTick).toBe(tick);
+        expect(admission.shelterIntentScore).toBeGreaterThan(0);
+        if (typeof admission.shelterIntentScore !== "number") {
+          throw new Error("Fresh shelter admission omitted its causal score");
+        }
+        expect(admission.triggerEventId).toBe(guardianDogShelterWhineTriggerEventId(
+          sourceAssignment.currentActivity.transactionId, admission.shelterIntentScore,
+        ));
+        expect(insideKennel).toBe(false);
+        expect(admission.triggerEventId).not.toBe(whineAdmission.triggerEventId);
+      }
+      const audio = structuredClone(soundscapePlay.mock.calls.slice(audioFrontier).filter(([cue]) => (
+        cue === "vocalization-dog-shelter-whine"
+      )));
+      audioFrontier = soundscapePlay.mock.calls.length;
+      const hearing = perceptionSpy.mock.calls.slice(hearingFrontier).flatMap(([input], offset) => {
+        const samples = (input.supplementalSoundSamples ?? []).filter(({ expressionEventId }) => (
+          expressionEventId === whineAdmission.eventId
+        ));
+        if (samples.length === 0) return [];
+        expect(samples).toHaveLength(1);
+        const result = perceptionSpy.mock.results[hearingFrontier + offset];
+        if (result?.type !== "return") throw new Error("Shelter hearing did not complete");
+        const batches: ReturnType<typeof humanPerception.collectExistingHumanObservations> = result.value;
+        const observations = batches.flatMap(({ observerId, observations: received }) => received.filter(({ id, channel }) => channel === "hearing"
+          && samples.some((sample) => id.endsWith(`-${sample.id}`)))
+          .map((observation) => ({ observerId, observation })));
+        expect(observations.length).toBeGreaterThan(0);
+        expect(observations.every(({ observation }) => observation.perceivedClass === "animal-call"
+          && observation.interrupt === "none" && observation.identification === "anonymous"
+          && observation.subjectId === null)).toBe(true);
+        return [{ tick: input.targetTick, samples: structuredClone(samples), observations }];
+      });
+      hearingFrontier = perceptionSpy.mock.calls.length;
+      if (acceptedSteps >= 10) {
+        expect(admissions.some(({ eventId }) => eventId === whineAdmission.eventId)).toBe(false);
+        expect(carry.actorVocalizationSamples.some(({ expressionEventId }) => (
+          expressionEventId === whineAdmission.eventId
+        ))).toBe(false);
+      }
+      if (source.intent.kind === "seek-shelter" && source.intent.enteredAtTick === whineTick) {
+        expect(admissions.every(({ kind, eventId }) => kind !== "guardian-dog-shelter-whine"
+          || eventId === whineAdmission.eventId)).toBe(true);
+        expect(audio).toEqual([]);
+      }
+      return { envelope, trace: { acceptedSteps, tick, phase: carry.playerStepsSinceWorldTick,
+        source, assignment: sourceAssignment, custody: sourceCustody, insideKennel, admissions,
+        samples: carry.actorVocalizationSamples.filter(({ sourceActorId }) => sourceActorId === source.identity.stableId),
+        channel: carry.situatedExpressionChannels.channels.find(({ sourceActorId }) => sourceActorId === source.identity.stableId) ?? null,
+        audio, hearing } };
+    };
+    const uninterrupted = [(await captureContinuation(runtime, repository, 0)).trace];
+    let checkpoint19: SaveRecord | undefined;
+    let checkpoint19Envelope: Record<string, unknown> | undefined;
+    let terminal: Record<string, unknown> | undefined;
+    for (let step = 1; step <= 40; step += 1) {
+      advancePlayerSteps(runtime, 1);
+      const captured = await captureContinuation(runtime, repository, step);
+      uninterrupted.push(captured.trace);
+      if (step === 19) {
+        checkpoint19 = repository.snapshot();
+        checkpoint19Envelope = captured.envelope;
+      }
+      if (step === 40) terminal = captured.envelope;
+    }
+    if (checkpoint19 === undefined || checkpoint19Envelope === undefined || terminal === undefined) {
+      throw new Error("Shelter continuation omitted its accepted checkpoint or terminal state");
+    }
+    expect(uninterrupted.flatMap(({ hearing }) => hearing)).toHaveLength(1);
+    const continuingOriginalRequestStepsAfterCooldown = uninterrupted.filter(({ acceptedSteps, source }) => (
+      acceptedSteps >= 24 && source.intent.kind === "seek-shelter" && source.intent.enteredAtTick === whineTick
+    )).length;
+    // Losing this continuing-source window is lost fixture coverage, not proof
+    // of a runtime defect. A legitimate later request/kennel arrival is allowed.
+    expect(continuingOriginalRequestStepsAfterCooldown).toBeGreaterThan(0);
     runtime.destroy();
+
+    // Both branches share the same actual first nineteen steps. Resume that
+    // consumed-origin snapshot, not a fabricated actor or reconstructed sound.
+    const continuationRepository = new MemoryRepository(checkpoint19);
+    const audioBeforeReload = soundscapePlay.mock.calls.length;
+    const hearingBeforeReload = perceptionSpy.mock.calls.length;
+    const continuation = await createTideweftRuntime(continuationRepository);
+    try {
+      expect(continuation.getUIView().saveWarning).toBeUndefined();
+      expect(continuation.getRenderView().player.recoveryKind).toBeUndefined();
+      expect(soundscapePlay.mock.calls.slice(audioBeforeReload).filter(([cue]) => (
+        cue === "vocalization-dog-shelter-whine"
+      ))).toEqual([]);
+      expect(perceptionSpy.mock.calls.slice(hearingBeforeReload).flatMap(([input]) => (
+        (input.supplementalSoundSamples ?? []).filter(({ expressionEventId }) => (
+          expressionEventId === whineAdmission.eventId
+        ))
+      ))).toEqual([]);
+      audioFrontier = soundscapePlay.mock.calls.length;
+      hearingFrontier = perceptionSpy.mock.calls.length;
+      const restored = [(await captureContinuation(continuation, continuationRepository, 19)).trace];
+      const { audio: _checkpointAudio, hearing: _checkpointHearing, ...checkpointFacts } = uninterrupted[19]!;
+      const { audio: reloadAudio, hearing: reloadHearing, ...reloadFacts } = restored[0]!;
+      expect(reloadFacts).toEqual(checkpointFacts);
+      expect(reloadAudio).toEqual([]);
+      expect(reloadHearing).toEqual([]);
+      for (let step = 20; step <= 40; step += 1) {
+        advancePlayerSteps(continuation, 1);
+        const captured = await captureContinuation(continuation, continuationRepository, step);
+        restored.push(captured.trace);
+      }
+      expect(restored.slice(1)).toEqual(uninterrupted.slice(20));
+      expect(restored.flatMap(({ hearing }) => hearing)).toEqual([]);
+      const comparableTerminal = (envelope: Record<string, unknown>) => {
+        const { session: _session, integrity: _seal, regionalTravel, ...roots } = envelope;
+        const travel = restorePlayerRegionalTravel(deserializeWorld(String(envelope.world)).meta.rootSeed,
+          envelope.player as PlayerState, String(regionalTravel));
+        if (travel === null) throw new Error("Shelter terminal failed its actual travel owner validation");
+        // Validate the actual travel owner and all semantic fields. Unlike the
+        // moving fall witness, this idle continuation leaves its chart clean;
+        // require exact publication revision/seals and serialized travel too.
+        const { revision, integrity: _chartSeal, ...chart } = travel.cartography;
+        const { integrity: _travelSeal, cartography: _serializedChart, ...frame } = JSON.parse(
+          String(regionalTravel),
+        ) as Record<string, unknown>;
+        return { revision, facts: { roots, chart, frame } };
+      };
+      const uninterruptedTerminal = comparableTerminal(terminal);
+      const restoredTerminal = comparableTerminal(savedEnvelope(continuationRepository));
+      expect(restoredTerminal.facts).toEqual(uninterruptedTerminal.facts);
+      expect(restoredTerminal.revision).toBe(uninterruptedTerminal.revision);
+      expect(savedEnvelope(continuationRepository).regionalTravel).toBe(terminal.regionalTravel);
+      const sourceTransitions = uninterrupted.filter((trace, index) => index === 0
+        || stableStringify([trace.source.intent, trace.assignment.currentActivity, trace.insideKennel])
+          !== stableStringify([uninterrupted[index - 1]!.source.intent,
+            uninterrupted[index - 1]!.assignment.currentActivity, uninterrupted[index - 1]!.insideKennel]));
+      console.info("Guardian shelter-whine continuation proof:", JSON.stringify({
+        scope: "controlled weather/filtered sensory fixture, not ordinary play or hours annoyance",
+        acceptedSteps: 40, originPhase: whineCarry.playerStepsSinceWorldTick,
+        reloadAtStep: 19, reloadPhase: (checkpoint19Envelope.perceptionCarry as typeof whineCarry).playerStepsSinceWorldTick,
+        originalWhineAudio: originalWhineAudio.length,
+        continuationWhineAudio: uninterrupted.flatMap(({ audio }) => audio).length,
+        originalHumanHearing: uninterrupted.flatMap(({ hearing }) => hearing).length,
+        reloadedSuffixHumanHearing: restored.flatMap(({ hearing }) => hearing).length,
+        continuingOriginalRequestStepsAfterCooldown,
+        sourceTransitions: sourceTransitions.map(({ acceptedSteps, source, assignment, insideKennel }) => ({
+          acceptedSteps, intent: source.intent.kind, enteredAtTick: source.intent.enteredAtTick,
+          activity: assignment.currentActivity.activity, insideKennel,
+        })),
+        excludedPublicationFields: ["session", "envelope integrity"],
+      }));
+    } finally { continuation.destroy(); }
+    // The later original whineRecord branch retains its independent exact-one
+    // T+1 hearing proof; do not count this new reference continuation twice.
+    perceptionSpy.mockClear();
 
     const tamperedActivityCarry = structuredClone(whineCarry);
     const tamperedActivityAdmission =
