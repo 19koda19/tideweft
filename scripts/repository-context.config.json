@@ -187,7 +187,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "b89a6741d955fde3704c6c5cfce20ef48bc496f1a770ebe78719f64b5629ce3c",
+      "reviewedSourceFingerprint": "3c7ed94ecc7279235fadb5dd7f25739228a1e0b81c83790a2f3976f184dd682b",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -214,7 +214,8 @@
         "No independent domain-specific floating-sound-text system."
       ],
       "exceptions": [
-        "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable."
+        "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
+        "Current interval consumption also retires semantic memory; longer cross-interval vocal recency is an open integration gap, not a completed repetition guarantee."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
       "evidence": [
@@ -233,7 +234,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "b89a6741d955fde3704c6c5cfce20ef48bc496f1a770ebe78719f64b5629ce3c",
+      "reviewedSourceFingerprint": "3c7ed94ecc7279235fadb5dd7f25739228a1e0b81c83790a2f3976f184dd682b",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."
