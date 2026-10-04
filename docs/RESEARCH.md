@@ -754,6 +754,52 @@ the historical `voice3AT/` observations. The remaining line/family/profanity,
 mixed-scene, hardware-accessibility and hours-of-play requirements remain open;
 neither Living Voice nor a performance/release checkpoint closes here.
 
+#### Current-schema projected-wording observation — 2026-10-04
+
+A subsequent local diagnostic at clean `0e75d02` adds exact player-wording
+counts to the existing opt-in public observer, without changing the application,
+simulation, quality, schemas or dependencies. The retained current-v49/carry-v14
+application ASAR is
+`16c26ebf781331fbfa711900ca78a10d03a5e03a7c333c6d522a9e30742a6195`;
+the new harness SHA256 is
+`6c880c4677e5d9fc1c0269050e517d3d2524f811c359566a35e12d229d898ce9`.
+Node 22.20/npm 10.9, AC power and Low Power Mode off were verified. No competing
+test/profiler ran; temporary `caffeinate -i` prevented idle sleep without changing
+permanent power settings. The existing 1440×900/DPR1 Relief scenario and requested
+30-frame warmup remained unchanged.
+
+The existing three-region travel run completed 210.0116 seconds, 2,099 accepted
+steps and 209 world advances (420→629), covering 156.390263 tiles and three regions.
+There were 158 foot/camp transitions and zero continuity/projection mismatches.
+Its initial projection hash matches the prior corridor witness. Matching those
+work counts and public movement facts is not full authoritative/save equivalence.
+
+Of 1,720 public samples, 1,586 had no projected acoustic cue. Eighteen retained
+player-speech events used three exact wordings with counts 8/6/4; three successive
+single-new-event observations repeated the preceding wording. No ambiguous-order,
+invalid/changed-text, collision, incomplete or overflow condition was reported.
+One anonymous animal-call caption was observed at tick 424; no animal source was
+anchored and no mixed or physical cue was sampled. The longest empty sampled
+span was 134.5034 seconds and the largest sample gap 591.7 ms. Emitted audio, lawful
+NPC hearing, semantic families and missed brief events are outside this census.
+Its bounded in-page dictionary exports comparison fingerprints/counts, not raw
+wording or source identities; fingerprints are not cryptographic secrecy.
+
+The result establishes sampled wording repetition, not an annoyance pass, broad
+animal repertoire, busy-scene readability, hours of play or performance gain.
+The stopped terminal save measured 1,710,134 bytes; this is not a cold-reload or
+long-run storage proof. Existing physical foot/camp cycling was not modified.
+Browser-native wording measurement was not run; standalone embedding and the
+shared browser consumer passed their source selftests. Desktop observer tests,
+typecheck and the maintained smoke suite (105 tests) passed before capture.
+
+Exact command: `caffeinate -i npm run profile:baseline -- --executable
+<generated-executable> --scenario continuous-regional-travel-relief --sample-ms
+30000 --observe-voice --output <ignored-wording-json>`. Ignored evidence is
+`artifacts/validation/voice-current49/electron-travel-wording-0e75d02.json`, SHA256
+`268715755ae7f54e2a6d0477f2b512d24d0e6814d56b3feaeb097ae73802c93e`.
+No deployment or release gate is claimed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
