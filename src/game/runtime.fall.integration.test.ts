@@ -86,6 +86,7 @@ import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmi
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
 import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
 import type { PlayerEffortRecencyState } from "./playerEffortRecency";
+import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import * as expressionChannelBank from "./situatedExpressionChannelBank";
 import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
@@ -769,6 +770,146 @@ function renderedTileIndex(view: TideweftView): number {
 }
 
 describe("production terrain fall and physical cargo", () => {
+  it("characterizes interval-truncated speech cooldown after two actual storm stumbles", async () => {
+    const repository = new MemoryRepository();
+    const fixture = await createCurrentFixture(repository, "fall cargo exact test", false);
+    const initial = decodeCurrent(repository.snapshot());
+    const world = deserializeWorld(initial.world);
+    const meadow = world.terrain.tiles.find(({ terrain }) => terrain === "meadow");
+    if (meadow === undefined) throw new Error("storm corner has no existing meadow material");
+    // A controlled initial physical corner, not fabricated stumble/expression
+    // events. Equal dry ground removes downhill/rock/water causes; actual wind
+    // and keyed entry rolls must earn both incidents after setup.
+    const compatibilityStart = fixture.corner.y * world.terrain.width + fixture.corner.x;
+    for (const index of [compatibilityStart, compatibilityStart + 1, compatibilityStart + 1 + world.terrain.width]) {
+      const tile = world.terrain.tiles[index];
+      if (tile === undefined) throw new Error("storm corner exceeds its generated region");
+      tile.elevation = 900_000;
+      tile.terrain = "meadow";
+      tile.roughness = 0;
+      tile.moisture = 0;
+      tile.baseTravelCost = meadow.baseTravelCost;
+    }
+    world.weather = {
+      kind: "storm", intensity: FIXED_POINT, windX: -400_000, windY: 400_000,
+      nextChangeTick: world.meta.completedTick + 10_000,
+    };
+    const player = { ...initial.player, stability: FIXED_POINT, stamina: FIXED_POINT };
+    const travel = restorePlayerRegionalTravel(world.meta.rootSeed, player, initial.regionalTravel);
+    if (travel === null) throw new Error("storm corner lost its actual travel frame");
+    const spatial = createRegionalWorldView(createWorldView(world), travel.window, {
+      discovered: player.discovered, depthSoundings: player.depthSoundings,
+    });
+    // An initial bounded real stepPlayer search witnessed ordinal73. Freeze
+    // that address: do not silently search another outcome if physics changes.
+    // Actual runtime wind, footing and rolls must still earn both incidents.
+    const selectedOrdinal = 73;
+    replaceEnvelope(repository, {
+      ...initial, player, world: serializeWorld(world),
+      regionalEcology: rebaseFixtureRegionalEcology(initial.regionalEcology, world.meta.rootSeed, spatial),
+      traversalFeedback: { ...initial.traversalFeedback, nextTraversalOrdinal: selectedOrdinal },
+    });
+    const prepared = repository.snapshot();
+
+    async function run(reloadAtBoundary: boolean) {
+      const runRepository = new MemoryRepository(prepared);
+      soundscapePlay.mockClear();
+      let runtime = await createTideweftRuntime(runRepository);
+      let vocalAudio = 0;
+      const events: { step: number; incidentId: string; kind: string; meaning: string | null; trigger: string | null }[] = [];
+      const trajectory: { step: number; position: unknown; stamina: number }[] = [];
+      let lastIncidentId: string | null = null;
+      try {
+        expect(runtime.getUIView().saveWarning).toBeUndefined();
+        runtime.dispatchUI({ type: "resume-world" });
+        advancePlayerSteps(runtime, 6);
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+        for (let step = 7; step <= 11; step += 1) {
+          advancePlayerSteps(runtime, 1);
+          const view = runtime.getRenderView();
+          trajectory.push({ step, position: view.player.position, stamina: runtime.getUIView().player.stamina });
+          const incident = view.player.incident;
+          if (incident !== undefined && incident.id !== lastIncidentId) {
+            lastIncidentId = incident.id;
+            await runtime.save();
+            const saved = decodeCurrent(runRepository.snapshot());
+            const expression = saved.perceptionCarry.situatedExpressionChannels.channels
+              .find(({ sourceActorId }) => sourceActorId === "player:local")?.state.active;
+            events.push({ step, incidentId: incident.id, kind: incident.kind,
+              meaning: expression?.meaning ?? null, trigger: expression?.triggerEventId ?? null });
+          }
+          if (step === 10) {
+            await runtime.save();
+            const saved = decodeCurrent(runRepository.snapshot());
+            expect(saved.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+            expect(saved.perceptionCarry.situatedExpressionChannels.channels.some(
+              ({ sourceActorId }) => sourceActorId === "player:local",
+            )).toBe(false);
+            if (reloadAtBoundary) {
+              vocalAudio += incidentCueCalls("vocalization-relief");
+              runtime.destroy();
+              soundscapePlay.mockClear();
+              runtime = await createTideweftRuntime(runRepository);
+              expect(runtime.getUIView().title.hasSave).toBe(true);
+              expect(incidentCueCalls("vocalization-relief")).toBe(0);
+              await runtime.save();
+              expect(decodeCurrent(runRepository.snapshot()).perceptionCarry).toEqual(saved.perceptionCarry);
+              expect(decodeCurrent(runRepository.snapshot()).traversalFeedback).toEqual(saved.traversalFeedback);
+              runtime.dispatchUI({ type: "resume-world" });
+              runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+            }
+          }
+        }
+        await runtime.save();
+        vocalAudio += incidentCueCalls("vocalization-relief");
+        return { events, trajectory, vocalAudio, final: decodeCurrent(runRepository.snapshot()) };
+      } finally { runtime.destroy(); }
+    }
+
+    const uninterrupted = await run(false);
+    const restored = await run(true);
+    expect(restored.events).toEqual(uninterrupted.events);
+    expect(restored.trajectory).toEqual(uninterrupted.trajectory);
+    expect(restored.vocalAudio).toBe(uninterrupted.vocalAudio);
+    expect(uninterrupted.events.map(({ step }) => step)).toEqual([7, 11]);
+    expect(uninterrupted.events.every(({ kind, meaning, incidentId, trigger }) => (
+      kind === "stumble" && meaning === "relief-after-near-fall" && trigger === incidentId
+    ))).toBe(true);
+    expect(uninterrupted.events.map(({ incidentId }) => incidentId)).toEqual([
+      "player:0:traversal:73", "player:0:traversal:74",
+    ]);
+    // Characterizes a known current gap, not the desired sparse-Voice law:
+    // consumed interval memory admits two lines only4steps apart despite16.
+    expect(situatedExpressionCooldownSteps("relief-after-near-fall")?.meaning).toBe(16);
+    expect(uninterrupted.vocalAudio).toBe(2);
+    const { session: _firstSession, integrity: _firstSeal, regionalTravel: _firstTravel,
+      ...firstRoots } = uninterrupted.final;
+    const { session: _restoredSession, integrity: _restoredSeal, regionalTravel: _restoredTravel,
+      ...restoredRoots } = restored.final;
+    expect(restoredRoots).toEqual(firstRoots);
+    const comparableTravel = (saved: CurrentGameSaveEnvelope) => {
+      const actual = restorePlayerRegionalTravel(
+        deserializeWorld(saved.world).meta.rootSeed, saved.player, saved.regionalTravel,
+      );
+      if (actual === null) throw new Error("storm witness travel failed current validation");
+      // Same partitioned-capture exception as the exhaustion witness: reload
+      // adopts a published chart revision. Every semantic mark/frame survives.
+      const { revision, integrity: _chartSeal, ...chart } = actual.cartography;
+      const { integrity: _travelSeal, cartography: _serializedChart, ...frame } = JSON.parse(
+        saved.regionalTravel,
+      ) as Record<string, unknown>;
+      return { revision, facts: { chart, frame } };
+    };
+    const firstTravel = comparableTravel(uninterrupted.final);
+    const restoredTravel = comparableTravel(restored.final);
+    expect(restoredTravel.facts).toEqual(firstTravel.facts);
+    expect(restoredTravel.revision).toBe(firstTravel.revision + 1);
+    console.info("Actual repeated storm-stumble characterization:", JSON.stringify({
+      scope: "controlled initial current world, then actual input/steps; not ordinary-play frequency",
+      selectedOrdinal, events: uninterrupted.events, vocalAudio: uninterrupted.vocalAudio,
+    }));
+  });
+
   it.each([false, true])("commits automatic fall-parcel recovery audio only after presentation (reject=%s)", async (reject) => {
     const repository = new MemoryRepository();
     const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
