@@ -1145,6 +1145,44 @@ verification are not certified by these tests or earlier artifacts. No new
 gameplay producer, save schema, dependency, platform configuration, RNG,
 physical rule, upstream source or completed directive changed.
 
+#### Ordinary developer-browser traversal inspection — 2026-10-04
+
+The development-only inspector was exercised on clean local
+`8fa44df573ce20f107c57888e390606f9062d884`, served by the existing Vite command
+`npm run dev:web -- --port 5189`. A disposable Firefox profile used native
+START, an eight-unit Promise pickup and Relief W+D controls. No fall, sound,
+actor, weather, inventory, position or save was injected. Ordinary movement
+produced a serious loose-rock stumble at tick427: the current public speech
+event matched a retained accepted traversal decision and said “That was close.”
+
+The inspector began disabled with capacity64 and no records or counters.
+Enabling it retained one real decision. Replaying that current sequence
+returned the expected captured-producer/kernel scope, producer kind, actual
+runtime reason, exact intent and successful kernel result. Same-stack tick,
+player, acoustic-candidate and caption projections remained unchanged during
+replay and reset. Reset cleared both counters and records and made the old
+sequence unavailable; a refetched final snapshot confirmed disablement and
+empty state. This checks actual API access, not the complete selectable
+personality, relationship, emotion or audience lab.
+
+The attempt ended after 8.741 seconds within its 60-second bound; 76 public
+reads spanned 11.205 seconds, ticks420→428. It sampled one player speech and
+two physical candidates. Independent physical DOM observation found a readable
+`scrape` glyph, no clipping or acoustic-label collision, at most two labels,
+and public/DOM disappearance at tick428. The actual screenshot was inspected.
+The glyph and diagnostic record are separate witnesses, not an authenticated
+cross-link through DOM identity. Result SHA256:
+`f3ce4588132d9d79eb54e0ad116e3038cf677865624734b47af188cde9662ed8`.
+
+Source fingerprints remained unchanged through capture. The browser exited
+normally and its disposable profile was removed; the separately owned Vite
+server was stopped. Only the previously characterized startup CSP eval-probe
+denial was logged. This is development-source evidence, not a production
+artifact, whole-world/save/audio parity, audible quality, performance, mobile
+hardware, assistive-technology, hours-of-play, cumulative or release proof.
+The preceding slice's exact-source correctness/build evidence is not rerun
+solely for this prose record. No executable or policy change was made here.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
