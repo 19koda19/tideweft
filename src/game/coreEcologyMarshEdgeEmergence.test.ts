@@ -10,7 +10,7 @@ import { type CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
 import { MAX_TIDE_LEVEL } from "../sim/terrain";
-import { type WorldState, type WorldView } from "../sim/types";
+import { FIXED_POINT, type WorldState, type WorldView } from "../sim/types";
 import {
   collectCoreEcologyVisualObservationBatches,
   propagateCoreEcologyAlarmObservationBatches,
@@ -41,6 +41,7 @@ import { createTerrainRegionStreamingState } from "./regionStreaming";
 import {
   createRegionalTerrainWindow,
   regionalFrameOriginAtAddress,
+  regionLocalToWindowTile,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
@@ -69,6 +70,110 @@ interface Fixture {
 }
 
 describe("marsh-edge representative emergence", () => {
+  it("characterizes the current dry-ridge transmission gap using a committed rabbit alarm", () => {
+    const current = fixture("rabbit alarm dry ridge transmission baseline");
+    const rabbit = wildlife(current, "marsh-rabbit", RABBIT_X, ROW, 0, 0);
+    const fox = hungry(wildlife(current, "marsh-fox", FOX_X, ROW, 500_000, 0));
+    const visual = requiredBatches(
+      collectCoreEcologyVisualObservationBatches(frame(current, [rabbit, fox], 1)),
+    );
+    expect(requiredObservation(visual, rabbit, "predator", fox.identity.stableId))
+      .toMatchObject({ channel: "vision", identification: "identified" });
+    const alarmed = requiredStep(rabbit, 1, observationsFor(visual, rabbit), []);
+    expect(alarmed.decision.intent).toBe("alarm");
+    expect(alarmed.resourceClaims).toEqual([]);
+
+    const guardian = createDogActorState({
+      seed: current.state.meta.rootSeed,
+      originRegion: REGION,
+      originNamespace: "regional",
+      habitatClass: "settlement-edge",
+      habitatKey: "marsh-edge-guardian",
+      populationKey: "working-dogs:marsh-edge",
+      populationOrdinal: 1,
+      position: worldPosition(GUARDIAN_START_X, GUARDIAN_START_Y),
+      heading: 0,
+    });
+    const participants = [participant(guardian.address)];
+    const open = requiredBatches(propagateCoreEcologyAlarmObservationBatches(
+      alarmed.event,
+      frame(current, [alarmed.actor, fox], 2, participants),
+    ));
+    const openGuardian = observationsForObserver(open, guardian.identity.stableId);
+    expect(openGuardian).toHaveLength(1);
+    expect(openGuardian[0]).toMatchObject({
+      channel: "hearing", perceivedClass: "animal-alarm", identification: "anonymous",
+      subjectId: null, interrupt: "none",
+    });
+    expect(observationsFor(open, alarmed.actor)).toEqual([]);
+    expect(JSON.stringify(openGuardian)).not.toContain(rabbit.identity.stableId);
+    expect(JSON.stringify(openGuardian)).not.toContain(fox.identity.stableId);
+
+    // Change only one dry tile on the source-to-listener path. Both endpoint
+    // tiles and their 5x5 water masks remain exact. The real source event and
+    // actor poses stay exact; no locomotion, injected sound or optical gate runs.
+    const ridgeIndex = (ROW + 1) * current.state.terrain.width + RABBIT_X + 1;
+    const ridge = current.state.terrain.tiles[ridgeIndex];
+    if (ridge === undefined) throw new Error("Alarm path lost its intervening ridge tile");
+    expect(ridge.elevation).toBe(MAX_TIDE_LEVEL + 1);
+    ridge.terrain = "ridge";
+    ridge.elevation = FIXED_POINT;
+    const ridgeWorld = createRegionalWorldView(
+      createWorldView(current.state),
+      current.window,
+      projectRegionalCartographyWindow(createRegionalCartography(current.state.meta.rootSeed), current.window),
+    );
+    const ridged = { ...current, world: ridgeWorld };
+    const endpoints = [rabbit.address, guardian.address];
+    for (const endpoint of endpoints) {
+      const placement = livingActorAddressInRegionalWindow(endpoint, current.window);
+      if (placement === null) throw new Error("Alarm endpoint left its registered window");
+      const tileX = placement.tileIndex % current.world.terrain.width;
+      const tileY = Math.floor(placement.tileIndex / current.world.terrain.width);
+      expect(ridgeWorld.terrain.tiles[placement.tileIndex])
+        .toEqual(current.world.terrain.tiles[placement.tileIndex]);
+      for (let y = tileY - 2; y <= tileY + 2; y += 1) {
+        for (let x = tileX - 2; x <= tileX + 2; x += 1) {
+          const index = y * current.world.terrain.width + x;
+          expect(ridgeWorld.terrain.tiles[index]?.waterDepth)
+            .toBe(current.world.terrain.tiles[index]?.waterDepth);
+        }
+      }
+      expect(ambientNoiseAt(current.world, placement.tileIndex)).toBe(0);
+      expect(ambientNoiseAt(ridgeWorld, placement.tileIndex)).toBe(0);
+    }
+    const changedTiles = ridgeWorld.terrain.tiles.filter((tile, index) => (
+      tile.elevation !== current.world.terrain.tiles[index]?.elevation
+    ));
+    expect(changedTiles).toHaveLength(1);
+    expect(changedTiles[0]).toMatchObject({
+      terrain: "ridge", elevation: FIXED_POINT, waterDepth: 0,
+    });
+    const ridgePlacement = regionLocalToWindowTile(current.window, REGION, RABBIT_X + 1, ROW + 1);
+    if (ridgePlacement === null) throw new Error("Intervening ridge left its registered projection");
+    expect(changedTiles[0]).toBe(
+      ridgeWorld.terrain.tiles[ridgePlacement.y * ridgeWorld.terrain.width + ridgePlacement.x],
+    );
+    const behindRidge = requiredBatches(propagateCoreEcologyAlarmObservationBatches(
+      alarmed.event,
+      frame(ridged, [alarmed.actor, fox], 2, participants),
+    ));
+    // This equality is a characterization of missing path transmission, NOT
+    // terrain-hearing acceptance. Replace it with the intended counterfactual
+    // once a versioned shared acoustic law and saved-receipt policy are live.
+    expect(behindRidge).toEqual(open);
+    const openPerception = stepActorPerception(guardian.perception, { tick: 2, observations: openGuardian });
+    const ridgePerception = stepActorPerception(guardian.perception, {
+      tick: 2, observations: observationsForObserver(behindRidge, guardian.identity.stableId),
+    });
+    expect(openPerception).not.toBeNull();
+    expect(openPerception?.beliefs).toContainEqual(expect.objectContaining({
+      channel: "hearing", perceivedClass: "animal-alarm", subjectId: null,
+      sourceObservationId: openGuardian[0]!.id,
+    }));
+    expect(ridgePerception).toEqual(openPerception);
+  });
+
   it.each([
     {
       name: "lets a rabbit alarm recruit guardian investigation while the same dog deters fox pursuit",

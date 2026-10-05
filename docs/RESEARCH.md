@@ -1786,6 +1786,41 @@ mixed scenes, audible/assistive quality, mobile hardware, hours, terrain
 propagation, performance and release gates remain open; this narrow result does
 not certify them.
 
+### Dry-ridge hearing characterization — 2026-10-05
+
+The local candidate now has a producer-to-listener counterfactual in
+`coreEcologyMarshEdgeEmergence.test.ts`: a real rabbit visual observation of a
+fox drives its normal cognition to commit an alarm. The same authenticated
+event, source pose, guardian pose, weather and tick are propagated first across
+the dry corridor, then after raising only intervening tile `(39,31)` to a dry
+ridge. The registered regional projection retains exact endpoint tiles and
+both complete 5×5 water-depth masks; listener-local masking remains zero.
+The changed projected tile is checked explicitly. No second alarm, injected
+sound, movement, text, renderer visibility or optical hearing gate is used.
+
+The current result is **identical audible contacts, anonymous observations and
+fresh guardian beliefs**. Source exclusion and absence of rabbit/fox identities
+from those hearing observations are checked. This confirms missing terrain-path
+transmission; it is a baseline characterization, **not** passing terrain-hearing,
+ordinary-play, historical-belief restore or runtime-transaction acceptance.
+Optical obstruction coefficients are not acoustic absorption. Current aerial
+activity has no event-time acoustic altitude, so a future law must not silently
+assume every call is grounded or invent structure/foliage geometry.
+
+The current save validator independently reconstructs active player receipts
+at event time, including hearing certainty and anonymous bands. A propagation
+change therefore needs an explicit compatible/versioned receipt decision before
+admission; historical beliefs must not be rewritten, and pending stimuli still
+receive lawful next-interval hearing once. No propagation law, schema, reader,
+save policy, dependency or gameplay behavior changes in this characterization.
+
+Final targeted command:
+`npx vitest run src/game/coreEcologyMarshEdgeEmergence.test.ts --maxWorkers=1`
+passed 1 file / 4 tests in 1.91 seconds; `npm run test:smoke` passed 6 files /
+105 tests in 4.05 seconds, and `npm run typecheck` passed. No production/browser,
+packaging, performance, cumulative, publication or directive-closure result is
+claimed by this test-only slice.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
