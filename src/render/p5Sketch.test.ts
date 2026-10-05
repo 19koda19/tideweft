@@ -821,10 +821,12 @@ describe("Chart situated expression presentation", () => {
     const base = view("chart-four-kind-contract", { x: 0, y: 0 }, { followPlayer: false });
     let current: TideweftView = { ...base, acousticText: candidates };
     let reservedRects: readonly AcousticTextRect[] = [];
+    let animalCallTextMode: "full" | "important" = "full";
     const renderer = createTideweftRenderer({
       mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
       getView: () => current,
       getAcousticTextReservations: () => reservedRects,
+      getAnimalCallTextMode: () => animalCallTextMode,
       dispatch: vi.fn(),
     });
     const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
@@ -841,7 +843,7 @@ describe("Chart situated expression presentation", () => {
       line.mockClear();
       draw();
       expect(p5Harness.instance).toMatchObject({ width, height });
-      const expected = layoutAcousticTextCallouts(items, viewport, projectAnchor, reservedRects);
+      const expected = layoutAcousticTextCallouts(items, viewport, projectAnchor, reservedRects, animalCallTextMode);
       const drawn = text.mock.calls.filter(([copy]) => copies.has(String(copy)));
       expect(drawn).toEqual(expected.placements.map(({ candidate, rect: box }) => [
         candidate.acousticText.text,
@@ -887,6 +889,20 @@ describe("Chart situated expression presentation", () => {
       const separated = drawAndCheck(candidates);
       expect(separated).toHaveLength(4);
       expect(drawAndCheck([...candidates].reverse())).toEqual(separated);
+      const animal = candidates[1]!;
+      if (animal.acousticKind !== "animal-call") throw new Error("Expected animal fixture");
+      const quietItems = [...candidates];
+      quietItems[1] = { ...animal, criticalCall: false };
+      animalCallTextMode = "important";
+      expect(drawAndCheck(quietItems)).toHaveLength(3);
+      expect(text.mock.calls.some(([copy]) => copy === animal.text)).toBe(false);
+      // Unknown legacy calls and explicit critical calls still render.
+      expect(drawAndCheck(candidates)).toEqual(separated);
+      quietItems[1] = { ...animal, criticalCall: true };
+      expect(drawAndCheck(quietItems)).toEqual(separated);
+      animalCallTextMode = "full";
+      quietItems[1] = { ...animal, criticalCall: false };
+      expect(drawAndCheck(quietItems)).toEqual(separated);
       const crowded = candidates.map((candidate) => ({ ...candidate, position: { x: 0, y: 0 } }));
       const overloaded: AcousticTextView[] = [...crowded, {
         ...crowded[0]!, id: "chart-quiet-same-human", text: "Easy now.", priority: 100_000,

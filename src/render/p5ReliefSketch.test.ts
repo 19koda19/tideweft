@@ -615,6 +615,7 @@ function renderHarness(
     readonly chunkSize?: number;
     readonly viewport?: { readonly width: number; readonly height: number };
     readonly getAcousticTextReservations?: () => readonly AcousticTextRect[];
+    readonly getAnimalCallTextMode?: () => "full" | "important";
   } = {},
 ) {
   const { viewport, ...rendererOptions } = options;
@@ -2291,7 +2292,7 @@ describe("Relief situated expression presentation", () => {
       expect(acoustic?.hidden).toBe(false);
       expect(acoustic?.style.left).toBe(`${(rect.x + rect.width / 2).toFixed(1)}px`);
       expect(sharedLayout).toHaveBeenLastCalledWith(current.acousticText,
-        playerPresentation.actorCalloutViewport(width, height), expect.any(Function), undefined);
+        playerPresentation.actorCalloutViewport(width, height), expect.any(Function), undefined, undefined);
 
       sharedLayout.mockReturnValue({ ...result,
         placements: [{ ...placed, rect: { ...rect, y: rect.y + 140 } }] });
@@ -2472,8 +2473,10 @@ describe("Relief situated expression presentation", () => {
     const layout = playerPresentation.layoutAcousticTextCallouts;
     const sharedLayout = vi.spyOn(playerPresentation, "layoutAcousticTextCallouts");
     let reservedRects: readonly AcousticTextRect[] = [];
+    let animalCallTextMode: "full" | "important" = "full";
     const harness = renderHarness(current, { viewport: { width, height },
-      getAcousticTextReservations: () => reservedRects });
+      getAcousticTextReservations: () => reservedRects,
+      getAnimalCallTextMode: () => animalCallTextMode });
     try {
       expect(harness.instance).toMatchObject({ width, height });
       expect(harness.mount.getBoundingClientRect()).toMatchObject({ width, height });
@@ -2489,6 +2492,7 @@ describe("Relief situated expression presentation", () => {
         if (args === undefined) throw new Error("Relief did not consume the shared acoustic adapter");
         expect(args[0]).toBe(current.acousticText);
         expect(args[1]).toEqual(viewport);
+        expect(args[4]).toBe(animalCallTextMode);
         // Reuse the real terrain-aware Relief projector, not invented screen
         // anchors. These are the adapter's estimated envelopes, not measured
         // CSS glyphs or browser/mobile hardware evidence.
@@ -2539,12 +2543,32 @@ describe("Relief situated expression presentation", () => {
       };
 
       const first = drawAndCompare();
+      const geometry = (snapshot: typeof first.snapshot) => snapshot.map(({ id, rect }) => ({ id, rect }));
       expect(first.snapshot).toHaveLength(4);
       expect(first.snapshot.map(({ id }) => id)).toEqual(acousticText.map(({ id }) => id));
       expect(drawAndCompare().snapshot).toEqual(first.snapshot);
+      const animal = acousticText[1]!;
+      if (animal.acousticKind !== "animal-call") throw new Error("Expected animal fixture");
+      const quietItems = [...acousticText];
+      quietItems[1] = { ...animal, criticalCall: false };
+      current = { ...current, acousticText: quietItems };
+      harness.setView(current);
+      animalCallTextMode = "important";
+      expect(drawAndCompare().snapshot.map(({ id }) => id)).toEqual([
+        "mixed-speech", "mixed-scrape", "mixed-cargo-thud",
+      ]);
+      // The global source is untouched and the removed DOM cue is cleaned up.
+      expect(current.acousticText).toBe(quietItems);
+      quietItems[1] = { ...animal, criticalCall: true };
+      expect(geometry(drawAndCompare().snapshot)).toEqual(geometry(first.snapshot));
+      quietItems[1] = animal;
+      expect(geometry(drawAndCompare().snapshot)).toEqual(geometry(first.snapshot));
+      animalCallTextMode = "full";
+      quietItems[1] = { ...animal, criticalCall: false };
+      expect(geometry(drawAndCompare().snapshot)).toEqual(geometry(first.snapshot));
       current = { ...current, acousticText: [...acousticText].reverse() };
       harness.setView(current);
-      expect(drawAndCompare().snapshot).toEqual(first.snapshot);
+      expect(geometry(drawAndCompare().snapshot)).toEqual(geometry(first.snapshot));
 
       const crowded = acousticText.map((candidate) => ({ ...candidate, position: { x: 48, y: 48 } }));
       current = { ...current, acousticText: [

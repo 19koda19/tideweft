@@ -26,6 +26,8 @@ export interface TutorialDialogController {
 
 export interface TutorialDialogOptions {
   readonly onOpenPatchNotes: (trigger: HTMLElement) => void;
+  /** Host-owned presentation controls, shown only on the accessibility page. */
+  readonly presentationControls?: HTMLElement;
 }
 
 const element = <K extends keyof HTMLElementTagNameMap>(
@@ -119,6 +121,7 @@ export function createTutorialDialog(options: TutorialDialogOptions): TutorialDi
     plannedHeading,
     plannedList,
   );
+  if (options.presentationControls) page.append(options.presentationControls);
   layout.append(topicNav, page);
 
   const footer = element("footer", "tutorial-dialog__footer");
@@ -253,6 +256,7 @@ export function createTutorialDialog(options: TutorialDialogOptions): TutorialDi
     renderCallouts(section);
     renderAction(section);
     renderPlanned(section);
+    if (options.presentationControls) options.presentationControls.hidden = section.id !== "accessibility";
     previousButton.disabled = activeIndex === 0;
     nextButton.disabled = activeIndex >= sections.length - 1;
     renderTopics();

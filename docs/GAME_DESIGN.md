@@ -311,6 +311,12 @@ tool, cargo content, or cause that the sound itself did not disclose.
 Accessibility can make that same available information clearer; it cannot add
 hearing or localization.
 
+Field Manual → Accessibility also offers Full / Important animal world labels.
+Important reduces noncritical labels only; strong warnings, sounds and accessible
+captions remain available. Full is the default, not an instruction to show every
+call. The [shared presentation owner](ARCHITECTURE.md#shared-acoustic-text-presentation-arbitration)
+defines importance and the browser-local preference boundary.
+
 The screen does not narrate every step. Routine walking, continuous wading,
 animal-group movement, and repeated work normally remain audio and animation.
 Salient physical events may become text according to intensity, novelty,

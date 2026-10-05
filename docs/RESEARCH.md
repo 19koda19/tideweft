@@ -1285,6 +1285,54 @@ assistive speech/audio, mobile hardware, long-session performance, full
 cumulative confidence or public release. Save49/carry14, dependencies,
 upstream sources and simulation authority are unchanged.
 
+#### Noncritical animal world-label preference — 2026-10-04
+
+Local work over `cd44054` adds the Field Manual → Accessibility Full / Important
+control at the [shared presentation owner](ARCHITECTURE.md#shared-acoustic-text-presentation-arbitration).
+Only explicitly noncritical animal world-label candidates are filtered;
+unknown legacy importance remains visible. Importance comes from the existing
+semantic interruption policy after reception/source validation, not tone,
+glyphs, rank or decoded alarm intent. Audio, hearing, interruption, physical and
+speech candidates, shared captions and announcements retain their owners.
+The preference is browser-local, defaults to Full, and is not world-save data.
+
+The same actual visible storm-whine/fall/cargo fixture was recaptured as public
+views; temporary test-only capture was removed byte-exactly afterward. The
+ignored frozen-view adapter passes eight Chart/Relief size states plus twelve
+native preference stages in each normal/reduced-motion run. Pointer and bounded
+Tab/Space activation hide and restore the actual WHINE... glyph on desktop and
+portrait layouts without changing the frozen views, speech caption or its one
+announcement. Reload retains Important in browser storage. Existing manual
+opening sends WAIT/recovery cancellation requests; preference activation itself
+sends none. Earlier local checks incorrectly assumed command-free manual
+opening and page reset on reopen; those rejected runs are not certificates.
+Final records retain two known startup/reload eval-CSP denials each, with no
+other captured errors. Their SHA256 values are
+`78b5bea3b56917f6fc26f4fe588262d2cdd8949aac48b5996a555ed449b6e35e`
+and `2b7f36bacb815ab750593111fcc02a02204faab477e793a22b3650f0d3cd16ae`.
+
+The actual production files served at `/tideweft/` separately pass ten native
+Field Manual stages on paused Title at 1280×720 and 390×844 in Firefox 157.
+Native T, pointer and Tab/Space reach the control; the 44px target, visible
+keyboard focus, page visibility and Important reload reconstruction pass.
+Four recorded full public render/UI comparisons remain byte-equal across
+toggles at tick 420. Four screenshots corroborate the DOM bounds. The record
+has SHA256 `6a6a90633d7413ae5c65af63271c39018c94ed1d534248b611a89cda53b4705b`;
+it retains the same two documented startup/reload CSP denials and no other
+captured error or failed request. This is production preference/DOM evidence,
+not active-play animal, audio, full-save, AT or mobile-hardware acceptance.
+
+Affected semantic/projection/presentation tests pass nine files/318 tests;
+UI/announcement integration passes three files/68 tests. The real mixed runtime
+passes both visible/unseen cases, including current-save/audio parity.
+Maintained critical smoke passes 105 tests; typecheck, production web build and
+five-artifact static smoke pass. Bundle `index-D75lgQA2.js` has SHA256
+`6765be1c389dd46222b42a538499f8074520ee4b96baa835cb6c0ddf8797dcb5`.
+The frozen browser fixture is native presentation evidence, not an ordinary
+canine encounter, production simulation, heard audio, AT or hardware proof.
+Fresh desktop packaging, hours, full cumulative confidence and public release
+are not certified here. Save49/carry14 and dependencies remain unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

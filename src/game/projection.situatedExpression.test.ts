@@ -55,6 +55,7 @@ import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "./coreWildlifeSignalExpression";
+import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
 
 const SIGNED_REGION = createRegionCoord(-7, -12);
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
@@ -674,6 +675,7 @@ describe("situated expression game projection", () => {
       acousticKind: "speech",
       id: expression.eventId,
     });
+    expect(view.expressions?.[0]).not.toHaveProperty("criticalCall");
     expect(view.acousticText).toHaveLength(2);
     expect(view.acousticText?.[0]).toBe(view.expressions?.[0]);
     expect(view.acousticText?.[1]).toMatchObject({
@@ -1122,6 +1124,7 @@ describe("situated expression game projection", () => {
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogWarning(dog, "dog-signal:visible-warning");
     const reception = heardVisibleReception(expression);
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("strong");
 
     const game = projectGameView(world, player, {
       situatedExpression: expression,
@@ -1142,7 +1145,14 @@ describe("situated expression game projection", () => {
       text: "BARK!",
       position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
       tone: "alarmed",
+      criticalCall: true,
     })]);
+    expect(game.acousticText?.[0]).toBe(game.expressions?.[0]);
+    expect(projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: null,
+      dogActorRoster,
+    }).acousticText).toEqual([]);
     expect(ui.expressionCaption).toMatchObject({
       speakerLabel: "Unknown dog",
       text: "BARK!",
@@ -1212,6 +1222,7 @@ describe("situated expression game projection", () => {
     });
 
     expect(game.expressions).toEqual([]);
+    expect(game.acousticText).toEqual([]);
     expect(ui.expressionCaption).toMatchObject({
       speakerLabel: "A dog",
       text: "BARK!",
@@ -1233,6 +1244,7 @@ describe("situated expression game projection", () => {
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogDefensiveGrowl(dog, "dog-signal:visible-growl");
     const reception = heardVisibleReception(expression);
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
 
     expect(projectGameView(world, player, {
       situatedExpression: expression,
@@ -1245,6 +1257,7 @@ describe("situated expression game projection", () => {
       text: "GRRRR.",
       position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
       tone: "restrained",
+      criticalCall: false,
     })]);
     expect(projectUIView(world, player, session, {
       economyWorld: compatibility,
@@ -1304,6 +1317,7 @@ describe("situated expression game projection", () => {
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogShelterWhine(dog, "dog-signal:visible-whine");
     const reception = heardVisibleReception(expression);
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
 
     expect(projectGameView(world, player, {
       situatedExpression: expression,
@@ -1316,6 +1330,7 @@ describe("situated expression game projection", () => {
       text: "WHINE...",
       position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
       tone: "restrained",
+      criticalCall: false,
     })]);
     expect(projectUIView(world, player, session, {
       economyWorld: compatibility,
@@ -1540,6 +1555,8 @@ describe("situated expression game projection", () => {
     });
     const expression = reduction.event;
     if (expression === null) throw new Error("Chicken projection fixture rejected");
+    expect(expression.tone).toBe("alarmed");
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
     const source: CoreWildlifeExpressionSource = {
       actorId: expression.sourceActorId, species: "domestic-chicken", position: expression.position,
     };
@@ -1550,7 +1567,7 @@ describe("situated expression game projection", () => {
     };
     expect(projectGameView(world, player, options).expressions).toEqual([expect.objectContaining({
       sourceActorId: expression.sourceActorId, speakerLabel: "Domestic chicken", text: "SQUAWK.",
-      acousticKind: "animal-call",
+      acousticKind: "animal-call", criticalCall: false,
     })]);
     expect(projectUIView(world, player, session, { economyWorld: compatibility, ...options })
       .expressionCaption).toMatchObject({
@@ -1660,6 +1677,8 @@ describe("situated expression game projection", () => {
     });
     const expression = reduction.event;
     if (expression === null) throw new Error("Duck projection fixture rejected");
+    expect(expression.tone).toBe("alarmed");
+    expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
     const source: CoreWildlifeExpressionSource = {
       actorId: expression.sourceActorId, species: "american-black-duck", position: expression.position,
     };
@@ -1673,6 +1692,7 @@ describe("situated expression game projection", () => {
       id: expression.eventId, sourceActorId: expression.sourceActorId, sourceKind: "animal",
       speakerLabel: "American black duck", text: "QUACK.", acousticKind: "animal-call",
       position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 }, priority: 160_000,
+      criticalCall: false,
     })]);
     expect(visible.acousticText?.[0]).toBe(visible.expressions?.[0]);
     expect(projectUIView(world, player, session, { economyWorld: compatibility, ...options })
@@ -2073,11 +2093,12 @@ describe("situated expression game projection", () => {
     const reception = heardVisibleReception(expression);
     const source = marshRabbitSource(expression);
 
-    expect(projectGameView(world, player, {
+    const game = projectGameView(world, player, {
       situatedExpression: expression,
       situatedExpressionReception: reception,
       coreWildlifeExpressionSources: [source],
-    }).expressions).toEqual([expect.objectContaining({
+    });
+    expect(game.expressions).toEqual([expect.objectContaining({
       acousticKind: "embodied-signal",
       sourceActorId: expression.sourceActorId,
       sourceKind: "animal",
@@ -2086,6 +2107,8 @@ describe("situated expression game projection", () => {
       position: { x: (18 + 0.5) * 24, y: (22 + 0.5) * 24 },
       tone: "restrained",
     })]);
+    expect(game.expressions?.[0]).not.toHaveProperty("criticalCall");
+    expect(game.acousticText?.[0]).toBe(game.expressions?.[0]);
     expect(projectUIView(world, player, session, {
       economyWorld: compatibility,
       situatedExpression: expression,

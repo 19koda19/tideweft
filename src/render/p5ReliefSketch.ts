@@ -1023,6 +1023,7 @@ export function createTideweftReliefRenderer(
             return projected.visible ? projected : null;
           },
           options.getAcousticTextReservations?.(),
+          options.getAnimalCallTextMode?.(),
         );
     const activeAcousticSourceIds = new Set(
       acousticLayout?.placements.map(({ candidate }) => candidate.sourceId) ?? [],

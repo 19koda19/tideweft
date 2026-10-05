@@ -5,6 +5,7 @@ import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePo
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
 import type { AcousticTextRect } from "./acousticTextLayout";
+import type { AnimalCallTextMode } from "./animalCallText";
 
 export interface WorldPoint {
   readonly x: number;
@@ -239,6 +240,8 @@ export interface PlayerIncidentView {
  */
 export interface SituatedExpressionView {
   readonly acousticKind: "speech" | "animal-call" | "embodied-signal";
+  /** Safe heard urgency from the shared semantic owner; absent means unknown. */
+  readonly criticalCall?: boolean;
   readonly id: string;
   readonly sourceActorId: string;
   readonly sourceKind: "player" | "human" | "animal" | "supernatural";
@@ -819,6 +822,7 @@ export interface TideweftRendererOptions {
   readonly dispatch: (command: RendererCommand) => void;
   /** Presentation-only, bounded feedback rectangles relative to the mount. */
   readonly getAcousticTextReservations?: () => readonly AcousticTextRect[];
+  readonly getAnimalCallTextMode?: () => AnimalCallTextMode;
 }
 
 export interface TideweftRendererController {

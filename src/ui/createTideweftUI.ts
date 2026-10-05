@@ -51,6 +51,7 @@ import {
 } from "./patchNotesDialog";
 import { bindTitleAtmosphere } from "./titleAtmosphere";
 import { createAcousticTextReservationReader } from "./acousticTextReservations";
+import { bindAnimalCallTextControl } from "./animalCallTextControl";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
@@ -1147,6 +1148,7 @@ export function handleResidentAboutEscape(
 }
 
 interface UIRefs {
+  animalCallTextControl: ReturnType<typeof bindAnimalCallTextControl> | null;
   shell: HTMLDivElement;
   saveWarningBanners: readonly SaveWarningBannerRefs[];
   mobileFieldStrip: HTMLElement;
@@ -2194,8 +2196,21 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
       if (source === "tutorial") tutorial.resume();
     },
   });
+  let animalCallTextControl: ReturnType<typeof bindAnimalCallTextControl> | null = null;
+  const presentationControls = options.animalCallText ? createElement("section", "tutorial-callout") : null;
+  if (presentationControls && options.animalCallText) {
+    const help = createElement("p", "tutorial-callout__body",
+      "Reduce noncritical animal world labels. Sounds, strong warnings and accessible captions stay on; Full still obeys hearing and label limits.");
+    help.id = "animal-call-text-help";
+    const control = createButton("tutorial-page__action", "ANIMAL LABELS · FULL");
+    control.dataset.ui = "animal-call-text-control";
+    control.setAttribute("aria-describedby", help.id);
+    animalCallTextControl = bindAnimalCallTextControl(control, options.animalCallText);
+    presentationControls.append(createElement("strong", "tutorial-callout__title", "ANIMAL CALL LABELS"), help, control);
+  }
   tutorial = createTutorialDialog({
     onOpenPatchNotes: (trigger) => patchNotes.open(trigger, "tutorial"),
+    ...(presentationControls ? { presentationControls } : {}),
   });
   const kit = createKitDialog({
     dispatch: options.dispatch,
@@ -2255,6 +2270,7 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
   options.root.replaceChildren(shell);
 
   return {
+    animalCallTextControl,
     shell,
     saveWarningBanners: SAVE_WARNING_SURFACES.map((surface) => saveWarningBanners[surface]),
     mobileFieldStrip,
@@ -3596,6 +3612,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       stop();
       acousticTextReservations.destroy();
       refs.chronicleDetails.removeEventListener("toggle", acousticTextReservations.invalidate);
+      refs.animalCallTextControl?.destroy();
       liveRegionAnnouncements.destroy();
       restoreResidentAboutFocus();
       mobileBrace.destroy();

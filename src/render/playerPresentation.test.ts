@@ -293,6 +293,38 @@ describe("production-aperture acoustic callout adapter", () => {
     },
   );
 
+  it("filters only explicitly noncritical animal labels before layout without changing its sources", () => {
+    const original = mixedText(separatedAnchors(1_280));
+    const animal = original[1]!;
+    if (animal.acousticKind !== "animal-call") throw new Error("Expected animal fixture");
+    const viewport = actorCalloutViewport(1_280, 720);
+    const anchor = ({ position }: AcousticTextView) => position;
+    const full = layoutAcousticTextCallouts(original, viewport, anchor);
+    // Unknown legacy importance stays visible, even with the reduced setting.
+    expect(decisions(layoutAcousticTextCallouts(original, viewport, anchor, undefined, "important")))
+      .toEqual(decisions(full));
+    const quiet = Object.freeze({ ...animal, criticalCall: false, text: "whine..." });
+    const candidates = Object.freeze([original[0]!, quiet, original[2]!, original[3]!]);
+    const bytes = JSON.stringify(candidates);
+    const selected: string[] = [];
+    const reduced = layoutAcousticTextCallouts(candidates, viewport, (candidate) => {
+      selected.push(candidate.id);
+      return candidate.position;
+    }, undefined, "important");
+    expect(reduced.placements.map(({ candidate }) => candidate.id)).toEqual([
+      "mixed-warning", "mixed-slide", "mixed-cargo",
+    ]);
+    expect(selected).not.toContain(quiet.id);
+    // Preference filtering is not a false collision/admission diagnosis.
+    expect(reduced.suppressions).toEqual([]);
+    const restored = layoutAcousticTextCallouts(candidates, viewport, anchor, undefined, "full");
+    expect(restored.placements).toHaveLength(4);
+    expect(JSON.stringify(candidates)).toBe(bytes);
+    const critical = Object.freeze({ ...animal, criticalCall: true });
+    expect(layoutAcousticTextCallouts([critical], viewport, anchor, undefined, "important").placements)
+      .toHaveLength(1);
+  });
+
   it.each([[1_280, 720], [390, 844]])(
     "keeps the warning primary under overlapping mixed load at %sx%s",
     (width, height) => {

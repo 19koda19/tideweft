@@ -84,6 +84,7 @@ import {
   type SituatedExpressionEvent,
 } from "./situatedExpression";
 import { projectResidentIntroductionExpression } from "./residentIntroductionExpression";
+import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
 import {
   situatedExpressionReceptionMatchesActiveEvent,
   type SituatedExpressionReception,
@@ -542,6 +543,9 @@ function projectSituatedExpressionView(
         : callKind === null
           ? "speech" as const
           : "animal-call" as const,
+      ...(callKind === null || embodiedSignal ? {} : {
+        criticalCall: situatedExpressionSoundInterrupt(event) === "strong",
+      }),
       id: event.eventId,
       sourceActorId: event.sourceActorId,
       sourceKind: source.sourceKind,

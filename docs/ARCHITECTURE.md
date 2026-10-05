@@ -591,6 +591,19 @@ retain their lawful state, and a layout-suppressed callout does not erase its
 source's state. This join uses actor identity rather than screen proximity.
 Presentation loss never erases audio or actor hearing.
 
+Field Manual → Accessibility offers **Full / Important** animal world labels.
+Full is the default and still obeys hearing, repetition and layout limits.
+Important filters only animal-call candidates explicitly marked noncritical by
+the existing `situatedExpressionSoundInterrupt` semantic owner after lawful
+receipt/source validation. Strong calls and unknown legacy importance remain;
+speech and physical/embodied cues are not filtered. Quiet chicken/duck calls do
+not become strong warnings merely from alarmed tone or their hidden cause.
+This preference changes neither audio, actor hearing, interruption nor the
+shared accessible caption/announcement. It uses separate browser-local storage,
+not world/save state; denied storage falls back to Full on the next load while
+the current session control still works. One native pressed-state button serves
+both views and is hidden on other manual pages; UI teardown removes its listener.
+
 The application also supplies at most three measured UI reservations to that
 same layout: the shared caption, full EVENTS panel, and journey action dock.
 These boxes use mount-relative CSS coordinates; a candidate tries the existing

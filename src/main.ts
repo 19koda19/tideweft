@@ -19,6 +19,7 @@ import { createTideweftUI } from "./ui";
 import { createBraceSourceController } from "./ui/braceSources";
 import { bindDesktopBraceHold } from "./ui/desktopBrace";
 import type { AcousticTextRect } from "./render/acousticTextLayout";
+import { loadAnimalCallTextMode, saveAnimalCallTextMode } from "./render/animalCallText";
 
 async function boot(): Promise<void> {
   const canvasMount = document.querySelector<HTMLElement>("#p5-mount");
@@ -33,6 +34,7 @@ async function boot(): Promise<void> {
 
   const runtime = await createTideweftRuntime();
   let readAcousticTextReservations: () => readonly AcousticTextRect[] = () => [];
+  let animalCallTextMode = loadAnimalCallTextMode();
   const syncViewToggle = (mode: ViewMode, reliefAvailable: boolean): void => {
     if (!viewToggle) return;
     const state = viewModeButtonState(mode, reliefAvailable);
@@ -66,6 +68,7 @@ async function boot(): Promise<void> {
     getView: runtime.getRenderView,
     dispatch: dispatchRenderer,
     getAcousticTextReservations: () => readAcousticTextReservations(),
+    getAnimalCallTextMode: () => animalCallTextMode,
     onModeChange: syncViewToggle,
     onReliefUnavailable: (reason) => {
       console.warn(`Relief view unavailable: ${reason}`);
@@ -109,6 +112,13 @@ async function boot(): Promise<void> {
   const ui = createTideweftUI({
     root: uiRoot,
     acousticTextMount: canvasMount,
+    animalCallText: {
+      getMode: () => animalCallTextMode,
+      setMode: (mode) => {
+        animalCallTextMode = mode;
+        saveAnimalCallTextMode(mode);
+      },
+    },
     getView: runtime.getUIView,
     getRendererTelemetry: renderer.telemetry,
     setBrace: (active) => braceSources.set("touch", active),

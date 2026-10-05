@@ -4,6 +4,7 @@ import type {
   SituatedExpressionView,
   WorldPoint,
 } from "./types";
+import { shouldShowAnimalCallLabel, type AnimalCallTextMode } from "./animalCallText";
 import {
   DEFAULT_ACOUSTIC_TEXT_GUTTER,
   DEFAULT_ACOUSTIC_TEXT_PER_SOURCE_CAP,
@@ -259,9 +260,11 @@ export function layoutAcousticTextCallouts(
   viewport: IncidentViewport,
   screenAnchor: (candidate: AcousticTextView) => WorldPoint | null,
   reservedRects?: readonly AcousticTextRect[],
+  animalCallTextMode: AnimalCallTextMode = "full",
 ): AcousticTextLayoutResult<AcousticTextScreenCandidate> {
   const candidates: AcousticTextScreenCandidate[] = [];
   for (const item of acousticText) {
+    if (!shouldShowAnimalCallLabel(item, animalCallTextMode)) continue;
     const anchor = screenAnchor(item);
     if (anchor === null) continue;
     candidates.push(Object.freeze({

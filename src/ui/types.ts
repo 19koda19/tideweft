@@ -12,6 +12,7 @@ import type { RuntimePerformanceSnapshot } from "../performance/runtimePerforman
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 import type { AcousticTextRect } from "../render/acousticTextLayout";
+import type { AnimalCallTextControlOptions } from "./animalCallTextControl";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -666,6 +667,7 @@ export interface TideweftUIOptions {
   readonly root: HTMLElement;
   /** Optional coordinate mount for shared acoustic-label feedback reservations. */
   readonly acousticTextMount?: HTMLElement;
+  readonly animalCallText?: AnimalCallTextControlOptions;
   readonly getView: () => TideweftUIView | null | undefined;
   /** Live renderer instrumentation; intentionally excluded from saved/view revision state. */
   readonly getRendererTelemetry?: () => RendererTelemetrySnapshot;
