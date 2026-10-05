@@ -250,6 +250,8 @@ import type {
 } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import * as situatedExpressionChannels from "./situatedExpressionChannelBank";
+import * as humanDangerWarnings from "./humanDangerWarningExpression";
+import * as expressionDiagnostics from "./situatedExpressionDiagnostics";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import {
   deserializeSettlementDomesticAnimalRecoveryState,
@@ -5952,6 +5954,10 @@ describe("runtime core-ecology vertical slice", () => {
       expect(soundscapePlay.mock.calls).toEqual(audioBeforeReload);
     } finally { restored.destroy(); scheduledFrame = undefined; }
 
+    // Exercise the same registry reset as the preceding capacity fixtures.
+    // This runtime and its spies must retain their shared static module graph;
+    // fresh dynamic imports would silently inspect a different module instance.
+    vi.resetModules();
     const failedRepository = new MemoryRepository(startingRecord);
     const failed = await createTideweftRuntime(failedRepository);
     try {
@@ -5963,12 +5969,10 @@ describe("runtime core-ecology vertical slice", () => {
       const before = requiredEnvelope(failedRepository);
       expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
       const beforeDiagnostics = inspector.getSnapshot();
-      const channels = await import("./situatedExpressionChannelBank");
-      const warnings = await import("./humanDangerWarningExpression");
-      const diagnostics = await import("./situatedExpressionDiagnostics");
-      const closure = vi.spyOn(channels, "closeSituatedExpressionChannelBankInterval").mockReturnValue(null);
-      const selected = vi.spyOn(warnings, "selectHumanDangerWarningExpression");
-      const append = vi.spyOn(diagnostics, "appendExpressionDiagnostic");
+      const closure = vi.spyOn(situatedExpressionChannels, "closeSituatedExpressionChannelBankInterval")
+        .mockReturnValue(null);
+      const selected = vi.spyOn(humanDangerWarnings, "selectHumanDangerWarningExpression");
+      const append = vi.spyOn(expressionDiagnostics, "appendExpressionDiagnostic");
       soundscapePlay.mockClear();
       try {
         advancePlayerSteps(failed, 1);
