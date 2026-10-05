@@ -3,6 +3,7 @@ import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 import {
+  PLAYER_EFFORT_REANNOUNCEMENT_STEPS,
   canonicalizePlayerEffortRecencyState,
   createPlayerEffortRecencyState,
   playerEffortRecencyAllowsExpression,
@@ -10,6 +11,7 @@ import {
   type PlayerEffortRecencyReceipt,
 } from "./playerEffortRecency";
 import { createPlayerStepStateAnchor, createPlayerStepStateSample } from "./playerStepState";
+import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import { createPlayerExhaustionExpressionAdmissionRecord } from "./situatedExpressionAdmissionLedger";
 import { createWorldPosition, translateWorldPosition } from "./worldPosition";
 
@@ -36,16 +38,26 @@ function receipt(ordinal = 0): PlayerEffortRecencyReceipt {
 }
 
 describe("bounded accepted effort recency, separate from sound carry", () => {
-  it("blocks through35 accepted steps and expires exactly at36 across intervals", () => {
+  it("blocks through599 accepted steps and expires exactly at600 across intervals", () => {
+    expect(PLAYER_EFFORT_REANNOUNCEMENT_STEPS).toBe(600);
+    expect(situatedExpressionCooldownSteps("need-rest-after-exertion")).toEqual({ meaning: 36, family: 12 });
+    expect(playerEffortRecencyAllowsExpression(createPlayerEffortRecencyState(SEED), SEED, {
+      completedTick: 420, playerStepPhase: 1,
+    })).toBe(true);
     const state = recordAcceptedPlayerEffortExpression(SEED, receipt());
     expect(state).not.toBeNull();
-    for (let steps = 0; steps < 36; steps += 1) {
+    expect(state?.lastAccepted).toEqual(receipt());
+    for (let steps = 0; steps < 600; steps += 1) {
       const phase = 1 + steps;
       expect(playerEffortRecencyAllowsExpression(state, SEED, {
         completedTick: 420 + Math.floor(phase / 10), playerStepPhase: phase % 10,
       })).toBe(false);
     }
-    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 423, playerStepPhase: 7 })).toBe(true);
+    expect(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 480, playerStepPhase: 0 })?.lastAccepted)
+      .toEqual(state?.lastAccepted);
+    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 480, playerStepPhase: 1 })).toBe(true);
+    expect(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 480, playerStepPhase: 1 }))
+      .toEqual(createPlayerEffortRecencyState(SEED));
   });
 
   it("normalizes actual phase ten, rather than admission's compatibility phase-nine clamp", () => {
@@ -53,8 +65,11 @@ describe("bounded accepted effort recency, separate from sound carry", () => {
     expect(state?.lastAccepted?.step.sampleOrdinal).toBe(9);
     expect(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 420, playerStepPhase: 9 })).toBeNull();
     expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 421, playerStepPhase: 0 })).toBe(false);
-    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 424, playerStepPhase: 5 })).toBe(false);
-    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 424, playerStepPhase: 6 })).toBe(true);
+    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 424, playerStepPhase: 6 })).toBe(false);
+    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 480, playerStepPhase: 9 })).toBe(false);
+    expect(playerEffortRecencyAllowsExpression(state, SEED, { completedTick: 481, playerStepPhase: 0 })).toBe(true);
+    expect(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 481, playerStepPhase: 0 })?.lastAccepted)
+      .toBeNull();
   });
 
   it("uses only accepted clock frontiers; pause and batched continuation do not invent decay", () => {
@@ -63,13 +78,37 @@ describe("bounded accepted effort recency, separate from sound carry", () => {
     expect(canonicalizePlayerEffortRecencyState(state, SEED, paused)).toEqual(state);
     expect(canonicalizePlayerEffortRecencyState(JSON.parse(JSON.stringify(state)), SEED, paused)).toEqual(state);
     let sequential = state;
-    for (let phase = 2; phase <= 37; phase += 1) {
+    for (let phase = 2; phase <= 601; phase += 1) {
       sequential = canonicalizePlayerEffortRecencyState(sequential, SEED, {
         completedTick: 420 + Math.floor(phase / 10), playerStepPhase: phase % 10,
       });
+      if (phase <= 600) expect(sequential?.lastAccepted).toEqual(state?.lastAccepted);
     }
-    expect(sequential).toEqual(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 423, playerStepPhase: 7 }));
+    expect(sequential).toEqual(canonicalizePlayerEffortRecencyState(state, SEED, { completedTick: 480, playerStepPhase: 1 }));
     expect(sequential).toEqual(createPlayerEffortRecencyState(SEED));
+  });
+
+  it("roundtrips current history beyond the old36-step sound cooldown without changing its accepted origin", () => {
+    const state = recordAcceptedPlayerEffortExpression(SEED, receipt());
+    if (state?.lastAccepted == null) throw new Error("invalid fixture");
+    for (const clock of [
+      { completedTick: 423, playerStepPhase: 7 }, // age36: the pending-sound meaning lock has ended.
+      { completedTick: 423, playerStepPhase: 8 }, // age37: historical eligibility remains quiet.
+      { completedTick: 480, playerStepPhase: 0 }, // age599: the last quiet frontier.
+    ]) {
+      const restored = canonicalizePlayerEffortRecencyState(JSON.parse(JSON.stringify(state)), SEED, clock);
+      expect(restored).toEqual(state);
+      expect(restored?.lastAccepted?.admission).toEqual(state.lastAccepted.admission);
+      expect(playerEffortRecencyAllowsExpression(restored, SEED, clock)).toBe(false);
+      expect(Object.isFrozen(restored?.lastAccepted)).toBe(true);
+      expect(Object.keys(restored ?? {}).sort()).toEqual(["lastAccepted", "rootSeed", "version"]);
+      expect(Object.keys(restored?.lastAccepted ?? {}).sort()).toEqual([
+        "admission", "afterPosition", "beforePosition", "predecessor", "step",
+      ]);
+      for (const replayableKey of ["active", "text", "caption", "reception", "audioAcknowledged", "remainingSteps"]) {
+        expect(JSON.stringify(restored)).not.toContain(`"${replayableKey}":`);
+      }
+    }
   });
 
   it("rejects malformed, cross-world, future or contradictory accepted-history facts", () => {

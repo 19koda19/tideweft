@@ -1577,14 +1577,14 @@ describe("production terrain fall and physical cargo", () => {
         // The normal movement adapter owns every physical step. No voice,
         // stamina, camp, admission or sound is injected after initial setup.
         runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
-        for (let step = 1; step <= 40; step += 1) {
+        for (let step = 1; step <= 80; step += 1) {
           advancePlayerSteps(runtime, 1);
           const expression = runtime.getRenderView().expressions?.find(({ sourceActorId }) => (
             sourceActorId === "player:local"
           ));
           const newEvent = expression !== undefined && !seen.has(expression.id);
           // Both runs perform the same explicit save actions.
-          if (newEvent || step % 10 === 0 || step === 19) {
+          if (newEvent || step % 10 === 0 || step === 49) {
             await runtime.save();
             const saved = decodeCurrent(repository.snapshot());
             if (newEvent) {
@@ -1651,7 +1651,7 @@ describe("production terrain fall and physical cargo", () => {
     };
 
     const uninterrupted = await run(null);
-    const restored = await run(19);
+    const restored = await run(49);
     expect(restored.events).toEqual(uninterrupted.events);
     expect(restored.modes).toEqual(uninterrupted.modes);
     expect(restored.boundaryCarries).toEqual(uninterrupted.boundaryCarries);
@@ -1662,13 +1662,15 @@ describe("production terrain fall and physical cargo", () => {
     expect(uninterrupted.diagnosticRecords.filter(({ reason }) => reason === "accepted"))
       .toHaveLength(uninterrupted.events.length);
     expect(uninterrupted.audioCalls).toBe(uninterrupted.events.length);
-    // The actual physical sequence is unchanged. Consuming sound no longer
-    // truncates the accepted expression's independently retained cooldown.
-    expect(uninterrupted.events.length).toBeGreaterThan(1);
-    expect(uninterrupted.events.slice(1).every((event, index) => (
-      event.step - uninterrupted.events[index]!.step >= 36
-    ))).toBe(true);
-    expect(uninterrupted.events.map(({ step }) => step)).toEqual([1, 38]);
+    // Several real micro-recoveries still happen. The optional effort utterance
+    // stays quiet beyond the unchanged 36-step pending-sound cooldown, including
+    // after a current reload at step49. No physical transition is suppressed.
+    const campEntries = uninterrupted.modes.filter(({ mode }, index, modes) => (
+      mode === "camp" && (index === 0 || modes[index - 1]!.mode !== "camp")
+    ));
+    expect(campEntries.length).toBeGreaterThan(1);
+    expect(uninterrupted.events.map(({ step }) => step)).toEqual([1]);
+    expect(uninterrupted.final.playerExpressionRecency.effort.lastAccepted).not.toBeNull();
     const { session: _firstSession, integrity: _firstIntegrity,
       regionalTravel: _firstTravel, ...firstRoots } = uninterrupted.final;
     const { session: _restoredSession, integrity: _restoredIntegrity,
@@ -1692,14 +1694,18 @@ describe("production terrain fall and physical cargo", () => {
     const firstTravel = comparableTravel(uninterrupted.final);
     const restoredTravel = comparableTravel(restored.final);
     expect(restoredTravel.facts).toEqual(firstTravel.facts);
-    expect(restoredTravel.revision).toBe(firstTravel.revision + 1);
+    // This later reload adopts an already-published, unchanged chart. Unlike
+    // the former step19 capture, it creates no additional publication revision;
+    // every cartographic fact is still compared above.
+    expect(restoredTravel.revision).toBe(firstTravel.revision);
     console.info("Held-input exhaustion cooldown proof", {
       scope: "controlled current runtime, not natural play rate or hours annoyance acceptance",
-      fixedSteps: 40,
+      fixedSteps: 80,
+      physicalCampEntrySteps: campEntries.map(({ step }) => step),
       acceptedEventSteps: uninterrupted.events.map(({ step }) => step),
       actualVocalAudio: uninterrupted.audioCalls,
       consumedIntervals: uninterrupted.boundaryCarries.length,
-      reloadAtStep: 19,
+      reloadAtStep: 49,
       currentReloadEventAndPhysicalEquivalence: true,
       excludedPublicationFields: ["session", "envelope integrity", "chart revision and seals"],
     });

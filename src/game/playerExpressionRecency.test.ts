@@ -4,6 +4,7 @@ import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { playerEffortExpressionPolicy } from "./playerEffortExpression";
 import {
+  PLAYER_EFFORT_REANNOUNCEMENT_STEPS,
   canonicalizePlayerEffortRecencyState,
   recordAcceptedPlayerEffortExpression,
   type PlayerEffortRecencyClock,
@@ -316,7 +317,9 @@ describe("bounded player-expression choice history contract", () => {
     }, SEED, clockAt(1))).toBeNull();
   });
 
-  it("delegates existing effort history and its 36-step decay unchanged", () => {
+  it("delegates the effort-only600-step eligibility while leaving the pending-sound and footing laws unchanged", () => {
+    expect(PLAYER_EFFORT_REANNOUNCEMENT_STEPS).toBe(600);
+    expect(situatedExpressionCooldownSteps("need-rest-after-exertion")).toEqual({ meaning: 36, family: 12 });
     const evidence = {
       committedWorldTick: INITIAL_TICK, admittedAtPlayerStepPhase: 1,
       acceptedDistanceUnits: 105, resolution: "dry-exhaustion-camp" as const,
@@ -339,13 +342,25 @@ describe("bounded player-expression choice history contract", () => {
     });
     if (effort === null) throw new Error("Effort fixture lost existing validation");
     const combined = { ...createPlayerExpressionRecencyState(SEED), effort };
-    for (let age = 0; age <= 36; age += 1) {
+    for (let age = 0; age <= 600; age += 1) {
       const clock = clockAt(1 + age);
       const restored = canonicalizePlayerExpressionRecencyState(combined, SEED, clock);
       expect(restored?.effort).toEqual(canonicalizePlayerEffortRecencyState(effort, SEED, clock));
       expect(restored?.footing).toEqual([]);
+      if (age < 600) expect(restored?.effort.lastAccepted).toEqual(effort.lastAccepted);
     }
-    expect(canonicalizePlayerExpressionRecencyState(combined, SEED, clockAt(37)))
+    expect(canonicalizePlayerExpressionRecencyState(combined, SEED, clockAt(601)))
       .toEqual(createPlayerExpressionRecencyState(SEED));
+
+    const withFooting = accepted(combined, footing("ordinary-stumble", 7), 7);
+    const restored = canonicalizePlayerExpressionRecencyState(JSON.parse(JSON.stringify(withFooting)), SEED, clockAt(38));
+    expect(restored).toEqual(combined);
+    expect(restored?.effort.lastAccepted?.admission).toEqual(admission);
+    expect(Object.keys(restored ?? {})).toEqual(["version", "effort", "footing"]);
+    expect(restored?.footing).toEqual([]);
+    expect(Object.isFrozen(restored?.effort.lastAccepted)).toBe(true);
+    for (const replayableKey of ["active", "text", "caption", "reception", "audioAcknowledged", "remainingSteps"]) {
+      expect(JSON.stringify(restored)).not.toContain(`"${replayableKey}":`);
+    }
   });
 });

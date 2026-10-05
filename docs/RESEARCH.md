@@ -1056,6 +1056,57 @@ physical-glyph encounter, not dog/human/physical coexistence, audio, assistive
 output, replay, full conservation, hours, performance, mobile hardware or
 directive closure. No application change or public release was made.
 
+#### Sparse optional exhaustion reannouncement — 2026-10-04
+
+An ordinary three-minute Chart exploration on local `1f7deff` exposed a real
+repetition problem: 25 sampled exhaustion lines, often about four seconds
+apart, among 29 player lines. The existing 36-step semantic policy was working
+as designed; repeated physical micro-recoveries created fresh occasions too
+soon. The repair changes only the existing accepted-effort history owner:
+after one optional murmur, another fresh exhaustion must wait 600 accepted
+player steps. The first qualifying exhaustion remains eligible. The pending
+kernel's 36/12-step meaning/family law, physical movement, stamina, camp,
+wording, event identities, hearing, and already-committed audio are unchanged.
+The [canonical contract](ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline)
+distinguishes admission eligibility from sound presentation and propagation.
+
+Two recency unit files / 17 tests pass, including exact 599/600 expiry,
+phase-ten, pause, batched advancement, and detached current-history roundtrip
+beyond the former 36-step horizon. Eight selected runtime effort tests pass.
+An 80-step held-input fixture compares uninterrupted and reload-at-49 runs:
+multiple actual camp entries remain, only the first exhaustion speaks, current
+roots/carry/event/mode/stamina/audio agree, and consumed sound cannot replay.
+Its later reload adopts an already-published chart, so the earlier step-19
+publication-counter expectation was corrected without dropping fact equality.
+A separate recheck of the strengthened camp-entry oracle passes. Nine affected
+kernel/channel/reception/acoustics/trajectory/admission/causal/diagnostic files /
+148 tests and critical smoke / 105 tests pass. Typecheck, production web build,
+and nested-path static smoke pass. Outer49/carry14 and wire shape are unchanged;
+existing supported records load forward, forgotten null history stays null.
+Older executables' former pruning rule cannot read newly retained age36–599
+history; no reverse-reader compatibility is claimed.
+
+The same finite ordinary native-control exploration was repeated against the
+dirty candidate's production bundle
+`519d46b88be2f85f35c40b0477e0fec46948c485d582d0f1d85b721a7a77e00d`.
+Actual attempt: 180.407 seconds; observation: 180.892 seconds / 1,275 reads,
+ticks420→600. It sampled five player lines, including two exhaustion wordings
+at 66.085/135.114 seconds, twelve physical cues, and no adjacent sampled wording
+repeat or overflow. Earlier observation was 180.486 seconds / 1,341 reads,
+ticks420→599, eight physical cues and eleven adjacent wording repeats. The
+probe changed only its nonoverwriting output suffix; seed, ordinary controls,
+viewport and production serving stayed the same. Wall-timed paths and terminal
+work differ: these counts are a playtest observation, not an exact before/after
+simulation equivalence or performance claim. Result SHA256:
+`0c1fbbb7f5075957a812f6ba1e7dec37c1e789f548f2595da88e6cb2ddea78b4`.
+
+The final Chart screenshot was inspected. Browser exited normally and its
+disposable profile was removed; only the known startup CSP eval-probe denial
+was logged. No canine call was encountered, so that opportunity remains open.
+No hours-of-play, audible/assistive quality, mobile hardware, desktop package,
+complete cumulative, public release, or whole-Voice closure is certified here.
+Dependencies, upstream code, save policy and completed directives are unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

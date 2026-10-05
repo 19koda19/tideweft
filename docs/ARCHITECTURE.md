@@ -1002,9 +1002,16 @@ footing. Historical pairs obey the priority-qualified family law at their
 acceptance frontiers, not merely today's ages.
 Age derives from the authoritative world tick and actual physical step ordinal;
 the tenth step is the next tick's phase zero, not the old admission's phase-nine
-compatibility clamp. Existing 36-step exhaustion and 12/16-step footing meaning
-cooldowns survive consumed hearing intervals and current save/reload; each
-record is pruned at expiry. It contains no
+compatibility clamp. The pending exhaustion channel retains its unchanged
+36-step semantic cooldown, but the existing effort-history owner now requires
+600 accepted player steps before another fresh dry-exhaustion transition may
+utter that optional murmur. This separate pre-admission eligibility rule limits
+micro-recovery cycling; it does not delay or erase committed sound, change
+movement/stamina/camp, generate a timed line, or silence unrelated warnings.
+The same one physical-origin receipt survives consumed intervals and current
+save/reload, then prunes at the 600-step horizon. Previously forgotten consumed
+history is not reconstructed when loading older supported records. The 12/16-step
+footing meaning locks remain unchanged. This state contains no
 audio, caption or hearing queue and cannot replay an old event. New history
 commits only after expression admission and rolls back with a failed tick.
 Pending origins must exactly match the current physical/admission carry;

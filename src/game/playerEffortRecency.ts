@@ -16,6 +16,13 @@ import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import { createWorldPosition, isWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 export const PLAYER_EFFORT_RECENCY_VERSION = 1 as const;
+/**
+ * Repeated micro-recoveries are not new conversational occasions. This quiet
+ * eligibility window is separate from the unchanged pending-sound cooldown.
+ * After one murmur, another fresh physical exhaustion may speak only after
+ * 600 accepted steps. The first qualifying exhaustion remains eligible.
+ */
+export const PLAYER_EFFORT_REANNOUNCEMENT_STEPS = 600 as const;
 const PLAYER_STEPS_PER_WORLD_TICK = 10;
 
 /** Accepted history, not a pending acoustic event or a presentation queue. */
@@ -67,7 +74,9 @@ export function canonicalizePlayerEffortRecencyState(
   const age = playerEffortRecencyAge(receipt, clock);
   const cooldown = situatedExpressionCooldownSteps("need-rest-after-exertion");
   if (age === null || cooldown === null) return null;
-  return freezeState(rootSeed, age >= cooldown.meaning ? null : receipt);
+  return freezeState(rootSeed, age >= Math.max(
+    cooldown.meaning, PLAYER_EFFORT_REANNOUNCEMENT_STEPS,
+  ) ? null : receipt);
 }
 
 /** A fresh physical exhaustion can be quiet without erasing any physical event. */
