@@ -20,6 +20,7 @@ import {
   acousticTextRectsOverlap,
   DEFAULT_ACOUSTIC_TEXT_GUTTER,
   MAX_ACOUSTIC_TEXT_PLACEMENTS,
+  type AcousticTextRect,
 } from "./acousticTextLayout";
 
 export const ALPHA31_PREDATOR_PRESENTATION_OWNER_INTENT =
@@ -613,6 +614,7 @@ function renderHarness(
   options: {
     readonly chunkSize?: number;
     readonly viewport?: { readonly width: number; readonly height: number };
+    readonly getAcousticTextReservations?: () => readonly AcousticTextRect[];
   } = {},
 ) {
   const { viewport, ...rendererOptions } = options;
@@ -2289,7 +2291,7 @@ describe("Relief situated expression presentation", () => {
       expect(acoustic?.hidden).toBe(false);
       expect(acoustic?.style.left).toBe(`${(rect.x + rect.width / 2).toFixed(1)}px`);
       expect(sharedLayout).toHaveBeenLastCalledWith(current.acousticText,
-        playerPresentation.actorCalloutViewport(width, height), expect.any(Function));
+        playerPresentation.actorCalloutViewport(width, height), expect.any(Function), undefined);
 
       sharedLayout.mockReturnValue({ ...result,
         placements: [{ ...placed, rect: { ...rect, y: rect.y + 140 } }] });
@@ -2315,6 +2317,102 @@ describe("Relief situated expression presentation", () => {
         harness.draw();
         expect(harbor.hidden).toBe(false);
       }
+    } finally {
+      sharedLayout.mockRestore();
+      harness.renderer.destroy();
+    }
+  });
+
+  it.each([
+    [844, 390, false], [1_280, 720, false],
+    [844, 390, true], [1_280, 720, true],
+  ] as const)("lets an unrelated porter emotion yield only to placed acoustic occupancy at %sx%s (reduced motion: %s)", (width, height, reducedMotion) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = reducedMotion;
+    // Force the ordinary projection beyond the edge: arbitration must use
+    // the final eased/clamped CSS position, not the raw projected anchor.
+    p5Harness.projectionShiftX = width * 2;
+    const base = view("unrelated-porter-acoustic-conflict", { x: 48, y: 48 });
+    const porter = Object.freeze({
+      actorId: "human:quiet-unrelated", id: "porter:quiet-unrelated",
+      quickLabel: "Unknown porter", position: Object.freeze({ x: 48, y: 48 }),
+      facing: 0, state: "waiting" as const, emotionMark: ":|" as const, selected: false,
+    });
+    const porters = Object.freeze([porter]);
+    const speech: AcousticTextView = {
+      acousticKind: "speech", id: "unrelated-speaker-speech", sourceActorId: "human:speaker",
+      sourceKind: "human", speakerLabel: "Nearby person", text: "Good day.",
+      position: { x: 48, y: 48 }, progress: 0.2, priority: 900_000,
+      salience: 900_000, tone: "restrained", variantSeed: 1,
+    };
+    let current: TideweftView = { ...base, porters, acousticText: [] };
+    const originalPorters = JSON.stringify(porters);
+    const harness = renderHarness(current, { viewport: { width, height } });
+    const sharedLayout = vi.spyOn(playerPresentation, "layoutAcousticTextCallouts");
+    try {
+      harness.draw();
+      const layer = harness.mount.children.find(({ className }) => className === "relief-label-layer");
+      const emotion = layer?.children.find(({ dataset, removed }) => (
+        dataset.tone === "porter-emotion" && !removed
+      ));
+      if (!emotion || !layer) throw new Error("Expected unrelated observable porter emotion");
+      expect(emotion.textContent).toBe(porter.emotionMark);
+      expect(emotion.hidden).toBe(false);
+      const originalPosition = { ...emotion.style };
+      expect(Number.parseFloat(emotion.style.left!)).toBe(width - 12 - 144);
+      const rect = {
+        x: Number.parseFloat(emotion.style.left!) - 40,
+        y: Number.parseFloat(emotion.style.top!) - 18, width: 80, height: 22,
+      };
+      const placed = {
+        candidate: { id: speech.id, sourceId: speech.sourceActorId, priority: speech.priority,
+          salience: speech.salience, anchor: { x: rect.x, y: rect.y },
+          box: { width: rect.width, height: rect.height }, acousticText: speech },
+        laneId: "above", rect,
+      };
+      const result = { placements: [placed], suppressions: [] };
+      sharedLayout.mockReturnValue(result);
+      const measurement = vi.spyOn(emotion, "getBoundingClientRect").mockImplementation(() => {
+        throw new Error("Optional state arbitration must not force DOM measurement");
+      });
+      const bodyDraw = harness.instance.ellipsoid as ReturnType<typeof vi.fn>;
+      const bodyCallsPerFrame = bodyDraw.mock.calls.length;
+      expect(bodyCallsPerFrame).toBeGreaterThan(0);
+      current = { ...current, acousticText: [speech] };
+      harness.setView(current);
+      harness.draw();
+      expect(emotion.hidden).toBe(true);
+      expect(emotion.removed).toBe(false);
+      expect(emotion.style).toEqual(originalPosition);
+      expect(bodyDraw).toHaveBeenCalledTimes(bodyCallsPerFrame * 2);
+      const acoustic = layer.children.find(({ dataset, removed }) => (
+        dataset.acousticKind === "speech" && !removed
+      ));
+      expect(acoustic?.hidden).toBe(false);
+      expect(acoustic?.textContent).toBe(speech.text);
+      expect(speech.sourceActorId).not.toBe(porter.actorId);
+      expect(current.porters).toBe(porters);
+      expect(JSON.stringify(current.porters)).toBe(originalPorters);
+
+      sharedLayout.mockReturnValue({ ...result,
+        placements: [{ ...placed, rect: { ...rect, y: rect.y + 140 } }] });
+      harness.draw();
+      expect(emotion.hidden).toBe(false);
+      expect(emotion.style).toEqual(originalPosition);
+
+      // A real input candidate with no placed envelope occupies no pixels.
+      sharedLayout.mockReturnValue({ placements: [], suppressions: [] });
+      harness.draw();
+      expect(emotion.hidden).toBe(false);
+      const { acousticText: _acousticText, ...legacy } = current;
+      for (const restored of [{ ...current, acousticText: [] }, legacy]) {
+        harness.setView(restored);
+        harness.draw();
+        expect(emotion.hidden).toBe(false);
+        expect(emotion.textContent).toBe(porter.emotionMark);
+        expect(JSON.stringify(restored.porters)).toBe(originalPorters);
+      }
+      expect(measurement).not.toHaveBeenCalled();
     } finally {
       sharedLayout.mockRestore();
       harness.renderer.destroy();
@@ -2373,7 +2471,9 @@ describe("Relief situated expression presentation", () => {
     };
     const layout = playerPresentation.layoutAcousticTextCallouts;
     const sharedLayout = vi.spyOn(playerPresentation, "layoutAcousticTextCallouts");
-    const harness = renderHarness(current, { viewport: { width, height } });
+    let reservedRects: readonly AcousticTextRect[] = [];
+    const harness = renderHarness(current, { viewport: { width, height },
+      getAcousticTextReservations: () => reservedRects });
     try {
       expect(harness.instance).toMatchObject({ width, height });
       expect(harness.mount.getBoundingClientRect()).toMatchObject({ width, height });
@@ -2456,6 +2556,14 @@ describe("Relief situated expression presentation", () => {
       expect(crowdedResult.snapshot.map(({ id }) => id)).toContain("mixed-speech");
       expect(crowdedResult.snapshot.map(({ id }) => id)).not.toContain("mixed-repeated-source");
       expect(drawAndCompare().snapshot).toEqual(crowdedResult.snapshot);
+      current = { ...current, acousticText };
+      harness.setView(current);
+      reservedRects = [{ x: 0, y: 0, width, height }];
+      expect(drawAndCompare().snapshot).toEqual([]);
+      expect(current.acousticText).toBe(acousticText);
+      reservedRects = [];
+      expect(drawAndCompare().snapshot.map(({ id, rect }) => ({ id, rect })))
+        .toEqual(first.snapshot.map(({ id, rect }) => ({ id, rect })));
       current = { ...current, acousticText: [] };
       harness.setView(current);
       expect(drawAndCompare().snapshot).toEqual([]);

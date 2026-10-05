@@ -1242,6 +1242,13 @@ function assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal = fal
   for (const label of snapshot.labels) {
     if (!inside(label.rect) || !label.matchesProjection || label.horizontalOverflow
       || label.verticalOverflow) throw new Error('Voice label is clipped or is not a current heard projection');
+    for (const feedback of feedbackRects) {
+      const rect = label.rect;
+      if (rect.x < feedback.x + feedback.width && rect.x + rect.width > feedback.x
+        && rect.y < feedback.y + feedback.height && rect.y + rect.height > feedback.y) {
+        throw new Error('Voice DOM label overlaps field feedback');
+      }
+    }
   }
   for (let left = 0; left < snapshot.labels.length; left += 1) {
     for (let right = left + 1; right < snapshot.labels.length; right += 1) {
@@ -1273,7 +1280,9 @@ function assertPairedGreetingSnapshot(snapshot, mode) {
   if (mode === 'relief-3d' && (!Number.isSafeInteger(pair.ordinaryWorldLabelCount)
     || pair.ordinaryWorldLabelCount < 0 || pair.ordinaryWorldLabelCount > 64
     || pair.ordinaryWorldLabelOverlapCount !== 0)) {
-    throw new Error('Paired greeting overlaps an ordinary Relief world label or lacks its bounded witness');
+    throw new Error('Paired greeting overlaps an ordinary Relief world label or lacks its bounded witness: '
+      + JSON.stringify({ viewport: snapshot.viewport, count: pair.ordinaryWorldLabelCount,
+        overlaps: pair.ordinaryWorldLabelOverlaps ?? null }));
   }
   return snapshot;
 }
@@ -1515,8 +1524,11 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         if (ordinaryLabels.length > 64) throw new Error('Paired ordinary-label inspection exceeds its bound');
         const intersects = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x
           && a.y < b.y + b.height && a.y + a.height > b.y;
-        const ordinaryOverlapCount = visibleLabels.reduce((count, node) => count + ordinaryLabels.filter(
-          (ordinary) => intersects(geometry(node).rect, geometry(ordinary).rect)).length, 0);
+        const ordinaryOverlaps = visibleLabels.flatMap((node) => ordinaryLabels.filter(
+          (ordinary) => intersects(geometry(node).rect, geometry(ordinary).rect)).map((ordinary) => ({
+            acoustic: { text: node.textContent, ...geometry(node) },
+            ordinary: { text: ordinary.textContent, tone: ordinary.dataset.tone, ...geometry(ordinary) },
+          })));
         return {
           mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
           tick: bridge.runtime.getRenderView().tick,
@@ -1525,7 +1537,7 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
           liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
           labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
           feedback: {
-            chronicle: geometry(document.querySelector('.chronicle-panel > .panel-summary')).rect,
+            chronicle: geometry(document.querySelector('.chronicle-panel')).rect,
             dock: geometry(document.querySelector('.action-dock')).rect,
           },
           caption: caption && !caption.hidden ? { ...geometry(caption),
@@ -1547,7 +1559,8 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
             labelsMatchOneToOne: pairedMatches.every((index) => index >= 0)
               && new Set(pairedMatches).size === pairedMatches.length,
             ordinaryWorldLabelCount: ordinaryLabels.length,
-            ordinaryWorldLabelOverlapCount: ordinaryOverlapCount,
+            ordinaryWorldLabelOverlapCount: ordinaryOverlaps.length,
+            ordinaryWorldLabelOverlaps: ordinaryOverlaps,
           } }),
         };
       })()`);
@@ -1821,7 +1834,7 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
           liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
           labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
           feedback: {
-            chronicle: geometry(document.querySelector('.chronicle-panel > .panel-summary'))?.rect,
+            chronicle: geometry(document.querySelector('.chronicle-panel'))?.rect,
             dock: geometry(document.querySelector('.action-dock'))?.rect,
           },
           caption: caption && !caption.hidden ? { ...geometry(caption),

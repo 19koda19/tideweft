@@ -1222,6 +1222,69 @@ complete cumulative confidence, full expression lab or public release.
 Save49/carry14, dependencies, upstream source, physical rules, active order
 and completed directives are unchanged.
 
+#### Acoustic text versus field feedback — 2026-10-04
+
+Local work over `0feb672` checked the actual existing storm shelter-whine,
+player fall, and conserved Promise-cargo scene. Temporary test-only capture
+copied the scene's public renderer/UI views and was then removed; the original
+runtime test bytes match. A local adapter freezes those copies and mounts the
+real development renderer/UI with no runtime, save, audio, or gameplay command
+receiver. This is native presentation evidence from a controlled current
+producer fixture, not an ordinary canine encounter or production simulation.
+
+The initial 844×390 screenshot exposed a genuine overlap: WHINE... at
+`383.1,219.47,86,13.67` intersected the shared speech caption at
+`350.18,223.78,143.63,14.68` (CSS x/y/width/height). The previous snapshot
+validator compared world labels with each other and feedback with itself,
+but missed that boundary. The shared layout now receives three bounded UI
+reservations with cached mount-relative measurements, as specified by the
+[presentation owner](ARCHITECTURE.md#shared-acoustic-text-presentation-arbitration).
+It relocates within existing lanes or suppresses optional world text; hearing,
+audio, semantic events and accessible captions do not disappear with a label.
+
+Production paired-GREET testing then caught a relocated speech box clipping
+another resident's emotion mark in landscape view. Relief's existing optional
+harbor-label yielding now also covers optional actor labels and marks at their
+final eased/clamped envelope. Actor state/body rendering and essential
+destination/ADRIFT guidance remain intact. This conservative envelope can
+suppress a nearby noncolliding optional mark; it is not a complete all-label or
+arbitrary-font collision guarantee. The maintained native validator now rejects
+label intersections with caption, full EVENTS panel, and action dock, with
+synthetic rejection/touching-edge selftests and bounded conflict diagnostics.
+
+Final controlled Firefox 157 normal/reduced captures each pass four sizes
+(1280×720, 390×844, 320×640, 844×390) in Chart and Relief. Public fixture inputs
+remain byte-equivalent when serialized, with no meaningful dispatched commands.
+Desktop/portrait Relief show the actual player speech and uniquely matched
+shelter whine; short landscape retains speech and omits the whine. Lower
+physical cues are also unplaced; an absent glyph is not proof of an absent
+world event or of a particular suppression reason. Native DOM bounds,
+nonintersection with feedback/ordinary labels, caption/ARIA and exactly one
+announcement pass. Chart screenshots do not provide DOM acoustic-glyph proof.
+The final v4 normal/reduced records have SHA256
+`855f68e52e900ceaa750abed5051d1a65811b773a3380dd57c1ecf6783dff406`
+and `c65fa9019c542358225e7c443b75ba637d618a0add43ed65c4fa9ddff666380b`
+respectively. Actual desktop and landscape images
+were inspected. These local derivatives remain ignored.
+
+The production bundle `index-B8OhHy_S.js`, SHA256
+`b0c7f562a6d8a9cdb61b80190272b19e38c978e004277fac2b9e85c9fdd83250`,
+also passes the maintained `profile:browser -- --paired-greetings` and
+`--reduced-motion` witnesses through the real `/tideweft/` static artifact.
+Each uses two native selection/GREET actions, eight frozen presentation states,
+expiry, current-schema reload/nonreplay and guarded lifecycle checks. The
+earlier boundary failures and one run invalidated by concurrent test-file edits
+are not passing certificates; final records match stable inspected inputs.
+
+Affected presentation integration passes nine files/275 tests, including
+17 layout and nine reservation-cache tests; the real mixed runtime fixture
+passes both visible/unseen cases (22 unrelated cases excluded). Maintained
+critical smoke passes 105 tests; browser selftests, typecheck, production web
+build and static web smoke pass. This is not fresh desktop packaging, actual
+assistive speech/audio, mobile hardware, long-session performance, full
+cumulative confidence or public release. Save49/carry14, dependencies,
+upstream sources and simulation authority are unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

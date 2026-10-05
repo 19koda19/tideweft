@@ -332,6 +332,24 @@ assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot, labels: 
 assert.throws(() => assertVoicePresentationSnapshot(voiceSnapshot, 'chart-2d'), /caption/u);
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   labels: [...voiceSnapshot.labels, { ...voiceSnapshot.labels[0] }] }, 'relief-3d'), /overlap/u);
+// Supplied DOM rectangles characterize the validator, not an actual native
+// layout. Every feedback surface excludes labels, while touching is not overlap.
+for (const feedbackRect of [voiceSnapshot.caption.rect,
+  voiceSnapshot.feedback.chronicle, voiceSnapshot.feedback.dock]) {
+  const intersecting = { ...voiceSnapshot,
+    labels: [{ ...voiceSnapshot.labels[0], rect: {
+      x: feedbackRect.x + 10, y: feedbackRect.y + 1, width: 200, height: 40,
+    } }],
+  };
+  assert.throws(() => assertVoicePresentationSnapshot(intersecting, 'relief-3d'),
+    /Voice DOM label overlaps field feedback/u);
+  const touching = { ...voiceSnapshot,
+    labels: [{ ...voiceSnapshot.labels[0], rect: {
+      x: feedbackRect.x + feedbackRect.width, y: feedbackRect.y + 1, width: 20, height: 40,
+    } }],
+  };
+  assert.equal(assertVoicePresentationSnapshot(touching, 'relief-3d'), touching);
+}
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
   labels: [{ ...voiceSnapshot.labels[0], matchesProjection: false }] }, 'relief-3d'), /current heard projection/u);
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,

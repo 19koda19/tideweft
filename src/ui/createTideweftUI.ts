@@ -50,6 +50,7 @@ import {
   type PatchNotesOpenSource,
 } from "./patchNotesDialog";
 import { bindTitleAtmosphere } from "./titleAtmosphere";
+import { createAcousticTextReservationReader } from "./acousticTextReservations";
 
 export const WAYKNOT_KEY_SHORTCUT = "F";
 export const MOBILE_PROMISES_PANEL_ID = "promises-panel";
@@ -1247,6 +1248,8 @@ interface UIRefs {
   residentAboutLivingActions: HTMLDivElement;
   residentAboutActionHint: HTMLParagraphElement;
   chronicleDetails: HTMLDetailsElement;
+  fieldFeedback: HTMLDivElement;
+  actionDock: HTMLElement;
   chronicleSummary: HTMLElement;
   chronicleCount: HTMLSpanElement;
   chroniclePreview: HTMLSpanElement;
@@ -2353,6 +2356,8 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
     residentAboutLivingActions,
     residentAboutActionHint,
     chronicleDetails,
+    fieldFeedback,
+    actionDock,
     chronicleSummary,
     chronicleCount,
     chroniclePreview,
@@ -2407,6 +2412,12 @@ const buildShell = (options: TideweftUIOptions): UIRefs => {
 
 export function createTideweftUI(options: TideweftUIOptions): TideweftUIController {
   const refs = buildShell(options);
+  const acousticTextReservations = createAcousticTextReservationReader(
+    options.acousticTextMount,
+    [refs.expressionCaption, refs.chronicleDetails, refs.actionDock],
+    refs.fieldFeedback,
+  );
+  refs.chronicleDetails.addEventListener("toggle", acousticTextReservations.invalidate);
   const updatePerformance = createTideweftUIPerformanceProbe({
     countDomNodes: () => options.root.ownerDocument.getElementsByTagName("*").length,
     ...(options.performanceTelemetryEnabled === undefined
@@ -2438,6 +2449,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastChronicle = "";
   let lastResidentAbout = "__unrendered__";
   let lastAnnouncement = "";
+  let lastCaptionReservationId: string | undefined;
   const expressionAnnouncementLedger = createAcousticCaptionAnnouncementLedger();
   let acousticCaptionWorldReplacementDispatched = false;
   let lastNavigationCopy = "";
@@ -2483,6 +2495,10 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   const renderExpressionCaption = (
     caption: TideweftUIView["expressionCaption"],
   ): void => {
+    if (caption?.id !== lastCaptionReservationId) {
+      lastCaptionReservationId = caption?.id;
+      acousticTextReservations.invalidate();
+    }
     if (!caption) {
       refs.expressionCaption.hidden = true;
       return;
@@ -3106,6 +3122,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     }
     const revision = String(view.revision);
     const isNewRevision = revision !== lastRevision;
+    if (isNewRevision) acousticTextReservations.invalidate();
     if (!isNewRevision) {
       syncDialog(refs.titleDialog, titlePresented && !refs.patchNotes.isOpen());
       syncDialog(
@@ -3544,6 +3561,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
 
   return {
     update,
+    getAcousticTextReservations: acousticTextReservations.get,
     getPerformanceTelemetry: updatePerformance.getSnapshot,
     setPerformanceTelemetryEnabled: updatePerformance.setEnabled,
     resetPerformanceTelemetry: updatePerformance.reset,
@@ -3576,6 +3594,8 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
+      acousticTextReservations.destroy();
+      refs.chronicleDetails.removeEventListener("toggle", acousticTextReservations.invalidate);
       liveRegionAnnouncements.destroy();
       restoreResidentAboutFocus();
       mobileBrace.destroy();

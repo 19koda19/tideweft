@@ -11,6 +11,7 @@ import type { RendererTelemetrySnapshot } from "../render/rendererTelemetry";
 import type { RuntimePerformanceSnapshot } from "../performance/runtimePerformanceTelemetry";
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
+import type { AcousticTextRect } from "../render/acousticTextLayout";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -663,6 +664,8 @@ export type TideweftUICommand =
 
 export interface TideweftUIOptions {
   readonly root: HTMLElement;
+  /** Optional coordinate mount for shared acoustic-label feedback reservations. */
+  readonly acousticTextMount?: HTMLElement;
   readonly getView: () => TideweftUIView | null | undefined;
   /** Live renderer instrumentation; intentionally excluded from saved/view revision state. */
   readonly getRendererTelemetry?: () => RendererTelemetrySnapshot;
@@ -680,6 +683,7 @@ export interface TideweftUIOptions {
 
 export interface TideweftUIController {
   readonly update: (view?: TideweftUIView | null) => void;
+  readonly getAcousticTextReservations: () => readonly AcousticTextRect[];
   /** Non-authoritative presentation measurements; never enters view/save state. */
   readonly getPerformanceTelemetry: () => TideweftUIPerformanceTelemetry;
   readonly setPerformanceTelemetryEnabled: (

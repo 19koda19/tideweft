@@ -41,6 +41,8 @@ export interface AcousticTextCandidate {
 }
 
 export const MAX_ACOUSTIC_TEXT_PLACEMENTS = 4;
+/** Caption, event feedback and journey controls; never a world-object list. */
+export const MAX_ACOUSTIC_TEXT_RESERVED_RECTS = 3;
 export const DEFAULT_ACOUSTIC_TEXT_PER_SOURCE_CAP = 1;
 export const DEFAULT_ACOUSTIC_TEXT_GUTTER = 8;
 /**
@@ -59,6 +61,8 @@ export interface AcousticTextLayoutOptions {
   readonly perSourceCap?: number;
   /** Minimum screen-space separation between placed rectangles. */
   readonly gutter?: number;
+  /** Current measured feedback boxes in the same coordinates as the viewport. */
+  readonly reservedRects?: readonly AcousticTextRect[];
 }
 
 export interface AcousticTextPlacement<
@@ -131,13 +135,24 @@ function compareCandidates<Candidate extends AcousticTextCandidate>(
     || left.inputIndex - right.inputIndex;
 }
 
-const validRect = (rect: AcousticTextRect): boolean =>
-  Number.isFinite(rect.x)
+const validRect = (rect: AcousticTextRect | null | undefined): boolean =>
+  rect !== null && rect !== undefined
+  && Number.isFinite(rect.x)
   && Number.isFinite(rect.y)
   && Number.isFinite(rect.width)
   && Number.isFinite(rect.height)
   && rect.width > 0
   && rect.height > 0;
+
+function validReservedRects(rects: readonly AcousticTextRect[]): boolean {
+  if (!Array.isArray(rects) || rects.length > MAX_ACOUSTIC_TEXT_RESERVED_RECTS) return false;
+  // Indexed validation rejects holes rather than treating a sparse array as
+  // empty occupancy. This loop always has at most three entries.
+  for (let index = 0; index < rects.length; index += 1) {
+    if (!validRect(rects[index])) return false;
+  }
+  return true;
+}
 
 const validCandidate = (candidate: AcousticTextCandidate): boolean =>
   candidate.id.trim().length > 0
@@ -269,6 +284,8 @@ export function layoutAcousticText<Candidate extends AcousticTextCandidate>(
     : DEFAULT_ACOUSTIC_TEXT_GUTTER;
   const lanes = canonicalLanes(options.lanes);
   const viewport = validRect(options.viewport) ? options.viewport : null;
+  const reservedRects = options.reservedRects === undefined ? [] : options.reservedRects;
+  const validReservations = validReservedRects(reservedRects);
   const ordered = candidates
     .map((candidate, inputIndex): IndexedCandidate<Candidate> => ({ candidate, inputIndex }))
     .sort(compareCandidates);
@@ -305,11 +322,18 @@ export function layoutAcousticText<Candidate extends AcousticTextCandidate>(
       suppressions.push(suppression(candidate, "no-fitting-lane"));
       continue;
     }
+    // A malformed host reservation cannot let text draw through essential UI.
+    if (!validReservations) {
+      suppressions.push(suppression(candidate, "overlap"));
+      continue;
+    }
     for (const lane of lanes) {
       const rect = rectInLane(candidate, lane, viewport);
       if (rect === null) continue;
       fittingLaneCount += 1;
-      const overlaps = placements.some((placed) => (
+      const overlaps = reservedRects.some((reserved) => (
+        acousticTextRectsOverlap(rect, reserved, gutter)
+      )) || placements.some((placed) => (
         acousticTextRectsOverlap(rect, placed.rect, gutter)
       ));
       if (overlaps) continue;

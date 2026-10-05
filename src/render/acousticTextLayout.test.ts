@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   MAX_ACOUSTIC_TEXT_PLACEMENTS,
+  MAX_ACOUSTIC_TEXT_RESERVED_RECTS,
   acousticTextRectsOverlap,
   layoutAcousticText,
   type AcousticTextCandidate,
   type AcousticTextLane,
+  type AcousticTextRect,
 } from "./acousticTextLayout";
 
 const lanes: readonly AcousticTextLane[] = [
@@ -203,6 +205,140 @@ describe("acoustic text layout", () => {
       { x: 44, y: 0, width: 40, height: 16 },
       4,
     )).toBe(false);
+  });
+
+  it("preserves exact existing decisions when reservations are omitted or empty", () => {
+    const input = [
+      candidate("speech", "source:speech", 10, 10),
+      candidate("call", "source:call", 8, 7),
+      candidate("contact", "source:contact", 2, 2),
+    ];
+    const existing = layoutAcousticText(input, { lanes, viewport, gutter: 4 });
+
+    expect(existing.placements).toHaveLength(3);
+    expect(layoutAcousticText(input, { lanes, viewport, gutter: 4, reservedRects: [] }))
+      .toEqual(existing);
+  });
+
+  it("relocates a label from reserved feedback to the next clean authored lane", () => {
+    const input = [candidate("whine", "source:dog", 10, 10)];
+    const feedback = { x: 96, y: 12, width: 48, height: 16 };
+    const original = layoutAcousticText(input, { lanes, viewport, gutter: 4 });
+    expect(original.placements).toMatchObject([{ laneId: "above", rect: feedback }]);
+
+    const result = layoutAcousticText(input, { lanes, viewport, gutter: 4, reservedRects: [feedback] });
+    expect(result.placements).toEqual([{
+      candidate: input[0], laneId: "above-right", rect: { x: 152, y: 22, width: 48, height: 16 },
+    }]);
+    expect(result.suppressions).toEqual([]);
+    expect(acousticTextRectsOverlap(result.placements[0]!.rect, feedback, 4)).toBe(false);
+    expect(result.placements[0]!.candidate).toBe(input[0]);
+    expect(layoutAcousticText(input, { lanes, viewport, gutter: 4, reservedRects: [feedback] }))
+      .toEqual(result);
+  });
+
+  it.each([
+    [3, false],
+    [4, true],
+  ] as const)("applies the same gutter to feedback with a %s-pixel gap", (gap, fits) => {
+    const lane = { id: "one", order: 0, offset: { x: 0, y: 0 } } as const;
+    const input = [candidate("call", "source:call", 10, 10, { x: 20, y: 10 }, { width: 40, height: 16 })];
+    const result = layoutAcousticText(input, {
+      lanes: [lane], viewport: { x: 0, y: 0, width: 200, height: 20 }, gutter: 4,
+      reservedRects: [{ x: 40 + gap, y: 2, width: 40, height: 16 }],
+    });
+
+    expect(result.placements).toHaveLength(fits ? 1 : 0);
+    expect(result.suppressions).toEqual(fits ? [] : [{ candidate: input[0], reason: "overlap" }]);
+  });
+
+  it("suppresses rather than drawing when all three bounded lanes are reserved", () => {
+    expect(MAX_ACOUSTIC_TEXT_RESERVED_RECTS).toBe(3);
+    const input = [
+      candidate("speech", "source:speech", 10, 10),
+      candidate("call", "source:call", 8, 7),
+    ];
+    const result = layoutAcousticText(input, {
+      lanes, viewport, gutter: 4,
+      reservedRects: [
+        { x: 96, y: 12, width: 48, height: 16 },
+        { x: 152, y: 22, width: 48, height: 16 },
+        { x: 96, y: 92, width: 48, height: 16 },
+      ],
+    });
+
+    expect(result.placements).toEqual([]);
+    expect(result.suppressions).toEqual(input.map((item) => ({ candidate: item, reason: "overlap" })));
+  });
+
+  it("keeps reservations, candidates and lanes order-independent without changing rank", () => {
+    const input = [
+      candidate("z-contact", "source:contact", 1, 1),
+      candidate("a-speech", "source:speech", 10, 10),
+      candidate("b-call", "source:call", 8, 7),
+    ];
+    const reservedRects = [
+      { x: 96, y: 12, width: 48, height: 16 },
+      { x: 0, y: 0, width: 40, height: 20 },
+      { x: 220, y: 100, width: 10, height: 10 },
+    ];
+    const result = layoutAcousticText(input, { lanes, viewport, gutter: 4, reservedRects });
+    const permuted = layoutAcousticText([...input].reverse(), {
+      lanes: [...lanes].reverse(), viewport, gutter: 4, reservedRects: [...reservedRects].reverse(),
+    });
+
+    expect(result.placements.map(({ candidate: placed }) => placed.id)).toEqual(["a-speech", "b-call"]);
+    expect(result.suppressions).toEqual([{ candidate: input[0], reason: "overlap" }]);
+    expect(permuted).toEqual(result);
+    for (const placement of result.placements) {
+      expect(reservedRects.some((reserved) => acousticTextRectsOverlap(placement.rect, reserved, 4))).toBe(false);
+    }
+  });
+
+  it("fails closed without placements for malformed, sparse or over-budget reservations", () => {
+    const input = [candidate("speech", "source:speech", 10, 10), candidate("call", "source:call", 8, 7)];
+    const valid = { x: 0, y: 0, width: 1, height: 1 };
+    const malformed: readonly unknown[] = [
+      null,
+      {},
+      [null],
+      Array(1),
+      [{ ...valid, x: Number.NaN }],
+      [{ ...valid, y: Number.POSITIVE_INFINITY }],
+      [{ ...valid, width: 0 }],
+      [{ ...valid, height: -1 }],
+      [{ x: 0, y: 0, width: 1 }],
+      [{ ...valid, width: "1" }],
+      [valid, { ...valid, height: Number.NaN }],
+      [valid, valid, valid, valid],
+    ];
+    for (const reservedRects of malformed) {
+      const result = layoutAcousticText(input, {
+        lanes, viewport, gutter: 4, reservedRects: reservedRects as readonly AcousticTextRect[],
+      });
+      expect(result.placements).toEqual([]);
+      expect(result.suppressions).toEqual(input.map((item) => ({ candidate: item, reason: "overlap" })));
+    }
+  });
+
+  it("does not mutate or retain new state in frozen candidates, reservations or options", () => {
+    const input = Object.freeze([Object.freeze({
+      ...candidate("whine", "source:dog", 10, 10),
+      anchor: Object.freeze({ x: 120, y: 60 }),
+      box: Object.freeze({ width: 48, height: 16 }),
+    })]);
+    const options = Object.freeze({
+      lanes: Object.freeze(lanes.map((lane) => Object.freeze({ ...lane, offset: Object.freeze({ ...lane.offset }) }))),
+      viewport: Object.freeze({ ...viewport }),
+      gutter: 4,
+      reservedRects: Object.freeze([Object.freeze({ x: 96, y: 12, width: 48, height: 16 })]),
+    });
+    const before = structuredClone({ input, options });
+
+    const result = layoutAcousticText(input, options);
+    expect(result.placements).toHaveLength(1);
+    expect({ input, options }).toEqual(before);
+    expect(layoutAcousticText(input, options)).toEqual(result);
   });
 
   it("uses no RNG, clock, frame state, or retained placement state", () => {

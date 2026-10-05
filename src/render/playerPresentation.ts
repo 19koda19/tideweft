@@ -13,6 +13,7 @@ import {
   type AcousticTextLane,
   type AcousticTextLayoutResult,
   type AcousticTextSize,
+  type AcousticTextRect,
 } from "./acousticTextLayout";
 
 /**
@@ -257,6 +258,7 @@ export function layoutAcousticTextCallouts(
   acousticText: readonly AcousticTextView[],
   viewport: IncidentViewport,
   screenAnchor: (candidate: AcousticTextView) => WorldPoint | null,
+  reservedRects?: readonly AcousticTextRect[],
 ): AcousticTextLayoutResult<AcousticTextScreenCandidate> {
   const candidates: AcousticTextScreenCandidate[] = [];
   for (const item of acousticText) {
@@ -278,6 +280,7 @@ export function layoutAcousticTextCallouts(
     globalCap: MAX_ACOUSTIC_TEXT_PLACEMENTS,
     perSourceCap: DEFAULT_ACOUSTIC_TEXT_PER_SOURCE_CAP,
     gutter: DEFAULT_ACOUSTIC_TEXT_GUTTER,
+    ...(reservedRects === undefined ? {} : { reservedRects }),
   });
 }
 

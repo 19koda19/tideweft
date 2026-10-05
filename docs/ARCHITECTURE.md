@@ -591,11 +591,24 @@ retain their lawful state, and a layout-suppressed callout does not erase its
 source's state. This join uses actor identity rather than screen proximity.
 Presentation loss never erases audio or actor hearing.
 
-In Relief, optional harbor names also yield when their final eased/clamped
+The application also supplies at most three measured UI reservations to that
+same layout: the shared caption, full EVENTS panel, and journey action dock.
+These boxes use mount-relative CSS coordinates; a candidate tries the existing
+bounded lanes and yields if none clears the feedback. Invalid, sparse, or
+over-budget reservations fail closed for optional world labels, not for the
+caption, audio, hearing, or world event. The UI owns a frozen rectangle cache:
+new UI publication, caption replacement/removal, window resize, EVENTS toggle,
+and bounded mount/feedback/target resize observation invalidate it. Stable
+getter reads perform no DOM measurement. Missing ResizeObserver retains
+publication/toggle/window invalidation; teardown disconnects its observer and
+listeners. No world-object or actor scan supplies these screen-space boxes.
+
+In Relief, optional harbor names and actor quick labels/emotion marks also yield
+when their final eased/clamped
 conservative text envelope conflicts with a placed acoustic label, then return
 when occupancy clears. Only the existing bounded acoustic placements are queried;
 no DOM measurement, hearing suppression or new queue is introduced. Essential
-destination and ADRIFT guidance are not hidden by this narrow optional-name rule.
+destination and ADRIFT guidance are not hidden by this optional-state rule.
 The envelope may briefly suppress a nearby noncolliding name; it is not an
 arbitrary-font or all-world-label collision guarantee.
 

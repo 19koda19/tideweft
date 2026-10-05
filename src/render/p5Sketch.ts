@@ -5900,6 +5900,7 @@ export function createTideweftRenderer(
             latestView.acousticText,
             actorCalloutViewport(p.width, p.height),
             (acousticText) => worldToScreen(acousticText.position),
+            options.getAcousticTextReservations?.(),
           );
       const activeAcousticSourceIds = new Set(
         acousticLayout?.placements.map(({ candidate }) => candidate.sourceId) ?? [],

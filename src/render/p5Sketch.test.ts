@@ -820,9 +820,11 @@ describe("Chart situated expression presentation", () => {
     ];
     const base = view("chart-four-kind-contract", { x: 0, y: 0 }, { followPlayer: false });
     let current: TideweftView = { ...base, acousticText: candidates };
+    let reservedRects: readonly AcousticTextRect[] = [];
     const renderer = createTideweftRenderer({
       mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
       getView: () => current,
+      getAcousticTextReservations: () => reservedRects,
       dispatch: vi.fn(),
     });
     const text = p5Harness.instance?.text as ReturnType<typeof vi.fn>;
@@ -839,7 +841,7 @@ describe("Chart situated expression presentation", () => {
       line.mockClear();
       draw();
       expect(p5Harness.instance).toMatchObject({ width, height });
-      const expected = layoutAcousticTextCallouts(items, viewport, projectAnchor);
+      const expected = layoutAcousticTextCallouts(items, viewport, projectAnchor, reservedRects);
       const drawn = text.mock.calls.filter(([copy]) => copies.has(String(copy)));
       expect(drawn).toEqual(expected.placements.map(({ candidate, rect: box }) => [
         candidate.acousticText.text,
@@ -895,6 +897,11 @@ describe("Chart situated expression presentation", () => {
         .toBe(candidates[0]!.text);
       expect(text.mock.calls.some(([copy]) => copy === "Easy now.")).toBe(false);
       expect(drawAndCheck([...overloaded].reverse())).toEqual(crowdedRects);
+      reservedRects = [{ x: 0, y: 0, width, height }];
+      expect(drawAndCheck(candidates)).toEqual([]);
+      expect(current.acousticText).toBe(candidates);
+      reservedRects = [];
+      expect(drawAndCheck(candidates)).toEqual(separated);
       expect(drawAndCheck([])).toEqual([]);
     } finally {
       renderer.destroy();

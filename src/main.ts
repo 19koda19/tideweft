@@ -18,6 +18,7 @@ import {
 import { createTideweftUI } from "./ui";
 import { createBraceSourceController } from "./ui/braceSources";
 import { bindDesktopBraceHold } from "./ui/desktopBrace";
+import type { AcousticTextRect } from "./render/acousticTextLayout";
 
 async function boot(): Promise<void> {
   const canvasMount = document.querySelector<HTMLElement>("#p5-mount");
@@ -31,6 +32,7 @@ async function boot(): Promise<void> {
   if (status) status.textContent = "The estuary is taking shape";
 
   const runtime = await createTideweftRuntime();
+  let readAcousticTextReservations: () => readonly AcousticTextRect[] = () => [];
   const syncViewToggle = (mode: ViewMode, reliefAvailable: boolean): void => {
     if (!viewToggle) return;
     const state = viewModeButtonState(mode, reliefAvailable);
@@ -63,6 +65,7 @@ async function boot(): Promise<void> {
     mount: canvasMount,
     getView: runtime.getRenderView,
     dispatch: dispatchRenderer,
+    getAcousticTextReservations: () => readAcousticTextReservations(),
     onModeChange: syncViewToggle,
     onReliefUnavailable: (reason) => {
       console.warn(`Relief view unavailable: ${reason}`);
@@ -105,6 +108,7 @@ async function boot(): Promise<void> {
   });
   const ui = createTideweftUI({
     root: uiRoot,
+    acousticTextMount: canvasMount,
     getView: runtime.getUIView,
     getRendererTelemetry: renderer.telemetry,
     setBrace: (active) => braceSources.set("touch", active),
@@ -127,6 +131,7 @@ async function boot(): Promise<void> {
     },
     ...(announcer ? { announcer } : {}),
   });
+  readAcousticTextReservations = ui.getAcousticTextReservations;
   runtime.setFocusHandler(renderer.focusWorld);
   runtime.start();
 

@@ -4,6 +4,7 @@ import type { DogPresentation } from "../game/dogPresentation";
 import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 import type { LivingActorSpecies } from "../game/livingActor";
 import type { RendererTelemetrySnapshot } from "./rendererTelemetry";
+import type { AcousticTextRect } from "./acousticTextLayout";
 
 export interface WorldPoint {
   readonly x: number;
@@ -816,6 +817,8 @@ export interface TideweftRendererOptions {
   readonly mount: HTMLElement;
   readonly getView: () => TideweftView | null | undefined;
   readonly dispatch: (command: RendererCommand) => void;
+  /** Presentation-only, bounded feedback rectangles relative to the mount. */
+  readonly getAcousticTextReservations?: () => readonly AcousticTextRect[];
 }
 
 export interface TideweftRendererController {

@@ -1022,6 +1022,7 @@ export function createTideweftReliefRenderer(
             );
             return projected.visible ? projected : null;
           },
+          options.getAcousticTextReservations?.(),
         );
     const activeAcousticSourceIds = new Set(
       acousticLayout?.placements.map(({ candidate }) => candidate.sourceId) ?? [],
@@ -1085,8 +1086,10 @@ export function createTideweftReliefRenderer(
         tone === "adrift" ? 62 : 28,
         Math.max(tone === "adrift" ? 62 : 28, viewportHeight - 34),
       );
-      if (tone === "harbor" && acousticLayout?.placements.length) {
-        // Optional harbor names yield to already placed sound, not vice versa.
+      const optionalStateLabel = tone === "harbor" || tone === "porter"
+        || tone === "porter-emotion" || tone === "dog" || tone === "wildlife";
+      if (optionalStateLabel && acousticLayout?.placements.length) {
+        // Optional names/state marks yield to already placed sound, not vice versa.
         // Reserve the full ordinary CSS width and a conservative uppercase /
         // wrapping envelope (bottom-anchored, unlike centered acoustic text).
         // This is an estimate, not glyph measurement; native CSS is checked
