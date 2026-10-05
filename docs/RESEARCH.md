@@ -1501,6 +1501,40 @@ certification. Terrain/foliage/interior propagation and wider Voice gates stay
 open. Schema49/carry14, supported readers, dependencies and upstream sources
 are unchanged; historical beliefs are not recalculated or discarded.
 
+#### Guardian whine captured listening — 2026-10-05
+
+Local work over `1bf9008` connects the existing guardian shelter-whine producer
+to the existing optional player-contact diagnostic observer. It captures the
+already-calculated contact only when DEV inspection is enabled. No second
+hearing query, new acoustic producer, mapper, preview API or gameplay rule is
+introduced; warning barks and defensive growls remain uncaptured.
+
+Before the seven-line runtime connection, both existing visible/unseen storm-
+whine/fall/cargo fixtures fail at the new non-null listening-context assertion.
+The command is `npx vitest run src/game/runtime.fall.integration.test.ts -t
+'composes a current storm shelter whine with real Promise fall and cargo
+impact' --maxWorkers=1 --no-cache`. After connection both pass, preserving all
+prior assertions. Their actual condition/work-owned whine retains exact hearing
+and source uncertainty. Baseline preview matches the real contact; masking 1
+produces only a null hypothetical result. Detached frozen diagnostics,
+unchanged UI/render/audio, enabled/off full authoritative-save equality,
+reset/reload retirement and late-failure rollback remain covered. The separate
+synthetic unit composition does not represent an ordinary animal encounter.
+
+Diagnostics pass 62 unit tests; runtime diagnostics pass three; the unchanged
+introduction/save/audio late-closure rollback test passes. Maintained critical
+smoke passes six files/105 tests; typecheck, context-index 28 and player-facing
+policy 39 checks pass. Production web build and nested-path static smoke pass
+(five files, 4,733,618 bytes). Bundle `index-DjpwkpMi.js` SHA256
+`433a1377278d6847db7bb3b651d3fc19b957dc475048f8561a8e1d41a0519432`
+contains none of the inspected diagnostic API/listening markers. The existing
+large-chunk warning remains. These are controlled current-save and production-
+exclusion checks, not a new native browser encounter, audible/AT, mobile,
+desktop-package, hours, performance, full-cumulative or Voice-closure
+certificate. Full expression/sound labs and the knowledge auditor remain open.
+Schema49/carry14, supported readers, dependencies and upstream sources are
+unchanged; no release or directive transition occurred.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

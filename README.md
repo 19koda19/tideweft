@@ -326,6 +326,8 @@ inspector.replayProducer(snapshot.records[0]?.sequence);
 // The same replay also supports the current guardian shelter-whine producer:
 const whine = inspector.getSnapshot({ meaning: "guardian-dog-shelter-whine" }).records[0];
 inspector.replayProducer(whine?.sequence);
+// Inspect that real whine's captured player hearing; previews cannot change it:
+inspector.previewListening(whine?.sequence, { ambientNoise: 1 });
 // After a real keeper secure-store response, inspect its captured hearing:
 const keeper = inspector.getSnapshot({ meaning: "keeper-secure-store-response" }).records[0];
 inspector.previewListening(keeper?.sequence);
@@ -345,8 +347,9 @@ guardian shelter-whine inputs; it checks the mapped intent against the recorded
 decision and does not rerun physical transactions, weather exposure, kennel
 custody, shelter travel, recency, capacity or hearing. Other producers return
 null for producer replay. `previewListening()` currently supports captured
-keeper secure-store responses only, using the existing player-contact calculator
-with bounded masking/wind overrides. Actual contact and receipt remain separate
+keeper secure-store responses and guardian shelter whines, using the existing
+player-contact calculator with bounded masking/wind overrides. Actual contact
+and receipt remain separate
 from the hypothetical result. Uncaptured context is not proof of inaudibility;
 this does not change weather, terrain transmission, knowledge, NPC hearing or
 audio, and is not a complete sound-ecology lab. Refetch the snapshot after reset:

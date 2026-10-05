@@ -15474,7 +15474,12 @@ export async function createTideweftRuntime(
           throw new Error("Guardian signal did not match its causal expression kind");
         }
         const listenerWasSleepingAtAdmission = playerIsSleeping();
-        const audible = playerExpressionAudibility(guardianDogSignalIntent);
+        let diagnosticListeningContext: ExpressionDiagnosticListeningContext | null = null;
+        const audible = playerExpressionAudibility(guardianDogSignalIntent,
+          import.meta.env.DEV && expressionDiagnosticState?.enabled === true && isWhine
+            ? (context) => { diagnosticListeningContext = context; }
+            : undefined,
+        );
         const reception = audible === null || audible.contact === null
           ? { kind: "none" as const }
           : playerDirectlyObservesExpressionSource(guardianDogSignalIntent)
@@ -15523,6 +15528,7 @@ export async function createTideweftRuntime(
             && isWhine && workingDogStep.shelterWhineDiagnosticInput !== undefined
             ? { kind: "guardian-dog-shelter-whine", input: workingDogStep.shelterWhineDiagnosticInput }
             : null,
+          diagnosticListeningContext,
         );
         if (
           admitted

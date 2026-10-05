@@ -960,6 +960,49 @@ describe("captured player-listening preview", () => {
     expect(JSON.stringify(state)).toBe(before);
   });
 
+  it("keeps synthetic whine producer replay and its recorded receipt unchanged by listening previews", () => {
+    // Combine the existing mapper/contact fixtures, not a real animal encounter.
+    const source = structuredClone(listeningEvidence());
+    const beforeSource = JSON.stringify(source);
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), source);
+    const record = state.records[0]!;
+    const before = JSON.stringify(state);
+    const replay = replayExpressionDiagnosticProducer(state, record.sequence);
+    expect(replay).toMatchObject({
+      producerKind: "guardian-dog-shelter-whine", actualRuntimeReason: "accepted",
+      candidate: record.intent, accepted: true, reason: "accepted",
+    });
+    const baseline = previewExpressionDiagnosticListening(state, record.sequence);
+    const masked = previewExpressionDiagnosticListening(state, record.sequence, { ambientNoise: 1 });
+    expect(baseline).not.toBeNull();
+    expect(masked).not.toBeNull();
+    expect(baseline?.actualContact).not.toBeNull();
+    expect(baseline?.actualContact).toEqual(record.listeningContext?.contact);
+    expect(baseline?.hypotheticalContact).toEqual(record.listeningContext?.contact);
+    expect(baseline?.candidateInput).toEqual(record.listeningContext?.input);
+    for (const preview of [baseline, masked]) {
+      expect(preview?.actualRuntimeReason).toBe(record.reason);
+      expect(preview?.actualContact).toEqual(record.listeningContext?.contact);
+      expect(preview?.actualPlayerReception).toEqual(record.playerReception);
+      expect(preview?.actualPlayerReception?.kind).toBe("heard-visible");
+    }
+    expect(masked?.candidateInput).toEqual({ ...record.listeningContext?.input, ambientNoise: 1 });
+    expect(masked?.hypotheticalContact).toBeNull();
+    const sourceObjects = objectGraph(source);
+    const recordObjects = objectGraph(record);
+    for (const result of [replay, baseline, masked]) {
+      for (const object of objectGraph(result)) {
+        expect(sourceObjects.has(object)).toBe(false);
+        expect(recordObjects.has(object)).toBe(false);
+        expect(Object.isFrozen(object)).toBe(true);
+      }
+    }
+    expect(replayExpressionDiagnosticProducer(state, record.sequence)).toEqual(replay);
+    expect(previewExpressionDiagnosticListening(state, record.sequence)).toEqual(baseline);
+    expect(JSON.stringify(state)).toBe(before);
+    expect(JSON.stringify(source)).toBe(beforeSource);
+  });
+
   it("keeps a valid captured null contact distinct from missing or unsupported context", () => {
     const input = { ...listeningCapture().input, ambientNoise: 1 };
     const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence(listeningCapture(input)));

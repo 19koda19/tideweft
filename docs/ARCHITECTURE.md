@@ -1116,11 +1116,15 @@ state. Later world changes do not rewrite the captured cause. Reset/reload
 clears availability, but reset may reuse numeric sequences; select from a new
 snapshot rather than treating a number as a permanent external handle.
 
-The keeper's current secure-store response can retain the exact already-evaluated
-player listening input and contact when inspection is enabled. The optional
-observer receives a detached copy after the existing contact calculation; it
-does not repeat a hearing query or mutate the contact used by admission/audio.
-Other producers do not yet capture this tuple. An absent context means
+The keeper's current secure-store response and guardian shelter whine can retain
+the exact already-evaluated player listening input and contact when inspection
+is enabled. The optional observer receives a detached copy after the existing
+contact calculation; it does not repeat a hearing query or mutate the contact
+used by admission/audio.
+The whine keeps its existing condition/work-owned cause, producer replay and
+visible/unseen reception; warning barks, defensive growls and other producers
+do not yet capture this tuple. Sleeping or unavailable geometry/masking may
+return before calculation, leaving context uncaptured. An absent context means
 uncaptured, whereas a captured null contact means that calculation found no
 audible contact; neither substitutes for a committed listener receipt.
 

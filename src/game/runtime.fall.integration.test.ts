@@ -33,7 +33,7 @@ import { deserializeSettlementEcologyState } from "./settlementEcology";
 import { deserializeSettlementWorkingAnimalState } from "./settlementWorkingAnimals";
 import { projectSettlementWorkingDogCircadian } from "./settlementWorkingDogCircadian";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
-import { VISIBILITY_DIRECT } from "./perception";
+import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
 import { projectPerception } from "./projection";
 import { PLAYER_MOVEMENT_STAMINA_GATE, TILE_UNITS, stepPlayer, type PlayerState } from "./player";
 import {
@@ -90,6 +90,7 @@ import type { PlayerExpressionRecencyState } from "./playerExpressionRecency";
 import type { PlayerEffortRecencyState } from "./playerEffortRecency";
 import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import * as expressionChannelBank from "./situatedExpressionChannelBank";
+import * as expressionDiagnostics from "./situatedExpressionDiagnostics";
 import * as dogExpression from "./dogSignalExpression";
 import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
@@ -2201,6 +2202,7 @@ describe("production terrain fall and physical cargo", () => {
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     runtime.expressionDiagnostics!.setEnabled(true);
+    const diagnosticAppend = vi.spyOn(expressionDiagnostics, "appendExpressionDiagnostic");
     runtime.dispatchUI({ type: "resume-world" });
     // Nine accepted neutral steps are real simulation, not an edited phase.
     // Fall on the due world step so short physical cues coexist with the call.
@@ -2326,8 +2328,65 @@ describe("production terrain fall and physical cargo", () => {
       actualRuntimeReason: "accepted", candidate: dogDecision.intent,
       accepted: true, reason: "accepted", realization: dogDecision.realization,
     });
+    const listening = dogDecision.listeningContext;
+    expect(listening).not.toBeNull();
+    if (listening === null || listening.contact === null) {
+      throw new Error("actual heard shelter whine omitted its captured listening contact");
+    }
+    const observedListening = diagnosticAppend.mock.calls.find(([, input]) => (
+      input.intent.sourceActorId === guardian.identity.stableId
+      && input.intent.meaning === "guardian-dog-shelter-whine"
+    ))?.[1].listeningContext;
+    expect(observedListening).toEqual(listening);
+    expect(listening).not.toBe(observedListening);
+    expect(listening.input).not.toBe(observedListening?.input);
+    expect(listening.input.source).not.toBe(observedListening?.input.source);
+    expect(listening.contact).not.toBe(observedListening?.contact);
+    const listenerDelta = worldPositionDelta(saved.perceptionCarry.intervalStartPosition, savedGuardian.address.position);
+    expect(listening.input.listener).toEqual({ x: 0, y: 0 });
+    expect(listening.input.source).toEqual({ x: listenerDelta.x, y: listenerDelta.y });
+    expect(evaluateAudibleContact(listening.input)).toEqual(listening.contact);
+    expect(dogDecision.playerReception).toEqual(whineChannel?.reception);
+    expect(dogDecision.playerReception?.certainty).toBe(Math.max(1, Math.round(listening.contact.certainty * FIXED_POINT)));
+    for (const value of [listening, listening.input, listening.input.listener, listening.input.source,
+      listening.input.wind, listening.contact, listening.contact.bearing, listening.contact.distanceBand]) {
+      expect(Object.isFrozen(value)).toBe(true);
+    }
+    const beforeListening = { diagnostics: structuredClone(inspector.getSnapshot()), record: repository.snapshot() };
+    const baseline = inspector.previewListening(dogDecision.sequence);
+    const masked = inspector.previewListening(dogDecision.sequence, { ambientNoise: 1 });
+    expect(baseline).toEqual({
+      scope: "captured-player-listening-preview", actualRuntimeReason: "accepted",
+      actualContact: listening.contact, actualPlayerReception: dogDecision.playerReception,
+      candidateInput: listening.input, hypotheticalContact: listening.contact,
+      notEvaluated: ["physical-environment-change", "terrain/structure/foliage-transmission", "sleep-policy",
+        "visibility/identification", "comprehension", "npc-reception", "causal-admission", "audio/presentation"],
+    });
+    expect(masked).toEqual({ ...baseline, candidateInput: { ...listening.input, ambientNoise: 1 }, hypotheticalContact: null });
+    expect(baseline?.actualContact).not.toBe(listening.contact);
+    expect(baseline?.candidateInput).not.toBe(listening.input);
+    expect(baseline?.candidateInput.source).not.toBe(listening.input.source);
+    expect(Object.isFrozen(baseline?.actualContact)).toBe(true);
+    expect(Object.isFrozen(baseline?.candidateInput.source)).toBe(true);
+    expect(Object.isFrozen(masked?.candidateInput)).toBe(true);
+    expect(Reflect.set(listening.input.source, "x", 999_999)).toBe(false);
+    expect(Reflect.set(listening.contact, "certainty", 0)).toBe(false);
+    expect(inspector.getSnapshot()).toEqual(beforeListening.diagnostics);
     expect({ render: runtime.getRenderView(), ui: runtime.getUIView(), calls: soundscapePlay.mock.calls })
       .toEqual(beforeReplay);
+    expect(repository.snapshot()).toEqual(beforeListening.record);
+    await runtime.save();
+    expect(repository.snapshot().worldJson).toBe(beforeListening.record.worldJson);
+    for (const marker of ["listeningContext", "candidateInput", "captured-player-listening-preview", "previewListening"]) {
+      expect(repository.snapshot().worldJson).not.toContain(marker);
+    }
+    expect(inspector.reset()).toMatchObject({ enabled: true, totalCount: 0, evictedCount: 0, records: [] });
+    expect(inspector.previewListening(dogDecision.sequence)).toBeNull();
+    expect(inspector.replayProducer(dogDecision.sequence)).toBeNull();
+    expect({ render: runtime.getRenderView(), ui: runtime.getUIView(), calls: soundscapePlay.mock.calls })
+      .toEqual(beforeReplay);
+    await runtime.save();
+    expect(repository.snapshot().worldJson).toBe(beforeListening.record.worldJson);
 
     // Use actual runtime candidates with a deterministic test camera. These
     // are production layout envelopes, not browser font/glyph measurements.
@@ -2385,6 +2444,9 @@ describe("production terrain fall and physical cargo", () => {
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     expect(reloaded.expressionDiagnostics!.getSnapshot()).toMatchObject({ enabled: false, records: [] });
     expect(reloaded.expressionDiagnostics!.replayProducer(dogDecision.sequence)).toBeNull();
+    expect(reloaded.expressionDiagnostics!.previewListening(dogDecision.sequence)).toBeNull();
+    reloaded.expressionDiagnostics!.setEnabled(true);
+    expect(reloaded.expressionDiagnostics!.previewListening(dogDecision.sequence)).toBeNull();
     expect(soundscapePlay.mock.calls).toEqual(calls);
     expect(reloaded.getRenderView().acousticText?.some(({ acousticKind }) => acousticKind === "physical"))
       .toBe(false);
@@ -2417,6 +2479,7 @@ describe("production terrain fall and physical cargo", () => {
       expect(decodeCurrent(disabledRepository.snapshot())).toEqual(saved);
       expect(soundscapePlay.mock.calls).toEqual(calls);
       expect(disabled.expressionDiagnostics!.getSnapshot().records).toEqual([]);
+      expect(disabled.expressionDiagnostics!.previewListening(dogDecision.sequence)).toBeNull();
     } finally { disabled.destroy(); }
 
     if (!visible) {
@@ -2437,16 +2500,21 @@ describe("production terrain fall and physical cargo", () => {
           .mockImplementation((...args) => ++closes === 1 ? null : close(...args));
         const mapper = vi.spyOn(dogExpression, "guardianDogShelterWhineExpressionIntent");
         soundscapePlay.mockClear();
+        diagnosticAppend.mockClear();
         try {
           failed.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
           advancePlayerSteps(failed, 1);
           expect(closes).toBe(1);
           expect(mapper.mock.results.some(({ type, value }) => type === "return"
             && value?.meaning === "guardian-dog-shelter-whine")).toBe(true);
+          expect(diagnosticAppend.mock.calls.some(([, input]) => input.intent.meaning === "guardian-dog-shelter-whine"
+            && input.reason === "accepted" && input.listeningContext !== null && input.listeningContext !== undefined
+            && input.listeningContext.contact !== null)).toBe(true);
           expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
           expect(failedRepository.snapshot()).toEqual(beforeFailureRecord);
           expect(failed.expressionDiagnostics!.getSnapshot().records).toEqual([]);
           expect(failed.expressionDiagnostics!.replayProducer(1)).toBeNull();
+          expect(failed.expressionDiagnostics!.previewListening(1)).toBeNull();
           expect(incidentCueCalls("vocalization-dog-shelter-whine")).toBe(0);
           await failed.save();
           const rolledBack = decodeCurrent(failedRepository.snapshot());
