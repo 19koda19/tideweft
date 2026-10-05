@@ -511,6 +511,8 @@ export interface SituatedExpressionCaptionUIView {
     | "direction unclear";
   /** Urgency is explicit and is never inferred from visual tone. */
   readonly assertive?: boolean;
+  /** Existing acoustic arbitration priority, used only for urgent UI preemption. */
+  readonly priority?: number;
 }
 
 /** Persistent storage health is separate from transient gameplay announcements. */

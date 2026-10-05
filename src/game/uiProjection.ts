@@ -332,21 +332,19 @@ function selectAcousticCaption(
   expression: AcousticCaptionCandidate | null,
   worldAcoustic: AcousticCaptionCandidate | null,
 ): SituatedExpressionCaptionUIView | undefined {
-  if (expression === null) return worldAcoustic?.caption;
-  if (worldAcoustic === null) return expression.caption;
-  if (expression.priority !== worldAcoustic.priority) {
-    return expression.priority > worldAcoustic.priority
-      ? expression.caption
-      : worldAcoustic.caption;
-  }
-  if (expression.salience !== worldAcoustic.salience) {
-    return expression.salience > worldAcoustic.salience
-      ? expression.caption
-      : worldAcoustic.caption;
-  }
-  return expression.stableId <= worldAcoustic.stableId
-    ? expression.caption
-    : worldAcoustic.caption;
+  const selected = expression === null
+    ? worldAcoustic
+    : worldAcoustic === null
+      ? expression
+      : expression.priority !== worldAcoustic.priority
+        ? expression.priority > worldAcoustic.priority ? expression : worldAcoustic
+        : expression.salience !== worldAcoustic.salience
+          ? expression.salience > worldAcoustic.salience ? expression : worldAcoustic
+          : expression.stableId <= worldAcoustic.stableId ? expression : worldAcoustic;
+  return selected === null ? undefined : {
+    ...selected.caption,
+    priority: selected.priority,
+  };
 }
 
 export function projectUIView(

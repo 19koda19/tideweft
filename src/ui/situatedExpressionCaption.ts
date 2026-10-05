@@ -2,6 +2,9 @@ import type { SituatedExpressionCaptionUIView } from "./types";
 
 type Caption = NonNullable<SituatedExpressionCaptionUIView>;
 
+export const ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND = 21;
+export const ACOUSTIC_CAPTION_MINIMUM_READING_MS = 1_000;
+
 /** Keeps short-lived priority preemption from replaying an older live caption. */
 export const ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT = 32;
 
@@ -39,6 +42,66 @@ export function shouldResetAcousticCaptionAnnouncementLedger(
   titleVisible: boolean,
 ): boolean {
   return replacementDispatched && !titleVisible;
+}
+
+/** Reading time for the actual visible copy, not the expanded ARIA description. */
+export function situatedExpressionCaptionReadingTimeMs(caption: Caption): number {
+  const showSpeaker = caption.presentationKind !== "animal-call"
+    && caption.presentationKind !== "embodied-signal"
+    && caption.presentationKind !== "physical";
+  const visible = `${showSpeaker ? `${caption.speakerLabel}: ` : ""}${situatedExpressionCaptionVisibleText(caption)}`;
+  // Count Unicode code points rather than UTF-16 surrogate halves. Combining
+  // marks count separately, conservatively allowing a little more reading time.
+  return Math.max(
+    ACOUSTIC_CAPTION_MINIMUM_READING_MS,
+    Math.ceil(Array.from(visible).length * 1_000 / ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND),
+  );
+}
+
+export interface AcousticCaptionReadingLease {
+  /** UI wall-clock only: never extends sound, hearing, or world-source labels. */
+  update(caption: Caption | undefined, nowMs: number): Caption | undefined;
+  /** Hide immediately without replaying this world's previously displayed IDs. */
+  clear(): void;
+  /** Only a confirmed world replacement starts a new presentation namespace. */
+  reset(): void;
+}
+
+/** One reading slot, no subtitle backlog, and bounded replay suppression. */
+export function createAcousticCaptionReadingLease(): AcousticCaptionReadingLease {
+  const displayed = createAcousticCaptionAnnouncementLedger();
+  let active: { readonly caption: Caption; readonly expiresAt: number } | undefined;
+  return Object.freeze({
+    update(caption: Caption | undefined, nowMs: number): Caption | undefined {
+      if (!Number.isFinite(nowMs)) {
+        active = undefined;
+        return undefined;
+      }
+      if (active !== undefined && nowMs >= active.expiresAt) active = undefined;
+      if (caption === undefined || caption.id === active?.caption.id) return active?.caption;
+      // Ordinary updates cannot cut a line's reading time short. An explicitly
+      // urgent cue can interrupt, but a lower-priority warning cannot displace
+      // an urgent higher-priority line. Tone and wording never infer urgency.
+      if (active !== undefined && (
+        caption.assertive !== true
+        || (active.caption.assertive === true
+          && (caption.priority ?? 0) < (active.caption.priority ?? 0))
+      )) return active.caption;
+      if (!displayed.admit(caption.id)) return active?.caption;
+      active = {
+        caption: Object.freeze({ ...caption }),
+        expiresAt: nowMs + situatedExpressionCaptionReadingTimeMs(caption),
+      };
+      return active.caption;
+    },
+    clear(): void {
+      active = undefined;
+    },
+    reset(): void {
+      active = undefined;
+      displayed.reset();
+    },
+  });
 }
 
 /** Shared visible wording for the bounded expression-caption surface. */

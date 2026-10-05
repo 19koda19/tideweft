@@ -763,6 +763,7 @@ function playerExpression(runtime: TideweftRuntime, tone: "alarmed" | "relieved"
     text: expression.text,
     tone: expression.tone,
     assertive: tone === "alarmed",
+    priority: expression.priority,
   });
   return expression;
 }

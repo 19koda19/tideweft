@@ -240,8 +240,10 @@ retired instead of promoted: ongoing suspicion, rest, observable exposure,
 contract, and selection remain non-acoustic quick-label/condition/ABOUT facts
 until a committed transition authorizes expression. Authoritative hunger stays
 silent rather than becoming an inferred utterance or hidden-need UI. The
-accessible caption surface keeps
-one highest-priority receipt-backed cue. The physical footing/cargo cause remains in
+accessible caption surface selects one highest-priority receipt-backed cue,
+then allows its visible line length-dependent reading time; urgent cues may
+interrupt under the [shared presentation contract](./ARCHITECTURE.md#shared-acoustic-text-presentation-arbitration).
+The physical footing/cargo cause remains in
 EVENTS where the player directly experienced or observed it; eligible sound
 text is only a restrained presentation of that same cause, never a second
 omniscient narrator. Source-bound sound uses ordinary

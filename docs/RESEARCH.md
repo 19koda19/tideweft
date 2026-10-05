@@ -1823,6 +1823,40 @@ claimed by this test-only slice.
 
 ## Simulation-design findings
 
+### Length-dependent caption reading time — 2026-10-05
+
+The local unpublished caption candidate over `4ec64f4` gives the existing
+bottom caption a single UI-only reading lease at 21 visible Unicode code points
+per second, minimum one second. Speaker prefixes and coarse directions count;
+expanded screen-reader descriptions do not. The first display starts the clock,
+not each publication. Routine incoming cues do not interrupt the reading slot;
+explicit urgent cues may preempt, subject to existing priority. Live-region
+admission remains independent. No audio, hearing, world-source label lifetime or
+serialized event is extended by this presentation change.
+
+Focused projection/UI tests passed 7 files/83 tests; reading-time and existing
+runtime fall integration passed 2 files/68 tests. Typecheck and the maintained
+critical smoke passed (6 files/105 tests). The changed exact caption-shape
+expectations now include its real presentation priority, not relaxed matching.
+The current candidate also compiled for production web and passed the static
+`/tideweft/` artifact smoke; this is not interactive production-browser proof.
+These focused checks do not certify other unfinished candidate changes.
+
+The existing ignored mixed-view page hosted the actual current development UI
+in Firefox 157 at 1280×720. A synthetic 16-character visible line retained its
+one-second lease; an 85-character line retained its 4,048-ms lease. After absent
+projection and unchanged-revision updates, both expired without replay and
+released their reservation (3 boxes to 2). Urgent preemption and quiet-overlay
+clear/no-replay passed; the frozen public fixture remained unchanged. Exact
+source hashes, commands/probe and observations are retained in local
+`artifacts/validation/voice-current49/native-caption-reading-21cps.json` and its
+companion probe. One known CSP eval-probe denial remains, not a console-clean
+claim. The owned browser exited and its disposable profile was removed.
+This is synthetic DOM timing evidence, not ordinary gameplay, physical mobile,
+assistive hardware, production-browser/packaged desktop or hours acceptance.
+Old frozen-caption checks assuming indefinite paused display must be made
+deadline-aware before reuse; old projection disappearance is not DOM expiry.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

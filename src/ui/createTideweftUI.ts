@@ -21,6 +21,7 @@ import {
 } from "./types";
 import {
   createAcousticCaptionAnnouncementLedger,
+  createAcousticCaptionReadingLease,
   shouldResetAcousticCaptionAnnouncementLedger,
   situatedExpressionCaptionCopy,
   situatedExpressionCaptionVisibleText,
@@ -2467,6 +2468,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   let lastAnnouncement = "";
   let lastCaptionReservationId: string | undefined;
   const expressionAnnouncementLedger = createAcousticCaptionAnnouncementLedger();
+  const expressionReadingLease = createAcousticCaptionReadingLease();
   let acousticCaptionWorldReplacementDispatched = false;
   let lastNavigationCopy = "";
   let lastMobileNavigationCopy = "";
@@ -2509,8 +2511,17 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
   };
 
   const renderExpressionCaption = (
-    caption: TideweftUIView["expressionCaption"],
+    incoming: TideweftUIView["expressionCaption"],
+    suppressed = false,
   ): void => {
+    // Lawful live announcements are independent of visual retention/preemption.
+    if (incoming !== undefined && expressionAnnouncementLedger.admit(incoming.id)) {
+      announce(situatedExpressionCaptionCopy(incoming), incoming.assertive === true);
+    }
+    if (suppressed) expressionReadingLease.clear();
+    const caption = suppressed
+      ? undefined
+      : expressionReadingLease.update(incoming, performance.now());
     if (caption?.id !== lastCaptionReservationId) {
       lastCaptionReservationId = caption?.id;
       acousticTextReservations.invalidate();
@@ -2531,8 +2542,6 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     refs.expressionCaption.dataset.expressionId = caption.id;
     refs.expressionCaption.setAttribute("aria-label", copy);
     refs.expressionCaption.hidden = false;
-    if (!expressionAnnouncementLedger.admit(caption.id)) return;
-    announce(copy, caption.assertive === true);
   };
 
   const titleAtmosphere = bindTitleAtmosphere({
@@ -3085,9 +3094,14 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
         view.title.visible,
       );
       acousticCaptionWorldReplacementDispatched = false;
-      if (replacementAccepted) expressionAnnouncementLedger.reset();
+      if (replacementAccepted) {
+        expressionAnnouncementLedger.reset();
+        expressionReadingLease.reset();
+      }
     }
-    renderExpressionCaption(view?.expressionCaption);
+    renderExpressionCaption(view?.expressionCaption, view === null
+      || (forcedTitle ?? view.title.visible)
+      || (forcedQuietHour ?? view.quietHour?.visible ?? false));
     const actorAbout = view ? resolveTideweftAboutSurface(view) : undefined;
     refs.kit.update(view?.kit);
     renderSaveWarning(view?.saveWarning);
@@ -3589,6 +3603,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       if (latestView) restartFlow.sync(latestView.title, visible);
       titleAtmosphere.sync(visible, visible && !refs.patchNotes.isOpen());
       if (visible) {
+        renderExpressionCaption(undefined, true);
         mobileBrace.release();
         refs.kit.close(false);
       }
@@ -3597,6 +3612,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     setQuietHourVisible: (visible) => {
       forcedQuietHour = visible;
       if (visible) {
+        renderExpressionCaption(undefined, true);
         mobileBrace.release();
         refs.kit.close(false);
       }
@@ -3610,6 +3626,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     closeKit: () => refs.kit.close(),
     destroy: () => {
       stop();
+      expressionReadingLease.reset();
       acousticTextReservations.destroy();
       refs.chronicleDetails.removeEventListener("toggle", acousticTextReservations.invalidate);
       refs.animalCallTextControl?.destroy();

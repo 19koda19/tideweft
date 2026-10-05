@@ -246,6 +246,7 @@ describe("UI acoustic-caption arbitration", () => {
       animalCallKind: "animal-call",
       directionLabel: "east",
       assertive: true,
+      priority: event.priority,
     });
     expect(caption).not.toHaveProperty("physicalSoundKind");
     expect(caption).not.toHaveProperty("position");
@@ -308,6 +309,7 @@ describe("UI acoustic-caption arbitration", () => {
       physicalSoundKind: "scrape",
       tone: "restrained",
       assertive: false,
+      priority: event.priority,
     });
     expect(["scrape", "scritch"]).toContain(first.expressionCaption?.text);
     expect(first.expressionCaption).not.toHaveProperty("sourceId");
@@ -364,6 +366,7 @@ describe("UI acoustic-caption arbitration", () => {
       animalCallKind: "chorus",
       directionLabel: "east",
       assertive: false,
+      priority: event.priority,
     });
     expect(caption).not.toHaveProperty("physicalSoundKind");
     expect(caption).not.toHaveProperty("sourceId");
@@ -452,6 +455,7 @@ describe("UI acoustic-caption arbitration", () => {
       presentationKind: "speech",
       speakerLabel: "You",
       tone: "alarmed",
+      priority: warning.priority,
     });
   });
 

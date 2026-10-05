@@ -368,8 +368,9 @@ replaying audio or text.
 
 Expression ownership is now isolated by source actor in a deterministically
 ordered bank capped at sixteen retained channels. One source actor's active line
-or cooldown cannot suppress another's. The accessible caption surface selects
-one highest-priority local cue at a time, while Chart and Relief use the shared
+or cooldown cannot suppress another's. Live caption arbitration selects one
+highest-priority local cue; the UI's [reading lease](#shared-acoustic-text-presentation-arbitration)
+may retain an already perceived line until its reading deadline, while Chart and Relief use the shared
 bounded acoustic layout described below: at most four labels globally and one
 per source. Adding actor authority therefore does not create an overhead-text
 wall. Every projected exact line
@@ -614,6 +615,19 @@ shared accessible caption/announcement. It uses separate browser-local storage,
 not world/save state; denied storage falls back to Full on the next load while
 the current session control still works. One native pressed-state button serves
 both views and is hidden on other manual pages; UI teardown removes its listener.
+
+The shared bottom caption has a UI-only reading lease owned by
+`src/ui/situatedExpressionCaption.ts`: the visible speaker prefix, text and
+direction take at least `ceil(Unicode code points × 1000 / 21)` milliseconds,
+with a one-second minimum. Longer lines therefore remain readable after their
+brief sound ends; repeated publication of the same ID never restarts the clock.
+Only an explicitly urgent cue can interrupt early, and a lower-priority urgent
+cue cannot displace a higher-priority one. One retained caption and the existing
+bounded ID history prevent an accumulating subtitle backlog. Live announcements
+remain independent of visual retention. Missing views, title/quiet overlays and
+teardown clear the reading slot; only confirmed world replacement resets its ID
+namespace. This ephemeral lease changes no audio, hearing, simulation timing,
+save state or source-anchored world-label lifetime.
 
 The application also supplies at most three measured UI reservations to that
 same layout: the shared caption, full EVENTS panel, and journey action dock.

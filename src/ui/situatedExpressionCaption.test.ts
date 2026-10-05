@@ -4,9 +4,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT,
+  ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND,
+  ACOUSTIC_CAPTION_MINIMUM_READING_MS,
   createAcousticCaptionAnnouncementLedger,
+  createAcousticCaptionReadingLease,
   shouldResetAcousticCaptionAnnouncementLedger,
   situatedExpressionCaptionCopy,
+  situatedExpressionCaptionReadingTimeMs,
   situatedExpressionCaptionVisibleText,
 } from "./situatedExpressionCaption";
 import type { SituatedExpressionCaptionUIView } from "./types";
@@ -560,14 +564,284 @@ describe("situated expression caption", () => {
 
   it("deduplicates through the bounded caption-ID ledger and never infers urgency from tone", () => {
     expect(uiSource).toContain("createAcousticCaptionAnnouncementLedger()");
-    expect(uiSource).toContain("expressionAnnouncementLedger.admit(caption.id)");
+    expect(uiSource).toContain("expressionAnnouncementLedger.admit(incoming.id)");
     expect(uiSource).toContain("expressionAnnouncementLedger.reset()");
     expect(uiSource).toContain("acousticCaptionWorldReplacementDispatched");
-    expect(uiSource).toContain("announce(copy, caption.assertive === true)");
+    expect(uiSource).toContain("announce(situatedExpressionCaptionCopy(incoming), incoming.assertive === true)");
     expect(uiSource).not.toContain('caption.tone === "alarmed"');
   });
 
   it("tears down the shared live-region queue with the rest of the UI", () => {
     expect(uiSource).toContain("liveRegionAnnouncements.destroy()");
+  });
+
+  it("wires the UI-only reading slot ahead of revision shortcuts and to visibility/reset boundaries", () => {
+    // Source wiring checks complement the pure lease tests; they are not a
+    // native-DOM, screen-reader delivery, or rendered-platform witness.
+    expect(uiSource).toContain("createAcousticCaptionReadingLease()");
+    expect(uiSource).toContain("expressionReadingLease.update(incoming, performance.now())");
+    expect(uiSource).toContain("if (suppressed) expressionReadingLease.clear()");
+    expect(uiSource).toContain("renderExpressionCaption(view?.expressionCaption, view === null");
+    expect(uiSource).toContain("|| (forcedTitle ?? view.title.visible)");
+    expect(uiSource).toContain("|| (forcedQuietHour ?? view.quietHour?.visible ?? false)");
+    const updateStart = uiSource.indexOf("const updateUnmeasured =");
+    const updateCaption = uiSource.indexOf("renderExpressionCaption(view?.expressionCaption", updateStart);
+    const revisionShortcut = uiSource.indexOf("if (!isNewRevision)", updateStart);
+    expect(updateStart).toBeGreaterThanOrEqual(0);
+    expect(updateCaption).toBeGreaterThan(updateStart);
+    expect(revisionShortcut).toBeGreaterThan(updateCaption);
+    expect(uiSource).toMatch(/if \(replacementAccepted\) \{\s*expressionAnnouncementLedger\.reset\(\);\s*expressionReadingLease\.reset\(\);/u);
+    expect(uiSource).toMatch(/destroy: \(\) => \{\s*stop\(\);\s*expressionReadingLease\.reset\(\);/u);
+  });
+});
+
+describe("acoustic caption reading time", () => {
+  const caption: SituatedExpressionCaptionUIView = {
+    id: "reading:speech",
+    speakerLabel: "Courier",
+    text: "x".repeat(42),
+    tone: "restrained",
+    presentationKind: "speech",
+    assertive: false,
+  };
+
+  const expectedTime = (visible: string): number => Math.max(
+    ACOUSTIC_CAPTION_MINIMUM_READING_MS,
+    Math.ceil(Array.from(visible).length * 1_000 / ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND),
+  );
+
+  it("scales actual visible copy at no more than 21 Unicode code points per second", () => {
+    expect(ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND).toBe(21);
+    expect(ACOUSTIC_CAPTION_MINIMUM_READING_MS).toBe(1_000);
+    const short = { ...caption, text: "Steady." };
+    const long = { ...caption, text: "x".repeat(84) };
+    expect(situatedExpressionCaptionReadingTimeMs(short)).toBe(1_000);
+    expect(situatedExpressionCaptionReadingTimeMs(caption))
+      .toBe(expectedTime(`Courier: ${caption.text}`));
+    expect(situatedExpressionCaptionReadingTimeMs(long))
+      .toBe(expectedTime(`Courier: ${long.text}`));
+    expect(situatedExpressionCaptionReadingTimeMs(long))
+      .toBeGreaterThan(situatedExpressionCaptionReadingTimeMs(caption));
+    expect(Array.from(`Courier: ${long.text}`).length
+      / (situatedExpressionCaptionReadingTimeMs(long) / 1_000)).toBeLessThanOrEqual(21);
+  });
+
+  it("counts surrogate-pair characters once and combining marks conservatively", () => {
+    const unicode = { ...caption, text: `${"🦊".repeat(21)}${"e\u0301".repeat(7)}` };
+    const visible = `Courier: ${unicode.text}`;
+    expect(Array.from(visible).length).toBe(44);
+    expect(visible.length).toBe(65);
+    expect(situatedExpressionCaptionReadingTimeMs(unicode)).toBe(expectedTime(visible));
+  });
+
+  it("includes the visible speaker and direction rather than expanded screen-reader prose", () => {
+    const directional = { ...caption, directionLabel: "east" as const };
+    expect(situatedExpressionCaptionVisibleText(directional))
+      .toBe(`${caption.text} · east`);
+    const visible = `Courier: ${caption.text} · east`;
+    expect(situatedExpressionCaptionReadingTimeMs(directional)).toBe(expectedTime(visible));
+    expect(situatedExpressionCaptionReadingTimeMs(directional))
+      .not.toBe(expectedTime(situatedExpressionCaptionCopy(directional)));
+  });
+
+  it("does not count hidden speaker labels or expanded descriptions for sound captions", () => {
+    const animal: SituatedExpressionCaptionUIView = {
+      ...caption,
+      speakerLabel: "This label is never visible on the animal caption surface",
+      presentationKind: "animal-call",
+      animalCallKind: "bird-call",
+      text: "CALL!".repeat(6),
+      directionLabel: "direction unclear",
+    };
+    expect(situatedExpressionCaptionReadingTimeMs(animal))
+      .toBe(expectedTime(situatedExpressionCaptionVisibleText(animal)));
+    const physical: SituatedExpressionCaptionUIView = {
+      ...animal,
+      presentationKind: "physical",
+      physicalSoundKind: "scrape",
+      text: "scrape".repeat(6),
+    };
+    expect(situatedExpressionCaptionReadingTimeMs(physical))
+      .toBe(expectedTime(`[${physical.text} · direction unclear]`));
+    const { physicalSoundKind: _physicalKind, ...physicalWithoutKind } = physical;
+    const embodied: SituatedExpressionCaptionUIView = {
+      ...physicalWithoutKind,
+      presentationKind: "embodied-signal",
+    };
+    expect(situatedExpressionCaptionReadingTimeMs(embodied))
+      .toBe(expectedTime(`[${embodied.text} · direction unclear]`));
+  });
+});
+
+describe("single acoustic caption reading lease", () => {
+  const caption = (overrides: Partial<SituatedExpressionCaptionUIView> = {}):
+  SituatedExpressionCaptionUIView => ({
+    id: "reading:ordinary",
+    speakerLabel: "Courier",
+    text: "Take the dry crossing by the old harbor.",
+    tone: "restrained",
+    presentationKind: "speech",
+    priority: 650_000,
+    assertive: false,
+    ...overrides,
+  });
+
+  it("holds one displayed caption through absent projections without restarting its deadline", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const incoming = caption();
+    const start = 250;
+    const deadline = start + situatedExpressionCaptionReadingTimeMs(incoming);
+    const displayed = lease.update(incoming, start);
+    expect(displayed).toEqual(incoming);
+    expect(lease.update(incoming, start + 100)).toBe(displayed);
+    expect(lease.update(undefined, deadline - 1)).toBe(displayed);
+    expect(lease.update(incoming, deadline)).toBeUndefined();
+    expect(lease.update(incoming, deadline + 1_000)).toBeUndefined();
+  });
+
+  it("expires on UI wall time even when the simulation publishes no changed caption", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const incoming = caption();
+    const displayed = lease.update(incoming, 0);
+    const deadline = situatedExpressionCaptionReadingTimeMs(incoming);
+    expect(lease.update(undefined, deadline - 1)).toBe(displayed);
+    // These updates represent a paused/unchanged field view: no fixed-step
+    // clock or new authoritative expression is needed to end a reading lease.
+    expect(lease.update(undefined, deadline)).toBeUndefined();
+    expect(lease.update(undefined, deadline + 10_000)).toBeUndefined();
+  });
+
+  it("does not let ordinary numerically high-priority or alarmed copy cut reading short", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const incoming = caption();
+    const displayed = lease.update(incoming, 0);
+    const ordinary = caption({
+      id: "reading:ordinary-new",
+      text: "DANGER!",
+      tone: "alarmed",
+      priority: 1_000_000,
+      assertive: false,
+    });
+    expect(lease.update(ordinary, 100)).toBe(displayed);
+    const { assertive: _ordinaryUrgency, ...withoutDeclaredUrgency } = ordinary;
+    expect(lease.update(withoutDeclaredUrgency, 200)).toBe(displayed);
+    expect(lease.update(undefined, situatedExpressionCaptionReadingTimeMs(incoming)))
+      .toBeUndefined();
+  });
+
+  it("allows an explicitly urgent cue to preempt routine speech regardless of tone", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const ordinary = caption();
+    const warning = caption({
+      id: "reading:warning",
+      text: "Watch out!",
+      tone: "restrained",
+      priority: 400_000,
+      assertive: true,
+    });
+    lease.update(ordinary, 0);
+    const displayedWarning = lease.update(warning, 100);
+    expect(displayedWarning).toEqual(warning);
+    expect(lease.update(ordinary, 200)).toBe(displayedWarning);
+    const deadline = 100 + situatedExpressionCaptionReadingTimeMs(warning);
+    expect(lease.update(ordinary, deadline)).toBeUndefined();
+    expect(lease.update(undefined, deadline + 1)).toBeUndefined();
+  });
+
+  it("preserves higher-priority urgent speech and accepts equal or higher-priority warnings", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const warning = caption({ id: "reading:urgent", priority: 900_000, assertive: true });
+    const displayed = lease.update(warning, 0);
+    expect(lease.update(caption({
+      id: "reading:lower-warning", priority: 899_999, assertive: true,
+    }), 100)).toBe(displayed);
+    const equal = caption({ id: "reading:equal-warning", priority: 900_000, assertive: true });
+    expect(lease.update(equal, 200)).toEqual(equal);
+    const stronger = caption({ id: "reading:stronger-warning", priority: 950_000, assertive: true });
+    expect(lease.update(stronger, 300)).toEqual(stronger);
+  });
+
+  it("does not turn suppressed transient candidates into a later subtitle backlog", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const incoming = caption();
+    const displayed = lease.update(incoming, 0);
+    for (let index = 0; index < 40; index += 1) {
+      expect(lease.update(caption({ id: `reading:suppressed:${index}` }), index + 1))
+        .toBe(displayed);
+    }
+    const deadline = situatedExpressionCaptionReadingTimeMs(incoming);
+    expect(lease.update(undefined, deadline)).toBeUndefined();
+    expect(lease.update(undefined, deadline + 1)).toBeUndefined();
+    const fresh = caption({ id: "reading:fresh" });
+    expect(lease.update(fresh, deadline + 2)).toEqual(fresh);
+  });
+
+  it("admits a still-current ordinary candidate after reading time, not from an internal queue", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const initial = caption();
+    const later = caption({ id: "reading:still-current" });
+    lease.update(initial, 0);
+    expect(lease.update(later, 100)?.id).toBe(initial.id);
+    expect(lease.update(later, situatedExpressionCaptionReadingTimeMs(initial))).toEqual(later);
+  });
+
+  it("clear hides immediately without replay, while reset permits a new world to reuse IDs", () => {
+    const lease = createAcousticCaptionReadingLease();
+    const incoming = caption();
+    lease.update(incoming, 0);
+    lease.clear();
+    expect(lease.update(undefined, 100)).toBeUndefined();
+    expect(lease.update(incoming, 100)).toBeUndefined();
+    lease.reset();
+    expect(lease.update(incoming, 200)).toEqual(incoming);
+  });
+
+  it("fails closed on a nonfinite presentation clock without forgetting consumed IDs", () => {
+    for (const invalidTime of [NaN, Infinity, -Infinity]) {
+      const lease = createAcousticCaptionReadingLease();
+      const incoming = caption();
+      lease.update(incoming, 0);
+      expect(lease.update(incoming, invalidTime)).toBeUndefined();
+      expect(lease.update(incoming, 100)).toBeUndefined();
+    }
+  });
+
+  it("keeps bounded short-term history with the existing 32-ID eviction contract", () => {
+    const lease = createAcousticCaptionReadingLease();
+    for (let index = 0; index <= ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT; index += 1) {
+      const incoming = caption({ id: `reading:history:${index}` });
+      expect(lease.update(incoming, index * 10_000)).toEqual(incoming);
+    }
+    lease.clear();
+    const now = (ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT + 1) * 10_000;
+    expect(lease.update(caption({
+      id: `reading:history:${ACOUSTIC_CAPTION_ANNOUNCEMENT_HISTORY_LIMIT}`,
+    }), now)).toBeUndefined();
+    expect(lease.update(caption({ id: "reading:history:0" }), now))
+      .toMatchObject({ id: "reading:history:0" });
+  });
+
+  it("retains a detached frozen knowledge-safe snapshot rather than later mutable source copy", () => {
+    const lease = createAcousticCaptionReadingLease();
+    type MutableCaptionFixture = {
+      -readonly [Key in keyof SituatedExpressionCaptionUIView]: SituatedExpressionCaptionUIView[Key];
+    };
+    const incoming: MutableCaptionFixture = { ...caption({
+      speakerLabel: "Someone",
+      directionLabel: "east",
+      text: "Watch out!",
+    }) };
+    const displayed = lease.update(incoming, 0);
+    expect(Object.isFrozen(lease)).toBe(true);
+    expect(Object.isFrozen(displayed)).toBe(true);
+    expect(displayed).not.toBe(incoming);
+    incoming.speakerLabel = "Hidden Mara";
+    incoming.text = "Hidden stolen tool";
+    expect(lease.update(incoming, 100)).toBe(displayed);
+    expect(displayed).toMatchObject({ speakerLabel: "Someone", text: "Watch out!" });
+    expect(JSON.stringify(displayed)).not.toContain("Hidden");
+    expect(displayed).not.toHaveProperty("sourceActorId");
+    expect(displayed).not.toHaveProperty("position");
+    expect(() => { (displayed as { text: string }).text = "changed"; }).toThrow(TypeError);
   });
 });
