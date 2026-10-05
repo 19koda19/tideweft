@@ -6147,6 +6147,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 120_000);
 
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
+    const observations = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     const {
       runtime,
       repository,
@@ -6479,6 +6480,12 @@ describe("runtime core-ecology vertical slice", () => {
       admittedAtPlayerStepPhase: 0,
       acceptedAtTick: propagatedWorld.meta.completedTick,
     });
+    const warningAdmission = humanWarnings[0];
+    if (warningAdmission?.kind !== "human-danger-warning") {
+      throw new Error("Actual alarm omitted its committed human warning");
+    }
+    const warningSample = propagated.perceptionCarry.actorVocalizationSamples[warningAdmission.sampleOrdinal];
+    if (warningSample === undefined) throw new Error("Actual warning omitted its sound sample");
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-alarm"))
       .toHaveLength(1);
     const activeWarningCheckpoint = repository.snapshot();
@@ -6505,10 +6512,22 @@ describe("runtime core-ecology vertical slice", () => {
     // The warning's one authoritative sound sample enters the next human
     // perception interval. Other residents may learn only an anonymous
     // danger-sound fact, and that receipt cannot recursively create warnings.
+    observations.mockClear();
     advancePlayerSteps(runtime, 10);
     await runtime.save();
     const warned = requiredEnvelope(repository);
     const warnedWorld = deserializeWorld(warned.world);
+    const warningIntervals = observations.mock.calls.map(([input]) => input).filter((input) => (
+      input.supplementalSoundSamples?.some(({ expressionEventId }) => expressionEventId === warningAdmission.eventId)
+    ));
+    expect(warningIntervals).toHaveLength(1);
+    expect(warningIntervals[0]?.supplementalSoundSamples).toContainEqual(warningSample);
+    expect(warningIntervals[0]?.surfaceSoundSampleIds).toContain(warningSample.id);
+    const warningSource = warnedWorld.residents.find(({ identity }) => identity.stableId === warningSample.sourceActorId);
+    expect(warningSource).toBeDefined();
+    expect(warningSource?.perception.beliefs.some(({ sourceObservationId }) => (
+      sourceObservationId.endsWith(`-${warningSample.id}`)
+    ))).toBe(false);
     const warningConsumers = warnedWorld.residents.filter((resident) => (
       resident.identity.stableId !== porter.identity.stableId
       && resident.perception.beliefs.some((belief) => (
@@ -6517,6 +6536,7 @@ describe("runtime core-ecology vertical slice", () => {
         && belief.subjectId === null
         && belief.identification === "anonymous"
         && belief.lastObservedTick === warnedWorld.meta.completedTick
+        && belief.sourceObservationId.endsWith(`-${warningSample.id}`)
       ))
     ));
     expect(warningConsumers.length).toBeGreaterThan(0);
@@ -6543,6 +6563,25 @@ describe("runtime core-ecology vertical slice", () => {
     await resumedWarning.save();
     expect(stableStringify(requiredEnvelope(warningCheckpointRepository).perceptionCarry))
       .toBe(stableStringify(propagated.perceptionCarry));
+    observations.mockClear();
+    advancePlayerSteps(resumedWarning, 10);
+    await resumedWarning.save();
+    const restoredWarning = requiredEnvelope(warningCheckpointRepository);
+    // Both paths process the same accepted steps from the same exact pending
+    // checkpoint. Restoring cannot change world knowledge or the sound bank.
+    expect(restoredWarning.world).toBe(warned.world);
+    expect(restoredWarning.perceptionCarry).toEqual(warned.perceptionCarry);
+    const restoredIntervals = observations.mock.calls.map(([input]) => input).filter((input) => (
+      input.supplementalSoundSamples?.some(({ expressionEventId }) => expressionEventId === warningAdmission.eventId)
+    ));
+    expect(restoredIntervals).toHaveLength(1);
+    expect(restoredIntervals[0]?.surfaceSoundSampleIds).toContain(warningSample.id);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-alarm")).toEqual([]);
+    observations.mockClear();
+    advancePlayerSteps(resumedWarning, 10);
+    expect(observations.mock.calls.some(([input]) => input.supplementalSoundSamples?.some(
+      ({ expressionEventId }) => expressionEventId === warningAdmission.eventId,
+    ))).toBe(false);
     resumedWarning.destroy();
     scheduledFrame = undefined;
 

@@ -1522,8 +1522,10 @@ describe("perpetual new worlds", () => {
     const carry = saved.perceptionCarry as {
       readonly version: number;
       readonly actorVocalizationSamples: ReadonlyArray<{
+        readonly id: string;
         readonly expressionEventId: string;
         readonly soundClass: string;
+        readonly sourceActorId: string;
       }>;
       readonly situatedExpressionAdmissions: {
         readonly records: ReadonlyArray<{
@@ -1548,6 +1550,10 @@ describe("perpetual new worlds", () => {
       expressionEventId: introductionLabel?.id,
       soundClass: "human-vocalization",
     }));
+    const introductionSample = carry.actorVocalizationSamples.find(
+      ({ expressionEventId }) => expressionEventId === introductionLabel.id,
+    );
+    if (introductionSample === undefined) throw new Error("GREET omitted its committed sound sample");
     runtime.destroy();
 
     const tamperedRecord = repository.snapshot();
@@ -1616,16 +1622,33 @@ describe("perpetual new worlds", () => {
     perceptionSpy.mockClear();
     advancePlayerSteps(reloaded, 10);
     const matchingIntervals = perceptionSpy.mock.calls
-      .map(([input]) => input.supplementalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ expressionEventId }) => (
+      .map(([input]) => input)
+      .filter((input) => input.supplementalSoundSamples?.some(({ expressionEventId }) => (
         expressionEventId === introductionLabel?.id
       )));
     expect(matchingIntervals).toHaveLength(1);
-    expect(matchingIntervals[0]).toContainEqual(expect.objectContaining({
+    expect(matchingIntervals[0]?.supplementalSoundSamples).toContainEqual(expect.objectContaining({
       expressionEventId: introductionLabel?.id,
       sourceActorId: introductionAdmission?.sourceActorId,
       soundClass: "human-vocalization",
     }));
+    expect(matchingIntervals[0]?.supplementalSoundSamples).toContainEqual(introductionSample);
+    expect(matchingIntervals[0]?.surfaceSoundSampleIds).toContain(introductionSample.id);
+    const intervalIndex = perceptionSpy.mock.calls.findIndex(([input]) => input === matchingIntervals[0]);
+    const intervalResult = perceptionSpy.mock.results[intervalIndex];
+    expect(intervalResult?.type).toBe("return");
+    const hearingBatches = intervalResult?.value as ReturnType<typeof humanPerception.collectExistingHumanObservations>;
+    const sourceBatch = hearingBatches.find(({ observerId }) => observerId === introductionSample.sourceActorId);
+    expect(sourceBatch).toBeDefined();
+    expect(sourceBatch?.observations.some(({ id }) => id.endsWith(`-${introductionSample.id}`))).toBe(false);
+    expect(hearingBatches.some(({ observerId, observations }) => (
+      observerId !== introductionSample.sourceActorId
+      && observations.some(({ id, channel, perceivedClass, subjectId, identification }) => (
+        id.endsWith(`-${introductionSample.id}`)
+        && channel === "hearing" && perceivedClass === "human-vocalization"
+        && subjectId === null && identification === "anonymous"
+      ))
+    ))).toBe(true);
     advancePlayerSteps(reloaded, 1);
     expect(reloaded.getRenderView().acousticText).toContainEqual(expect.objectContaining({
       id: introductionLabel.id,

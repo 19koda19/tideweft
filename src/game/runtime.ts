@@ -13092,23 +13092,50 @@ export async function createTideweftRuntime(
         && candidate.eventId === sample.expressionEventId
         && candidate.sourceActorId === sample.sourceActorId
       ));
-      if (admission?.kind === "settlement-keeper-store-response") {
-        const event = settlementKeeperStoreResponseExpressionEventForTrigger(
-          { world: economyView, settlement: settlementEcology },
-          admission.triggerEventId,
-        );
-        if (event === null
-          || !vocalizationSampleMatchesActiveEvent(sample, event)
-          || !residentSourcePositionMatches(economyView, sample.sourceActorId, sample.position)) {
-          throw new Error("Keeper surface sound lost its committed source authority");
+      let event: SituatedExpressionEvent | null;
+      let historicalSourceLocus = false;
+      switch (admission?.kind) {
+        case "settlement-keeper-store-response":
+          event = settlementKeeperStoreResponseExpressionEventForTrigger(
+            { world: economyView, settlement: settlementEcology },
+            admission.triggerEventId,
+          );
+          break;
+        case "resident-introduction":
+          event = residentIntroductionExpressionEventForTrigger(economyView, admission.triggerEventId);
+          historicalSourceLocus = true;
+          break;
+        case "resident-weather-hold":
+          event = residentWeatherHoldExpressionEventForTrigger(economyView, admission.triggerEventId);
+          historicalSourceLocus = true;
+          break;
+        case "porter-heavy-departure":
+          event = workingPeopleExpressionEventForTrigger(economyView, admission.triggerEventId);
+          break;
+        case "human-danger-warning": {
+          const authority = runtimeHumanDangerWarningExpressionAuthority(economyView, admission);
+          event = authority === null ? null : humanDangerWarningExpressionEventForTrigger(
+            authority,
+            admission.triggerEventId,
+          );
+          break;
         }
-        return [sample.id];
+        default:
+          return admission !== undefined
+            && (admission.kind === "core-wildlife-alarm"
+              || admission.kind === "core-wildlife-fish-crow-alarm")
+            && acousticTerrainSupportForSpecies(coreWildlifeAlarmAdmissionSpecies(admission)) === "surface"
+            ? [sample.id] : [];
       }
-      return admission !== undefined
-        && (admission.kind === "core-wildlife-alarm"
-          || admission.kind === "core-wildlife-fish-crow-alarm")
-        && acousticTerrainSupportForSpecies(coreWildlifeAlarmAdmissionSpecies(admission)) === "surface"
-        ? [sample.id] : [];
+      // Introduction and shelter owners authenticate their retained event-time
+      // route/settlement locus. A later moving body cannot relocate the sound.
+      if (event === null
+        || !vocalizationSampleMatchesActiveEvent(sample, event)
+        || (!historicalSourceLocus
+          && !residentSourcePositionMatches(economyView, sample.sourceActorId, sample.position))) {
+        throw new Error("Human surface sound lost its committed source authority");
+      }
+      return [sample.id];
     });
     const batches = collectExistingHumanObservations({
       world: worldView,

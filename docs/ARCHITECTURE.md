@@ -330,6 +330,23 @@ unchanged; T+1 consumes the NPC receipt once and T+2/reload cannot replay it.
 This does not change the saved player's event-time hearing law or establish
 general human-vocal support, ordinary travel or autonomous conversation.
 
+The other existing admitted human sources—introduction, weather hold, heavy
+departure and danger warning—now join that same independent T+1 human hearing
+leg. Each exact sample ordinal/event/source must match its re-derived domain
+event and acoustic tuple; a generic vocal class cannot supply ground support.
+Introduction and weather-hold owners authenticate their historical event-time
+settlement/route locus, not the speaker's later position. Keeper, departure and
+warning retain their existing current-body proofs. Support is derived once for
+the bounded sound bank, never independently for every listener. These existing
+producer tests retain the original source sounds and saved player receipts,
+exclude self-hearing, and consume pending hearing once, even after the visible
+line expires. A restored pending warning processes the same accepted steps to
+the exact same world and perception carry as uninterrupted play. Introductions,
+weather holds and departures still convey only anonymous vocalization to other
+humans; warning hearing conveys anonymous danger, not the hidden cause, and
+cannot recursively generate warnings. This is a current-consumer integration,
+not new chatter, work, dialogue or general human-to-dog hearing.
+
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
 explicit `unmodeled-support`, not invented ground contact. A physical domain may

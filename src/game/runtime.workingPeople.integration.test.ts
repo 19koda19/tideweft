@@ -15,7 +15,10 @@ import {
 import * as humanPerception from "./humanPerception";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer } from "./player";
-import { resolveResidentWorldPlacement } from "./residentSpatial";
+import {
+  resolveResidentWorldPlacement,
+  resolveResidentWorldPlacementAtEventLocation,
+} from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { createSessionState } from "./sessionTypes";
 import type {
@@ -138,6 +141,20 @@ function steadyCueCount(): number {
 
 function decodeCurrent(repository: MemoryRepository): CurrentEnvelope {
   return JSON.parse(repository.snapshot().worldJson) as CurrentEnvelope;
+}
+
+function expectSurfaceSampleReceipt(
+  input: Parameters<typeof humanPerception.collectExistingHumanObservations>[0],
+  batches: ReturnType<typeof humanPerception.collectExistingHumanObservations>,
+  sample: humanPerception.SupplementalSoundSample,
+): void {
+  expect(input.surfaceSoundSampleIds).toContain(sample.id);
+  expect(input.supplementalSoundSamples?.filter(({ id }) => id === sample.id))
+    .toEqual([sample]);
+  const sourceBatch = batches.find(({ observerId }) => observerId === sample.sourceActorId);
+  expect(sourceBatch).toBeDefined();
+  expect(sourceBatch?.observations.some(({ id }) => id.endsWith(`-${sample.id}`)))
+    .toBe(false);
 }
 
 function resealCurrentRecord(
@@ -429,6 +446,25 @@ describe("runtime Working People heavy-porter expression", () => {
     const porterSample = committed.perceptionCarry.actorVocalizationSamples[
       admission.sampleOrdinal
     ];
+    if (porterSample === undefined) {
+      throw new Error("saved weather hold omitted its exact pending sample");
+    }
+    const committedResident = committedWorld.residents.find(({ id }) => id === fixture.residentId);
+    if (committedResident === undefined) {
+      throw new Error("saved weather hold omitted its resident");
+    }
+    const eventPlacement = resolveResidentWorldPlacementAtEventLocation(
+      createWorldView(committedWorld),
+      committedResident,
+      {
+        kind: "route",
+        routeId: admission.eventRouteId,
+        progress: admission.eventRouteProgress,
+      },
+      null,
+    );
+    expect(eventPlacement).not.toBeNull();
+    expect(porterSample.position).toEqual(eventPlacement?.position);
     expect(porterSample).toMatchObject({
       expressionEventId: admission.eventId,
       sourceActorId: fixture.actorId,
@@ -453,21 +489,32 @@ describe("runtime Working People heavy-porter expression", () => {
     expect(steadyCueCount()).toBe(cueCountBeforeReload);
     advancePlayerSteps(resumed, 10);
     const matchingIntervals = perceptionSpy.mock.calls
-      .map(([input]) => input.supplementalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ expressionEventId }) => (
+      .map(([input]) => input)
+      .filter((input) => input.supplementalSoundSamples?.some(({ expressionEventId }) => (
         expressionEventId === admission.eventId
       )));
     expect(matchingIntervals).toHaveLength(1);
-    expect(matchingIntervals[0]).toContainEqual(expect.objectContaining({
+    expect(matchingIntervals[0]?.supplementalSoundSamples).toContainEqual(expect.objectContaining({
       sourceActorId: fixture.actorId,
       expressionEventId: admission.eventId,
     }));
+    const intervalIndex = perceptionSpy.mock.calls.findIndex(([input]) => input === matchingIntervals[0]);
+    expectSurfaceSampleReceipt(
+      matchingIntervals[0]!,
+      perceptionSpy.mock.results[intervalIndex]!.value,
+      porterSample,
+    );
     expect(steadyCueCount()).toBe(cueCountBeforeReload);
     await resumed.save();
     const after = decodeCurrent(repository);
     expect(deserializeWorld(after.world).events.filter((event) => (
       event.type === "resident-sheltered" && event.subjectId === fixture.residentId
     ))).toHaveLength(1);
+    advancePlayerSteps(resumed, 10);
+    expect(perceptionSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === porterSample.id)
+    ))).toHaveLength(1);
+    expect(steadyCueCount()).toBe(cueCountBeforeReload);
     resumed.destroy();
   });
 
@@ -592,15 +639,25 @@ describe("runtime Working People heavy-porter expression", () => {
 
     advancePlayerSteps(resumed, 10);
     const matchingIntervals = perceptionSpy.mock.calls
-      .map(([input]) => input.supplementalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ id }) => id === sample.id));
+      .map(([input]) => input)
+      .filter((input) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id));
     expect(matchingIntervals).toHaveLength(1);
-    expect(matchingIntervals[0]?.filter(({ id }) => id === sample.id)).toEqual([
+    expect(matchingIntervals[0]?.supplementalSoundSamples?.filter(({ id }) => id === sample.id)).toEqual([
       expect.objectContaining({
         sourceActorId: fixture.actorId,
         soundClass: "human-vocalization",
       }),
     ]);
+    const intervalIndex = perceptionSpy.mock.calls.findIndex(([input]) => input === matchingIntervals[0]);
+    expectSurfaceSampleReceipt(
+      matchingIntervals[0]!,
+      perceptionSpy.mock.results[intervalIndex]!.value,
+      sample,
+    );
+    advancePlayerSteps(resumed, 10);
+    expect(perceptionSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === sample.id)
+    ))).toHaveLength(1);
     expect(strainedCueCount()).toBe(cueCountBeforeReload);
     resumed.destroy();
   });
@@ -637,15 +694,26 @@ describe("runtime Working People heavy-porter expression", () => {
 
     advancePlayerSteps(resumed, 2);
     const matchingIntervals = perceptionSpy.mock.calls
-      .map(([input]) => input.supplementalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ id }) => id === pendingSample.id));
+      .map(([input]) => input)
+      .filter((input) => input.supplementalSoundSamples?.some(({ id }) => id === pendingSample.id));
     expect(matchingIntervals).toHaveLength(1);
+    const intervalIndex = perceptionSpy.mock.calls.findIndex(([input]) => input === matchingIntervals[0]);
+    expectSurfaceSampleReceipt(
+      matchingIntervals[0]!,
+      perceptionSpy.mock.results[intervalIndex]!.value,
+      pendingSample,
+    );
     expect(strainedCueCount()).toBe(cueCountBeforeReload);
     await resumed.save();
     expect(decodeCurrent(repository).perceptionCarry).toMatchObject({
       actorVocalizationSamples: [],
       situatedExpressionChannels: { version: 1, channels: [] },
     });
+    advancePlayerSteps(resumed, 10);
+    expect(perceptionSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === pendingSample.id)
+    ))).toHaveLength(1);
+    expect(strainedCueCount()).toBe(cueCountBeforeReload);
     resumed.destroy();
   });
 
