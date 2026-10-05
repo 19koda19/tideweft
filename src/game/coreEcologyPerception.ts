@@ -59,6 +59,10 @@ import {
   type OutdoorIlluminationField,
 } from "./outdoorIllumination";
 import { ambientNoiseAt } from "./physicalAcousticPerception";
+import {
+  acousticTerrainSupportForSpecies,
+  prepareTerrainAudibleContactInput,
+} from "./terrainAcoustics";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
 import {
@@ -490,7 +494,7 @@ export function propagateCoreEcologyAlarmObservationBatches(
         batches.push(Object.freeze({ observerId: observer.actorId, observations, audibleContact }));
         continue;
       }
-      const heard = evaluateAudibleContact({
+      const acousticInput = prepareTerrainAudibleContactInput({
         listener: { x: 0, y: 0 },
         source: sourceDelta,
         baseRange: Math.floor(
@@ -502,7 +506,15 @@ export function propagateCoreEcologyAlarmObservationBatches(
           x: frame.world.weather.windX / FIXED_POINT,
           y: frame.world.weather.windY / FIXED_POINT,
         },
+      }, {
+        world: frame.world,
+        listenerPosition: observer.position,
+        sourcePosition: event.position,
+        listenerSupport: acousticTerrainSupportForSpecies(observer.species),
+        sourceSupport: acousticTerrainSupportForSpecies(event.species),
       });
+      if (acousticInput === null) return null;
+      const heard = evaluateAudibleContact(acousticInput);
       if (heard !== null) {
         const observation = createCoreEcologyAlarmObservation(event, {
           observerId: observer.actorId,

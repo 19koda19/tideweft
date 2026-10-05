@@ -73,7 +73,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 49;
+  readonly version: 50;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -166,12 +166,12 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 49
-    || record.payloadVersion !== 49
-  ) throw new Error("fixture did not produce a current v49 regional save");
+    || value.version !== 50
+    || record.payloadVersion !== 50
+  ) throw new Error("fixture did not produce a current v50 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
-    throw new Error("fixture v49 outer envelope does not match its integrity seal");
+    throw new Error("fixture v50 outer envelope does not match its integrity seal");
   }
   expect(Object.keys(value).sort()).toEqual([
     "bio0Ecology",
@@ -211,7 +211,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 49,
+    payloadVersion: 50,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });

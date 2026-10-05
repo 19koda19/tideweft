@@ -164,7 +164,7 @@ describe("runtime performance telemetry", () => {
         perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
       })}\n`);
       const envelope = JSON.parse(worldJson) as Record<string, unknown>;
-      expect(envelope.version).toBe(49);
+      expect(envelope.version).toBe(50);
       expect(envelope.playerExpressionRecency).toEqual(createPlayerExpressionRecencyState(
         deserializeWorld(envelope.world as string).meta.rootSeed,
       ));
@@ -172,7 +172,7 @@ describe("runtime performance telemetry", () => {
       expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
       // These stationary inputs create no effort or footing history. Preserve the exact
       // 6215116, 30-step oracle for every older root after explicitly removing
-      // only the new v49 combined root/version and recomputing its enclosing seal.
+      // only the v49 combined root and current outer version, then recomputing its seal.
       const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
       v47Base.version = 47;
       const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });

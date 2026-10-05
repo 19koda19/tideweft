@@ -662,6 +662,27 @@ class MemoryRepository implements SaveRepository {
   }
 }
 
+/** Obsolete unpublished Voice formats are recognized, never partially loaded or overwritten. */
+async function expectRetiredVoiceSaveUntouched(record: SaveRecord): Promise<void> {
+  const repository = new MemoryRepository(record);
+  const priorCueCount = soundscapePlay.mock.calls.length;
+  const runtime = await createTideweftRuntime(repository);
+  expect(runtime.getUIView().title.hasSave).toBe(false);
+  expect(runtime.getUIView().title.requiresSeed).toBe(true);
+  expect(runtime.getUIView().saveWarning?.message).toBe("PRE-1.0 SAVE INCOMPATIBLE");
+  expect(runtime.getUIView().announcement?.message).toContain(
+    `development schema ${record.payloadVersion} is intentionally unsupported`,
+  );
+  expect(soundscapePlay.mock.calls).toHaveLength(priorCueCount);
+  await expect(runtime.save()).rejects.toThrow(
+    "non-empty seed before replacing the incompatible pre-1.0 development save",
+  );
+  expect(repository.snapshot()).toEqual(record);
+  expect(soundscapePlay.mock.calls).toHaveLength(priorCueCount);
+  runtime.destroy();
+  scheduledFrame = undefined;
+}
+
 let scheduledFrame: ((now: number) => void) | undefined;
 let nextFrameTime = 100;
 
@@ -829,8 +850,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 49 || current.version !== 49) {
-    throw new Error("runtime fixture is not a current v49 save");
+  if (record.payloadVersion !== 50 || current.version !== 50) {
+    throw new Error("runtime fixture is not a current v50 save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -1872,7 +1893,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 49) throw new Error("fixture is not a current save");
+  if (current.version !== 50) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1903,7 +1924,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 49) throw new Error("fixture is not a current save");
+  if (current.version !== 50) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -1934,7 +1955,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 49 || typeof current.settlementEcology !== "string") {
+  if (current.version !== 50 || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -1989,7 +2010,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 49
+    current.version !== 50
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2133,7 +2154,7 @@ async function createChickenAlarmRuntime(
     night.weather.nextChangeTick = night.meta.completedTick + 100_000;
     assertWorldInvariants(night);
     // Existing supported world fixture initializes fresh current ecology;
-    // all following staging and reload use current49 generated-home authority.
+    // all following staging and reload use current50 generated-home authority.
     nightRecord = legacyRuntimeSaveRecord(night);
   }
   const sourceRepository = new MemoryRepository(nightRecord);
@@ -2423,7 +2444,7 @@ describe("runtime settlement ecology integration", () => {
     expect(bearSources[0]?.patch.originRegion).toEqual(createRegionCoord(-6, -24));
     expect(bearSources[0]?.patch.populations.find(({ species }) => species === "brown-bear")
       ?.members.map(({ actor }) => actor.identity.stableId)).toEqual([fixture.bearActorId]);
-    expect(saved.version).toBe(49);
+    expect(saved.version).toBe(50);
     expect((saved.perceptionCarry as { version: number }).version).toBe(14);
     runtime.destroy();
     scheduledFrame = undefined;
@@ -3840,8 +3861,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(49);
-    expect(envelope.version).toBe(49);
+    expect(record.payloadVersion).toBe(50);
+    expect(envelope.version).toBe(50);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -4102,7 +4123,7 @@ describe("runtime settlement ecology integration", () => {
     resumedAfterReceipt.destroy();
   });
 
-  it("migrates honest v40 store state without inventing speech and fences future reply semantics from v34-v40", async () => {
+  it("migrates released v32 store state without inventing speech, fences future knowledge and preserves retired Voice records", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
     source.dispatchUI({
@@ -4125,25 +4146,20 @@ describe("runtime settlement ecology integration", () => {
       ...v8CurrentCarry
     } = currentCarry;
     const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentFields } = current;
-    const honestV40Base = {
+    const honestV32Base = {
       ...currentFields,
-      version: 40,
-      perceptionCarry: {
-        ...v8CurrentCarry,
-        version: 8,
-        actorVocalizationSamples: [],
-        situatedExpressionChannels: { version: 1, channels: [] },
-        situatedExpressionAdmissions: { version: 1, records: [] },
-        situatedExpressionCausalAuthority: { version: 1, records: [] },
-      },
+      version: 32,
+      // Released v32 already owns recovery/timeAction; only Voice is absent.
+      player: structuredClone(current.player as PlayerState),
+      perceptionCarry: legacyPlayerPerceptionCarry(currentCarry),
     };
     const honestRepository = new MemoryRepository({
       ...currentRecord,
-      payloadVersion: 40,
+      payloadVersion: 32,
       updatedAt: currentRecord.updatedAt + 1,
       worldJson: JSON.stringify({
-        ...honestV40Base,
-        integrity: gameSaveEnvelopeIntegrity(honestV40Base),
+        ...honestV32Base,
+        integrity: gameSaveEnvelopeIntegrity(honestV32Base),
       }),
     });
     soundscapePlay.mockClear();
@@ -4156,7 +4172,7 @@ describe("runtime settlement ecology integration", () => {
     advancePlayerSteps(migrated, 10);
     await migrated.save();
     const migratedEnvelope = savedEnvelope(honestRepository);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedEnvelope.version).toBe(50);
     expect(migratedEnvelope.perceptionCarry).toMatchObject({
       version: 14,
       actorVocalizationSamples: [],
@@ -4173,11 +4189,11 @@ describe("runtime settlement ecology integration", () => {
     const smuggledWorld = deserializeWorld(String(current.world));
     const smuggledResident = smuggledWorld.residents[0];
     if (smuggledResident === undefined) {
-      throw new Error("v40 semantic-smuggling fixture needs a resident");
+      throw new Error("v32 semantic-smuggling fixture needs a resident");
     }
     const forgedObservationTick = smuggledResident.perception.tick + 1;
     const forgedObservation = createActorObservation({
-      id: "OBS-v40-future-secured-store-report",
+      id: "OBS-v32-future-secured-store-report",
       observerId: smuggledResident.identity.stableId,
       observedAtTick: forgedObservationTick,
       channel: "hearing",
@@ -4202,7 +4218,7 @@ describe("runtime settlement ecology integration", () => {
           { tick: forgedObservationTick, observations: [forgedObservation] },
         );
     if (learnedFutureReport === null || learnedFutureReport.beliefs.length !== 1) {
-      throw new Error("v40 semantic-smuggling fixture could not form its forged belief");
+      throw new Error("v32 semantic-smuggling fixture could not form its forged belief");
     }
     smuggledWorld.residents[0] = {
       ...smuggledResident,
@@ -4217,21 +4233,24 @@ describe("runtime settlement ecology integration", () => {
         salientMemory: [],
       },
     };
-    const smuggledV40Base = {
-      ...honestV40Base,
+    const smuggledV32Base = {
+      ...honestV32Base,
       world: serializeWorld(smuggledWorld),
     };
-    const rejectedFutureBelief = await createTideweftRuntime(new MemoryRepository({
+    const smuggledV32Record: SaveRecord = {
       ...currentRecord,
-      payloadVersion: 40,
+      payloadVersion: 32,
       updatedAt: currentRecord.updatedAt + 2,
       worldJson: JSON.stringify({
-        ...smuggledV40Base,
-        integrity: gameSaveEnvelopeIntegrity(smuggledV40Base),
+        ...smuggledV32Base,
+        integrity: gameSaveEnvelopeIntegrity(smuggledV32Base),
       }),
-    }));
+    };
+    const smuggledV32Repository = new MemoryRepository(smuggledV32Record);
+    const rejectedFutureBelief = await createTideweftRuntime(smuggledV32Repository);
     expect(rejectedFutureBelief.getUIView().saveWarning?.message)
       .toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(smuggledV32Repository.snapshot()).toEqual(smuggledV32Record);
     rejectedFutureBelief.destroy();
 
     for (const [index, historical] of [
@@ -4251,7 +4270,7 @@ describe("runtime settlement ecology integration", () => {
         version: historical.outerVersion,
         perceptionCarry: forgedCarry,
       };
-      const rejected = await createTideweftRuntime(new MemoryRepository({
+      const retiredRecord: SaveRecord = {
         ...currentRecord,
         payloadVersion: historical.outerVersion,
         updatedAt: currentRecord.updatedAt + 3 + index,
@@ -4259,12 +4278,8 @@ describe("runtime settlement ecology integration", () => {
           ...forgedHistoricalBase,
           integrity: gameSaveEnvelopeIntegrity(forgedHistoricalBase),
         }),
-      }));
-      expect(
-        rejected.getUIView().saveWarning?.message,
-        `outer v${historical.outerVersion}/carry-v${historical.carryVersion}`,
-      ).toBe("LOCAL AUTOSAVE UNREADABLE");
-      rejected.destroy();
+      };
+      await expectRetiredVoiceSaveUntouched(retiredRecord);
     }
   });
 
@@ -4311,8 +4326,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(49);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedRecord.payloadVersion).toBe(50);
+    expect(migratedEnvelope.version).toBe(50);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -4399,8 +4414,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(49);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedRecord.payloadVersion).toBe(50);
+    expect(migratedEnvelope.version).toBe(50);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -4573,8 +4588,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(49);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedRecord.payloadVersion).toBe(50);
+    expect(migratedEnvelope.version).toBe(50);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -4729,8 +4744,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(49);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedRecord.payloadVersion).toBe(50);
+    expect(migratedEnvelope.version).toBe(50);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -4845,8 +4860,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(49);
-    expect(migratedEnvelope.version).toBe(49);
+    expect(migratedRecord.payloadVersion).toBe(50);
+    expect(migratedEnvelope.version).toBe(50);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,
@@ -5226,9 +5241,8 @@ describe("runtime settlement ecology integration", () => {
     expect((committed.player as PlayerState).timeAction).toMatchObject({ kind: "rest" });
     runtime.destroy();
 
-    // v35/carry-v4 already owned warning barks. Its exact nonempty interval
-    // migrates by version alone; loading must not replay acknowledged audio or
-    // duplicate the persisted sample/admission/channel.
+    // v35/carry-v4 owned warning barks, but is now an intentionally retired
+    // unpublished Voice format. Its nonempty interval must remain untouched.
     const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...committedFields } = committed;
     const committedCarry = committed.perceptionCarry as Readonly<Record<string, unknown>>;
     expect(committedCarry.version).toBe(14);
@@ -5244,7 +5258,7 @@ describe("runtime settlement ecology integration", () => {
       version: 35,
       perceptionCarry: { ...v7CommittedCarry, version: 4 },
     };
-    const v35Repository = new MemoryRepository({
+    const v35WarningRecord: SaveRecord = {
       ...committedRecord,
       payloadVersion: 35,
       updatedAt: committedRecord.updatedAt + 1,
@@ -5252,32 +5266,8 @@ describe("runtime settlement ecology integration", () => {
         ...v35Base,
         integrity: gameSaveEnvelopeIntegrity(v35Base),
       }),
-    });
-    soundscapePlay.mockClear();
-    const migratedWarning = await createTideweftRuntime(v35Repository);
-    expect(migratedWarning.getUIView().saveWarning).toBeUndefined();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    await migratedWarning.save();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    const migratedWarningEnvelope = savedEnvelope(v35Repository);
-    expect(migratedWarningEnvelope.version).toBe(49);
-    expect(migratedWarningEnvelope.perceptionCarry).toEqual({
-      ...v7CommittedCarry,
-      version: 14,
-      intervalStartWasSleeping: false,
-      playerStepStateSamples: Array.from(
-        { length: Number(v7CommittedCarry.playerStepsSinceWorldTick) },
-        () => null,
-      ),
-      playerStepStateAnchor: {
-        version: 1,
-        sampleOrdinal: Number(v7CommittedCarry.playerStepsSinceWorldTick),
-        stamina: (committed.player as PlayerState).stamina,
-        mode: (committed.player as PlayerState).mode,
-      },
-      animalContactAcousticCarry: { version: 1, records: [] },
-    });
-    migratedWarning.destroy();
+    };
+    await expectRetiredVoiceSaveUntouched(v35WarningRecord);
 
     // Keep the bark's cause and identity intact while coherently staging its
     // physical source inside the trailing strip. Event identity is cause-bound;
@@ -6356,19 +6346,39 @@ describe("runtime settlement ecology integration", () => {
         integrity: gameSaveEnvelopeIntegrity(v35Base),
       }),
     };
-    const rejectedV35 = await createTideweftRuntime(new MemoryRepository(v35GrowlRecord));
-    expect(rejectedV35.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
-    rejectedV35.destroy();
+    await expectRetiredVoiceSaveUntouched(v35GrowlRecord);
 
-    // v36/carry-v5 already owned defensive growls. Its exact nonempty
-    // interval migrates by version alone without replaying acknowledged audio
-    // or duplicating any sample, admission, channel, or reception.
+    // Retirement must not hide the original admission-kind rejection: the
+    // obsolete tuple is also invalid inside a full current carry.
+    const legacyGrowlTupleCarry = {
+      ...growlCarry,
+      situatedExpressionAdmissions: {
+        version: 1,
+        records: growlCarry.situatedExpressionAdmissions.records.map((record) => (
+          record.kind === "guardian-dog-defensive-growl"
+            ? { ...record, kind: "guardian-dog-warning" }
+            : record
+        )),
+      },
+    };
+    const legacyGrowlTupleRecord = withCurrentEnvelopeFields(growlRecord, {
+      perceptionCarry: legacyGrowlTupleCarry,
+    });
+    const legacyGrowlTupleRepository = new MemoryRepository(legacyGrowlTupleRecord);
+    const rejectedLegacyGrowlTuple = await createTideweftRuntime(legacyGrowlTupleRepository);
+    expect(rejectedLegacyGrowlTuple.getUIView().saveWarning?.message)
+      .toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(legacyGrowlTupleRepository.snapshot()).toEqual(legacyGrowlTupleRecord);
+    rejectedLegacyGrowlTuple.destroy();
+
+    // The obsolete v36/carry-v5 growl checkpoint is recognized without replay,
+    // partial adoption or overwrite. Current reload below still proves cause.
     const v36Base = {
       ...growlFields,
       version: 36,
       perceptionCarry: { ...v7GrowlCarry, version: 5 },
     };
-    const v36GrowlRepository = new MemoryRepository({
+    const v36GrowlRecord: SaveRecord = {
       ...growlRecord,
       payloadVersion: 36,
       updatedAt: growlRecord.updatedAt + 2,
@@ -6376,34 +6386,9 @@ describe("runtime settlement ecology integration", () => {
         ...v36Base,
         integrity: gameSaveEnvelopeIntegrity(v36Base),
       }),
-    });
+    };
+    await expectRetiredVoiceSaveUntouched(v36GrowlRecord);
     soundscapePlay.mockClear();
-    const migratedGrowl = await createTideweftRuntime(v36GrowlRepository);
-    expect(migratedGrowl.getUIView().saveWarning).toBeUndefined();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    await migratedGrowl.save();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    const migratedGrowlRecord = v36GrowlRepository.snapshot();
-    const migratedGrowlEnvelope = savedEnvelope(v36GrowlRepository);
-    expect(migratedGrowlRecord.payloadVersion).toBe(49);
-    expect(migratedGrowlEnvelope.version).toBe(49);
-    expect(migratedGrowlEnvelope.perceptionCarry).toEqual({
-      ...v7GrowlCarry,
-      version: 14,
-      intervalStartWasSleeping: false,
-      playerStepStateSamples: Array.from(
-        { length: Number(v7GrowlCarry["playerStepsSinceWorldTick"]) },
-        () => null,
-      ),
-      playerStepStateAnchor: {
-        version: 1,
-        sampleOrdinal: Number(v7GrowlCarry["playerStepsSinceWorldTick"]),
-        stamina: (growlEnvelope.player as PlayerState).stamina,
-        mode: (growlEnvelope.player as PlayerState).mode,
-      },
-      animalContactAcousticCarry: { version: 1, records: [] },
-    });
-    migratedGrowl.destroy();
 
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     const resumedRepository = new MemoryRepository(growlRecord);
@@ -7311,9 +7296,8 @@ describe("runtime settlement ecology integration", () => {
       situatedExpressionChannels: _currentSituatedExpressionChannels,
       ...v7WhineCarryBase
     } = whineCarry as Readonly<Record<string, unknown>>;
-    // The current world can lawfully admit the resident weather hold on the
-    // same tick. A genuine v37/carry-v6 fixture predates that semantic, so keep
-    // this compatibility proof narrowly bound to the whine it is testing.
+    // Keep this retired-format witness narrowly bound to its actual whine;
+    // same-tick current resident weather speech belongs to the live proof below.
     const v7WhineCarry: Readonly<Record<string, unknown>> = {
       ...v7WhineCarryBase,
       actorVocalizationSamples: whineCarry.actorVocalizationSamples.filter(
@@ -7346,20 +7330,40 @@ describe("runtime settlement ecology integration", () => {
         integrity: gameSaveEnvelopeIntegrity(v36Base),
       }),
     };
-    const rejectedV36 = await createTideweftRuntime(new MemoryRepository(v36WhineRecord));
-    expect(rejectedV36.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
-    rejectedV36.destroy();
+    await expectRetiredVoiceSaveUntouched(v36WhineRecord);
 
-    // v37/carry-v6 already owned shelter whines. Its exact nonempty interval
-    // migrates by version alone without replaying acknowledged audio or
-    // duplicating any retained sample, admission, channel, or reception.
+    // A whine cannot masquerade as an older growl tuple in the full current
+    // carry either; retirement alone is not the admission-authentication proof.
+    const legacyWhineTupleCarry = {
+      ...whineCarry,
+      situatedExpressionAdmissions: {
+        version: 1,
+        records: whineCarry.situatedExpressionAdmissions.records.map((record) => (
+          record.kind === "guardian-dog-shelter-whine"
+            ? { ...record, kind: "guardian-dog-defensive-growl" }
+            : record
+        )),
+      },
+    };
+    const legacyWhineTupleRecord = withCurrentEnvelopeFields(whineRecord, {
+      perceptionCarry: legacyWhineTupleCarry,
+    });
+    const legacyWhineTupleRepository = new MemoryRepository(legacyWhineTupleRecord);
+    const rejectedLegacyWhineTuple = await createTideweftRuntime(legacyWhineTupleRepository);
+    expect(rejectedLegacyWhineTuple.getUIView().saveWarning?.message)
+      .toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(legacyWhineTupleRepository.snapshot()).toEqual(legacyWhineTupleRecord);
+    rejectedLegacyWhineTuple.destroy();
+
+    // The obsolete v37/carry-v6 whine checkpoint is recognized without replay,
+    // partial adoption or overwrite. Full current reload remains required.
     expect(whineCarry.version).toBe(14);
     const v37Base = {
       ...whineFields,
       version: 37,
       perceptionCarry: { ...v7WhineCarry, version: 6 },
     };
-    const v37WhineRepository = new MemoryRepository({
+    const v37WhineRecord: SaveRecord = {
       ...whineRecord,
       payloadVersion: 37,
       updatedAt: whineRecord.updatedAt + 2,
@@ -7367,34 +7371,9 @@ describe("runtime settlement ecology integration", () => {
         ...v37Base,
         integrity: gameSaveEnvelopeIntegrity(v37Base),
       }),
-    });
+    };
+    await expectRetiredVoiceSaveUntouched(v37WhineRecord);
     soundscapePlay.mockClear();
-    const migratedWhine = await createTideweftRuntime(v37WhineRepository);
-    expect(migratedWhine.getUIView().saveWarning).toBeUndefined();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    await migratedWhine.save();
-    expect(soundscapePlay).not.toHaveBeenCalled();
-    const migratedWhineRecord = v37WhineRepository.snapshot();
-    const migratedWhineEnvelope = savedEnvelope(v37WhineRepository);
-    expect(migratedWhineRecord.payloadVersion).toBe(49);
-    expect(migratedWhineEnvelope.version).toBe(49);
-    expect(migratedWhineEnvelope.perceptionCarry).toEqual({
-      ...v7WhineCarry,
-      version: 14,
-      intervalStartWasSleeping: false,
-      playerStepStateSamples: Array.from(
-        { length: Number(v7WhineCarry["playerStepsSinceWorldTick"]) },
-        () => null,
-      ),
-      playerStepStateAnchor: {
-        version: 1,
-        sampleOrdinal: Number(v7WhineCarry["playerStepsSinceWorldTick"]),
-        stamina: (whineEnvelope.player as PlayerState).stamina,
-        mode: (whineEnvelope.player as PlayerState).mode,
-      },
-      animalContactAcousticCarry: { version: 1, records: [] },
-    });
-    migratedWhine.destroy();
 
     const resumedRepository = new MemoryRepository(whineRecord);
     const resumed = await createTideweftRuntime(resumedRepository);

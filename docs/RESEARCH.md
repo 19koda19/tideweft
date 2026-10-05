@@ -1857,6 +1857,65 @@ assistive hardware, production-browser/packaged desktop or hours acceptance.
 Old frozen-caption checks assuming indefinite paused display must be made
 deadline-aware before reuse; old projection disappearance is not DOM expiry.
 
+### Local surface-hearing boundary — 2026-10-05
+
+The unpublished candidate over `3630001` adds the first bounded relief
+transmission rule for authenticated terrestrial alarm causes/listeners. The
+prior dry-ridge characterization demonstrated that listener-local ambient noise
+alone did not distinguish a crossed ridge. `terrainAcoustics.ts` now walks the
+registered local supercover, without a full-world scan or retained cache. Its
+greatest crossed-cell height excess uses the lower entry/exit endpoint of the
+linear support baseline; a midpoint missed real obstruction on sloped paths.
+Authored clearance/span/cap categories alter received strength, not committed
+event intensity, timing, source identity or the independent optical gate.
+Reverse-path and rising/falling tests retain exact transmission `0.5390625`.
+
+Current core alarms, player alarm receipt reauthentication and the matching
+resident hearing leg share that input adapter. Player steps have explicit
+surface support. Unknown airborne/submerged support and off-frame paths remain
+explicitly unmodeled/coarse, not invented ground contact or an inspected clear
+path. Generic human/dog/physical consumers still require their own authenticated
+joins. This is **PARTIAL** propagation coverage, not full Voice closure.
+
+Outer save50/carry14 establishes this changed hearing boundary. Obsolete
+unpublished Voice development formats33–49 are deliberately incompatible and
+remain untouched on load; released readers1–32, including Alpha60, remain.
+Their historical `player.timeAction` authority is retained. Current malformed
+cause/species/receipt and no-overwrite negatives remain mandatory. A newly
+added test initially confused a deliberately supported fish-crow admission
+alias with a forgery; it now alters the authenticated current species instead.
+No production rule was weakened to satisfy that mistaken expectation.
+
+Final focused kernels/policy passed6 files/122 tests; fall, bio0, player time,
+regional, V25/V26, resources and wait passed8 files/98 tests. Turning Day,
+working-people and expression diagnostics passed3 files/18 tests. The real
+warning/bark/fall/cargo case and forged-species rejection passed separately
+(2 tests). The mixed fixture's existing player was staged two tiles nearer
+existing residents inside their legitimately reduced impact range; the actual
+rough fall, physical cargo, event/receipt conservation and non-overlap
+assertions remain. Critical `npm run test:smoke` passed6 files/105 tests.
+The full corrected core-ecology file then passed74 tests in633.01s, including
+the real mixed-source case, current reload/forgery guards, authentic animal
+alarms and physical conservation. Its final JSON is retained locally at
+`artifacts/validation/voice-current49/terrain50-core-final.json`. A detached
+earlier domain run lost its observation handle; terminal process absence and
+distinct new Vitest cache entries recover passing runtime/perception/settlement/
+telemetry file results, not a combined exit0 certificate.
+
+The requested Alpha61 local preview passed `npm run make:desktop` (including
+typecheck, production web compilation, Mac arm64 package and ZIP) and the
+existing disposable-profile packaged smoke. Actual `app://bundle` boot,
+Chart/Relief, controls, recovery and current-save checks passed with empty
+renderer-warning, navigation-error and resource-failure lists; the world image
+was inspected. Runtime-only ASAR has10 entries/4,970,315 bytes, SHA256
+`0cba3cde562908833d4a5ef5a8512b843e1ebb13b283dfca884d7752bc339d5a`.
+Static smoke passed the emitted five-file `/tideweft/` artifact. These are
+focused runtime and host artifact checks, not ordinary travel, mobile hardware,
+production FPS, a long soak, interactive production-browser certification,
+signing, other desktop targets, cumulative regression or public release.
+Canonical coverage and compatibility limits belong to
+[Architecture](./ARCHITECTURE.md#local-surface-acoustic-transmission).
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

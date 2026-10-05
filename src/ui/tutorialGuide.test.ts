@@ -20,7 +20,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(70);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(71);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -57,7 +57,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(whatsNew?.steps).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: "whats-new-turning-day",
-        title: "The Breathing Room",
+        title: "Historical Alpha 60 · The Breathing Room",
       }),
     ]));
     expect(whatsNew?.action).toEqual({
@@ -70,7 +70,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("never advances simulation or starts a save");
     expect(copy).toContain("world continues underneath");
     expect(copy).toContain("opening the notes first cancels that transient action at its committed boundary");
-    expect(copy).toContain("Alpha 60 · The Breathing Room is the current release candidate");
+    expect(copy).toContain("Alpha 60 · The Breathing Room is the previous published baseline");
     expect(copy).toContain("complete performance-stabilization implementation");
     expect(copy).toContain("Exact bounded same-stack receipts remove repeated authenticated regional-ecology validation");
     expect(copy).toContain("preferred 45–60 FPS band instead of the former sustained 4–8 FPS failure state");
@@ -191,6 +191,40 @@ describe("TIDEWEFT field-manual content", () => {
       "physical guest lodging/bed and guaranteed return travel",
     );
     expect(plannedEcology?.body).not.toContain("physical guest rest/return travel");
+  });
+
+  it("teaches the local Voice preview, restrained caption timing and deliberate save retirement", () => {
+    const preview = tutorialSectionById("whats-new")?.steps.find(
+      (step) => step.id === "whats-new-living-voice-preview",
+    );
+    const acoustic = tutorialSectionById("accessibility")?.steps.find(
+      (step) => step.id === "accessibility-acoustic-reading",
+    );
+    const saves = tutorialSectionById("saves-and-quiet-hour")?.steps.find(
+      (step) => step.id === "saves-alpha61-preview",
+    );
+    const animalSound = tutorialSectionById("people-and-about")?.steps.find(
+      (step) => step.id === "settlement-shadows-sound",
+    );
+
+    expect(preview?.body).toContain("unpublished local playtest build");
+    expect(preview?.body).toContain("does not close the directive or publish a new browser release");
+    expect(preview?.body).toContain("silence remains meaningful");
+    expect(acoustic?.body).toContain("about 21 characters per second");
+    expect(acoustic?.body).toContain("one-second minimum");
+    expect(acoustic?.body).toContain("urgent warnings may interrupt");
+    expect(acoustic?.body).toContain("Full / Important");
+    expect(acoustic?.body).toContain("not sounds, actor hearing, strong warnings or accessible captions");
+    expect(acoustic?.body).toContain("no setting reveals an unheard event");
+    expect(saves?.body).toContain("outer save version 50");
+    expect(saves?.body).toContain("Published formats 1–32");
+    expect(saves?.body).toContain("development formats 33–49 are intentionally incompatible");
+    expect(saves?.body).toContain("stored bytes remain untouched");
+    expect(saves?.body).toContain("deliberate fresh-world replacement");
+    expect(saves?.body).toContain("unexpected storage failure is not a reset");
+    expect(animalSound?.body).toContain("narrow elk, boar, chicken, duck or goat alarm");
+    expect(animalSound?.body).toContain("Lawful hearing, not visibility alone");
+    expect(animalSound?.body).toContain("wolf calls remain foundation-only or deferred");
   });
 
   it("covers every advertised control exactly once and deliberately omits tide holding", () => {
@@ -442,7 +476,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(recoveryStep?.body).toContain("Cancel or Wake");
     expect(recoveryStep?.body).toContain("physical incident, or qualifying current lawful disturbance");
     expect(recoveryStep?.body).toContain("broad terrain remains readable but exact actors, items, labels, interactions, and unseen events do not become player knowledge");
-    expect(recoveryStep?.body).toContain("in-progress REST or SLEEP is saved in outer version 32");
+    expect(recoveryStep?.body).toContain("in-progress REST or SLEEP is saved in current outer version 50");
     expect(recoveryStep?.body).toContain("resumes after reload");
     expect(recoveryStep?.body).toContain("hidden or closed app advances nothing");
     expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(

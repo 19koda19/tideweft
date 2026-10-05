@@ -2,6 +2,41 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.61",
+      "releaseDate": "2026-10-05",
+      "buildIdentity": "0.3.3-alpha.61",
+      "summary": "Alpha 61 is a local Living Voice playtest preview: committed speech, representative animal calls and physical sounds share lawful hearing and restrained captions. Living Voice remains in development; this build is not a published release or directive closure.",
+      "gameplayContractVersion": 51,
+      "tutorialVersion": 71,
+      "categories": {
+        "gameplay": [
+          "Committed player traversal and exhaustion reactions, heavy-load porter departure, keeper response, resident introduction, weather hold and one human danger warning use the shared expression path rather than speaking merely because an actor was selected or rendered.",
+          "Representative guardian-dog signals, fish-crow, deer, gull, elk, wild-boar, chicken, American-black-duck and goat alarms, rabbit thumps, frog chorus, rat rustle, rain-caused cat retreat calls and fox pursuit yips join the same bounded acoustic language. Hearing an unseen source does not reveal its identity, hidden target or exact position."
+        ],
+        "fixes": [
+          "Speech, animal calls and eligible physical sounds share bounded, collision-aware world labels; label suppression does not erase committed sound or lawful actor hearing.",
+          "The current terrain-hearing boundary attenuates supported surface paths consistently for the connected alarm consumers, while unmodeled height and body support remain explicit limitations rather than invented physical geometry."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only ruleset. This preview does not add general animal attacks, hunting, fishing, wearable-gear effects, crafting expansion or new companion ownership.",
+          "Quiet calls remain noninterrupting; only qualifying strong lawful disturbances may interrupt WAIT or recovery. Optional captions never grant additional world knowledge."
+        ],
+        "interface": [
+          "The bottom caption stays visible according to its displayed length at about 21 characters per second, with a one-second minimum. Routine incoming cues cannot shorten its reading time; urgent warnings may interrupt.",
+          "Field Manual version 71 explains the local preview and its limits. Accessibility offers Full or Important animal world labels; Important reduces noncritical animal labels without disabling audio, hearing or accessible captions."
+        ],
+        "saves": [
+          "This preview writes outer save version 50. Published save formats 1–32, including Alpha 60's version 32, remain supported; obsolete unpublished Voice development formats 33–49 are intentionally incompatible.",
+          "An incompatible record is left untouched and requires deliberate fresh-world replacement. Current saves still preserve authoritative state, physical conservation and deterministic restore; loading does not replay consumed incidental sound."
+        ],
+        "knownLimitations": [
+          "This is an unpublished local playtest preview. Alpha 60 remains the latest LIVE_VERIFIED public baseline, and Living Voice's remaining acceptance, broader repertoire and integration work are not complete.",
+          "Existing calls are narrow cause-backed representatives, not continuous animal conversation or universal species coverage. Broader human conversation, future tool, violence and vessel actions, and unmodeled acoustic geometry are not made playable by the shared interface.",
+          "This preview does not certify universal frame pacing, low-end hardware, prolonged-session performance, all assistive technologies or every desktop platform. Local packaging and smoke evidence remain distinct from remote CI, deployment and exact live-build verification."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.60",
       "releaseDate": "2026-09-28",
       "buildIdentity": "0.3.3-alpha.60",

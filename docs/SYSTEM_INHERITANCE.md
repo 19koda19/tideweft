@@ -415,6 +415,13 @@ presentation, never the committed physical consequence. Likewise, expression
 cooldown may coalesce optional text but must not erase a distinct newly
 committed acoustic event from propagation or listener receipts.
 
+Terrain support comes from the physical cause/body, not the caption, sound class
+or renderer height. Applicable surface listeners use the shared
+[local transmission owner](./ARCHITECTURE.md#local-surface-acoustic-transmission);
+airborne/submerged and off-frame support stay explicitly unmodeled/coarse until
+their real owners provide geometry. Current alarm consumers re-derive bounded
+support beside existing samples, never as a second saved or omniscient fact.
+
 Factual speech likewise requires an authenticated source event, expression,
 admission and acoustic sample plus listener-specific audible confidence. The
 current secured-store response is the bounded representative: sufficiently

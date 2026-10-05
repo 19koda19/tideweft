@@ -14,6 +14,10 @@ import {
 } from "./perception";
 import { deriveWaterFlowProfile } from "./waterFlow";
 import {
+  prepareTerrainAudibleContactInput,
+  type AcousticTerrainSupport,
+} from "./terrainAcoustics";
+import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
   isWorldPosition,
@@ -140,6 +144,11 @@ export function createPhysicalSoundSample(
  */
 export function evaluatePhysicalAcousticListener(
   input: PhysicalAcousticListenerInput,
+  terrain?: Readonly<{
+    readonly world: WorldView;
+    readonly sourceSupport: AcousticTerrainSupport;
+    readonly listenerSupport: AcousticTerrainSupport;
+  }>,
 ): PhysicalAcousticListenerResult | null {
   const value: unknown = input;
   if (
@@ -177,14 +186,22 @@ export function evaluatePhysicalAcousticListener(
   } catch {
     return null;
   }
-  const contact = evaluateAudibleContact({
+  const acousticInput = {
     listener: { x: 0, y: 0 },
     source: { x: delta.x, y: delta.y },
     baseRange: value.effectiveRangeUnits,
     ambientNoise: value.ambientNoise,
     sourceLoudness: sample.soundLoudness / FIXED_POINT,
     wind: value.wind,
-  });
+  };
+  const prepared = terrain === undefined ? acousticInput
+    : prepareTerrainAudibleContactInput(acousticInput, {
+        ...terrain,
+        listenerPosition: value.observerPosition,
+        sourcePosition: sample.position,
+      });
+  if (prepared === null) return null;
+  const contact = evaluateAudibleContact(prepared);
   if (contact === null) return NOT_HEARD;
   const area = inferAnonymousHearingArea(value.observerPosition, sample.position, contact);
   if (area === null) return null;

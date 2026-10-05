@@ -70,7 +70,7 @@ interface Fixture {
 }
 
 describe("marsh-edge representative emergence", () => {
-  it("characterizes the current dry-ridge transmission gap using a committed rabbit alarm", () => {
+  it("lets intervening dry relief mask a committed rabbit alarm without changing its cause", () => {
     const current = fixture("rabbit alarm dry ridge transmission baseline");
     const rabbit = wildlife(current, "marsh-rabbit", RABBIT_X, ROW, 0, 0);
     const fox = hungry(wildlife(current, "marsh-fox", FOX_X, ROW, 500_000, 0));
@@ -158,10 +158,9 @@ describe("marsh-edge representative emergence", () => {
       alarmed.event,
       frame(ridged, [alarmed.actor, fox], 2, participants),
     ));
-    // This equality is a characterization of missing path transmission, NOT
-    // terrain-hearing acceptance. Replace it with the intended counterfactual
-    // once a versioned shared acoustic law and saved-receipt policy are live.
-    expect(behindRidge).toEqual(open);
+    expect(observationsForObserver(behindRidge, guardian.identity.stableId)).toEqual([]);
+    expect(behindRidge.find(({ observerId }) => observerId === guardian.identity.stableId)
+      ?.audibleContact).toBeNull();
     const openPerception = stepActorPerception(guardian.perception, { tick: 2, observations: openGuardian });
     const ridgePerception = stepActorPerception(guardian.perception, {
       tick: 2, observations: observationsForObserver(behindRidge, guardian.identity.stableId),
@@ -171,7 +170,10 @@ describe("marsh-edge representative emergence", () => {
       channel: "hearing", perceivedClass: "animal-alarm", subjectId: null,
       sourceObservationId: openGuardian[0]!.id,
     }));
-    expect(ridgePerception).toEqual(openPerception);
+    expect(ridgePerception).not.toBeNull();
+    expect(ridgePerception?.beliefs).not.toContainEqual(expect.objectContaining({
+      channel: "hearing", perceivedClass: "animal-alarm",
+    }));
   });
 
   it.each([
@@ -612,9 +614,9 @@ function worldPosition(tileX: number, tileY: number) {
   );
 }
 
-function requiredBatches(
-  batches: readonly CoreEcologyObservationBatch[] | null,
-): readonly CoreEcologyObservationBatch[] {
+function requiredBatches<T extends CoreEcologyObservationBatch>(
+  batches: readonly T[] | null,
+): readonly T[] {
   if (batches === null) throw new Error("Valid marsh-edge perception frame was rejected");
   return batches;
 }

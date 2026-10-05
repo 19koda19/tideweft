@@ -21,11 +21,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.60",
-      releaseDate: "2026-09-28",
-      buildIdentity: "0.3.3-alpha.60",
+      version: "0.3.3-alpha.61",
+      releaseDate: "2026-10-05",
+      buildIdentity: "0.3.3-alpha.61",
       gameplayContractVersion: 51,
-      tutorialVersion: 70,
+      tutorialVersion: 71,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -37,6 +37,27 @@ describe("canonical offline patch notes", () => {
     const document = copy() as { releases: unknown[] };
     document.releases.reverse();
     expect(() => validatePatchNotesDocument(document)).toThrow(/newest first/u);
+  });
+
+  it("scopes the Alpha-61 preview without claiming publication or finished Voice breadth", () => {
+    const currentCopy = PATCH_NOTE_CATEGORIES
+      .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .join(" ");
+    expect(LATEST_PATCH_NOTE.summary).toContain("local Living Voice playtest preview");
+    expect(LATEST_PATCH_NOTE.summary).toContain("not a published release or directive closure");
+    expect(currentCopy).toContain("about 21 characters per second");
+    expect(currentCopy).toContain("one-second minimum");
+    expect(currentCopy).toContain("urgent warnings may interrupt");
+    expect(currentCopy).toContain("Full or Important animal world labels");
+    expect(currentCopy).toContain("without disabling audio, hearing or accessible captions");
+    expect(currentCopy).toContain("Published save formats 1–32");
+    expect(currentCopy).toContain("writes outer save version 50");
+    expect(currentCopy).toContain("Voice development formats 33–49 are intentionally incompatible");
+    expect(currentCopy).toContain("left untouched");
+    expect(currentCopy).toContain("Alpha 60 remains the latest LIVE_VERIFIED public baseline");
+    expect(currentCopy).toContain("not continuous animal conversation or universal species coverage");
+    expect(currentCopy).toContain("future tool, violence and vessel actions");
+    expect(currentCopy).toContain("not made playable by the shared interface");
   });
 
   it("recognizes only official stable versions at or beyond the 1.0 boundary", () => {
@@ -103,6 +124,9 @@ describe("canonical offline patch notes", () => {
   });
 
   it("scopes Alpha-60 The Breathing Room and retains Alpha-59 through Alpha-53 truth", () => {
+    const alpha60Release = TIDEWEFT_PATCH_NOTES.releases.find(
+      ({ version }) => version === "0.3.3-alpha.60",
+    );
     const alpha59Release = TIDEWEFT_PATCH_NOTES.releases.find(
       ({ version }) => version === "0.3.3-alpha.59",
     );
@@ -437,27 +461,27 @@ describe("canonical offline patch notes", () => {
       .flatMap((category) => horizonRelease?.categories[category] ?? [])
       .join(" ");
     const limitations = allCategoryCopy("knownLimitations");
-    expect(LATEST_PATCH_NOTE.summary).toContain("The Breathing Room");
-    expect(LATEST_PATCH_NOTE.summary).toContain("former 4–8 FPS failure state");
-    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+    expect(alpha60Release?.summary).toContain("The Breathing Room");
+    expect(alpha60Release?.summary).toContain("former 4–8 FPS failure state");
+    expect(alpha60Release?.categories.fixes.join(" ")).toContain(
       "Exact bounded same-stack receipts",
     );
-    expect(LATEST_PATCH_NOTE.categories.fixes.join(" ")).toContain(
+    expect(alpha60Release?.categories.fixes.join(" ")).toContain(
       "Every packaged baseline carries fail-closed trusted-input",
     );
-    expect(LATEST_PATCH_NOTE.categories.gameplay.join(" ")).toContain(
+    expect(alpha60Release?.categories.gameplay.join(" ")).toContain(
       "Performance work reduces duplicated computation rather than biodiversity",
     );
-    expect(LATEST_PATCH_NOTE.categories.saves.join(" ")).toContain(
+    expect(alpha60Release?.categories.saves.join(" ")).toContain(
       "transient receipts, caches, measurements, and profiler state never enter the save envelope",
     );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+    expect(alpha60Release?.categories.knownLimitations.join(" ")).toContain(
       "once-per-world-update hitch remains visible",
     );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+    expect(alpha60Release?.categories.knownLimitations.join(" ")).toContain(
       "Source or build metadata alone never proves publication",
     );
-    expect(LATEST_PATCH_NOTE.categories.knownLimitations.join(" ")).toContain(
+    expect(alpha60Release?.categories.knownLimitations.join(" ")).toContain(
       "Living Voice remains gated",
     );
     expect(alpha59Release?.summary).toContain("selected count-only retained-owner instrumentation");

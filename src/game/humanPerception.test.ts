@@ -82,6 +82,118 @@ describe("existing-human sensory bridge", () => {
       .toBe(false);
   });
 
+  describe("caller-authenticated surface sound support", () => {
+    it.each(["supplemental", "physical", "unadmitted"] as const)(
+      "lowers anonymous %s hearing across a dry ridge without grounding an unspecified source",
+      (kind) => {
+        const seed = `human surface hearing ${kind}`;
+        const clear = fixture(seed, { facing: "west" });
+        const blocked = fixture(seed, { facing: "west", ridgeAtX: OBSERVER_X + 2 });
+        const id = `surface-${kind}`;
+        const options = { soundRangeUnits: 20_000 };
+        const suppliedSound = kind === "supplemental"
+          ? { supplementalSoundSamples: [supplementalSoundSample(
+              id, OBSERVER_X + 4, OBSERVER_Y, "HUMAN-OTHER", options,
+            )] }
+          : kind === "physical"
+            ? { physicalSoundSamples: [physicalSoundSample(
+                id, OBSERVER_X + 4, OBSERVER_Y, "OBJECT-CRATE-1", options,
+              )] }
+            : { unadmittedAlarmSoundSamples: [unadmittedAlarmSoundSample(
+                id, OBSERVER_X + 4, OBSERVER_Y, "DEER-1", options,
+              )] };
+        const inputFor = (current: Fixture, surface: boolean): HumanPerceptionInput => ({
+          world: current.world,
+          window: current.window,
+          targetTick: fixtureTick(current, 1),
+          playerSamples: [],
+          ...suppliedSound,
+          ...(surface ? { surfaceSoundSampleIds: [id] } : {}),
+        });
+        const heardBy = (current: Fixture, surface: boolean) => batchFor(
+          collectExistingHumanObservations(inputFor(current, surface)),
+          current.resident.id,
+        )?.observations.find(({ id: observationId }) => observationId.endsWith(`-${id}`));
+        const before = JSON.stringify(suppliedSound);
+        const clearHearing = heardBy(clear, true);
+        const blockedHearing = heardBy(blocked, true);
+
+        expect(clearHearing).toMatchObject({
+          channel: "hearing", identification: "anonymous", subjectId: null,
+        });
+        expect(blockedHearing).toMatchObject({
+          channel: "hearing", identification: "anonymous", subjectId: null,
+        });
+        expect(blockedHearing!.confidence).toBeLessThan(clearHearing!.confidence);
+        expect(blockedHearing!.area.radiusUnits).toBeGreaterThan(0);
+        expect(blockedHearing).not.toHaveProperty("sourceActorId");
+        expect(blockedHearing).not.toHaveProperty("sourceId");
+        expect(heardBy(blocked, false)).toEqual(heardBy(clear, false));
+        expect(JSON.stringify(suppliedSound)).toBe(before);
+      },
+    );
+
+    it("uses intrinsic player step surface support without caller metadata", () => {
+      const clear = fixture("player steps own grounded support", { facing: "west" });
+      const blocked = fixture("player steps own grounded support", {
+        facing: "west", ridgeAtX: OBSERVER_X + 2,
+      });
+      const sample = soundSample("grounded-step", OBSERVER_X + 4, OBSERVER_Y, {
+        soundRangeUnits: 20_000,
+      });
+      const clearHearing = observationsFor(clear, [sample], 1)
+        .find(({ channel }) => channel === "hearing");
+      const blockedHearing = observationsFor(blocked, [sample], 1)
+        .find(({ channel }) => channel === "hearing");
+
+      expect(clearHearing).toMatchObject({ channel: "hearing", subjectId: null });
+      expect(blockedHearing).toMatchObject({ channel: "hearing", subjectId: null });
+      expect(blockedHearing!.confidence).toBeLessThan(clearHearing!.confidence);
+    });
+
+    it("rejects malformed, duplicate, unknown, player, and over-cap support IDs before any receipt", () => {
+      const current = fixture("surface metadata cannot invent a sample", { facing: "west" });
+      const player = soundSample("player-step", OBSERVER_X + 1, OBSERVER_Y);
+      const voice = supplementalSoundSample("surface-voice", OBSERVER_X + 2, OBSERVER_Y);
+      const physical = physicalSoundSample("surface-impact", OBSERVER_X + 3, OBSERVER_Y, "OBJECT-CRATE-1");
+      const alarm = unadmittedAlarmSoundSample("surface-alarm", OBSERVER_X + 4, OBSERVER_Y);
+      const input: HumanPerceptionInput = {
+        world: current.world,
+        window: current.window,
+        targetTick: fixtureTick(current, 1),
+        playerSamples: [player],
+        supplementalSoundSamples: [voice],
+        physicalSoundSamples: [physical],
+        unadmittedAlarmSoundSamples: [alarm],
+      };
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      const invalid: readonly unknown[] = [
+        undefined, null, {}, voice.id,
+        [voice.id, voice.id], ["missing-sound"], [voice.id, "extra-sound"], [player.id],
+        [1], ["invalid sound id"], ["x".repeat(49)], new Array(1),
+        Array.from({ length: HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+          + HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES + 1 }, () => voice.id),
+      ];
+      const before = JSON.stringify(input);
+      for (const surfaceSoundSampleIds of invalid) {
+        expect(collectExistingHumanObservations({
+          ...input, surfaceSoundSampleIds,
+        } as unknown as HumanPerceptionInput, observer)).toEqual([]);
+      }
+      expect(observer).not.toHaveBeenCalled();
+      const supported = collectExistingHumanObservations({
+        ...input, surfaceSoundSampleIds: [voice.id, physical.id, alarm.id],
+      });
+      expect(supported.length).toBeGreaterThan(0);
+      expect(collectExistingHumanObservations({
+        ...input, surfaceSoundSampleIds: [alarm.id, physical.id, voice.id],
+      })).toEqual(supported);
+      expect(collectExistingHumanObservations({ ...input, surfaceSoundSampleIds: [] }))
+        .toEqual(collectExistingHumanObservations(input));
+      expect(JSON.stringify(input)).toBe(before);
+    });
+  });
+
   it("separates peripheral classification, moving silhouettes, and lit identity", () => {
     const current = fixture("light and movement disclose differently", { facing: "east" });
     const peripheral = observationsFor(current, [

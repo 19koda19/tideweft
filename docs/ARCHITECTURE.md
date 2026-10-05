@@ -278,6 +278,40 @@ load. A pending next-interval alarm is re-derived from its existing actor
 memory/locus and evaluated against the current physical field, including after
 interruption. Optional captions cannot bypass this hearing result.
 
+#### Local surface acoustic transmission
+
+`terrainAcoustics.ts` owns the first bounded relief-hearing rule, independent
+of optical occlusion. Known terrestrial alarm sources and terrestrial listeners
+use their exact event-time segmented positions and the registered current
+terrain view. A symmetric supercover visits only crossed cells and corner/edge
+flanks. Available malformed geometry fails closed. Supporting surface height is
+elevation plus water depth; an underwater riverbed is not a dry acoustic wall.
+The greatest intervening excess above the linear endpoint-surface baseline
+reduces received source strength: 64,000 normalized elevation units of clearance,
+then a 256,000-unit pressure span, capped at 50% masking. These are authored
+relief categories, not metres, measured acoustics or optical coefficients.
+Endpoints do not obstruct themselves; repeated ridge cells do not multiply the
+mask. Range, certainty and anonymous uncertainty then use the existing evaluator.
+The committed event's loudness, identity and timing remain unchanged.
+
+Current core alarm propagation, player live/replayed alarm receipts and the
+same-event resident hearing leg share this rule. Resident player-step hearing
+also has explicit surface support. A bounded transient set of sound-sample IDs
+re-derives support from authenticated causes; it is neither a saved dialogue
+field nor listener knowledge. The original sound carriers remain unchanged.
+Captured DEV listening tuples contain the actual adjusted input, not a second
+preview law. Consumed observations remain historical and are not re-heard on load.
+
+This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
+event-time acoustic altitude/depth, so generic calls and those listeners retain
+explicit `unmodeled-support`, not invented ground contact. A physical domain may
+later supply real surface contact. Off-frame geography likewise retains explicit
+`outside-frame` coarse hearing rather than claiming a clear inspected path.
+No wall, roof, foliage height, settlement absorption or renderer lift is inferred.
+Remaining human/dog expression and physical-event consumers must join this
+shared owner with authenticated support and matching event-time receipt tests;
+this representative does not close the whole Voice propagation requirement.
+
 The collapsed player audio remains exactly one existing `wildlife-alarm` cue
 at its prior release-order position, volume, variant and undefined pan, released
 only after interval closure. Text refusal cannot remove that audio, strong
@@ -3413,8 +3447,8 @@ releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
 boundary.
 
 The current unpublished Directive 04_2 source lineage advances the outer
-session through version 49 and the bounded perception carry through version 14;
-the current source writer emits outer version 49. The preceding v43/carry-v11
+session through version 50 and the bounded perception carry through version 14;
+the current source writer emits outer version 50. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -3426,27 +3460,35 @@ non-warning human-to-human structured fact receipt from the authenticated
 secured-store response. Its current species-aware alarm record also admits the
 gull; that additive semantic changes no save shape, and reload reauthenticates
 it without replaying audio or text. V48 keeps carry v14 and requires the bounded
-accepted-effort recency root separately from consumed sounds. Supported v47
+accepted-effort recency root separately from consumed sounds. Then-supported v47
 initializes it only from already authenticated pending exhaustion evidence;
 consumed historical recency initializes empty rather than inventing old events.
 V49 keeps carry14 and replaces the standalone effort root with bounded combined
 `playerExpressionRecency`: unchanged effort plus two accepted-footing origins.
-Supported v48 preserves its validated effort root and adopts footing only from
+Then-supported v48 preserved its validated effort root and adopted footing only from
 independently authenticated pending admission/causal/physical-step facts. A
 validated legacy null physical-history prefix has no provable footing origin;
 consumed older footing likewise initializes empty, without replay or invented
 history. Current pending origins must agree exactly with those separate facts.
 Missing, extra or contradictory current-v49 authority fails closed without
 overwrite; historical formats reject the future combined root. No additional
-development format is retired. Outer v41 through v46 are explicitly retired under
-the pre-1.0 policy: load recognizes any such
-incompatible development record, leaves it untouched, and directs development
-to a clean current save rather than attempting partial deserialization.
-Supported pre-v41 migration readers remain implemented and tested where
-retained, but before official 1.0 that implementation fact is not a permanent
-promise to preserve every internal development format. Current-v49 roundtrip
-and all conservation, determinism, integrity, and no-overwrite laws remain
-mandatory.
+development format was retired at that historical boundary.
+
+Outer v50 establishes the new terrain-hearing compatibility boundary. Unpublished
+Voice development formats v33–v49 are explicitly retired rather than growing
+dual acoustic laws for their retained event-time receipts (including unheard,
+expired and replaced events). Load recognizes those records as incompatible,
+leaves their bytes untouched, and requires deliberate fresh-world replacement;
+it never partially loads or silently overwrites them. Supported released
+readers v1–v32, including Alpha60's outer32 baseline, remain intact and adopt an
+empty Voice bank before new current gameplay. Generic migration machinery and
+their validation are retained. Current-format source/cause, receipt, interruption
+and conservation tests remain required; obsolete positive Voice migration
+expectations are not a substitute for them. Before official 1.0, implemented
+internal readers are not a permanent compatibility promise. Current-v50
+roundtrip and all determinism, integrity and no-overwrite laws remain mandatory.
+This is a pre-1.0 development retirement, not a relaxation of the permanent
+official-1.0 supported-save policy.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic
@@ -3713,6 +3755,12 @@ certification. Released Alpha60 advances the Field Manual/tutorial to version
 70 while retaining gameplay contract 51, outer save v32, simulation v4,
 `RegionalEcologyStateV6`, and wildlife actor v1. These are the current
 **LIVE_VERIFIED** manual, gameplay, and save boundaries.
+
+The unpublished local Alpha61 preview advances the manual to71 and writes
+outer save50, while gameplay contract51 and the public Alpha60 baseline remain
+distinct. Its What's New and Accessibility entries describe only current Voice
+representatives, caption reading time and label controls; its save entry states
+the deliberate development-format retirement. Metadata is not release proof.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 

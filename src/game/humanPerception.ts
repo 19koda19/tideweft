@@ -17,6 +17,7 @@ import {
   type AudibleContact,
 } from "./perception";
 import { buildWorldPerceptionCells } from "./outdoorIllumination";
+import { prepareTerrainAudibleContactInput } from "./terrainAcoustics";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
@@ -158,6 +159,13 @@ export interface HumanPerceptionInput {
   readonly physicalSoundSamples?: readonly PhysicalSoundSample[];
   /** Shares the physical-world sound budget; never enters expression/save carry. */
   readonly unadmittedAlarmSoundSamples?: readonly UnadmittedAlarmSoundSample[];
+  /**
+   * Transient caller-authenticated surface support for supplied non-player
+   * sounds. Omitted IDs have unmodeled support; sample identity or vocabulary
+   * cannot establish physical height. Player step samples are already surface
+   * actions and must not be repeated here. This metadata is never save carry.
+   */
+  readonly surfaceSoundSampleIds?: readonly string[];
 }
 
 export interface HumanObservationBatch {
@@ -308,11 +316,13 @@ export function collectExistingHumanObservations(
   const hasSupplementalSemanticFacts = Object.hasOwn(value, "supplementalSemanticFacts");
   const hasPhysicalSounds = Object.hasOwn(value, "physicalSoundSamples");
   const hasUnadmittedAlarmSounds = Object.hasOwn(value, "unadmittedAlarmSoundSamples");
+  const hasSurfaceSoundSampleIds = Object.hasOwn(value, "surfaceSoundSampleIds");
   const expectedKeys = ["playerSamples", "targetTick", "window", "world"];
   if (hasSupplementalSounds) expectedKeys.push("supplementalSoundSamples");
   if (hasSupplementalSemanticFacts) expectedKeys.push("supplementalSemanticFacts");
   if (hasPhysicalSounds) expectedKeys.push("physicalSoundSamples");
   if (hasUnadmittedAlarmSounds) expectedKeys.push("unadmittedAlarmSoundSamples");
+  if (hasSurfaceSoundSampleIds) expectedKeys.push("surfaceSoundSampleIds");
   if (!exactKeys(value, expectedKeys)) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
   if (
@@ -320,6 +330,7 @@ export function collectExistingHumanObservations(
     || (hasSupplementalSemanticFacts && !Array.isArray(input.supplementalSemanticFacts))
     || (hasPhysicalSounds && !Array.isArray(input.physicalSoundSamples))
     || (hasUnadmittedAlarmSounds && !Array.isArray(input.unadmittedAlarmSoundSamples))
+    || (hasSurfaceSoundSampleIds && !Array.isArray(input.surfaceSoundSampleIds))
   ) return EMPTY_BATCHES;
   const rawSupplementalSounds = input.supplementalSoundSamples
     ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
@@ -368,6 +379,13 @@ export function collectExistingHumanObservations(
     || !disjointSampleIds(samples, supplementalSounds, physicalSounds, unadmittedAlarmSounds)
     || !disjointAcousticEventIds(physicalSounds, unadmittedAlarmSounds)
   ) return EMPTY_BATCHES;
+  const surfaceSoundSampleIds = validatedSurfaceSoundSampleIds(
+    input.surfaceSoundSampleIds ?? [],
+    supplementalSounds,
+    physicalSounds,
+    unadmittedAlarmSounds,
+  );
+  if (surfaceSoundSampleIds === null) return EMPTY_BATCHES;
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
   const semanticFactByExpressionEventId = new Map(
@@ -427,12 +445,14 @@ export function collectExistingHumanObservations(
       targetPoint: SpatialFramePoint,
       semanticFact: SituatedExpressionSemanticFact | null = null,
       diagnosticSample: SupplementalSoundSample | null = null,
+      sourceSupport: "surface" | "unmodeled" = surfaceSoundSampleIds.has(sample.id)
+        ? "surface" : "unmodeled",
     ): boolean => {
       if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) {
         if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "not-heard");
         return true;
       }
-      const heard = evaluateAudibleContact({
+      const acousticInput = prepareTerrainAudibleContactInput({
         listener: projectedResident.position,
         source: targetPoint,
         baseRange: sample.soundRangeUnits,
@@ -442,7 +462,15 @@ export function collectExistingHumanObservations(
           x: world.weather.windX / FIXED_POINT,
           y: world.weather.windY / FIXED_POINT,
         },
+      }, {
+        world,
+        listenerPosition: placement.position,
+        sourcePosition: sample.position,
+        sourceSupport,
+        listenerSupport: "surface",
       });
+      if (acousticInput === null) return false;
+      const heard = evaluateAudibleContact(acousticInput);
       if (heard === null) {
         if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "not-heard");
         return true;
@@ -521,7 +549,9 @@ export function collectExistingHumanObservations(
           };
         }
       }
-      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+      if (!appendHearingObservation(sample, targetPoint, null, null, "surface")) {
+        return EMPTY_BATCHES;
+      }
     }
     for (const sample of supplementalSounds) {
       const semanticFact = semanticFactByExpressionEventId.get(sample.expressionEventId) ?? null;
@@ -556,6 +586,10 @@ export function collectExistingHumanObservations(
           x: world.weather.windX / FIXED_POINT,
           y: world.weather.windY / FIXED_POINT,
         },
+      }, {
+        world,
+        sourceSupport: surfaceSoundSampleIds.has(sample.id) ? "surface" : "unmodeled",
+        listenerSupport: "surface",
       });
       if (reception === null) return EMPTY_BATCHES;
       if (reception.kind === "heard") observations.push(reception.observation);
@@ -732,6 +766,27 @@ function canonicalUnadmittedAlarmSoundSamples(
   }
   samples.sort((left, right) => compareText(left.id, right.id));
   return Object.freeze(samples);
+}
+
+function validatedSurfaceSoundSampleIds(
+  value: readonly string[],
+  supplementalSounds: readonly SupplementalSoundSample[],
+  physicalSounds: readonly PhysicalSoundSample[],
+  unadmittedAlarmSounds: readonly UnadmittedAlarmSoundSample[],
+): ReadonlySet<string> | null {
+  if (value.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+    + HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES) return null;
+  const suppliedIds = new Set<string>();
+  for (const samples of [supplementalSounds, physicalSounds, unadmittedAlarmSounds]) {
+    for (const sample of samples) suppliedIds.add(sample.id);
+  }
+  const surfaceIds = new Set<string>();
+  for (const id of value) {
+    if (typeof id !== "string" || !SAMPLE_ID_PATTERN.test(id)
+      || surfaceIds.has(id) || !suppliedIds.has(id)) return null;
+    surfaceIds.add(id);
+  }
+  return surfaceIds;
 }
 
 function disjointAcousticEventIds(

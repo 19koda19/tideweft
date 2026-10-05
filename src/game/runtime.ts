@@ -958,6 +958,10 @@ import {
   coreEcologySpeciesRuntimePolicy,
 } from "./coreEcologySpeciesRuntimePolicy";
 import {
+  acousticTerrainSupportForSpecies,
+  prepareTerrainAudibleContactInput,
+} from "./terrainAcoustics";
+import {
   coreEcologyCanPursueLivingActor,
   coreEcologyCanResolveMortalityTarget,
 } from "./coreEcologyTrophic";
@@ -1188,9 +1192,9 @@ const HARD_PRESSURE_MODE = "wild" as const;
 const RENDER_TILE_SIZE = 24;
 /** Current outer save whose pending factual speech can become listener knowledge. */
 const GAME_SAVE_VERSION = CURRENT_GAME_SAVE_VERSION;
-/** Supported predecessor with only accepted dry-exhaustion history. */
+/** Retired Voice-development predecessor with only accepted dry-exhaustion history. */
 const EFFORT_RECENCY_GAME_SAVE_VERSION = 48;
-/** Supported predecessor: factual speech/carry14 without cross-interval recency. */
+/** Retired Voice-development predecessor: factual speech without cross-interval recency. */
 const FACTUAL_SPEECH_GAME_SAVE_VERSION = 47;
 /** Retired pre-1.0 save whose pending keeper speech remained acoustically generic. */
 const RABBIT_ALARM_GAME_SAVE_VERSION = 46;
@@ -1271,16 +1275,29 @@ const RESIDENT_INTRODUCTION_PRESENTATION_PROTECTION = new Set<SituatedExpression
  * Development schemas are resettable only after an explicit retirement
  * decision. Schema zero represents the pre-versioned internal fixture; an
  * arbitrary unknown number must remain corrupt rather than becoming a reset
- * authorization by accident.
+ * authorization by accident. Voice development formats 33–49 are deliberately
+ * retired at the terrain-hearing boundary; released Alpha60 format 32 and its
+ * earlier supported readers remain intact. No legacy acoustic law is guessed.
  */
 const RETIRED_PRE_1_0_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   0,
+  PLAYER_EXPRESSION_GAME_SAVE_VERSION,
+  WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION,
+  GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
+  FISH_CROW_ALARM_GAME_SAVE_VERSION,
+  HUMAN_DANGER_WARNING_GAME_SAVE_VERSION,
+  ANIMAL_CONTACT_GAME_SAVE_VERSION,
   41,
   PLAYER_EXHAUSTION_GAME_SAVE_VERSION,
   RESIDENT_INTRODUCTION_GAME_SAVE_VERSION,
   RESIDENT_WEATHER_HOLD_GAME_SAVE_VERSION,
   DEER_ALARM_GAME_SAVE_VERSION,
   RABBIT_ALARM_GAME_SAVE_VERSION,
+  FACTUAL_SPEECH_GAME_SAVE_VERSION,
+  EFFORT_RECENCY_GAME_SAVE_VERSION,
+  49,
 ]);
 const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   LEGACY_GAME_SAVE_VERSION,
@@ -1315,16 +1332,6 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION,
   CIRCADIAN_RECEIPT_GAME_SAVE_VERSION,
   PLAYER_RECOVERY_GAME_SAVE_VERSION,
-  PLAYER_EXPRESSION_GAME_SAVE_VERSION,
-  WORKING_PEOPLE_EXPRESSION_GAME_SAVE_VERSION,
-  GUARDIAN_DOG_WARNING_GAME_SAVE_VERSION,
-  GUARDIAN_DOG_GROWL_GAME_SAVE_VERSION,
-  GUARDIAN_DOG_SHELTER_WHINE_GAME_SAVE_VERSION,
-  FISH_CROW_ALARM_GAME_SAVE_VERSION,
-  HUMAN_DANGER_WARNING_GAME_SAVE_VERSION,
-  ANIMAL_CONTACT_GAME_SAVE_VERSION,
-  FACTUAL_SPEECH_GAME_SAVE_VERSION,
-  EFFORT_RECENCY_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -1372,7 +1379,7 @@ interface GameSaveEnvelope {
   promiseJourney: RegionalPromiseJourneyState;
   perceptionCarry: PlayerPerceptionCarry;
   playerExpressionRecency: PlayerExpressionRecencyState;
-  /** Present only on deliberately supported v48 envelopes. */
+  /** Historical v48 field; its retired development records are not decoded. */
   playerEffortRecency?: PlayerEffortRecencyState;
   bio0Ecology: string;
   regionalEcology: string;
@@ -12568,7 +12575,8 @@ export async function createTideweftRuntime(
     const masking = ambientNoiseAt(worldView, playerTileIndex(player));
     if (masking === null) return null;
     const acoustics = expressionAcoustics(expression);
-    const input = {
+    const sourceSpecies = coreWildlifeAlarmSpeciesForMeaning(expression.meaning);
+    const input = prepareTerrainAudibleContactInput({
       listener: { x: 0, y: 0 },
       source: { x: delta.x, y: delta.y },
       baseRange: acoustics.rangeUnits,
@@ -12578,7 +12586,14 @@ export async function createTideweftRuntime(
         x: worldView.weather.windX / FIXED_POINT,
         y: worldView.weather.windY / FIXED_POINT,
       },
-    };
+    }, {
+      world: worldView,
+      listenerPosition,
+      sourcePosition: expression.position,
+      listenerSupport: "surface",
+      sourceSupport: acousticTerrainSupportForSpecies(sourceSpecies),
+    });
+    if (input === null) return null;
     const heard = evaluateAudibleContact(input);
     if (import.meta.env.DEV && onEvaluated !== undefined) {
       try {
@@ -13066,7 +13081,23 @@ export async function createTideweftRuntime(
     physicalSoundSamples: readonly PhysicalSoundSample[],
     porterVisual: RuntimePorterVisualFrame | null = null,
     unadmittedAlarmSoundSamples: readonly UnadmittedAlarmSoundSample[] = [],
+    surfaceFallbackSoundSampleIds: readonly string[] = [],
   ): ResidentPerceptionFrame {
+    // Support is re-derived from retained authenticated causes, not persisted
+    // beside sound words or guessed from actor IDs. Airborne calls remain
+    // explicitly unmodeled until their domain supplies real acoustic height.
+    const surfaceVocalizationSampleIds = actorVocalizationSamples.flatMap((sample, sampleOrdinal) => {
+      const admission = situatedExpressionAdmissions.records.find((candidate) => (
+        candidate.sampleOrdinal === sampleOrdinal
+        && candidate.eventId === sample.expressionEventId
+        && candidate.sourceActorId === sample.sourceActorId
+      ));
+      return admission !== undefined
+        && (admission.kind === "core-wildlife-alarm"
+          || admission.kind === "core-wildlife-fish-crow-alarm")
+        && acousticTerrainSupportForSpecies(coreWildlifeAlarmAdmissionSpecies(admission)) === "surface"
+        ? [sample.id] : [];
+    });
     const batches = collectExistingHumanObservations({
       world: worldView,
       window: regionalTravel.window,
@@ -13076,6 +13107,7 @@ export async function createTideweftRuntime(
       supplementalSemanticFacts: pendingAuthenticatedSituatedExpressionSemanticFacts(),
       physicalSoundSamples,
       unadmittedAlarmSoundSamples,
+      surfaceSoundSampleIds: [...surfaceVocalizationSampleIds, ...surfaceFallbackSoundSampleIds],
     }, import.meta.env.DEV && expressionDiagnosticState?.enabled === true ? (receipts) => {
       const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
       if (state === null) return;
@@ -14352,6 +14384,15 @@ export async function createTideweftRuntime(
           fallback.kind === "alarm" ? [fallback.sample] : []
         )),
       );
+      const surfaceFallbackSampleIds = new Set(preparedCoreAlarms.flatMap((prepared) => (
+        acousticTerrainSupportForSpecies(prepared.alarm.species) === "surface"
+          ? [prepared.alarmPhysicalFallback?.id, prepared.alarmSoundFallback?.id]
+            .filter((id): id is string => id !== undefined)
+          : []
+      )));
+      const selectedSurfaceFallbackSampleIds = selectedExpressionHearingFallbacks
+        .filter(({ sample }) => surfaceFallbackSampleIds.has(sample.id))
+        .map(({ sample }) => sample.id);
       for (const prepared of preparedCoreAlarms) {
         const fallbackOwnsResidentHearing = selectedHearingFallbackEventIds.has(
           prepared.alarm.eventId,
@@ -14475,7 +14516,7 @@ export async function createTideweftRuntime(
       const perceptionFrame = residentPerceptionFrame(targetTick, humanPhysicalSoundSamples, {
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
-      }, humanUnadmittedAlarmSoundSamples);
+      }, humanUnadmittedAlarmSoundSamples, selectedSurfaceFallbackSampleIds);
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorldWithPreparedResidentIntroduction(perceptionFrame);
       // The preceding frame consumed the prior interval exactly once. New
@@ -23268,7 +23309,7 @@ function coreWildlifeAlarmReceptionAtEventTime(
   const masking = ambientNoiseAt(spatialWorld, playerTileIndex(eventTimePlayer));
   if (masking === null) return null;
   const acoustics = situatedExpressionAcoustics(event);
-  const contact = evaluateAudibleContact({
+  const terrainInput = prepareTerrainAudibleContactInput({
     listener: { x: 0, y: 0 },
     source: { x: delta.x, y: delta.y },
     baseRange: acoustics.rangeUnits,
@@ -23278,7 +23319,15 @@ function coreWildlifeAlarmReceptionAtEventTime(
       x: spatialWorld.weather.windX / FIXED_POINT,
       y: spatialWorld.weather.windY / FIXED_POINT,
     },
+  }, {
+    world: spatialWorld,
+    listenerPosition: carry.intervalStartPosition,
+    sourcePosition: event.position,
+    listenerSupport: "surface",
+    sourceSupport: acousticTerrainSupportForSpecies(coreWildlifeAlarmAdmissionSpecies(admission)),
   });
+  if (terrainInput === null) return null;
+  const contact = evaluateAudibleContact(terrainInput);
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
@@ -23654,8 +23703,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     // The retained wildlife alarm-event locus first exists in v38. Older wrappers may
     // carry the same nested wildlife schema, so reject a resealed historical
     // envelope that tries to smuggle future event-position authority through
-    // either its regional owner or the pre-v25 compatibility core. Outer v38
-    // remains valid now that v39 separately owns persistent human warnings.
+    // either its regional owner or the pre-v25 compatibility core. Released
+    // predecessors cannot import this authority; v33–v49 are retired before
+    // decoding, while legitimate older no-locus memory adopts its body once.
     if (
       decoded.version < FISH_CROW_ALARM_GAME_SAVE_VERSION
       && [decoded.regionalEcology, decoded.coreEcology].some((serialized) => (
