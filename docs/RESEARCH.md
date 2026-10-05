@@ -1660,6 +1660,73 @@ mobile/desktop-package/performance/hours or current-head cumulative certificate
 is claimed. Broader Voice/lab closure remains open. Schema49/carry14, readers,
 dependencies, upstream sources and release/major-directive order are unchanged.
 
+#### Current ordinary animal captions in Chart and Relief — 2026-10-05
+
+Frozen local `c74975cf37a36be6fd2f03d8d5114a00a9f77b06`, tree
+`ce2b7a14301f821a849128f45d8b989d05bb5c3c`, now passes the complete maintained
+regression: 361 files/3,857 tests, zero failed or pending, in 1,284.82s. Exact
+command is `caffeinate -i npm run test:ci -- --reporter=default --reporter=json
+--outputFile=artifacts/validation/c74975c-cumulative.json`; the preceding context
+and player-facing selftests also pass 28/39. The JSON SHA256 is
+`fd995ab670a123563b4531bb15141adab95f1388d5afbc850d78dcc90b80637a`.
+Executable, tests, configuration and HEAD stayed unchanged throughout. This
+certifies that checkpoint, not whole Living Voice closure or publication.
+
+After that run terminated, two finite ordinary-control animal opportunities
+used the unchanged production bundle `index-DigJMANA.js`, SHA256
+`74f37358efa18d5ae52afb10921af99d3f6c5a0ce0a4a58ee198accf32cbea4a`,
+served at `/tideweft/` in disposable Firefox 157 profiles, 1440×900/DPR1,
+Node 22.20.0/npm 10.9.3. The host was on battery 63%→61%, Low Power Mode off;
+these are functional observations, not comparable performance measurements.
+Physical START typed `breathing-room all-tide corridor 187`; native W movement
+stopped after the real caption appeared. Chart movement is northward; Relief
+movement is camera-relative. No actor, event, weather, inventory, position,
+save or runtime-action injection, pause, or forced encounter was used.
+
+The existing ignored local probe's former unconditional animal-attempt success
+could pass with no call. Its bounded rAF observer now requires an actual current
+animal UI caption, matching visible DOM event ID and exact wording, empty animal
+speaker span, positive geometry, no clipping or overlapping field feedback,
+and public disappearance. Screenshot brackets recheck computed visibility,
+wording, ID and actual view before/after capture. No-call or expired-picture
+opportunities cannot pass. Review caught and corrected initially weaker
+screenshot brackets; syntax checks pass. The probe is not shipped, and no game
+producer, hearing rule, presentation algorithm or persistent state changed.
+
+The Chart-first opportunity lasts 60.041s, with 60.286s/531 public reads. At tick 424,
+3.873s into its rAF observation, one anonymous bird caption joins the visible
+DOM: `CALL. · direction unclear`, accessible copy
+`[A bird calls; direction unclear.]`, and no exact world glyph. Its
+203.583×17.717px rectangle is unclipped and does not intersect observed labels,
+EVENTS or the action dock. The matching-ID screenshot bracket passes; inspected
+pixels show readable text. The subsequent Relief capture crosses disappearance
+and has no call: its bracket fails, so it is not live two-view proof.
+
+The separate Relief-first opportunity lasts 60.103s, with 60.139s/463 reads. At
+tick 424/4.206s its current caption has the same lawful anonymous wording, exact
+public DOM-ID join, positive unclipped geometry and no observed peer overlap.
+Its Relief screenshot bracket and inspected pixels pass. Its later Chart
+capture is expired and unavailable. These are two independent finite exposures,
+not two different species, simultaneous two-view text, or equal-input terminal
+world equivalence. In each run one animal caption is observed; no actor-anchored
+acoustic glyph appears. Public disappearance is observed at 4.315s/4.536s,
+not authenticated expiry of a hidden event.
+
+The captures retain 527/460 empty reads, 269/388ms maximum sample gaps, and no
+observer overflow or incomplete census; these counts do not establish continuous
+audible silence or emitted-call rates. JSON SHA256s are
+`3f79e2b9572f0dd9cdd85f7339e8c1912673869c668750d82e738fbc1c8e1619`
+and `df357872f1e81fcbcc60e578d7ef0f2efee04d1e379a54000f43e617fc541256`;
+exact probe SHA256s are
+`d7618c7f77cb543cbc637453a6ab93d1eaedfcde58cbf9078e759f83018dcfc4`
+and `5a1fc30e1a7887ed5e904b06cf526906cb76db8532df219dc7ca876e5ae7457f`.
+Both browsers exit normally and their disposable profiles are removed; the
+user's browser and saves remain untouched. Each retains one known CSP eval-probe
+denial, not a console-clean result. This adds current ordinary animal-caption
+evidence only: hidden species/motivation, NPC hearing, audible/assistive quality,
+dog encounters, dense/mixed scenes, mobile hardware, hours, performance,
+desktop packaging and release/major-directive gates remain unclaimed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
