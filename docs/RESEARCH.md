@@ -1333,6 +1333,43 @@ canine encounter, production simulation, heard audio, AT or hardware proof.
 Fresh desktop packaging, hours, full cumulative confidence and public release
 are not certified here. Save49/carry14 and dependencies remain unchanged.
 
+#### Selected human-warning belief inspection — 2026-10-04
+
+Local work over `3d9e927` fills one existing development-inspector field:
+human warnings now supply the exact canonical belief selected by their current
+authenticated resident pass. An enabled DEV-only, failure-isolated notification
+retains the winner without another scan, candidate-shape change, new trigger or
+save field. The existing transaction-staged buffer copies it; anonymous animal
+hearing stays anonymous. The [inspection owner](ARCHITECTURE.md#development-expression-inspection)
+remains a partial lab, not a full configurable actor/world simulator.
+
+Fourteen selector tests pass exact candidate bytes/order, immutable winner,
+multi-resident selection, absent/stale/recursive exclusions, throwing/mutating
+notification isolation, DEV=false exclusion and no deep resident serialization.
+The real controlled fish-crow → human-hearing → warning fixture passes enabled/
+disabled full-current-save and committed-audio equality at twenty accepted fixed
+steps. Its late closure failure observes a genuine provisional warning/causal
+record, then verifies retirement, unchanged stored save, twelve restored roots
+and no released warning audio. Cold reload starts with an empty disabled
+inspector and does not replay audio. The existing fish-crow propagation/tamper
+and mixed warning/bark/fall/acquired-cargo cases also pass. These are controlled
+runtime proofs, not an ordinary native encounter or qualitative sound review.
+
+Affected domain passes nine files/197 tests; maintained smoke passes 105.
+The introduction/save/audio late-closure regression also passes unchanged in
+8.51s under a temporary idle-sleep assertion. Its first attempt timed out across
+a host-log-confirmed 903-second sleep; that failed attempt is not a certificate,
+and neither its assertions nor 15-second timeout were changed.
+Typecheck, production web build and nested static artifact smoke pass. Bundle
+`index-CNd9X9Qc.js` SHA256
+`5a5b8238834e18b164f9fb1d0453d6d758b51008ace0c986b0c5bcc350453bad`
+contains none of the inspected diagnostic API/replay markers. An initial broad
+`getSnapshot` text check matched existing production performance telemetry;
+it was not evidence of an exposed expression inspector. No runtime was changed
+to remove that legitimate interface. New native/desktop/hardware/AT, hours,
+performance, full cumulative and release checks are not certified by this
+slice. Schema49/carry14, dependencies and upstream sources remain unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

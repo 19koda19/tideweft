@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createActorObservation,
+  type ActorBelief,
   type ActorObservation,
 } from "../sim/actorPerception";
 import {
@@ -59,16 +60,18 @@ function observation(
 
 function warningWorld(
   perceivedClass: "animal-alarm" | "danger-sound" | "large-predator",
+  observedResidentCount = 1,
 ): Readonly<{ world: ReturnType<typeof createWorldView>; resident: ResidentState }> {
   const state = createWorld(`human warning ${perceivedClass}`, "standard");
   const resident = firstResident(state);
+  const observedResidentIds = new Set(state.residents.slice(0, observedResidentCount).map(({ id }) => id));
   const tick = state.meta.completedTick + 1;
   const frame: ResidentPerceptionFrame = {
     tick,
     residents: state.residents.map((candidate) => ({
       residentId: candidate.id,
       actorId: candidate.identity.stableId,
-      observations: candidate.id === resident.id
+      observations: observedResidentIds.has(candidate.id)
         ? [observation(candidate, tick, perceivedClass)]
         : [],
     })),
@@ -79,6 +82,8 @@ function warningWorld(
   if (advanced === undefined) throw new Error("warning fixture lost its resident");
   return { world, resident: advanced };
 }
+
+afterEach(() => { vi.unstubAllEnvs(); });
 
 describe("human danger warning expression", () => {
   it("derives one deterministic warning from a fresh direct predator sighting", () => {
@@ -117,6 +122,155 @@ describe("human danger warning expression", () => {
     const fixture = warningWorld("danger-sound");
     expect(humanDangerWarningExpressionCandidate(fixture)).toBeNull();
     expect(selectHumanDangerWarningExpression(fixture.world)).toBeNull();
+  });
+
+  it.each(["animal-alarm", "large-predator"] as const)(
+    "inspects one detached immutable %s cause without changing candidate bytes or keys",
+    (perceivedClass) => {
+      vi.stubEnv("DEV", true);
+      const fixture = warningWorld(perceivedClass);
+      const worldBefore = JSON.stringify(fixture.world);
+      const expected = humanDangerWarningExpressionCandidate(fixture);
+      if (expected === null) throw new Error("warning inspection fixture has no candidate");
+      const originalBelief = fixture.resident.perception.beliefs.find(({ sourceObservationId }) => (
+        sourceObservationId === expected.sourceObservationId
+      ));
+      if (originalBelief === undefined) throw new Error("warning inspection fixture has no source belief");
+      const sink = vi.fn<(belief: ActorBelief) => void>();
+
+      const candidate = selectHumanDangerWarningExpression(fixture.world, sink);
+
+      expect(JSON.stringify(candidate)).toBe(JSON.stringify(expected));
+      expect(Object.keys(candidate!)).toEqual(["intent", "sourceObservationId"]);
+      expect(sink).toHaveBeenCalledTimes(1);
+      const belief = sink.mock.calls[0]![0];
+      expect(belief).toEqual(originalBelief);
+      expect(belief).not.toBe(originalBelief);
+      expect(belief.area).not.toBe(originalBelief.area);
+      for (const value of [belief, belief.area, belief.area.center, belief.area.center.region]) {
+        expect(Object.isFrozen(value)).toBe(true);
+      }
+      expect(belief.sourceObservationId).toBe(candidate!.sourceObservationId);
+      expect(belief.lastObservedTick).toBe(fixture.world.completedTick);
+      expect(belief.identification).toBe(perceivedClass === "animal-alarm" ? "anonymous" : "identified");
+      expect(belief.subjectId === null).toBe(perceivedClass === "animal-alarm");
+      expect(JSON.stringify(fixture.world)).toBe(worldBefore);
+    },
+  );
+
+  it("reports only the winning cause among multiple eligible residents regardless of iteration order", () => {
+    vi.stubEnv("DEV", true);
+    const fixture = warningWorld("animal-alarm", 3);
+    const eligible = fixture.world.residents.map((resident) => (
+      humanDangerWarningExpressionCandidate({ world: fixture.world, resident })
+    )).filter((candidate) => candidate !== null);
+    expect(eligible.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(eligible.map(({ intent }) => intent.priority)).size).toBe(1);
+    expect(new Set(eligible.map(({ intent }) => intent.salience)).size).toBe(1);
+    const expected = [...eligible].sort((left, right) => (
+      left.intent.sourceActorId.localeCompare(right.intent.sourceActorId)
+    ))[0]!;
+    const worldBefore = JSON.stringify(fixture.world);
+    const forwardSink = vi.fn<(belief: ActorBelief) => void>();
+    const reverseSink = vi.fn<(belief: ActorBelief) => void>();
+    const reversed = { ...fixture.world, residents: [...fixture.world.residents].reverse() };
+
+    const forward = selectHumanDangerWarningExpression(fixture.world, forwardSink);
+    const reverse = selectHumanDangerWarningExpression(reversed, reverseSink);
+
+    expect(JSON.stringify(forward)).toBe(JSON.stringify(expected));
+    expect(JSON.stringify(reverse)).toBe(JSON.stringify(expected));
+    expect(forwardSink).toHaveBeenCalledTimes(1);
+    expect(reverseSink).toHaveBeenCalledTimes(1);
+    expect(forwardSink.mock.calls[0]![0].sourceObservationId).toBe(expected.sourceObservationId);
+    expect(reverseSink.mock.calls[0]![0]).toEqual(forwardSink.mock.calls[0]![0]);
+    expect(JSON.stringify(fixture.world)).toBe(worldBefore);
+  });
+
+  it("does not inspect absent, stale or recursively heard human-warning causes", () => {
+    vi.stubEnv("DEV", true);
+    const fixture = warningWorld("animal-alarm");
+    const absent = { ...fixture.world, residents: [] };
+    const stale = structuredClone(fixture.world);
+    stale.completedTick += 1;
+    const recursive = warningWorld("danger-sound").world;
+
+    for (const world of [absent, stale, recursive]) {
+      const sink = vi.fn<(belief: ActorBelief) => void>();
+      expect(selectHumanDangerWarningExpression(world, sink)).toBeNull();
+      expect(sink).not.toHaveBeenCalled();
+    }
+  });
+
+  it("does not let a throwing inspection sink veto or alter the selected warning", () => {
+    vi.stubEnv("DEV", true);
+    const fixture = warningWorld("animal-alarm");
+    const worldBefore = JSON.stringify(fixture.world);
+    const expected = selectHumanDangerWarningExpression(fixture.world);
+    expect(expected).not.toBeNull();
+    const sink = vi.fn((_belief: ActorBelief) => { throw new Error("diagnostic sink failed"); });
+
+    expect(selectHumanDangerWarningExpression(fixture.world, sink)).toEqual(expected);
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(sink.mock.results[0]?.type).toBe("throw");
+    expect(JSON.stringify(fixture.world)).toBe(worldBefore);
+  });
+
+  it("isolates attempted mutation of the selected canonical belief from warning and world authority", () => {
+    vi.stubEnv("DEV", true);
+    const fixture = warningWorld("animal-alarm");
+    const worldBefore = JSON.stringify(fixture.world);
+    const expected = selectHumanDangerWarningExpression(fixture.world);
+    expect(expected).not.toBeNull();
+    const writes: boolean[] = [];
+    const sink = vi.fn((belief: ActorBelief) => {
+      writes.push(Reflect.set(belief, "salience", 0));
+      writes.push(Reflect.set(belief.area.center, "localX", 0));
+      writes.push(Reflect.set(belief.area.center.region, "x", 99));
+      // Deliberately throw after recording the nonthrowing mutation attempts.
+      // Assertions are outside the swallowed diagnostic callback.
+      Object.assign(belief, { sourceObservationId: "forged-warning-observation" });
+    });
+
+    expect(selectHumanDangerWarningExpression(fixture.world, sink)).toEqual(expected);
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(writes).toEqual([false, false, false]);
+    expect(sink.mock.results[0]?.type).toBe("throw");
+    expect(sink.mock.calls[0]![0].sourceObservationId).toBe(expected!.sourceObservationId);
+    expect(JSON.stringify(fixture.world)).toBe(worldBefore);
+  });
+
+  it("does not expose selected beliefs to the sink when DEV is false", () => {
+    vi.stubEnv("DEV", false);
+    const fixture = warningWorld("large-predator");
+    const expected = humanDangerWarningExpressionCandidate(fixture);
+    expect(expected).not.toBeNull();
+    const sink = vi.fn((_belief: ActorBelief) => { throw new Error("production must not inspect"); });
+
+    expect(selectHumanDangerWarningExpression(fixture.world, sink)).toEqual(expected);
+    expect(sink).not.toHaveBeenCalled();
+  });
+
+  it("does not deep-serialize eligible residents to inspect the selected belief", () => {
+    vi.stubEnv("DEV", true);
+    const fixture = warningWorld("animal-alarm", 3);
+    const world = structuredClone(fixture.world);
+    let serializationOnlyReads = 0;
+    for (const resident of world.residents) {
+      Object.defineProperty(resident, "serializationOnlyProbe", {
+        configurable: true,
+        enumerable: true,
+        get: () => {
+          serializationOnlyReads += 1;
+          return "unused";
+        },
+      });
+    }
+    const sink = vi.fn<(belief: ActorBelief) => void>();
+
+    expect(selectHumanDangerWarningExpression(world, sink)).not.toBeNull();
+    expect(sink).toHaveBeenCalledTimes(1);
+    expect(serializationOnlyReads).toBe(0);
   });
 
   it("scans world-owned residents without deep-serializing each resident", () => {

@@ -15363,7 +15363,13 @@ export async function createTideweftRuntime(
       // commits its already-proven cross-root transaction before unrelated
       // warnings or animal calls can consume the bounded voice budget.
       reconcileResidentInteractions(deferredWorldAcousticAudio);
-      const humanDangerWarning = selectHumanDangerWarningExpression(economyView);
+      let humanDangerWarningBelief: ActorBelief | null = null;
+      const humanDangerWarning = selectHumanDangerWarningExpression(
+        economyView,
+        import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+          ? (belief) => { humanDangerWarningBelief = belief; }
+          : undefined,
+      );
       if (humanDangerWarning !== null) {
         const audible = playerExpressionAudibility(humanDangerWarning.intent);
         const reception = audible === null || audible.contact === null
@@ -15385,6 +15391,7 @@ export async function createTideweftRuntime(
               acceptedAtTick: world.meta.completedTick,
             })
           ),
+          humanDangerWarningBelief,
         );
         if (admitted && audible !== null && audible.contact !== null) {
           playerWaitDisturbedThisStep = true;

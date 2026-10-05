@@ -64,24 +64,39 @@ export function humanDangerWarningTriggerEventId(
  */
 export function selectHumanDangerWarningExpression(
   world: WorldView,
+  /** Optional development inspection of the already-selected canonical cause. */
+  onSelectedBelief?: (belief: ActorBelief) => void,
 ): HumanDangerWarningExpressionCandidate | null {
   if (!plainRecord(world) || !Array.isArray(world.residents)) return null;
   const ownershipCounts = residentOwnershipCounts(world.residents);
   let selected: HumanDangerWarningExpressionCandidate | null = null;
+  let selectedBelief: ActorBelief | null = null;
   for (const resident of world.residents) {
     if (residentOwnershipCount(ownershipCounts, resident) !== 1) continue;
     // This resident is the exact value obtained from the authoritative world
     // collection. Re-running the public detached-input ownership proof here
     // would scan and canonically serialize the collection once per resident.
-    const candidate = humanDangerWarningExpressionCandidateForOwnedResident(
-      world,
-      resident,
+    const evidence = humanDangerWarningEvidence(
+      { world, resident },
+      "resident-sourced-from-world",
     );
+    if (evidence === null) continue;
+    const candidate = candidateFromEvidence(evidence);
     if (
       candidate !== null
       && (selected === null || compareWarningCandidates(candidate, selected) < 0)
     ) {
       selected = candidate;
+      if (import.meta.env.DEV && onSelectedBelief !== undefined) {
+        selectedBelief = evidence.belief;
+      }
+    }
+  }
+  if (import.meta.env.DEV && selectedBelief !== null && onSelectedBelief !== undefined) {
+    try {
+      onSelectedBelief(selectedBelief);
+    } catch {
+      // Optional inspection cannot change the selected authoritative warning.
     }
   }
   return selected;
@@ -97,22 +112,17 @@ export function humanDangerWarningExpressionCandidate(
   );
 }
 
-function humanDangerWarningExpressionCandidateForOwnedResident(
-  world: WorldView,
-  resident: ResidentState,
-): HumanDangerWarningExpressionCandidate | null {
-  return humanDangerWarningExpressionCandidateWithOwnership(
-    { world, resident },
-    "resident-sourced-from-world",
-  );
-}
-
 function humanDangerWarningExpressionCandidateWithOwnership(
   inputValue: HumanDangerWarningExpressionInput,
   ownership: "validate-detached-input" | "resident-sourced-from-world",
 ): HumanDangerWarningExpressionCandidate | null {
   const evidence = humanDangerWarningEvidence(inputValue, ownership);
-  if (evidence === null) return null;
+  return evidence === null ? null : candidateFromEvidence(evidence);
+}
+
+function candidateFromEvidence(
+  evidence: HumanDangerWarningEvidence,
+): HumanDangerWarningExpressionCandidate | null {
   const { resident, belief, knowledgeBasis, position } = evidence;
   const triggerEventId = humanDangerWarningTriggerEventId(
     resident.identity.stableId,

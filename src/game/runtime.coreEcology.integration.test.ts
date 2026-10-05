@@ -5877,6 +5877,122 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
+  it("inspects the exact human-warning belief without changing alarm work, saves or rollback", async () => {
+    const fixture = await createFishCrowAlarmRuntime();
+    const startingRecord = fixture.repository.snapshot();
+    fixture.runtime.destroy();
+    scheduledFrame = undefined;
+
+    async function run(enabled: boolean) {
+      const repository = new MemoryRepository(startingRecord);
+      const runtime = await createTideweftRuntime(repository);
+      try {
+        const inspector = runtime.expressionDiagnostics!;
+        expect(inspector.getSnapshot()).toMatchObject({ enabled: false, records: [] });
+        inspector.setEnabled(enabled);
+        soundscapePlay.mockClear();
+        advancePlayerSteps(runtime, 20);
+        await runtime.save();
+        const saved = requiredEnvelope(repository);
+        const world = deserializeWorld(saved.world);
+        const warning = saved.perceptionCarry.situatedExpressionAdmissions.records.find(
+          (record) => record.kind === "human-danger-warning",
+        );
+        if (warning?.kind !== "human-danger-warning") throw new Error("Real alarm omitted its human warning");
+        const source = world.residents.find(({ identity }) => identity.stableId === warning.sourceActorId);
+        const belief = source?.perception.beliefs.find(({ sourceObservationId }) => (
+          sourceObservationId === warning.sourceObservationId
+        ));
+        if (belief === undefined) throw new Error("Real human warning lost its exact belief");
+        expect(belief).toMatchObject({ channel: "hearing", perceivedClass: "animal-alarm",
+          subjectId: null, identification: "anonymous", strongInterrupt: true,
+          lastObservedTick: world.meta.completedTick });
+        const decisions = inspector.getSnapshot({ meaning: "human-danger-warning" }).records;
+        if (enabled) {
+          expect(decisions).toHaveLength(1);
+          const decision = decisions[0]!;
+          expect(decision).toMatchObject({ reason: "accepted", admission: warning,
+            intent: { sourceActorId: source!.identity.stableId,
+              knowledgeBasis: "self-heard-anonymous-alarm" } });
+          expect(decision.sourceBelief).toEqual(belief);
+          expect(decision.sourceBelief).not.toBe(belief);
+          expect(Object.isFrozen(decision.sourceBelief)).toBe(true);
+          expect(Object.isFrozen(decision.sourceBelief!.area.center.region)).toBe(true);
+          expect(Reflect.set(decision.sourceBelief!, "subjectId", fixture.crowActorId)).toBe(false);
+          const anonymous = stableStringify(decision.sourceBelief);
+          for (const hidden of [fixture.crowActorId, "fish-crow", "northern-harrier"]) {
+            expect(anonymous).not.toContain(hidden);
+          }
+          // Human causes are inspectable, not an invented producer replay.
+          expect(decision.producerContext).toBeNull();
+          expect(inspector.replayProducer(decision.sequence)).toBeNull();
+          await runtime.save();
+          expect(requiredEnvelope(repository)).toEqual(saved);
+        } else {
+          expect(decisions).toEqual([]);
+          expect(inspector.getSnapshot().records).toEqual([]);
+        }
+        return { saved, audio: structuredClone(soundscapePlay.mock.calls), record: repository.snapshot() };
+      } finally {
+        runtime.destroy();
+        scheduledFrame = undefined;
+      }
+    }
+
+    const enabled = await run(true);
+    const disabled = await run(false);
+    expect(enabled.saved).toEqual(disabled.saved);
+    expect(enabled.audio).toEqual(disabled.audio);
+    expect(enabled.audio.filter(([cue]) => cue === "vocalization-alarm")).toHaveLength(1);
+    const audioBeforeReload = structuredClone(soundscapePlay.mock.calls);
+    const restored = await createTideweftRuntime(new MemoryRepository(enabled.record));
+    try {
+      expect(restored.getUIView().saveWarning).toBeUndefined();
+      expect(restored.expressionDiagnostics!.getSnapshot()).toMatchObject({ enabled: false, records: [] });
+      expect(soundscapePlay.mock.calls).toEqual(audioBeforeReload);
+    } finally { restored.destroy(); scheduledFrame = undefined; }
+
+    const failedRepository = new MemoryRepository(startingRecord);
+    const failed = await createTideweftRuntime(failedRepository);
+    try {
+      const inspector = failed.expressionDiagnostics!;
+      inspector.setEnabled(true);
+      advancePlayerSteps(failed, 19);
+      await failed.save();
+      const beforeRecord = failedRepository.snapshot();
+      const before = requiredEnvelope(failedRepository);
+      expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      const beforeDiagnostics = inspector.getSnapshot();
+      const channels = await import("./situatedExpressionChannelBank");
+      const warnings = await import("./humanDangerWarningExpression");
+      const diagnostics = await import("./situatedExpressionDiagnostics");
+      const closure = vi.spyOn(channels, "closeSituatedExpressionChannelBankInterval").mockReturnValue(null);
+      const selected = vi.spyOn(warnings, "selectHumanDangerWarningExpression");
+      const append = vi.spyOn(diagnostics, "appendExpressionDiagnostic");
+      soundscapePlay.mockClear();
+      try {
+        advancePlayerSteps(failed, 1);
+        expect(selected.mock.results.some(({ type, value }) => type === "return"
+          && value?.intent.meaning === "human-danger-warning")).toBe(true);
+        expect(append.mock.calls.some(([, input]) => input.intent.meaning === "human-danger-warning"
+          && input.reason === "accepted" && input.admission?.kind === "human-danger-warning"
+          && input.sourceBelief?.sourceObservationId === input.admission.sourceObservationId)).toBe(true);
+        expect(closure).toHaveBeenCalled();
+        expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+        expect(failedRepository.snapshot()).toEqual(beforeRecord);
+        expect(inspector.getSnapshot()).toEqual(beforeDiagnostics);
+        expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-alarm")).toEqual([]);
+        await failed.save();
+        const rolledBack = requiredEnvelope(failedRepository);
+        for (const key of ["world", "player", "regionalTravel", "regionalEcology", "physicalCargo",
+          "dogActorRoster", "settlementWorkingAnimals", "settlementEcology", "perceptionCarry",
+          "fieldResources", "playerExpressionRecency", "promiseJourney"] as const) {
+          expect(rolledBack[key], key).toEqual(before[key]);
+        }
+      } finally { closure.mockRestore(); selected.mockRestore(); append.mockRestore(); }
+    } finally { failed.destroy(); scheduledFrame = undefined; }
+  }, 120_000);
+
   it("admits one fish-crow alarm, propagates it at T+1 without duplicating human hearing, and rejects tampering", async () => {
     const {
       runtime,

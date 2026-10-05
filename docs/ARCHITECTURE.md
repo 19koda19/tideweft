@@ -1068,6 +1068,13 @@ not claimed as the final caption. Missing context remains explicitly null.
 Filtered records retain global total/eviction counters, not filter-specific
 counts. The observer does not scan the world for hypothetical causes.
 
+Human danger warnings supply the exact canonical belief selected during the
+existing authenticated resident pass. Only enabled development inspection
+retains it; one optional, failure-isolated notification follows winner selection
+without reselecting a source or changing candidate shape/order. The existing
+buffer detaches that belief at the decision and discards it on transaction failure.
+Anonymous hearing remains anonymous; inspection does not decode an alarm's cause.
+
 Fixed-step records publish only after the existing fallible transaction and
 deferred introduction-save preparation succeed; rollback discards provisional
 records. Immediate UI transactions retain their existing authority boundary.
