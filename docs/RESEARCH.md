@@ -1370,6 +1370,47 @@ to remove that legitimate interface. New native/desktop/hardware/AT, hours,
 performance, full cumulative and release checks are not certified by this
 slice. Schema49/carry14, dependencies and upstream sources remain unchanged.
 
+#### Longer ordinary voice exposure — 2026-10-05
+
+Clean local `df6b4dd` was exercised through native controls in Firefox 157,
+using the existing production artifact at `/tideweft/`, a disposable profile
+and seed `phase ten glass ebb`. Bundle SHA256 remains
+`5a5b8238834e18b164f9fb1d0453d6d758b51008ace0c986b0c5bcc350453bad`.
+The existing v10 probe performs START, the real keeper warning, physical cargo
+pickup/drop/recovery and travel using current public guidance only; it injects
+no actor, event, position, weather, inventory or save. Three delivery-button
+attempts were recorded; retained chronicle proves two completed handoffs:
+8 Fresh Water to Latchmere and 14 Food to Bellwake. The final Reed Promise
+remains unfinished. Ten journey recovery attempts and five rests occurred.
+Sampled global displacement was 116.67 tiles, not an exact continuous path or
+conservation witness.
+
+Actual journey: 360.607 s; observation: 366.827 s / 1,995 reads, ticks 420→841
+including ordinary rest batches. The bounded observer recorded 73 distinct
+projection IDs: 34 player speech, one human response and 38 physical cues.
+Player wording covered 13 distinct strings and one adjacent sampled repeat.
+Seven sampled
+"We've lost cargo!" lines accompanied repeated cargo-loss/recovery traversal;
+the observed repetition is a review flag, not proof of a duplicate producer.
+At most three candidates projected at once. There were 1,785 empty-projection
+reads and a longest 51.487 s empty sampled span; these do not establish acoustic
+silence. Maximum sample gap was 1.252 s. Both overflow flags and all incomplete
+flags remained false. No animal call was sampled, leaving animal acceptance
+open rather than proving absence or a failed source.
+
+The keeper Relief and final Chart screenshots were inspected: source-associated
+speech and separate shared captions were readable, with no pile in those two
+frames. This is not a continuous DOM-collision, audible/assistive, hours,
+busy-settlement, mobile-hardware, desktop, performance or release certificate.
+The sole recorded console error matches the previously documented CSP
+eval-probe denial; browser exited normally and its disposable profile was
+removed. Result SHA256:
+`2bc1cc29d946581462ac33811f4936c276c4e423c3c2882ffe61e8bdefb96a42`;
+probe SHA256:
+`3cb7d627ae902d55d152b840e5b477d2c64326896a8b3b8a6461d4ade2825bd5`.
+This adds finite ordinary-play evidence after the existing 600-step exhaustion
+eligibility repair, not equal-work before/after comparison or Voice closure.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
