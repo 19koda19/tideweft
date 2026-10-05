@@ -13092,6 +13092,18 @@ export async function createTideweftRuntime(
         && candidate.eventId === sample.expressionEventId
         && candidate.sourceActorId === sample.sourceActorId
       ));
+      if (admission?.kind === "settlement-keeper-store-response") {
+        const event = settlementKeeperStoreResponseExpressionEventForTrigger(
+          { world: economyView, settlement: settlementEcology },
+          admission.triggerEventId,
+        );
+        if (event === null
+          || !vocalizationSampleMatchesActiveEvent(sample, event)
+          || !residentSourcePositionMatches(economyView, sample.sourceActorId, sample.position)) {
+          throw new Error("Keeper surface sound lost its committed source authority");
+        }
+        return [sample.id];
+      }
       return admission !== undefined
         && (admission.kind === "core-wildlife-alarm"
           || admission.kind === "core-wildlife-fish-crow-alarm")

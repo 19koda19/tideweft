@@ -173,6 +173,7 @@ import {
 } from "./regionalWorldView";
 import {
   playerWorldPositionInRegionalWindow,
+  residentPlacementInRegionalWindow,
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
 import {
@@ -181,7 +182,11 @@ import {
   type TideweftRuntime,
 } from "./runtime";
 import { createSessionState } from "./sessionTypes";
-import { SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE } from "./situatedExpressionAcoustics";
+import {
+  SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
+  situatedExpressionSemanticFactForEvent,
+  type SituatedExpressionSemanticFact,
+} from "./situatedExpressionAcoustics";
 import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import * as situatedExpressionChannels from "./situatedExpressionChannelBank";
@@ -951,6 +956,76 @@ function withCurrentEnvelopeFields(
       integrity: gameSaveEnvelopeIntegrity(nextFields),
     }),
   };
+}
+
+/** A current route listener, not a new human body or a fabricated utterance. */
+function prepareKeeperReportSurfacePair(
+  original: WorldState,
+  window: RegionalTerrainWindow,
+  player: PlayerState,
+  sample: humanPerception.SupplementalSoundSample,
+  fact: SituatedExpressionSemanticFact,
+  porterActorId: string,
+) {
+  const listener = [...original.residents]
+    .sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : 1)
+    .find(({ identity, activeContractId }) => identity.stableId !== sample.sourceActorId
+      && identity.stableId !== porterActorId && activeContractId === null);
+  if (listener === undefined) throw new Error("Keeper surface fixture lacks an existing listener");
+  const sourceX = Math.floor(sample.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const sourceY = Math.floor(sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const candidates = original.routes.flatMap((route) => route.path.flatMap((tileIndex, offset) => {
+    const tile = original.terrain.tiles[tileIndex];
+    if (tile === undefined || route.path.length < 2) return [];
+    const distance = Math.hypot(tile.x + 0.5 - sample.position.localX / WORLD_POSITION_UNITS_PER_TILE,
+      tile.y + 0.5 - sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+    return distance >= 1.5 && distance <= 3.5
+      ? [{ routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance }]
+      : [];
+  })).sort((left, right) => left.distance - right.distance || left.routeId - right.routeId
+    || left.progress - right.progress).slice(0, 64);
+  for (const location of candidates) {
+    const clearWorld = deserializeWorld(serializeWorld(original));
+    const stagedListener = clearWorld.residents.find(({ id }) => id === listener.id)!;
+    stagedListener.location = { kind: "route", routeId: location.routeId, progress: location.progress };
+    const economy = createWorldView(clearWorld);
+    const placement = resolveResidentWorldPlacement(economy, stagedListener);
+    if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) continue;
+    const listenerX = Math.floor(placement.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const listenerY = Math.floor(placement.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+    const clearView = createRegionalWorldView(economy, window, player);
+    const collect = (view: WorldView) => humanPerception.collectExistingHumanObservations({
+      world: view, window, targetTick: original.meta.completedTick + 1,
+      playerSamples: [], supplementalSoundSamples: [sample],
+      supplementalSemanticFacts: [fact], surfaceSoundSampleIds: [sample.id],
+    }).find(({ observerId }) => observerId === listener.identity.stableId);
+    const clear = collect(clearView)?.observations.find(({ channel }) => channel === "hearing");
+    if (clear?.perceivedClass !== "store-secured-report") continue;
+    for (let y = Math.min(sourceY, listenerY); y <= Math.max(sourceY, listenerY); y += 1) {
+      for (let x = Math.min(sourceX, listenerX); x <= Math.max(sourceX, listenerX); x += 1) {
+        if ((x === sourceX && y === sourceY) || (x === listenerX && y === listenerY)
+          || x >= original.terrain.width || y >= original.terrain.height) continue;
+        const index = y * original.terrain.width + x;
+        const tile = clearWorld.terrain.tiles[index];
+        const viewTile = regionLocalToWindowTile(window, createRegionCoord(0, 0), x, y);
+        if (tile === undefined || viewTile === null || tile.elevation >= FIXED_POINT
+          || clearView.terrain.tiles[viewTile.y * clearView.terrain.width + viewTile.x]?.waterDepth !== 0) continue;
+        const maskedWorld = deserializeWorld(serializeWorld(clearWorld));
+        maskedWorld.terrain.tiles[index]!.elevation = FIXED_POINT;
+        const maskedView = createRegionalWorldView(createWorldView(maskedWorld), window, player);
+        const masked = collect(maskedView)?.observations.find(({ id }) => id === clear.id);
+        if (masked?.perceivedClass !== "human-vocalization" || masked.confidence >= clear.confidence) continue;
+        const projected = residentPlacementInRegionalWindow(placement, window);
+        if (projected === null) throw new Error("Keeper route listener left its actual frame");
+        expect(ambientNoiseAt(maskedView, projected.tileIndex)).toBe(ambientNoiseAt(clearView, projected.tileIndex));
+        expect(maskedWorld.terrain.tiles.filter((candidate, ordinal) => (
+          stableStringify(candidate) !== stableStringify(clearWorld.terrain.tiles[ordinal])
+        )).map(({ index: changed }) => changed)).toEqual([index]);
+        return { clearWorld, maskedWorld, clear, masked, listenerActorId: listener.identity.stableId };
+      }
+    }
+  }
+  throw new Error("Real keeper report has no bounded route/dry-crest comprehension witness");
 }
 
 function legacyRuntimeSaveRecord(world: WorldState): SaveRecord {
@@ -4209,6 +4284,105 @@ describe("runtime settlement ecology integration", () => {
       lastObservedTick: fact.lastObservedTick,
     }))).toEqual(learnedFactReceipts);
     resumedAfterReceipt.destroy();
+  });
+
+  it("lets one dry crest reduce understanding of a real pending keeper reply without rewriting the player's receipt", async () => {
+    const sourceRepository = new MemoryRepository();
+    const source = await createTideweftRuntime(sourceRepository);
+    source.dispatchUI({
+      type: "new-world", seed: "one keeper reply in the acoustic world", posture: "gale", sessionShape: "wander",
+    });
+    soundscapePlay.mockClear();
+    source.dispatchUI({ type: "interact" });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(1);
+    await source.save();
+    const sourceRecord = sourceRepository.snapshot();
+    const saved = savedEnvelope(sourceRepository);
+    const settlement = deserializeSettlementEcologyState(saved.settlementEcology);
+    const carry = saved.perceptionCarry as {
+      actorVocalizationSamples: humanPerception.SupplementalSoundSample[];
+      situatedExpressionChannels: unknown;
+      situatedExpressionAdmissions: { records: Array<Record<string, unknown>> };
+    };
+    const channels = situatedExpressionChannels.canonicalizeSituatedExpressionChannelBank(carry.situatedExpressionChannels);
+    const event = channels?.channels.find(({ sourceActorId }) => sourceActorId === settlement.identity.keeperActorId)?.state.active;
+    const sample = carry.actorVocalizationSamples[0];
+    const fact = event === undefined || event === null ? null : situatedExpressionSemanticFactForEvent(event);
+    if (sample === undefined || fact === null) throw new Error("Ordinary keeper action failed to produce its real report");
+    expect(sample.expressionEventId).toBe(event?.eventId);
+    expect(carry.situatedExpressionAdmissions.records).toEqual([expect.objectContaining({
+      kind: "settlement-keeper-store-response", eventId: sample.expressionEventId,
+      closureTransactionId: settlement.lastClosureTransactionId,
+    })]);
+    source.destroy();
+    const world = deserializeWorld(String(saved.world));
+    const player = saved.player as PlayerState;
+    const travel = restorePlayerRegionalTravel(world.meta.rootSeed, player, String(saved.regionalTravel));
+    const bio0 = deserializeBio0Ecology(saved.bio0Ecology);
+    if (travel === null || bio0 === null) throw new Error("Keeper fixture lost its actual saved frame");
+    const pair = prepareKeeperReportSurfacePair(world, travel.window, player, sample, fact, bio0.porterAddress.actorId);
+    expect(pair.clear.confidence).toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+    expect(pair.masked.confidence).toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+    for (const [branchWorld, expected] of [[pair.clearWorld, pair.clear], [pair.maskedWorld, pair.masked]] as const) {
+      scheduledFrame = undefined;
+      soundscapePlay.mockClear();
+      const repository = new MemoryRepository(withCurrentEnvelopeFields(sourceRecord, { world: serializeWorld(branchWorld) }));
+      const hearingSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+      const runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await runtime.save();
+      const loaded = savedEnvelope(repository);
+      expect(loaded.perceptionCarry).toEqual(carry);
+      expect(loaded.settlementEcology).toBe(saved.settlementEcology);
+      expect(loaded.player).toEqual(saved.player);
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const consumed = savedEnvelope(repository);
+      const heardWorld = deserializeWorld(String(consumed.world));
+      const hearingInputs = hearingSpy.mock.calls.map(([input]) => input).filter(({ supplementalSoundSamples }) => (
+        supplementalSoundSamples?.some(({ expressionEventId }) => expressionEventId === sample.expressionEventId)
+      ));
+      expect(hearingInputs).toHaveLength(1);
+      expect(hearingInputs[0]?.supplementalSoundSamples).toContainEqual(sample);
+      expect(hearingInputs[0]?.surfaceSoundSampleIds).toContain(sample.id);
+      const listener = heardWorld.residents.find(({ identity }) => identity.stableId === pair.listenerActorId);
+      expect(listener).toBeDefined();
+      const belief = listener?.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === expected.id);
+      expect(belief).toMatchObject({
+        perceivedClass: expected.perceivedClass, confidence: expected.confidence,
+        subjectId: null, identification: "anonymous", channel: "hearing",
+        firstObservedTick: world.meta.completedTick + 1, lastObservedTick: world.meta.completedTick + 1,
+      });
+      expect(belief?.area.radiusUnits).toBeGreaterThan(0);
+      expect(JSON.stringify(belief)).not.toContain(sample.sourceActorId);
+      expect(JSON.stringify(belief)).not.toContain(settlement.identity.storeId);
+      expect(JSON.stringify(belief)).not.toContain("fresh-produce");
+      const keeper = heardWorld.residents.find(({ identity }) => identity.stableId === sample.sourceActorId);
+      expect(keeper).toBeDefined();
+      expect(keeper?.perception.beliefs.some(({ sourceObservationId }) => (
+        sourceObservationId.endsWith(`-${sample.id}`)
+      ))).toBe(false);
+      expect((consumed.perceptionCarry as typeof carry).actorVocalizationSamples).toEqual([]);
+      expect((consumed.perceptionCarry as typeof carry).situatedExpressionAdmissions.records).toEqual([]);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+      runtime.destroy();
+      scheduledFrame = undefined;
+      const resumed = await createTideweftRuntime(repository);
+      expect(resumed.getUIView().saveWarning).toBeUndefined();
+      advancePlayerSteps(resumed, 10);
+      await resumed.save();
+      const reloadedWorld = deserializeWorld(String(savedEnvelope(repository).world));
+      const retained = reloadedWorld.residents.find(({ identity }) => identity.stableId === pair.listenerActorId)
+        ?.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === expected.id);
+      expect(retained).toMatchObject({ firstObservedTick: world.meta.completedTick + 1, lastObservedTick: world.meta.completedTick + 1 });
+      expect(hearingSpy.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(
+        ({ expressionEventId }) => expressionEventId === sample.expressionEventId,
+      ))).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+      resumed.destroy();
+      hearingSpy.mockRestore();
+    }
   });
 
   it("migrates released v32 store state without inventing speech, fences future knowledge and preserves retired Voice records", async () => {

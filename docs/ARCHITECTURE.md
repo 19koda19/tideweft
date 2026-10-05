@@ -318,6 +318,18 @@ Separate real food-scent locomotion proves the existing BIO0 producer and exact
 pending-carry restore. These are bounded runtime witnesses, not ordinary travel
 or broad non-dog contact certification.
 
+The immediate keeper closure reply also supplies surface support to its
+independent next-interval human audience. Its exact admitted sample ordinal,
+event/source identity, re-derived committed closure event, acoustic tuple and
+unique resident pose authenticate the cause; a speech class or semantic fact
+alone does not ground a source. A controlled pair starts with ordinary Interact,
+places an existing listener on an actual route, and changes only one intervening
+dry cell: the same audible line falls below the fact-comprehension threshold.
+The original player admission/reception, stock and pending carry still load
+unchanged; T+1 consumes the NPC receipt once and T+2/reload cannot replay it.
+This does not change the saved player's event-time hearing law or establish
+general human-vocal support, ordinary travel or autonomous conversation.
+
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
 explicit `unmodeled-support`, not invented ground contact. A physical domain may

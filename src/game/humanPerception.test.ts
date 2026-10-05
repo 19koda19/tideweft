@@ -656,6 +656,88 @@ describe("existing-human sensory bridge", () => {
       .toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
   });
 
+  it.each([2, 3] as const)(
+    "withholds a keeper report's meaning across one dry crest at %i tiles without changing its sound or inventing support",
+    (sourceOffset) => {
+      // Controlled keeper-owner inputs; the runtime producer has its own proof.
+      const seed = `keeper report surface hearing ${sourceOffset}`;
+      const prepare = (crest: boolean) => {
+        const current = keeperListeningFixture(seed, sourceOffset);
+        const state = current.fixture.state;
+        for (let x = OBSERVER_X; x <= OBSERVER_X + sourceOffset; x += 1) {
+          const tile = state.terrain.tiles[OBSERVER_Y * state.terrain.width + x];
+          if (tile === undefined) throw new Error("Keeper surface fixture lost its dry corridor");
+          tile.elevation = MAX_TIDE_LEVEL + 1;
+        }
+        if (crest) {
+          const tile = state.terrain.tiles[OBSERVER_Y * state.terrain.width + OBSERVER_X + 1];
+          if (tile === undefined) throw new Error("Keeper surface fixture lost its intervening crest");
+          tile.elevation = FIXED_POINT;
+        }
+        return { ...current, fixture: rebuildWorld(current.fixture) };
+      };
+      const clear = prepare(false);
+      const masked = prepare(true);
+      const sounds = {
+        supplementalSoundSamples: [clear.voice],
+        supplementalSemanticFacts: [clear.fact],
+      };
+      const inputFor = (current: typeof clear, supported: boolean): HumanPerceptionInput => ({
+        ...current.input,
+        world: current.fixture.world,
+        window: current.fixture.window,
+        ...sounds,
+        ...(supported ? { surfaceSoundSampleIds: [clear.voice.id] } : {}),
+      });
+      const inputs = [inputFor(clear, true), inputFor(masked, true),
+        inputFor(clear, false), inputFor(masked, false)];
+      const before = JSON.stringify([inputs, clear.listener.perception, masked.listener.perception]);
+      const [clearBatches, maskedBatches, unmodeledClearBatches, unmodeledMaskedBatches] = inputs
+        .map((input) => collectExistingHumanObservations(input));
+      const hearingFor = (batches: readonly HumanObservationBatch[]) => batchFor(
+        batches, clear.listener.id,
+      )?.observations.find(({ id }) => id.endsWith(`-${clear.voice.id}`));
+      const clearHearing = hearingFor(clearBatches!);
+      const maskedHearing = hearingFor(maskedBatches!);
+
+      expect(masked.voice).toEqual(clear.voice);
+      expect(masked.fact).toEqual(clear.fact);
+      expect(masked.fixture.state.weather).toEqual(clear.fixture.state.weather);
+      expect(masked.fixture.state.tide).toEqual(clear.fixture.state.tide);
+      expect(masked.listener.location).toEqual(clear.listener.location);
+      expect(masked.input.targetTick).toBe(clear.input.targetTick);
+      const crestIndex = OBSERVER_Y * clear.fixture.state.terrain.width + OBSERVER_X + 1;
+      for (const [index, tile] of clear.fixture.state.terrain.tiles.entries()) {
+        expect(masked.fixture.state.terrain.tiles[index]).toEqual(index === crestIndex
+          ? { ...tile, elevation: FIXED_POINT } : tile);
+      }
+      expect(clearHearing).toMatchObject({
+        channel: "hearing", perceivedClass: "store-secured-report",
+        subjectId: null, identification: "anonymous", interrupt: "none",
+      });
+      expect(clearHearing!.confidence).toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+      expect(maskedHearing).toMatchObject({
+        id: clearHearing!.id, channel: "hearing", perceivedClass: "human-vocalization",
+        subjectId: null, identification: "anonymous", interrupt: "none",
+      });
+      expect(maskedHearing!.confidence).toBeLessThan(clearHearing!.confidence);
+      expect(maskedHearing!.confidence).toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+      expect(maskedHearing!.area.radiusUnits).toBeGreaterThan(0);
+      expect(maskedHearing!.area.center).not.toEqual(clear.voice.position);
+      for (const key of ["sourceActorId", "sourceId", "expressionEventId", "storeId", "stock", "playerId"]) {
+        expect(clearHearing).not.toHaveProperty(key);
+        expect(maskedHearing).not.toHaveProperty(key);
+      }
+      // A keeper-shaped ID/semantic fact alone must not imply surface support.
+      expect(hearingFor(unmodeledMaskedBatches!)).toEqual(hearingFor(unmodeledClearBatches!));
+      expect(hearingFor(unmodeledMaskedBatches!)?.perceivedClass).toBe("store-secured-report");
+      for (const batches of [clearBatches!, maskedBatches!, unmodeledClearBatches!, unmodeledMaskedBatches!]) {
+        expect(batchFor(batches, clear.fixture.resident.id)?.observations).toEqual([]);
+      }
+      expect(JSON.stringify([inputs, clear.listener.perception, masked.listener.perception])).toBe(before);
+    },
+  );
+
   describe("development supplemental-listening observer", () => {
     it.each([
       { name: "clear", offset: 2, storm: false, turbulentWater: false, outcome: "heard", understood: true },
