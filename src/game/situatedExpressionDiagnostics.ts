@@ -103,6 +103,51 @@ export interface ExpressionDiagnosticSnapshot {
   readonly totalCount: number;
   readonly evictedCount: number;
   readonly records: readonly ExpressionDiagnosticRecord[];
+  readonly repetition: ExpressionDiagnosticRepetitionState;
+}
+
+/** First-seen keys are retained; overflow is counted, never silently discarded. */
+export interface ExpressionDiagnosticRepetitionCounts {
+  readonly entries: readonly Readonly<{ key: string; count: number }>[];
+  readonly untrackedCount: number;
+}
+
+/** Capture-period decision totals, not unique sound, audio or caption counts. */
+export interface ExpressionDiagnosticRepetitionState {
+  readonly acceptedFixedSteps: number;
+  readonly acceptedSimulationMs: number;
+  readonly admittedDecisions: number;
+  readonly unadmittedDecisions: number;
+  readonly unrealizedAdmittedDecisions: number;
+  readonly saturated: boolean;
+  readonly families: ExpressionDiagnosticRepetitionCounts;
+  readonly actors: ExpressionDiagnosticRepetitionCounts;
+  readonly lines: ExpressionDiagnosticRepetitionCounts;
+  readonly reasons: ExpressionDiagnosticRepetitionCounts;
+}
+
+export interface ExpressionDiagnosticRepetitionReport extends Omit<ExpressionDiagnosticRepetitionState,
+  "families" | "actors" | "lines" | "reasons"
+> {
+  readonly scope: "captured-expression-repetition";
+  readonly enabled: boolean;
+  readonly totalCount: number;
+  readonly evictedCount: number;
+  readonly retainedCount: number;
+  readonly families: ExpressionDiagnosticRepetitionRates;
+  readonly actors: ExpressionDiagnosticRepetitionRates;
+  readonly lines: ExpressionDiagnosticRepetitionRates;
+  readonly reasons: ExpressionDiagnosticRepetitionRates;
+  readonly notEvaluated: readonly string[];
+}
+
+export interface ExpressionDiagnosticRepetitionRates {
+  readonly entries: readonly Readonly<{
+    key: string;
+    count: number;
+    perAcceptedSimulationMinute: number | null;
+  }>[];
+  readonly untrackedCount: number;
 }
 
 export type ExpressionPreviewOverrides = Partial<Pick<SituatedExpressionIntent,
@@ -162,6 +207,7 @@ export interface SituatedExpressionDiagnostics {
     overrides?: ExpressionListeningPreviewOverrides,
   ) => ExpressionDiagnosticListeningPreview | null;
   readonly auditKnowledge: (query?: ExpressionDiagnosticQuery) => ExpressionDiagnosticKnowledgeAudit;
+  readonly reportRepetition: () => ExpressionDiagnosticRepetitionReport;
 }
 
 export interface ExpressionDiagnosticKnowledgeAudit {
@@ -189,6 +235,7 @@ export function createExpressionDiagnosticState(enabled = false): ExpressionDiag
     totalCount: 0,
     evictedCount: 0,
     records: Object.freeze([]),
+    repetition: createRepetitionState(),
   });
 }
 
@@ -231,10 +278,112 @@ export function appendExpressionDiagnostic(
       totalCount,
       evictedCount: totalCount - records.length,
       records,
+      repetition: countRepetitionDecision(state.repetition, record),
     });
   } catch {
     return state;
   }
+}
+
+/** Only the runtime's successful fixed-step boundary supplies this exposure. */
+export function advanceExpressionDiagnosticExposure(
+  state: ExpressionDiagnosticSnapshot,
+  fixedStepMs: number,
+): ExpressionDiagnosticSnapshot {
+  if (!state.enabled || !Number.isSafeInteger(fixedStepMs) || fixedStepMs <= 0) return state;
+  const prior = state.repetition;
+  if (prior.saturated) return state;
+  if (prior.acceptedFixedSteps >= Number.MAX_SAFE_INTEGER
+    || prior.acceptedSimulationMs > Number.MAX_SAFE_INTEGER - fixedStepMs) {
+    return Object.freeze({ ...state, repetition: Object.freeze({ ...prior, saturated: true }) });
+  }
+  return Object.freeze({
+    ...state,
+    repetition: Object.freeze({
+      ...prior,
+      acceptedFixedSteps: prior.acceptedFixedSteps + 1,
+      acceptedSimulationMs: prior.acceptedSimulationMs + fixedStepMs,
+    }),
+  });
+}
+
+/** Capture-period totals survive record eviction; these are NOT unique event rates. */
+export function reportExpressionDiagnosticRepetition(
+  state: ExpressionDiagnosticSnapshot,
+): ExpressionDiagnosticRepetitionReport {
+  const repetition = state.repetition;
+  const saturated = repetition.saturated || state.totalCount >= Number.MAX_SAFE_INTEGER;
+  const rates = (counts: ExpressionDiagnosticRepetitionCounts): ExpressionDiagnosticRepetitionRates => ({
+    entries: counts.entries.map(({ key, count }) => ({
+      key, count,
+      perAcceptedSimulationMinute: saturated || repetition.acceptedSimulationMs === 0
+        ? null : count / (repetition.acceptedSimulationMs / 60_000),
+    })).sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
+    untrackedCount: counts.untrackedCount,
+  });
+  return freezeCopy(structuredClone({
+    ...repetition,
+    scope: "captured-expression-repetition",
+    enabled: state.enabled,
+    totalCount: state.totalCount,
+    evictedCount: state.evictedCount,
+    retainedCount: state.records.length,
+    saturated,
+    families: rates(repetition.families),
+    actors: rates(repetition.actors),
+    lines: rates(repetition.lines),
+    reasons: rates(repetition.reasons),
+    notEvaluated: [
+      "uncaptured-producers-and-physical-sounds", "unique-world-events",
+      "committed-audio-and-caption-counts", "wall-time-and-civil-time-rates",
+      "settlement-density", "profanity-classification", "failed-diagnostic-copies",
+      "annoyance-and-hours-soak",
+    ],
+  }));
+}
+
+function createRepetitionState(): ExpressionDiagnosticRepetitionState {
+  const empty = (): ExpressionDiagnosticRepetitionCounts => Object.freeze({
+    entries: Object.freeze([]), untrackedCount: 0,
+  });
+  return Object.freeze({
+    acceptedFixedSteps: 0, acceptedSimulationMs: 0, admittedDecisions: 0,
+    unadmittedDecisions: 0, unrealizedAdmittedDecisions: 0, saturated: false,
+    families: empty(), actors: empty(), lines: empty(), reasons: empty(),
+  });
+}
+
+/** No hashing, actor classification, wording parsing, world scan or unbounded key set. */
+function incrementRepetitionCounts(
+  prior: ExpressionDiagnosticRepetitionCounts,
+  key: string,
+): ExpressionDiagnosticRepetitionCounts {
+  const index = prior.entries.findIndex((entry) => entry.key === key);
+  if (index < 0 && prior.entries.length >= EXPRESSION_DIAGNOSTIC_CAPACITY) {
+    return Object.freeze({ ...prior, untrackedCount: prior.untrackedCount + 1 });
+  }
+  const entries = index < 0
+    ? [...prior.entries, Object.freeze({ key, count: 1 })]
+    : prior.entries.map((entry, at) => at === index ? Object.freeze({ key, count: entry.count + 1 }) : entry);
+  return Object.freeze({ entries: Object.freeze(entries), untrackedCount: prior.untrackedCount });
+}
+
+function countRepetitionDecision(
+  prior: ExpressionDiagnosticRepetitionState,
+  record: ExpressionDiagnosticRecord,
+): ExpressionDiagnosticRepetitionState {
+  const admitted = record.event !== null && record.admission !== null;
+  const text = record.contextualText ?? record.realization?.text ?? null;
+  return Object.freeze({
+    ...prior,
+    admittedDecisions: prior.admittedDecisions + (admitted ? 1 : 0),
+    unadmittedDecisions: prior.unadmittedDecisions + (admitted ? 0 : 1),
+    unrealizedAdmittedDecisions: prior.unrealizedAdmittedDecisions + (admitted && text === null ? 1 : 0),
+    families: admitted ? incrementRepetitionCounts(prior.families, record.intent.family) : prior.families,
+    actors: admitted ? incrementRepetitionCounts(prior.actors, record.intent.sourceActorId) : prior.actors,
+    lines: admitted && text !== null ? incrementRepetitionCounts(prior.lines, text) : prior.lines,
+    reasons: incrementRepetitionCounts(prior.reasons, record.reason),
+  });
 }
 
 export function selectExpressionDiagnostics(

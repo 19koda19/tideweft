@@ -184,6 +184,7 @@ import {
   type SituatedExpressionState,
 } from "./situatedExpression";
 import {
+  advanceExpressionDiagnosticExposure,
   appendExpressionDiagnostic,
   auditExpressionDiagnosticKnowledge,
   captureExpressionDiagnosticHumanAudience,
@@ -192,6 +193,7 @@ import {
   previewExpressionDiagnostic,
   previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
+  reportExpressionDiagnosticRepetition,
   selectExpressionDiagnostics,
   setExpressionDiagnosticEnabled,
   type ExpressionDiagnosticReason,
@@ -20015,7 +20017,19 @@ export async function createTideweftRuntime(
     // the fallible authoritative tick has returned successfully. A fail-closed
     // rollback can restore the event/text queue, but cannot unplay an escaped
     // sound.
-    if (import.meta.env.DEV) expressionDiagnosticState = committedExpressionDiagnostics;
+    if (import.meta.env.DEV) {
+      expressionDiagnosticState = committedExpressionDiagnostics;
+      // The ordinary frame loop also accepts paused/title no-op callbacks.
+      // Match tick's entry gate, not merely the wrapper's successful return.
+      if (expressionDiagnosticState?.enabled === true
+        && !prior.session.paused && !prior.session.titleVisible && !prior.session.quietHourVisible) {
+        try {
+          expressionDiagnosticState = advanceExpressionDiagnosticExposure(expressionDiagnosticState, FIXED_STEP_MS);
+        } catch {
+          // Optional repetition inspection cannot veto a committed tick or audio.
+        }
+      }
+    }
     releaseCommittedAudio(committedWorldAcousticAudio);
     return true;
   }
@@ -20299,6 +20313,7 @@ export async function createTideweftRuntime(
           expressionDiagnosticState!, sequence, overrides,
         ),
         auditKnowledge: (query) => auditExpressionDiagnosticKnowledge(expressionDiagnosticState!, query),
+        reportRepetition: () => reportExpressionDiagnosticRepetition(expressionDiagnosticState!),
       } satisfies SituatedExpressionDiagnostics),
     } : {}),
     getPerformanceTelemetry,

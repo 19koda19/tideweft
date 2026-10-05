@@ -335,6 +335,8 @@ inspector.previewListening(keeper?.sequence);
 inspector.previewListening(keeper?.sequence, { ambientNoise: 1 });
 // Check captured source validation, selected human hearing and retained beliefs:
 inspector.auditKnowledge({ meaning: "keeper-secure-store-response" });
+// Capture-period repetition totals, including successful quiet-step exposure:
+inspector.reportRepetition();
 ```
 
 It is default-off, development-only and bounded to 64 copied decisions.
@@ -362,6 +364,16 @@ hearing and post-transaction belief retention. Only the existing keeper report
 has an NPC factual decoder; other speech remains sound-only. Uncaptured data
 and player comprehension are not certified. The audit is read-only, not a
 portable attestation or a complete knowledge auditor.
+`reportRepetition()` reports captured decision/reason totals and admitted-decision
+family, actor and wording counts across ring eviction. Contextual wording takes
+precedence over catalog fallback. Each group keeps its first 64 keys and reports
+untracked occurrences; a ranked list with overflow is not exhaustive. Rates use
+successful accepted simulation time, including quiet steps—not wall or civil
+minutes, unique world events, committed audio or captions. Paused/failed/disabled
+steps add nothing; zero exposure or counter saturation gives null rates.
+Reset/new-world/reload clear totals; disabling preserves prior totals. Reports
+and hypothetical previews cannot add counts. Uncaptured producers, settlement
+density, profanity and long-play annoyance are not certified by this aid.
 Production web and packaged builds expose no inspector. See
 the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
 

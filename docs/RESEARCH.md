@@ -1616,6 +1616,50 @@ focused/domain passes do not certify the entire corrected head. Runtime, schema,
 supported readers, dependencies, upstream and existing production artifacts are
 unchanged. No release or directive transition occurred.
 
+#### Bounded captured-expression repetition inspection — 2026-10-05
+
+The local candidate based on `747619a` extends the existing default-off DEV
+inspector, not gameplay or hearing. Its 64-record ring alone cannot retain
+capture-period repetition or measure quiet exposure. Bounded first-seen groups
+now count actual logged decisions/reasons and admitted-decision family, source
+and supplied wording; overflow is explicit. These are not unique world-event,
+audio, caption or settlement-density counts. The Architecture inspection
+contract owns the API and its exclusions.
+
+Nine synthetic unit cases include 2,000 logged decisions, ring eviction,
+contextual wording, 64-key overflow, deterministic ranking, detached/frozen
+reports, clone failure and saturation. They establish counter behavior only,
+not actual producer rates or thousands of gameplay events. Joint diagnostics
+and repetition tests pass two files/77 tests in1.21s with
+`npx vitest run src/game/situatedExpressionDiagnostics.test.ts
+src/game/situatedExpressionRepetition.test.ts --maxWorkers=1 --no-cache`.
+
+The real runtime keeper action supplies one admitted response. Ten successful
+quiet steps contribute1,000ms despite producing no further decision; disabled
+capture contributes nothing. The short-window ratio60 per accepted simulation
+minute is an extrapolated decision/exposure ratio, not an observed speech rate
+over a minute. A new title/no-op characterization initially fails: the first
+diagnostic hook incorrectly counts2callbacks/200ms because the wrapper succeeds
+when `tick` returns without playing. Matching the existing tick-entry pause,
+title and Quiet Hour gate fixes inspection only. Actual quiet/resume frames then
+retain exactly7enabled steps out of9accepted steps; disabled and paused frames
+do not inflate the denominator. Full save/UI/render/audio parity, reset/reload,
+pure queries and failure isolation pass all six runtime-inspector cases in17.67s.
+A late interval failure preserves nine prior steps and discards provisional
+source/audience changes; failed exposure inspection cannot veto committed audio.
+
+Existing kernel/channel/reception/knowledge tests pass four files/55. The
+unchanged introduction-save/vocal-audio rollback case passes1, and both current
+mixed shelter-whine/Promise-fall/cargo cases pass2. Maintained critical smoke
+passes six/105; typecheck and production web build pass. Static nested-path smoke
+passes five files/4,733,775 bytes. Production JavaScript remains byte-identical
+to the prior inspector checkpoint: `index-DigJMANA.js`,4,619,056 bytes, SHA256
+`74f37358efa18d5ae52afb10921af99d3f6c5a0ce0a4a58ee198accf32cbea4a`;
+none of seven inspected diagnostic markers is present. No new browser/audio/AT/
+mobile/desktop-package/performance/hours or current-head cumulative certificate
+is claimed. Broader Voice/lab closure remains open. Schema49/carry14, readers,
+dependencies, upstream sources and release/major-directive order are unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

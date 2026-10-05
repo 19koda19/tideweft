@@ -92,9 +92,13 @@ async function keeperRun(enabled: boolean) {
       audio: structuredClone(play.mock.calls),
     };
     const sequence = decisions.records[0]?.sequence ?? 1;
+    const initialRepetition = inspector.reportRepetition();
     const initialAudit = inspector.auditKnowledge();
     const baseline = inspector.previewListening(sequence);
     const masked = inspector.previewListening(sequence, { ambientNoise: 1 });
+    inspector.preview(sequence);
+    inspector.replayProducer(sequence);
+    expect(inspector.reportRepetition()).toEqual(initialRepetition);
     expect(inspector.getSnapshot()).toEqual(beforePreview.decisions);
     expect(runtime.getRenderView()).toEqual(beforePreview.view);
     expect(runtime.getUIView()).toEqual(beforePreview.ui);
@@ -109,8 +113,13 @@ async function keeperRun(enabled: boolean) {
     const ui = structuredClone(runtime.getUIView());
     const audio = structuredClone(play.mock.calls);
     const audienceDecisions = inspector.getSnapshot();
+    const repetition = inspector.reportRepetition();
     const audienceAudit = inspector.auditKnowledge();
     const filteredAudienceAudit = inspector.auditKnowledge({ meaning: "keeper-secure-store-response" });
+    inspector.preview(sequence);
+    inspector.replayProducer(sequence);
+    inspector.previewListening(sequence);
+    expect(inspector.reportRepetition()).toEqual(repetition);
     expect(inspector.getSnapshot()).toEqual(audienceDecisions);
     expect(runtime.getRenderView()).toEqual(view);
     expect(runtime.getUIView()).toEqual(ui);
@@ -125,6 +134,15 @@ async function keeperRun(enabled: boolean) {
     expect(inspector.reset()).toMatchObject({
       enabled, totalCount: 0, evictedCount: 0, records: [],
     });
+    expect(inspector.reportRepetition()).toMatchObject({
+      scope: "captured-expression-repetition", enabled,
+      totalCount: 0, evictedCount: 0, retainedCount: 0,
+      acceptedFixedSteps: 0, acceptedSimulationMs: 0,
+      admittedDecisions: 0, unadmittedDecisions: 0, unrealizedAdmittedDecisions: 0,
+      saturated: false,
+      families: { entries: [], untrackedCount: 0 }, actors: { entries: [], untrackedCount: 0 },
+      lines: { entries: [], untrackedCount: 0 }, reasons: { entries: [], untrackedCount: 0 },
+    });
     expect(inspector.previewListening(sequence)).toBeNull();
     expect(inspector.auditKnowledge()).toMatchObject({
       scope: "captured-factual-knowledge-audit", enabled, totalCount: 0, records: [],
@@ -138,7 +156,7 @@ async function keeperRun(enabled: boolean) {
     return {
       repository, pending, final: repository.snapshot(), decisions, caption,
       baseline, masked, audio, view, ui, initialAudit, audienceDecisions,
-      audienceAudit, filteredAudienceAudit, selectedHumans,
+      audienceAudit, filteredAudienceAudit, selectedHumans, initialRepetition, repetition,
     };
   } finally { hearing.mockRestore(); runtime.destroy(); }
 }
@@ -152,6 +170,14 @@ describe("development situated-expression inspector", () => {
     expect(control.masked).toBeNull();
     expect(control.initialAudit.records).toEqual([]);
     expect(control.audienceAudit.records).toEqual([]);
+    expect(control.repetition).toMatchObject({
+      scope: "captured-expression-repetition", enabled: false,
+      totalCount: 0, evictedCount: 0, retainedCount: 0,
+      acceptedFixedSteps: 0, acceptedSimulationMs: 0,
+      admittedDecisions: 0, unadmittedDecisions: 0,
+      families: { entries: [], untrackedCount: 0 }, actors: { entries: [], untrackedCount: 0 },
+      lines: { entries: [], untrackedCount: 0 }, reasons: { entries: [], untrackedCount: 0 },
+    });
     expect(observed.decisions.records).toHaveLength(1);
     const decision = observed.decisions.records[0]!;
     expect(decision).toMatchObject({
@@ -165,6 +191,28 @@ describe("development situated-expression inspector", () => {
       realization: { text: observed.caption?.text },
     });
     expect(decision.event?.eventId).toBe(observed.caption?.id);
+    expect(observed.initialRepetition).toMatchObject({
+      scope: "captured-expression-repetition", enabled: true,
+      acceptedFixedSteps: 0, acceptedSimulationMs: 0,
+      totalCount: 1, evictedCount: 0, retainedCount: 1,
+      admittedDecisions: 1, unadmittedDecisions: 0, unrealizedAdmittedDecisions: 0,
+      saturated: false,
+      families: { entries: [{ key: decision.intent.family, count: 1, perAcceptedSimulationMinute: null }], untrackedCount: 0 },
+      actors: { entries: [{ key: decision.intent.sourceActorId, count: 1, perAcceptedSimulationMinute: null }], untrackedCount: 0 },
+      lines: { entries: [{ key: decision.realization!.text, count: 1, perAcceptedSimulationMinute: null }], untrackedCount: 0 },
+      reasons: { entries: [{ key: decision.reason, count: 1, perAcceptedSimulationMinute: null }], untrackedCount: 0 },
+    });
+    expect(observed.repetition).toMatchObject({
+      scope: "captured-expression-repetition", enabled: true,
+      acceptedFixedSteps: 10, acceptedSimulationMs: 1_000,
+      totalCount: 1, evictedCount: 0, retainedCount: 1,
+      admittedDecisions: 1, unadmittedDecisions: 0, unrealizedAdmittedDecisions: 0,
+      saturated: false,
+      families: { entries: [{ key: decision.intent.family, count: 1, perAcceptedSimulationMinute: 60 }], untrackedCount: 0 },
+      actors: { entries: [{ key: decision.intent.sourceActorId, count: 1, perAcceptedSimulationMinute: 60 }], untrackedCount: 0 },
+      lines: { entries: [{ key: decision.realization!.text, count: 1, perAcceptedSimulationMinute: 60 }], untrackedCount: 0 },
+      reasons: { entries: [{ key: decision.reason, count: 1, perAcceptedSimulationMinute: 60 }], untrackedCount: 0 },
+    });
     expect(observed.initialAudit).toMatchObject({
       scope: "captured-factual-knowledge-audit", enabled: true, totalCount: 1,
       records: [{
@@ -260,7 +308,10 @@ describe("development situated-expression inspector", () => {
       expect.objectContaining({ receipt: expect.objectContaining({ observerId: decision.intent.sourceActorId }), retainedBelief: false }),
     ]);
     const diagnosticObjects = objectGraph([observed.decisions, observed.audienceDecisions]);
-    for (const audit of [observed.initialAudit, observed.audienceAudit, observed.filteredAudienceAudit]) {
+    for (const audit of [
+      observed.initialAudit, observed.audienceAudit, observed.filteredAudienceAudit,
+      observed.initialRepetition, observed.repetition,
+    ]) {
       for (const object of objectGraph(audit)) {
         expect(Object.isFrozen(object)).toBe(true);
         expect(diagnosticObjects.has(object)).toBe(false);
@@ -310,6 +361,8 @@ describe("development situated-expression inspector", () => {
         "expressionDiagnostics", "producerContext", "listeningContext", "candidateInput",
         "captured-player-listening-preview", "previewListening",
         "knowledgeSource", "humanListeners", "retainedBelief", "captured-factual-knowledge-audit", "auditKnowledge",
+        "captured-expression-repetition", "reportRepetition", "acceptedFixedSteps", "acceptedSimulationMs",
+        "unrealizedAdmittedDecisions",
       ]) expect(record.worldJson).not.toContain(marker);
     }
     const restored = await createTideweftRuntime(observed.repository);
@@ -320,9 +373,18 @@ describe("development situated-expression inspector", () => {
       });
       expect(restored.expressionDiagnostics?.previewListening(decision.sequence)).toBeNull();
       expect(restored.expressionDiagnostics?.auditKnowledge().records).toEqual([]);
+      expect(restored.expressionDiagnostics?.reportRepetition()).toMatchObject({
+        enabled: false, totalCount: 0, retainedCount: 0,
+        acceptedFixedSteps: 0, acceptedSimulationMs: 0, admittedDecisions: 0, unadmittedDecisions: 0,
+        families: { entries: [], untrackedCount: 0 }, actors: { entries: [], untrackedCount: 0 },
+        lines: { entries: [], untrackedCount: 0 }, reasons: { entries: [], untrackedCount: 0 },
+      });
       restored.expressionDiagnostics?.setEnabled(true);
       expect(restored.expressionDiagnostics?.previewListening(decision.sequence)).toBeNull();
       expect(restored.expressionDiagnostics?.auditKnowledge().records).toEqual([]);
+      expect(restored.expressionDiagnostics?.reportRepetition()).toMatchObject({
+        enabled: true, totalCount: 0, acceptedFixedSteps: 0, acceptedSimulationMs: 0,
+      });
     } finally { restored.destroy(); }
   });
 
@@ -335,8 +397,87 @@ describe("development situated-expression inspector", () => {
     expect(observed.decisions.records).toEqual([]);
     expect(observed.baseline).toBeNull();
     expect(observed.masked).toBeNull();
+    expect(observed.repetition).toMatchObject({
+      acceptedFixedSteps: 10, acceptedSimulationMs: 1_000, admittedDecisions: 0, unadmittedDecisions: 0,
+    });
     expect(observed.pending.worldJson).toBe(control.pending.worldJson);
     expect(observed.final.worldJson).toBe(control.final.worldJson);
+    expect(observed.audio).toEqual(control.audio);
+  });
+
+  it("counts quiet accepted steps but not disabled, paused, title or no-op frames", async () => {
+    const runtime = await createTideweftRuntime(new MemoryRepository());
+    try {
+      const inspector = runtime.expressionDiagnostics;
+      if (inspector === undefined) throw new Error("Development inspector is unavailable");
+      inspector.setEnabled(true);
+      const title = inspector.reportRepetition();
+      steps(runtime, 2);
+      expect(inspector.reportRepetition()).toEqual(title);
+      expect(title).toMatchObject({ acceptedFixedSteps: 0, acceptedSimulationMs: 0, totalCount: 0 });
+
+      runtime.dispatchUI({
+        type: "new-world", seed: "phase ten glass ebb", posture: "journey", sessionShape: "wander",
+      });
+      play.mockClear();
+      // Fewer than ten idle steps never reaches a world-tick animal producer.
+      // Exposure is nevertheless real accepted simulation, not record count.
+      steps(runtime, 3);
+      const quiet = inspector.reportRepetition();
+      expect(quiet).toMatchObject({
+        enabled: true, acceptedFixedSteps: 3, acceptedSimulationMs: 300,
+        totalCount: 0, retainedCount: 0, admittedDecisions: 0, unadmittedDecisions: 0,
+        families: { entries: [], untrackedCount: 0 }, actors: { entries: [], untrackedCount: 0 },
+        lines: { entries: [], untrackedCount: 0 }, reasons: { entries: [], untrackedCount: 0 },
+      });
+      expect(inspector.getSnapshot().records).toEqual([]);
+      expect(play.mock.calls).toEqual([]);
+
+      inspector.setEnabled(false);
+      steps(runtime, 2);
+      expect(inspector.reportRepetition()).toEqual({ ...quiet, enabled: false });
+      inspector.setEnabled(true);
+      steps(runtime, 0);
+      expect(inspector.reportRepetition()).toEqual(quiet);
+
+      runtime.dispatchUI({ type: "quiet-hour", action: "open" });
+      steps(runtime, 3);
+      expect(inspector.reportRepetition()).toEqual(quiet);
+      runtime.dispatchUI({ type: "quiet-hour", action: "continue" });
+      steps(runtime, 2);
+      const resumed = inspector.reportRepetition();
+      expect(resumed).toMatchObject({ acceptedFixedSteps: 5, acceptedSimulationMs: 500, totalCount: 0 });
+
+      runtime.dispatchUI({ type: "open-title" });
+      steps(runtime, 3);
+      expect(inspector.reportRepetition()).toEqual(resumed);
+      runtime.dispatchUI({ type: "resume-world" });
+      steps(runtime, 2);
+      expect(inspector.reportRepetition()).toMatchObject({
+        acceptedFixedSteps: 7, acceptedSimulationMs: 700, totalCount: 0,
+      });
+      expect(inspector.getSnapshot().records).toEqual([]);
+    } finally { runtime.destroy(); }
+  });
+
+  it("isolates an exposure observer failure after successful steps without vetoing keeper authority or audio", async () => {
+    const control = await keeperRun(false);
+    const exposure = vi.spyOn(diagnostics, "advanceExpressionDiagnosticExposure").mockImplementation(() => {
+      throw new Error("developer exposure observer failed");
+    });
+    const observed = await keeperRun(true);
+    expect(exposure).toHaveBeenCalled();
+    expect(observed.decisions.records).toHaveLength(1);
+    expect(observed.audienceAudit.records[0]).toMatchObject({
+      sourceStatus: "validated", playerReceiptStatus: "matching-retained-receipt",
+    });
+    expect(observed.repetition).toMatchObject({
+      acceptedFixedSteps: 0, acceptedSimulationMs: 0, admittedDecisions: 1, unadmittedDecisions: 0,
+    });
+    expect(observed.pending.worldJson).toBe(control.pending.worldJson);
+    expect(observed.final.worldJson).toBe(control.final.worldJson);
+    expect(observed.view).toEqual(control.view);
+    expect(observed.ui).toEqual(control.ui);
     expect(observed.audio).toEqual(control.audio);
   });
 
@@ -360,6 +501,13 @@ describe("development situated-expression inspector", () => {
         sourceStatus: "validated", playerReceiptStatus: "matching-retained-receipt", humanListeners: null, issues: [],
       });
       steps(runtime, 9);
+      const beforeFailureDiagnostics = inspector.getSnapshot();
+      const beforeFailureRepetition = inspector.reportRepetition();
+      expect(beforeFailureDiagnostics.records).toEqual(committed.records);
+      expect(inspector.auditKnowledge()).toEqual(committedAudit);
+      expect(beforeFailureRepetition).toMatchObject({
+        acceptedFixedSteps: 9, acceptedSimulationMs: 900, admittedDecisions: 1, unadmittedDecisions: 0,
+      });
       await runtime.save();
       const beforeFailureRecord = repository.snapshot();
       const beforeFailure = JSON.parse(beforeFailureRecord.worldJson) as Record<string, unknown>;
@@ -374,7 +522,9 @@ describe("development situated-expression inspector", () => {
             record.sequence === committed.records[0]?.sequence && (record.humanListeners?.length ?? 0) > 0
           )))).toBe(true);
         expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
-        expect(inspector.getSnapshot()).toEqual(committed);
+        expect(inspector.getSnapshot()).toEqual(beforeFailureDiagnostics);
+        expect(inspector.getSnapshot().records).toEqual(committed.records);
+        expect(inspector.reportRepetition()).toEqual(beforeFailureRepetition);
         expect(inspector.auditKnowledge()).toEqual(committedAudit);
         expect(repository.snapshot()).toEqual(beforeFailureRecord);
         expect(play.mock.calls.filter(([cue]) => cue !== "warning")).toEqual(audio.filter(([cue]) => cue !== "warning"));

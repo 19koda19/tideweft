@@ -1181,6 +1181,29 @@ Uncaptured provenance/listeners, unsupported semantic transfer and player
 comprehension remain explicitly outside this partial factual-audit spine;
 the complete knowledge-leak auditor and broader labs remain open.
 
+`reportRepetition()` retains capture-period totals separately from the 64-record
+inspection ring. It counts captured decisions and reasons, and groups decisions
+with an event and admission by semantic family, source actor and exact supplied
+contextual wording (otherwise the catalog realization). This does not revalidate
+an admission, deduplicate world events or count committed audio/captions. Each
+group retains only its first 64 keys; existing keys continue counting, while
+untracked-key occurrences are reported explicitly. Ranked entries are therefore
+not a complete top-frequency list when overflow occurs. Reset/new-world/reload
+clear these totals; disabling capture preserves prior totals but adds nothing.
+
+The denominator is successful accepted fixed-step time, including quiet steps,
+published only after the full transaction and due save preparation succeed.
+Paused, disabled and failed steps add no exposure. Rates are per **accepted
+simulation minute**, not elapsed wall time or the civil clock; accelerated WAIT
+and recovery still count their ordinary accepted steps. Zero exposure or unsafe
+counter saturation makes rates unavailable. Preview/replay/audit operations add
+no decisions or exposure. Reports are detached/frozen and retain the existing
+default-off, no-save, failure-isolation and production-exclusion boundaries.
+Uncaptured producers/physical sounds, failed diagnostic copies, settlement
+density, profanity classification, annoyance and hours-long exposure remain
+outside this partial inspection aid; synthetic counter tests are not gameplay
+frequency evidence.
+
 The separate read-only preview reruns only the existing expression kernel from
 copied prior state, with explicitly supported semantic overrides. It cannot submit an
 event or simulate a domain action, physical recency, capacity, propagation,
