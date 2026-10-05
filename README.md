@@ -323,6 +323,9 @@ const snapshot = inspector.getSnapshot({ sourceActorId: "player:local" });
 inspector.preview(snapshot.records[0]?.sequence, { variantSeed: 43 });
 // For a captured real traversal decision, replay its producer policy + kernel:
 inspector.replayProducer(snapshot.records[0]?.sequence);
+// The same replay also supports the current guardian shelter-whine producer:
+const whine = inspector.getSnapshot({ meaning: "guardian-dog-shelter-whine" }).records[0];
+inspector.replayProducer(whine?.sequence);
 ```
 
 It is default-off, development-only and bounded to 64 copied decisions.
@@ -332,10 +335,11 @@ are global. `reset()` clears history without changing gameplay. Catalog wording,
 optional contextual text and player receipt are separate; absent context does
 not establish silence or unheard audio. Previews are hypothetical kernel
 results, not domain/hearing/personality/relationship simulations or a complete
-expression lab. `replayProducer()` is available only for retained real player
-traversal inputs; it checks the mapped intent against the recorded decision and
-does not rerun physical transactions, recency, capacity or hearing. Other
-producers return null. Refetch the snapshot after reset: sequence numbers may
+expression lab. `replayProducer()` supports retained real player traversal and
+guardian shelter-whine inputs; it checks the mapped intent against the recorded
+decision and does not rerun physical transactions, weather exposure, kennel
+custody, shelter travel, recency, capacity or hearing. Other producers return
+null. Refetch the snapshot after reset: sequence numbers may
 be reused. Production web and packaged builds expose no inspector. See
 the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
 

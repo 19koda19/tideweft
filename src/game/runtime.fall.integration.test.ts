@@ -90,6 +90,7 @@ import type { PlayerExpressionRecencyState } from "./playerExpressionRecency";
 import type { PlayerEffortRecencyState } from "./playerEffortRecency";
 import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import * as expressionChannelBank from "./situatedExpressionChannelBank";
+import * as dogExpression from "./dogSignalExpression";
 import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
@@ -2194,10 +2195,12 @@ describe("production terrain fall and physical cargo", () => {
       perceptionCarry: { ...before.perceptionCarry, intervalStartPosition: stagedPlayerPosition },
       dogActorRoster: serializeDogActorRoster(stagedRoster),
     });
+    const observerDisabledStart = repository.snapshot();
 
     soundscapePlay.mockClear();
     const runtime = await createTideweftRuntime(repository);
     expect(runtime.getUIView().saveWarning).toBeUndefined();
+    runtime.expressionDiagnostics!.setEnabled(true);
     runtime.dispatchUI({ type: "resume-world" });
     // Nine accepted neutral steps are real simulation, not an edited phase.
     // Fall on the due world step so short physical cues coexist with the call.
@@ -2297,6 +2300,34 @@ describe("production terrain fall and physical cargo", () => {
     });
     expect(incidentCueCalls("vocalization-dog-shelter-whine")).toBe(1);
     expect(incidentCueCalls("vocalization-alarm")).toBe(1);
+    const inspector = runtime.expressionDiagnostics!;
+    const dogDecisions = inspector.getSnapshot({ sourceActorId: guardian.identity.stableId }).records;
+    expect(dogDecisions).toHaveLength(1);
+    const dogDecision = dogDecisions[0]!;
+    expect(dogDecision).toMatchObject({
+      reason: "accepted",
+      event: { eventId: whineAdmission?.eventId },
+      producerContext: {
+        kind: "guardian-dog-shelter-whine",
+        input: {
+          completedTick: world.meta.completedTick + 1,
+          shelterIntentScore: whineAdmission?.kind === "guardian-dog-shelter-whine"
+            ? whineAdmission.shelterIntentScore : undefined,
+          dog: { intent: { kind: "seek-shelter", cause: { referenceId: "condition:weather-exposure" } } },
+          workingAnimals: { assignments: [expect.objectContaining({
+            currentActivity: expect.objectContaining({ activity: "defer-to-actor" }),
+          })] },
+        },
+      },
+    });
+    const beforeReplay = structuredClone({ render: mixedView, ui: runtime.getUIView(), calls: soundscapePlay.mock.calls });
+    expect(inspector.replayProducer(dogDecision.sequence)).toMatchObject({
+      scope: "captured-producer-and-kernel-replay", producerKind: "guardian-dog-shelter-whine",
+      actualRuntimeReason: "accepted", candidate: dogDecision.intent,
+      accepted: true, reason: "accepted", realization: dogDecision.realization,
+    });
+    expect({ render: runtime.getRenderView(), ui: runtime.getUIView(), calls: soundscapePlay.mock.calls })
+      .toEqual(beforeReplay);
 
     // Use actual runtime candidates with a deterministic test camera. These
     // are production layout envelopes, not browser font/glyph measurements.
@@ -2352,6 +2383,8 @@ describe("production terrain fall and physical cargo", () => {
     runtime.destroy();
     const reloaded = await createTideweftRuntime(repository);
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
+    expect(reloaded.expressionDiagnostics!.getSnapshot()).toMatchObject({ enabled: false, records: [] });
+    expect(reloaded.expressionDiagnostics!.replayProducer(dogDecision.sequence)).toBeNull();
     expect(soundscapePlay.mock.calls).toEqual(calls);
     expect(reloaded.getRenderView().acousticText?.some(({ acousticKind }) => acousticKind === "physical"))
       .toBe(false);
@@ -2368,6 +2401,63 @@ describe("production terrain fall and physical cargo", () => {
       expect(stableStringify(roundtrip[key])).toBe(stableStringify(saved[key]));
     }
     reloaded.destroy();
+
+    // Repeat exactly the same actual fixed steps from the same current save
+    // with the observer off. Full saved roots and committed audio must agree.
+    const disabledRepository = new MemoryRepository(observerDisabledStart);
+    soundscapePlay.mockClear();
+    const disabled = await createTideweftRuntime(disabledRepository);
+    try {
+      disabled.dispatchUI({ type: "resume-world" });
+      advancePlayerSteps(disabled, 9);
+      disabled.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+      advancePlayerSteps(disabled, 1);
+      disabled.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      await disabled.save();
+      expect(decodeCurrent(disabledRepository.snapshot())).toEqual(saved);
+      expect(soundscapePlay.mock.calls).toEqual(calls);
+      expect(disabled.expressionDiagnostics!.getSnapshot().records).toEqual([]);
+    } finally { disabled.destroy(); }
+
+    if (!visible) {
+      // The real whine is mapped before this later interval-closure failure.
+      // Its staged diagnostic must not survive any more than its audio/roots.
+      const failedRepository = new MemoryRepository(observerDisabledStart);
+      const failed = await createTideweftRuntime(failedRepository);
+      try {
+        failed.expressionDiagnostics!.setEnabled(true);
+        failed.dispatchUI({ type: "resume-world" });
+        advancePlayerSteps(failed, 9);
+        await failed.save();
+        const beforeFailureRecord = failedRepository.snapshot();
+        const beforeFailure = decodeCurrent(beforeFailureRecord);
+        const close = expressionChannelBank.closeSituatedExpressionChannelBankInterval;
+        let closes = 0;
+        const closure = vi.spyOn(expressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+          .mockImplementation((...args) => ++closes === 1 ? null : close(...args));
+        const mapper = vi.spyOn(dogExpression, "guardianDogShelterWhineExpressionIntent");
+        soundscapePlay.mockClear();
+        try {
+          failed.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+          advancePlayerSteps(failed, 1);
+          expect(closes).toBe(1);
+          expect(mapper.mock.results.some(({ type, value }) => type === "return"
+            && value?.meaning === "guardian-dog-shelter-whine")).toBe(true);
+          expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+          expect(failedRepository.snapshot()).toEqual(beforeFailureRecord);
+          expect(failed.expressionDiagnostics!.getSnapshot().records).toEqual([]);
+          expect(failed.expressionDiagnostics!.replayProducer(1)).toBeNull();
+          expect(incidentCueCalls("vocalization-dog-shelter-whine")).toBe(0);
+          await failed.save();
+          const rolledBack = decodeCurrent(failedRepository.snapshot());
+          for (const key of ["world", "player", "regionalTravel", "regionalEcology", "physicalCargo",
+            "dogActorRoster", "settlementWorkingAnimals", "perceptionCarry", "fieldResources",
+            "playerExpressionRecency", "promiseJourney"] as const) {
+            expect(rolledBack[key]).toEqual(beforeFailure[key]);
+          }
+        } finally { closure.mockRestore(); mapper.mockRestore(); }
+      } finally { failed.destroy(); }
+    }
   }, 60_000);
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {

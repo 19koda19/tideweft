@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { stepActorPerception } from "../sim/actorPerception";
 import { createRegionCoord } from "../sim/regions";
+import { seedFromText } from "../sim/rng";
+import { createDogActorState, replaceDogActorPerception, setDogActorIntent } from "./dogActor";
+import * as dogSignalProducer from "./dogSignalExpression";
+import type { GuardianDogShelterWhineExpressionInput } from "./dogSignalExpression";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import * as traversalProducer from "./playerTraversalExpression";
@@ -29,6 +34,11 @@ import {
   createHeardVisibleSituatedExpressionReception,
   createSelfSituatedExpressionReception,
 } from "./situatedExpressionReception";
+import {
+  createSettlementWorkingAnimalState,
+  resolveSettlementWorkingAnimalActivity,
+  stageSettlementWorkingAnimalActivity,
+} from "./settlementWorkingAnimals";
 import { createWorldPosition } from "./worldPosition";
 
 afterEach(() => vi.restoreAllMocks());
@@ -171,6 +181,66 @@ function traversalEvidence(
     weather: "storm",
     contextualText: null,
     producerContext: { kind: "player-traversal", input },
+  };
+}
+
+// The same dog/work constructors as dogSignalExpression.test.ts commit the
+// condition-owned intent and work deference. This is mapper evidence, not an
+// ordinary weather encounter, kennel/custody proof or audible observation.
+function shelterWhineInput(): GuardianDogShelterWhineExpressionInput {
+  const region = createRegionCoord(0, 0);
+  const position = createWorldPosition(region, 24_000, 24_000);
+  const originalDog = createDogActorState({
+    seed: seedFromText("guardian dog signal expression test"),
+    originRegion: region, originNamespace: "regional", habitatClass: "settlement-edge",
+    habitatKey: "guardian-signal-test-worksite", populationKey: "guardian-signal-test-dogs",
+    populationOrdinal: 0, position: createWorldPosition(region, 23_000, 24_000), heading: 0, tick: 0,
+  });
+  const perception = stepActorPerception(originalDog.perception, { tick: 1, observations: [] });
+  if (perception === null) throw new Error("whine fixture requires a current perception tick");
+  const dog = setDogActorIntent(replaceDogActorPerception(originalDog, perception), {
+    kind: "seek-shelter", cause: { kind: "condition", referenceId: "condition:weather-exposure" },
+    enteredAtTick: 1, nextThinkTick: 3,
+  });
+  const initial = createSettlementWorkingAnimalState({
+    settlementId: 11,
+    assignments: [{
+      assignmentOrdinal: 0, workerActorId: dog.identity.stableId, workerSpecies: "domestic-dog",
+      handlerActorId: "H-dog-warning-test-handler",
+      workerCustodyRelationshipId: "DOMESTIC-REL-0000000000000011",
+      protectedCustodyRelationshipId: "DOMESTIC-REL-0000000000000012",
+      protectedGroupId: "GOAT-HERD-dog-warning-test", role: "guardian",
+      worksiteId: "DOMESTIC-PEN-dog-warning-test", dutyArea: { center: position, radiusUnits: 6_000 },
+      createdAtTick: 0,
+    }],
+  });
+  const staged = stageSettlementWorkingAnimalActivity(initial, {
+    assignmentId: initial.assignments[0]!.assignmentId, tick: 1, perception,
+    welfare: { injuryPressure: 0, coldPressure: 0, heatPressure: 0, exhaustionPressure: 0, hungerPressure: 0, thirstPressure: 0 },
+    accessibility: { watch: true, investigate: true, return: true },
+    actorDisposition: { kind: "defer-to-actor", referenceId: "actor-intent:seek-shelter" },
+    workerInsideDutyArea: true,
+  });
+  if (staged === null || staged.transaction === null) throw new Error("whine fixture requires staged work deference");
+  const resolved = resolveSettlementWorkingAnimalActivity(staged.state, staged.transaction);
+  if (resolved === null) throw new Error("whine fixture requires committed work deference");
+  return { dog, workingAnimals: resolved.state, completedTick: 1, shelterIntentScore: 650_000 };
+}
+
+function shelterWhineEvidence(
+  input = shelterWhineInput(),
+  reason: ExpressionDiagnosticReason = "accepted",
+): ExpressionDiagnosticInput {
+  const intent = dogSignalProducer.guardianDogShelterWhineExpressionIntent(input);
+  if (intent === null) throw new Error("whine fixture requires a valid existing producer intent");
+  const priorState = createSituatedExpressionState();
+  const reduction = reduceSituatedExpression(priorState, intent);
+  if (reduction.event === null) throw new Error("whine fixture requires a selected kernel event");
+  return {
+    completedTick: 1, playerStepPhase: 0, intent, priorState, reason,
+    event: reason === "accepted" ? reduction.event : null,
+    admission: null, playerReception: null, sourceBelief: null, weather: "rain", contextualText: null,
+    producerContext: { kind: "guardian-dog-shelter-whine", input },
   };
 }
 
@@ -507,6 +577,11 @@ describe("captured traversal producer replay", () => {
     }
     for (const object of sourceObjects) expect(Object.isFrozen(object)).toBe(false);
     expect(record.producerContext).toEqual(source.producerContext);
+    const sourceContext = source.producerContext;
+    const recordContext = record.producerContext;
+    if (sourceContext?.kind !== "player-traversal" || recordContext?.kind !== "player-traversal") {
+      throw new Error("expected copied traversal context");
+    }
     const replay = replayExpressionDiagnosticProducer(state, 1)!;
     expect(replay).not.toBeNull();
     const recordObjects = objectGraph(record);
@@ -516,11 +591,11 @@ describe("captured traversal producer replay", () => {
       expect(Object.isFrozen(object)).toBe(true);
     }
     expect(JSON.stringify(source)).toBe(beforeSource);
-    Reflect.set(source.producerContext!.input.cargo, "cargoShock", 0);
-    Reflect.set(source.producerContext!.input.incident, "id", "player:0:traversal:8");
-    expect(record.producerContext?.input.cargo.cargoShock).toBe(520_000);
+    Reflect.set(sourceContext.input.cargo, "cargoShock", 0);
+    Reflect.set(sourceContext.input.incident, "id", "player:0:traversal:8");
+    expect(recordContext.input.cargo.cargoShock).toBe(520_000);
     expect(replay.candidate.triggerEventId).toBe("player:0:traversal:7");
-    expect(Reflect.set(record.producerContext!.input.cargo, "cargoShock", 0)).toBe(false);
+    expect(Reflect.set(recordContext.input.cargo, "cargoShock", 0)).toBe(false);
     expect(Reflect.set(replay.candidate.position, "localX", 0)).toBe(false);
     expect(JSON.stringify(state)).toBe(beforeState);
   });
@@ -639,5 +714,128 @@ describe("captured traversal producer replay", () => {
     expect(restarted.records[0]?.sequence).toBe(1);
     expect(replayExpressionDiagnosticProducer(restarted, 1)?.candidate.meaning).toBe("relief-after-near-fall");
     expect(replayExpressionDiagnosticProducer(first, 1)?.candidate.meaning).toBe("steady-after-stumble");
+  });
+});
+
+describe("captured guardian shelter-whine producer replay", () => {
+  it("replays exact fresh condition/work causes deterministically with detached frozen evidence", () => {
+    const source = structuredClone(shelterWhineEvidence());
+    const sourceBefore = JSON.stringify(source);
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), source);
+    const before = JSON.stringify(state);
+    const record = state.records[0]!;
+    const sourceContext = source.producerContext;
+    const context = record.producerContext;
+    if (sourceContext?.kind !== "guardian-dog-shelter-whine" || context?.kind !== "guardian-dog-shelter-whine") {
+      throw new Error("expected copied guardian shelter context");
+    }
+    expect(context.input.dog.intent).toMatchObject({
+      kind: "seek-shelter", cause: { kind: "condition", referenceId: "condition:weather-exposure" }, enteredAtTick: 1,
+    });
+    expect(context.input.workingAnimals.assignments[0]?.currentActivity).toMatchObject({
+      activity: "defer-to-actor", acceptedAtTick: 1,
+      cause: { kind: "actor-disposition", referenceId: "actor-intent:seek-shelter" },
+    });
+    const replay = replayExpressionDiagnosticProducer(state, 1)!;
+    expect(replay).toMatchObject({
+      scope: "captured-producer-and-kernel-replay", producerKind: "guardian-dog-shelter-whine",
+      actualRuntimeReason: "accepted", accepted: true, reason: "accepted",
+      candidate: { meaning: "guardian-dog-shelter-whine", volume: "murmur", knowledgeBasis: "self-weather-distress" },
+      realization: { text: "WHINE...", vocalization: "dog-shelter-whine" },
+    });
+    expect(replay.candidate).toEqual(record.intent);
+    expect(replayExpressionDiagnosticProducer(state, 1)).toEqual(replay);
+    const sourceObjects = objectGraph(source);
+    const recordObjects = objectGraph(record);
+    for (const object of recordObjects) {
+      expect(sourceObjects.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    for (const object of objectGraph(replay)) {
+      expect(recordObjects.has(object)).toBe(false);
+      expect(sourceObjects.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    for (const object of sourceObjects) expect(Object.isFrozen(object)).toBe(false);
+    expect(JSON.stringify(source)).toBe(sourceBefore);
+    Reflect.set(sourceContext.input, "shelterIntentScore", 1);
+    Reflect.set(sourceContext.input.dog.intent, "enteredAtTick", 0);
+    expect(context.input.shelterIntentScore).toBe(650_000);
+    expect(context.input.dog.intent.enteredAtTick).toBe(1);
+    expect(Reflect.set(context.input, "shelterIntentScore", 1)).toBe(false);
+    expect(Reflect.set(replay.candidate.position, "localX", 0)).toBe(false);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("keeps a recorded sound-budget refusal separate from hypothetical whine replay", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), shelterWhineEvidence(undefined, "sound-budget"));
+    expect(state.records[0]).toMatchObject({ reason: "sound-budget", event: null, admission: null, playerReception: null });
+    const replay = replayExpressionDiagnosticProducer(state, 1);
+    expect(replay).toMatchObject({
+      producerKind: "guardian-dog-shelter-whine", actualRuntimeReason: "sound-budget", accepted: true, reason: "accepted",
+    });
+    expect(replay?.notEvaluated).toEqual(expect.arrayContaining([
+      "physical-transaction", "physical-recency", "sample/channel-capacity", "listener-hearing", "causal-admission",
+    ]));
+  });
+
+  it("makes malformed, continued, wrong-work and mismatched shelter-score contexts unavailable", () => {
+    const evidence = shelterWhineEvidence();
+    const context = evidence.producerContext;
+    if (context?.kind !== "guardian-dog-shelter-whine") throw new Error("expected guardian fixture context");
+    const input = context.input;
+    const assignment = input.workingAnimals.assignments[0]!;
+    for (const invalid of [
+      null,
+      { ...input, dog: null },
+      { ...input, shelterIntentScore: 0 },
+      { ...input, dog: { ...input.dog, intent: { ...input.dog.intent, enteredAtTick: 0 } } },
+      { ...input, workingAnimals: { ...input.workingAnimals, assignments: [{
+        ...assignment, currentActivity: { ...assignment.currentActivity,
+          cause: { kind: "actor-disposition", referenceId: "actor-intent:retreat" } },
+      }] } },
+      { ...input, shelterIntentScore: input.shelterIntentScore + 1 },
+    ]) {
+      const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+        ...evidence,
+        producerContext: { kind: "guardian-dog-shelter-whine", input: invalid } as unknown as ExpressionDiagnosticProducerContext,
+      });
+      const before = JSON.stringify(state);
+      expect(replayExpressionDiagnosticProducer(state, 1)).toBeNull();
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("isolates dog-mapper and cloning exceptions without changing retained causes", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), shelterWhineEvidence());
+    const before = JSON.stringify(state);
+    const clone = vi.spyOn(globalThis, "structuredClone").mockImplementation(() => { throw new Error("whine copy failed"); });
+    expect(replayExpressionDiagnosticProducer(state, 1)).toBeNull();
+    clone.mockRestore();
+    vi.spyOn(dogSignalProducer, "guardianDogShelterWhineExpressionIntent").mockImplementation(() => {
+      throw new Error("whine mapper failed");
+    });
+    expect(replayExpressionDiagnosticProducer(state, 1)).toBeNull();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("retires evicted/reset whines while preserving traversal dispatch and discarded-root isolation", () => {
+    const evidence = shelterWhineEvidence();
+    const committed = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    let current = committed;
+    const traversal = traversalEvidence();
+    for (let index = 0; index < EXPRESSION_DIAGNOSTIC_CAPACITY; index += 1) {
+      current = appendExpressionDiagnostic(current, traversal);
+    }
+    expect(current.records).toHaveLength(64);
+    expect(current.evictedCount).toBe(1);
+    expect(replayExpressionDiagnosticProducer(current, 1)).toBeNull();
+    expect(replayExpressionDiagnosticProducer(current, 65)?.producerKind).toBe("player-traversal");
+    expect(replayExpressionDiagnosticProducer(committed, 2)).toBeNull();
+    expect(replayExpressionDiagnosticProducer(committed, 1)?.producerKind).toBe("guardian-dog-shelter-whine");
+    const reset = createExpressionDiagnosticState(true);
+    expect(replayExpressionDiagnosticProducer(reset, 1)).toBeNull();
+    expect(replayExpressionDiagnosticProducer(appendExpressionDiagnostic(reset, evidence), 1)?.producerKind)
+      .toBe("guardian-dog-shelter-whine");
   });
 });

@@ -1048,20 +1048,25 @@ records. Immediate UI transactions retain their existing authority boundary.
 Diagnostic failure cannot veto gameplay. These records never enter saves,
 hearing, RNG, audio or caption queues, and production builds expose no observer.
 
-For current player traversal decisions, a record may also retain the exact
-already-applied `PlayerTraversalExpressionInput`: incident, fall evaluation,
-physical-cargo outcome and event-time source position. This is a detached copy
-of the input already supplied to that domain's semantic mapper, not a world,
-inventory or hypothetical actor scan. Other producers retain null context;
-unsupported incidents without a semantic intent create no diagnostic record.
+For current player traversal and guardian shelter-whine decisions, a record
+may also retain the exact already-applied domain input. Traversal captures
+`PlayerTraversalExpressionInput`: incident, fall evaluation, physical-cargo
+outcome and event-time source position. Shelter whine captures the existing
+`GuardianDogShelterWhineExpressionInput`: bounded dog/work roots, completed tick
+and positive shelter-intent score. The runtime retains the original mapper
+input through admission only when development inspection is enabled; a real
+decision copies it into the bounded buffer. Neither path scans for hypothetical
+actors or reconstructs its cause from later roots. Other producers retain null
+context; unsupported causes without a semantic intent create no record.
 
-`replayProducer(sequence)` selects only the current buffer's retained traversal
-input, runs the existing `playerTraversalExpressionIntent`, checks exact
-agreement with the recorded intent, and then reruns its source-local kernel.
+`replayProducer(sequence)` selects only the current buffer's retained domain
+input, runs the existing traversal or shelter-whine semantic mapper, checks
+exact agreement with the recorded intent, and then reruns its source-local kernel.
 Missing/unsupported context, evicted records, invalid input, mapper failure or
 intent disagreement makes replay unavailable. It neither authenticates nor
-repeats the physical transaction, and cannot submit events, change inputs or
-overrule the actual runtime refusal. Its output explicitly excludes recency,
+repeats the physical transaction, weather exposure, kennel custody or shelter
+travel, and cannot submit events, change inputs or overrule the actual runtime
+refusal. Its output explicitly excludes recency,
 capacity, admission, hearing, presentation and uncaptured social/emotional
 state. Later world changes do not rewrite the captured cause. Reset/reload
 clears availability, but reset may reuse numeric sequences; select from a new

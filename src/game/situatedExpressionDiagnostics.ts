@@ -1,6 +1,10 @@
 import type { ActorBelief } from "../sim/actorPerception";
 import { stableStringify } from "../sim/util";
 import {
+  guardianDogShelterWhineExpressionIntent,
+  type GuardianDogShelterWhineExpressionInput,
+} from "./dogSignalExpression";
+import {
   playerTraversalExpressionIntent,
   type PlayerTraversalExpressionInput,
 } from "./playerTraversalExpression";
@@ -27,10 +31,13 @@ export type ExpressionDiagnosticReason = SituatedExpressionChannelBankReductionR
   | "porter-not-heard-or-visible";
 
 /** Exact already-applied domain facts, not a configurable gameplay command. */
-export interface ExpressionDiagnosticProducerContext {
+export type ExpressionDiagnosticProducerContext = Readonly<{
   readonly kind: "player-traversal";
   readonly input: PlayerTraversalExpressionInput;
-}
+}> | Readonly<{
+  readonly kind: "guardian-dog-shelter-whine";
+  readonly input: GuardianDogShelterWhineExpressionInput;
+}>;
 
 export interface ExpressionDiagnosticInput {
   readonly completedTick: number;
@@ -51,7 +58,7 @@ export interface ExpressionDiagnosticInput {
   readonly weather: string;
   /** Authenticated contextual wording, only when the producer supplies it. */
   readonly contextualText?: string | null;
-  /** Only the currently supported producer supplies its existing input. */
+  /** Only supported producers supply their existing event-time inputs. */
   readonly producerContext?: ExpressionDiagnosticProducerContext | null;
 }
 
@@ -96,7 +103,7 @@ export interface ExpressionDiagnosticPreview {
 
 export interface ExpressionDiagnosticProducerReplay {
   readonly scope: "captured-producer-and-kernel-replay";
-  readonly producerKind: "player-traversal";
+  readonly producerKind: ExpressionDiagnosticProducerContext["kind"];
   readonly actualRuntimeReason: ExpressionDiagnosticReason;
   readonly candidate: SituatedExpressionIntent;
   readonly accepted: boolean;
@@ -235,15 +242,18 @@ export function replayExpressionDiagnosticProducer(
   sequence: number,
 ): ExpressionDiagnosticProducerReplay | null {
   const record = state.records.find((candidate) => candidate.sequence === sequence);
-  if (record?.producerContext?.kind !== "player-traversal") return null;
+  const context = record?.producerContext;
+  if (record === undefined || context === null || context === undefined
+    || (context.kind !== "player-traversal" && context.kind !== "guardian-dog-shelter-whine")) return null;
   try {
-    const input = structuredClone(record.producerContext.input);
-    const candidate = playerTraversalExpressionIntent(input);
+    const candidate = context.kind === "player-traversal"
+      ? playerTraversalExpressionIntent(structuredClone(context.input))
+      : guardianDogShelterWhineExpressionIntent(structuredClone(context.input));
     if (candidate === null || stableStringify(candidate) !== stableStringify(record.intent)) return null;
     const reduction = reduceSituatedExpression(record.priorState, candidate);
     return freezeCopy({
       scope: "captured-producer-and-kernel-replay",
-      producerKind: "player-traversal",
+      producerKind: context.kind,
       actualRuntimeReason: record.reason,
       candidate,
       accepted: reduction.accepted,

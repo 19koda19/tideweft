@@ -1183,6 +1183,45 @@ hardware, assistive-technology, hours-of-play, cumulative or release proof.
 The preceding slice's exact-source correctness/build evidence is not rerun
 solely for this prose record. No executable or policy change was made here.
 
+#### Captured guardian shelter-whine inspection — 2026-10-04
+
+Local work over `32ebfed` adds one existing animal producer to the bounded
+development inspector. The runtime retains the exact already-mapped guardian
+input—dog/work roots, completed tick and shelter-intent score—through admission
+only when the observer is enabled. A real decision copies that input; replay
+uses the unchanged shelter-whine mapper and requires exact recorded-intent
+agreement before rerunning the copied source-local kernel. No new whine,
+animal behavior, hypothetical event, hearing or physical authority is created.
+The [inspection contract](ARCHITECTURE.md#development-expression-inspection)
+keeps weather exposure, kennel custody and physical shelter travel outside
+replay's claimed proof.
+
+Five new focused diagnostics tests preserve deterministic replay, detached
+frozen evidence, recorded-refusal separation, unavailable malformed/continuing/
+mismatched causes, exceptions and shared-buffer reset/eviction. The complete
+diagnostics file passes 46 tests. The existing visible/unseen mixed scene now
+compares observer-enabled and observer-disabled runs from the same current
+save and exact fixed-step inputs: the full saved envelope and committed audio
+calls agree. The real whine's captured intent replays exactly without changing
+render/UI/audio projections; cold reload exposes no diagnostic history. A
+later interval-closure failure occurs after the actual mapper produces the
+whine, yet publishes no record or whine audio and restores eleven relevant
+authoritative roots. Both mixed cases pass. Six selected fall/storm/capacity/
+phase-ten/mixed tests and ten affected mapper/kernel/channel/reception/
+admission/trajectory/authority/runtime-inspector files / 152 tests pass.
+The existing late introduction/save/vocal-audio rollback case, critical smoke
+/ 105 tests and context-index checks / 28 also pass.
+
+Typecheck, production web build and nested-path static smoke pass. Bundle
+SHA256 `371e42d66e4819e4fabc8d9e11b87e80d90915c1bedbb8ff495230426a91dbd9`
+contains none of the inspector API, replay, preview or new guardian-capture
+markers. Production does not retain this diagnostic input. These controlled
+fixtures and bundle inspection do not certify a native canine encounter,
+audible/assistive quality, hours-of-play, mobile hardware, desktop packaging,
+complete cumulative confidence, full expression lab or public release.
+Save49/carry14, dependencies, upstream source, physical rules, active order
+and completed directives are unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

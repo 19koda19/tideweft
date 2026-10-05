@@ -10179,11 +10179,13 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
   readonly weather: WeatherState;
   readonly observationBatches: readonly (readonly CoreEcologyObservationBatch[])[];
   readonly handlerSearchReport: SettlementWorkingAnimalHandlerSearchReport | null;
+  readonly captureShelterWhineDiagnostic?: boolean;
 }>): Readonly<{
   readonly roster: DogActorRosterState;
   readonly workingAnimals: SettlementWorkingAnimalState;
   readonly signalIntent: SituatedExpressionIntent | null;
   readonly signalShelterIntentScore: number | null;
+  readonly shelterWhineDiagnosticInput?: GuardianDogShelterWhineExpressionInput;
 }> | null {
   const assignment = input.workingAnimals.assignments[0];
   if (assignment === undefined || input.workingAnimals.assignments.length !== 1) return null;
@@ -10698,6 +10700,11 @@ function stepRuntimeSettlementWorkingDog(input: Readonly<{
     signalShelterIntentScore: shelterWhineIntent === null
       ? null
       : shelterWhineAuthority!.shelterIntentScore,
+    // Retain the exact input already mapped above, not later reconstructed roots.
+    // No copy, traversal or diagnostic reference survives when disabled.
+    ...(import.meta.env.DEV && input.captureShelterWhineDiagnostic === true && shelterWhineIntent !== null
+      ? { shelterWhineDiagnosticInput: shelterWhineAuthority! }
+      : {}),
   });
 }
 
@@ -14581,6 +14588,9 @@ export async function createTideweftRuntime(
           settlementDomesticAnimalRecovery,
           settlementWorkingAnimals,
         ),
+        ...(import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+          ? { captureShelterWhineDiagnostic: true }
+          : {}),
       });
       if (workingDogStep === null) {
         throw new Error("Settlement working dog step rejected");
@@ -15483,6 +15493,10 @@ export async function createTideweftRuntime(
                   listenerWasSleepingAtAdmission,
                 }),
           sourceBelief,
+          import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+            && isWhine && workingDogStep.shelterWhineDiagnosticInput !== undefined
+            ? { kind: "guardian-dog-shelter-whine", input: workingDogStep.shelterWhineDiagnosticInput }
+            : null,
         );
         if (
           admitted
