@@ -788,6 +788,43 @@ describe("core ecology cross-species perception bridge", () => {
     expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, input)).toBeNull();
   });
 
+  it.each([
+    ["missing tide", undefined],
+    ["null tide", null],
+    ["missing level", {}],
+    ["nonfinite level", { level: Number.NaN }],
+    ["negative level", { level: -1 }],
+    ["negative zero level", { level: -0 }],
+    ["fractional level", { level: 0.5 }],
+    ["excessive level", { level: FIXED_POINT + 1 }],
+  ])("rejects %s rather than guessing the alarm water field", (_name, tide) => {
+    const current = fixture("malformed alarm tide fails closed");
+    const gull = wildlife(current, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const listener = actorAddress("H-invalid-tide-listener", "human", OBSERVER_X, OBSERVER_Y, 0);
+    const input = {
+      ...frame(current, [alarmed.actor], { playerAddress: listener }), tick: 2,
+    };
+    expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, input)).not.toBeNull();
+    // Preserve registration while exercising the newly consumed environmental
+    // field at this unknown-input boundary; this is not a corrupt save fixture.
+    Object.defineProperty(current.world, "tide", { value: tide, enumerable: true });
+    expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, input)).toBeNull();
+  });
+
+  it.each([0, FIXED_POINT])("accepts the valid tide-level boundary %s for alarm hearing", (level) => {
+    const current = fixture("valid alarm tide bounds");
+    const gull = wildlife(current, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const listener = actorAddress("H-valid-tide-listener", "human", OBSERVER_X, OBSERVER_Y, 0);
+    Object.defineProperty(current.world, "tide", {
+      value: { ...current.world.tide, level }, enumerable: true,
+    });
+    expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, {
+      ...frame(current, [alarmed.actor], { playerAddress: listener }), tick: 2,
+    })).not.toBeNull();
+  });
+
   it("keeps a small-prey foot alarm audible nearby without treating it as a full alarm-call interrupt", () => {
     const current = fixture("rabbit foot alarm has bounded reach");
     const rabbit = wildlife(current, "marsh-rabbit", OBSERVER_X, OBSERVER_Y, 0, 0);

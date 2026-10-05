@@ -1480,6 +1480,21 @@ Typecheck and production web/static nested-path smoke pass; bundle
 `08bdd2359781c00cb51f2cfb6d02eea21586a9ed482a97f546ef3854cc583676`.
 The existing large-chunk warning remains.
 
+Subsequent boundary review found that this newly connected consumer had not
+validated the tide scalar before calling the shared calculator. Eight new
+malformed-tide cases fail before the guard: missing/null tide throws; missing,
+nonfinite, negative, negative-zero, fractional and excessive levels are guessed
+through normalization. The alarm admission boundary now requires a plain tide
+record and the existing safe-integer fixed-point range; shared hydrology and
+its tolerant normalization are unchanged. Both valid endpoints remain accepted.
+Core perception passes31 tests, the same pending-alarm save/reload case passes,
+and maintained smoke passes105 tests. Typecheck, production build and static
+smoke pass again. Guarded source SHA256 is
+`311a165ce56b0d03970584946191a3f9f1ca3efc47c6bdc8182e67ff187f3ca1`;
+new bundle `index-BHcMAKh3.js` SHA256
+`e45e78b63c97704be0f8c23f21b723122ab83f48b94e47937b509c07db2d05bc`.
+This is malformed mutable-view boundary evidence, not observed save corruption.
+
 These are controlled unit/current-save proofs, not ordinary native encounter,
 audible/AT, mobile, desktop-package, hours, performance or full-cumulative
 certification. Terrain/foliage/interior propagation and wider Voice gates stay

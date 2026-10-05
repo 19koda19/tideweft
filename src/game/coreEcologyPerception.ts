@@ -460,7 +460,12 @@ export function propagateCoreEcologyAlarmObservationBatches(
 ): readonly CoreEcologyAlarmObservationBatch[] | null {
   const frame = canonicalPerceptionFrame(frameValue);
   const event = canonicalAlarmEvent(eventValue, frame, freshEmitterValue);
-  if (frame === null || event === null) return null;
+  if (
+    frame === null
+    || event === null
+    || !plainRecord(frame.world.tide)
+    || !fixedUnit(frame.world.tide.level)
+  ) return null;
   const emission = coreEcologyAlarmSignalProfile(event.species);
   const batches: CoreEcologyAlarmObservationBatch[] = [];
 
