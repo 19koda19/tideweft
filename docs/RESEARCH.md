@@ -1535,6 +1535,57 @@ certificate. Full expression/sound labs and the knowledge auditor remain open.
 Schema49/carry14, supported readers, dependencies and upstream sources are
 unchanged; no release or directive transition occurred.
 
+#### Captured current factual knowledge audit — 2026-10-05
+
+Local work over `acfe447` extends the existing default-off,64-record DEV
+inspector rather than adding comprehension or a second sensory simulation.
+Event-time source checks call the existing keeper/introduction/warning/weather
+validators. An optional observer copies the actual successful selected-human
+listening frame; post-transaction finalization joins fresh retained beliefs by
+listener, tick and observation ID. Player receipt matching is not comprehension.
+The current keeper decoder alone carries anonymous `store-secured-report`
+above its existing450000 threshold. Other speech conveys its sound class only.
+Missing source/listener capture is reported as unavailable, not certified absent.
+
+Ten new human-observer cases characterize clear/weak/masked contact, own-source
+exclusion, unavailable geometry, malformed/late-invalid frames, detached frozen
+copies, throwing callbacks, production exclusion and the existing64×8 bound.
+Before implementation eight fail and two pass; final human perception passes
+43/43. A new synthetic warning receipt initially exposed a diagnostic-validator
+gap: without a decoder it accepted `large-predator` understanding. Checking the
+existing `situatedExpressionSoundClass` fixes that report without changing
+hearing. All13 source/listener audit tests pass, including actual committed
+constructors for the four source validators. Synthetic receipt-shape tests do
+not establish ordinary hearing or player-accessible encounters.
+
+`npx vitest run src/game/humanPerception.test.ts
+src/game/situatedExpressionDiagnostics.test.ts
+src/game/situatedExpressionKnowledgeAudit.test.ts
+src/game/settlementKeeperStoreResponseExpression.test.ts
+src/game/residentIntroductionExpression.test.ts
+src/game/humanDangerWarningExpression.test.ts
+src/game/residentWeatherHoldExpression.test.ts --maxWorkers=1 --no-cache`
+passes seven files/154 tests. Runtime diagnostics pass four tests, proving
+the real keeper UI action, selected human observations and saved fresh beliefs,
+enabled/off full-save/audio/UI parity, immutable query reports, reset/reload
+retirement and provisional-audience rollback after a real late interval failure.
+Unchanged introduction/save/audio rollback, keeper pending-save/one-time
+receipt and two visible/unseen mixed whine/fall/cargo cases pass together:
+three files/four selected tests,137 excluded. Maintained smoke passes6/105;
+typecheck, context28 and player-facing policy39 checks pass.
+
+Production web build and nested-path static smoke pass five files/4,733,775B.
+Bundle `index-DigJMANA.js` SHA256
+`74f37358efa18d5ae52afb10921af99d3f6c5a0ce0a4a58ee198accf32cbea4a`
+contains none of nine inspected exact diagnostic markers. Substring searching
+`knowledgeSource` also matches the legitimate existing species field
+`knowledgeSources`; exact-marker inspection distinguishes that unrelated code.
+The existing large-chunk warning remains. No new native browser/audio/AT/mobile/
+desktop-package/hours/performance or current-head cumulative certificate is
+claimed. The full knowledge auditor, expression/sound labs and broader Voice
+closure remain open. Schema49/carry14, supported readers, dependencies and
+upstream sources are unchanged; no release or directive transition occurred.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

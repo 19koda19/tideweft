@@ -1,5 +1,10 @@
 import type { ActorBelief } from "../sim/actorPerception";
+import type { ResidentState } from "../sim/types";
 import { stableStringify } from "../sim/util";
+import { HUMAN_PERCEPTION_MAX_RESIDENTS, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
+  type HumanSupplementalListeningReceipt } from "./humanPerception";
+import { EXPRESSION_KNOWLEDGE_SOURCE_MEANINGS, expressionKnowledgeListenerIssues,
+  type ExpressionKnowledgeSourceCheck, type ExpressionKnowledgeListenerAudit } from "./situatedExpressionKnowledgeAudit";
 import { evaluateAudibleContact, type AudibleContact, type AudibleContactInput } from "./perception";
 import {
   guardianDogShelterWhineExpressionIntent,
@@ -19,7 +24,7 @@ import {
 } from "./situatedExpression";
 import type { SituatedExpressionAdmissionRecord } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBankReductionReason } from "./situatedExpressionChannelBank";
-import type { SituatedExpressionReception } from "./situatedExpressionReception";
+import { canonicalizeSituatedExpressionReception, type SituatedExpressionReception } from "./situatedExpressionReception";
 
 /** Development evidence only: never a save root, command, or hearing authority. */
 export const EXPRESSION_DIAGNOSTIC_CAPACITY = 64;
@@ -69,6 +74,8 @@ export interface ExpressionDiagnosticInput {
   readonly producerContext?: ExpressionDiagnosticProducerContext | null;
   /** Null/absent is uncaptured; a captured null contact is valid inaudibility. */
   readonly listeningContext?: ExpressionDiagnosticListeningContext | null;
+  /** Small verdict from an existing event-time validator, not a world snapshot. */
+  readonly knowledgeSource?: ExpressionKnowledgeSourceCheck | null;
 }
 
 export interface ExpressionDiagnosticRecord extends ExpressionDiagnosticInput {
@@ -78,6 +85,9 @@ export interface ExpressionDiagnosticRecord extends ExpressionDiagnosticInput {
   readonly contextualText: string | null;
   readonly producerContext: ExpressionDiagnosticProducerContext | null;
   readonly listeningContext: ExpressionDiagnosticListeningContext | null;
+  readonly knowledgeSource: ExpressionKnowledgeSourceCheck | null;
+  /** Null means this record has not captured a selected human listening frame. */
+  readonly humanListeners: readonly ExpressionKnowledgeListenerAudit[] | null;
 }
 
 export interface ExpressionDiagnosticQuery {
@@ -151,6 +161,24 @@ export interface SituatedExpressionDiagnostics {
     sequence: number,
     overrides?: ExpressionListeningPreviewOverrides,
   ) => ExpressionDiagnosticListeningPreview | null;
+  readonly auditKnowledge: (query?: ExpressionDiagnosticQuery) => ExpressionDiagnosticKnowledgeAudit;
+}
+
+export interface ExpressionDiagnosticKnowledgeAudit {
+  readonly scope: "captured-factual-knowledge-audit";
+  readonly enabled: boolean;
+  readonly totalCount: number;
+  readonly evictedCount: number;
+  readonly records: readonly Readonly<{
+    sequence: number;
+    meaning: SituatedExpressionIntent["meaning"];
+    sourceStatus: "validated" | "rejected" | "uncaptured";
+    sourceCheck: ExpressionKnowledgeSourceCheck | null;
+    playerReceiptStatus: "matching-retained-receipt" | "rejected" | "uncaptured";
+    humanListeners: readonly ExpressionKnowledgeListenerAudit[] | null;
+    issues: readonly string[];
+  }>[];
+  readonly notEvaluated: readonly string[];
 }
 
 export function createExpressionDiagnosticState(enabled = false): ExpressionDiagnosticSnapshot {
@@ -192,6 +220,8 @@ export function appendExpressionDiagnostic(
       contextualText: copy.contextualText ?? null,
       producerContext: copy.producerContext ?? null,
       listeningContext: copy.listeningContext ?? null,
+      knowledgeSource: copy.knowledgeSource ?? null,
+      humanListeners: null,
     });
     const records = Object.freeze([...state.records, record].slice(-EXPRESSION_DIAGNOSTIC_CAPACITY));
     const totalCount = state.totalCount + 1;
@@ -220,6 +250,95 @@ export function selectExpressionDiagnostics(
       && (query.reason === undefined || reason === query.reason)
     ))),
   });
+}
+
+/** Amend only retained factual decisions, through the same transaction-staged root. */
+export function captureExpressionDiagnosticHumanAudience(
+  state: ExpressionDiagnosticSnapshot,
+  receipts: readonly HumanSupplementalListeningReceipt[],
+): ExpressionDiagnosticSnapshot {
+  if (!state.enabled || receipts.length > HUMAN_PERCEPTION_MAX_RESIDENTS
+    * HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES) return state;
+  try {
+    const records = state.records.map((record) => {
+      if (record.event === null || !EXPRESSION_KNOWLEDGE_SOURCE_MEANINGS.includes(record.intent.meaning)) return record;
+      const matches = receipts.filter((receipt) => receipt.expressionEventId === record.event!.eventId);
+      if (matches.length === 0 || matches.length > HUMAN_PERCEPTION_MAX_RESIDENTS) return record;
+      return freezeCopy({ ...record, humanListeners: structuredClone(matches.map((receipt) => ({
+        receipt, retainedBelief: null,
+      }))) });
+    });
+    return Object.freeze({ ...state, records: Object.freeze(records) });
+  } catch { return state; }
+}
+
+/** Hearing and understood meaning are not the same as a retained cognition fact. */
+export function finalizeExpressionDiagnosticHumanAudience(
+  state: ExpressionDiagnosticSnapshot,
+  completedTick: number,
+  residents: readonly ResidentState[],
+): ExpressionDiagnosticSnapshot {
+  if (!state.enabled) return state;
+  try {
+    const byId = new Map(residents.map((resident) => [resident.id, resident]));
+    const records = state.records.map((record) => {
+      if (record.humanListeners === null) return record;
+      const humanListeners = record.humanListeners.map((listener) => {
+        const { receipt } = listener;
+        if (listener.retainedBelief !== null || receipt.observedAtTick !== completedTick) return listener;
+        const resident = byId.get(receipt.residentId);
+        const retainedBelief = receipt.observation !== null && resident !== undefined
+          && resident.identity.stableId === receipt.observerId
+          && resident.perception.actorId === receipt.observerId
+          && resident.perception.tick === completedTick
+          && resident.perception.beliefs.some((belief) => (
+            belief.sourceObservationId === receipt.observation!.id
+            && belief.lastObservedTick === completedTick
+            && belief.perceivedClass === receipt.observation!.perceivedClass
+            && belief.channel === "hearing" && belief.subjectId === null
+            && belief.identification === "anonymous"
+          ));
+        return Object.freeze({ receipt, retainedBelief });
+      });
+      return Object.freeze({ ...record, humanListeners: Object.freeze(humanListeners) });
+    });
+    return Object.freeze({ ...state, records: Object.freeze(records) });
+  } catch { return state; }
+}
+
+/** Inspect captured actual evidence; never parse prose, infer missing listeners or grant knowledge. */
+export function auditExpressionDiagnosticKnowledge(
+  state: ExpressionDiagnosticSnapshot,
+  query: ExpressionDiagnosticQuery = {},
+): ExpressionDiagnosticKnowledgeAudit {
+  const records = selectExpressionDiagnostics(state, query).records.map((record) => {
+    const { event, knowledgeSource: source, playerReception: receipt } = record;
+    const sourceMatches = event !== null && source !== null
+      && source.eventId === event.eventId && source.sourceActorId === event.sourceActorId
+      && source.triggerEventId === event.triggerEventId;
+    const sourceStatus = source === null ? "uncaptured" as const
+      : sourceMatches && source.validated ? "validated" as const : "rejected" as const;
+    const playerReceiptStatus = receipt === null ? "uncaptured" as const
+      : event !== null && canonicalizeSituatedExpressionReception(receipt) !== null
+        && receipt.eventId === event.eventId && receipt.sourceActorId === event.sourceActorId
+        ? "matching-retained-receipt" as const : "rejected" as const;
+    const issues: string[] = [];
+    if (sourceStatus === "rejected") issues.push("source-validation-rejected");
+    if (playerReceiptStatus === "rejected") issues.push("player-receipt-mismatch");
+    for (const listener of record.humanListeners ?? []) {
+      if (event === null) issues.push("listener-without-event");
+      else issues.push(...expressionKnowledgeListenerIssues(event, listener.receipt)
+        .map((issue) => `${listener.receipt.observerId}:${issue}`));
+    }
+    return { sequence: record.sequence, meaning: record.intent.meaning, sourceStatus,
+      sourceCheck: source, playerReceiptStatus, humanListeners: record.humanListeners, issues };
+  });
+  return freezeCopy(structuredClone({
+    scope: "captured-factual-knowledge-audit", enabled: state.enabled,
+    totalCount: state.totalCount, evictedCount: state.evictedCount, records,
+    notEvaluated: ["uncaptured-source-provenance", "listeners-outside-selected-human-frame",
+      "player-comprehension", "unsupported-npc-semantic-transfer", "portable-source-attestation"],
+  }));
 }
 
 /** A pure, explicitly hypothetical lab; it cannot submit any event to gameplay. */

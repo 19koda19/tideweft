@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createActorObservation,
@@ -20,6 +20,7 @@ import { createRegionCoord } from "../sim/regions";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
 import {
   HUMAN_HEARING_MAX_RANGE_UNITS,
+  HUMAN_PERCEPTION_MAX_RESIDENTS,
   HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT,
   HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
   HUMAN_PERCEPTION_MAX_PLAYER_SAMPLES,
@@ -31,6 +32,8 @@ import {
   createSupplementalSoundSample,
   createUnadmittedAlarmSoundSample,
   type HumanObservationBatch,
+  type HumanPerceptionInput,
+  type HumanSupplementalListeningReceipt,
   type PhysicalSoundSample,
   type PlayerSenseSample,
   type SupplementalSoundSample,
@@ -44,14 +47,16 @@ import {
   type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
-import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { residentPlacementInRegionalWindow, resolveResidentWorldPlacement } from "./residentSpatial";
+import { evaluateAudibleContact } from "./perception";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
   SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
   situatedExpressionAcoustics,
   situatedExpressionSemanticFactForMemory,
   type SituatedExpressionSemanticFact,
 } from "./situatedExpressionAcoustics";
-import { createWorldPosition, type WorldPosition } from "./worldPosition";
+import { createWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 const OBSERVER_X = 24;
 const OBSERVER_Y = 24;
@@ -461,6 +466,236 @@ describe("existing-human sensory bridge", () => {
     });
     expect(weakObservations.find(({ id }) => id.includes(weakVoice.id))?.confidence)
       .toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+  });
+
+  describe("development supplemental-listening observer", () => {
+    it.each([
+      { name: "clear", offset: 2, storm: false, turbulentWater: false, outcome: "heard", understood: true },
+      { name: "partial", offset: 4, storm: false, turbulentWater: false, outcome: "heard", understood: false },
+      { name: "masked", offset: 6, storm: true, turbulentWater: true, outcome: "not-heard", understood: false },
+    ] as const)("reports the actual $name keeper calculation without inventing understanding", ({
+      name, offset, storm, turbulentWater, outcome, understood,
+    }) => {
+      const current = keeperListeningFixture(`observed keeper ${name}`, offset, { storm, turbulentWater });
+      const before = JSON.stringify([current.input, current.listener.perception]);
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      const withoutObserver = collectExistingHumanObservations(current.input);
+      const batches = collectExistingHumanObservations(current.input, observer);
+
+      expect(batches).toEqual(withoutObserver);
+      expect(observer).toHaveBeenCalledOnce();
+      const receipts = observer.mock.calls[0]![0];
+      expect(receipts).toHaveLength(batches.length);
+      const receipt = receipts.find(({ residentId }) => residentId === current.listener.id);
+      const placement = resolveResidentWorldPlacement(current.fixture.economy, current.listener);
+      const projected = placement === null ? null : residentPlacementInRegionalWindow(placement, current.fixture.window);
+      if (placement === null || projected === null) throw new Error("listening fixture lost its actual listener");
+      const delta = worldPositionDelta(placement.position, current.voice.position);
+      const masking = ambientNoiseAt(current.fixture.world, projected.tileIndex);
+      if (masking === null) throw new Error("listening fixture lost its actual masking");
+      const contact = evaluateAudibleContact({
+        listener: { x: 0, y: 0 }, source: { x: delta.x, y: delta.y },
+        baseRange: current.voice.soundRangeUnits,
+        sourceLoudness: current.voice.soundLoudness / FIXED_POINT,
+        ambientNoise: masking,
+        wind: {
+          x: current.fixture.world.weather.windX / FIXED_POINT,
+          y: current.fixture.world.weather.windY / FIXED_POINT,
+        },
+      });
+      expect(receipt).toMatchObject({
+        expressionEventId: current.voice.expressionEventId,
+        sourceActorId: current.voice.sourceActorId,
+        sampleId: current.voice.id,
+        residentId: current.listener.id,
+        observerId: current.listener.identity.stableId,
+        observedAtTick: current.input.targetTick,
+        outcome,
+        contact,
+        semanticFact: current.fact,
+      });
+      const observation = batchFor(batches, current.listener.id)?.observations.find(({ channel }) => channel === "hearing") ?? null;
+      expect(receipt?.observation).toEqual(observation);
+      if (outcome === "heard") {
+        expect(contact).not.toBeNull();
+        expect(observation).toMatchObject({
+          perceivedClass: understood ? "store-secured-report" : "human-vocalization",
+          subjectId: null, identification: "anonymous", channel: "hearing",
+        });
+        if (understood) expect(observation!.confidence).toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+        else expect(observation!.confidence).toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
+        expect(receipt!.contact).not.toBe(contact);
+        expect(receipt!.observation).not.toBe(observation);
+      } else {
+        expect(contact).toBeNull();
+        expect(observation).toBeNull();
+      }
+      expect(receipt!.semanticFact).not.toBe(current.fact);
+      expect(JSON.stringify([current.input, current.listener.perception])).toBe(before);
+      const sourceReceipt = receipts.find(({ observerId }) => observerId === current.voice.sourceActorId);
+      expect(sourceReceipt).toMatchObject({
+        expressionEventId: current.voice.expressionEventId,
+        sourceActorId: current.voice.sourceActorId,
+        sampleId: current.voice.id,
+        outcome: "source-excluded", contact: null, observation: null,
+      });
+      expect(batchFor(batches, current.fixture.resident.id)?.observations).toEqual([]);
+    });
+
+    it("returns detached immutable receipts once and isolates observer mutation and failure", () => {
+      const current = keeperListeningFixture("listening observer cannot become authority");
+      const before = JSON.stringify(current.input);
+      const withoutObserver = collectExistingHumanObservations(current.input);
+      let retained: readonly HumanSupplementalListeningReceipt[] | undefined;
+      let mutationResults: boolean[] = [];
+      let allFrozen = false;
+      const observer = vi.fn((receipts: readonly HumanSupplementalListeningReceipt[]) => {
+        retained = receipts;
+        allFrozen = receiptObjects(receipts).every(Object.isFrozen);
+        const heard = receipts.find(({ residentId }) => residentId === current.listener.id)!;
+        mutationResults = [
+          Reflect.set(receipts, "length", 0),
+          Reflect.set(heard, "outcome", "not-heard"),
+          Reflect.set(heard.contact!, "certainty", 0),
+          Reflect.set(heard.semanticFact!, "minimumHearingConfidence", 0),
+          Reflect.set(heard.observation!.area.center, "localX", 999),
+        ];
+        throw new Error("optional receipt sink failed");
+      });
+      const batches = collectExistingHumanObservations(current.input, observer);
+
+      expect(observer).toHaveBeenCalledOnce();
+      expect(retained).toBeDefined();
+      expect(allFrozen).toBe(true);
+      expect(mutationResults).toEqual([false, false, false, false, false]);
+      expect(batches).toEqual(withoutObserver);
+      expect(JSON.stringify(current.input)).toBe(before);
+      const originalObjects = new Set(receiptObjects([current.input, batches]));
+      expect(receiptObjects(retained!).every((value) => !originalObjects.has(value))).toBe(true);
+      const repeated = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      expect(collectExistingHumanObservations(current.input, repeated)).toEqual(batches);
+      expect(repeated.mock.calls[0]![0]).toEqual(retained);
+      expect(repeated.mock.calls[0]![0]).not.toBe(retained);
+    });
+
+    it("does not notify when a later eligible listener invalidates the complete batch", () => {
+      const current = keeperListeningFixture("no partial listening publication");
+      const route = current.fixture.state.routes[0];
+      if (route === undefined) throw new Error("listener failure fixture needs an existing route");
+      for (const resident of current.fixture.state.residents) resident.location = { kind: "route", routeId: route.id, progress: 0 };
+      const eligible = [...current.fixture.state.residents].sort((left, right) => (
+        left.identity.stableId < right.identity.stableId ? -1 : left.identity.stableId > right.identity.stableId ? 1 : 0
+      )).slice(0, HUMAN_PERCEPTION_MAX_RESIDENTS);
+      const later = eligible.at(-1);
+      if (later === undefined || eligible.length < 2) throw new Error("listener failure fixture needs ordered residents");
+      const control = rebuildWorld(current.fixture);
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      const controlInput = { ...current.input, world: control.world, window: control.window };
+      const validBatches = collectExistingHumanObservations(controlInput, observer);
+      expect(validBatches.length).toBeGreaterThan(1);
+      expect(observer).toHaveBeenCalledOnce();
+      expect(observer.mock.calls[0]![0].some(({ outcome, observerId }) => (
+        outcome === "heard" && observerId !== later.identity.stableId
+      ))).toBe(true);
+
+      later.perception = createActorPerceptionState(later.identity.stableId, current.input.targetTick);
+      const invalid = rebuildWorld(current.fixture);
+      observer.mockClear();
+      expect(collectExistingHumanObservations({
+        ...current.input, world: invalid.world, window: invalid.window,
+      }, observer)).toEqual([]);
+      expect(observer).not.toHaveBeenCalled();
+    });
+
+    it("does not notify for malformed input, duplicate samples or a forged semantic source", () => {
+      const current = keeperListeningFixture("invalid sound is not a diagnostic receipt");
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      for (const input of [
+        { ...current.input, targetTick: Number.NaN },
+        { ...current.input, supplementalSoundSamples: [current.voice, current.voice] },
+        { ...current.input, supplementalSemanticFacts: [{ ...current.fact, sourceActorId: "HUMAN-FORGED-KEEPER" }] },
+      ]) {
+        expect(collectExistingHumanObservations(input, observer)).toEqual([]);
+      }
+      expect(observer).not.toHaveBeenCalled();
+    });
+
+    it("distinguishes unavailable source geometry from an actual zero-volume calculation", () => {
+      const current = keeperListeningFixture("unavailable is not unheard");
+      const distant = createSupplementalSoundSample({
+        ...current.voice,
+        position: createWorldPosition(createRegionCoord(-1_000_000, 1_000_000), 500, 500),
+      });
+      const quiet = createSupplementalSoundSample({ ...current.voice, soundLoudness: 0 });
+      if (distant === null || quiet === null) throw new Error("valid listening diagnostic fixtures were rejected");
+      for (const [voice, outcome] of [[distant, "unavailable"], [quiet, "not-heard"]] as const) {
+        const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+        const batches = collectExistingHumanObservations({ ...current.input, supplementalSoundSamples: [voice] }, observer);
+        expect(observer).toHaveBeenCalledOnce();
+        expect(observer.mock.calls[0]![0].find(({ residentId }) => residentId === current.listener.id)).toMatchObject({
+          expressionEventId: voice.expressionEventId, sampleId: voice.id,
+          outcome, contact: null, observation: null,
+        });
+        expect(batchFor(batches, current.listener.id)?.observations).toEqual([]);
+      }
+    });
+
+    it("does not turn ordinary supplemental hearing into a factual understanding candidate", () => {
+      const current = keeperListeningFixture("ordinary voice has no fact decoder");
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      const batches = collectExistingHumanObservations({ ...current.input, supplementalSemanticFacts: [] }, observer);
+      expect(observer).toHaveBeenCalledOnce();
+      const receipt = observer.mock.calls[0]![0].find(({ residentId }) => residentId === current.listener.id);
+      expect(receipt).toMatchObject({ outcome: "heard", semanticFact: null });
+      expect(receipt?.observation).toEqual(batchFor(batches, current.listener.id)?.observations[0]);
+      expect(receipt?.observation?.perceivedClass).toBe("human-vocalization");
+    });
+
+    it("bounds synthetic diagnostic occupancy to the existing resident and sound capacities", () => {
+      const current = fixture("finite listening receipt occupancy", { facing: "east" });
+      const template = current.resident;
+      const route = current.state.routes[0];
+      if (route === undefined) throw new Error("bounded listening fixture needs an existing route");
+      current.state.residents = Array.from({ length: HUMAN_PERCEPTION_MAX_RESIDENTS + 5 }, (_, index) => {
+        const stableId = `HUMAN-receipt-cap-${String(index).padStart(3, "0")}`;
+        return {
+          ...template,
+          id: index + 1,
+          identity: { ...template.identity, stableId },
+          perception: createActorPerceptionState(stableId, current.state.meta.completedTick),
+          location: { kind: "route" as const, routeId: route.id, progress: 0 },
+        };
+      });
+      const rebuilt = buildFixture(current.state, current.state.residents[0]!);
+      const voices = Array.from({ length: HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES }, (_, index) => (
+        supplementalSoundSample(`receipt-cap-${index}`, OBSERVER_X + 2, OBSERVER_Y)
+      ));
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      const batches = collectExistingHumanObservations({
+        world: rebuilt.world, window: rebuilt.window,
+        targetTick: fixtureTick(rebuilt, 1), playerSamples: [], supplementalSoundSamples: voices,
+      }, observer);
+      expect(batches).toHaveLength(HUMAN_PERCEPTION_MAX_RESIDENTS);
+      expect(observer).toHaveBeenCalledOnce();
+      const receipts = observer.mock.calls[0]![0];
+      expect(receipts).toHaveLength(HUMAN_PERCEPTION_MAX_RESIDENTS * HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES);
+      expect(new Set(receipts.map(({ observerId }) => observerId)).size).toBe(HUMAN_PERCEPTION_MAX_RESIDENTS);
+      expect(receipts.every(({ outcome }) => outcome === "heard")).toBe(true);
+      expect(new Set(receipts.map(({ observerId, sampleId }) => `${observerId}/${sampleId}`)).size).toBe(receipts.length);
+    });
+
+    it("does not expose the optional receipt observer outside development", () => {
+      const current = keeperListeningFixture("production hearing has no inspector");
+      const withoutObserver = collectExistingHumanObservations(current.input);
+      const observer = vi.fn<(receipts: readonly HumanSupplementalListeningReceipt[]) => void>();
+      try {
+        vi.stubEnv("DEV", false);
+        expect(collectExistingHumanObservations(current.input, observer)).toEqual(withoutObserver);
+        expect(observer).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 
   it("binds semantic facts to their own voice events independent of input order", () => {
@@ -1323,6 +1558,55 @@ describe("existing-human sensory bridge", () => {
     expect(observationsFor(current, [sample], 1)).toEqual([]);
   });
 });
+
+/** Controlled existing-owner inputs, not a player-accessible keeper encounter. */
+function keeperListeningFixture(
+  seed: string,
+  sourceOffset = 2,
+  environment: { readonly storm?: boolean; readonly turbulentWater?: boolean } = {},
+): {
+  readonly fixture: Fixture;
+  readonly listener: ResidentState;
+  readonly voice: SupplementalSoundSample;
+  readonly fact: SituatedExpressionSemanticFact;
+  readonly input: HumanPerceptionInput;
+} {
+  const current = fixture(seed, { facing: "east", ...environment });
+  const listener = current.state.residents.find(({ id }) => id !== current.resident.id);
+  const route = current.state.routes[0];
+  if (listener === undefined || route === undefined) throw new Error("keeper listening fixture needs two current residents");
+  listener.location = { kind: "route", routeId: route.id, progress: 0 };
+  const rebuilt = rebuildWorld(current);
+  const fact = situatedExpressionSemanticFactForMemory({
+    sourceActorId: current.resident.identity.stableId,
+    triggerEventId: "settlement-store-closure:diagnostic-test",
+    meaning: "keeper-secure-store-response", family: "work", priority: 600_000,
+    meaningCooldownRemainingSteps: 30, familyCooldownRemainingSteps: 10,
+  });
+  if (fact === null) throw new Error("keeper listening fixture lost its current semantic mapper");
+  const acoustics = situatedExpressionAcoustics({ meaning: "keeper-secure-store-response", volume: "spoken" });
+  const voice = supplementalSoundSample("diagnostic-store-report", OBSERVER_X + sourceOffset, OBSERVER_Y,
+    current.resident.identity.stableId, {
+      expressionEventId: fact.expressionEventId,
+      soundLoudness: acoustics.loudness,
+      soundRangeUnits: acoustics.rangeUnits,
+    });
+  return {
+    fixture: rebuilt, listener, voice, fact,
+    input: {
+      world: rebuilt.world, window: rebuilt.window,
+      targetTick: fixtureTick(rebuilt, 1), playerSamples: [],
+      supplementalSoundSamples: [voice], supplementalSemanticFacts: [fact],
+    },
+  };
+}
+
+function receiptObjects(value: unknown, seen = new Set<object>()): readonly object[] {
+  if (value === null || typeof value !== "object" || seen.has(value)) return [];
+  seen.add(value);
+  const descendants = Object.values(value).flatMap((entry) => receiptObjects(entry, seen));
+  return [value, ...descendants];
+}
 
 function fixture(
   seed: string,

@@ -14,6 +14,7 @@ import { FIXED_POINT, type WorldView } from "../sim/types";
 import {
   evaluateAudibleContact,
   evaluateVisualContact,
+  type AudibleContact,
 } from "./perception";
 import { buildWorldPerceptionCells } from "./outdoorIllumination";
 import type { RegionalTerrainWindow } from "./regionalTravel";
@@ -166,6 +167,20 @@ export interface HumanObservationBatch {
   readonly observations: readonly ActorObservation[];
 }
 
+/** Optional DEV evidence from the existing hearing query, never a knowledge input. */
+export interface HumanSupplementalListeningReceipt {
+  readonly expressionEventId: string;
+  readonly sourceActorId: string;
+  readonly sampleId: string;
+  readonly residentId: number;
+  readonly observerId: string;
+  readonly observedAtTick: number;
+  readonly outcome: "heard" | "not-heard" | "source-excluded" | "unavailable";
+  readonly contact: AudibleContact | null;
+  readonly semanticFact: SituatedExpressionSemanticFact | null;
+  readonly observation: ActorObservation | null;
+}
+
 /** Creates one validated immutable hearing-only stimulus, or null without repair. */
 export function createSupplementalSoundSample(
   input: SupplementalSoundSampleInput,
@@ -285,6 +300,7 @@ export function createPlayerSenseSample(input: PlayerSenseSampleInput): PlayerSe
  */
 export function collectExistingHumanObservations(
   input: HumanPerceptionInput,
+  onSupplementalListening?: (receipts: readonly HumanSupplementalListeningReceipt[]) => void,
 ): readonly HumanObservationBatch[] {
   const value: unknown = input;
   if (!plainRecord(value)) return EMPTY_BATCHES;
@@ -372,6 +388,8 @@ export function collectExistingHumanObservations(
   if (!uniqueResidents(selected)) return EMPTY_BATCHES;
 
   const batches: HumanObservationBatch[] = [];
+  const listeningReceipts: HumanSupplementalListeningReceipt[] | null = import.meta.env.DEV
+    && typeof onSupplementalListening === "function" ? [] : null;
   for (const { resident, placement } of selected) {
     const priorState = canonicalizeActorPerceptionState(resident.perception);
     if (
@@ -389,12 +407,31 @@ export function collectExistingHumanObservations(
       readonly sampleOrdinal: number;
       readonly observation: ActorObservation;
     } | null = null;
+    const recordListening = (
+      sample: SupplementalSoundSample | null,
+      semanticFact: SituatedExpressionSemanticFact | null,
+      outcome: HumanSupplementalListeningReceipt["outcome"],
+      contact: AudibleContact | null = null,
+      observation: ActorObservation | null = null,
+    ): void => {
+      if (import.meta.env.DEV && listeningReceipts !== null && sample !== null) {
+        listeningReceipts.push({
+          expressionEventId: sample.expressionEventId, sourceActorId: sample.sourceActorId,
+          sampleId: sample.id, residentId: resident.id, observerId: priorState.actorId,
+          observedAtTick: targetTick, outcome, contact, semanticFact, observation,
+        });
+      }
+    };
     const appendHearingObservation = (
       sample: AcousticSample,
       targetPoint: SpatialFramePoint,
       semanticFact: SituatedExpressionSemanticFact | null = null,
+      diagnosticSample: SupplementalSoundSample | null = null,
     ): boolean => {
-      if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) return true;
+      if (sample.soundLoudness <= 0 || sample.soundRangeUnits <= 0) {
+        if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "not-heard");
+        return true;
+      }
       const heard = evaluateAudibleContact({
         listener: projectedResident.position,
         source: targetPoint,
@@ -406,7 +443,10 @@ export function collectExistingHumanObservations(
           y: world.weather.windY / FIXED_POINT,
         },
       });
-      if (heard === null) return true;
+      if (heard === null) {
+        if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "not-heard");
+        return true;
+      }
       const area = inferAnonymousHearingArea(placement.position, sample.position, heard);
       if (area === null) return false;
       const hearingConfidence = scaleContact(heard.certainty);
@@ -429,6 +469,7 @@ export function collectExistingHumanObservations(
       });
       if (observation === null) return false;
       observations.push(observation);
+      if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "heard", heard, observation);
       return true;
     };
 
@@ -483,13 +524,21 @@ export function collectExistingHumanObservations(
       if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
     }
     for (const sample of supplementalSounds) {
-      if (sample.sourceActorId === priorState.actorId) continue;
+      const semanticFact = semanticFactByExpressionEventId.get(sample.expressionEventId) ?? null;
+      if (sample.sourceActorId === priorState.actorId) {
+        if (import.meta.env.DEV) recordListening(sample, semanticFact, "source-excluded");
+        continue;
+      }
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
-      if (targetPoint === null) continue;
+      if (targetPoint === null) {
+        if (import.meta.env.DEV) recordListening(sample, semanticFact, "unavailable");
+        continue;
+      }
       if (!appendHearingObservation(
         sample,
         targetPoint,
-        semanticFactByExpressionEventId.get(sample.expressionEventId) ?? null,
+        semanticFact,
+        sample,
       )) return EMPTY_BATCHES;
     }
     for (const sample of physicalSounds) {
@@ -532,7 +581,25 @@ export function collectExistingHumanObservations(
       observations: canonical,
     }));
   }
+  if (import.meta.env.DEV && listeningReceipts !== null && onSupplementalListening !== undefined) {
+    try {
+      // Deliver only a complete successful frame. A failing later listener must
+      // never publish partial evidence. Neither copying nor the observer can
+      // veto, mutate or retain objects from the authoritative sensory result.
+      onSupplementalListening(freezeListeningCopy(structuredClone(listeningReceipts)));
+    } catch {
+      // Optional diagnostics are deliberately failure-isolated.
+    }
+  }
   return Object.freeze(batches);
+}
+
+function freezeListeningCopy<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    for (const nested of Object.values(value)) freezeListeningCopy(nested);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function canonicalSamples(value: readonly PlayerSenseSample[]): readonly PlayerSenseSample[] | null {

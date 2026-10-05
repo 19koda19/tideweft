@@ -185,7 +185,10 @@ import {
 } from "./situatedExpression";
 import {
   appendExpressionDiagnostic,
+  auditExpressionDiagnosticKnowledge,
+  captureExpressionDiagnosticHumanAudience,
   createExpressionDiagnosticState,
+  finalizeExpressionDiagnosticHumanAudience,
   previewExpressionDiagnostic,
   previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
@@ -197,6 +200,7 @@ import {
   type ExpressionDiagnosticSnapshot,
   type SituatedExpressionDiagnostics,
 } from "./situatedExpressionDiagnostics";
+import { checkExpressionKnowledgeSource } from "./situatedExpressionKnowledgeAudit";
 import {
   acknowledgeSituatedExpressionChannelBank,
   advanceSituatedExpressionChannelBank,
@@ -12825,6 +12829,7 @@ export async function createTideweftRuntime(
     contextualText: string | null = null,
     producerContext: ExpressionDiagnosticProducerContext | null = null,
     listeningContext: ExpressionDiagnosticListeningContext | null = null,
+    diagnosticSettlement: SettlementEcologyState = settlementEcology,
   ): void {
     if (!import.meta.env.DEV) return;
     const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
@@ -12846,6 +12851,9 @@ export async function createTideweftRuntime(
         contextualText,
         producerContext,
         listeningContext,
+        knowledgeSource: event === null ? null : checkExpressionKnowledgeSource(
+          event, economyView, diagnosticSettlement,
+        ),
       });
       if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
       else expressionDiagnosticState = next;
@@ -12874,6 +12882,7 @@ export async function createTideweftRuntime(
     diagnosticBelief: ActorBelief | null = null,
     diagnosticProducerContext: ExpressionDiagnosticProducerContext | null = null,
     diagnosticListeningContext: ExpressionDiagnosticListeningContext | null = null,
+    diagnosticSettlement: SettlementEcologyState = settlementEcology,
   ): boolean {
     if (intent === null) return false;
     // Sound carry, memory, causal authority, and optional presentation are one
@@ -12888,6 +12897,7 @@ export async function createTideweftRuntime(
         intent, "sound-budget", null, null, null, undefined, diagnosticBelief,
         null, diagnosticProducerContext,
         diagnosticListeningContext,
+        diagnosticSettlement,
       );
       return false;
     }
@@ -12983,6 +12993,7 @@ export async function createTideweftRuntime(
         null,
         diagnosticProducerContext,
         diagnosticListeningContext,
+        diagnosticSettlement,
       );
       return true;
     }
@@ -12990,6 +13001,7 @@ export async function createTideweftRuntime(
       intent, reduction.reason, null, null, null, diagnosticPriorState, diagnosticBelief,
       null, diagnosticProducerContext,
       diagnosticListeningContext,
+      diagnosticSettlement,
     );
     return false;
   }
@@ -13062,7 +13074,13 @@ export async function createTideweftRuntime(
       supplementalSemanticFacts: pendingAuthenticatedSituatedExpressionSemanticFacts(),
       physicalSoundSamples,
       unadmittedAlarmSoundSamples,
-    });
+    }, import.meta.env.DEV && expressionDiagnosticState?.enabled === true ? (receipts) => {
+      const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
+      if (state === null) return;
+      const next = captureExpressionDiagnosticHumanAudience(state, receipts);
+      if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
+      else expressionDiagnosticState = next;
+    } : undefined);
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
       const resident = world.residents.find(({ id }) => id === batch.residentId);
@@ -18846,6 +18864,7 @@ export async function createTideweftRuntime(
       null,
       null,
       diagnosticListeningContext,
+      resolution.state,
     );
     settlementEcology = resolution.state;
     // Authoritative closure and expression roots commit before optional
@@ -19898,7 +19917,10 @@ export async function createTideweftRuntime(
         residentIntroductionSavePending = false;
         saveInBackground();
       }
-      if (import.meta.env.DEV) committedExpressionDiagnostics = stagedExpressionDiagnosticState;
+      if (import.meta.env.DEV) committedExpressionDiagnostics = stagedExpressionDiagnosticState === null
+        ? null : finalizeExpressionDiagnosticHumanAudience(
+          stagedExpressionDiagnosticState, world.meta.completedTick, world.residents,
+        );
     } catch (error) {
       if (priorWorld) {
         world = priorWorld;
@@ -20276,6 +20298,7 @@ export async function createTideweftRuntime(
         previewListening: (sequence, overrides) => previewExpressionDiagnosticListening(
           expressionDiagnosticState!, sequence, overrides,
         ),
+        auditKnowledge: (query) => auditExpressionDiagnosticKnowledge(expressionDiagnosticState!, query),
       } satisfies SituatedExpressionDiagnostics),
     } : {}),
     getPerformanceTelemetry,

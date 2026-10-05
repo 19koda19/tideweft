@@ -333,6 +333,8 @@ const keeper = inspector.getSnapshot({ meaning: "keeper-secure-store-response" }
 inspector.previewListening(keeper?.sequence);
 // Hypothetical masking; the actual receipt and game remain unchanged:
 inspector.previewListening(keeper?.sequence, { ambientNoise: 1 });
+// Check captured source validation, selected human hearing and retained beliefs:
+inspector.auditKnowledge({ meaning: "keeper-secure-store-response" });
 ```
 
 It is default-off, development-only and bounded to 64 copied decisions.
@@ -353,7 +355,14 @@ and receipt remain separate
 from the hypothetical result. Uncaptured context is not proof of inaudibility;
 this does not change weather, terrain transmission, knowledge, NPC hearing or
 audio, and is not a complete sound-ecology lab. Refetch the snapshot after reset:
-sequence numbers may be reused. Production web and packaged builds expose no inspector. See
+sequence numbers may be reused. `auditKnowledge()` checks captured evidence for
+current keeper responses, introductions, danger warnings and weather holds.
+It distinguishes source validation, matching player receipts, selected-human
+hearing and post-transaction belief retention. Only the existing keeper report
+has an NPC factual decoder; other speech remains sound-only. Uncaptured data
+and player comprehension are not certified. The audit is read-only, not a
+portable attestation or a complete knowledge auditor.
+Production web and packaged builds expose no inspector. See
 the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
 
 | Change or checkpoint | Validation commands and scope |

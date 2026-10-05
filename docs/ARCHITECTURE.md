@@ -1140,6 +1140,47 @@ no-save and production-exclusion rules above also apply. This is a captured
 player-contact inspection aid, not a complete sound-ecology lab or evidence that
 unavailable environmental propagation is implemented.
 
+`auditKnowledge(query)` inspects captured evidence for current keeper
+secure-store replies, resident introductions, human danger warnings and
+resident weather holds. At event time it calls each existing domain's
+`*ExpressionEventMatchesWorld` validator and retains only a small verdict with
+event/source/trigger/tick and owner. The keeper uses the exact committed closure
+root, not the prior open store. Other producers retain null source evidence;
+neither declared knowledge basis nor realized words establish possession of a
+fact. This captured verdict is not a portable attestation and cannot grant
+knowledge or validate a later mutable world.
+
+The existing human-perception collector can notify enabled DEV inspection of
+its already-evaluated supplemental listening frame. No second hearing query is
+run. Receipts distinguish heard, not heard, source-excluded and unavailable
+geometry; sources/listeners outside the selected bounded frame remain
+uncaptured. Notification follows complete successful collection and supplies a
+detached frozen copy; copying/observer failure cannot alter the sensory result.
+Each retained decision receives at most the existing 64 selected-human receipts,
+within the existing eight-sample frame bound. This is optional evidence, not a
+new observation channel, world scan or listener authority.
+
+The report checks event/source agreement, canonical anonymous hearing,
+confidence and the existing semantic decoder. Only a keeper's secure-store
+report currently supplies `store-secured-report` at confidence450000 or higher.
+Below that threshold it remains human vocalization. Introduction, warning and
+weather speech do not decode names, hidden causes, destinations or other facts:
+their received class is the existing semantic sound class. A matching retained
+player receipt is reported separately and does not prove player comprehension.
+
+Audience amendments use the same provisional diagnostic root as decisions.
+Only after the entire tick and due introduction-save preparation succeed does
+finalization join listener/actor, completed tick and exact observation ID to the
+retained anonymous hearing belief. A heard observation may not survive the
+existing cognition cap; absence of retention is not evidence of inaudibility.
+Before finalization retention is null. A later transaction failure publishes
+neither provisional audience nor new source decisions. Query reports are
+detached/frozen, have no effect on hearing/audio/captions, and follow the same
+64-record eviction, reset/reload, no-save and production-exclusion policy.
+Uncaptured provenance/listeners, unsupported semantic transfer and player
+comprehension remain explicitly outside this partial factual-audit spine;
+the complete knowledge-leak auditor and broader labs remain open.
+
 The separate read-only preview reruns only the existing expression kernel from
 copied prior state, with explicitly supported semantic overrides. It cannot submit an
 event or simulate a domain action, physical recency, capacity, propagation,

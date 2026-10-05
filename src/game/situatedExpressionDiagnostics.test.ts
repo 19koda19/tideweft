@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { stepActorPerception } from "../sim/actorPerception";
+import { createActorObservation, stepActorPerception } from "../sim/actorPerception";
+import { createWorld } from "../sim/public";
+import type { ResidentState } from "../sim/types";
 import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
 import { createDogActorState, replaceDogActorPerception, setDogActorIntent } from "./dogActor";
 import * as dogSignalProducer from "./dogSignalExpression";
 import type { GuardianDogShelterWhineExpressionInput } from "./dogSignalExpression";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import { HUMAN_PERCEPTION_MAX_RESIDENTS, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES,
+  type HumanSupplementalListeningReceipt } from "./humanPerception";
 import { evaluateAudibleContact, type AudibleContactInput } from "./perception";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import * as traversalProducer from "./playerTraversalExpression";
@@ -21,7 +25,10 @@ import { createPlayerExhaustionExpressionAdmissionRecord } from "./situatedExpre
 import {
   EXPRESSION_DIAGNOSTIC_CAPACITY,
   appendExpressionDiagnostic,
+  auditExpressionDiagnosticKnowledge,
+  captureExpressionDiagnosticHumanAudience,
   createExpressionDiagnosticState,
+  finalizeExpressionDiagnosticHumanAudience,
   previewExpressionDiagnostic,
   previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
@@ -34,6 +41,7 @@ import {
   type ExpressionPreviewOverrides,
   type ExpressionListeningPreviewOverrides,
 } from "./situatedExpressionDiagnostics";
+import { situatedExpressionSemanticFactForEvent } from "./situatedExpressionAcoustics";
 import {
   createHeardVisibleSituatedExpressionReception,
   createSelfSituatedExpressionReception,
@@ -286,6 +294,164 @@ function objectGraph(value: unknown, found = new Set<object>()): Set<object> {
   return found;
 }
 
+// Synthetic diagnostic joins only. A validated-shaped verdict here is not an
+// event-time source authentication; the source-owner and runtime tests prove that.
+function syntheticKnowledgeEvidence(): ExpressionDiagnosticInput {
+  const original = acceptedEvidence();
+  const intent: SituatedExpressionIntent = { ...original.intent,
+    sourceActorId: "RES-synthetic-speaker", meaning: "keeper-secure-store-response",
+    family: "work", tone: "restrained", volume: "spoken",
+    knowledgeBasis: "self-committed-store-closure", durationSteps: 12 };
+  const reduction = reduceSituatedExpression(original.priorState, intent);
+  const event = reduction.event;
+  if (event === null) throw new Error("synthetic audit fixture needs a canonical event");
+  return { ...original, intent, event, admission: null,
+    playerReception: createHeardVisibleSituatedExpressionReception(event, original.completedTick, 700_000, true),
+    knowledgeSource: { eventId: event.eventId, sourceActorId: event.sourceActorId,
+      triggerEventId: event.triggerEventId, checkedAtTick: original.completedTick,
+      owner: "settlementKeeperStoreResponseExpression", validated: true } };
+}
+
+function syntheticKnowledgeAudience(evidence = syntheticKnowledgeEvidence()) {
+  const resident = createWorld("diagnostic joins, not ordinary hearing", "standard").residents[0];
+  if (resident === undefined || evidence.event === null) throw new Error("audit fixture needs a resident and event");
+  const observedAtTick = resident.perception.tick + 1;
+  const observation = createActorObservation({
+    id: "synthetic-audit-hearing", observerId: resident.identity.stableId, observedAtTick,
+    channel: "hearing", perceivedClass: "store-secured-report", subjectId: null,
+    area: { center: evidence.event.position, radiusUnits: 2_500 }, confidence: 700_000,
+    salience: 700_000, identification: "anonymous", interrupt: "none",
+  });
+  if (observation === null) throw new Error("audit fixture needs a canonical hearing observation");
+  const receipt: HumanSupplementalListeningReceipt = {
+    expressionEventId: evidence.event.eventId, sourceActorId: evidence.event.sourceActorId,
+    sampleId: "synthetic-audit-sample", residentId: resident.id,
+    observerId: resident.identity.stableId, observedAtTick, outcome: "heard",
+    contact: { certainty: 0.7, bearing: { centerRadians: 0, uncertaintyRadians: 0.4 },
+      distanceBand: { minimum: 1, maximum: 3 } },
+    semanticFact: situatedExpressionSemanticFactForEvent(evidence.event), observation,
+  };
+  return { resident, receipt, evidence, observedAtTick };
+}
+
+describe("captured factual diagnostic audit", () => {
+  it("keeps uncaptured source/listeners explicit and does not infer understanding from prose or knowledgeBasis", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), acceptedEvidence());
+    const audit = auditExpressionDiagnosticKnowledge(state);
+    expect(audit.records[0]).toMatchObject({ sourceStatus: "uncaptured", sourceCheck: null,
+      playerReceiptStatus: "matching-retained-receipt", humanListeners: null, issues: [] });
+    expect(audit.notEvaluated).toEqual(expect.arrayContaining([
+      "player-comprehension", "listeners-outside-selected-human-frame", "portable-source-attestation",
+    ]));
+    expect(auditExpressionDiagnosticKnowledge(createExpressionDiagnosticState()).records).toEqual([]);
+  });
+
+  it("reports mismatched/rejected captured verdicts and player receipts without changing retained evidence", () => {
+    const evidence = syntheticKnowledgeEvidence();
+    let state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    state = appendExpressionDiagnostic(state, { ...evidence,
+      knowledgeSource: { ...evidence.knowledgeSource!, validated: false } });
+    state = appendExpressionDiagnostic(state, { ...evidence,
+      knowledgeSource: { ...evidence.knowledgeSource!, triggerEventId: "wrong-trigger" },
+      playerReception: { ...evidence.playerReception!, eventId: "se-wrong-event" } });
+    const before = JSON.stringify(state);
+    const report = auditExpressionDiagnosticKnowledge(state, { meaning: "keeper-secure-store-response" });
+    expect(report.records.map(({ sourceStatus }) => sourceStatus)).toEqual(["validated", "rejected", "rejected"]);
+    expect(report.records[2]?.issues).toEqual(["source-validation-rejected", "player-receipt-mismatch"]);
+    expect(report.totalCount).toBe(3);
+    expect(JSON.stringify(state)).toBe(before);
+    expect(auditExpressionDiagnosticKnowledge(state, { sourceActorId: "missing" }).records).toEqual([]);
+    const stateObjects = objectGraph(state);
+    for (const object of objectGraph(report)) {
+      expect(Object.isFrozen(object)).toBe(true);
+      expect(stateObjects.has(object)).toBe(false);
+    }
+  });
+
+  it("captures only an explicit retained event join and detaches every audience object without changing counters", () => {
+    const { evidence, receipt } = syntheticKnowledgeAudience();
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const before = JSON.stringify([state, receipt]);
+    const captured = captureExpressionDiagnosticHumanAudience(state, [receipt]);
+    expect(captured.records[0]?.humanListeners).toEqual([{ receipt, retainedBelief: null }]);
+    expect([captured.totalCount, captured.evictedCount]).toEqual([1, 0]);
+    expect(JSON.stringify([state, receipt])).toBe(before);
+    expect(state.records[0]?.humanListeners).toBeNull();
+    const originalObjects = objectGraph(receipt);
+    for (const object of objectGraph(captured.records[0]?.humanListeners)) {
+      expect(Object.isFrozen(object)).toBe(true);
+      expect(originalObjects.has(object)).toBe(false);
+    }
+    expect(captureExpressionDiagnosticHumanAudience(state, [{ ...receipt, expressionEventId: "se-unknown" }])
+      .records[0]).toBe(state.records[0]);
+    expect(captureExpressionDiagnosticHumanAudience(createExpressionDiagnosticState(true), [receipt]).records).toEqual([]);
+    const unsupported = appendExpressionDiagnostic(createExpressionDiagnosticState(true), acceptedEvidence());
+    expect(captureExpressionDiagnosticHumanAudience(unsupported, [{ ...receipt,
+      expressionEventId: unsupported.records[0]!.event!.eventId }]).records[0]?.humanListeners).toBeNull();
+  });
+
+  it("leaves disabled, excessive, evicted and uncopyable audience input untouched", () => {
+    const { evidence, receipt } = syntheticKnowledgeAudience();
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const disabled = setExpressionDiagnosticEnabled(state, false);
+    const hostile = new Proxy([], { get: () => { throw new Error("disabled receipt input must not be read"); } });
+    expect(captureExpressionDiagnosticHumanAudience(disabled, hostile)).toBe(disabled);
+    const tooMany = Array.from({ length: HUMAN_PERCEPTION_MAX_RESIDENTS * HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES + 1 }, () => receipt);
+    expect(captureExpressionDiagnosticHumanAudience(state, tooMany)).toBe(state);
+    const sourceOverflow = Array.from({ length: HUMAN_PERCEPTION_MAX_RESIDENTS + 1 }, () => receipt);
+    expect(captureExpressionDiagnosticHumanAudience(state, sourceOverflow).records[0]).toBe(state.records[0]);
+    const uncopyable = Object.defineProperty({ ...receipt }, "observation", { enumerable: true,
+      get: () => { throw new Error("diagnostic copy cannot veto world"); } });
+    expect(captureExpressionDiagnosticHumanAudience(state, [uncopyable])).toBe(state);
+    let full = state;
+    for (let index = 0; index < EXPRESSION_DIAGNOSTIC_CAPACITY; index += 1) {
+      full = appendExpressionDiagnostic(full, acceptedEvidence(30 + index));
+    }
+    expect(captureExpressionDiagnosticHumanAudience(full, [receipt]).records.every(({ humanListeners }) => humanListeners === null)).toBe(true);
+    expect(auditExpressionDiagnosticKnowledge(full).evictedCount).toBe(1);
+  });
+
+  it("distinguishes actual receipt from retained belief and finalizes only the exact completed tick/listener/observation", () => {
+    const { evidence, receipt, resident, observedAtTick } = syntheticKnowledgeAudience();
+    const captured = captureExpressionDiagnosticHumanAudience(
+      appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence), [receipt]);
+    const perception = stepActorPerception(resident.perception, { tick: observedAtTick, observations: [receipt.observation!] });
+    if (perception === null) throw new Error("audit fixture needs accepted cognition");
+    const retained: ResidentState = { ...resident, perception };
+    expect(finalizeExpressionDiagnosticHumanAudience(captured, observedAtTick - 1, [retained])
+      .records[0]?.humanListeners?.[0]?.retainedBelief).toBeNull();
+    const final = finalizeExpressionDiagnosticHumanAudience(captured, observedAtTick, [retained]);
+    expect(final.records[0]?.humanListeners?.[0]?.retainedBelief).toBe(true);
+    for (const changed of [resident, { ...retained, id: retained.id + 100 },
+      { ...retained, identity: { ...retained.identity, stableId: "RES-wrong-listener" } },
+      { ...retained, perception: { ...perception, beliefs: [] } },
+      { ...retained, perception: { ...perception, beliefs: perception.beliefs.map((belief) => ({ ...belief, sourceObservationId: "another-observation" })) } }]) {
+      expect(finalizeExpressionDiagnosticHumanAudience(captured, observedAtTick, [changed])
+        .records[0]?.humanListeners?.[0]?.retainedBelief).toBe(false);
+    }
+    expect(auditExpressionDiagnosticKnowledge(final).records[0]?.issues).toEqual([]);
+    expect(auditExpressionDiagnosticKnowledge(captured).records[0]?.humanListeners?.[0]?.retainedBelief).toBeNull();
+    expect(finalizeExpressionDiagnosticHumanAudience(final, observedAtTick + 1, []).records[0]?.humanListeners)
+      .toEqual(final.records[0]?.humanListeners);
+  });
+
+  it("flags unsupported heard understanding while not-heard/source-excluded/unavailable never become retained knowledge", () => {
+    const { evidence, receipt, observedAtTick, resident } = syntheticKnowledgeAudience();
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const heardWithoutMeaning = { ...receipt, semanticFact: null };
+    const captured = captureExpressionDiagnosticHumanAudience(state, [heardWithoutMeaning]);
+    expect(auditExpressionDiagnosticKnowledge(captured).records[0]?.issues)
+      .toContain(`${receipt.observerId}:unsupported-understanding`);
+    for (const outcome of ["not-heard", "unavailable", "source-excluded"] as const) {
+      const noObservation = { ...receipt, outcome, contact: null, observation: null,
+        observerId: outcome === "source-excluded" ? receipt.sourceActorId : receipt.observerId };
+      const final = finalizeExpressionDiagnosticHumanAudience(captureExpressionDiagnosticHumanAudience(state, [noObservation]), observedAtTick, [resident]);
+      expect(final.records[0]?.humanListeners?.[0]?.retainedBelief).toBe(false);
+      expect(auditExpressionDiagnosticKnowledge(final).records[0]?.issues).toEqual([]);
+    }
+  });
+});
+
 describe("situated-expression development diagnostics", () => {
   it("does not read, clone, freeze, or allocate a replacement for disabled evidence", () => {
     const disabled = createExpressionDiagnosticState();
@@ -333,6 +499,8 @@ describe("situated-expression development diagnostics", () => {
       realization: projectSituatedExpression(source.event),
       producerContext: null,
       listeningContext: null,
+      knowledgeSource: null,
+      humanListeners: null,
     });
     expect(JSON.stringify(source)).toBe(before);
     const sourceObjects = objectGraph(source);
@@ -368,6 +536,7 @@ describe("situated-expression development diagnostics", () => {
     const record = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence).records[0];
     expect(record).toEqual({
       ...evidence, sequence: 1, realization: null, producerContext: null, listeningContext: null,
+      knowledgeSource: null, humanListeners: null,
     });
     expect(record?.priorState.recent).toEqual(admitted.state.recent);
     expect(record?.priorState.recent).not.toBe(admitted.state.recent);
