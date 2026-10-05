@@ -187,11 +187,13 @@ import {
   appendExpressionDiagnostic,
   createExpressionDiagnosticState,
   previewExpressionDiagnostic,
+  previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
   selectExpressionDiagnostics,
   setExpressionDiagnosticEnabled,
   type ExpressionDiagnosticReason,
   type ExpressionDiagnosticProducerContext,
+  type ExpressionDiagnosticListeningContext,
   type ExpressionDiagnosticSnapshot,
   type SituatedExpressionDiagnostics,
 } from "./situatedExpressionDiagnostics";
@@ -12526,6 +12528,7 @@ export async function createTideweftRuntime(
       SituatedExpressionIntent,
       "meaning" | "position" | "sourceActorId" | "volume"
     >,
+    onEvaluated?: (context: ExpressionDiagnosticListeningContext) => void,
   ): {
     readonly certainty: number;
     readonly pan: number;
@@ -12559,7 +12562,7 @@ export async function createTideweftRuntime(
     const masking = ambientNoiseAt(worldView, playerTileIndex(player));
     if (masking === null) return null;
     const acoustics = expressionAcoustics(expression);
-    const heard = evaluateAudibleContact({
+    const input = {
       listener: { x: 0, y: 0 },
       source: { x: delta.x, y: delta.y },
       baseRange: acoustics.rangeUnits,
@@ -12569,7 +12572,17 @@ export async function createTideweftRuntime(
         x: worldView.weather.windX / FIXED_POINT,
         y: worldView.weather.windY / FIXED_POINT,
       },
-    });
+    };
+    const heard = evaluateAudibleContact(input);
+    if (import.meta.env.DEV && onEvaluated !== undefined) {
+      try {
+        // Optional observation gets a detached tuple, never the contact that
+        // authoritative admission/audio are about to use. No second query.
+        onEvaluated(structuredClone({ input, contact: heard }));
+      } catch {
+        // Diagnostic allocation/observation failure cannot change hearing.
+      }
+    }
     return heard === null
       ? null
       : Object.freeze({
@@ -12811,6 +12824,7 @@ export async function createTideweftRuntime(
     sourceBelief: ActorBelief | null = null,
     contextualText: string | null = null,
     producerContext: ExpressionDiagnosticProducerContext | null = null,
+    listeningContext: ExpressionDiagnosticListeningContext | null = null,
   ): void {
     if (!import.meta.env.DEV) return;
     const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
@@ -12831,6 +12845,7 @@ export async function createTideweftRuntime(
         weather: world.weather.kind,
         contextualText,
         producerContext,
+        listeningContext,
       });
       if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
       else expressionDiagnosticState = next;
@@ -12858,6 +12873,7 @@ export async function createTideweftRuntime(
     ) => SituatedExpressionAdmissionRecord | null,
     diagnosticBelief: ActorBelief | null = null,
     diagnosticProducerContext: ExpressionDiagnosticProducerContext | null = null,
+    diagnosticListeningContext: ExpressionDiagnosticListeningContext | null = null,
   ): boolean {
     if (intent === null) return false;
     // Sound carry, memory, causal authority, and optional presentation are one
@@ -12871,6 +12887,7 @@ export async function createTideweftRuntime(
       if (import.meta.env.DEV) recordExpressionDecision(
         intent, "sound-budget", null, null, null, undefined, diagnosticBelief,
         null, diagnosticProducerContext,
+        diagnosticListeningContext,
       );
       return false;
     }
@@ -12965,12 +12982,14 @@ export async function createTideweftRuntime(
         diagnosticBelief,
         null,
         diagnosticProducerContext,
+        diagnosticListeningContext,
       );
       return true;
     }
     if (import.meta.env.DEV) recordExpressionDecision(
       intent, reduction.reason, null, null, null, diagnosticPriorState, diagnosticBelief,
       null, diagnosticProducerContext,
+      diagnosticListeningContext,
     );
     return false;
   }
@@ -18792,7 +18811,12 @@ export async function createTideweftRuntime(
     ) {
       throw new Error("Committed store closure could not authorize its keeper response");
     }
-    const heard = playerExpressionAudibility(expressionIntent);
+    let diagnosticListeningContext: ExpressionDiagnosticListeningContext | null = null;
+    const heard = playerExpressionAudibility(expressionIntent,
+      import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+        ? (context) => { diagnosticListeningContext = context; }
+        : undefined,
+    );
     const responseAdmitted = acceptSituatedExpression(
       expressionIntent,
       heard === null
@@ -18813,6 +18837,9 @@ export async function createTideweftRuntime(
           hearingCertainty: heard?.certainty ?? null,
         })
       ),
+      null,
+      null,
+      diagnosticListeningContext,
     );
     settlementEcology = resolution.state;
     // Authoritative closure and expression roots commit before optional
@@ -20239,6 +20266,9 @@ export async function createTideweftRuntime(
         ),
         replayProducer: (sequence) => replayExpressionDiagnosticProducer(
           expressionDiagnosticState!, sequence,
+        ),
+        previewListening: (sequence, overrides) => previewExpressionDiagnosticListening(
+          expressionDiagnosticState!, sequence, overrides,
         ),
       } satisfies SituatedExpressionDiagnostics),
     } : {}),

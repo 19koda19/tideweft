@@ -7,6 +7,7 @@ import { createDogActorState, replaceDogActorPerception, setDogActorIntent } fro
 import * as dogSignalProducer from "./dogSignalExpression";
 import type { GuardianDogShelterWhineExpressionInput } from "./dogSignalExpression";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
+import { evaluateAudibleContact, type AudibleContactInput } from "./perception";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import * as traversalProducer from "./playerTraversalExpression";
 import type { PlayerTraversalExpressionInput } from "./playerTraversalExpression";
@@ -22,13 +23,16 @@ import {
   appendExpressionDiagnostic,
   createExpressionDiagnosticState,
   previewExpressionDiagnostic,
+  previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
   selectExpressionDiagnostics,
   setExpressionDiagnosticEnabled,
   type ExpressionDiagnosticInput,
+  type ExpressionDiagnosticListeningContext,
   type ExpressionDiagnosticProducerContext,
   type ExpressionDiagnosticReason,
   type ExpressionPreviewOverrides,
+  type ExpressionListeningPreviewOverrides,
 } from "./situatedExpressionDiagnostics";
 import {
   createHeardVisibleSituatedExpressionReception,
@@ -244,6 +248,36 @@ function shelterWhineEvidence(
   };
 }
 
+// Diagnostic-contract inputs only: computing this contact and constructing a
+// receipt does not prove runtime hearing, visibility or causal admission.
+function listeningCapture(input: AudibleContactInput = {
+  listener: { x: -2, y: 4 },
+  source: { x: 4, y: 4 },
+  baseRange: 20,
+  ambientNoise: 0.2,
+  sourceLoudness: 0.9,
+  wind: { x: 0, y: -0.6 },
+}): ExpressionDiagnosticListeningContext {
+  return { input, contact: evaluateAudibleContact(input) };
+}
+
+function listeningEvidence(
+  listeningContext = listeningCapture(),
+): ExpressionDiagnosticInput {
+  const evidence = shelterWhineEvidence();
+  if (evidence.event === null) throw new Error("listening fixture requires a selected kernel event");
+  const playerReception = listeningContext.contact === null
+    ? null
+    : createHeardVisibleSituatedExpressionReception(
+        evidence.event, evidence.completedTick,
+        Math.max(1, Math.round(listeningContext.contact.certainty * 1_000_000)), true,
+      );
+  if (listeningContext.contact !== null && playerReception === null) {
+    throw new Error("listening fixture requires a valid diagnostic receipt");
+  }
+  return { ...evidence, listeningContext, playerReception };
+}
+
 function objectGraph(value: unknown, found = new Set<object>()): Set<object> {
   if (value !== null && typeof value === "object" && !found.has(value)) {
     found.add(value);
@@ -298,6 +332,7 @@ describe("situated-expression development diagnostics", () => {
       sequence: 1,
       realization: projectSituatedExpression(source.event),
       producerContext: null,
+      listeningContext: null,
     });
     expect(JSON.stringify(source)).toBe(before);
     const sourceObjects = objectGraph(source);
@@ -331,7 +366,9 @@ describe("situated-expression development diagnostics", () => {
       playerReception: null,
     };
     const record = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence).records[0];
-    expect(record).toEqual({ ...evidence, sequence: 1, realization: null, producerContext: null });
+    expect(record).toEqual({
+      ...evidence, sequence: 1, realization: null, producerContext: null, listeningContext: null,
+    });
     expect(record?.priorState.recent).toEqual(admitted.state.recent);
     expect(record?.priorState.recent).not.toBe(admitted.state.recent);
   });
@@ -837,5 +874,290 @@ describe("captured guardian shelter-whine producer replay", () => {
     expect(replayExpressionDiagnosticProducer(reset, 1)).toBeNull();
     expect(replayExpressionDiagnosticProducer(appendExpressionDiagnostic(reset, evidence), 1)?.producerKind)
       .toBe("guardian-dog-shelter-whine");
+  });
+});
+
+describe("captured player-listening preview", () => {
+  it("normalizes uncaptured context to null without treating it as inaudibility", () => {
+    const evidence = acceptedEvidence();
+    const omitted = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const explicit = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+      ...evidence, listeningContext: null,
+    });
+    expect(omitted.records[0]?.listeningContext).toBeNull();
+    expect(explicit).toEqual(omitted);
+    expect(previewExpressionDiagnosticListening(omitted, 1)).toBeNull();
+    expect(previewExpressionDiagnosticListening(explicit, 1, { ambientNoise: 0 })).toBeNull();
+  });
+
+  it("detaches immutable captured evidence and exactly replays its unchanged contact", () => {
+    const source = structuredClone(listeningEvidence());
+    const beforeSource = JSON.stringify(source);
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), source);
+    const record = state.records[0]!;
+    const before = JSON.stringify(state);
+    const context = record.listeningContext;
+    const sourceContext = source.listeningContext;
+    if (context === null || sourceContext === null || sourceContext === undefined) {
+      throw new Error("expected copied listening capture");
+    }
+    expect(context.contact).not.toBeNull();
+    expect(context).toEqual(sourceContext);
+    const sourceObjects = objectGraph(source);
+    const recordObjects = objectGraph(record);
+    for (const object of recordObjects) {
+      expect(sourceObjects.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    for (const object of sourceObjects) expect(Object.isFrozen(object)).toBe(false);
+    const preview = previewExpressionDiagnosticListening(state, 1);
+    if (preview === null) throw new Error("expected an available captured contact preview");
+    expect(preview).toEqual({
+      scope: "captured-player-listening-preview",
+      actualRuntimeReason: record.reason,
+      actualContact: context.contact,
+      actualPlayerReception: record.playerReception,
+      candidateInput: context.input,
+      hypotheticalContact: context.contact,
+      notEvaluated: [
+        "physical-environment-change", "terrain/structure/foliage-transmission",
+        "sleep-policy", "visibility/identification", "comprehension", "npc-reception",
+        "causal-admission", "audio/presentation",
+      ],
+    });
+    for (const object of objectGraph(preview)) {
+      expect(recordObjects.has(object)).toBe(false);
+      expect(sourceObjects.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    expect(previewExpressionDiagnosticListening(state, 1)).toEqual(preview);
+    expect(JSON.stringify(source)).toBe(beforeSource);
+    Reflect.set(sourceContext.input, "ambientNoise", 1);
+    Reflect.set(sourceContext.input.source, "x", 900);
+    expect(context.input.ambientNoise).toBe(0.2);
+    expect(context.input.source.x).toBe(4);
+    expect(Reflect.set(context.input, "ambientNoise", 1)).toBe(false);
+    expect(Reflect.set(preview.candidateInput.source, "x", 900)).toBe(false);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("returns a valid fully masked preview without erasing the actual contact or receipt", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    const record = state.records[0]!;
+    const before = JSON.stringify(state);
+    const overrides = { ambientNoise: 1 };
+    const preview = previewExpressionDiagnosticListening(state, 1, overrides);
+    expect(preview).not.toBeNull();
+    expect(preview?.hypotheticalContact).toBeNull();
+    expect(preview?.actualContact).toEqual(record.listeningContext?.contact);
+    expect(preview?.actualContact).not.toBeNull();
+    expect(preview?.actualPlayerReception).toEqual(record.playerReception);
+    expect(preview?.actualPlayerReception?.kind).toBe("heard-visible");
+    expect(preview?.candidateInput).toEqual({ ...record.listeningContext?.input, ambientNoise: 1 });
+    expect(Object.isFrozen(overrides)).toBe(false);
+    overrides.ambientNoise = 0;
+    expect(preview?.candidateInput.ambientNoise).toBe(1);
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("keeps a valid captured null contact distinct from missing or unsupported context", () => {
+    const input = { ...listeningCapture().input, ambientNoise: 1 };
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence(listeningCapture(input)));
+    const before = JSON.stringify(state);
+    expect(state.records[0]?.listeningContext).toEqual({ input, contact: null });
+    expect(previewExpressionDiagnosticListening(state, 1)).toMatchObject({
+      actualContact: null, actualPlayerReception: null, hypotheticalContact: null,
+    });
+    const unmasked = previewExpressionDiagnosticListening(state, 1, { ambientNoise: 0 });
+    expect(unmasked?.actualContact).toBeNull();
+    expect(unmasked?.actualPlayerReception).toBeNull();
+    expect(unmasked?.hypotheticalContact).not.toBeNull();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("preserves an actual runtime refusal despite hypothetical acoustic contact", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+      ...listeningEvidence(), reason: "sound-budget", event: null, admission: null, playerReception: null,
+    });
+    const before = JSON.stringify(state);
+    const preview = previewExpressionDiagnosticListening(state, 1, { ambientNoise: 0 });
+    expect(preview?.actualRuntimeReason).toBe("sound-budget");
+    expect(preview?.actualPlayerReception).toBeNull();
+    expect(preview?.hypotheticalContact).not.toBeNull();
+    expect(state.records[0]).toMatchObject({ reason: "sound-budget", event: null, admission: null, playerReception: null });
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("accepts the masking endpoints and saturates valid diagonal wind through the existing calculator", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    const input = state.records[0]!.listeningContext!.input;
+    const before = JSON.stringify(state);
+    for (const overrides of [
+      { ambientNoise: 0 }, { ambientNoise: 1 },
+      { wind: { x: 1, y: 1 } }, { wind: { x: -1, y: -1 } },
+      { ambientNoise: 0.5, wind: { x: 0, y: 0 } },
+    ]) {
+      const preview = previewExpressionDiagnosticListening(state, 1, overrides);
+      expect(preview).not.toBeNull();
+      expect(preview?.candidateInput).toEqual({ ...input, ...overrides });
+      expect(preview?.hypotheticalContact).toEqual(evaluateAudibleContact({ ...input, ...overrides }));
+    }
+    const overrides = Object.assign(Object.create(null), {
+      ambientNoise: 0,
+      wind: Object.assign(Object.create(null), { x: 1, y: -1 }),
+    }) as ExpressionListeningPreviewOverrides;
+    expect(previewExpressionDiagnosticListening(state, 1, overrides)).not.toBeNull();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("accepts a finite zero range as captured inaudibility", () => {
+    const context = listeningCapture({ ...listeningCapture().input, baseRange: 0 });
+    expect(context.contact).toBeNull();
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence(context));
+    expect(previewExpressionDiagnosticListening(state, 1)).toMatchObject({
+      candidateInput: { baseRange: 0 }, actualContact: null, hypotheticalContact: null,
+    });
+  });
+
+  it("rejects malformed captured metadata even when its calculator result would be null", () => {
+    const evidence = listeningEvidence();
+    const input = evidence.listeningContext!.input;
+    const malformed = [
+      null, {}, { ...input, listener: null }, { ...input, source: {} },
+      { ...input, listener: { x: Number.NaN, y: 4 } },
+      { ...input, source: { x: Number.POSITIVE_INFINITY, y: 4 } },
+      { ...input, wind: { x: 0, y: Number.NEGATIVE_INFINITY } },
+      { ...input, baseRange: -1 }, { ...input, baseRange: Number.NaN },
+      { ...input, baseRange: Number.POSITIVE_INFINITY },
+      { ...input, ambientNoise: -0.01 }, { ...input, ambientNoise: 1.01 },
+      { ...input, sourceLoudness: -0.01 }, { ...input, sourceLoudness: 1.01 },
+      { ...input, sourceLoudness: Number.NaN },
+      { ...input, listener: { x: -Number.MAX_VALUE, y: 0 }, source: { x: Number.MAX_VALUE, y: 0 } },
+      { ...input, wind: { x: Number.MAX_VALUE, y: Number.MAX_VALUE } },
+    ];
+    for (const invalid of malformed) {
+      const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+        ...evidence, listeningContext: { input: invalid, contact: null } as unknown as ExpressionDiagnosticListeningContext,
+      });
+      const before = JSON.stringify(state);
+      expect(previewExpressionDiagnosticListening(state, 1)).toBeNull();
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("requires exact captured contact agreement before applying any masking override", () => {
+    const evidence = listeningEvidence();
+    const context = evidence.listeningContext!;
+    const contact = context.contact;
+    if (contact === null) throw new Error("expected an audible diagnostic fixture");
+    for (const invalid of [
+      { input: context.input, contact: null },
+      { input: context.input, contact: { ...contact, certainty: contact.certainty + 0.001 } },
+      { input: context.input, contact: { ...contact, bearing: { ...contact.bearing, centerRadians: contact.bearing.centerRadians + 0.001 } } },
+      { input: context.input, contact: { ...contact, distanceBand: { ...contact.distanceBand, maximum: contact.distanceBand.maximum + 0.001 } } },
+      { input: { ...context.input, ambientNoise: 1 }, contact },
+      { input: context.input, contact: { ...contact, certainty: Number.NaN } },
+      { input: context.input, contact: "not a contact" },
+    ]) {
+      const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+        ...evidence, listeningContext: invalid as unknown as ExpressionDiagnosticListeningContext,
+      });
+      const before = JSON.stringify(state);
+      expect(previewExpressionDiagnosticListening(state, 1, { ambientNoise: 1 })).toBeNull();
+      expect(JSON.stringify(state)).toBe(before);
+    }
+  });
+
+  it("rejects unknown top-level overrides rather than changing source or listener authority", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    for (const invalid of [
+      { listener: { x: 0, y: 0 } }, { source: { x: 0, y: 0 } },
+      { baseRange: 999 }, { sourceLoudness: 1 }, { weather: "clear" },
+      { sourceActorId: "invented" }, { playerReception: { kind: "heard-visible" } },
+      { ambientNoise: 0, meaning: "guardian-dog-warning" },
+    ]) {
+      expect(previewExpressionDiagnosticListening(state, 1, invalid as ExpressionListeningPreviewOverrides)).toBeNull();
+    }
+  });
+
+  it("rejects inherited, hidden, symbolic and accessor overrides without evaluating getters", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    const getter = vi.fn(() => { throw new Error("listening preview must not evaluate override getters"); });
+    const accessor = Object.defineProperty({}, "ambientNoise", { enumerable: true, get: getter });
+    const hidden = Object.defineProperty({}, "ambientNoise", { value: 0, enumerable: false });
+    const inherited = Object.assign(Object.create({ ambientNoise: 1 }), { wind: { x: 0, y: 0 } });
+    const proxy = new Proxy({}, { getPrototypeOf() { throw new Error("hostile override prototype"); } });
+    const before = JSON.stringify(state);
+    for (const invalid of [accessor, hidden, inherited, { [Symbol("mask")]: 0 }, [], null, 1, proxy]) {
+      expect(previewExpressionDiagnosticListening(state, 1, invalid as ExpressionListeningPreviewOverrides)).toBeNull();
+    }
+    expect(getter).not.toHaveBeenCalled();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("validates nested wind own data fields without evaluating nested getters", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    const getter = vi.fn(() => { throw new Error("listening preview must not evaluate wind getters"); });
+    const accessor = Object.defineProperty({ y: 0 }, "x", { enumerable: true, get: getter });
+    const hidden = Object.defineProperty({ y: 0 }, "x", { value: 0, enumerable: false });
+    const inherited = Object.assign(Object.create({ x: 0 }), { y: 0 });
+    const proxy = new Proxy({}, { getPrototypeOf() { throw new Error("hostile wind prototype"); } });
+    const before = JSON.stringify(state);
+    for (const wind of [
+      accessor, hidden, inherited, { x: 0, y: 0, [Symbol("wind")]: 0 },
+      { x: 0, y: 0, z: 0 }, {}, { x: 0 }, { y: 0 }, [], null, 1, proxy,
+      { x: 1.01, y: 0 }, { x: 0, y: -1.01 }, { x: Number.NaN, y: 0 },
+      { x: 0, y: Number.POSITIVE_INFINITY }, { x: "0", y: 0 },
+    ]) {
+      expect(previewExpressionDiagnosticListening(state, 1, { wind } as ExpressionListeningPreviewOverrides)).toBeNull();
+    }
+    expect(getter).not.toHaveBeenCalled();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("rejects non-unit masking and explicitly undefined supplied controls", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    for (const ambientNoise of [-0.01, 1.01, Number.NaN, Number.POSITIVE_INFINITY, "0", null, undefined]) {
+      expect(previewExpressionDiagnosticListening(state, 1, { ambientNoise } as ExpressionListeningPreviewOverrides)).toBeNull();
+    }
+    expect(previewExpressionDiagnosticListening(state, 1, { wind: undefined } as unknown as ExpressionListeningPreviewOverrides)).toBeNull();
+  });
+
+  it("uses only the retained buffer through eviction, reset and discarded staged roots", () => {
+    const evidence = listeningEvidence();
+    const first = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const before = JSON.stringify(first);
+    const staged = appendExpressionDiagnostic(first, { ...evidence, reason: "sound-budget", playerReception: null });
+    expect(previewExpressionDiagnosticListening(staged, 2)?.actualRuntimeReason).toBe("sound-budget");
+    expect(previewExpressionDiagnosticListening(first, 2)).toBeNull();
+    let full = first;
+    for (let index = 0; index < EXPRESSION_DIAGNOSTIC_CAPACITY; index += 1) {
+      full = appendExpressionDiagnostic(full, evidence);
+    }
+    expect(full.records).toHaveLength(64);
+    expect(full.evictedCount).toBe(1);
+    expect(previewExpressionDiagnosticListening(full, 1)).toBeNull();
+    expect(previewExpressionDiagnosticListening(full, 65)).not.toBeNull();
+    const reset = createExpressionDiagnosticState(true);
+    expect(previewExpressionDiagnosticListening(reset, 1)).toBeNull();
+    const restarted = appendExpressionDiagnostic(reset, {
+      ...evidence, listeningContext: listeningCapture({ ...evidence.listeningContext!.input, ambientNoise: 1 }),
+      playerReception: null,
+    });
+    expect(restarted.records[0]?.sequence).toBe(1);
+    expect(previewExpressionDiagnosticListening(restarted, 1)?.actualContact).toBeNull();
+    expect(previewExpressionDiagnosticListening(first, 1)?.actualContact).not.toBeNull();
+    for (const sequence of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1.5, 66]) {
+      expect(previewExpressionDiagnosticListening(full, sequence)).toBeNull();
+    }
+    expect(JSON.stringify(first)).toBe(before);
+  });
+
+  it("isolates copying failure without modifying retained contact or actual receipt", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), listeningEvidence());
+    const before = JSON.stringify(state);
+    vi.spyOn(globalThis, "structuredClone").mockImplementation(() => { throw new Error("listening preview copy failed"); });
+    expect(previewExpressionDiagnosticListening(state, 1)).toBeNull();
+    expect(JSON.stringify(state)).toBe(before);
   });
 });

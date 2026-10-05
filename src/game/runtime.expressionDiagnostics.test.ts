@@ -72,20 +72,52 @@ async function keeperRun(enabled: boolean) {
     const caption = runtime.getUIView().expressionCaption;
     await runtime.save();
     const pending = repository.snapshot();
+    const beforePreview = {
+      decisions: structuredClone(decisions),
+      view: structuredClone(runtime.getRenderView()),
+      ui: structuredClone(runtime.getUIView()),
+      audio: structuredClone(play.mock.calls),
+    };
+    const sequence = decisions.records[0]?.sequence ?? 1;
+    const baseline = inspector.previewListening(sequence);
+    const masked = inspector.previewListening(sequence, { ambientNoise: 1 });
+    expect(inspector.getSnapshot()).toEqual(beforePreview.decisions);
+    expect(runtime.getRenderView()).toEqual(beforePreview.view);
+    expect(runtime.getUIView()).toEqual(beforePreview.ui);
+    expect(play.mock.calls).toEqual(beforePreview.audio);
+    expect(repository.snapshot()).toEqual(pending);
+    await runtime.save();
+    expect(repository.snapshot().worldJson).toBe(pending.worldJson);
     steps(runtime, 10);
     await runtime.save();
+    const final = repository.snapshot();
+    const view = structuredClone(runtime.getRenderView());
+    const ui = structuredClone(runtime.getUIView());
+    const audio = structuredClone(play.mock.calls);
+    expect(inspector.reset()).toMatchObject({
+      enabled, totalCount: 0, evictedCount: 0, records: [],
+    });
+    expect(inspector.previewListening(sequence)).toBeNull();
+    expect(runtime.getRenderView()).toEqual(view);
+    expect(runtime.getUIView()).toEqual(ui);
+    expect(play.mock.calls).toEqual(audio);
+    expect(repository.snapshot()).toEqual(final);
+    await runtime.save();
+    expect(repository.snapshot().worldJson).toBe(final.worldJson);
     return {
       repository, pending, final: repository.snapshot(), decisions, caption,
-      audio: structuredClone(play.mock.calls), view: runtime.getRenderView(),
+      baseline, masked, audio, view, ui,
     };
   } finally { runtime.destroy(); }
 }
 
 describe("development situated-expression inspector", () => {
-  it("records a committed keeper cause and exact receipt without changing state, events, saves or audio", async () => {
+  it("records a committed keeper cause and previews its exact listening without changing state, events, saves or audio", async () => {
     const control = await keeperRun(false);
     const observed = await keeperRun(true);
     expect(control.decisions.records).toEqual([]);
+    expect(control.baseline).toBeNull();
+    expect(control.masked).toBeNull();
     expect(observed.decisions.records).toHaveLength(1);
     const decision = observed.decisions.records[0]!;
     expect(decision).toMatchObject({
@@ -99,18 +131,60 @@ describe("development situated-expression inspector", () => {
       realization: { text: observed.caption?.text },
     });
     expect(decision.event?.eventId).toBe(observed.caption?.id);
+    const listening = decision.listeningContext;
+    if (listening === null || observed.baseline === null || observed.masked === null) {
+      throw new Error("Committed keeper response lost its captured listening preview");
+    }
+    expect(listening.contact).not.toBeNull();
+    expect(observed.baseline).toMatchObject({
+      scope: "captured-player-listening-preview",
+      actualRuntimeReason: decision.reason,
+      actualContact: listening.contact,
+      actualPlayerReception: decision.playerReception,
+      candidateInput: listening.input,
+      hypotheticalContact: listening.contact,
+    });
+    expect(observed.baseline.actualContact).toEqual(listening.contact);
+    expect(observed.baseline.actualPlayerReception).toEqual(decision.playerReception);
+    expect(observed.baseline.actualPlayerReception).toMatchObject({ kind: "heard-visible" });
+    expect(observed.baseline.candidateInput).toEqual(listening.input);
+    expect(observed.baseline.hypotheticalContact).toEqual(listening.contact);
+    expect(observed.masked).toMatchObject({
+      scope: "captured-player-listening-preview",
+      actualRuntimeReason: decision.reason,
+      actualContact: listening.contact,
+      actualPlayerReception: decision.playerReception,
+      hypotheticalContact: null,
+    });
+    expect(observed.masked.actualContact).toEqual(listening.contact);
+    expect(observed.masked.actualPlayerReception).toEqual(decision.playerReception);
+    expect(observed.masked.candidateInput).toEqual({ ...listening.input, ambientNoise: 1 });
+    expect(observed.baseline.notEvaluated).toEqual([
+      "physical-environment-change", "terrain/structure/foliage-transmission",
+      "sleep-policy", "visibility/identification", "comprehension", "npc-reception",
+      "causal-admission", "audio/presentation",
+    ]);
+    expect(observed.masked.notEvaluated).toEqual(observed.baseline.notEvaluated);
     expect(observed.pending.worldJson).toBe(control.pending.worldJson);
     expect(observed.final.worldJson).toBe(control.final.worldJson);
     expect(observed.view).toEqual(control.view);
+    expect(observed.ui).toEqual(control.ui);
     expect(observed.audio).toEqual(control.audio);
-    expect(observed.final.worldJson).not.toContain("expressionDiagnostics");
-    expect(observed.final.worldJson).not.toContain("producerContext");
+    for (const record of [observed.pending, observed.final]) {
+      for (const marker of [
+        "expressionDiagnostics", "producerContext", "listeningContext", "candidateInput",
+        "captured-player-listening-preview", "previewListening",
+      ]) expect(record.worldJson).not.toContain(marker);
+    }
     const restored = await createTideweftRuntime(observed.repository);
     try {
       expect(restored.getUIView().saveWarning).toBeUndefined();
       expect(restored.expressionDiagnostics?.getSnapshot()).toMatchObject({
         enabled: false, totalCount: 0, records: [],
       });
+      expect(restored.expressionDiagnostics?.previewListening(decision.sequence)).toBeNull();
+      restored.expressionDiagnostics?.setEnabled(true);
+      expect(restored.expressionDiagnostics?.previewListening(decision.sequence)).toBeNull();
     } finally { restored.destroy(); }
   });
 
@@ -121,6 +195,8 @@ describe("development situated-expression inspector", () => {
     });
     const observed = await keeperRun(true);
     expect(observed.decisions.records).toEqual([]);
+    expect(observed.baseline).toBeNull();
+    expect(observed.masked).toBeNull();
     expect(observed.pending.worldJson).toBe(control.pending.worldJson);
     expect(observed.final.worldJson).toBe(control.final.worldJson);
     expect(observed.audio).toEqual(control.audio);

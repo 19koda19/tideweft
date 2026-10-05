@@ -1411,6 +1411,42 @@ probe SHA256:
 This adds finite ordinary-play evidence after the existing 600-step exhaustion
 eligibility repair, not equal-work before/after comparison or Voice closure.
 
+#### Captured player-listening inspection — 2026-10-05
+
+Local work over `91c1228` extends the existing default-off, 64-decision DEV
+inspector, not the hearing algorithm. One real keeper secure-store response
+captures its already-evaluated player contact through a detached, failure-isolated
+observer. A read-only preview verifies that baseline with the existing contact
+calculator and accepts only bounded masking/wind overrides. Actual receipt,
+actual contact and hypothetical contact remain separate. Other producers remain
+uncaptured; this does not implement terrain transmission or a full sound lab.
+
+Targeted diagnostics/runtime tests pass two files/64 tests, including exact
+enabled/off current-save, full UI/render and committed-audio equality, no saved
+diagnostic fields, reset/reload retirement, strict overrides and copy failure.
+The affected acoustic domain passes seven files/124 tests; the unchanged
+introduction/save/audio late-closure rollback case passes. Maintained smoke
+passes six files/105; typecheck, context-index 28 and player-facing-policy 39
+checks pass. Production web build and nested static smoke pass; bundle
+`index-B5w0WHiD.js` SHA256
+`d32016291ea669a52c5340cd8cd431b38bc7f31cdd0433f830930f64038f6a7b`
+contains none of the inspected diagnostic API/listening markers.
+
+Firefox 157 at 1440×900 uses native START and the visible keeper-warning button
+against separately served development source. The accepted tick-420 response
+has actual certainty 0.57386; masking 1 yields a null hypothetical contact while
+preserving the actual contact/receipt and selected same-stack public physical/
+custody fields. Reset retires preview and finishes disabled. Interaction takes
+224 ms and observation 384 ms/four reads: the 60,000 ms CLI bound is not a soak.
+The screenshot was inspected and the keeper label/shared caption are readable
+in that frame only. One known CSP eval-probe denial remains; browser exits
+normally and its disposable profile/server are removed. Result SHA256
+`63bd70aa3f24e096b55ac0a5594214caa4a1644a5c3e5ce5d2ddc985b14e016a`;
+probe SHA256 `797bef51ac1343c6fd3d579350f07437af9cd7f888d3a20c5eb47a63047c5e3a`.
+This is DEV access evidence, not production interactive, desktop, audible/AT,
+hours, performance, full cumulative, release or Voice-closure certification.
+Schema49/carry14, dependencies and upstream sources remain unchanged.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

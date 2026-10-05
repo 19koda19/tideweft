@@ -326,6 +326,11 @@ inspector.replayProducer(snapshot.records[0]?.sequence);
 // The same replay also supports the current guardian shelter-whine producer:
 const whine = inspector.getSnapshot({ meaning: "guardian-dog-shelter-whine" }).records[0];
 inspector.replayProducer(whine?.sequence);
+// After a real keeper secure-store response, inspect its captured hearing:
+const keeper = inspector.getSnapshot({ meaning: "keeper-secure-store-response" }).records[0];
+inspector.previewListening(keeper?.sequence);
+// Hypothetical masking; the actual receipt and game remain unchanged:
+inspector.previewListening(keeper?.sequence, { ambientNoise: 1 });
 ```
 
 It is default-off, development-only and bounded to 64 copied decisions.
@@ -333,14 +338,19 @@ It is default-off, development-only and bounded to 64 copied decisions.
 actor ID, trigger ID, meaning and exact decision reason. Total/eviction counts
 are global. `reset()` clears history without changing gameplay. Catalog wording,
 optional contextual text and player receipt are separate; absent context does
-not establish silence or unheard audio. Previews are hypothetical kernel
+not establish silence or unheard audio. `preview()` returns hypothetical kernel
 results, not domain/hearing/personality/relationship simulations or a complete
 expression lab. `replayProducer()` supports retained real player traversal and
 guardian shelter-whine inputs; it checks the mapped intent against the recorded
 decision and does not rerun physical transactions, weather exposure, kennel
 custody, shelter travel, recency, capacity or hearing. Other producers return
-null. Refetch the snapshot after reset: sequence numbers may
-be reused. Production web and packaged builds expose no inspector. See
+null for producer replay. `previewListening()` currently supports captured
+keeper secure-store responses only, using the existing player-contact calculator
+with bounded masking/wind overrides. Actual contact and receipt remain separate
+from the hypothetical result. Uncaptured context is not proof of inaudibility;
+this does not change weather, terrain transmission, knowledge, NPC hearing or
+audio, and is not a complete sound-ecology lab. Refetch the snapshot after reset:
+sequence numbers may be reused. Production web and packaged builds expose no inspector. See
 the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
 
 | Change or checkpoint | Validation commands and scope |

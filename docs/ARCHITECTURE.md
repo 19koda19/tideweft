@@ -1105,6 +1105,26 @@ state. Later world changes do not rewrite the captured cause. Reset/reload
 clears availability, but reset may reuse numeric sequences; select from a new
 snapshot rather than treating a number as a permanent external handle.
 
+The keeper's current secure-store response can retain the exact already-evaluated
+player listening input and contact when inspection is enabled. The optional
+observer receives a detached copy after the existing contact calculation; it
+does not repeat a hearing query or mutate the contact used by admission/audio.
+Other producers do not yet capture this tuple. An absent context means
+uncaptured, whereas a captured null contact means that calculation found no
+audible contact; neither substitutes for a committed listener receipt.
+
+`previewListening(sequence, overrides)` first verifies the captured baseline
+against the existing `evaluateAudibleContact` calculator. It permits only finite
+ambient masking in `0..1` and wind components in `-1..1`, and returns the actual
+contact/receipt separately from the hypothetical contact. Missing, inconsistent,
+invalid, evicted or reset context makes preview unavailable. It cannot change
+the environment, apply terrain/structure/foliage transmission, evaluate sleep,
+visibility/identification, comprehension or NPC reception, admit an event, or
+produce audio/text. The fixed 64-record buffer, failure isolation, rollback,
+no-save and production-exclusion rules above also apply. This is a captured
+player-contact inspection aid, not a complete sound-ecology lab or evidence that
+unavailable environmental propagation is implemented.
+
 The separate read-only preview reruns only the existing expression kernel from
 copied prior state, with explicitly supported semantic overrides. It cannot submit an
 event or simulate a domain action, physical recency, capacity, propagation,
