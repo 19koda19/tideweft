@@ -1586,6 +1586,36 @@ claimed. The full knowledge auditor, expression/sound labs and broader Voice
 closure remain open. Schema49/carry14, supported readers, dependencies and
 upstream sources are unchanged; no release or directive transition occurred.
 
+#### Quiet guardian recruitment and water-masked counterfactual — 2026-10-05
+
+The complete regression on frozen local `2818375` finishes with 359/360 files
+and 3844/3845 tests passing in 1314.12s. Its only failure is the existing
+marsh-edge rabbit-alarm/guardian-investigation example. An unchanged focused
+rerun reproduces it. The newly shared listener-local water mask is intentional;
+the old fixture's nominal meadow corridor has elevation0 under tide505000.
+At the actual registered guardian tile, depth505000 yields mask0.150434 and
+anonymous alarm confidence139942, below the existing work threshold180000.
+Clear air does not establish a quiet water field. Neither rabbit alarm meaning
+nor guardian disposition/threshold was changed to make the test pass.
+
+The correction changes only the controlled fixture: dry ground extends through
+the listener's complete two-tile masking halo before regional-view construction.
+The original investigation, physical search, fox-deterrence, anonymity and
+nonlethal assertions remain. A same-source/distance flooded counterpart proves
+real retained hearing with insufficient confidence and lawful `watch`, rather
+than automatic task admission. These are controlled shared-owner proofs, not
+ordinary player encounters or a new acoustic producer.
+
+`npx vitest run src/game/coreEcologyMarshEdgeEmergence.test.ts
+src/game/coreEcologyPerception.test.ts src/game/settlementWorkingAnimals.test.ts
+src/game/settlementWorkingAnimals.guardianInvestigation.test.ts
+src/game/dogBehavior.test.ts src/game/dogSignalExpression.test.ts
+--maxWorkers=1 --no-cache` passes six files/88 tests. Maintained critical smoke
+passes six/105 and typecheck passes. The failed cumulative result remains failed;
+focused/domain passes do not certify the entire corrected head. Runtime, schema,
+supported readers, dependencies, upstream and existing production artifacts are
+unchanged. No release or directive transition occurred.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

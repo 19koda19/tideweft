@@ -9,6 +9,7 @@ import {
 import { type CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
+import { MAX_TIDE_LEVEL } from "../sim/terrain";
 import { type WorldState, type WorldView } from "../sim/types";
 import {
   collectCoreEcologyVisualObservationBatches,
@@ -28,7 +29,8 @@ import {
 } from "./coreWildlifeActor";
 import { createDogActorState, replaceDogActorPerception } from "./dogActor";
 import { evaluateDogBehavior } from "./dogBehavior";
-import { type LivingActorAddress } from "./livingActor";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
+import { livingActorAddressInRegionalWindow, type LivingActorAddress } from "./livingActor";
 import {
   createLivingActorTraversabilitySurface,
   deriveLivingActorSearchProbe,
@@ -45,6 +47,7 @@ import { createRegionalWorldView } from "./regionalWorldView";
 import {
   createSettlementWorkingAnimalState,
   decideSettlementWorkingAnimalActivity,
+  SETTLEMENT_WORKING_ANIMAL_GUARDIAN_SIGNAL_THRESHOLD,
 } from "./settlementWorkingAnimals";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
@@ -66,8 +69,17 @@ interface Fixture {
 }
 
 describe("marsh-edge representative emergence", () => {
-  it("lets a rabbit alarm recruit guardian investigation while the same dog deters fox pursuit", () => {
-    const current = fixture("rabbit fox dog representative triad");
+  it.each([
+    {
+      name: "lets a rabbit alarm recruit guardian investigation while the same dog deters fox pursuit",
+      dry: true,
+    },
+    {
+      name: "keeps a water-masked rabbit alarm heard but below guardian investigation strength",
+      dry: false,
+    },
+  ])("$name", ({ dry }) => {
+    const current = fixture("rabbit fox dog representative triad", dry);
     const rabbit = wildlife(current, "marsh-rabbit", RABBIT_X, ROW, 0, 0);
     const fox = hungry(wildlife(current, "marsh-fox", FOX_X, ROW, 500_000, 0));
 
@@ -206,6 +218,16 @@ describe("marsh-edge representative emergence", () => {
       sourceObservationId === guardianAlarm.id
     ));
     if (guardianBelief === undefined) throw new Error("Guardian did not retain alarm belief");
+    const listenerIndex = livingActorAddressInRegionalWindow(dog, current.window)?.tileIndex;
+    if (listenerIndex === undefined) throw new Error("Guardian left its registered window");
+    const listener = current.world.terrain.tiles[listenerIndex];
+    expect(listener?.waterDepth).toBe(dry ? 0 : current.world.tide.level);
+    expect(ambientNoiseAt(current.world, listenerIndex)).toBe(dry ? 0 : 0.150434);
+    expect(guardianAlarm).toMatchObject({
+      identification: "anonymous",
+      interrupt: "none",
+      subjectId: null,
+    });
     const guardianAssignment = createSettlementWorkingAnimalState({
       settlementId: 1,
       assignments: [{
@@ -240,6 +262,25 @@ describe("marsh-edge representative emergence", () => {
       workerInsideDutyArea: true,
     });
     if (guardianDecision === null) throw new Error("Guardian work decision was rejected");
+    if (!dry) {
+      // Hearing is not automatic task admission. The same conserved source,
+      // distance and duty area still produce an anonymous sound, but real
+      // listener-local water masks it below the existing work threshold.
+      expect(guardianBelief.confidence).toBeGreaterThan(0);
+      expect(Math.min(guardianBelief.confidence, guardianBelief.salience))
+        .toBeLessThan(SETTLEMENT_WORKING_ANIMAL_GUARDIAN_SIGNAL_THRESHOLD);
+      expect(guardianBehavior.assignmentReadiness).toEqual({ kind: "available" });
+      expect(guardianDecision).toMatchObject({
+        activity: "watch",
+        cause: { kind: "assignment", referenceId: guardianAssignment.assignmentId },
+        perceivedArea: null,
+      });
+      expect(JSON.stringify(guardianDecision)).not.toContain(rabbit.identity.stableId);
+      expect(JSON.stringify(guardianDecision)).not.toContain(fox.identity.stableId);
+      return;
+    }
+    expect(Math.min(guardianBelief.confidence, guardianBelief.salience))
+      .toBeGreaterThanOrEqual(SETTLEMENT_WORKING_ANIMAL_GUARDIAN_SIGNAL_THRESHOLD);
     expect(guardianDecision).toMatchObject({
       activity: "investigate",
       cause: { kind: "perception", referenceId: guardianAlarm.id },
@@ -371,7 +412,7 @@ describe("marsh-edge representative emergence", () => {
   });
 });
 
-function fixture(seedText: string): Fixture {
+function fixture(seedText: string, dry = true): Fixture {
   const state = createWorld(seedText, "standard");
   state.weather = {
     ...state.weather,
@@ -381,12 +422,15 @@ function fixture(seedText: string): Fixture {
     windY: 0,
   };
   for (const settlement of state.settlements) settlement.tileIndex = 0;
-  for (let y = ROW - 1; y <= GUARDIAN_START_Y + 1; y += 1) {
-    for (let x = RABBIT_X - 1; x <= FOX_X + 1; x += 1) {
+  // Quiet air alone does not make a quiet corridor. Cover the actual
+  // listener's complete 5x5 masking neighborhood with registered terrain,
+  // above high water for the dry proof and flooded for its counterfactual.
+  for (let y = ROW - 2; y <= GUARDIAN_START_Y + 2; y += 1) {
+    for (let x = RABBIT_X - 2; x <= FOX_X + 2; x += 1) {
       const tile = state.terrain.tiles[y * state.terrain.width + x];
       if (tile === undefined) throw new Error("Marsh-edge fixture corridor left terrain");
       tile.terrain = "meadow";
-      tile.elevation = 0;
+      tile.elevation = dry ? MAX_TIDE_LEVEL + 1 : 0;
       tile.roughness = 0;
     }
   }
