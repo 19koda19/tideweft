@@ -29,7 +29,14 @@ import {
   type CoreWildlifeActorState,
   type CoreWildlifeCausalEvent,
 } from "./coreWildlifeActor";
-import { createLivingActorAddress, type LivingActorAddress } from "./livingActor";
+import {
+  createLivingActorAddress,
+  livingActorAddressInRegionalWindow,
+  type LivingActorAddress,
+} from "./livingActor";
+import { livingActorSenseProfile } from "./livingActorSenses";
+import { evaluateAudibleContact } from "./perception";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import {
@@ -662,6 +669,123 @@ describe("core ecology cross-species perception bridge", () => {
     expect(clearBatches?.find(({ observerId }) => observerId === player.actorId)?.audibleContact).not.toBeNull();
     expect(observationsFor(stormBatches, player.actorId)).toEqual([]);
     expect(stormBatches?.find(({ observerId }) => observerId === player.actorId)?.audibleContact).toBeNull();
+  });
+
+  it.each(["human", "domestic-dog"] as const)("uses listener-local water masking for exact %s alarm contacts", (species) => {
+    const current = fixture("water masking follows the listener, not the source");
+    const sourceX = OBSERVER_X + 4;
+    const listenerX = OBSERVER_X + 11;
+    const gull = wildlife(current, "gull", sourceX, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const prefix = species === "human" ? "H" : "D";
+    const listener = actorAddress(`${prefix}-water-listener`, species, listenerX, OBSERVER_Y, 500_000);
+    const nearby = actorAddress(`${prefix}-water-nearby`, species, sourceX, OBSERVER_Y, 0);
+    let dryContact: ReturnType<typeof evaluateAudibleContact> = null;
+
+    for (const water of ["dry", "source-only", "listener-adjacent"] as const) {
+      const state = structuredClone(current.state);
+      expect(state.tide.level).toBe(505_000);
+      // The original clear-weather corridor is not necessarily dry. Explicitly
+      // dry both local mask boxes before changing only one adjacent water tile.
+      for (const centerX of [sourceX, listenerX]) {
+        for (let y = OBSERVER_Y - 2; y <= OBSERVER_Y + 2; y += 1) {
+          for (let x = centerX - 2; x <= centerX + 2; x += 1) {
+            const tile = state.terrain.tiles[y * state.terrain.width + x];
+            if (tile === undefined) throw new Error("Water fixture left compatibility terrain");
+            tile.terrain = "meadow";
+            tile.elevation = state.tide.level;
+            tile.roughness = 0;
+          }
+        }
+      }
+      if (water !== "dry") {
+        const waterX = water === "source-only" ? sourceX : listenerX;
+        const tile = state.terrain.tiles[(OBSERVER_Y + 1) * state.terrain.width + waterX]!;
+        tile.terrain = "deep-water";
+        tile.elevation = 0;
+        tile.roughness = FIXED_POINT;
+      }
+      // Reproject through the owner: cloning a WorldView loses its registered
+      // window, and mutating only WorldState would leave old projected depths.
+      const world = createRegionalWorldView(
+        createWorldView(state),
+        current.window,
+        projectRegionalCartographyWindow(createRegionalCartography(state.meta.rootSeed), current.window),
+      );
+      const participants = [listener, nearby].map((address) => ({
+        address, contactScope: "core-only" as const,
+      }));
+      const input = {
+        ...frame({ ...current, state, world }, [alarmed.actor], { participants }), tick: 2,
+      };
+      const placement = livingActorAddressInRegionalWindow(listener, current.window);
+      if (placement === null) throw new Error("Water listener left its registered frame");
+      const masking = ambientNoiseAt(world, placement.tileIndex);
+      expect(masking).toBe(water === "listener-adjacent" ? 0.29508 : 0);
+      const expected = evaluateAudibleContact({
+        listener: { x: 0, y: 0 }, source: { x: -7_000, y: 0 },
+        baseRange: Math.floor(CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS
+          * livingActorSenseProfile(species).hearingSensitivity / ACTOR_PERCEPTION_SCALE),
+        ambientNoise: masking!, sourceLoudness: 1, wind: { x: 0, y: 0 },
+      });
+      if (water === "listener-adjacent" && species === "human") expect(expected).toBeNull();
+      else expect(expected).not.toBeNull();
+      const batches = propagateCoreEcologyAlarmObservationBatches(alarmed.event, input);
+      expect(batches).not.toBeNull();
+      const contact = batches?.find(({ observerId }) => observerId === listener.actorId)?.audibleContact;
+      expect(contact).toEqual(expected);
+      if (water === "dry") dryContact = contact!;
+      else if (water === "source-only") expect(contact).toEqual(dryContact);
+      else if (species === "domestic-dog") {
+        expect(contact?.certainty).toBe(0.283867);
+        expect(contact!.certainty).toBeLessThan(dryContact!.certainty);
+      }
+      const observations = observationsFor(batches, listener.actorId);
+      expect(observations).toHaveLength(expected === null ? 0 : 1);
+      if (expected !== null) {
+        expect(observations[0]).toMatchObject({
+          channel: "hearing", perceivedClass: "animal-alarm", subjectId: null,
+          identification: "anonymous", interrupt: "strong",
+          confidence: Math.round(expected.certainty * ACTOR_PERCEPTION_SCALE),
+          salience: Math.round(expected.certainty * ACTOR_PERCEPTION_SCALE),
+        });
+        for (const hidden of [gull.identity.stableId, gull.identity.species, alarmed.event.eventId, alarmed.event.causeReferenceId]) {
+          expect(JSON.stringify(observations)).not.toContain(hidden);
+        }
+        expect(Object.isFrozen(contact)).toBe(true);
+        expect(Object.isFrozen(contact?.bearing)).toBe(true);
+        expect(Object.isFrozen(contact?.distanceBand)).toBe(true);
+      }
+      expect(observationsFor(batches, gull.identity.stableId)).toEqual([]);
+      expect(batches?.find(({ observerId }) => observerId === gull.identity.stableId)?.audibleContact).toBeNull();
+      expect(Object.isFrozen(batches)).toBe(true);
+      expect(batches?.map(({ observerId }) => observerId)).toEqual(
+        [...batches!.map(({ observerId }) => observerId)].sort(),
+      );
+      expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, {
+        ...input, participants: [...participants].reverse(),
+      })).toEqual(batches);
+    }
+  });
+
+  it("fails alarm propagation closed on malformed listener-local water data", () => {
+    const current = fixture("malformed local alarm water fails closed");
+    const gull = wildlife(current, "gull", OBSERVER_X + 4, OBSERVER_Y, 500_000, 0);
+    const alarmed = alarmEvent(gull, "large-predator");
+    const listener = actorAddress("H-invalid-water-listener", "human", OBSERVER_X, OBSERVER_Y, 0);
+    const placement = livingActorAddressInRegionalWindow(listener, current.window);
+    if (placement === null) throw new Error("Malformed-water listener left its registered frame");
+    const input = {
+      ...frame(current, [alarmed.actor], { playerAddress: listener }), tick: 2,
+    };
+    expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, input)).not.toBeNull();
+    // Test/tool views are mutable, but retain their registered frame. A bad
+    // neighboring physical field must not become guessed dry hearing.
+    const tile = current.world.terrain.tiles[placement.tileIndex + current.world.terrain.width];
+    if (tile === undefined) throw new Error("Malformed-water fixture left local terrain");
+    Object.defineProperty(tile, "waterDepth", { value: Number.NaN, enumerable: true });
+    expect(ambientNoiseAt(current.world, placement.tileIndex)).toBeNull();
+    expect(propagateCoreEcologyAlarmObservationBatches(alarmed.event, input)).toBeNull();
   });
 
   it("keeps a small-prey foot alarm audible nearby without treating it as a full alarm-call interrupt", () => {

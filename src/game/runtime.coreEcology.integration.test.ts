@@ -27,6 +27,7 @@ import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   CORE_ECOLOGY_MAX_POPULATIONS,
+  coreEcologyAlarmSignalProfile,
   applyCoreEcologyWildlifeMortality,
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
@@ -104,7 +105,9 @@ import {
 import { setCoreEcologyMaterializationForWindow } from "./coreEcologyRuntime";
 import { CORE_ECOLOGY_DOMESTIC_SPECIES } from "./coreEcologyRegionalHabitat";
 import * as coreEcologyPerception from "./coreEcologyPerception";
-import type { AudibleContact } from "./perception";
+import { evaluateAudibleContact, type AudibleContact } from "./perception";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
+import { livingActorSenseProfile } from "./livingActorSenses";
 import { traversalIncidentAcousticEvent, type WorldAcousticEvent } from "./worldAcoustics";
 import type { TraversalFeedbackState } from "./traversalFeedback";
 import type { WorldAcousticPresentationReception } from "./worldAcousticPresentation";
@@ -5170,6 +5173,124 @@ describe("runtime core-ecology vertical slice", () => {
     }
   }, 120_000);
 
+  it("restores pending alarm hearing with real listener-local water masking without replaying audio", async () => {
+    const propagateAlarm = coreEcologyPerception.propagateCoreEcologyAlarmObservationBatches;
+    let sourceId: string | null = null;
+    const contacts: Array<{
+      eventId: string;
+      observedAtTick: number;
+      sourceAtTick: number;
+      masking: number;
+      actual: AudibleContact | null;
+      expected: AudibleContact | null;
+      observations: readonly ActorObservation[];
+    }> = [];
+    vi.spyOn(coreEcologyPerception, "propagateCoreEcologyAlarmObservationBatches")
+      .mockImplementation((...args) => {
+        const batches = propagateAlarm(...args);
+        const event = args[0] as CoreWildlifeCausalEvent;
+        if (event.actorId !== sourceId || batches === null) return batches;
+        const input = args[1] as coreEcologyPerception.CoreEcologyPerceptionFrameInput;
+        const listener = input.participants?.find(({ address }) => (
+          address.actorId === LOCAL_PLAYER_SUBJECT_ID
+        ))?.address;
+        const placement = listener === undefined ? null
+          : livingActorAddressInRegionalWindow(listener, input.window);
+        const actual = batches.find(({ observerId }) => observerId === LOCAL_PLAYER_SUBJECT_ID);
+        if (listener === undefined || placement === null || actual === undefined) {
+          throw new Error("Water-mask witness lost its registered real player listener");
+        }
+        const masking = ambientNoiseAt(input.world, placement.tileIndex);
+        if (masking === null) throw new Error("Water-mask witness lost valid physical water");
+        const source = worldPositionDelta(listener.position, event.position);
+        const hearing = livingActorSenseProfile(listener.species).hearingSensitivity;
+        const emission = coreEcologyAlarmSignalProfile(event.species);
+        contacts.push(structuredClone({
+          eventId: event.eventId,
+          observedAtTick: input.tick,
+          sourceAtTick: event.atTick,
+          masking,
+          actual: actual.audibleContact,
+          expected: evaluateAudibleContact({
+            listener: { x: 0, y: 0 }, source,
+            baseRange: Math.floor(coreEcologyPerception.CORE_ECOLOGY_ALARM_MAX_RANGE_UNITS
+              * hearing / ACTOR_PERCEPTION_SCALE),
+            ambientNoise: masking,
+            sourceLoudness: emission.sourceLoudness / FIXED_POINT,
+            wind: { x: input.world.weather.windX / FIXED_POINT,
+              y: input.world.weather.windY / FIXED_POINT },
+          }),
+          observations: actual.observations,
+        }));
+        return batches;
+      });
+    // Extend the existing controlled legacy-cohort/current49 fixture only with
+    // one physical water tile beside the stationary courier. The actor's real
+    // perception/cognition still commits the alarm; no sound is injected.
+    const fixture = await createAlarmRuntime(-4, "deer", createTideweftRuntime, true);
+    const { runtime, repository, alarmActorId } = fixture;
+    sourceId = alarmActorId;
+    let resumed: TideweftRuntime | undefined;
+    try {
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const checkpointRecord = repository.snapshot();
+      const checkpoint = requiredEnvelope(repository);
+      const checkpointTick = deserializeWorld(checkpoint.world).meta.completedTick;
+      const fresh = contacts.filter(({ sourceAtTick, observedAtTick }) => (
+        sourceAtTick === checkpointTick && observedAtTick === checkpointTick
+      ));
+      expect(fresh).toHaveLength(1);
+      expect(fresh[0]!.masking).toBeGreaterThan(0);
+      expect(fresh[0]!.actual).toEqual(fresh[0]!.expected);
+      const source = requiredCoreActor(requiredRegionalCoreOwner(checkpoint, alarmActorId), alarmActorId);
+      expect(source.memories).toContainEqual(expect.objectContaining({
+        eventId: fresh[0]!.eventId, kind: "alarm", atTick: checkpointTick,
+      }));
+      const authoritativeRoots = (envelope: CurrentEnvelope) => {
+        // Session publication and its enclosing seal are not authoritative
+        // world roots. Every other saved field, including travel, is compared.
+        const { session: _session, integrity: _seal, ...roots } = envelope;
+        return roots;
+      };
+      contacts.length = 0;
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const uninterrupted = requiredEnvelope(repository);
+      const hotContacts = structuredClone(contacts);
+      expect(deserializeWorld(uninterrupted.world).meta.completedTick).toBe(checkpointTick + 1);
+      expect(hotContacts).toHaveLength(1);
+      expect(hotContacts[0]).toMatchObject({
+        eventId: fresh[0]!.eventId, sourceAtTick: checkpointTick, observedAtTick: checkpointTick + 1,
+      });
+      expect(hotContacts[0]!.masking).toBeGreaterThan(0);
+      expect(hotContacts[0]!.actual).toEqual(hotContacts[0]!.expected);
+      const hotAudio = structuredClone(soundscapePlay.mock.calls);
+      runtime.destroy();
+      scheduledFrame = undefined;
+      contacts.length = 0;
+      soundscapePlay.mockClear();
+      const reloadedRepository = new MemoryRepository(checkpointRecord);
+      resumed = await createTideweftRuntime(reloadedRepository);
+      expect(resumed.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls).toEqual([]);
+      await resumed.save();
+      expect(authoritativeRoots(requiredEnvelope(reloadedRepository)))
+        .toEqual(authoritativeRoots(checkpoint));
+      advancePlayerSteps(resumed, 10);
+      await resumed.save();
+      expect(contacts).toEqual(hotContacts);
+      expect(soundscapePlay.mock.calls).toEqual(hotAudio);
+      expect(authoritativeRoots(requiredEnvelope(reloadedRepository)))
+        .toEqual(authoritativeRoots(uninterrupted));
+    } finally {
+      runtime.destroy();
+      resumed?.destroy();
+      scheduledFrame = undefined;
+    }
+  }, 120_000);
+
   it("preserves ordinary hearing of a fresh deer alarm from a genuinely remembered threat", async () => {
     const collectVisual = coreEcologyPerception.collectCoreEcologyVisualObservationBatches;
     const admitPresentation = acousticPresentationQueue.admitWorldAcousticPresentation;
@@ -8639,6 +8760,7 @@ async function createAlarmRuntime(
   sourceSpecies: "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar" = "deer",
   runtimeFactory: (repository: SaveRepository) => Promise<TideweftRuntime> =
     createTideweftRuntime,
+  listenerAdjacentWater = false,
 ): Promise<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
@@ -8668,6 +8790,20 @@ async function createAlarmRuntime(
   if (regional === null) throw new Error("alarm fixture could not restore its regional frame");
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null) throw new Error("alarm fixture could not locate its player");
+  if (listenerAdjacentWater) {
+    if (playerPosition.region.x !== 0 || playerPosition.region.y !== 0) {
+      throw new Error("Water-mask fixture needs the actual compatibility terrain owner");
+    }
+    const x = Math.floor(playerPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const y = Math.floor(playerPosition.localY / WORLD_POSITION_UNITS_PER_TILE) + 1;
+    const tile = world.terrain.tiles[y * world.terrain.width + x];
+    if (tile === undefined || tile.x !== x || tile.y !== y) {
+      throw new Error("Water-mask fixture left the physical terrain owner");
+    }
+    tile.elevation = 0;
+    tile.roughness = FIXED_POINT;
+    tile.terrain = "deep-water";
+  }
   const rabbitDirection: -1 | 1 = playerPosition.localX < REGION_WIDTH_UNITS / 2 ? 1 : -1;
   if (sourceSpecies === "marsh-rabbit") {
     player.facingMilliRadians = rabbitDirection > 0 ? 0 : Math.round(Math.PI * 1_000);

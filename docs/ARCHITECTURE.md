@@ -267,6 +267,17 @@ never caller, species, threat, or an exact floating anchor. It joins the existin
 eight-entry queue and source/repetition cooldown; critical human warnings retain
 priority over it. The old `ANIMAL ALARM` session announcement is retired.
 
+Fresh and retained core alarm propagation use the same listener-local
+`ambientNoiseAt` owner as other acoustic consumers. Each authenticated
+listener's registered terrain tile selects the bounded 5×5 rain/turbulent-water
+mask; water beside only a distant caller is not the listener's masking field.
+Species sensitivity, wind, source exclusion, event-time locus and anonymous
+uncertainty remain independent inputs. Exact contacts stay transient; retained
+beliefs preserve their historical confidence rather than being re-heard on
+load. A pending next-interval alarm is re-derived from its existing actor
+memory/locus and evaluated against the current physical field, including after
+interruption. Optional captions cannot bypass this hearing result.
+
 The collapsed player audio remains exactly one existing `wildlife-alarm` cue
 at its prior release-order position, volume, variant and undefined pan, released
 only after interval closure. Text refusal cannot remove that audio, strong

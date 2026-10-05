@@ -48,7 +48,6 @@ import {
 import {
   DEFAULT_DETAIL_PERCEPTION_RANGES,
   VISIBILITY_DIRECT,
-  calculateAmbientNoise,
   evaluateAudibleContact,
   evaluateVisualContact,
   type AudibleContact,
@@ -59,6 +58,7 @@ import {
   buildWorldPerceptionCells,
   type OutdoorIlluminationField,
 } from "./outdoorIllumination";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { regionalAddressAt, regionalWindowForWorld } from "./regionalWorldView";
 import {
@@ -461,14 +461,6 @@ export function propagateCoreEcologyAlarmObservationBatches(
   const frame = canonicalPerceptionFrame(frameValue);
   const event = canonicalAlarmEvent(eventValue, frame, freshEmitterValue);
   if (frame === null || event === null) return null;
-  const raining = frame.world.weather.kind === "rain" || frame.world.weather.kind === "storm";
-  const ambientNoise = calculateAmbientNoise({
-    rainIntensity: raining ? frame.world.weather.intensity / FIXED_POINT : 0,
-    // Water masking is owned by the broader acoustic field; this bounded alarm
-    // slice names only the current weather pressure instead of fabricating it.
-    localWaterTurbulence: 0,
-  });
-  if (ambientNoise === null) return null;
   const emission = coreEcologyAlarmSignalProfile(event.species);
   const batches: CoreEcologyAlarmObservationBatch[] = [];
 
@@ -478,6 +470,10 @@ export function propagateCoreEcologyAlarmObservationBatches(
     if (observer.actorId !== event.actorId) {
       const listenerPlacement = frame.placements.get(observer.actorId);
       if (listenerPlacement === undefined) return null;
+      // The existing acoustic field owns rain and nearby turbulent water.
+      // Mask at each validated listener, not once at the alarm source.
+      const ambientNoise = ambientNoiseAt(frame.world, listenerPlacement.tileIndex);
+      if (ambientNoise === null) return null;
       const hearing = livingActorSenseProfile(observer.species).hearingSensitivity;
       let sourceDelta: Readonly<{ readonly x: number; readonly y: number }>;
       try {

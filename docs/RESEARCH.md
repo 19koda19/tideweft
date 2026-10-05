@@ -1447,6 +1447,45 @@ This is DEV access evidence, not production interactive, desktop, audible/AT,
 hours, performance, full cumulative, release or Voice-closure certification.
 Schema49/carry14, dependencies and upstream sources remain unchanged.
 
+#### Listener-local water masking for core alarms — 2026-10-05
+
+Local work over `c3ba359` repairs an existing consumer, not a new animal sound.
+`propagateCoreEcologyAlarmObservationBatches` authenticated its source/frame but
+fixed water masking at zero. It now uses the existing `ambientNoiseAt` field
+at each registered listener tile. Source cause, event order/locus, species
+sensitivity, wind, anonymous uncertainty and listener limits are unchanged.
+
+Before the production edit, `coreEcologyPerception.test.ts -t 'uses
+listener-local water masking'` fails both new human/dog cases. The dry and
+source-only controls pass before the listener-water check: at distance7,000,
+masking0.29508 makes the human contact unavailable and lowers dog certainty
+0.578947→0.283867. The separate controlled runtime case, `-t 'restores pending
+alarm hearing with real listener-local water masking'`, fails exact contact
+equality: rain-only certainty0.626656 versus water-aware0.331576. Both commands
+use `npx vitest run`, their corresponding file, `--maxWorkers=1 --no-cache`.
+
+After the core-only repair, the new runtime case passes. A real fixture actor
+commits the alarm from its perception/cognition; one physical water tile is
+staged beside the stationary player, not a fabricated sound. Its saved pending
+alarm reconstructs the same T+1 contacts, audio calls and every authoritative
+saved root as uninterrupted execution. Only session publication and its
+enclosing seal are excluded; immediate reload releases no old audio.
+The affected six-file perception/ecology domain passes140 tests, including
+the new malformed-neighbor fail-closed case. Four existing remembered-threat
+hearing/closure tests and the unchanged introduction/save/audio rollback case
+pass; maintained smoke passes six files/105 tests. Source module SHA256 is
+`c65e03e6535a4d2190d14f21fed9038693e4b865f6e218edd623b35ab94d9c0b`.
+Typecheck and production web/static nested-path smoke pass; bundle
+`index-B5NZQlMl.js` SHA256
+`08bdd2359781c00cb51f2cfb6d02eea21586a9ed482a97f546ef3854cc583676`.
+The existing large-chunk warning remains.
+
+These are controlled unit/current-save proofs, not ordinary native encounter,
+audible/AT, mobile, desktop-package, hours, performance or full-cumulative
+certification. Terrain/foliage/interior propagation and wider Voice gates stay
+open. Schema49/carry14, supported readers, dependencies and upstream sources
+are unchanged; historical beliefs are not recalculated or discarded.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
