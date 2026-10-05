@@ -1727,6 +1727,65 @@ evidence only: hidden species/motivation, NPC hearing, audible/assistive quality
 dog encounters, dense/mixed scenes, mobile hardware, hours, performance,
 desktop packaging and release/major-directive gates remain unclaimed.
 
+### Narrow-viewport ordinary animal captions — 2026-10-05
+
+Three sequential production-browser opportunities on clean local
+`83af079376881477611765ed33c6736a703ed128` use the unchanged bundle above,
+ordinary START/W controls, the same current seed, and a verified
+390×844 CSS/DPR1 viewport. These are desktop Firefox 157 layout observations,
+not physical mobile or touch evidence. Battery readings are 53% before and 50%
+after, Low Power Mode off; the user's packaged game and browser remain running
+and untouched. No performance comparison is claimed.
+
+The existing ignored probe accepts explicit narrow Chart-first/Relief-first
+aliases. Its initial v14 Chart-first run passes 60.057s; review then strengthens
+screenshot brackets with capture-time clipping, bounded peer collision and
+actual viewport checks. Version 15 also rejects unexpected/truncated console
+errors and retains a profile if owned-browser exit is unconfirmed. Review finds
+that late shutdown errors could evade the early verdict; v16 reevaluates the
+console after teardown and bounds peer candidates before measuring them.
+`node --check` and four isolated actual-helper characterizations pass, including
+late unexpected errors and omitted error records. These are observer repairs,
+not gameplay, hearing, presentation or save changes.
+
+The final representative commands are:
+
+```sh
+node artifacts/validation/voice-current49/native-play-9cc87d3.cjs 60000 animal-relief-narrow
+node artifacts/validation/voice-current49/native-play-9cc87d3.cjs 60000 animal-narrow
+```
+
+Both terminal runs pass. Relief-first/v15 lasts 60.003s and retains
+535 reads over 60.074s; Chart-first/v16 lasts 60.071s and retains
+537 reads over 60.207s. Each observes one anonymous bird caption at tick 424,
+first seen at 4.034s/3.935s respectively. Exact current public and DOM IDs join
+`CALL. · direction unclear`, with an empty speaker span and no world glyph.
+The observed 169.833×14.683px rectangle at (110.083,681.417) is unclipped and
+separate from active world labels, event text and controls. In each opportunity,
+both Chart and Relief screenshot brackets pass before the same call expires;
+all four inspected images contain readable, nonoverlapping captions. This is
+across a native view switch, not simultaneous render loops or three species.
+
+Public disappearance occurs at 4.430s/4.396s. The observer retains 531/533 empty
+reads, maximum gaps 310/274ms and no overflow/incomplete result. These are
+sampled presentation facts, not audio rates, continuous silence or authenticated
+hidden-event expiry. Each final console contains only the one known CSP
+eval-probe denial, not a console-clean result; browsers exit zero and owned
+profiles are removed. No unknown late error appears.
+The final JSON SHA256s are
+`2298bd9f5d506a0e5e51e7f43c8df3a78125724fdd7c4c8b74079d8761187f92`
+and `f1b97a50bba9e49dcfbf2716193332adae54bbd8d1a437c6cfde4ad581b34808`;
+their probe SHA256s are
+`b8d3560b8ea43aa1d6201c66ab2e8944f218ad4f054059b4101e549e076c8b78`
+and `eed9f2bd233653d412072082922d71f6556f75fa3b48c8f2d29e4fa50c2822c4`.
+
+No public executable, schema49/carry14, supported reader, dependency, directive
+or release changes. The prior exact executable cumulative evidence remains
+applicable under the documentation-only exception. Broad animal encounters,
+mixed scenes, audible/assistive quality, mobile hardware, hours, terrain
+propagation, performance and release gates remain open; this narrow result does
+not certify them.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
