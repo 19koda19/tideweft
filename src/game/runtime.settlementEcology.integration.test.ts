@@ -44,6 +44,7 @@ import {
   animalContactMovementForDistance,
   canonicalizeAnimalContactAcousticCarry,
   createAnimalContactAcousticCarryRecord,
+  physicalSoundSampleForAnimalContact,
 } from "./animalContactAcousticCarry";
 import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
 import {
@@ -52,7 +53,9 @@ import {
   replaceDogActorPerception,
   replaceDogActorPhysiology,
   setDogActorIntent,
+  type DogActorState,
 } from "./dogActor";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import { guardianDogShelterWhineTriggerEventId } from "./dogSignalExpression";
 import {
   canonicalizeCoreEcologyAggregatePatch,
@@ -142,6 +145,7 @@ import {
   REGIONAL_TRAVEL_SAFE_MAX_Y,
   REGIONAL_TRAVEL_SAFE_MIN_Y,
   regionLocalToWindowTile,
+  type RegionalTerrainWindow,
 } from "./regionalTravel";
 import { putRegionalEcologyResidentDeviation } from "./regionalEcology";
 import { createCoreEcologyRegionalResidentPatchForRoot } from "./regionalEcologyResidents";
@@ -843,6 +847,90 @@ function legacyPlayerPerceptionCarry(value: unknown): Readonly<Record<string, un
     ...legacy
   } = structuredClone(value) as Record<string, unknown>;
   return Object.freeze({ ...legacy, version: 1 });
+}
+
+/** Controlled current-field counterfactual around an actually committed contact. */
+function prepareDogContactSurfacePair(
+  world: WorldState,
+  window: RegionalTerrainWindow,
+  listener: DogActorState,
+  contact: Readonly<{ beforePosition: WorldPosition; event: WorldAcousticEvent }>,
+  cartography: Pick<PlayerState, "discovered" | "depthSoundings">,
+) {
+  const sample = physicalSoundSampleForAnimalContact(contact);
+  if (sample === null) throw new Error("Surface witness lost its real contact sample");
+  const clearView = createRegionalWorldView(createWorldView(world), window, cartography);
+  const source = contact.event.sourcePosition;
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  const coverage = { dryListeners: 0, heardListeners: 0, dryCrests: 0 };
+  // Finite fixture search, not a new production listener/pathfinder. Preserve
+  // weather, source support, source material and event; change one dry crest.
+  for (const distanceTiles of [1.25, 1.5, 1.75, 2, 3, 4, 6, 8]) {
+    for (const [dx, dy] of directions) {
+      const listenerPosition = translateWorldPosition(
+        source, dx * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
+        dy * distanceTiles * WORLD_POSITION_UNITS_PER_TILE,
+      );
+      if (listenerPosition.region.x !== 0 || listenerPosition.region.y !== 0) continue;
+      const stagedListener = repositionDogActor(listener, {
+        position: listenerPosition, heading: listener.address.heading,
+        atTick: world.meta.completedTick,
+      });
+      const placement = livingActorAddressInRegionalWindow(stagedListener.address, window);
+      if (placement === null) continue;
+      const listenerTile = clearView.terrain.tiles[placement.tileIndex];
+      if (listenerTile === undefined || listenerTile.waterDepth !== 0) continue;
+      coverage.dryListeners += 1;
+      const input = {
+        dogs: [stagedListener], physicalSoundSamples: [sample],
+        surfaceSoundSampleIds: [sample.id], window,
+        targetTick: world.meta.completedTick + 1,
+      };
+      const clear = dogPhysicalAcoustics.collectDogPhysicalAcousticObservationBatches({
+        ...input, world: clearView,
+      })?.[0]?.observations[0];
+      if (clear === undefined) continue;
+      coverage.heardListeners += 1;
+      for (let offset = 1; offset < distanceTiles; offset += 1) {
+        const crestPosition = translateWorldPosition(
+          source, dx * offset * WORLD_POSITION_UNITS_PER_TILE,
+          dy * offset * WORLD_POSITION_UNITS_PER_TILE,
+        );
+        if (crestPosition.region.x !== 0 || crestPosition.region.y !== 0) continue;
+        const crestX = Math.floor(crestPosition.localX / WORLD_POSITION_UNITS_PER_TILE);
+        const crestY = Math.floor(crestPosition.localY / WORLD_POSITION_UNITS_PER_TILE);
+        if (crestX >= world.terrain.width || crestY >= world.terrain.height) continue;
+        const crestIndex = crestY * world.terrain.width + crestX;
+        const crest = world.terrain.tiles[crestIndex];
+        const viewTile = regionLocalToWindowTile(
+          window, crestPosition.region, crestX, crestY,
+        );
+        if (crest === undefined || viewTile === null
+          || clearView.terrain.tiles[viewTile.y * clearView.terrain.width + viewTile.x]?.waterDepth !== 0
+          || crest.elevation >= FIXED_POINT) continue;
+        coverage.dryCrests += 1;
+        const maskedWorld = deserializeWorld(serializeWorld(world));
+        maskedWorld.terrain.tiles[crestIndex]!.elevation = FIXED_POINT;
+        const maskedView = createRegionalWorldView(createWorldView(maskedWorld), window, cartography);
+        expect(ambientNoiseAt(maskedView, placement.tileIndex))
+          .toBe(ambientNoiseAt(clearView, placement.tileIndex));
+        const maskedBatches = dogPhysicalAcoustics.collectDogPhysicalAcousticObservationBatches({
+          ...input, world: maskedView,
+        });
+        if (maskedBatches === null) throw new Error("Dry crest created invalid hearing geometry");
+        const maskedConfidence = maskedBatches[0]?.observations[0]?.confidence ?? 0;
+        if (maskedConfidence >= clear.confidence) continue;
+        expect(maskedWorld.terrain.tiles.filter((tile, index) => (
+          stableStringify(tile) !== stableStringify(world.terrain.tiles[index])
+        )).map(({ index }) => index)).toEqual([crestIndex]);
+        return { listenerPosition, maskedWorld, clearConfidence: clear.confidence, maskedConfidence };
+      }
+    }
+  }
+  throw new Error(`Real contact fixture has no bounded dry crest counterfactual: ${JSON.stringify({
+    coverage, source, material: contact.event.surfaceMaterial,
+    intensity: contact.event.intensity, range: contact.event.rangeUnits,
+  })}`);
 }
 
 function withCurrentEnvelopeFields(
@@ -5648,16 +5736,26 @@ describe("runtime settlement ecology integration", () => {
     advancePlayerSteps(reloaded, 10);
     await reloaded.save();
     const physicalIntervals = hearingSpy.mock.calls
-      .map(([input]) => input.physicalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ acousticEventId }) => (
+      .map(([input]) => input)
+      .filter((input) => input.physicalSoundSamples?.some(({ acousticEventId }) => (
         acousticEventId === guardianContact?.event.eventId
       )));
     expect(physicalIntervals).toHaveLength(1);
-    expect(physicalIntervals[0]).toContainEqual(expect.objectContaining({
+    expect(physicalIntervals[0]?.physicalSoundSamples).toContainEqual(expect.objectContaining({
       acousticEventId: guardianContact?.event.eventId,
       sourceId: guardian.identity.stableId,
       soundClass: guardianContact?.event.soundClass,
     }));
+    const surfaceContactSample = physicalIntervals[0]?.physicalSoundSamples?.find(
+      ({ acousticEventId }) => acousticEventId === guardianContact.event.eventId,
+    );
+    expect(surfaceContactSample).toBeDefined();
+    expect(physicalIntervals[0]?.surfaceSoundSampleIds).toContain(surfaceContactSample?.id);
+    expect(surfaceContactSample).toMatchObject({
+      position: guardianContact.event.sourcePosition,
+      soundLoudness: guardianContact.event.intensity,
+      soundRangeUnits: guardianContact.event.rangeUnits,
+    });
     const hearingWorld = deserializeWorld(String(savedEnvelope(hearingRepository).world));
     const contactBeliefs = hearingWorld.residents.flatMap(({ perception }) => (
       perception.beliefs.filter(({ perceivedClass }) => (
@@ -7812,15 +7910,30 @@ describe("runtime settlement ecology integration", () => {
     // search probe and physically home again.
     runtime.destroy();
 
-    // Branch from the real pending contact and place the other current dog at
-    // its source locus. The next authoritative frame must admit one anonymous
+    // Branch from the real pending contact and place the other current dog on
+    // a dry listening path. Only an intervening saved terrain cell differs in
+    // the paired branch; the source, its event, and every receipt stay exact.
+    // The next authoritative frame must admit one anonymous
     // physical belief to that listener, never to the source dog itself, and
     // must persist cognition without adding a replay marker to the save.
     const dogHearingWorld = deserializeWorld(String(advancedEnvelope.world));
+    const acousticTravel = restorePlayerRegionalTravel(
+      dogHearingWorld.meta.rootSeed,
+      advancedEnvelope.player as PlayerState,
+      String(advancedEnvelope.regionalTravel),
+    );
+    if (acousticTravel === null) throw new Error("Contact counterfactual lost its loaded frame");
+    const surfacePair = prepareDogContactSurfacePair(
+      dogHearingWorld,
+      acousticTravel.window,
+      advancedBio0.dog,
+      guardianPhysicalContact,
+      advancedEnvelope.player as PlayerState,
+    );
     const stagedBio0 = {
       ...advancedBio0,
       dog: repositionDogActor(advancedBio0.dog, {
-        position: guardianPhysicalContact.event.sourcePosition,
+        position: surfacePair.listenerPosition,
         heading: advancedBio0.dog.address.heading,
         atTick: advancedBio0.tick,
       }),
@@ -7833,6 +7946,10 @@ describe("runtime settlement ecology integration", () => {
       perceptionCarry: stagedPhysicalCarry,
     });
     const dogHearingRepository = new MemoryRepository(dogHearingRecord);
+    const dogPhysicalHearingSpy = vi.spyOn(
+      dogPhysicalAcoustics,
+      "collectDogPhysicalAcousticObservationBatches",
+    );
     const dogHearingRuntime = await createTideweftRuntime(dogHearingRepository);
     expect(dogHearingRuntime.getUIView().saveWarning).toBeUndefined();
     advancePlayerSteps(dogHearingRuntime, 10);
@@ -7847,6 +7964,22 @@ describe("runtime settlement ecology integration", () => {
       throw new Error("dog physical-hearing witness lost a current authority");
     }
     const contactObservationTick = dogHearingWorld.meta.completedTick + 1;
+    const physicalDogIntervals = dogPhysicalHearingSpy.mock.calls
+      .map(([input]) => input)
+      .filter(({ physicalSoundSamples }) => physicalSoundSamples.some(({ acousticEventId }) => (
+        acousticEventId === guardianPhysicalContact.event.eventId
+      )));
+    expect(physicalDogIntervals).toHaveLength(1);
+    const dogSurfaceSample = physicalDogIntervals[0]?.physicalSoundSamples.find(
+      ({ acousticEventId }) => acousticEventId === guardianPhysicalContact.event.eventId,
+    );
+    expect(dogSurfaceSample).toBeDefined();
+    expect(physicalDogIntervals[0]?.surfaceSoundSampleIds).toContain(dogSurfaceSample?.id);
+    expect(dogSurfaceSample).toMatchObject({
+      position: guardianPhysicalContact.event.sourcePosition,
+      soundLoudness: guardianPhysicalContact.event.intensity,
+      soundRangeUnits: guardianPhysicalContact.event.rangeUnits,
+    });
     const otherDogObservationId = `physical-hearing:${hashCanonical({
       acousticEventId: guardianPhysicalContact.event.eventId,
       observerId: stagedBio0.dog.identity.stableId,
@@ -7900,11 +8033,57 @@ describe("runtime settlement ecology integration", () => {
       ({ sourceObservationId }) => sourceObservationId === otherDogObservationId,
     );
     expect(replayedBelief?.lastObservedTick).toBe(contactObservationTick);
+    expect(dogPhysicalHearingSpy.mock.calls.filter(([input]) => (
+      input.physicalSoundSamples.some(({ acousticEventId }) => (
+        acousticEventId === guardianPhysicalContact.event.eventId
+      ))
+    ))).toHaveLength(1);
     expect((savedEnvelope(dogHearingRepository).perceptionCarry as typeof advancedCarry)
       .animalContactAcousticCarry.records.some(({ event }) => (
         event.eventId === guardianPhysicalContact.event.eventId
       ))).toBe(false);
     dogHearingReload.destroy();
+
+    const maskedDogRepository = new MemoryRepository(withCurrentEnvelopeFields(
+      dogHearingRecord,
+      { world: serializeWorld(surfacePair.maskedWorld) },
+    ));
+    const maskedDogRuntime = await createTideweftRuntime(maskedDogRepository);
+    expect(maskedDogRuntime.getUIView().saveWarning).toBeUndefined();
+    await maskedDogRuntime.save();
+    const loadedMaskedEnvelope = savedEnvelope(maskedDogRepository);
+    expect(loadedMaskedEnvelope.perceptionCarry).toEqual(stagedPhysicalCarry);
+    expect(loadedMaskedEnvelope.bio0Ecology).toBe(serializeBio0Ecology(stagedBio0));
+    expect(loadedMaskedEnvelope.dogActorRoster).toBe(advancedEnvelope.dogActorRoster);
+    expect(loadedMaskedEnvelope.settlementWorkingAnimals)
+      .toBe(advancedEnvelope.settlementWorkingAnimals);
+    advancePlayerSteps(maskedDogRuntime, 10);
+    await maskedDogRuntime.save();
+    const maskedDogEnvelope = savedEnvelope(maskedDogRepository);
+    const maskedBio0 = deserializeBio0Ecology(maskedDogEnvelope.bio0Ecology);
+    expect(maskedBio0).not.toBeNull();
+    if (maskedBio0 === null) throw new Error("Masked contact lost its valid BIO0 listener");
+    const maskedContactBelief = maskedBio0.dog.perception.beliefs.find(
+      ({ sourceObservationId }) => sourceObservationId === otherDogObservationId,
+    );
+    if (maskedContactBelief !== undefined) {
+      expect(maskedContactBelief).toMatchObject({
+        subjectId: null,
+        identification: "anonymous",
+        lastObservedTick: contactObservationTick,
+      });
+      expect(maskedContactBelief.confidence).toBeLessThan(heardContactBelief!.confidence);
+    }
+    expect(maskedContactBelief?.confidence ?? 0)
+      .toBe(surfacePair.maskedConfidence);
+    expect(heardContactBelief?.confidence).toBe(surfacePair.clearConfidence);
+    expect((maskedDogEnvelope.perceptionCarry as typeof advancedCarry)
+      .animalContactAcousticCarry.records.some(({ event }) => (
+        event.eventId === guardianPhysicalContact.event.eventId
+      ))).toBe(false);
+    expect(deserializeWorld(String(maskedDogEnvelope.world)).meta.completedTick)
+      .toBe(contactObservationTick);
+    maskedDogRuntime.destroy();
 
     const recoveredRepository = new MemoryRepository(advancedRecord);
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");

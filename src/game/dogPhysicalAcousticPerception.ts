@@ -34,6 +34,8 @@ const EMPTY_BATCHES: readonly CoreEcologyObservationBatch[] = Object.freeze([]);
 export function collectDogPhysicalAcousticObservationBatches(input: Readonly<{
   readonly dogs: readonly DogActorState[];
   readonly physicalSoundSamples: readonly PhysicalSoundSample[];
+  /** Transient IDs whose authenticated physical cause supplies surface support. */
+  readonly surfaceSoundSampleIds?: readonly string[];
   readonly world: WorldView;
   readonly window: RegionalTerrainWindow;
   readonly targetTick: number;
@@ -43,18 +45,29 @@ export function collectDogPhysicalAcousticObservationBatches(input: Readonly<{
     || input.dogs.length > DOG_PHYSICAL_ACOUSTIC_MAX_LISTENERS
     || !Array.isArray(input.physicalSoundSamples)
     || input.physicalSoundSamples.length > PHYSICAL_ACOUSTIC_MAX_SAMPLES
+    || (Object.hasOwn(input, "surfaceSoundSampleIds")
+      && !Array.isArray(input.surfaceSoundSampleIds))
+    || (input.surfaceSoundSampleIds?.length ?? 0) > PHYSICAL_ACOUSTIC_MAX_SAMPLES
     || !Number.isSafeInteger(input.targetTick)
     || input.targetTick < 0
   ) return null;
   // Almost every fixed step has no pending body contact. Do not sort actors or
   // scan listener-local water tiles when there is no acoustic fact to consume.
-  if (input.physicalSoundSamples.length === 0) return EMPTY_BATCHES;
+  if (input.physicalSoundSamples.length === 0) {
+    return (input.surfaceSoundSampleIds?.length ?? 0) === 0 ? EMPTY_BATCHES : null;
+  }
   if (regionalWindowForWorld(input.world) !== input.window) return null;
   const samples: PhysicalSoundSample[] = [];
   for (const raw of input.physicalSoundSamples) {
     const sample = createPhysicalSoundSample(raw);
     if (sample === null) return null;
     samples.push(sample);
+  }
+  const sampleIds = new Set(samples.map(({ id }) => id));
+  const surfaceSampleIds = new Set<string>();
+  for (const id of input.surfaceSoundSampleIds ?? []) {
+    if (!sampleIds.has(id) || surfaceSampleIds.has(id)) return null;
+    surfaceSampleIds.add(id);
   }
   const batches: CoreEcologyObservationBatch[] = [];
   const dogs: DogActorState[] = [];
@@ -96,6 +109,10 @@ export function collectDogPhysicalAcousticObservationBatches(input: Readonly<{
           x: input.world.weather.windX / FIXED_POINT,
           y: input.world.weather.windY / FIXED_POINT,
         },
+      }, {
+        world: input.world,
+        sourceSupport: surfaceSampleIds.has(sample.id) ? "surface" : "unmodeled",
+        listenerSupport: "surface",
       });
       if (reception === null) return null;
       if (reception.kind === "heard") observations.push(reception.observation);

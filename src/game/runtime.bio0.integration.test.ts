@@ -98,6 +98,7 @@ import { replaceCoreWildlifeActorPhysiology } from "./coreWildlifeActor";
 import { repositionDogActor, replaceDogActorPhysiology } from "./dogActor";
 import { LOCAL_PLAYER_SUBJECT_ID } from "./humanPerception";
 import { headingToRadians, livingActorAddressForResident } from "./livingActor";
+import { canonicalizeAnimalContactAcousticCarry } from "./animalContactAcousticCarry";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
 import {
   canonicalizePorterResponseState,
@@ -834,12 +835,32 @@ describe("runtime BIO0 ecology persistence", () => {
       ADRIFT_STAND_DEPTH,
     );
 
-    const savedEcology = currentEnvelope(repository).bio0Ecology;
+    const savedEnvelope = currentEnvelope(repository);
+    const savedEcology = savedEnvelope.bio0Ecology;
+    const savedContactCarry = canonicalizeAnimalContactAcousticCarry(
+      savedEnvelope.perceptionCarry.animalContactAcousticCarry,
+    );
+    const contact = savedContactCarry?.records.find(({ event }) => (
+      event.sourceId === movement.after.dog.identity.stableId
+    ));
+    expect(contact).toBeDefined();
+    expect(contact).toMatchObject({
+      beforePosition: movement.before.dog.address.position,
+      event: {
+        sourcePosition: movement.after.dog.address.position,
+        occurredAtTick: movement.after.tick,
+        domain: "animal-contact",
+        sourceCategory: "animal",
+      },
+    });
     runtime.destroy();
     scheduledFrame = undefined;
     const resumed = await createTideweftRuntime(repository);
     await resumed.save();
     expect(currentEnvelope(repository).bio0Ecology).toBe(savedEcology);
+    expect(currentEnvelope(repository).version).toBe(50);
+    expect(currentEnvelope(repository).perceptionCarry.animalContactAcousticCarry)
+      .toEqual(savedContactCarry);
     resumed.destroy();
   });
 

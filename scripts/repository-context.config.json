@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "18474af3e53459fda466d449c7ba67b52be34b3df4a2962d7a514887c8c3cbcd",
+      "reviewedSourceFingerprint": "0392433636be5c76065625c89026d1678f38464fbd486c4c590b80a4eec4ef03",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -220,7 +220,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current surface-terrain transmission covers authenticated core alarms and connected receipts; unknown height/depth, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
+        "Current surface-terrain transmission covers authenticated core alarms, player steps and dog body-contact receipts; unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
@@ -228,6 +228,7 @@
         "src/game/worldAcoustics.test.ts",
         "src/game/terrainAcoustics.test.ts",
         "src/game/physicalAcousticPerception.test.ts",
+        "src/game/dogPhysicalAcousticPerception.test.ts",
         "src/game/worldAcousticPresentation.test.ts"
       ],
       "relatedContracts": []
@@ -241,7 +242,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "18474af3e53459fda466d449c7ba67b52be34b3df4a2962d7a514887c8c3cbcd",
+      "reviewedSourceFingerprint": "0392433636be5c76065625c89026d1678f38464fbd486c4c590b80a4eec4ef03",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

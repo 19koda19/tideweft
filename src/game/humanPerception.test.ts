@@ -17,7 +17,13 @@ import {
 } from "../sim/livingCircadian";
 import { createWorld, createWorldView } from "../sim/public";
 import { createRegionCoord } from "../sim/regions";
+import { MAX_TIDE_LEVEL } from "../sim/terrain";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
+import {
+  animalContactAcousticTriggerEventId,
+  createAnimalContactAcousticCarryRecord,
+  physicalSoundSampleForAnimalContact,
+} from "./animalContactAcousticCarry";
 import {
   HUMAN_HEARING_MAX_RANGE_UNITS,
   HUMAN_PERCEPTION_MAX_RESIDENTS,
@@ -57,6 +63,7 @@ import {
   type SituatedExpressionSemanticFact,
 } from "./situatedExpressionAcoustics";
 import { createWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
+import { animalContactAcousticEvent } from "./worldAcoustics";
 
 const OBSERVER_X = 24;
 const OBSERVER_Y = 24;
@@ -130,6 +137,75 @@ describe("existing-human sensory bridge", () => {
         expect(blockedHearing).not.toHaveProperty("sourceId");
         expect(heardBy(blocked, false)).toEqual(heardBy(clear, false));
         expect(JSON.stringify(suppliedSound)).toBe(before);
+      },
+    );
+
+    it.each([2, 4] as const)(
+      "uses an actual structured contact sample's support at %i tiles without revealing the body or mutating its sound",
+      (sourceOffset) => {
+        const seed = `human structured contact surface ${sourceOffset}`;
+        const prepare = (ridge: boolean) => {
+          const current = fixture(seed, { facing: "west" });
+          // A controlled dry corridor, not a riverbed or inferred actor height.
+          for (let x = OBSERVER_X; x <= OBSERVER_X + sourceOffset; x += 1) {
+            const tile = current.state.terrain.tiles[OBSERVER_Y * current.state.terrain.width + x];
+            if (tile === undefined) throw new Error("Body-contact fixture lost its dry corridor");
+            tile.elevation = MAX_TIDE_LEVEL + 1;
+          }
+          if (ridge) {
+            const crest = current.state.terrain.tiles[OBSERVER_Y * current.state.terrain.width + OBSERVER_X + 1];
+            if (crest === undefined) throw new Error("Body-contact fixture lost its dry crest");
+            crest.terrain = "ridge";
+            crest.elevation = FIXED_POINT;
+          }
+          return rebuildWorld(current);
+        };
+        const clear = prepare(false);
+        const blocked = prepare(true);
+        const sourcePosition = worldPoint(OBSERVER_X + sourceOffset, OBSERVER_Y);
+        const beforePosition = createWorldPosition(
+          sourcePosition.region, sourcePosition.localX - 400, sourcePosition.localY,
+        );
+        const triggerEventId = animalContactAcousticTriggerEventId({
+          sourceId: "A-v1-physical-contact-source", beforePosition,
+          afterPosition: sourcePosition, occurredAtTick: clear.state.meta.completedTick,
+        });
+        const event = triggerEventId === null ? null : animalContactAcousticEvent({
+          triggerEventId, sourceId: "A-v1-physical-contact-source", sourcePosition,
+          occurredAtTick: clear.state.meta.completedTick, bodySize: "medium",
+          movement: "slow", surfaceMaterial: "soil",
+        });
+        const record = event === null ? null : createAnimalContactAcousticCarryRecord({ beforePosition, event });
+        const sample = record === null ? null : physicalSoundSampleForAnimalContact(record);
+        if (sample === null) throw new Error("Body-contact fixture lost its causal sample");
+        const before = JSON.stringify([sample, clear.resident.perception, blocked.resident.perception]);
+        const hear = (current: Fixture, supported: boolean) => batchFor(
+          collectExistingHumanObservations({
+            world: current.world, window: current.window, targetTick: fixtureTick(current, 1),
+            playerSamples: [], physicalSoundSamples: [sample],
+            ...(supported ? { surfaceSoundSampleIds: [sample.id] } : {}),
+          }), current.resident.id,
+        )?.observations;
+        const clearHearing = hear(clear, true);
+        const blockedHearing = hear(blocked, true);
+
+        expect(clearHearing).toEqual([expect.objectContaining({
+          channel: "hearing", perceivedClass: sample.soundClass,
+          identification: "anonymous", subjectId: null, interrupt: "none",
+        })]);
+        expect(clearHearing?.[0]?.area.radiusUnits).toBeGreaterThan(0);
+        expect(clearHearing?.[0]?.area.center).not.toEqual(sourcePosition);
+        for (const key of ["sourceId", "sourceActorId", "acousticEventId", "bodySize", "surfaceMaterial"]) {
+          expect(clearHearing?.[0]).not.toHaveProperty(key);
+        }
+        if (sourceOffset === 4) expect(blockedHearing).toEqual([]);
+        else {
+          expect(blockedHearing).toHaveLength(1);
+          expect(blockedHearing?.[0]?.id).toBe(clearHearing?.[0]?.id);
+          expect(blockedHearing![0]!.confidence).toBeLessThan(clearHearing![0]!.confidence);
+        }
+        expect(hear(blocked, false)).toEqual(hear(clear, false));
+        expect(JSON.stringify([sample, clear.resident.perception, blocked.resident.perception])).toBe(before);
       },
     );
 

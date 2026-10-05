@@ -296,11 +296,27 @@ The committed event's loudness, identity and timing remain unchanged.
 
 Current core alarm propagation, player live/replayed alarm receipts and the
 same-event resident hearing leg share this rule. Resident player-step hearing
-also has explicit surface support. A bounded transient set of sound-sample IDs
+also has explicit surface support. Current BIO0 and settlement-working dog body
+contacts now use it for fresh player receipt and their independent next-interval
+human/dog hearing. Only reauthenticated contact causes supply surface support;
+the bounded support-ID set is intersected with each selected sound bank after
+capacity arbitration. Aggregate sound or a dog-shaped source name cannot acquire
+ground support by implication. A bounded transient set of sound-sample IDs
 re-derives support from authenticated causes; it is neither a saved dialogue
 field nor listener knowledge. The original sound carriers remain unchanged.
 Captured DEV listening tuples contain the actual adjusted input, not a second
 preview law. Consumed observations remain historical and are not re-heard on load.
+
+Current50/carry14 pending body contacts retain their original event and strict
+source/movement authentication. After interruption, the single remaining actor
+hearing opportunity uses the then-current physical field; it neither replays
+player audio/text nor adds a saved player-contact receipt. A controlled runtime
+pair around a genuinely committed guardian contact keeps source, event,
+listener and weather identical and raises only one intervening dry saved terrain
+cell. Anonymous hearing weakens while listener ambient noise remains identical.
+Separate real food-scent locomotion proves the existing BIO0 producer and exact
+pending-carry restore. These are bounded runtime witnesses, not ordinary travel
+or broad non-dog contact certification.
 
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
@@ -541,7 +557,8 @@ separate authenticated, eight-record living-actor hearing carry before any
 player hearing or text gate. The next world perception frame offers it exactly
 once to eligible nearby humans and eligible full-simulation in-window dogs
 through one physical acoustic evaluator with ordinary range, listener-local
-rain/water masking,
+rain/water masking, and shared surface transmission from the authenticated body
+contact where the physical path is available,
 anonymous localization, and source-ID exclusion. Dog listeners additionally
 apply their registered species hearing sensitivity; ordinary contact remains a
 `physical-*` observation rather than being promoted to an alarm or threat. The

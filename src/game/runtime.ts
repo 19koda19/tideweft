@@ -13997,6 +13997,11 @@ export async function createTideweftRuntime(
       if (animalContactSoundSamples === null) {
         throw new Error("Animal-contact acoustic carry failed reauthentication");
       }
+      // Only the exact reauthenticated dog-body contacts supply ground support.
+      // Aggregate activity remains unmodeled; sound words do not establish pose.
+      const surfaceAnimalContactSampleIds = new Set(
+        animalContactSoundSamples.map(({ id }) => id),
+      );
       const priorPorter = runtimeBio0Porter(
         economyView,
         bio0Ecology.porterAddress.actorId,
@@ -14393,6 +14398,12 @@ export async function createTideweftRuntime(
       const selectedSurfaceFallbackSampleIds = selectedExpressionHearingFallbacks
         .filter(({ sample }) => surfaceFallbackSampleIds.has(sample.id))
         .map(({ sample }) => sample.id);
+      const selectedSurfaceSoundSampleIds = [
+        ...selectedSurfaceFallbackSampleIds,
+        ...humanPhysicalSoundSamples
+          .filter(({ id }) => surfaceAnimalContactSampleIds.has(id))
+          .map(({ id }) => id),
+      ];
       for (const prepared of preparedCoreAlarms) {
         const fallbackOwnsResidentHearing = selectedHearingFallbackEventIds.has(
           prepared.alarm.eventId,
@@ -14416,6 +14427,9 @@ export async function createTideweftRuntime(
         collectDogPhysicalAcousticObservationBatches({
           dogs: runtimeDogActors(bio0Ecology, dogActorRoster),
           physicalSoundSamples: worldPhysicalSoundSamples,
+          surfaceSoundSampleIds: worldPhysicalSoundSamples
+            .filter(({ id }) => surfaceAnimalContactSampleIds.has(id))
+            .map(({ id }) => id),
           world: worldView,
           window: regionalTravel.window,
           targetTick,
@@ -14516,7 +14530,7 @@ export async function createTideweftRuntime(
       const perceptionFrame = residentPerceptionFrame(targetTick, humanPhysicalSoundSamples, {
         actorId: priorPorter.address.actorId,
         observations: porterWorldObservations,
-      }, humanUnadmittedAlarmSoundSamples, selectedSurfaceFallbackSampleIds);
+      }, humanUnadmittedAlarmSoundSamples, selectedSurfaceSoundSampleIds);
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorldWithPreparedResidentIntroduction(perceptionFrame);
       // The preceding frame consumed the prior interval exactly once. New
@@ -14763,7 +14777,7 @@ export async function createTideweftRuntime(
           // masking cannot erase the already committed world event or the next
           // bounded nearby-actor hearing interval.
           if (listenerMasking === null) continue;
-          const contact = evaluateAudibleContact({
+          const acousticInput = prepareTerrainAudibleContactInput({
             listener: { x: 0, y: 0 },
             source: { x: deltaFromPlayer.x, y: deltaFromPlayer.y },
             baseRange: acousticEvent.rangeUnits,
@@ -14773,7 +14787,15 @@ export async function createTideweftRuntime(
               x: completedRegionalView.weather.windX / FIXED_POINT,
               y: completedRegionalView.weather.windY / FIXED_POINT,
             },
+          }, {
+            world: completedRegionalView,
+            listenerPosition: playerAddress.position,
+            sourcePosition: after.position,
+            listenerSupport: "surface",
+            sourceSupport: "surface",
           });
+          if (acousticInput === null) continue;
+          const contact = evaluateAudibleContact(acousticInput);
           if (contact === null) continue;
           const directlyVisible = eventTimePerception
             .detailVisibilityGrades[placement.tileIndex] === VISIBILITY_DIRECT;
