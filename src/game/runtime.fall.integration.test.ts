@@ -829,6 +829,9 @@ describe("production terrain fall and physical cargo", () => {
       const trajectory: { step: number; position: unknown; stamina: number }[] = [];
       let lastIncidentId: string | null = null;
       try {
+        // Compare enabled captured-producer diagnostics with the disabled
+        // boundary-reload run; copied evidence must not alter physical truth.
+        runtime.expressionDiagnostics!.setEnabled(!reloadAtBoundary);
         expect(runtime.getUIView().saveWarning).toBeUndefined();
         runtime.dispatchUI({ type: "resume-world" });
         advancePlayerSteps(runtime, 6);
@@ -875,7 +878,10 @@ describe("production terrain fall and physical cargo", () => {
         await runtime.save();
         vocalAudio += incidentCueCalls("vocalization-relief");
         physicalAudio += incidentCueCalls("stumble");
-        return { events, trajectory, vocalAudio, physicalAudio, final: decodeCurrent(runRepository.snapshot()) };
+        const decisions = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records;
+        const replays = decisions.map(({ sequence }) => runtime.expressionDiagnostics!.replayProducer(sequence));
+        return { events, trajectory, vocalAudio, physicalAudio, decisions, replays,
+          final: decodeCurrent(runRepository.snapshot()) };
       } finally { runtime.destroy(); }
     }
 
@@ -897,6 +903,20 @@ describe("production terrain fall and physical cargo", () => {
     expect(situatedExpressionCooldownSteps("relief-after-near-fall")?.meaning).toBe(16);
     expect(uninterrupted.vocalAudio).toBe(1);
     expect(uninterrupted.physicalAudio).toBe(2);
+    expect(restored.decisions).toEqual([]);
+    expect(uninterrupted.decisions.map(({ reason }) => reason)).toEqual(["accepted", "footing-recency"]);
+    for (const [index, decision] of uninterrupted.decisions.entries()) {
+      expect(decision.producerContext).toMatchObject({
+        kind: "player-traversal", input: { incident: { id: uninterrupted.events[index]!.incidentId } },
+      });
+      expect(uninterrupted.replays[index]).toMatchObject({
+        scope: "captured-producer-and-kernel-replay",
+        producerKind: "player-traversal", actualRuntimeReason: decision.reason,
+        candidate: decision.intent,
+      });
+    }
+    // Consumed kernel memory cannot erase the separate real footing refusal.
+    expect(uninterrupted.replays[1]).toMatchObject({ accepted: true, actualRuntimeReason: "footing-recency" });
     expect(uninterrupted.final.playerExpressionRecency.footing).toHaveLength(1);
     expect(uninterrupted.final.playerExpressionRecency.footing[0]?.admission.triggerEventId)
       .toBe("player:0:traversal:73");
@@ -962,8 +982,16 @@ describe("production terrain fall and physical cargo", () => {
       expect(runtime.getUIView().announcement?.message ?? "").not.toContain("INTEGRITY HALT");
       expect(runtime.getRenderView().player.incident?.id).toBe("player:0:traversal:73");
       expect(incidentCueCalls("vocalization-relief")).toBe(0);
-      expect(runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records)
-        .toEqual([expect.objectContaining({ reason: "sound-budget", event: null, admission: null })]);
+      const decisions = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records;
+      expect(decisions).toEqual([expect.objectContaining({
+        reason: "sound-budget", event: null, admission: null,
+        producerContext: { kind: "player-traversal", input: expect.objectContaining({
+          incident: expect.objectContaining({ id: "player:0:traversal:73" }),
+        }) },
+      })]);
+      expect(runtime.expressionDiagnostics!.replayProducer(decisions[0]!.sequence)).toMatchObject({
+        scope: "captured-producer-and-kernel-replay", actualRuntimeReason: "sound-budget", accepted: true,
+      });
       await runtime.save();
       const actual = decodeCurrent(repository.snapshot());
       expect(actual.playerExpressionRecency.footing).toEqual([]);
@@ -1148,6 +1176,7 @@ describe("production terrain fall and physical cargo", () => {
     const repository = new MemoryRepository(await prepareStormStumbleFixture());
     const runtime = await createTideweftRuntime(repository);
     try {
+      runtime.expressionDiagnostics!.setEnabled(true);
       runtime.dispatchUI({ type: "resume-world" });
       advancePlayerSteps(runtime, 9);
       await runtime.save();
@@ -1167,6 +1196,8 @@ describe("production terrain fall and physical cargo", () => {
         expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
         expect(repository.snapshot()).toEqual(beforeRecord);
         expect(incidentCueCalls("vocalization-relief")).toBe(0);
+        expect(runtime.expressionDiagnostics!.getSnapshot().records).toEqual([]);
+        expect(runtime.expressionDiagnostics!.replayProducer(1)).toBeNull();
         await runtime.save();
         const rolledBack = decodeCurrent(repository.snapshot());
         expect(rolledBack.playerExpressionRecency).toEqual(before.playerExpressionRecency);
@@ -1175,6 +1206,12 @@ describe("production terrain fall and physical cargo", () => {
         expect(rolledBack.world).toEqual(before.world);
       } else {
         expect(incidentCueCalls("vocalization-relief")).toBe(1);
+        const decisions = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records;
+        expect(decisions).toHaveLength(1);
+        expect(runtime.expressionDiagnostics!.replayProducer(decisions[0]!.sequence)).toMatchObject({
+          scope: "captured-producer-and-kernel-replay", actualRuntimeReason: "accepted", accepted: true,
+          candidate: decisions[0]!.intent,
+        });
         await runtime.save();
         const closed = decodeCurrent(repository.snapshot());
         expect(closed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
@@ -1188,6 +1225,8 @@ describe("production terrain fall and physical cargo", () => {
         soundscapePlay.mockClear();
         const loaded = await createTideweftRuntime(repository);
         try {
+          expect(loaded.expressionDiagnostics!.getSnapshot().records).toEqual([]);
+          expect(loaded.expressionDiagnostics!.replayProducer(1)).toBeNull();
           expect(loaded.getUIView().title.hasSave).toBe(true);
           expect(incidentCueCalls("vocalization-relief")).toBe(0);
           await loaded.save();

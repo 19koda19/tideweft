@@ -1107,6 +1107,44 @@ No hours-of-play, audible/assistive quality, mobile hardware, desktop package,
 complete cumulative, public release, or whole-Voice closure is certified here.
 Dependencies, upstream code, save policy and completed directives are unchanged.
 
+#### Captured traversal producer inspection — 2026-10-04
+
+Local work over `e8b2056` extends the existing development inspector with the
+exact input already supplied to `playerTraversalExpressionIntent`. Selecting
+a retained traversal decision now replays that unchanged semantic mapper,
+requires exact agreement with the recorded intent, then reruns the source's
+copied prior kernel. This exposes actual cargo-versus-footing precedence and
+suppression without configuring hypothetical physical events. The
+[development inspection contract](ARCHITECTURE.md#development-expression-inspection)
+owns detachment, bounded retention, unavailable contexts and authority limits.
+Actual runtime refusal stays distinct from hypothetical mapper/kernel success;
+neither authenticates nor repeats the physical transaction, recency, capacity,
+hearing or presentation. Other producers have null context. Full selectable
+personality/relationship/emotion/audience lab coverage remains open.
+
+The diagnostics unit file passes 41 tests, covering current traversal branches,
+copied/frozen inputs and outputs, exact-intent mismatch, malformed inputs,
+exceptions, disabled no-work behavior and current-buffer lifecycle. Four
+existing runtime storm-stumble/capacity/phase-ten tests pass: actual committed
+causes are captured on acceptance and refusal, later failure publishes none,
+current reload starts with no diagnostic history, and enabled/disabled runs
+retain the same event/trajectory/audio/current-save roots. Ten inspector and
+traversal-policy tests across two files pass; two selected existing GREET and
+late introduction-rollback tests pass. Seven affected kernel/channel/reception/
+acoustics/trajectory/admission/causal files pass 127 tests. Critical smoke / 105
+tests, context-index checks / 28, typecheck, production web build and static
+nested-path smoke pass.
+
+The production bundle SHA256 is
+`36387ee1532fe33a7cff50e853c4718dba20101ce1580e573db8fc6624a6c4c0`.
+Inspection finds no inspector API, producer-replay or kernel-preview markers;
+the production-environment runtime test also exposes no inspector. Native
+developer-console usage, this new artifact's interactive browser/desktop
+package, complete cumulative regression, audio/assistive quality and release
+verification are not certified by these tests or earlier artifacts. No new
+gameplay producer, save schema, dependency, platform configuration, RNG,
+physical rule, upstream source or completed directive changed.
+
 ## Simulation-design findings
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits

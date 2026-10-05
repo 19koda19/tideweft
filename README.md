@@ -321,6 +321,8 @@ inspector.setEnabled(true);
 const snapshot = inspector.getSnapshot({ sourceActorId: "player:local" });
 // Use a retained record's sequence for a read-only kernel preview:
 inspector.preview(snapshot.records[0]?.sequence, { variantSeed: 43 });
+// For a captured real traversal decision, replay its producer policy + kernel:
+inspector.replayProducer(snapshot.records[0]?.sequence);
 ```
 
 It is default-off, development-only and bounded to 64 copied decisions.
@@ -330,7 +332,11 @@ are global. `reset()` clears history without changing gameplay. Catalog wording,
 optional contextual text and player receipt are separate; absent context does
 not establish silence or unheard audio. Previews are hypothetical kernel
 results, not domain/hearing/personality/relationship simulations or a complete
-expression lab. Production web and packaged builds expose no inspector. See
+expression lab. `replayProducer()` is available only for retained real player
+traversal inputs; it checks the mapped intent against the recorded decision and
+does not rerun physical transactions, recency, capacity or hearing. Other
+producers return null. Refetch the snapshot after reset: sequence numbers may
+be reused. Production web and packaged builds expose no inspector. See
 the [architecture contract](docs/ARCHITECTURE.md#development-expression-inspection).
 
 | Change or checkpoint | Validation commands and scope |

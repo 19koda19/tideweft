@@ -95,6 +95,7 @@ describe("development situated-expression inspector", () => {
       admission: { kind: "settlement-keeper-store-response" },
       playerReception: { kind: "heard-visible" },
       sourceBelief: null,
+      producerContext: null,
       realization: { text: observed.caption?.text },
     });
     expect(decision.event?.eventId).toBe(observed.caption?.id);
@@ -103,6 +104,7 @@ describe("development situated-expression inspector", () => {
     expect(observed.view).toEqual(control.view);
     expect(observed.audio).toEqual(control.audio);
     expect(observed.final.worldJson).not.toContain("expressionDiagnostics");
+    expect(observed.final.worldJson).not.toContain("producerContext");
     const restored = await createTideweftRuntime(observed.repository);
     try {
       expect(restored.getUIView().saveWarning).toBeUndefined();

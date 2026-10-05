@@ -1,4 +1,9 @@
 import type { ActorBelief } from "../sim/actorPerception";
+import { stableStringify } from "../sim/util";
+import {
+  playerTraversalExpressionIntent,
+  type PlayerTraversalExpressionInput,
+} from "./playerTraversalExpression";
 import {
   projectSituatedExpression,
   reduceSituatedExpression,
@@ -21,6 +26,12 @@ export type ExpressionDiagnosticReason = SituatedExpressionChannelBankReductionR
   | "prepared-introduction-committed"
   | "porter-not-heard-or-visible";
 
+/** Exact already-applied domain facts, not a configurable gameplay command. */
+export interface ExpressionDiagnosticProducerContext {
+  readonly kind: "player-traversal";
+  readonly input: PlayerTraversalExpressionInput;
+}
+
 export interface ExpressionDiagnosticInput {
   readonly completedTick: number;
   readonly playerStepPhase: number;
@@ -40,6 +51,8 @@ export interface ExpressionDiagnosticInput {
   readonly weather: string;
   /** Authenticated contextual wording, only when the producer supplies it. */
   readonly contextualText?: string | null;
+  /** Only the currently supported producer supplies its existing input. */
+  readonly producerContext?: ExpressionDiagnosticProducerContext | null;
 }
 
 export interface ExpressionDiagnosticRecord extends ExpressionDiagnosticInput {
@@ -47,6 +60,7 @@ export interface ExpressionDiagnosticRecord extends ExpressionDiagnosticInput {
   /** Catalog realization; contextual speech may replace its neutral wording. */
   readonly realization: SituatedExpressionProjection | null;
   readonly contextualText: string | null;
+  readonly producerContext: ExpressionDiagnosticProducerContext | null;
 }
 
 export interface ExpressionDiagnosticQuery {
@@ -80,6 +94,18 @@ export interface ExpressionDiagnosticPreview {
   readonly notEvaluated: readonly string[];
 }
 
+export interface ExpressionDiagnosticProducerReplay {
+  readonly scope: "captured-producer-and-kernel-replay";
+  readonly producerKind: "player-traversal";
+  readonly actualRuntimeReason: ExpressionDiagnosticReason;
+  readonly candidate: SituatedExpressionIntent;
+  readonly accepted: boolean;
+  readonly reason: ReturnType<typeof reduceSituatedExpression>["reason"];
+  readonly realization: SituatedExpressionProjection | null;
+  /** Mapping copied physical facts does not authenticate or rerun their cause. */
+  readonly notEvaluated: readonly string[];
+}
+
 export interface SituatedExpressionDiagnostics {
   readonly setEnabled: (enabled: boolean) => ExpressionDiagnosticSnapshot;
   readonly getSnapshot: (query?: ExpressionDiagnosticQuery) => ExpressionDiagnosticSnapshot;
@@ -88,6 +114,8 @@ export interface SituatedExpressionDiagnostics {
     sequence: number,
     overrides?: ExpressionPreviewOverrides,
   ) => ExpressionDiagnosticPreview | null;
+  /** Sequence is selected from the current buffer; reset may reuse numbers. */
+  readonly replayProducer: (sequence: number) => ExpressionDiagnosticProducerReplay | null;
 }
 
 export function createExpressionDiagnosticState(enabled = false): ExpressionDiagnosticSnapshot {
@@ -127,6 +155,7 @@ export function appendExpressionDiagnostic(
       sequence: state.totalCount + 1,
       realization: copy.event === null ? null : projectSituatedExpression(copy.event),
       contextualText: copy.contextualText ?? null,
+      producerContext: copy.producerContext ?? null,
     });
     const records = Object.freeze([...state.records, record].slice(-EXPRESSION_DIAGNOSTIC_CAPACITY));
     const totalCount = state.totalCount + 1;
@@ -191,6 +220,37 @@ export function previewExpressionDiagnostic(
       realization: reduction.event === null ? null : projectSituatedExpression(reduction.event),
       notEvaluated: [
         "domain-cause", "physical-recency", "sample/channel-capacity", "listener-hearing",
+        "causal-admission", "presentation", "personality", "relationships", "full-emotional-state",
+        "contextual-realization",
+      ],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Replays one supported mapper from detached historical inputs, never the world. */
+export function replayExpressionDiagnosticProducer(
+  state: ExpressionDiagnosticSnapshot,
+  sequence: number,
+): ExpressionDiagnosticProducerReplay | null {
+  const record = state.records.find((candidate) => candidate.sequence === sequence);
+  if (record?.producerContext?.kind !== "player-traversal") return null;
+  try {
+    const input = structuredClone(record.producerContext.input);
+    const candidate = playerTraversalExpressionIntent(input);
+    if (candidate === null || stableStringify(candidate) !== stableStringify(record.intent)) return null;
+    const reduction = reduceSituatedExpression(record.priorState, candidate);
+    return freezeCopy({
+      scope: "captured-producer-and-kernel-replay",
+      producerKind: "player-traversal",
+      actualRuntimeReason: record.reason,
+      candidate,
+      accepted: reduction.accepted,
+      reason: reduction.reason,
+      realization: reduction.event === null ? null : projectSituatedExpression(reduction.event),
+      notEvaluated: [
+        "physical-transaction", "physical-recency", "sample/channel-capacity", "listener-hearing",
         "causal-admission", "presentation", "personality", "relationships", "full-emotional-state",
         "contextual-realization",
       ],

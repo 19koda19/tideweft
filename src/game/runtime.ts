@@ -187,9 +187,11 @@ import {
   appendExpressionDiagnostic,
   createExpressionDiagnosticState,
   previewExpressionDiagnostic,
+  replayExpressionDiagnosticProducer,
   selectExpressionDiagnostics,
   setExpressionDiagnosticEnabled,
   type ExpressionDiagnosticReason,
+  type ExpressionDiagnosticProducerContext,
   type ExpressionDiagnosticSnapshot,
   type SituatedExpressionDiagnostics,
 } from "./situatedExpressionDiagnostics";
@@ -12801,6 +12803,7 @@ export async function createTideweftRuntime(
     priorState?: SituatedExpressionState,
     sourceBelief: ActorBelief | null = null,
     contextualText: string | null = null,
+    producerContext: ExpressionDiagnosticProducerContext | null = null,
   ): void {
     if (!import.meta.env.DEV) return;
     const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
@@ -12820,6 +12823,7 @@ export async function createTideweftRuntime(
         sourceBelief,
         weather: world.weather.kind,
         contextualText,
+        producerContext,
       });
       if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
       else expressionDiagnosticState = next;
@@ -12846,6 +12850,7 @@ export async function createTideweftRuntime(
       sampleOrdinal: number,
     ) => SituatedExpressionAdmissionRecord | null,
     diagnosticBelief: ActorBelief | null = null,
+    diagnosticProducerContext: ExpressionDiagnosticProducerContext | null = null,
   ): boolean {
     if (intent === null) return false;
     // Sound carry, memory, causal authority, and optional presentation are one
@@ -12856,7 +12861,10 @@ export async function createTideweftRuntime(
       || situatedExpressionAdmissions.records.length
         >= HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
     ) {
-      if (import.meta.env.DEV) recordExpressionDecision(intent, "sound-budget");
+      if (import.meta.env.DEV) recordExpressionDecision(
+        intent, "sound-budget", null, null, null, undefined, diagnosticBelief,
+        null, diagnosticProducerContext,
+      );
       return false;
     }
     const diagnosticPriorState = import.meta.env.DEV
@@ -12948,11 +12956,14 @@ export async function createTideweftRuntime(
         )?.reception ?? null,
         diagnosticPriorState,
         diagnosticBelief,
+        null,
+        diagnosticProducerContext,
       );
       return true;
     }
     if (import.meta.env.DEV) recordExpressionDecision(
       intent, reduction.reason, null, null, null, diagnosticPriorState, diagnosticBelief,
+      null, diagnosticProducerContext,
     );
     return false;
   }
@@ -13696,13 +13707,17 @@ export async function createTideweftRuntime(
       );
     }
     if (traversalExpressionContext !== null && incidentWorldPosition !== null) {
-      const traversalExpressionIntent = playerTraversalExpressionIntent({
+      const traversalExpressionInput = {
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
         position: incidentWorldPosition,
         incident: traversalExpressionContext.incident,
         evaluation: traversalExpressionContext.evaluation,
         cargo: traversalExpressionContext.cargo,
-      });
+      };
+      const traversalExpressionIntent = playerTraversalExpressionIntent(traversalExpressionInput);
+      const diagnosticProducerContext = import.meta.env.DEV && expressionDiagnosticState?.enabled === true
+        ? { kind: "player-traversal" as const, input: traversalExpressionInput }
+        : null;
       const expressionIncidentKind = traversalExpressionContext.incident.kind === "stumble"
         || traversalExpressionContext.incident.kind === "fall"
         || traversalExpressionContext.incident.kind === "sweep"
@@ -13762,12 +13777,15 @@ export async function createTideweftRuntime(
       if (import.meta.env.DEV && !footingAllowed && traversalExpressionIntent !== null) {
         recordExpressionDecision(
           traversalExpressionIntent, footingBudgetAvailable ? "footing-recency" : "sound-budget",
+          null, null, null, undefined, null, null, diagnosticProducerContext,
         );
       }
       const acceptedTraversal = footingAllowed && acceptSituatedExpression(
         traversalExpressionIntent,
         { kind: "self" },
         traversalAdmissionFor,
+        null,
+        diagnosticProducerContext,
       );
       if (acceptedTraversal && footingIntent) {
         const admission = situatedExpressionAdmissions.records.at(-1);
@@ -20197,6 +20215,9 @@ export async function createTideweftRuntime(
         },
         preview: (sequence, overrides) => previewExpressionDiagnostic(
           expressionDiagnosticState!, sequence, overrides,
+        ),
+        replayProducer: (sequence) => replayExpressionDiagnosticProducer(
+          expressionDiagnosticState!, sequence,
         ),
       } satisfies SituatedExpressionDiagnostics),
     } : {}),
