@@ -2203,6 +2203,33 @@ and exact current reload without replay. No new producer, desktop package,
 hardware audio/AT, performance, cumulative, release or directive closure is
 claimed by this finite functional check.
 
+### Learned-call equal-work characterization — 2026-10-06
+
+The full local `test:ci` run on `206a6420a53aae7a6c4610bbe6cd3b1b3b75b7c4`
+finished with 363/364 files and 4,050/4,052 tests passing in 1,675.19s;
+context28 and player-facing39 selftests also passed. Its only failures were
+the two historical v47 digest assertions in `runtime.performanceTelemetry.test.ts`.
+The old projection still included the intentionally additive
+`player.animalCallKnowledge` from the current witnessed-call learning slice.
+This failed run is retained as failed, not a cumulative certificate.
+
+The test-only reconciliation separately requires canonical empty call knowledge
+for both stationary seeds, then excludes only that new player field alongside
+the already-declared outer recency/version/seal differences from the historical
+projection. **Both original historical hashes remain unchanged and pass.**
+Every older root remains in the comparison; this is not an old-format load
+promise or a relaxation of current save validation. Fresh telemetry-disabled
+controls process the same 30 accepted steps/three world advances for each seed
+and match the complete, unnormalized current save bytes exactly. Both runtimes
+are cleaned on failure as well as success; the encoder spy is restored before
+the control run.
+
+The full affected file passed four tests in 17.44s; typecheck and the maintained
+six-file/105-test critical smoke passed. No application, schema, timing,
+dependency, artifact or release change was needed. This narrow revalidation
+does not turn the earlier failed full run into a passing cumulative result or
+close the remaining ordinary-play, hours, platform and release gates.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

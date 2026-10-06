@@ -7,6 +7,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import { createPlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 import { createPlayerExpressionRecencyState } from "./playerExpressionRecency";
 
 vi.setConfig({ testTimeout: 120_000 });
@@ -113,76 +114,98 @@ describe("runtime performance telemetry", () => {
     async (seed) => {
       const repository = new MemoryRepository();
       const runtime = await createTideweftRuntime(repository);
-      beginFreshWorld(runtime, seed);
-      runtime.setPerformanceTelemetryEnabled(true);
-      runtime.resetPerformanceTelemetry();
-      const originalEncoder = canonicalUtil.stableStringify;
-      const inputs = new Map<object, number>();
-      let encodedCodeUnits = 0;
-      let durableSignalEncodes = 0;
-      let durableSignalCodeUnits = 0;
-      let durableDerivationCodeUnits = 0;
-      const durableHabitats = new Map<object, number>();
-      const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
-        const encoded = originalEncoder(value);
-        if (typeof value === "object" && value !== null && "ownerId" in value
-          && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
-          inputs.set(value, (inputs.get(value) ?? 0) + 1);
-          encodedCodeUnits += encoded.length;
-        }
-        if (typeof value === "object" && value !== null && "patchKey" in value
-          && "derivation" in value && "groups" in value && Array.isArray(value.groups)) {
-          durableSignalEncodes += 1;
-          durableSignalCodeUnits += encoded.length;
-          const derivation = value.derivation as Readonly<Record<string, unknown>> | null;
-          durableDerivationCodeUnits += originalEncoder(derivation).length;
-          if (derivation !== null && typeof derivation.habitat === "object"
-            && derivation.habitat !== null) {
-            durableHabitats.set(derivation.habitat, (durableHabitats.get(derivation.habitat) ?? 0) + 1);
-          }
-        }
-        return encoded;
-      });
+      let worldJson: string;
       try {
-        advancePlayerSteps(runtime, 30);
+        beginFreshWorld(runtime, seed);
+        runtime.setPerformanceTelemetryEnabled(true);
+        runtime.resetPerformanceTelemetry();
+        const originalEncoder = canonicalUtil.stableStringify;
+        const inputs = new Map<object, number>();
+        let encodedCodeUnits = 0;
+        let durableSignalEncodes = 0;
+        let durableSignalCodeUnits = 0;
+        let durableDerivationCodeUnits = 0;
+        const durableHabitats = new Map<object, number>();
+        const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
+          const encoded = originalEncoder(value);
+          if (typeof value === "object" && value !== null && "ownerId" in value
+            && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
+            inputs.set(value, (inputs.get(value) ?? 0) + 1);
+            encodedCodeUnits += encoded.length;
+          }
+          if (typeof value === "object" && value !== null && "patchKey" in value
+            && "derivation" in value && "groups" in value && Array.isArray(value.groups)) {
+            durableSignalEncodes += 1;
+            durableSignalCodeUnits += encoded.length;
+            const derivation = value.derivation as Readonly<Record<string, unknown>> | null;
+            durableDerivationCodeUnits += originalEncoder(derivation).length;
+            if (derivation !== null && typeof derivation.habitat === "object"
+              && derivation.habitat !== null) {
+              durableHabitats.set(derivation.habitat, (durableHabitats.get(derivation.habitat) ?? 0) + 1);
+            }
+          }
+          return encoded;
+        });
+        try {
+          advancePlayerSteps(runtime, 30);
+        } finally {
+          encoder.mockRestore();
+        }
+        const telemetry = runtime.getPerformanceTelemetry();
+        expect(telemetry.fixedStep.totalCount).toBe(30);
+        expect(telemetry.worldAdvanceStep.totalCount).toBe(3);
+        await runtime.save();
+        worldJson = repository.snapshot().worldJson;
+        const digest = createHash("sha256").update(worldJson).digest("hex");
+        if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
+          seed, acceptedSteps: 30, advances: 3, saveBytes: Buffer.byteLength(worldJson), digest,
+          habitatEncodes: [...inputs.values()].reduce((sum, count) => sum + count, 0),
+          uniqueHabitatInputs: inputs.size, encodedCodeUnits,
+          perInputEncodes: [...inputs.values()].sort((left, right) => left - right),
+          durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
+          uniqueDurableHabitats: durableHabitats.size,
+          perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
+        })}\n`);
+        const envelope = JSON.parse(worldJson) as Record<string, unknown>;
+        expect(envelope.version).toBe(50);
+        expect(envelope.playerExpressionRecency).toEqual(createPlayerExpressionRecencyState(
+          deserializeWorld(envelope.world as string).meta.rootSeed,
+        ));
+        const player = envelope.player as Record<string, unknown>;
+        expect(player.animalCallKnowledge).toEqual(createPlayerAnimalCallKnowledge());
+        expect(Object.hasOwn(envelope, "playerEffortRecency")).toBe(false);
+        expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
+        // These stationary inputs create no effort, footing or learned-call history.
+        // Preserve the exact 6215116, 30-step oracle for every older root after
+        // removing only the later combined recency root and additive player call
+        // knowledge, restoring the outer version, and recomputing its seal.
+        const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
+        const { animalCallKnowledge: _callKnowledge, ...v47Player } = player;
+        v47Base.player = v47Player;
+        v47Base.version = 47;
+        const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });
+        const v47Digest = createHash("sha256").update(v47Json).digest("hex");
+        const baselineDigests: Readonly<Record<string, string>> = {
+          "runtime baseline estuary": "6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7",
+          "breathing room regional density 8": "e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e",
+        };
+        expect(v47Digest).toBe(baselineDigests[seed]);
       } finally {
-        encoder.mockRestore();
+        runtime.destroy();
       }
-      const telemetry = runtime.getPerformanceTelemetry();
-      expect(telemetry.fixedStep.totalCount).toBe(30);
-      expect(telemetry.worldAdvanceStep.totalCount).toBe(3);
-      await runtime.save();
-      const worldJson = repository.snapshot().worldJson;
-      const digest = createHash("sha256").update(worldJson).digest("hex");
-      if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
-        seed, acceptedSteps: 30, advances: 3, saveBytes: Buffer.byteLength(worldJson), digest,
-        habitatEncodes: [...inputs.values()].reduce((sum, count) => sum + count, 0),
-        uniqueHabitatInputs: inputs.size, encodedCodeUnits,
-        perInputEncodes: [...inputs.values()].sort((left, right) => left - right),
-        durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
-        uniqueDurableHabitats: durableHabitats.size,
-        perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
-      })}\n`);
-      const envelope = JSON.parse(worldJson) as Record<string, unknown>;
-      expect(envelope.version).toBe(50);
-      expect(envelope.playerExpressionRecency).toEqual(createPlayerExpressionRecencyState(
-        deserializeWorld(envelope.world as string).meta.rootSeed,
-      ));
-      expect(Object.hasOwn(envelope, "playerEffortRecency")).toBe(false);
-      expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
-      // These stationary inputs create no effort or footing history. Preserve the exact
-      // 6215116, 30-step oracle for every older root after explicitly removing
-      // only the v49 combined root and current outer version, then recomputing its seal.
-      const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
-      v47Base.version = 47;
-      const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });
-      const v47Digest = createHash("sha256").update(v47Json).digest("hex");
-      const baselineDigests: Readonly<Record<string, string>> = {
-        "runtime baseline estuary": "6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7",
-        "breathing room regional density 8": "e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e",
-      };
-      expect(v47Digest).toBe(baselineDigests[seed]);
-      runtime.destroy();
+
+      const controlRepository = new MemoryRepository();
+      const control = await createTideweftRuntime(controlRepository);
+      try {
+        beginFreshWorld(control, seed);
+        expect(control.getPerformanceTelemetry().fixedStep.enabled).toBe(false);
+        expect(control.getPerformanceTelemetry().worldAdvanceStep.enabled).toBe(false);
+        advancePlayerSteps(control, 30);
+        await control.save();
+        expect(controlRepository.snapshot().worldJson).toBe(worldJson);
+      } finally {
+        control.destroy();
+      }
     },
   );
 
