@@ -383,6 +383,10 @@ untracked occurrences; a ranked list with overflow is not exhaustive. Rates use
 successful accepted simulation time, including quiet steps—not wall or civil
 minutes, unique world events, committed audio or captions. Paused/failed/disabled
 steps add nothing; zero exposure or counter saturation gives null rates.
+`admittedAnimalVocalDecisions` and its per-accepted-simulation-minute rate use
+the existing thirteen vocal families, excluding human contours and rabbit body
+thumps. Refused optional admission can still produce real sound, so this is
+not a total world-call count.
 Reset/new-world/reload clear totals; disabling preserves prior totals. Reports
 and hypothetical previews cannot add counts. Uncaptured producers, settlement
 density, profanity and long-play annoyance are not certified by this aid.

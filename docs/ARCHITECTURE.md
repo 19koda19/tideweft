@@ -1410,6 +1410,13 @@ untracked-key occurrences are reported explicitly. Ranked entries are therefore
 not a complete top-frequency list when overflow occurs. Reset/new-world/reload
 clear these totals; disabling capture preserves prior totals but adds nothing.
 
+The separate `admittedAnimalVocalDecisions` subtotal classifies only the
+event's thirteen current vocal families through the existing closed animal-call
+lookup, not prose, actor IDs or the broader `animal-signal` family. Human vocal
+contours and rabbit body thumps are excluded. It has the same admitted-decision
+scope and accepted-simulation-time denominator; optional refusal can leave a
+real ecology sound uncounted. It is not a census of committed world calls.
+
 The denominator is successful accepted fixed-step time, including quiet steps,
 published only after the full transaction and due save preparation succeed.
 Paused, disabled and failed steps add no exposure. Rates are per **accepted

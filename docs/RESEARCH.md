@@ -1965,6 +1965,33 @@ correctness and compile-time exclusion checks, not a new native playtest,
 performance, package, cumulative, release or directive-closure certificate.
 No schema, save reader, dependency, version or gameplay scope changed.
 
+### Capture-period animal-vocal inspection — 2026-10-06
+
+The unpublished DEV-only repetition report now separates admitted animal vocal
+decisions from the wider `animal-signal` category. It reuses the existing closed
+thirteen-family vocal lookup: human contours and rabbit body thumps do not
+count. Event plus admission is still a captured decision, not reauthentication,
+unique world events or total audio; optional ecology refusal can still produce
+lawful sound outside this admitted subtotal. Rates use accepted simulation
+time, with the existing quiet-step, rollback, reset, no-save and bounded policy.
+
+Pure diagnostics/repetition/knowledge tests pass3files/147; the eight added
+census cases are explicitly synthetic. Existing actual keeper/guardian mixed
+integration passes2files/8selected,25unselected. The genuine storm shelter
+whine contributes to the total over ten accepted100ms steps; save, inspection,
+reset/reload and late failure preserve the existing authority and counter
+boundaries. This short controlled rate is not ordinary animal-call frequency.
+Critical smoke105, typecheck, production web622modules and nested static smoke
+PASS. Production JS/CSS are byte-identical to the previous CdoXx_bE/BY0KDEk3
+artifact, and new diagnostic markers are absent. No game producer, schema,
+dependency, released behavior or hours-long annoyance claim changed.
+
+Manual review of the current forty literal realizations across twenty-five
+meanings and the authenticated introduction template finds no authored
+profanity. Generated names, arbitrary contextual text, unheard/unobserved
+events and actual long-play rates are not classified by that finite inventory.
+No universal zero-profanity counter or NLP subsystem is claimed.
+
 ### Learned animal-call recognition — 2026-10-06
 
 Native follow-up on clean `ba6deb0` uses the same current production bundle

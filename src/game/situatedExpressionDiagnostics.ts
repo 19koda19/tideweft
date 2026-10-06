@@ -7,6 +7,7 @@ import { EXPRESSION_KNOWLEDGE_SOURCE_MEANINGS, expressionKnowledgeListenerIssues
   type ExpressionKnowledgeSourceCheck, type ExpressionKnowledgeListenerAudit } from "./situatedExpressionKnowledgeAudit";
 import { evaluateAudibleContact, type AudibleContact, type AudibleContactInput } from "./perception";
 import { SERIOUS_FALL_HAZARD } from "./fallRisk";
+import { animalCallRecognitionForVocalization } from "./playerAnimalCallKnowledge";
 import {
   guardianDogShelterWhineExpressionIntent,
   type GuardianDogShelterWhineExpressionInput,
@@ -118,6 +119,8 @@ export interface ExpressionDiagnosticRepetitionState {
   readonly acceptedFixedSteps: number;
   readonly acceptedSimulationMs: number;
   readonly admittedDecisions: number;
+  /** Closed current vocal families only; body thumps and human contours are excluded. */
+  readonly admittedAnimalVocalDecisions: number;
   readonly unadmittedDecisions: number;
   readonly unrealizedAdmittedDecisions: number;
   readonly saturated: boolean;
@@ -135,6 +138,7 @@ export interface ExpressionDiagnosticRepetitionReport extends Omit<ExpressionDia
   readonly totalCount: number;
   readonly evictedCount: number;
   readonly retainedCount: number;
+  readonly admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: number | null;
   readonly families: ExpressionDiagnosticRepetitionRates;
   readonly actors: ExpressionDiagnosticRepetitionRates;
   readonly lines: ExpressionDiagnosticRepetitionRates;
@@ -337,11 +341,12 @@ export function reportExpressionDiagnosticRepetition(
 ): ExpressionDiagnosticRepetitionReport {
   const repetition = state.repetition;
   const saturated = repetition.saturated || state.totalCount >= Number.MAX_SAFE_INTEGER;
+  const rate = (count: number): number | null => saturated || repetition.acceptedSimulationMs === 0
+    ? null : count / (repetition.acceptedSimulationMs / 60_000);
   const rates = (counts: ExpressionDiagnosticRepetitionCounts): ExpressionDiagnosticRepetitionRates => ({
     entries: counts.entries.map(({ key, count }) => ({
       key, count,
-      perAcceptedSimulationMinute: saturated || repetition.acceptedSimulationMs === 0
-        ? null : count / (repetition.acceptedSimulationMs / 60_000),
+      perAcceptedSimulationMinute: rate(count),
     })).sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
     untrackedCount: counts.untrackedCount,
   });
@@ -352,6 +357,7 @@ export function reportExpressionDiagnosticRepetition(
     totalCount: state.totalCount,
     evictedCount: state.evictedCount,
     retainedCount: state.records.length,
+    admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: rate(repetition.admittedAnimalVocalDecisions),
     saturated,
     families: rates(repetition.families),
     actors: rates(repetition.actors),
@@ -371,7 +377,7 @@ function createRepetitionState(): ExpressionDiagnosticRepetitionState {
     entries: Object.freeze([]), untrackedCount: 0,
   });
   return Object.freeze({
-    acceptedFixedSteps: 0, acceptedSimulationMs: 0, admittedDecisions: 0,
+    acceptedFixedSteps: 0, acceptedSimulationMs: 0, admittedDecisions: 0, admittedAnimalVocalDecisions: 0,
     unadmittedDecisions: 0, unrealizedAdmittedDecisions: 0, saturated: false,
     families: empty(), actors: empty(), lines: empty(), reasons: empty(),
   });
@@ -397,10 +403,15 @@ function countRepetitionDecision(
   record: ExpressionDiagnosticRecord,
 ): ExpressionDiagnosticRepetitionState {
   const admitted = record.event !== null && record.admission !== null;
+  // Reuse the existing closed semantic vocabulary, not wording, IDs or the
+  // wider animal-signal family (which also includes a rabbit body thump).
+  // This lookup neither grants player knowledge nor authenticates the record.
+  const animalVocal = admitted && animalCallRecognitionForVocalization(record.event!.vocalization) !== null;
   const text = record.contextualText ?? record.realization?.text ?? null;
   return Object.freeze({
     ...prior,
     admittedDecisions: prior.admittedDecisions + (admitted ? 1 : 0),
+    admittedAnimalVocalDecisions: prior.admittedAnimalVocalDecisions + (animalVocal ? 1 : 0),
     unadmittedDecisions: prior.unadmittedDecisions + (admitted ? 0 : 1),
     unrealizedAdmittedDecisions: prior.unrealizedAdmittedDecisions + (admitted && text === null ? 1 : 0),
     families: admitted ? incrementRepetitionCounts(prior.families, record.intent.family) : prior.families,

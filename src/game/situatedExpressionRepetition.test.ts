@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createRegionCoord } from "../sim/regions";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
-import { createSituatedExpressionState, projectSituatedExpression, reduceSituatedExpression } from "./situatedExpression";
+import { createSituatedExpressionState, projectSituatedExpression, reduceSituatedExpression,
+  type SituatedExpressionVocalization } from "./situatedExpression";
 import { createPlayerExhaustionExpressionAdmissionRecord } from "./situatedExpressionAdmissionLedger";
 import {
   advanceExpressionDiagnosticExposure, appendExpressionDiagnostic,
@@ -197,5 +198,148 @@ describe("captured expression repetition (synthetic tooling evidence)", () => {
     expect(appendExpressionDiagnostic(exhausted, decision())).toBe(exhausted);
     expect(reportExpressionDiagnosticRepetition(exhausted).saturated).toBe(true);
     expect(reportExpressionDiagnosticRepetition(exhausted).actors.entries[0]?.perAcceptedSimulationMinute).toBeNull();
+  });
+});
+
+describe("captured admitted animal-vocal decisions (synthetic census only)", () => {
+  const vocalizations = [
+    "dog-warning-bark", "dog-defensive-growl", "dog-shelter-whine", "domestic-cat-rain-distress",
+    "fish-crow-alarm", "deer-alarm-snort", "gull-alarm-cry", "elk-alarm-bark", "boar-grunt",
+    "chicken-alarm-squawk", "duck-alarm-quack", "goat-alarm-bleat", "marsh-fox-pursuit-yip",
+  ] as const satisfies readonly SituatedExpressionVocalization[];
+
+  // Deliberately substitutes only a selected acoustic token into logged evidence.
+  // The census neither reauthenticates these shapes nor grants animal identity,
+  // source knowledge, hearing, unique world events, audio or caption realization.
+  function vocalDecision(vocalization: SituatedExpressionVocalization, sourceActorId = "player:local"): ExpressionDiagnosticInput {
+    const evidence = decision(28, sourceActorId);
+    if (evidence.event === null) throw new Error("Synthetic animal census requires event-shaped evidence");
+    return { ...evidence, event: { ...evidence.event, vocalization } };
+  }
+
+  it("counts all thirteen supported actual vocal keys, not the human source/family or catalog realization", () => {
+    let state = createExpressionDiagnosticState(true);
+    for (const [index, vocalization] of vocalizations.entries()) {
+      state = appendExpressionDiagnostic(state, { ...vocalDecision(vocalization), contextualText: "Not an animal label." });
+      expect(state.repetition.admittedAnimalVocalDecisions).toBe(index + 1);
+    }
+    state = advanceExpressionDiagnosticExposure(state, 60_000);
+    expect(reportExpressionDiagnosticRepetition(state)).toMatchObject({
+      totalCount: 13, admittedDecisions: 13, admittedAnimalVocalDecisions: 13,
+      admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: 13,
+    });
+  });
+
+  it("excludes human, rabbit contact and unknown tokens despite animal prose, family and source IDs", () => {
+    let state = createExpressionDiagnosticState(true);
+    for (const vocalization of ["steady", "strained", "alarm", "relief", "marsh-rabbit-alarm-thump", "unknown-animal-call"] as const) {
+      const evidence = vocalDecision(vocalization as SituatedExpressionVocalization, "dog:synthetic");
+      if (evidence.event === null) throw new Error("Synthetic excluded-token fixture needs an event");
+      state = appendExpressionDiagnostic(state, {
+        ...evidence, contextualText: "BARK! fox call goat bleat",
+        intent: { ...evidence.intent, family: "animal-signal" },
+        event: { ...evidence.event, family: "animal-signal" },
+      });
+    }
+    state = advanceExpressionDiagnosticExposure(state, 60_000);
+    expect(reportExpressionDiagnosticRepetition(state)).toMatchObject({
+      totalCount: 6, admittedDecisions: 6, admittedAnimalVocalDecisions: 0,
+      admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: 0,
+    });
+  });
+
+  it("requires event plus admission, with no call counted for refused or uncaptured decisions", () => {
+    const evidence = vocalDecision("dog-warning-bark");
+    let state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    for (const input of [
+      { ...evidence, admission: null },
+      { ...evidence, event: null },
+      { ...evidence, event: null, admission: null, reason: "sound-budget" as const },
+    ]) state = appendExpressionDiagnostic(state, input);
+    expect(reportExpressionDiagnosticRepetition(state)).toMatchObject({
+      totalCount: 4, admittedDecisions: 1, unadmittedDecisions: 3, admittedAnimalVocalDecisions: 1,
+      admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: null,
+    });
+  });
+
+  it("retains scalar call counts through ring eviction and first-seen actor/text key overflow", () => {
+    let state = createExpressionDiagnosticState(true);
+    for (let index = 0; index < 70; index += 1) state = appendExpressionDiagnostic(state, {
+      ...vocalDecision("marsh-fox-pursuit-yip", `H-synthetic-${index}`), contextualText: `synthetic ${index}`,
+    });
+    for (const index of [0, 69]) state = appendExpressionDiagnostic(state, {
+      ...vocalDecision("marsh-fox-pursuit-yip", `H-synthetic-${index}`), contextualText: `synthetic ${index}`,
+    });
+    state = advanceExpressionDiagnosticExposure(state, 120_000);
+    const report = reportExpressionDiagnosticRepetition(state);
+    expect(report).toMatchObject({
+      totalCount: 72, retainedCount: 64, evictedCount: 8,
+      admittedAnimalVocalDecisions: 72, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: 36,
+    });
+    for (const group of [report.actors, report.lines]) {
+      expect(group.entries).toHaveLength(64);
+      expect(group.untrackedCount).toBe(7);
+    }
+  });
+
+  it("keeps the animal-vocal rate unavailable without exposure or when arithmetic saturates", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), vocalDecision("goat-alarm-bleat"));
+    expect(reportExpressionDiagnosticRepetition(state).admittedAnimalVocalDecisionsPerAcceptedSimulationMinute).toBeNull();
+    const nearLimit = advanceExpressionDiagnosticExposure(state, Number.MAX_SAFE_INTEGER);
+    const saturated = advanceExpressionDiagnosticExposure(nearLimit, 1);
+    expect(reportExpressionDiagnosticRepetition(saturated)).toMatchObject({
+      saturated: true, admittedAnimalVocalDecisions: 1, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: null,
+    });
+    const exhausted = { ...state, totalCount: Number.MAX_SAFE_INTEGER };
+    expect(appendExpressionDiagnostic(exhausted, vocalDecision("goat-alarm-bleat"))).toBe(exhausted);
+    expect(reportExpressionDiagnosticRepetition(exhausted)).toMatchObject({
+      saturated: true, admittedAnimalVocalDecisions: 1, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: null,
+    });
+  });
+
+  it("preserves totals while disabled without reading input and clears them on a fresh reset", () => {
+    let state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), vocalDecision("dog-shelter-whine"));
+    state = advanceExpressionDiagnosticExposure(state, 60_000);
+    const disabled = setExpressionDiagnosticEnabled(state, false);
+    const hostile = new Proxy({} as ExpressionDiagnosticInput, { get() { throw new Error("disabled census read"); } });
+    expect(appendExpressionDiagnostic(disabled, hostile)).toBe(disabled);
+    expect(advanceExpressionDiagnosticExposure(disabled, 100)).toBe(disabled);
+    expect(reportExpressionDiagnosticRepetition(disabled)).toMatchObject({
+      enabled: false, admittedAnimalVocalDecisions: 1, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: 1,
+    });
+    expect(reportExpressionDiagnosticRepetition(createExpressionDiagnosticState(true))).toMatchObject({
+      admittedAnimalVocalDecisions: 0, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: null,
+    });
+  });
+
+  it("keeps animal counts global, detached and read-only through queries, previews and reports", () => {
+    let state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), vocalDecision("duck-alarm-quack"));
+    state = advanceExpressionDiagnosticExposure(state, 60_000);
+    const before = JSON.stringify(state);
+    const report = reportExpressionDiagnosticRepetition(selectExpressionDiagnostics(state, { sourceActorId: "missing" }));
+    expect(report).toMatchObject({
+      retainedCount: 0, admittedAnimalVocalDecisions: 1, admittedAnimalVocalDecisionsPerAcceptedSimulationMinute: 1,
+    });
+    previewExpressionDiagnostic(state, 1);
+    replayExpressionDiagnosticProducer(state, 1);
+    auditExpressionDiagnosticKnowledge(state);
+    reportExpressionDiagnosticRepetition(state);
+    expect(JSON.stringify(state)).toBe(before);
+    const originals = objectGraph(state);
+    for (const object of objectGraph(report)) {
+      expect(originals.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    expect(Reflect.set(report, "admittedAnimalVocalDecisions", 99)).toBe(false);
+  });
+
+  it("does not count an animal decision whose optional evidence copy fails", () => {
+    const evidence = vocalDecision("domestic-cat-rain-distress");
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), evidence);
+    const before = JSON.stringify(state);
+    vi.spyOn(globalThis, "structuredClone").mockImplementationOnce(() => { throw new Error("animal evidence copy failed"); });
+    expect(appendExpressionDiagnostic(state, evidence)).toBe(state);
+    expect(JSON.stringify(state)).toBe(before);
+    expect(state.repetition.admittedAnimalVocalDecisions).toBe(1);
   });
 });
