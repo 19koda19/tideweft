@@ -2443,6 +2443,25 @@ This is a finite controlled three-source scene, not broad chatter, saturation,
 hours, hardware audio/AT/mobile, performance, or release acceptance. No
 application, schema, sound lifetime, dependency or production artifact changed.
 
+#### Longer wilderness attempt ends at a bounded crossing — 2026-10-06
+
+The unchanged native driver on clean `5560d7f` requests two hours, but ends after
+1,026,295ms of observation, about seventeen minutes. One real ADRIFT episode
+escapes after 65,507ms; a second remains swept after 121,337ms and the existing
+120-second exploratory-paddling bound refuses. The game and transport remain
+live until normal owned-browser cleanup. This is an incomplete expedition,
+not two-hour acceptance, a crash or a demonstrated Voice defect. No terminal
+screenshot or current-save stage is claimed.
+
+The 6,944 public reads retain 37 unique projections: 11 player speech, one
+anonymous bird call and 25 physical cues, with no observation overflow. The
+five close-line wordings and four adjacent sampled repeats remain a qualitative
+concern; a 299,673ms empty sampled span is not emitted-audio silence. Script,
+production bundle and source remain unchanged. JSON SHA256:
+`5459e9168b340609138850e35a6be5807a023bb079e2f0403bac2f6b0395f9a0`.
+Continuation requires lawful route/visible knowledge rather than repeating
+the same blind heading or changing simulation to make a probe pass.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
