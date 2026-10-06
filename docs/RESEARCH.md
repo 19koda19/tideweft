@@ -1916,6 +1916,30 @@ browser presentation evidence, not audible audio, assistive hardware, physical
 mobile, desktop packaging, full animal/physical coexistence, crowd/soak/FPS,
 cumulative regression, publication or Living Voice closure.
 
+Further unchanged-artifact checks at clean `715b6aa` passed the full normal
+anonymous-animal matrix (eight freshly earned bird calls, 25 visible code
+points / 1,191 ms budget / 1,211–1,469 ms observed). Every source remained
+unanchored, expired naturally and did not replay after current-save reload.
+Eight successful reduced-motion paired-speech witnesses were also accepted by
+the existing `assertVoicePresentationMatrix`, reusing matched successful child
+reports rather than rerunning them: 47/62 points, 2,240–2,261 / 2,956–3,105 ms
+observed; both learned ABOUT states persisted. Relief placed two labels at
+desktop/portrait widths and one at short landscape; no ordinary-label overlap.
+Representative Chart/Relief screenshots were inspected. These are independent
+finite sessions, not continuous-play, audio, mobile-hardware or soak proof.
+
+The original paired matrix and one selected attempt stopped at the post-reload
+desktop title-menu physical-click check. The exact unchanged compact recheck
+and later remaining states passed. Failed attempts remain retained, not counted
+as passes or silently replaced by a falsely completed original aggregate.
+Two separately instrumented local passive click probes saw trusted down/up/click
+delivery to the actual button and successful title opening; their extra observer
+is excluded from acceptance. Responsive hit-layout timing remains an unverified
+hypothesis, not a diagnosed game defect or delivered fix. No runtime or public
+harness change followed those observations. The normal animal aggregate is
+`native-lease-animal-matrix-03.json`; successful paired children span the `-03`,
+`-04`, `-05` and `-08` stems under the same ignored validation directory.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
