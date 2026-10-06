@@ -1940,6 +1940,31 @@ harness change followed those observations. The normal animal aggregate is
 `native-lease-animal-matrix-03.json`; successful paired children span the `-03`,
 `-04`, `-05` and `-08` stems under the same ignored validation directory.
 
+### Captured traversal-context expression preview — 2026-10-06
+
+The local development-only slice over `eb91237` adds `previewProducer()` to the
+existing bounded inspector, not a new gameplay producer or simulation loop.
+It first verifies exact captured traversal replay, then selects copied hazard
+severity or cargo shock and reruns the current mapper/kernel. Tests cover the
+existing serious-hazard and important-cargo thresholds, cargo-loss precedence,
+unchanged identity/custody/prior state, malformed selections, failure isolation,
+eviction/reset and actual refusal separate from hypothetical acceptance.
+Uncaptured personality, relationships, full emotion and other producer
+selections remain unavailable; the full lab is still partial.
+
+Diagnostics passed 1 file / 83 tests. The actual two-stumble boundary-reload
+fixture and complete current runtime-inspector owner passed 2 files / 7 tests
+(26 unrelated fall tests unselected). Both hypothetical ordinary and serious
+reactions leave actual views, audio, diagnostic counts and current-save bytes
+unchanged; the original enabled/disabled/reload parity remains intact.
+Maintained smoke passed 6 files / 105 tests. Typecheck, production web build
+(622 modules) and static web smoke (5 files / 4,759,431 bytes) passed. The emitted
+JS `index-CdoXx_bE.js` and CSS `index-BY0KDEk3.css` remain the same as the prior
+learning slice; new preview markers are absent from production JS. These are
+correctness and compile-time exclusion checks, not a new native playtest,
+performance, package, cumulative, release or directive-closure certificate.
+No schema, save reader, dependency, version or gameplay scope changed.
+
 ### Learned animal-call recognition — 2026-10-06
 
 The local unpublished slice over `03eb624` learns only an existing vocal family

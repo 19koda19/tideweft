@@ -323,6 +323,10 @@ const snapshot = inspector.getSnapshot({ sourceActorId: "player:local" });
 inspector.preview(snapshot.records[0]?.sequence, { variantSeed: 43 });
 // For a captured real traversal decision, replay its producer policy + kernel:
 inspector.replayProducer(snapshot.records[0]?.sequence);
+// Change only copied traversal context; this does not cause another fall:
+inspector.previewProducer(snapshot.records[0]?.sequence, {
+  kind: "player-traversal", hazardSeverity: 500_000,
+});
 // The same replay also supports the current guardian shelter-whine producer:
 const whine = inspector.getSnapshot({ meaning: "guardian-dog-shelter-whine" }).records[0];
 inspector.replayProducer(whine?.sequence);
@@ -350,7 +354,15 @@ expression lab. `replayProducer()` supports retained real player traversal and
 guardian shelter-whine inputs; it checks the mapped intent against the recorded
 decision and does not rerun physical transactions, weather exposure, kennel
 custody, shelter travel, recency, capacity or hearing. Other producers return
-null for producer replay. `previewListening()` currently supports captured
+null for producer replay. `previewProducer()` first verifies an exact captured
+traversal replay, then optionally changes copied `hazardSeverity` or `cargoShock`
+(integers `0..1_000_000`) and reruns that mapper and kernel. Severity uses the
+existing serious-hazard threshold; source/event identity, physical outcome,
+cargo custody and prior kernel state stay fixed. It returns explicitly
+hypothetical input/results separately from the actual runtime reason. This
+does not recompute physics, hearing, audio or captions; other producers and
+uncaptured personality/relationship controls remain unavailable.
+`previewListening()` currently supports captured
 keeper secure-store responses and guardian shelter whines, using the existing
 player-contact calculator with bounded masking/wind overrides. Actual contact
 and receipt remain separate

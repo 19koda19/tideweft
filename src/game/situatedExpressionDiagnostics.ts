@@ -6,6 +6,7 @@ import { HUMAN_PERCEPTION_MAX_RESIDENTS, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND
 import { EXPRESSION_KNOWLEDGE_SOURCE_MEANINGS, expressionKnowledgeListenerIssues,
   type ExpressionKnowledgeSourceCheck, type ExpressionKnowledgeListenerAudit } from "./situatedExpressionKnowledgeAudit";
 import { evaluateAudibleContact, type AudibleContact, type AudibleContactInput } from "./perception";
+import { SERIOUS_FALL_HAZARD } from "./fallRisk";
 import {
   guardianDogShelterWhineExpressionIntent,
   type GuardianDogShelterWhineExpressionInput,
@@ -178,6 +179,25 @@ export interface ExpressionDiagnosticProducerReplay {
   readonly notEvaluated: readonly string[];
 }
 
+/** Hypothetical mapper inputs, not a new fall forecast or cargo transaction. */
+export interface ExpressionProducerPreviewSelection {
+  readonly kind: "player-traversal";
+  readonly hazardSeverity?: number;
+  readonly cargoShock?: number;
+}
+
+export interface ExpressionDiagnosticProducerPreview {
+  readonly scope: "hypothetical-producer-and-kernel-preview";
+  readonly producerKind: "player-traversal";
+  readonly actualRuntimeReason: ExpressionDiagnosticReason;
+  readonly hypotheticalInput: PlayerTraversalExpressionInput;
+  readonly candidate: SituatedExpressionIntent;
+  readonly accepted: boolean;
+  readonly reason: ReturnType<typeof reduceSituatedExpression>["reason"];
+  readonly realization: SituatedExpressionProjection | null;
+  readonly notEvaluated: readonly string[];
+}
+
 export type ExpressionListeningPreviewOverrides = Partial<Pick<AudibleContactInput,
   "ambientNoise" | "wind"
 >>;
@@ -202,6 +222,10 @@ export interface SituatedExpressionDiagnostics {
   ) => ExpressionDiagnosticPreview | null;
   /** Sequence is selected from the current buffer; reset may reuse numbers. */
   readonly replayProducer: (sequence: number) => ExpressionDiagnosticProducerReplay | null;
+  readonly previewProducer: (
+    sequence: number,
+    selection: ExpressionProducerPreviewSelection,
+  ) => ExpressionDiagnosticProducerPreview | null;
   readonly previewListening: (
     sequence: number,
     overrides?: ExpressionListeningPreviewOverrides,
@@ -560,6 +584,66 @@ export function replayExpressionDiagnosticProducer(
         "physical-transaction", "physical-recency", "sample/channel-capacity", "listener-hearing",
         "causal-admission", "presentation", "personality", "relationships", "full-emotional-state",
         "contextual-realization",
+      ],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Selects bounded hypothetical context for one captured current mapper only. */
+export function previewExpressionDiagnosticProducer(
+  state: ExpressionDiagnosticSnapshot,
+  sequence: number,
+  selection: ExpressionProducerPreviewSelection,
+): ExpressionDiagnosticProducerPreview | null {
+  try {
+    if (!plainDataFields(selection, ["kind", "hazardSeverity", "cargoShock"])
+      || selection.kind !== "player-traversal") return null;
+    for (const key of ["hazardSeverity", "cargoShock"] as const) {
+      if (Object.hasOwn(selection, key) && (!Number.isSafeInteger(selection[key])
+        || selection[key]! < 0 || selection[key]! > 1_000_000)) return null;
+    }
+    const record = state.records.find((candidate) => candidate.sequence === sequence);
+    const context = record?.producerContext;
+    if (record === undefined || context?.kind !== "player-traversal") return null;
+    // Changing copied context must not rescue an invalid or inconsistent cause.
+    // Keep the exact replay independent of this counterfactual selection.
+    if (replayExpressionDiagnosticProducer(state, sequence) === null) return null;
+    const input = structuredClone(context.input);
+    const hypotheticalInput: PlayerTraversalExpressionInput = {
+      ...input,
+      evaluation: {
+        ...input.evaluation,
+        forecast: {
+          ...input.evaluation.forecast,
+          ...(Object.hasOwn(selection, "hazardSeverity") ? {
+            hazardSeverity: selection.hazardSeverity!,
+            seriousHazard: selection.hazardSeverity! >= SERIOUS_FALL_HAZARD,
+          } : {}),
+        },
+      },
+      cargo: {
+        ...input.cargo,
+        ...(Object.hasOwn(selection, "cargoShock") ? { cargoShock: selection.cargoShock! } : {}),
+      },
+    };
+    const candidate = playerTraversalExpressionIntent(hypotheticalInput);
+    if (candidate === null) return null;
+    const reduction = reduceSituatedExpression(record.priorState, candidate);
+    return freezeCopy({
+      scope: "hypothetical-producer-and-kernel-preview",
+      producerKind: "player-traversal",
+      actualRuntimeReason: record.reason,
+      hypotheticalInput,
+      candidate,
+      accepted: reduction.accepted,
+      reason: reduction.reason,
+      realization: reduction.event === null ? null : projectSituatedExpression(reduction.event),
+      notEvaluated: [
+        "physical-forecast-and-transaction", "physical-recency", "sample/channel-capacity",
+        "listener-hearing", "causal-admission", "audio/presentation", "personality",
+        "relationships", "full-emotional-state", "contextual-realization",
       ],
     });
   } catch {

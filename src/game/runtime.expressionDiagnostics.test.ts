@@ -98,6 +98,7 @@ async function keeperRun(enabled: boolean) {
     const masked = inspector.previewListening(sequence, { ambientNoise: 1 });
     inspector.preview(sequence);
     inspector.replayProducer(sequence);
+    expect(inspector.previewProducer(sequence, { kind: "player-traversal", hazardSeverity: 500_000 })).toBeNull();
     expect(inspector.reportRepetition()).toEqual(initialRepetition);
     expect(inspector.getSnapshot()).toEqual(beforePreview.decisions);
     expect(runtime.getRenderView()).toEqual(beforePreview.view);
@@ -118,6 +119,7 @@ async function keeperRun(enabled: boolean) {
     const filteredAudienceAudit = inspector.auditKnowledge({ meaning: "keeper-secure-store-response" });
     inspector.preview(sequence);
     inspector.replayProducer(sequence);
+    expect(inspector.previewProducer(sequence, { kind: "player-traversal" })).toBeNull();
     inspector.previewListening(sequence);
     expect(inspector.reportRepetition()).toEqual(repetition);
     expect(inspector.getSnapshot()).toEqual(audienceDecisions);
@@ -144,6 +146,7 @@ async function keeperRun(enabled: boolean) {
       lines: { entries: [], untrackedCount: 0 }, reasons: { entries: [], untrackedCount: 0 },
     });
     expect(inspector.previewListening(sequence)).toBeNull();
+    expect(inspector.previewProducer(sequence, { kind: "player-traversal" })).toBeNull();
     expect(inspector.auditKnowledge()).toMatchObject({
       scope: "captured-factual-knowledge-audit", enabled, totalCount: 0, records: [],
     });
@@ -360,6 +363,7 @@ describe("development situated-expression inspector", () => {
       for (const marker of [
         "expressionDiagnostics", "producerContext", "listeningContext", "candidateInput",
         "captured-player-listening-preview", "previewListening",
+        "hypothetical-producer-and-kernel-preview", "previewProducer", "hypotheticalInput",
         "knowledgeSource", "humanListeners", "retainedBelief", "captured-factual-knowledge-audit", "auditKnowledge",
         "captured-expression-repetition", "reportRepetition", "acceptedFixedSteps", "acceptedSimulationMs",
         "unrealizedAdmittedDecisions",
@@ -372,6 +376,7 @@ describe("development situated-expression inspector", () => {
         enabled: false, totalCount: 0, records: [],
       });
       expect(restored.expressionDiagnostics?.previewListening(decision.sequence)).toBeNull();
+      expect(restored.expressionDiagnostics?.previewProducer(decision.sequence, { kind: "player-traversal" })).toBeNull();
       expect(restored.expressionDiagnostics?.auditKnowledge().records).toEqual([]);
       expect(restored.expressionDiagnostics?.reportRepetition()).toMatchObject({
         enabled: false, totalCount: 0, retainedCount: 0,

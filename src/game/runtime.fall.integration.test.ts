@@ -1119,7 +1119,26 @@ describe("production terrain fall and physical cargo", () => {
         physicalAudio += incidentCueCalls("stumble");
         const decisions = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records;
         const replays = decisions.map(({ sequence }) => runtime.expressionDiagnostics!.replayProducer(sequence));
-        return { events, trajectory, vocalAudio, physicalAudio, decisions, replays,
+        const beforePreview = {
+          diagnostics: runtime.expressionDiagnostics!.getSnapshot(),
+          repetition: runtime.expressionDiagnostics!.reportRepetition(),
+          view: structuredClone(runtime.getRenderView()),
+          ui: structuredClone(runtime.getUIView()),
+          audio: structuredClone(soundscapePlay.mock.calls),
+          save: runRepository.snapshot(),
+        };
+        const previews = decisions.map(({ sequence }) => [0, 1_000_000].map((hazardSeverity) => (
+          runtime.expressionDiagnostics!.previewProducer(sequence, { kind: "player-traversal", hazardSeverity })
+        )));
+        expect(runtime.expressionDiagnostics!.getSnapshot()).toEqual(beforePreview.diagnostics);
+        expect(runtime.expressionDiagnostics!.reportRepetition()).toEqual(beforePreview.repetition);
+        expect(runtime.getRenderView()).toEqual(beforePreview.view);
+        expect(runtime.getUIView()).toEqual(beforePreview.ui);
+        expect(soundscapePlay.mock.calls).toEqual(beforePreview.audio);
+        expect(runRepository.snapshot()).toEqual(beforePreview.save);
+        await runtime.save();
+        expect(runRepository.snapshot().worldJson).toBe(beforePreview.save.worldJson);
+        return { events, trajectory, vocalAudio, physicalAudio, decisions, replays, previews,
           final: decodeCurrent(runRepository.snapshot()) };
       } finally { runtime.destroy(); }
     }
@@ -1153,6 +1172,18 @@ describe("production terrain fall and physical cargo", () => {
         producerKind: "player-traversal", actualRuntimeReason: decision.reason,
         candidate: decision.intent,
       });
+      expect(uninterrupted.previews[index]?.map((preview) => preview?.candidate.meaning))
+        .toEqual(["steady-after-stumble", "relief-after-near-fall"]);
+      for (const preview of uninterrupted.previews[index]!) {
+        expect(preview).toMatchObject({
+          scope: "hypothetical-producer-and-kernel-preview", producerKind: "player-traversal",
+          actualRuntimeReason: decision.reason,
+          candidate: {
+            sourceActorId: decision.intent.sourceActorId, triggerEventId: decision.intent.triggerEventId,
+            position: decision.intent.position, variantSeed: decision.intent.variantSeed,
+          },
+        });
+      }
     }
     // Consumed kernel memory cannot erase the separate real footing refusal.
     expect(uninterrupted.replays[1]).toMatchObject({ accepted: true, actualRuntimeReason: "footing-recency" });

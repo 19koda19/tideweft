@@ -1315,6 +1315,26 @@ state. Later world changes do not rewrite the captured cause. Reset/reload
 clears availability, but reset may reuse numeric sequences; select from a new
 snapshot rather than treating a number as a permanent external handle.
 
+`previewProducer(sequence, selection)` is a separate, explicitly hypothetical
+producer-context lab for captured player traversal only. It first requires the
+unchanged baseline mapper to reproduce the recorded intent exactly. Selection
+permits only `kind: "player-traversal"` and optional integer `hazardSeverity` or
+`cargoShock` in `0..1_000_000`. Changed severity derives the serious-hazard flag
+using the existing `SERIOUS_FALL_HAZARD` threshold. A detached input then runs
+the existing traversal mapper and source-local kernel, preserving actor/event
+identity, position, ordinal, physical outcome, payload/custody and prior state.
+Omitting both optional controls means no context changes, not an empty prior kernel.
+
+The output separates hypothetical input, candidate and kernel result from the
+actual runtime reason; it does not recompute the physical forecast/transaction,
+recency, capacity, hearing, admission, audio or presentation. Invalid selection,
+failed/mismatched baseline, unsupported producer, eviction or reset returns
+unavailable. Strict data-only selection rejects accessors and unknown fields.
+Previews do not alter records, repetition counts or saves, and retain the DEV,
+bounded, frozen-copy and failure-isolation rules above. Guardian context is
+still exact-replay-only. Personality, relationships, full emotion and other
+producer selections remain outside this partial lab, not invented controls.
+
 The keeper's current secure-store response and guardian shelter whine can retain
 the exact already-evaluated player listening input and contact when inspection
 is enabled. The optional observer receives a detached copy after the existing

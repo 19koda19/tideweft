@@ -13,6 +13,7 @@ import { HUMAN_PERCEPTION_MAX_RESIDENTS, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND
   type HumanSupplementalListeningReceipt } from "./humanPerception";
 import { evaluateAudibleContact, type AudibleContactInput } from "./perception";
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
+import { SERIOUS_FALL_HAZARD } from "./fallRisk";
 import * as traversalProducer from "./playerTraversalExpression";
 import type { PlayerTraversalExpressionInput } from "./playerTraversalExpression";
 import {
@@ -31,6 +32,7 @@ import {
   finalizeExpressionDiagnosticHumanAudience,
   previewExpressionDiagnostic,
   previewExpressionDiagnosticListening,
+  previewExpressionDiagnosticProducer,
   replayExpressionDiagnosticProducer,
   selectExpressionDiagnostics,
   setExpressionDiagnosticEnabled,
@@ -920,6 +922,200 @@ describe("captured traversal producer replay", () => {
     expect(restarted.records[0]?.sequence).toBe(1);
     expect(replayExpressionDiagnosticProducer(restarted, 1)?.candidate.meaning).toBe("relief-after-near-fall");
     expect(replayExpressionDiagnosticProducer(first, 1)?.candidate.meaning).toBe("steady-after-stumble");
+  });
+});
+
+describe("hypothetical captured traversal producer preview", () => {
+  const ordinary = traversalInput();
+  const importantCargo = traversalInput({
+    cargo: {
+      ...ordinary.cargo,
+      selectedPayload: { kind: "promise", contractId: 44, resource: "medicine", quantity: 1, property: "fragile" },
+    },
+  });
+  type Selection = Parameters<typeof previewExpressionDiagnosticProducer>[2];
+  const selection = (value: unknown) => value as Selection;
+
+  it("returns the exact kind-only baseline, detached and frozen, without changing evidence or counters", () => {
+    const source = structuredClone(traversalEvidence());
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), source);
+    const before = JSON.stringify({ source, state });
+    const preview = previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal" });
+    expect(preview).toMatchObject({
+      scope: "hypothetical-producer-and-kernel-preview", producerKind: "player-traversal",
+      actualRuntimeReason: "accepted", hypotheticalInput: ordinary,
+      candidate: state.records[0]!.intent, accepted: true, reason: "accepted",
+      realization: projectSituatedExpression(state.records[0]!.event!),
+      notEvaluated: expect.arrayContaining(["physical-forecast-and-transaction", "physical-recency", "listener-hearing", "causal-admission", "audio/presentation"]),
+    });
+    expect(previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal" })).toEqual(preview);
+    const originals = new Set([...objectGraph(source), ...objectGraph(state)]);
+    for (const object of objectGraph(preview)) {
+      expect(originals.has(object)).toBe(false);
+      expect(Object.isFrozen(object)).toBe(true);
+    }
+    expect(JSON.stringify({ source, state })).toBe(before);
+  });
+
+  it.each([
+    [0, "steady-after-stumble"],
+    [SERIOUS_FALL_HAZARD - 1, "steady-after-stumble"],
+    [SERIOUS_FALL_HAZARD, "relief-after-near-fall"],
+    [1_000_000, "relief-after-near-fall"],
+  ] as const)("maps hypothetical severity %i through the existing serious threshold", (hazardSeverity, meaning) => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence());
+    const preview = previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal", hazardSeverity });
+    expect(preview?.candidate).toMatchObject({
+      meaning, sourceActorId: ordinary.sourceActorId, triggerEventId: ordinary.incident.id,
+      position: ordinary.position, variantSeed: ordinary.incident.variantSeed,
+    });
+    expect(preview?.hypotheticalInput).toEqual({
+      ...ordinary,
+      evaluation: { ...ordinary.evaluation, forecast: {
+        ...ordinary.evaluation.forecast, hazardSeverity, seriousHazard: hazardSeverity >= SERIOUS_FALL_HAZARD,
+      } },
+    });
+    expect(state.records[0]!.producerContext?.input).toEqual(ordinary);
+  });
+
+  it("clears the captured serious flag when a lower hypothetical severity is selected", () => {
+    const serious = traversalInput({ evaluation: {
+      ...ordinary.evaluation,
+      forecast: { ...ordinary.evaluation.forecast, hazardSeverity: 760_000, seriousHazard: true },
+    } });
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence(serious));
+    expect(previewExpressionDiagnosticProducer(state, 1, {
+      kind: "player-traversal", hazardSeverity: SERIOUS_FALL_HAZARD - 1,
+    })).toMatchObject({
+      candidate: { meaning: "steady-after-stumble" },
+      hypotheticalInput: { evaluation: { forecast: { seriousHazard: false } } },
+    });
+    expect(state.records[0]!.producerContext?.input).toEqual(serious);
+  });
+
+  it.each([[259_999, "relief-after-near-fall"], [260_000, "protect-important-cargo"]] as const)(
+    "retains existing cargo precedence at hypothetical shock %i", (cargoShock, meaning) => {
+      const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence(importantCargo));
+      const preview = previewExpressionDiagnosticProducer(state, 1, {
+        kind: "player-traversal", hazardSeverity: SERIOUS_FALL_HAZARD, cargoShock,
+      });
+      expect(preview?.candidate.meaning).toBe(meaning);
+      expect(preview?.hypotheticalInput.cargo).toEqual({ ...importantCargo.cargo, cargoShock });
+      expect(preview?.hypotheticalInput.evaluation.consequenceQuote).toEqual(ordinary.evaluation.consequenceQuote);
+      expect(preview?.hypotheticalInput.incident).toEqual(ordinary.incident);
+      expect(preview?.hypotheticalInput.evaluation.usedTraversalOrdinal).toBe(ordinary.evaluation.usedTraversalOrdinal);
+      expect(state.records[0]!.producerContext?.input).toEqual(importantCargo);
+    },
+  );
+
+  it("keeps actual separated cargo ahead of hypothetical severity and shock without inventing custody", () => {
+    const separated = traversalInput({ cargo: {
+      ...importantCargo.cargo, outcome: "separated", separatedEntityIds: ["cargo:r-14:23:18"],
+    } });
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence(separated));
+    const preview = previewExpressionDiagnosticProducer(state, 1, {
+      kind: "player-traversal", hazardSeverity: 0, cargoShock: 0,
+    });
+    expect(preview?.candidate.meaning).toBe("alarm-at-cargo-loss");
+    expect(preview?.hypotheticalInput.cargo).toEqual({ ...separated.cargo, cargoShock: 0 });
+    expect(preview?.hypotheticalInput.incident).toEqual(separated.incident);
+    expect(state.records[0]!.producerContext?.input).toEqual(separated);
+  });
+
+  it("preserves actual refusal and the captured prior kernel rather than admitting a preview", () => {
+    const refused = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence(ordinary, "sound-budget"));
+    expect(previewExpressionDiagnosticProducer(refused, 1, { kind: "player-traversal", hazardSeverity: 500_000 }))
+      .toMatchObject({ actualRuntimeReason: "sound-budget", accepted: true, reason: "accepted" });
+    const evidence = traversalEvidence();
+    const accepted = reduceSituatedExpression(evidence.priorState, evidence.intent);
+    if (accepted.state === null) throw new Error("expected captured accepted kernel");
+    const duplicate = appendExpressionDiagnostic(createExpressionDiagnosticState(true), {
+      ...evidence, priorState: accepted.state, reason: "duplicate-trigger", event: null, playerReception: null,
+    });
+    expect(previewExpressionDiagnosticProducer(duplicate, 1, { kind: "player-traversal", hazardSeverity: 500_000 }))
+      .toMatchObject({ actualRuntimeReason: "duplicate-trigger", accepted: false, reason: "duplicate-trigger", realization: null });
+    expect(refused.records[0]).toMatchObject({ event: null, admission: null, playerReception: null });
+  });
+
+  it("rejects unsupported selection shapes and protected fields without evaluating accessors", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence());
+    const getter = vi.fn(() => { throw new Error("selection accessor must not run"); });
+    const malformed: unknown[] = [
+      null, undefined, [], {}, { kind: "guardian-dog-shelter-whine" },
+      Object.create({ kind: "player-traversal" }),
+      Object.defineProperty({}, "kind", { enumerable: true, get: getter }),
+      Object.defineProperty({ kind: "player-traversal" }, "hazardSeverity", { enumerable: true, get: getter }),
+      Object.defineProperty({ kind: "player-traversal" }, "cargoShock", { value: 0, enumerable: false }),
+      { kind: "player-traversal", [Symbol("hidden")]: 1 },
+      new Proxy({}, { getPrototypeOf() { throw new Error("unsupported proxy"); } }),
+      ...["sourceActorId", "position", "incident", "evaluation", "cargo", "priorState", "shelterIntentScore"]
+        .map((key) => ({ kind: "player-traversal", [key]: 0 })),
+    ];
+    const before = JSON.stringify(state);
+    for (const value of malformed) expect(previewExpressionDiagnosticProducer(state, 1, selection(value))).toBeNull();
+    expect(getter).not.toHaveBeenCalled();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("rejects noninteger, nonfinite and out-of-range controls while accepting own null-prototype data", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence());
+    for (const key of ["hazardSeverity", "cargoShock"]) {
+      for (const value of [-1, 1_000_001, 0.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, undefined, null, "0", true]) {
+        expect(previewExpressionDiagnosticProducer(state, 1, selection({ kind: "player-traversal", [key]: value }))).toBeNull();
+      }
+    }
+    const ownData = Object.assign(Object.create(null), { kind: "player-traversal", hazardSeverity: 0, cargoShock: 1_000_000 });
+    expect(previewExpressionDiagnosticProducer(state, 1, selection(ownData))?.hypotheticalInput.cargo.cargoShock).toBe(1_000_000);
+  });
+
+  it("leaves uncaptured and guardian contexts unavailable, and validates the baseline before overrides", () => {
+    let state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), acceptedEvidence());
+    state = appendExpressionDiagnostic(state, shelterWhineEvidence());
+    const evidence = traversalEvidence();
+    state = appendExpressionDiagnostic(state, {
+      ...evidence, intent: { ...evidence.intent, meaning: "relief-after-near-fall", tone: "relieved" },
+    });
+    const before = JSON.stringify(state);
+    for (const sequence of [0, 1, 2, 3, 4, Number.NaN]) {
+      expect(previewExpressionDiagnosticProducer(state, sequence, { kind: "player-traversal", hazardSeverity: 500_000 })).toBeNull();
+    }
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("isolates copying, baseline and hypothetical mapper failure without changing retained evidence", () => {
+    const state = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence());
+    const before = JSON.stringify(state);
+    const clone = vi.spyOn(globalThis, "structuredClone").mockImplementation(() => { throw new Error("preview copy failed"); });
+    expect(previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal" })).toBeNull();
+    clone.mockRestore();
+    const original = traversalProducer.playerTraversalExpressionIntent;
+    const mapper = vi.spyOn(traversalProducer, "playerTraversalExpressionIntent");
+    mapper.mockImplementation(() => { throw new Error("baseline mapper failed"); });
+    expect(previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal" })).toBeNull();
+    mapper.mockImplementation((input) => input.evaluation.forecast.hazardSeverity === 500_000 ? null : original(input));
+    expect(previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal", hazardSeverity: 500_000 })).toBeNull();
+    mapper.mockImplementation((input) => {
+      if (input.evaluation.forecast.hazardSeverity === 500_000) throw new Error("hypothetical mapper failed");
+      return original(input);
+    });
+    expect(previewExpressionDiagnosticProducer(state, 1, { kind: "player-traversal", hazardSeverity: 500_000 })).toBeNull();
+    expect(JSON.stringify(state)).toBe(before);
+  });
+
+  it("uses only retained records through eviction, reset and discarded provisional roots", () => {
+    const first = appendExpressionDiagnostic(createExpressionDiagnosticState(true), traversalEvidence());
+    let full = first;
+    for (let index = 1; index <= EXPRESSION_DIAGNOSTIC_CAPACITY; index += 1) {
+      full = appendExpressionDiagnostic(full, traversalEvidence());
+    }
+    const options = { kind: "player-traversal" as const, hazardSeverity: 500_000 };
+    const before = JSON.stringify(full);
+    expect(previewExpressionDiagnosticProducer(full, 1, options)).toBeNull();
+    expect(previewExpressionDiagnosticProducer(full, 65, options)?.candidate.meaning).toBe("relief-after-near-fall");
+    expect(previewExpressionDiagnosticProducer(first, 2, options)).toBeNull();
+    expect(previewExpressionDiagnosticProducer(first, 1, options)).not.toBeNull();
+    expect(previewExpressionDiagnosticProducer(createExpressionDiagnosticState(true), 1, options)).toBeNull();
+    expect(JSON.stringify(full)).toBe(before);
   });
 });
 

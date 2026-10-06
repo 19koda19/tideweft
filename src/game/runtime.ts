@@ -197,6 +197,7 @@ import {
   createExpressionDiagnosticState,
   finalizeExpressionDiagnosticHumanAudience,
   previewExpressionDiagnostic,
+  previewExpressionDiagnosticProducer,
   previewExpressionDiagnosticListening,
   replayExpressionDiagnosticProducer,
   reportExpressionDiagnosticRepetition,
@@ -20812,6 +20813,9 @@ export async function createTideweftRuntime(
         ),
         replayProducer: (sequence) => replayExpressionDiagnosticProducer(
           expressionDiagnosticState!, sequence,
+        ),
+        previewProducer: (sequence, selection) => previewExpressionDiagnosticProducer(
+          expressionDiagnosticState!, sequence, selection,
         ),
         previewListening: (sequence, overrides) => previewExpressionDiagnosticListening(
           expressionDiagnosticState!, sequence, overrides,
