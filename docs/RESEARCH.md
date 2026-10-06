@@ -2513,6 +2513,33 @@ fingerprints. This qualifies one current player-accessible loop, not six minutes
 regional transitions, sustained itinerary availability, hours, dense stress,
 hardware audio/AT/mobile, performance or release. No application change is made.
 
+### Native continuation interrupted by host sleep — 2026-10-06
+
+The next unchanged-production attempt on clean `a4879f3` does not qualify its
+requested fifteen minutes: a completed native pointer command lacks a real
+handoff, and the existing fifteen-second receipt bound refuses. All eight units
+remain carried with the tracked DELIVER objective; button-command success is
+not dispatch or fulfillment evidence. Its 84,278ms public observer is incomplete
+long-play evidence, not a demonstrated game defect. The failed JSON is retained
+unchanged (SHA256 `557e1f3a091b0ca1d2e37e5f6d0fc2dc3af8f8e4db256c5de82fdfb6e09a5627`).
+
+A narrow existing-driver revision uses documented native E on the focused
+Chart canvas, recording bounded public before/after input observations without
+changing the receipt, announcement or custody checks. This actually delivers
+eight Fresh Water at 512→513 and picks up the next fourteen-unit Food load.
+The continuation then refuses its waypoint deadline after host sleep. The Mac
+power log records lid-closed sleep during this run, including a 532-second
+episode. Wall-clock journey time is 681,910ms, while the differently scoped,
+setup-inclusive page observer records 156,988ms. Wall-based exposure counters
+and the deadline include that interruption; they cannot certify continuous play.
+The terminal fourteen-unit load remains carried. JSON SHA256:
+`ca17e88fe54a5cfb06a51552c5ab442236c42586d0822821651349ea208ab245`.
+Only the known startup CSP probe denial occurs; both owned browsers exit normally
+and their synthetic profiles are removed. No terminal-image, save/reload,
+fifteen-minute, hours, sound-quality or product-failure claim follows. No
+application, schema, dependency or production artifact changes; the remaining
+continuous-play observation requires an uninterrupted host window.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
