@@ -2746,6 +2746,53 @@ Earlier expired-lease and screenshot-continuity refusals remain failed attempts,
 not weakened gates. These are two selected layouts, not a full new matrix,
 mobile hardware, audible/screen-reader output, dense stress or hours acceptance.
 
+### Expanded-sight representative performance check — 2026-10-06
+
+Five sequential captures froze clean `37f7df96681ec830b380375ba7166f105c35347e`,
+current93 application bytes (ASAR `63ea252c…`, JS `13abc61b…`), on the same M4
+16GiB Mac, AC power/Low Power Mode off, 1440×900 CSS, 30-frame warmup and
+unchanged quality. Existing `profile:baseline` / matched `profile:browser`
+commands used 60s, with travel lawfully extended to 210s. No CPU sampler,
+voice observer or hitch trace ran in these timing windows. Ignored captures
+are under `artifacts/validation/voice-current49/performance-37f7df9/`.
+
+| Scenario | Renderer callbacks/s | Draw CPU mean (ms) | World-step mean (ms) | World steps | Full-window rAF worst (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Electron estuary Relief | 35.73 | 23.36 | 90.07 | 59 | 150.0 |
+| Electron dense Relief | 36.41 | 22.46 | 102.55 | 59 | 166.7 |
+| Firefox estuary Relief | 32.40 | 19.68 | 163.44 | 59 | 233.34 |
+| Electron travel Relief | 35.00 | 14.22 | 64.79 | 209 | 350.0 |
+| Electron estuary Chart | 54.52 | 11.19 | 94.87 | 59 | 133.3 |
+
+The stationary Relief rows **fail** the retained desktop45/browser40 callback
+floors. Chart and travel pass their corresponding floors. This is not a healthy
+whole-gate result or a measured repair. Expanded sight changes occupancy:
+estuary/dense expose22/15 actors versus the historical3, so old timing is context,
+not an equal-work control for assigning cause. All stationary windows process
+599 fixed steps; travel processes2,099 and crosses three regions/156.39tiles
+without recorded discontinuity or projection mismatch. Pending queues end empty.
+Travel's renderer tail retains only4,096 intervals (worst132.1ms); the table
+correctly retains its full-window7,349-rAF-interval worst350ms instead.
+No autosave occurs in these windows; explicit tail saves are separate. These
+single host runs do not prove presented/GPU FPS, retained-memory health, hours,
+acoustic saturation or low-end mobile; 59-advance world p99 is a low-sample max.
+
+A separate20s CPU diagnostic extends the existing runner locally, changing no
+gameplay or shipped source. Its16,140 samples over20,177.949ms (requested1ms,
+actual mean≈1.25ms) use explicit page/CDP clock bookends. An isolated sourcemap
+build has the **exact shipped JS prefix**, differing only by the appended map
+comment; shipping dist/ASAR are untouched. Nearest first-party render-owner
+sample weights identify water submission≈4,193ms (native depth-state query
+≈2,000ms beneath it), current-streamline stroke submission≈3,874ms, biome motifs
+≈2,827ms and ground rings≈1,585ms. These are disjoint nearest-owner sampled
+weights, not exact function durations; parent inclusive samples must not be
+added. The current-streamline owner still submits separate immediate lines,
+and broader direct sight admits more motifs/halos. Another675ms is charged to
+the current owner outside its stroke helper. No optimization is retained.
+The next bounded candidate is equivalent segment submission at that measured
+render owner, preserving sight, water height/colour, styles, physical currents
+and all simulation. Depth-state preservation cannot be replaced by guessing.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
