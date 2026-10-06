@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public";
+import { createWorldView, deserializeWorld, replaceResidentCircadian, serializeWorld } from "../sim/public";
 import {
   createRegionCoord,
   regionKey,
@@ -19,6 +19,8 @@ import { acousticTextRectsOverlap } from "../render/acousticTextLayout";
 import { stableStringify } from "../sim/util";
 import * as humanPerception from "./humanPerception";
 import * as uiProjection from "./uiProjection";
+import { deserializeBio0Ecology } from "./bio0Ecology";
+import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
   replaceDogActorCircadian,
   replaceDogActorPhysiology,
@@ -76,7 +78,11 @@ import {
   createRegionalWorldView,
   regionalStorageRegionsInView,
 } from "./regionalWorldView";
-import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
+import {
+  playerWorldPositionInRegionalWindow,
+  residentPlacementInRegionalWindow,
+  resolveResidentWorldPlacement,
+} from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
@@ -84,7 +90,10 @@ import type { TraversalFeedbackState } from "./traversalFeedback";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
-import { createSituatedExpressionCausalAuthorityRecord } from "./situatedExpressionCausalAuthority";
+import {
+  createSituatedExpressionCausalAuthorityRecord,
+  situatedExpressionAdmissionMatchesCausalAuthority,
+} from "./situatedExpressionCausalAuthority";
 import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
 import type { PlayerExpressionRecencyState } from "./playerExpressionRecency";
 import type { PlayerEffortRecencyState } from "./playerEffortRecency";
@@ -92,7 +101,12 @@ import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import * as expressionChannelBank from "./situatedExpressionChannelBank";
 import * as expressionDiagnostics from "./situatedExpressionDiagnostics";
 import * as dogExpression from "./dogSignalExpression";
-import { translateWorldPosition, worldPositionDelta, type WorldPosition } from "./worldPosition";
+import {
+  WORLD_POSITION_UNITS_PER_TILE,
+  translateWorldPosition,
+  worldPositionDelta,
+  type WorldPosition,
+} from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -262,9 +276,23 @@ function replaceEnvelope(
   });
 }
 
-function findRidgeCorner(world: WorldState, window: RegionalTerrainWindow): RidgeCorner {
+function findRidgeCorner(
+  world: WorldState,
+  window: RegionalTerrainWindow,
+  requireNearbyVoiceRoute = false,
+): RidgeCorner {
   const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
   const { width, height, tiles } = world.terrain;
+  // The new hearing witnesses alone need an existing route within the quiet
+  // murmur's real reach. Select geometry, not a roll/voice outcome or new route.
+  const voiceRouteTiles = requireNearbyVoiceRoute
+    ? [...new Set(world.routes.flatMap(({ path }) => path))]
+      .flatMap((index) => {
+        const tile = tiles[index];
+        return tile !== undefined && tile.elevation >= world.tide.level && tile.elevation < 750_000
+          ? [tile] : [];
+      })
+    : [];
   for (let y = 1; y < height - 1; y += 1) {
     for (let x = 1; x < width - 2; x += 1) {
       const startTileIndex = y * width + x;
@@ -282,6 +310,10 @@ function findRidgeCorner(world: WorldState, window: RegionalTerrainWindow): Ridg
         || occupied.has(ridgeTileIndex)
         || occupied.has(diagonalTileIndex)
       ) continue;
+      if (requireNearbyVoiceRoute && !voiceRouteTiles.some((tile) => {
+        const distance = Math.hypot(tile.x + 0.5 - (x + 1.05), tile.y + 0.5 - (y + 0.999));
+        return distance >= 1.5 && distance <= 2.5;
+      })) continue;
       const point = regionLocalToWindowTile(
         window,
         createRegionCoord(0, 0),
@@ -427,6 +459,7 @@ function rebaseFixtureRegionalEcology(
 
 function relocateToRidgeAtZeroStability(
   envelope: CurrentGameSaveEnvelope,
+  requireNearbyVoiceRoute = false,
 ): { readonly envelope: CurrentGameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
@@ -437,7 +470,7 @@ function relocateToRidgeAtZeroStability(
   if (!regionalTravel) {
     throw new Error("fixture started with an invalid v4 regional-travel sidecar");
   }
-  const corner = findRidgeCorner(world, regionalTravel.window);
+  const corner = findRidgeCorner(world, regionalTravel.window, requireNearbyVoiceRoute);
   const startTerrain = world.terrain.tiles[corner.startTileIndex];
   const ridgeTerrain = world.terrain.tiles[corner.ridgeTileIndex];
   if (!startTerrain || !ridgeTerrain) throw new Error("ridge fixture lost its terrain pair");
@@ -564,8 +597,9 @@ function relocateToRidgeAtZeroStability(
 function relocateForDryExhaustion(
   envelope: CurrentGameSaveEnvelope,
   waterDepth = 0,
+  requireNearbyVoiceRoute = false,
 ): CurrentGameSaveEnvelope {
-  const relocated = relocateToRidgeAtZeroStability(envelope);
+  const relocated = relocateToRidgeAtZeroStability(envelope, requireNearbyVoiceRoute);
   const world = deserializeWorld(relocated.envelope.world);
   const startIndex = relocated.corner.y * world.terrain.width + relocated.corner.x;
   const destinationIndex = startIndex + 1;
@@ -691,6 +725,7 @@ async function createCurrentFixture(
   repository: MemoryRepository,
   seed: string,
   acceptPromise: boolean,
+  requireNearbyVoiceRoute = false,
 ): Promise<{
   readonly contractId: number | null;
   readonly sourceLotId: string | null;
@@ -731,7 +766,7 @@ async function createCurrentFixture(
   if (acceptPromise && (!promiseLot || promiseLot.payload.kind !== "promise")) {
     throw new Error("accepted Promise did not reach the physical carrier");
   }
-  const relocated = relocateToRidgeAtZeroStability(initial);
+  const relocated = relocateToRidgeAtZeroStability(initial, requireNearbyVoiceRoute);
   replaceEnvelope(repository, relocated.envelope);
   return {
     contractId,
@@ -831,7 +866,194 @@ async function prepareStormStumbleFixture(): Promise<SaveRecord> {
     return repository.snapshot();
 }
 
+/** Retain a real pending player cause; stage only an existing route listener and one dry crest. */
+function preparePlayerVocalSurfacePair(
+  envelope: CurrentGameSaveEnvelope,
+  sample: humanPerception.SupplementalSoundSample,
+) {
+  const original = deserializeWorld(envelope.world);
+  const travel = restorePlayerRegionalTravel(original.meta.rootSeed, envelope.player, envelope.regionalTravel);
+  const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
+  if (travel === null || bio0 === null) throw new Error("Player sound fixture lost its current physical owners");
+  const listener = [...original.residents]
+    .sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : 1)
+    .find(({ identity, activeContractId }) => identity.stableId !== bio0.porterAddress.actorId
+      && activeContractId === null);
+  if (listener === undefined) throw new Error("Player sound fixture lacks an existing free listener");
+  const sourceX = Math.floor(sample.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const sourceY = Math.floor(sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const retainedPlayerTiles = new Set([
+    envelope.perceptionCarry.intervalStartPosition,
+    ...envelope.perceptionCarry.playerSenseSamples.map(({ position }) => position),
+  ].filter(({ region }) => region.x === 0 && region.y === 0).map(({ localX, localY }) => (
+    `${Math.floor(localX / WORLD_POSITION_UNITS_PER_TILE)},${Math.floor(localY / WORLD_POSITION_UNITS_PER_TILE)}`
+  )));
+  const candidates = original.routes.flatMap((route) => route.path.flatMap((tileIndex, offset) => {
+    const tile = original.terrain.tiles[tileIndex];
+    if (tile === undefined || route.path.length < 2) return [];
+    const distance = Math.hypot(tile.x + 0.5 - sample.position.localX / WORLD_POSITION_UNITS_PER_TILE,
+      tile.y + 0.5 - sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+    return distance >= 1.5 && distance <= 8
+      ? [{ routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance }]
+      : [];
+  })).sort((left, right) => left.distance - right.distance || left.routeId - right.routeId
+    || left.progress - right.progress).slice(0, 64);
+  let heardCandidates = 0;
+  for (const location of candidates) {
+    const clearWorld = deserializeWorld(serializeWorld(original));
+    const stagedListener = clearWorld.residents.find(({ id }) => id === listener.id)!;
+    stagedListener.location = { kind: "route", routeId: location.routeId, progress: location.progress };
+    if (stagedListener.circadian !== undefined) {
+      clearWorld.residents[clearWorld.residents.indexOf(stagedListener)] = replaceResidentCircadian(stagedListener, {
+        atTick: clearWorld.meta.completedTick,
+        circadian: {
+          ...stagedListener.circadian, restDestinationArrived: false,
+          posture: { state: "awake", enteredAtTick: clearWorld.meta.completedTick },
+        },
+      });
+    }
+    const placement = resolveResidentWorldPlacement(createWorldView(clearWorld), stagedListener);
+    if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) continue;
+    const listenerX = Math.floor(placement.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+    const listenerY = Math.floor(placement.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+    const clearView = createRegionalWorldView(createWorldView(clearWorld), travel.window, envelope.player);
+    const observationId = `hp-h-${original.meta.completedTick + 1}-${listener.id}-${sample.id}`;
+    const collect = (view: ReturnType<typeof createWorldView>) => humanPerception.collectExistingHumanObservations({
+      world: view, window: travel.window, targetTick: original.meta.completedTick + 1,
+      playerSamples: [], supplementalSoundSamples: [sample], surfaceSoundSampleIds: [sample.id],
+    }).find(({ observerId }) => observerId === listener.identity.stableId)
+      ?.observations.find(({ id }) => id === observationId);
+    const clear = collect(clearView);
+    if (clear?.perceivedClass !== "human-vocalization") continue;
+    heardCandidates += 1;
+    for (let y = Math.min(sourceY, listenerY); y <= Math.max(sourceY, listenerY); y += 1) {
+      for (let x = Math.min(sourceX, listenerX); x <= Math.max(sourceX, listenerX); x += 1) {
+        if ((x === sourceX && y === sourceY) || (x === listenerX && y === listenerY)
+          || retainedPlayerTiles.has(`${x},${y}`) || x < 0 || y < 0
+          || x >= original.terrain.width || y >= original.terrain.height) continue;
+        const index = y * original.terrain.width + x;
+        const tile = clearWorld.terrain.tiles[index];
+        const viewTile = regionLocalToWindowTile(travel.window, createRegionCoord(0, 0), x, y);
+        if (tile === undefined || viewTile === null || tile.elevation >= FIXED_POINT
+          || clearView.terrain.tiles[viewTile.y * clearView.terrain.width + viewTile.x]?.waterDepth !== 0) continue;
+        const maskedWorld = deserializeWorld(serializeWorld(clearWorld));
+        maskedWorld.terrain.tiles[index]!.elevation = FIXED_POINT;
+        const maskedView = createRegionalWorldView(createWorldView(maskedWorld), travel.window, envelope.player);
+        const masked = collect(maskedView);
+        if (masked !== undefined && masked.confidence >= clear.confidence) continue;
+        const projected = residentPlacementInRegionalWindow(placement, travel.window);
+        if (projected === null) throw new Error("Player sound listener left its real frame");
+        expect(ambientNoiseAt(maskedView, projected.tileIndex)).toBe(ambientNoiseAt(clearView, projected.tileIndex));
+        expect(maskedWorld.terrain.tiles.filter((candidate, ordinal) => (
+          stableStringify(candidate) !== stableStringify(clearWorld.terrain.tiles[ordinal])
+        )).map(({ index: changed }) => changed)).toEqual([index]);
+        const pending = (world: WorldState, spatial: ReturnType<typeof createWorldView>) => ({
+          ...envelope, world: serializeWorld(world),
+          regionalEcology: rebaseFixtureRegionalEcology(envelope.regionalEcology, world.meta.rootSeed, spatial),
+        });
+        return {
+          clearEnvelope: pending(clearWorld, clearView), maskedEnvelope: pending(maskedWorld, maskedView),
+          clear, masked, listenerActorId: listener.identity.stableId,
+        };
+      }
+    }
+  }
+  throw new Error(`Real pending player sound has no bounded route/dry-crest witness: ${JSON.stringify({
+    sourcePosition: sample.position, candidates: candidates.length, heardCandidates,
+  })}`);
+}
+
 describe("production terrain fall and physical cargo", () => {
+  it.each(["player-traversal", "player-fall-recovery", "player-exhaustion"] as const)(
+    "grounds one real pending %s in independent human terrain hearing without replay",
+    async (kind) => {
+      const repository = new MemoryRepository();
+      if (kind === "player-exhaustion") {
+        const bootstrap = await createTideweftRuntime(repository);
+        // Reuse the same known generated route geometry as the other two
+        // witnesses; the unchanged dry movement owner still earns exhaustion.
+        bootstrap.dispatchUI({ type: "new-world", seed: "fall cargo exact test", posture: "gale", sessionShape: "wander" });
+        await bootstrap.save();
+        bootstrap.destroy();
+        replaceEnvelope(repository, relocateForDryExhaustion(decodeCurrent(repository.snapshot()), 0, true));
+      } else {
+        await createCurrentFixture(repository, "fall cargo exact test", true, true);
+      }
+      const producer = await createTideweftRuntime(repository);
+      try {
+        producer.dispatchUI({ type: "resume-world" });
+        producer.dispatchRenderer({ type: "movement", vector: kind === "player-exhaustion" ? { x: 1, y: 0 } : { x: 1, y: 1 } });
+        advancePlayerSteps(producer, 1);
+        producer.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+        if (kind === "player-exhaustion") {
+          expect(producer.getUIView().player.stamina).toBe(0);
+          advancePlayerSteps(producer, 2);
+        } else {
+          expect(producer.getRenderView().player.incident?.kind).toBe("fall");
+          if (kind === "player-fall-recovery") {
+            advancePlayerSteps(producer, 10);
+            const parcel = producer.getRenderView().looseCargo?.find(({ recovery }) => recovery === "reachable");
+            if (parcel === undefined) throw new Error("Real fall supplied no reachable conserved recovery parcel");
+            producer.dispatchRenderer({ type: "parcel-target", parcelId: parcel.id, recoverOnArrival: true });
+            expect(producer.getRenderView().looseCargo?.some(({ id }) => id === parcel.id)).toBe(false);
+          }
+        }
+        await producer.save();
+      } finally { producer.destroy(); }
+      const pending = decodeCurrent(repository.snapshot());
+      const admission = pending.perceptionCarry.situatedExpressionAdmissions.records.find((record) => record.kind === kind);
+      if (admission === undefined) throw new Error(`Actual player action supplied no ${kind} admission`);
+      const sample = pending.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+      const cause = pending.perceptionCarry.situatedExpressionCausalAuthority.records.find(({ eventId }) => eventId === admission.eventId);
+      if (sample === undefined || cause === undefined) throw new Error("Real player admission lost its original sound/cause");
+      expect(situatedExpressionAdmissionMatchesCausalAuthority(admission, cause)).toBe(true);
+      expect(cause.committedWorldTick).toBe(deserializeWorld(pending.world).meta.completedTick);
+      expect(sample).toMatchObject({ expressionEventId: admission.eventId, sourceActorId: "player:local", soundClass: "human-vocalization" });
+      expect(sample.position).toEqual(cause.playerPosition);
+      const pair = preparePlayerVocalSurfacePair(pending, sample);
+      const sourceCue = kind === "player-traversal" ? "vocalization-alarm" : kind === "player-fall-recovery" ? "vocalization-relief" : "vocalization-strained";
+      const originalAudio = soundscapePlay.mock.calls.find(([cue]) => cue === sourceCue);
+      if (originalAudio === undefined) throw new Error("Real source action supplied no committed original audio");
+      for (const [branch, expected] of [[pair.clearEnvelope, pair.clear], [pair.maskedEnvelope, pair.masked]] as const) {
+        const branchRepository = new MemoryRepository(repository.snapshot());
+        replaceEnvelope(branchRepository, branch);
+        const collect = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+        soundscapePlay.mockClear();
+        scheduledFrame = undefined;
+        const runtime = await createTideweftRuntime(branchRepository);
+        try {
+          expect(runtime.getUIView().title.hasSave).toBe(true);
+          expect(runtime.getUIView().saveWarning).toBeUndefined();
+          expect(soundscapePlay).not.toHaveBeenCalled();
+          await runtime.save();
+          const restored = decodeCurrent(branchRepository.snapshot());
+          expect(restored.perceptionCarry.actorVocalizationSamples).toEqual(pending.perceptionCarry.actorVocalizationSamples);
+          expect(restored.perceptionCarry.situatedExpressionCausalAuthority).toEqual(pending.perceptionCarry.situatedExpressionCausalAuthority);
+          runtime.dispatchUI({ type: "resume-world" });
+          advancePlayerSteps(runtime, 10 - pending.perceptionCarry.playerStepsSinceWorldTick);
+          expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+          const matching = collect.mock.calls.map(([input], index) => ({ input, result: collect.mock.results[index]?.value }))
+            .filter(({ input }) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id));
+          expect(matching).toHaveLength(1);
+          expect(matching[0]!.input.supplementalSoundSamples).toContainEqual(sample);
+          expect(matching[0]!.input.surfaceSoundSampleIds).toContain(sample.id);
+          const observation = (matching[0]!.result as readonly humanPerception.HumanObservationBatch[])
+            .find(({ observerId }) => observerId === pair.listenerActorId)?.observations.find(({ id }) => id === pair.clear.id);
+          expect(observation).toEqual(expected);
+          if (observation !== undefined) {
+            expect(observation).toMatchObject({ channel: "hearing", perceivedClass: "human-vocalization", identification: "anonymous", subjectId: null, interrupt: sample.soundInterrupt });
+            expect(observation.area.radiusUnits).toBeGreaterThan(0);
+          }
+          await runtime.save();
+          expect(decodeCurrent(branchRepository.snapshot()).perceptionCarry.actorVocalizationSamples.some(({ id }) => id === sample.id)).toBe(false);
+          advancePlayerSteps(runtime, 10);
+          expect(collect.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id))).toHaveLength(1);
+          expect(soundscapePlay.mock.calls).not.toContainEqual(originalAudio);
+        } finally { runtime.destroy(); collect.mockRestore(); }
+      }
+    }, 90_000,
+  );
+
   it("preserves accepted speech cooldown across two actual storm stumbles and boundary reload", async () => {
     const prepared = await prepareStormStumbleFixture();
     const selectedOrdinal = 73;
@@ -1216,6 +1438,7 @@ describe("production terrain fall and physical cargo", () => {
       const before = decodeCurrent(beforeRecord);
       expect(before.playerExpressionRecency.footing).toEqual([]);
       expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      const humanPerceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
       const close = expressionChannelBank.closeSituatedExpressionChannelBankInterval;
       let closes = 0;
       if (reject) vi.spyOn(expressionChannelBank, "closeSituatedExpressionChannelBankInterval")
@@ -1253,6 +1476,14 @@ describe("production terrain fall and physical cargo", () => {
           admission: { admittedAtPlayerStepPhase: 9 },
           authority: { committedWorldTick: deserializeWorld(before.world).meta.completedTick },
         });
+        const footing = closed.playerExpressionRecency.footing[0]!;
+        const humanFrame = humanPerceptionSpy.mock.calls.map(([input]) => input).find(({ supplementalSoundSamples }) => (
+          supplementalSoundSamples?.some(({ expressionEventId }) => expressionEventId === footing.admission.eventId)
+        ));
+        const sample = humanFrame?.supplementalSoundSamples?.find(({ expressionEventId }) => expressionEventId === footing.admission.eventId);
+        expect(sample).toMatchObject({ sourceActorId: "player:local", position: footing.authority.playerPosition });
+        expect(sample?.position).not.toEqual(before.perceptionCarry.playerSenseSamples[8]?.position);
+        expect(humanFrame?.surfaceSoundSampleIds).toContain(sample?.id);
         runtime.destroy();
         soundscapePlay.mockClear();
         const loaded = await createTideweftRuntime(repository);
@@ -1800,6 +2031,7 @@ describe("production terrain fall and physical cargo", () => {
       expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
       expect(before.playerExpressionRecency.effort.lastAccepted).toBeNull();
       expect(before.perceptionCarry.playerStepStateSamples.every((step) => step?.exhausted === false)).toBe(true);
+      const humanPerceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
       const close = expressionChannelBank.closeSituatedExpressionChannelBankInterval;
       let closes = 0;
       if (reject) vi.spyOn(expressionChannelBank, "closeSituatedExpressionChannelBankInterval")
@@ -1827,6 +2059,14 @@ describe("production terrain fall and physical cargo", () => {
           step: { sampleOrdinal: 9, exhausted: true },
           admission: { committedWorldTick: deserializeWorld(before.world).meta.completedTick, admittedAtPlayerStepPhase: 9 },
         });
+        const effort = closed.playerExpressionRecency.effort.lastAccepted!;
+        const humanFrame = humanPerceptionSpy.mock.calls.map(([input]) => input).find(({ supplementalSoundSamples }) => (
+          supplementalSoundSamples?.some(({ expressionEventId }) => expressionEventId === effort.admission.eventId)
+        ));
+        const sample = humanFrame?.supplementalSoundSamples?.find(({ expressionEventId }) => expressionEventId === effort.admission.eventId);
+        expect(sample).toMatchObject({ sourceActorId: "player:local", position: effort.afterPosition });
+        expect(sample?.position).not.toEqual(before.perceptionCarry.playerSenseSamples[8]?.position);
+        expect(humanFrame?.surfaceSoundSampleIds).toContain(sample?.id);
         runtime.destroy();
         soundscapePlay.mockClear();
         runtime = await createTideweftRuntime(repository);

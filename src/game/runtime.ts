@@ -13138,6 +13138,25 @@ export async function createTideweftRuntime(
         && candidate.eventId === sample.expressionEventId
         && candidate.sourceActorId === sample.sourceActorId
       ));
+      if (admission?.kind === "player-traversal"
+        || admission?.kind === "player-fall-recovery"
+        || admission?.kind === "player-exhaustion") {
+        const causes = situatedExpressionCausalAuthority.records.filter(({ eventId }) => (
+          eventId === admission.eventId
+        ));
+        const cause = causes[0];
+        if (causes.length !== 1 || cause === undefined
+          || cause.committedWorldTick !== economyView.completedTick
+          || !situatedExpressionAdmissionMatchesCausalAuthority(admission, cause)
+          || !sameRuntimeWorldPosition(cause.playerPosition, sample.position)
+          || !vocalizationSampleMatchesChannel(sample, situatedExpressionChannels)) {
+          throw new Error("Player surface sound lost its committed physical cause");
+        }
+        // The committed event-time pose owns support, including a terminal
+        // tenth step or a now-expired caption. Do not substitute a later pose
+        // or rescan cargo history to reconstruct an already accepted action.
+        return [sample.id];
+      }
       if (admission?.kind === "guardian-dog-warning"
         || admission?.kind === "guardian-dog-defensive-growl"
         || admission?.kind === "guardian-dog-shelter-whine") {

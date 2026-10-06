@@ -383,6 +383,27 @@ Pending cold-load authority still requires its existing reprojectable cause;
 mid-interval rebase restore and caption-refused rebase retention remain open
 Living Voice integration/persistence obligations, not proven by this enrichment.
 
+Existing player traversal, parcel-recovery and dry-exhaustion reactions also
+derive surface support for independent human hearing. Each exact admitted
+sound must match one retained current-tick player causal record, its admission
+digest/metadata, event-time position and original channel acoustic tuple. The
+recorded physical cause owns the locus, including a terminal tenth player step;
+neither a later pose, phase-nine pending-load helper nor a cargo-history rescan
+may substitute for it. Surface support includes the current terrain/water
+surface poses, not invented underwater or airborne height. Optional caption
+expiry cannot remove the pending hearing opportunity. Other humans receive
+only anonymous vocalization with the original interruption policy, not decoded
+stamina, cargo contents or player identity. This join changes neither the
+original source sound/audio nor save carry and does not ground legacy-v33
+player admissions by inference.
+Controlled current-save pairs for all three real producers place one existing
+human on a generated route and change only one dry, nonendpoint crest away
+from the retained player trajectory. Exact anonymous hearing weakens without
+changing the original sound or listener masking; T+1 consumes it once and
+T+2/load cannot replay it. Terminal footing/effort tests retain the actual
+tenth-step locus and late-failure rollback. These are bounded integration
+witnesses, not ordinary travel, broad NPC response or acoustic saturation.
+
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
 explicit `unmodeled-support`, not invented ground contact. A physical domain may

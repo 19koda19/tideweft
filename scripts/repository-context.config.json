@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "f6bc33a5b470354a62ea2dc5003d338a0b73c542e6109604f8ec0379ba7c7eb6",
+      "reviewedSourceFingerprint": "37fcd8b99fdfb1b27107695a529dc1cc3a20ce13dd8adc7135db97a0818192eb",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -220,7 +220,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit sources' independent human audience, including authenticated refused cat/fox hearing. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable; pending cold-rebase restore and refused-rebase retention remain open. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
+        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable; pending cold-rebase restore and refused-rebase retention remain open. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
@@ -243,7 +243,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "f6bc33a5b470354a62ea2dc5003d338a0b73c542e6109604f8ec0379ba7c7eb6",
+      "reviewedSourceFingerprint": "37fcd8b99fdfb1b27107695a529dc1cc3a20ce13dd8adc7135db97a0818192eb",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

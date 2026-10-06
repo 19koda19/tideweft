@@ -160,10 +160,11 @@ export interface HumanPerceptionInput {
   /** Shares the physical-world sound budget; never enters expression/save carry. */
   readonly unadmittedAlarmSoundSamples?: readonly UnadmittedAlarmSoundSample[];
   /**
-   * Transient caller-authenticated surface support for supplied non-player
-   * sounds. Omitted IDs have unmodeled support; sample identity or vocabulary
-   * cannot establish physical height. Player step samples are already surface
-   * actions and must not be repeated here. This metadata is never save carry.
+   * Transient caller-authenticated surface support for supplied vocal/physical
+   * sounds, including player vocal reactions. Omitted IDs have unmodeled
+   * support; sample identity or vocabulary cannot establish physical height.
+   * Player step samples are intrinsically surface actions and must not be
+   * repeated here. This metadata is never save carry.
    */
   readonly surfaceSoundSampleIds?: readonly string[];
 }
