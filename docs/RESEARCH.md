@@ -2462,6 +2462,28 @@ production bundle and source remain unchanged. JSON SHA256:
 Continuation requires lawful route/visible knowledge rather than repeating
 the same blind heading or changing simulation to make a probe pass.
 
+### Current cumulative checkpoint — 2026-10-06
+
+The committed, tracked-clean `e51791476fa92a040da0bb7b8ef60436dd0e29d7`
+(tree `979ec06501707b7139c212f1d24ccf6cae23712a`) remained immutable during
+`caffeinate -i npm run test:ci -- --reporter=default --reporter=json --outputFile=artifacts/validation/voice-current49/cumulative-e517914.json`.
+The command exited successfully: context-index 28 and player-facing-sync 39
+selftests passed; Vitest passed all 364 files / 4,054 tests in 1,589.10s,
+with no failed or pending tests. The JSON report independently confirms both
+new current-save pending-crow and keeper/flock coexistence cases passed.
+Report SHA256:
+`da09d31099d784f04af6d1f63768ef84f3c615b7efc4163e42a7cd88988a3f6f`.
+Node22.20.0/npm10.9.3 remain unchanged; this is local evidence, not a run under
+CI's distinct Node24.20.0 environment or a public release certificate.
+
+Current save50/carry14 includes bounded accepted cargo protection/loss/recovery
+history in the same recency-v2 owner as exhaustion and footing. The composition
+summary is reconciled to that already-implemented rule, not a new migration or
+gameplay change. Original Architecture remains the detailed contract owner.
+Ordinary-play, sustained stress, hours, hardware, performance and release gates
+remain separate. No application, dependency, schema, production artifact or
+completed directive changed in this evidence/status reconciliation.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
