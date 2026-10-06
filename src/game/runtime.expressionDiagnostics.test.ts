@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AudioSettings, TideweftSoundscape } from "../audio/soundscape";
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { deserializeWorld } from "../sim/public";
 import * as humanPerception from "./humanPerception";
@@ -8,15 +9,45 @@ import * as expressionChannels from "./situatedExpressionChannelBank";
 import * as diagnostics from "./situatedExpressionDiagnostics";
 
 const play = vi.hoisted(() => vi.fn());
-vi.mock("../audio/soundscape", () => ({
-  spatialPanForBearing: () => 0,
-  TideweftSoundscape: class {
-    async unlock(): Promise<void> {}
-    play(...args: unknown[]): void { play(...args); }
-    updateAmbience(): void {}
-    destroy(): void {}
-  },
+const audioDelegate = vi.hoisted(() => ({
+  enabled: false,
+  instance: undefined as TideweftSoundscape | undefined,
+  unlocks: [] as Promise<void>[],
+  playing: false,
 }));
+vi.mock("../audio/soundscape", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../audio/soundscape")>();
+  return {
+    spatialPanForBearing: () => 0,
+    TideweftSoundscape: class {
+      private readonly delegate = audioDelegate.enabled ? new actual.TideweftSoundscape() : undefined;
+      constructor() { if (this.delegate) audioDelegate.instance = this.delegate; }
+      async unlock(): Promise<void> {
+        if (this.delegate) {
+          const completion = this.delegate.unlock();
+          audioDelegate.unlocks.push(completion);
+          await completion;
+        }
+      }
+      play(...args: Parameters<TideweftSoundscape["play"]>): void {
+        play(...args);
+        if (!this.delegate) return;
+        audioDelegate.playing = true;
+        try { this.delegate.play(...args); }
+        finally { audioDelegate.playing = false; }
+      }
+      updateAmbience(...args: Parameters<TideweftSoundscape["updateAmbience"]>): void {
+        this.delegate?.updateAmbience(...args);
+      }
+      destroy(): void { this.delegate?.destroy(); }
+    },
+  };
+});
+
+// Construction happens inside the awaited runtime factory, not this scope.
+function currentAudioDelegate(): TideweftSoundscape | undefined {
+  return audioDelegate.instance;
+}
 
 class MemoryRepository implements SaveRepository {
   private record: SaveRecord | undefined;
@@ -66,11 +97,56 @@ function objectGraph(value: unknown, found = new Set<object>()): Set<object> {
   return found;
 }
 
-async function keeperRun(enabled: boolean) {
+function audioOutputGraph(blocked: boolean) {
+  const parameter = () => ({
+    value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn(), setTargetAtTime: vi.fn(),
+  });
+  const gains: Array<{ gain: ReturnType<typeof parameter>; connect: ReturnType<typeof vi.fn> }> = [];
+  let rejectResume: ((error: unknown) => void) | undefined;
+  const resumed = blocked
+    ? new Promise<void>((_resolve, reject) => { rejectResume = reject; })
+    : Promise.resolve();
+  const context = {
+    currentTime: 12, sampleRate: 8_000, state: blocked ? "suspended" : "running", destination: {},
+    createGain: () => {
+      const node = { gain: parameter(), connect: vi.fn() };
+      gains.push(node);
+      return node;
+    },
+    createBiquadFilter: () => ({ type: "lowpass", frequency: parameter(), Q: parameter(), connect: vi.fn() }),
+    createStereoPanner: () => ({ pan: parameter(), connect: vi.fn(), disconnect: vi.fn() }),
+    createBuffer: (_channels: number, length: number) => ({ getChannelData: () => new Float32Array(length) }),
+    createBufferSource: () => ({ buffer: null, loop: false, connect: vi.fn(), start: vi.fn(), stop: vi.fn() }),
+    createOscillator: vi.fn(() => ({
+      type: "sine", frequency: parameter(), connect: vi.fn(), start: vi.fn(), stop: vi.fn(),
+    })),
+    resume: vi.fn(() => resumed),
+    suspend: vi.fn(() => { context.state = "suspended"; return Promise.resolve(); }),
+    close: vi.fn(() => {
+      context.state = "closed";
+      rejectResume?.(new DOMException("Closed before resume completed", "InvalidStateError"));
+      return Promise.resolve();
+    }),
+  };
+  const constructor = vi.fn(function AudioContextFixture() { return context; });
+  vi.stubGlobal("AudioContext", constructor);
+  return { context, constructor, gains };
+}
+
+async function keeperRun(enabled: boolean, audioOptions?: {
+  settings?: Partial<AudioSettings>;
+  resetOutput: () => void;
+}) {
   const repository = new MemoryRepository();
   const runtime = await createTideweftRuntime(repository);
   const hearing = vi.spyOn(humanPerception, "collectExistingHumanObservations");
   try {
+    if (audioOptions) {
+      const soundscape = currentAudioDelegate();
+      if (soundscape === undefined) throw new Error("Real soundscape delegate is unavailable");
+      audioDelegate.unlocks.push(soundscape.unlock());
+      soundscape.setSettings(audioOptions.settings ?? {});
+    }
     runtime.dispatchUI({
       type: "new-world", seed: "phase ten glass ebb", posture: "journey", sessionShape: "wander",
     });
@@ -79,6 +155,7 @@ async function keeperRun(enabled: boolean) {
     expect(inspector.getSnapshot()).toMatchObject({ enabled: false, totalCount: 0, records: [] });
     inspector.setEnabled(enabled);
     play.mockClear();
+    audioOptions?.resetOutput();
     expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
     runtime.dispatchUI({ type: "interact" });
     const decisions = inspector.getSnapshot();
@@ -165,6 +242,105 @@ async function keeperRun(enabled: boolean) {
 }
 
 describe("development situated-expression inspector", () => {
+  it("preserves keeper authority, hearing and captions under reduced or blocked audio output", async () => {
+    // The runtime clock stays real. Only the real delegate's bounded panner
+    // disconnect timers are tracked for cleanup; unrelated timers are untouched.
+    const disconnects = new Map<ReturnType<typeof setTimeout>, () => void>();
+    const schedule = globalThis.setTimeout;
+    const timers = vi.spyOn(globalThis, "setTimeout").mockImplementation((callback, delay, ...args) => {
+      if (!audioDelegate.playing || delay !== 2_200 || typeof callback !== "function") {
+        return schedule(callback, delay, ...args);
+      }
+      let handle: ReturnType<typeof setTimeout>;
+      const disconnect = () => { disconnects.delete(handle); callback(...args); };
+      handle = schedule(disconnect, delay);
+      disconnects.set(handle, disconnect);
+      return handle;
+    });
+    let control: Awaited<ReturnType<typeof keeperRun>> | undefined;
+    let normalToneCount = 0;
+    try {
+      for (const mode of ["normal", "disabled", "master-zero", "effects-zero", "blocked"] as const) {
+        const graph = audioOutputGraph(mode === "blocked");
+        audioDelegate.enabled = true;
+        audioDelegate.instance = undefined;
+        audioDelegate.unlocks = [];
+        try {
+          const settings = mode === "disabled" ? { enabled: false }
+            : mode === "master-zero" ? { master: 0 }
+              : mode === "effects-zero" ? { effects: 0 } : {};
+          const observed = await keeperRun(true, {
+            settings, resetOutput: () => graph.context.createOscillator.mockClear(),
+          });
+          const decision = observed.decisions.records[0];
+          expect(observed.decisions.records).toHaveLength(1);
+          expect(decision).toMatchObject({
+            reason: "accepted", completedTick: 420, admission: { kind: "settlement-keeper-store-response" },
+            playerReception: { kind: "heard-visible" }, realization: { text: observed.caption?.text },
+          });
+          expect(observed.caption?.id).toBe(decision?.event?.eventId);
+          expect(observed.caption?.text.length).toBeGreaterThan(0);
+          expect(decision?.event?.vocalization).toBeDefined();
+          expect(observed.audio.some(([cue]) => cue === `vocalization-${decision?.event?.vocalization}`)).toBe(true);
+          expect(observed.repetition).toMatchObject({ acceptedFixedSteps: 10, acceptedSimulationMs: 1_000 });
+          const pending = JSON.parse(observed.pending.worldJson) as { world: string };
+          const final = JSON.parse(observed.final.worldJson) as { world: string };
+          expect(deserializeWorld(pending.world).meta.completedTick).toBe(420);
+          expect(deserializeWorld(final.world).meta.completedTick).toBe(421);
+          expect(observed.audienceAudit.records[0]).toMatchObject({
+            sourceStatus: "validated", playerReceiptStatus: "matching-retained-receipt", issues: [],
+          });
+          expect(observed.audienceAudit.records[0]?.humanListeners?.some(({ receipt, retainedBelief }) => (
+            receipt.outcome === "heard" && retainedBelief && receipt.observation?.perceivedClass === "store-secured-report"
+          ))).toBe(true);
+          if (mode === "normal") {
+            control = observed;
+            normalToneCount = graph.context.createOscillator.mock.calls.length;
+            expect(normalToneCount).toBeGreaterThan(0);
+            expect(graph.gains[0]?.gain.setTargetAtTime.mock.calls.at(-1)?.[0]).toBeGreaterThan(0);
+            expect(graph.gains[2]?.gain.setTargetAtTime.mock.calls.at(-1)?.[0]).toBeGreaterThan(0);
+          } else {
+            if (control === undefined) throw new Error("Reduced-output fixture lost its normal baseline");
+            // Save metadata's wall-clock updatedAt is not authoritative state.
+            expect(observed.pending.worldJson, mode).toBe(control.pending.worldJson);
+            expect(observed.final.worldJson, mode).toBe(control.final.worldJson);
+            for (const key of [
+              "decisions", "caption", "baseline", "masked", "audio", "view", "ui", "initialAudit",
+              "audienceDecisions", "audienceAudit", "filteredAudienceAudit", "selectedHumans",
+              "initialRepetition", "repetition",
+            ] as const) expect(observed[key], `${mode}: ${key}`).toEqual(control[key]);
+            if (mode === "master-zero" || mode === "effects-zero") {
+              // Zero output gain is not suppression of committed cue scheduling.
+              expect(graph.context.createOscillator).toHaveBeenCalledTimes(normalToneCount);
+              const gainIndex = mode === "master-zero" ? 0 : 2;
+              expect(graph.gains[gainIndex]?.gain.setTargetAtTime.mock.calls.at(-1)?.[0]).toBe(0);
+            } else {
+              expect(graph.context.createOscillator).not.toHaveBeenCalled();
+              if (mode === "disabled") {
+                expect(graph.context.suspend).toHaveBeenCalledOnce();
+                expect(graph.gains[0]?.gain.setTargetAtTime.mock.calls.at(-1)?.[0]).toBe(0);
+              } else expect(graph.context.resume).toHaveBeenCalled();
+            }
+          }
+          expect(graph.constructor).toHaveBeenCalledOnce();
+          expect(graph.context.close).toHaveBeenCalledOnce();
+        } finally {
+          currentAudioDelegate()?.destroy();
+          const completions = await Promise.allSettled(audioDelegate.unlocks);
+          for (const [handle, disconnect] of disconnects) {
+            clearTimeout(handle);
+            disconnect();
+          }
+          audioDelegate.enabled = false;
+          audioDelegate.instance = undefined;
+          audioDelegate.unlocks = [];
+          audioDelegate.playing = false;
+          expect(completions.every(({ status }) => status === "fulfilled")).toBe(true);
+        }
+      }
+    } finally { timers.mockRestore(); }
+  });
+
   it("records a committed keeper cause and previews its exact listening without changing state, events, saves or audio", async () => {
     const control = await keeperRun(false);
     const observed = await keeperRun(true);

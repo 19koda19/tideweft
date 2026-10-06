@@ -2904,6 +2904,90 @@ describe("production terrain fall and physical cargo", () => {
     }
   }, 60_000);
 
+  it("characterizes interval-local cargo recovery without conflating sound lifetime with custody", async () => {
+    // Current limitation, not the final repetition acceptance: cargo has no
+    // separate cross-interval accepted-choice history. Use only a real fall
+    // and two independently recovered parcels to locate that boundary.
+    const repository = new MemoryRepository();
+    const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
+    if (fixture.contractId === null) throw new Error("Cargo characterization requires a real Promise");
+    const initial = await createTideweftRuntime(repository);
+    let firstRecoveryId: string;
+    let secondParcelId: string;
+    let pending: SaveRecord;
+    try {
+      initial.dispatchUI({ type: "resume-world" });
+      initial.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+      advancePlayerSteps(initial, 1);
+      initial.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      expect(initial.getRenderView().player.incident?.kind).toBe("fall");
+      advancePlayerSteps(initial, 8);
+      const reachable = initial.getRenderView().looseCargo?.filter(({ recovery }) => recovery === "reachable") ?? [];
+      if (reachable.length < 2) throw new Error("Real fall did not supply two currently reachable parcels");
+      secondParcelId = reachable[1]!.id;
+      initial.dispatchRenderer({ type: "parcel-target", parcelId: reachable[0]!.id, recoverOnArrival: true });
+      firstRecoveryId = playerExpression(initial, "relieved").id;
+      await initial.save();
+      pending = repository.snapshot();
+      expect(decodeCurrent(pending).perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      expect(promiseQuantity(decodeCurrent(pending).physicalCargo, fixture.contractId)).toBe(fixture.promiseQuantity);
+    } finally { initial.destroy(); }
+
+    async function recoverSecond(crossBoundary: boolean) {
+      const branchRepository = new MemoryRepository(pending);
+      const branch = await createTideweftRuntime(branchRepository);
+      try {
+        expect(branch.getUIView().saveWarning).toBeUndefined();
+        branch.expressionDiagnostics!.setEnabled(true);
+        branch.dispatchUI({ type: "resume-world" });
+        soundscapePlay.mockClear();
+        if (crossBoundary) advancePlayerSteps(branch, 1);
+        expect(branch.getRenderView().looseCargo).toContainEqual(expect.objectContaining({
+          id: secondParcelId, recovery: "reachable",
+        }));
+        await branch.save();
+        const before = decodeCurrent(branchRepository.snapshot());
+        expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(crossBoundary ? 0 : 9);
+        const recovered = before.physicalCargo.looseWorld.entities.find(({ id }) => id === secondParcelId);
+        if (recovered?.payload.kind !== "promise") throw new Error("Second parcel lost its exact physical Promise payload");
+        soundscapePlay.mockClear();
+        branch.dispatchRenderer({ type: "parcel-target", parcelId: secondParcelId, recoverOnArrival: true });
+        await branch.save();
+        const after = decodeCurrent(branchRepository.snapshot());
+        const choices = branch.expressionDiagnostics!.getSnapshot({ sourceActorId: "player:local" }).records
+          .filter(({ intent }) => intent?.meaning === "relief-after-cargo-recovery");
+        expect(choices).toHaveLength(1);
+        expect(after.physicalCargo.looseWorld.entities.some(({ id }) => id === secondParcelId)).toBe(false);
+        expect(after.physicalCargo.looseWorld.history).toContainEqual(expect.objectContaining({
+          kind: expect.stringMatching(/^(?:pickup|merge)$/u), entityIds: [secondParcelId],
+          causes: expect.arrayContaining(["recovery"]),
+        }));
+        expect(promiseQuantity(after.physicalCargo, fixture.contractId!)).toBe(fixture.promiseQuantity);
+        expect(after.physicalCargo.carrier.lots.filter(({ payload }) => payload.kind === "promise")
+          .reduce((sum, { payload }) => sum + (payload.kind === "promise" ? payload.quantity : 0), 0))
+          .toBe(before.physicalCargo.carrier.lots.filter(({ payload }) => payload.kind === "promise")
+            .reduce((sum, { payload }) => sum + (payload.kind === "promise" ? payload.quantity : 0), 0)
+            + recovered.payload.quantity);
+        return { choice: choices[0]!, audio: structuredClone(soundscapePlay.mock.calls) };
+      } finally { branch.destroy(); }
+    }
+
+    const sameInterval = await recoverSecond(false);
+    const nextInterval = await recoverSecond(true);
+    expect(situatedExpressionCooldownSteps("relief-after-cargo-recovery")?.meaning).toBe(14);
+    expect(sameInterval.choice).toMatchObject({ reason: "meaning-cooldown", event: null });
+    expect(sameInterval.choice.playerStepPhase).toBe(9);
+    expect(sameInterval.audio).toEqual([["strand", 0.58]]);
+    // Exact existing consumption law: one accepted step closes the old sound
+    // interval; it does not claim that the fourteen-step choice lock elapsed.
+    expect(nextInterval.choice).toMatchObject({ reason: "accepted" });
+    expect(nextInterval.choice.event).not.toBeNull();
+    expect(nextInterval.choice.completedTick).toBe(sameInterval.choice.completedTick + 1);
+    expect(nextInterval.choice.playerStepPhase).toBe(0);
+    expect(nextInterval.choice.event?.eventId).not.toBe(firstRecoveryId);
+    expect(nextInterval.audio.filter(([cue]) => cue === "vocalization-relief")).toHaveLength(1);
+  }, 60_000);
+
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {
     const repository = new MemoryRepository();
     const fixture = await createCurrentFixture(

@@ -2107,6 +2107,33 @@ Terminal local artifact `native-play-11498d2-7200000-v17.json` has SHA256
 `a1d46bba5419b68add50a413e3a663ca44f3a6d108e3c0ec5f9f8fe13a3e2c6d`;
 probe SHA256 is `ef8d78a858ca20950ee29f7d1be561b004c0d4e4558b97ca8ed55be01455a0c9`.
 
+### Current cargo boundary and reduced-output characterization — 2026-10-06
+
+The test-only local slice over `5aad99b` leaves production behavior and schemas
+unchanged. `runtime.fall.integration.test.ts` acquires a real Promise, earns
+one ridge fall on its existing controlled initial fixture, and reaches two
+actual parcels. Recovery of the first at phase9 supplies the shared current
+save. Both branches recover the second conserved parcel and add its exact
+quantity to the carrier. An immediate second recovery refuses optional relief
+with `meaning-cooldown`; one accepted idle step closes the old interval and
+allows a fresh relief. That is only one step of the fourteen-step meaning law.
+This locates the presently interval-local cargo limitation; it is not a
+repetition fix or final annoyance acceptance. Consumed acoustic channels remain
+retired under their existing contract. Separate durable accepted-choice history,
+not replayable sound or a caption timer, is the appropriate repair owner.
+
+`runtime.expressionDiagnostics.test.ts` also delegates to the real Soundscape
+against a test-owned Web Audio graph. Normal, disabled, master-zero,
+effects-zero and blocked-context output process the same keeper interaction
+and ten accepted steps, world tick420→421. Exact pending/final authoritative
+save strings, hearing/retained anonymous knowledge, captions, captured decisions
+and attempted committed cues match. Normal schedules tones; zero gain still
+schedules the same cues, while disabled or suspended output creates no tones.
+Owned panner timers and pending resumes are cleaned up without faking the
+simulation clock. This proves a representative current output/authority
+separation, not device audio quality, actual assistive-technology delivery,
+all producers, long-play, performance or directive closure.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
