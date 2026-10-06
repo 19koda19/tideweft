@@ -6847,15 +6847,14 @@ function runtimePendingCoreWildlifePursuitExpressionAuthorities(
   )));
 }
 
-/** Pending rain calls retain their ecology-owned locus, never a subtitle queue. */
-function runtimeFreshCoreWildlifeWeatherDistressExpressionAuthorities(
+/** Same-T pending rain calls retain their cause/locus despite view-only detail loss. */
+function runtimePendingCoreWildlifeWeatherDistressExpressionAuthorities(
   state: CoreEcologyAggregatePatchState,
 ): readonly CoreWildlifeWeatherDistressExpressionInput[] {
   return Object.freeze(state.populations.flatMap(({ members }) => members.flatMap((member) => {
     const actor = member.actor;
     if (
-      member.materialization !== "materialized"
-      || actor.identity.species !== "domestic-cat"
+      actor.identity.species !== "domestic-cat"
       || actor.intent.kind !== "retreat"
       || actor.intent.enteredAtTick !== state.updatedAtTick
       || actor.intent.focusObservationId === null
@@ -6873,7 +6872,7 @@ function runtimeFreshCoreWildlifeWeatherDistressExpressionAuthorities(
       triggerEventId: memory.eventId,
       sourceObservationId: actor.intent.focusObservationId,
       acceptedAtTick: state.updatedAtTick,
-    });
+    }, "retained");
     return authority === null ? [] : [authority];
   })).sort((left, right) => compareText(left.event.eventId, right.event.eventId)));
 }
@@ -14474,19 +14473,23 @@ export async function createTideweftRuntime(
       const humanCoreAlarmObserverIds = new Set(corePerceptionFrame.participants.flatMap(
         ({ address }) => address.species === "human" ? [address.actorId] : [],
       ));
-      const pendingCatWeatherCalls = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
+      // Stored same-T causes survive view-only dematerialization. Use only the
+      // bounded active custody set, never the all-stored sparse history scan.
+      const retainedEcologySources = regionalEcologyStateV6ActiveSourcePatches(regionalEcology);
+      if (retainedEcologySources === null) {
+        throw new Error("Pending wildlife sound lost its bounded ecology custody");
+      }
+      const pendingCatWeatherCalls = retainedEcologySources.flatMap(({ sourceKey, patch }) => (
         patch.updatedAtTick !== world.meta.completedTick ? []
-          : runtimeFreshCoreWildlifeWeatherDistressExpressionAuthorities(patch).map((authority) => ({
+          : runtimePendingCoreWildlifeWeatherDistressExpressionAuthorities(patch).map((authority) => ({
               authority, sourceKey,
             }))
-      )).filter(({ authority }) => (
-        localMaterializedCoreActorIdSet.has(authority.actor.identity.stableId)
       )).sort((left, right) => (
         compareText(left.authority.event.eventId, right.authority.event.eventId)
         || compareText(left.sourceKey, right.sourceKey)
       ));
       const catWeatherPhysicalFallbacks = pendingCatWeatherCalls.flatMap(({ authority, sourceKey }) => {
-        const expression = coreWildlifeWeatherDistressExpressionEventForTrigger(
+        const expression = retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(
           authority, authority.event.eventId,
         );
         if (expression === null) throw new Error("Fresh cat weather call lost its acoustic authority");
@@ -14503,22 +14506,46 @@ export async function createTideweftRuntime(
           ? undefined : actorVocalizationSamples[admission.sampleOrdinal];
         if (
           matchingAdmissions.length === 1 && admission !== undefined
-          && coreWildlifeWeatherDistressAdmissionMatchesWorld(admission, authority, world.meta.completedTick)
+          && coreWildlifeWeatherDistressAdmissionMatchesWorld(admission, authority, world.meta.completedTick, "retained")
           && retainedSample?.expressionEventId === admission.eventId
           && retainedSample.sourceActorId === admission.sourceActorId
         ) return [];
         const sample = catWeatherDistressPhysicalSoundSample(expression);
         if (sample === null) throw new Error("Cat weather call could not enter shared physical hearing");
+        const observationId = authority.event.observationId;
+        if (observationId === null) {
+          throw new Error("Pending cat sound lost its authenticated rain evidence");
+        }
+        const hasDetailedCause = runtimeRegionalWildlifeCallHasDetailedCause(
+          regionalEcologyProjectionForStep,
+          {
+            kind: "core-wildlife-weather-distress",
+            sourceOwnerKey: sourceKey,
+            sourceActorId: authority.actor.identity.stableId,
+            acceptedAtTick: authority.event.atTick,
+            admittedAtPlayerStepPhase: 0,
+          },
+          world.meta.completedTick,
+        );
+        if (hasDetailedCause) {
+          const detailedSource = projectedEcologySources.find((source) => source.sourceKey === sourceKey);
+          const detailedAuthority = detailedSource === undefined ? null
+            : runtimeCoreWildlifeWeatherDistressExpressionAuthority(detailedSource.patch, {
+                actorId: authority.actor.identity.stableId,
+                triggerEventId: authority.event.eventId,
+                sourceObservationId: observationId,
+                acceptedAtTick: authority.event.atTick,
+              });
+          if (detailedAuthority === null
+            || !coreWildlifeWeatherDistressExpressionEventMatchesWorld(detailedAuthority, expression)) {
+            throw new Error("Pending cat sound contradicts its available detailed cause");
+          }
+        }
         return [{ eventId: authority.event.eventId,
           priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample,
-          surfaceSupported: acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" }];
+          surfaceSupported: hasDetailedCause
+            && acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" }];
       });
-      // Stored same-T causes survive view-only dematerialization. Use only the
-      // bounded active custody set, never the all-stored sparse history scan.
-      const retainedEcologySources = regionalEcologyStateV6ActiveSourcePatches(regionalEcology);
-      if (retainedEcologySources === null) {
-        throw new Error("Pending fox sound lost its bounded ecology custody");
-      }
       const pendingFoxPursuits = retainedEcologySources.flatMap(({ sourceKey, patch }) => (
         patch.updatedAtTick !== world.meta.completedTick ? []
           : runtimePendingCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({

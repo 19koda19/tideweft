@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "39d7a4c01f4c7a291eb98fe097e379b394e0d678c28826b78aafd75d9edbede0",
+      "reviewedSourceFingerprint": "b508ab60d7a891a5df5a79e20aacbb1093cb639aa1331968b1fead701de1a4c7",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -220,7 +220,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted pending-save restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Cat refused-call rebase retention, sparse-owner departure and an originally visible call later losing detail remain unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
+        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted/refused pending restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; admitted carriers suppress physical twins and only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Sparse-owner departure and an originally visible call later losing detail remain unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
@@ -243,7 +243,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "39d7a4c01f4c7a291eb98fe097e379b394e0d678c28826b78aafd75d9edbede0",
+      "reviewedSourceFingerprint": "b508ab60d7a891a5df5a79e20aacbb1093cb639aa1331968b1fead701de1a4c7",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

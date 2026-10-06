@@ -418,8 +418,15 @@ of the historical wet-track locus; stored sound custody is not body proof and
 exact body/locus equality would incorrectly reject its real same-T movement.
 A controlled dry-ground west-window call keeps its original sample and current
 roots through reload and consumes once without audio replay or inferred terrain
-support. Cat caption-refused rebase retention and either source's departure into
-sparse custody remain unproven. These distant edge witnesses do not certify
+support. Its caption-refused counterpart reconstructs the same physical-hearing
+tuple from the bounded same-T rain cause, not a second persisted sound queue.
+Retained admission/sample matching suppresses that fallback when the admitted
+carrier already owns hearing, even after its caption expires. Only exact
+current detailed rederivation may add terrain support; absent/coarse detail
+withholds it and available contradictions fail closed. The unchanged eight-slot
+priority bank consumes the call once at T+1, including after current reload,
+without T+2 or audio replay. Either source's departure into sparse custody
+remains unproven. These distant edge witnesses do not certify
 positive hearing, an originally visible call later losing detail, ordinary
 travel or general off-frame retention.
 

@@ -4374,6 +4374,188 @@ describe("runtime core-ecology vertical slice", () => {
     } finally { runtime.destroy(); projectionSpy.mockRestore(); }
   }, 90_000);
 
+  it("restores one real caption-refused cat rain call after a signed-window rebase without replay", async () => {
+    vi.resetModules();
+    const frames: Array<Readonly<{
+      targetTick: number;
+      samples: readonly PhysicalSoundSample[];
+      surfaceSoundSampleIds: readonly string[];
+      observations: readonly ActorObservation[];
+    }>> = [];
+    vi.doMock("./humanPerception", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./humanPerception")>();
+      return {
+        ...actual, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+        collectExistingHumanObservations: (input: Parameters<typeof actual.collectExistingHumanObservations>[0]) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          frames.push({
+            targetTick: input.targetTick, samples: structuredClone(input.physicalSoundSamples ?? []),
+            surfaceSoundSampleIds: [...(input.surfaceSoundSampleIds ?? [])],
+            observations: batches.flatMap(({ observations }) => observations),
+          });
+          return batches;
+        },
+      };
+    });
+    let runtime: TideweftRuntime | null = null;
+    let projectionSpy: MockInstance<typeof projectRegionalEcologyStateV6ActiveState> | null = null;
+    const sources = (projection: RegionalEcologyStateV6ActiveProjection) => [
+      ...projection.base.base.base.base.base.residents,
+      ...projection.base.base.base.base.alpineResidents,
+      ...projection.base.base.base.polarShoreResidents,
+      ...projection.base.base.coldShoreResidents,
+      ...projection.base.polarConsumerResidents,
+      ...projection.breadthResidents,
+    ];
+    try {
+      // Both observers and the runtime factory belong to this same module
+      // graph; the runtime's projection memo captures its projector on creation.
+      const projectionModule = await import("./regionalEcologyStateV6");
+      projectionSpy = vi.spyOn(projectionModule, "projectRegionalEcologyStateV6ActiveState");
+      const runtimeModule = await import("./runtime");
+      const fixture = await createCatWeatherRuntime("rain-distress", 1, false, {
+        initialWestRebaseBoundary: true, createRuntime: runtimeModule.createTideweftRuntime,
+      });
+      runtime = fixture.runtime;
+      await runtime.save();
+      const before = requiredEnvelope(fixture.repository);
+      const world = deserializeWorld(before.world);
+      const travel = restorePlayerRegionalTravel(world.meta.rootSeed, before.player, before.regionalTravel);
+      if (travel === null) throw new Error("Refused cat fixture lost its actual initial frame");
+      const initialProjection = projectionModule.projectRegionalEcologyStateV6ActiveState(requiredRegionalEcologyV6(before), {
+        origin: travel.window.origin, terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+      });
+      if (initialProjection === null) throw new Error("Refused cat fixture lost its actual initial projection");
+      const initialOwners = sources(initialProjection).filter(({ patch }) => patch.populations.some(({ members }) => (
+        members.some(({ actor }) => actor.identity.stableId === fixture.catActorId)
+      )));
+      expect(initialOwners).toHaveLength(1);
+      const sourceOwnerKey = initialOwners[0]!.sourceKey;
+      expect(initialOwners[0]!.patch.populations.flatMap(({ members }) => members)
+        .filter(({ actor }) => actor.identity.stableId === fixture.catActorId))
+        .toMatchObject([{ materialization: "materialized" }]);
+      runtime.expressionDiagnostics!.setEnabled(true);
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const pending = requiredEnvelope(fixture.repository);
+      const tick = deserializeWorld(pending.world).meta.completedTick;
+      const cat = requiredCoreActor(requiredRegionalCoreOwner(pending, fixture.catActorId), fixture.catActorId);
+      const refused = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: fixture.catActorId }).records
+        .filter(({ reason, intent }) => reason === "sound-budget"
+          && intent.meaning === "domestic-cat-rain-distress-call");
+      expect(refused).toHaveLength(1);
+      const decision = refused[0]!;
+      expect(decision.completedTick).toBe(tick);
+      expect(decision.event).toBeNull();
+      expect(decision.admission).toBeNull();
+      const memories = cat.memories.filter(({ eventId }) => eventId === decision.intent.triggerEventId);
+      expect(memories).toHaveLength(1);
+      const memory = memories[0]!;
+      expect(memory).toMatchObject({ kind: "weather", referenceId: "weather:rain", atTick: tick,
+        observationId: cat.intent.focusObservationId,
+        environmentalEvidence: { kind: "wet-tracks", createdAtTick: tick } });
+      expect(cat.intent).toMatchObject({ kind: "retreat", enteredAtTick: tick, expiresAtTick: tick + 4,
+        cause: { kind: "perception", referenceId: memory.observationId },
+        focusObservationId: memory.observationId, resourceReference: null });
+      expect(decision.intent).toMatchObject({ sourceActorId: fixture.catActorId,
+        position: memory.environmentalEvidence?.position, volume: "murmur" });
+      // A real retreat has already moved the body. The original wet track,
+      // never that later pose, owns the physical call's event-time locus.
+      expect(cat.address.position).not.toEqual(decision.intent.position);
+      expect(pending.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(pending.perceptionCarry.situatedExpressionAdmissions.records).toEqual([]);
+      expect(pending.perceptionCarry.situatedExpressionChannels.channels).toEqual([]);
+      const expressionEventId = situatedExpressionEventIdForTrigger(fixture.catActorId, decision.intent.triggerEventId);
+      if (expressionEventId === null) throw new Error("Actual refused rain call lost its canonical event identity");
+      const eventHash = hashCanonical({ domain: "domestic-cat-weather-call:v1", eventId: expressionEventId,
+        sourceActorId: fixture.catActorId });
+      const acoustics = situatedExpressionAcoustics(decision.intent);
+      const originalSample: PhysicalSoundSample = {
+        id: `cwc-${eventHash}`, acousticEventId: `cat-weather-call:v1:${eventHash}`,
+        sourceId: fixture.catActorId, position: decision.intent.position,
+        soundLoudness: acoustics.loudness, soundRangeUnits: acoustics.rangeUnits,
+        soundClass: "animal-call", soundInterrupt: "none",
+      };
+      const audioCount = soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call").length;
+      expect(audioCount).toBe(0);
+      const originBefore = travel.window.origin;
+      const originAfter = { x: originBefore.x - REGIONAL_TRAVEL_SHIFT_TILES, y: originBefore.y };
+      projectionSpy.mockClear();
+      runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+      let movementSteps = 0;
+      while (movementSteps < 9 && runtime.getRenderView().terrain.worldTileOrigin?.x === originBefore.x) {
+        advancePlayerSteps(runtime, 1);
+        movementSteps += 1;
+      }
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      expect(runtime.getRenderView().terrain.worldTileOrigin).toEqual(originAfter);
+      expect(movementSteps).toBeGreaterThan(0);
+      expect(movementSteps).toBeLessThan(10);
+      const actualProjection = projectionSpy.mock.calls.flatMap(([, window], index) => {
+        const result = projectionSpy!.mock.results[index];
+        return window.origin.x === originAfter.x && window.origin.y === originAfter.y
+          && result?.type === "return" && result.value !== null ? [result.value] : [];
+      }).at(-1);
+      if (actualProjection === undefined) throw new Error("Real movement never projected the refused rebased cat");
+      expect(actualProjection.atTick).toBe(tick);
+      const actualOwners = sources(actualProjection).filter(({ sourceKey }) => sourceKey === sourceOwnerKey);
+      expect(actualOwners).toHaveLength(1);
+      expect(actualOwners[0]!.patch.populations.flatMap(({ members }) => members)
+        .filter(({ actor }) => actor.identity.stableId === fixture.catActorId))
+        .toMatchObject([{ materialization: "coarse" }]);
+      const delta = worldPositionDelta(worldPositionAtWindowTile(travel.window, 0), originalSample.position);
+      expect(delta.x + REGIONAL_TRAVEL_SHIFT_TILES * WORLD_POSITION_UNITS_PER_TILE)
+        .toBeGreaterThanOrEqual(REGIONAL_TRAVEL_COLUMNS * WORLD_POSITION_UNITS_PER_TILE);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      await runtime.save();
+      const rebased = requiredEnvelope(fixture.repository);
+      expect(deserializeWorld(rebased.world).meta.completedTick).toBe(tick);
+      expect(rebased.perceptionCarry.playerStepsSinceWorldTick).toBe(movementSteps);
+      expect(rebased.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(requiredCoreActor(requiredRegionalCoreOwner(rebased, fixture.catActorId), fixture.catActorId)).toEqual(cat);
+      expect(frames.some(({ samples }) => samples.some(({ id }) => id === originalSample.id))).toBe(false);
+      const record = fixture.repository.snapshot();
+      runtime.destroy(); scheduledFrame = undefined; soundscapePlay.mockClear();
+      const repository = new MemoryRepository(record);
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(repository.snapshot()).toEqual(record);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().title.hasSave).toBe(true);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await runtime.save();
+      const restored = requiredEnvelope(repository);
+      expect(restored.perceptionCarry).toEqual(rebased.perceptionCarry);
+      expect(restored.world).toBe(rebased.world);
+      expect(restored.regionalEcology).toBe(rebased.regionalEcology);
+      expect(requiredCoreActor(requiredRegionalCoreOwner(restored, fixture.catActorId), fixture.catActorId)).toEqual(cat);
+      advancePlayerSteps(runtime, 10 - movementSteps);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      const receipts = frames.filter(({ samples }) => samples.some(({ id }) => id === originalSample.id));
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0]!.targetTick).toBe(tick + 1);
+      expect(receipts[0]!.samples.filter(({ id }) => id === originalSample.id)).toEqual([originalSample]);
+      expect(receipts[0]!.samples.length).toBeLessThanOrEqual(8);
+      expect(receipts[0]!.surfaceSoundSampleIds).not.toContain(originalSample.id);
+      // This off-frame source is not positive-hearing evidence. Any lawful
+      // observation must remain anonymous and reveal neither cat nor rain cause.
+      expect(receipts[0]!.observations.filter(({ id }) => id.endsWith(`-${originalSample.id}`)).every((observation) => (
+        observation.channel === "hearing" && observation.perceivedClass === "animal-call"
+        && observation.identification === "anonymous" && observation.subjectId === null
+        && observation.interrupt === "none" && observation.area.radiusUnits > 0
+      ))).toBe(true);
+      await runtime.save();
+      expect(deserializeWorld(requiredEnvelope(repository).world).meta.completedTick).toBe(tick + 1);
+      advancePlayerSteps(runtime, 10);
+      expect(frames.filter(({ samples }) => samples.some(({ id }) => id === originalSample.id))).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toHaveLength(audioCount);
+    } finally {
+      runtime?.destroy(); scheduledFrame = undefined;
+      projectionSpy?.mockRestore();
+      vi.doUnmock("./humanPerception"); vi.resetModules();
+    }
+  }, 90_000);
+
   it("admits one source-bound deer snort through shared audio/caption authority and reloads without replay", async () => {
     const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
