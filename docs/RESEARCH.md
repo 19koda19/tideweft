@@ -2272,6 +2272,28 @@ probe denial was retained. JSON SHA256:
 This longer observation is still not hours, Relief, hardware audio/AT, mobile,
 performance, absent NPC/dog or whole-directive acceptance.
 
+The two-hour request on clean `b63fd3b`, using the same unchanged artifact and
+driver, ended **incomplete** after 720,476ms at ticks420→1296. The declared
+northward heading reached ADRIFT; the driver intentionally refused after
+30 seconds of floating without a lawful escape direction. This is neither a
+two-hour pass nor evidence of a game crash. Public samples retained 531.098
+tiles of displacement / 518.194 net northward tiles, seven actual REST actions,
+652,234ms movement, 23,446ms recovery, 30,863ms floating and 13,908ms stationary.
+The terminal UI offered ordinary paddle/float controls; no hidden route or
+authoritative intervention was supplied.
+
+Its 5,166 reads over 720,582ms retained 32 projected cues (ten player, one
+anonymous bird and 21 physical), at most two candidates and 5,056 empty reads.
+The single partial 15-minute census had no reported overflow/incomplete;
+maximum sample gap was 1,518ms. Three player wordings and three adjacent sampled
+repeats remain qualitative observations, not exact producer timing, audio
+silence, screen-space overlap or hours acceptance. Normal browser/profile
+cleanup completed, with no guarded lifecycle error and only the known startup
+CSP probe denial. No terminal screenshot was produced on this refusal path.
+JSON SHA256:
+`95e27b85a912dea9018210739bca37c488fe0b778edef4b2cd2d78e84879ce9e`.
+No gameplay repair or repeated blind route follows from this driver limit.
+
 ### Current cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
