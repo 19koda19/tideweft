@@ -326,6 +326,9 @@ import {
   fishCrowAlarmExpressionEventMatchesWorld,
   fishCrowAlarmExpressionMemoryMatchesWorld,
   isExpressiveAlarmSpecies,
+  retainedCoreWildlifeAlarmExpressionEventForTrigger,
+  retainedCoreWildlifeAlarmExpressionEventMatchesWorld,
+  retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld,
   type CoreWildlifeAlarmExpressionInput,
   type ExpressiveAlarmSpecies,
 } from "./coreWildlifeSignalExpression";
@@ -342,7 +345,9 @@ import {
   coreWildlifePursuitExpressionEventForTrigger,
   coreWildlifePursuitExpressionEventMatchesWorld,
   coreWildlifePursuitExpressionIntent,
-  coreWildlifePursuitExpressionMemoryMatchesWorld,
+  retainedCoreWildlifePursuitExpressionEventForTrigger,
+  retainedCoreWildlifePursuitExpressionEventMatchesWorld,
+  retainedCoreWildlifePursuitExpressionMemoryMatchesWorld,
   type CoreWildlifePursuitExpressionInput,
 } from "./coreWildlifePursuitExpression";
 import {
@@ -717,6 +722,7 @@ import {
   canonicalCoreEcologyRegionalResidentPatchForRoot,
   createCoreEcologyRegionalResidentPatchForRoot,
 } from "./regionalEcologyResidents";
+import type { RegionalEcologyResidentPatch } from "./regionalEcologyRuntime";
 import {
   CORE_ECOLOGY_DOMESTIC_SPECIES,
   coreEcologyRegionalHabitatCacheDiagnostics,
@@ -6804,11 +6810,10 @@ function runtimeCoreAlarmEvents(
  * recover a sound that optional expression admission did not retain without
  * persisting a second acoustic queue.
  */
-function runtimeFreshCoreWildlifePursuitExpressionAuthorities(
+function runtimePendingCoreWildlifePursuitExpressionAuthorities(
   state: CoreEcologyAggregatePatchState,
 ): readonly CoreWildlifePursuitExpressionInput[] {
   return Object.freeze(state.populations.flatMap(({ members }) => members.flatMap((member) => {
-    if (member.materialization !== "materialized") return [];
     const actor = member.actor;
     const resource = actor.intent.resourceReference;
     if (
@@ -6832,7 +6837,7 @@ function runtimeFreshCoreWildlifePursuitExpressionAuthorities(
       sourceObservationId: actor.intent.focusObservationId,
       targetActorId: resource.resourceId,
       acceptedAtTick: state.updatedAtTick,
-    });
+    }, "retained");
     return authority === null ? [] : [authority];
   })).sort((left, right) => compareText(
     left.event.eventId,
@@ -7004,6 +7009,7 @@ function runtimeCoreWildlifePursuitExpressionAuthority(
     targetActorId: string;
     acceptedAtTick: number;
   }>,
+  representation: "fresh" | "retained" = "fresh",
 ): CoreWildlifePursuitExpressionInput | null {
   const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
   if (
@@ -7036,7 +7042,10 @@ function runtimeCoreWildlifePursuitExpressionAuthority(
     position: actor.address.position,
   });
   const authority = Object.freeze({ actor, event, world: patch });
-  return coreWildlifePursuitExpressionIntent(authority) === null
+  const valid = representation === "fresh"
+    ? coreWildlifePursuitExpressionIntent(authority) !== null
+    : retainedCoreWildlifePursuitExpressionEventForTrigger(authority, input.triggerEventId) !== null;
+  return !valid
     ? null
     : authority;
 }
@@ -7064,7 +7073,12 @@ function coreWildlifeAlarmExpressionEventForAdmission(
   admission: RuntimeCoreWildlifeAlarmAdmission,
   authority: CoreWildlifeAlarmExpressionInput,
   triggerEventId: string,
+  representation: "fresh" | "retained" = "fresh",
 ): SituatedExpressionEvent | null {
+  if (representation === "retained") {
+    return retainedCoreWildlifeAlarmExpressionEventForTrigger(authority, triggerEventId,
+      admission.kind === "core-wildlife-fish-crow-alarm" ? "legacy-fish-crow" : "current");
+  }
   return admission.kind === "core-wildlife-fish-crow-alarm"
     ? fishCrowAlarmExpressionEventForTrigger(authority, triggerEventId)
     : coreWildlifeAlarmExpressionEventForTrigger(authority, triggerEventId);
@@ -7074,7 +7088,12 @@ function coreWildlifeAlarmExpressionMatchesAdmission(
   admission: RuntimeCoreWildlifeAlarmAdmission,
   authority: CoreWildlifeAlarmExpressionInput,
   event: SituatedExpressionEvent,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
+  if (representation === "retained") {
+    return retainedCoreWildlifeAlarmExpressionEventMatchesWorld(authority, event,
+      admission.kind === "core-wildlife-fish-crow-alarm" ? "legacy-fish-crow" : "current");
+  }
   return admission.kind === "core-wildlife-fish-crow-alarm"
     ? fishCrowAlarmExpressionEventMatchesWorld(authority, event)
     : coreWildlifeAlarmExpressionEventMatchesWorld(authority, event);
@@ -7084,7 +7103,12 @@ function coreWildlifeAlarmMemoryMatchesAdmission(
   admission: RuntimeCoreWildlifeAlarmAdmission,
   authority: CoreWildlifeAlarmExpressionInput,
   memory: SituatedExpressionMemory,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
+  if (representation === "retained") {
+    return retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(authority, memory,
+      admission.kind === "core-wildlife-fish-crow-alarm" ? "legacy-fish-crow" : "current");
+  }
   return admission.kind === "core-wildlife-fish-crow-alarm"
     ? fishCrowAlarmExpressionMemoryMatchesWorld(authority, memory)
     : coreWildlifeAlarmExpressionMemoryMatchesWorld(authority, memory);
@@ -7341,6 +7365,24 @@ function runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
       });
 }
 
+/** Original alarm locus/cause survives storage dematerialization, not stale clocks. */
+function runtimeRetainedCoreWildlifeAlarmExpressionAuthority(
+  sources: readonly RegionalEcologyResidentPatch[],
+  admission: RuntimeCoreWildlifeAlarmAdmission,
+): CoreWildlifeAlarmExpressionInput | null {
+  const matching = sources.filter(({ sourceKey }) => sourceKey === admission.sourceOwnerKey);
+  const source = matching[0];
+  return matching.length !== 1 || source === undefined
+    ? null
+    : runtimeCoreWildlifeAlarmExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        acceptedAtTick: admission.acceptedAtTick,
+        sourceSpecies: coreWildlifeAlarmAdmissionSpecies(admission),
+      });
+}
+
 function runtimeRegionalCoreWildlifePursuitExpressionAuthority(
   projection: RegionalEcologyStateV6ActiveProjection,
   admission: RuntimeCoreWildlifePursuitAdmission,
@@ -7360,6 +7402,51 @@ function runtimeRegionalCoreWildlifePursuitExpressionAuthority(
       });
 }
 
+/** Same-T committed sound custody is independent of the current body-detail view. */
+function runtimeRetainedCoreWildlifePursuitExpressionAuthority(
+  sources: readonly RegionalEcologyResidentPatch[],
+  admission: RuntimeCoreWildlifePursuitAdmission,
+): CoreWildlifePursuitExpressionInput | null {
+  const matching = sources.filter(({ sourceKey }) => sourceKey === admission.sourceOwnerKey);
+  const source = matching[0];
+  return matching.length !== 1 || source === undefined
+    ? null
+    : runtimeCoreWildlifePursuitExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        targetActorId: admission.targetActorId,
+        acceptedAtTick: admission.acceptedAtTick,
+      }, "retained");
+}
+
+/** Stored sound custody cannot substitute for the actual projected source body. */
+function runtimeRegionalWildlifeCallSourceBodyAtLocus(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: RuntimeCoreWildlifeAlarmAdmission | RuntimeCoreWildlifePursuitAdmission,
+  event: SituatedExpressionEvent,
+): boolean {
+  if (projection.atTick !== admission.acceptedAtTick) return false;
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  const source = sources[0];
+  if (sources.length !== 1 || source === undefined
+    || source.patch.updatedAtTick !== admission.acceptedAtTick) return false;
+  const members = source.patch.populations.flatMap(({ members }) => members).filter(
+    ({ actor }) => actor.identity.stableId === admission.sourceActorId,
+  );
+  const member = members[0];
+  const species = admission.kind === "core-wildlife-pursuit-call"
+    ? "marsh-fox" : coreWildlifeAlarmAdmissionSpecies(admission);
+  return members.length === 1 && member !== undefined
+    && member.materialization === "materialized"
+    && member.actor.identity.species === species
+    && member.actor.address.species === species
+    && member.actor.updatedAtTick === admission.acceptedAtTick
+    && sameRuntimeWorldPosition(member.actor.address.position, event.position);
+}
+
 /**
  * Detailed materialization is optional for a retained call's terrain
  * enrichment, not for the already committed sound. A window exchange may
@@ -7368,7 +7455,11 @@ function runtimeRegionalCoreWildlifePursuitExpressionAuthority(
  */
 function runtimeRegionalWildlifeCallHasDetailedCause(
   projection: RegionalEcologyStateV6ActiveProjection,
-  admission: RuntimeCoreWildlifeWeatherDistressAdmission | RuntimeCoreWildlifePursuitAdmission,
+  admission:
+    | Pick<RuntimeCoreWildlifeWeatherDistressAdmission,
+        "kind" | "sourceOwnerKey" | "sourceActorId" | "acceptedAtTick" | "admittedAtPlayerStepPhase">
+    | Pick<RuntimeCoreWildlifePursuitAdmission,
+        "kind" | "sourceOwnerKey" | "sourceActorId" | "acceptedAtTick" | "admittedAtPlayerStepPhase" | "targetActorId">,
   completedTick: number,
 ): boolean {
   if (projection.atTick !== completedTick
@@ -14370,13 +14461,18 @@ export async function createTideweftRuntime(
           priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample,
           surfaceSupported: acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" }];
       });
-      const pendingFoxPursuits = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
-        runtimeFreshCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({
-          authority,
-          sourceKey,
-        }))
-      )).filter(({ authority }) => (
-        localMaterializedCoreActorIdSet.has(authority.actor.identity.stableId)
+      // Stored same-T causes survive view-only dematerialization. Use only the
+      // bounded active custody set, never the all-stored sparse history scan.
+      const retainedEcologySources = regionalEcologyStateV6ActiveSourcePatches(regionalEcology);
+      if (retainedEcologySources === null) {
+        throw new Error("Pending fox sound lost its bounded ecology custody");
+      }
+      const pendingFoxPursuits = retainedEcologySources.flatMap(({ sourceKey, patch }) => (
+        patch.updatedAtTick !== world.meta.completedTick ? []
+          : runtimePendingCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({
+              authority,
+              sourceKey,
+            }))
       )).sort((left, right) => (
         compareText(left.authority.event.eventId, right.authority.event.eventId)
         || compareText(left.sourceKey, right.sourceKey)
@@ -14385,7 +14481,7 @@ export async function createTideweftRuntime(
         authority,
         sourceKey,
       }) => {
-        const expression = coreWildlifePursuitExpressionEventForTrigger(
+        const expression = retainedCoreWildlifePursuitExpressionEventForTrigger(
           authority,
           authority.event.eventId,
         );
@@ -14418,11 +14514,44 @@ export async function createTideweftRuntime(
         if (sample === null) {
           throw new Error("Fox pursuit could not enter shared physical hearing");
         }
+        const resource = authority.event.resourceReference;
+        const observationId = authority.event.observationId;
+        if (resource === null || observationId === null) {
+          throw new Error("Pending fox sound lost its authenticated prey evidence");
+        }
+        const hasDetailedCause = runtimeRegionalWildlifeCallHasDetailedCause(
+          regionalEcologyProjectionForStep,
+          {
+            kind: "core-wildlife-pursuit-call",
+            sourceOwnerKey: sourceKey,
+            sourceActorId: authority.actor.identity.stableId,
+            targetActorId: resource.resourceId,
+            acceptedAtTick: authority.event.atTick,
+            admittedAtPlayerStepPhase: 0,
+          },
+          world.meta.completedTick,
+        );
+        if (hasDetailedCause) {
+          const detailedSource = projectedEcologySources.find((source) => source.sourceKey === sourceKey);
+          const detailedAuthority = detailedSource === undefined ? null
+            : runtimeCoreWildlifePursuitExpressionAuthority(detailedSource.patch, {
+            actorId: authority.actor.identity.stableId,
+            triggerEventId: authority.event.eventId,
+            sourceObservationId: observationId,
+            targetActorId: resource.resourceId,
+            acceptedAtTick: authority.event.atTick,
+          });
+          if (detailedAuthority === null
+            || !coreWildlifePursuitExpressionEventMatchesWorld(detailedAuthority, expression)) {
+            throw new Error("Pending fox sound contradicts its available detailed cause");
+          }
+        }
         return [{
           eventId: authority.event.eventId,
           priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
           sample,
-          surfaceSupported: acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface",
+          surfaceSupported: hasDetailedCause
+            && acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface",
         }];
       });
       const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
@@ -21545,6 +21674,8 @@ function playerPerceptionCarryMatchesPosition(
     },
   );
   if (regionalProjection === null) return false;
+  const retainedEcologySources = regionalEcologyStateV6ActiveSourcePatches(regionalEcology);
+  if (retainedEcologySources === null) return false;
   const physicalContactMatches = carry.animalContactAcousticCarry.records.every(
     ({ beforePosition, event }) => {
       const sources = runtimeDogActors(bio0, dogRoster).filter(({ identity }) => (
@@ -21613,6 +21744,7 @@ function playerPerceptionCarryMatchesPosition(
     settlement,
     workingAnimals,
     regionalProjection,
+    retainedEcologySources,
   );
   const currentPlayerAdmissions = carry.situatedExpressionAdmissions.records.filter(
     (admission) => admission.kind === "player-traversal"
@@ -21761,8 +21893,8 @@ function playerPerceptionCarryMatchesPosition(
       admission.kind === "core-wildlife-fish-crow-alarm"
       || admission.kind === "core-wildlife-alarm"
     ) {
-      const authority = runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
-        regionalProjection,
+      const authority = runtimeRetainedCoreWildlifeAlarmExpressionAuthority(
+        retainedEcologySources,
         admission,
       );
       const event = authority === null
@@ -21771,12 +21903,14 @@ function playerPerceptionCarryMatchesPosition(
             admission,
             authority,
             admission.triggerEventId,
+            "retained",
           );
       const admissionMatches = authority !== null
         && coreWildlifeAlarmAdmissionMatchesWorld(
           admission,
           authority,
           economy.completedTick,
+          "retained",
         );
       const sampleMatches = event !== null
         && vocalizationSampleMatchesActiveEvent(sample, event);
@@ -21791,7 +21925,7 @@ function playerPerceptionCarryMatchesPosition(
         spatialWorld,
         window: regionalTravel.window,
         playerTemplate: player,
-        authority,
+        sourceBodyAtCallLocus: runtimeRegionalWildlifeCallSourceBodyAtLocus(regionalProjection, admission, event),
         event,
         admission,
       });
@@ -21835,13 +21969,13 @@ function playerPerceptionCarryMatchesPosition(
       }) !== null;
     }
     if (admission.kind === "core-wildlife-pursuit-call") {
-      const authority = runtimeRegionalCoreWildlifePursuitExpressionAuthority(
-        regionalProjection,
+      const authority = runtimeRetainedCoreWildlifePursuitExpressionAuthority(
+        retainedEcologySources,
         admission,
       );
       const event = authority === null
         ? null
-        : coreWildlifePursuitExpressionEventForTrigger(
+        : retainedCoreWildlifePursuitExpressionEventForTrigger(
             authority,
             admission.triggerEventId,
           );
@@ -21861,6 +21995,7 @@ function playerPerceptionCarryMatchesPosition(
         window: regionalTravel.window,
         playerTemplate: player,
         authority,
+        sourceBodyAtCallLocus: runtimeRegionalWildlifeCallSourceBodyAtLocus(regionalProjection, admission, event),
         event,
         admission,
       }) !== null;
@@ -22002,6 +22137,7 @@ function situatedExpressionChannelsMatchWorld(
   settlement: SettlementEcologyState,
   workingAnimals: SettlementWorkingAnimalState,
   regionalProjection: RegionalEcologyStateV6ActiveProjection,
+  retainedEcologySources: readonly RegionalEcologyResidentPatch[],
 ): boolean {
   return bank.channels.every((channel) => {
     const active = channel.state.active;
@@ -22054,8 +22190,8 @@ function situatedExpressionChannelsMatchWorld(
         const admission = admissionFor(triggerEventId);
         return admission === null
           ? null
-          : runtimeRegionalCoreWildlifeAlarmExpressionAuthority(
-              regionalProjection,
+          : runtimeRetainedCoreWildlifeAlarmExpressionAuthority(
+              retainedEcologySources,
               admission,
             );
       };
@@ -22064,7 +22200,7 @@ function situatedExpressionChannelsMatchWorld(
         const admission = admissionFor(memory.triggerEventId);
         return authority !== null
           && admission !== null
-          && coreWildlifeAlarmMemoryMatchesAdmission(admission, authority, memory);
+          && coreWildlifeAlarmMemoryMatchesAdmission(admission, authority, memory, "retained");
       })) return false;
       if (active !== null) {
         const authority = authorityFor(active.triggerEventId);
@@ -22076,6 +22212,7 @@ function situatedExpressionChannelsMatchWorld(
             admission,
             authority,
             active,
+            "retained",
           )
         ) return false;
       }
@@ -22086,6 +22223,7 @@ function situatedExpressionChannelsMatchWorld(
             admission,
             authority,
             economy.completedTick,
+            "retained",
           )
           && (active?.eventId !== admission.eventId || (
             active !== null
@@ -22094,7 +22232,7 @@ function situatedExpressionChannelsMatchWorld(
               spatialWorld,
               window: regionalTravel.window,
               playerTemplate: player,
-              authority,
+              sourceBodyAtCallLocus: runtimeRegionalWildlifeCallSourceBodyAtLocus(regionalProjection, admission, active),
               event: active,
               admission,
               reception: channel.reception,
@@ -22192,8 +22330,8 @@ function situatedExpressionChannelsMatchWorld(
         const admission = admissionFor(triggerEventId);
         return admission === null
           ? null
-          : runtimeRegionalCoreWildlifePursuitExpressionAuthority(
-              regionalProjection,
+          : runtimeRetainedCoreWildlifePursuitExpressionAuthority(
+              retainedEcologySources,
               admission,
             );
       };
@@ -22202,7 +22340,7 @@ function situatedExpressionChannelsMatchWorld(
         const authority = authorityFor(memory.triggerEventId);
         return admission !== null
           && authority !== null
-          && coreWildlifePursuitExpressionMemoryMatchesWorld(authority, memory);
+          && retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(authority, memory);
       })) return false;
       if (active !== null) {
         const admission = admissionFor(active.triggerEventId);
@@ -22210,7 +22348,7 @@ function situatedExpressionChannelsMatchWorld(
         if (
           admission === null
           || authority === null
-          || !coreWildlifePursuitExpressionEventMatchesWorld(authority, active)
+          || !retainedCoreWildlifePursuitExpressionEventMatchesWorld(authority, active)
         ) return false;
       }
       return wildlifePursuitAdmissions.every((admission) => {
@@ -22229,6 +22367,7 @@ function situatedExpressionChannelsMatchWorld(
               window: regionalTravel.window,
               playerTemplate: player,
               authority,
+              sourceBodyAtCallLocus: runtimeRegionalWildlifeCallSourceBodyAtLocus(regionalProjection, admission, active),
               event: active,
               admission,
               reception: channel.reception,
@@ -23125,11 +23264,13 @@ function coreWildlifeAlarmAdmissionMatchesWorld(
   admission: CoreWildlifeAlarmAdmission,
   authority: CoreWildlifeAlarmExpressionInput,
   completedTick: number,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
   const event = coreWildlifeAlarmExpressionEventForAdmission(
     admission,
     authority,
     admission.triggerEventId,
+    representation,
   );
   return event !== null
     && admission.sourceActorId === authority.actor.identity.stableId
@@ -23309,12 +23450,12 @@ function coreWildlifePursuitAdmissionMatchesWorld(
   authority: CoreWildlifePursuitExpressionInput,
   completedTick: number,
 ): boolean {
-  const event = coreWildlifePursuitExpressionEventForTrigger(
+  const event = retainedCoreWildlifePursuitExpressionEventForTrigger(
     authority,
     admission.triggerEventId,
   );
   return event !== null
-    && coreWildlifePursuitExpressionEventMatchesWorld(authority, event)
+    && retainedCoreWildlifePursuitExpressionEventMatchesWorld(authority, event)
     && admission.sourceActorId === authority.actor.identity.stableId
     && admission.sourceActorId === authority.event.actorId
     && admission.triggerEventId === authority.event.eventId
@@ -23334,6 +23475,7 @@ interface CoreWildlifePursuitReceptionAuthorityInput {
   readonly window: RegionalPlayerTravelState["window"];
   readonly playerTemplate: PlayerState;
   readonly authority: CoreWildlifePursuitExpressionInput;
+  readonly sourceBodyAtCallLocus: boolean;
   readonly event: SituatedExpressionEvent;
   readonly admission: CoreWildlifePursuitAdmission;
   readonly reception: SituatedExpressionReception | null;
@@ -23357,6 +23499,7 @@ function coreWildlifePursuitReceptionAtEventTime(
     window,
     playerTemplate,
     authority,
+    sourceBodyAtCallLocus,
     event,
     admission,
   } = input;
@@ -23417,7 +23560,7 @@ function coreWildlifePursuitReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
-  const directlyVisible = isWildlifeWorldPositionDirectlyObserved(event.position, {
+  const directlyVisible = sourceBodyAtCallLocus && isWildlifeWorldPositionDirectlyObserved(event.position, {
     window: {
       origin: window.origin,
       terrain: {
@@ -23449,7 +23592,7 @@ interface CoreWildlifeAlarmReceptionAuthorityInput {
   readonly spatialWorld: WorldView;
   readonly window: RegionalPlayerTravelState["window"];
   readonly playerTemplate: PlayerState;
-  readonly authority: CoreWildlifeAlarmExpressionInput;
+  readonly sourceBodyAtCallLocus: boolean;
   readonly event: SituatedExpressionEvent;
   readonly admission: CoreWildlifeAlarmAdmission;
   readonly reception: SituatedExpressionReception | null;
@@ -23472,7 +23615,7 @@ function coreWildlifeAlarmReceptionAtEventTime(
     spatialWorld,
     window,
     playerTemplate,
-    authority,
+    sourceBodyAtCallLocus,
     event,
     admission,
   } = input;
@@ -23550,16 +23693,12 @@ function coreWildlifeAlarmReceptionAtEventTime(
     return Object.freeze({ audible: false, reception: null });
   }
   // A visible call locus alone does not authenticate a visible source body.
-  // Reuse the already-authenticated materialized source, matching live receipt
-  // classification; sound propagation remains at the committed event locus.
+  // Use the independently authenticated ACTIVE materialized source, not raw
+  // stored sound custody. Propagation remains at the committed event locus.
   // Visibility is replayed from the event-time pose. Strong calls may have
   // already woken the courier; a non-interrupting signal never does, so its
   // sleeping interval receives no player receipt before reaching this path.
-  const sourceAtCallLocus = sameRuntimeWorldPosition(
-    authority.actor.address.position,
-    event.position,
-  );
-  const directlyVisible = sourceAtCallLocus && isWildlifeWorldPositionDirectlyObserved(event.position, {
+  const directlyVisible = sourceBodyAtCallLocus && isWildlifeWorldPositionDirectlyObserved(event.position, {
     window: {
       origin: window.origin,
       terrain: {

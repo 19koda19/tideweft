@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ACTOR_PERCEPTION_SCALE,
   createActorObservation,
+  stepActorPerception,
 } from "../sim/actorPerception";
 import { createRegionCoord } from "../sim/regions";
 import { seedFromText } from "../sim/rng";
@@ -10,6 +11,7 @@ import {
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  setCoreEcologyAggregatePatchMaterializedActors,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
 } from "./coreEcology";
@@ -28,6 +30,9 @@ import {
   coreWildlifePursuitExpressionEventMatchesWorld,
   coreWildlifePursuitExpressionIntent,
   coreWildlifePursuitExpressionMemoryMatchesWorld,
+  retainedCoreWildlifePursuitExpressionEventForTrigger,
+  retainedCoreWildlifePursuitExpressionEventMatchesWorld,
+  retainedCoreWildlifePursuitExpressionMemoryMatchesWorld,
   type CoreWildlifePursuitExpressionInput,
 } from "./coreWildlifePursuitExpression";
 import {
@@ -35,6 +40,8 @@ import {
   createSituatedExpressionState,
   projectSituatedExpression,
   reduceSituatedExpression,
+  type SituatedExpressionEvent,
+  type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
   createWorldPosition,
@@ -174,6 +181,51 @@ function replaceMemories(
   });
 }
 
+function allCoarseInput(
+  input: CoreWildlifePursuitExpressionInput,
+): CoreWildlifePursuitExpressionInput {
+  const world = setCoreEcologyAggregatePatchMaterializedActors(input.world, {
+    atTick: input.world.updatedAtTick,
+    actorIds: [],
+  });
+  return Object.freeze({ ...input, actor: actorFor(world, "marsh-fox"), world });
+}
+
+function expressionFor(input: CoreWildlifePursuitExpressionInput) {
+  const intent = coreWildlifePursuitExpressionIntent(input);
+  if (intent === null) throw new Error("Pursuit-yip intent was not derived");
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  const memory = reduction.state?.recent[0];
+  if (!reduction.accepted || reduction.event === null || memory === undefined) {
+    throw new Error("Pursuit-yip expression was not accepted");
+  }
+  return { intent, event: reduction.event, memory, state: reduction.state };
+}
+
+function replaceOwnedActor(
+  input: CoreWildlifePursuitExpressionInput,
+  actorValue: unknown,
+): CoreWildlifePursuitExpressionInput {
+  const actor = canonicalizeCoreWildlifeActorState(actorValue);
+  if (actor === null) throw new Error("Retained-pursuit actor fixture was not canonical");
+  return Object.freeze({
+    actor,
+    event: input.event,
+    world: replaceCoreEcologyAggregatePatchActor(input.world, actor),
+  });
+}
+
+function expectRetainedRejection(
+  input: CoreWildlifePursuitExpressionInput,
+  event: SituatedExpressionEvent,
+  memory: SituatedExpressionMemory,
+): void {
+  expect(retainedCoreWildlifePursuitExpressionEventForTrigger(input, event.triggerEventId))
+    .toBeNull();
+  expect(retainedCoreWildlifePursuitExpressionEventMatchesWorld(input, event)).toBe(false);
+  expect(retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(input, memory)).toBe(false);
+}
+
 describe("core-wildlife pursuit expression", () => {
   it("derives one restrained yip from an exact newly entered marsh-fox pursuit", () => {
     const { input, rawEvent } = pursuitFixture();
@@ -242,6 +294,279 @@ describe("core-wildlife pursuit expression", () => {
       input,
       `${intent.triggerEventId}:forged`,
     )).toBeNull();
+  });
+
+  it("retains the exact same-tick committed yip and cooldown without authorizing a fresh coarse call", () => {
+    const { input } = pursuitFixture();
+    const expression = expressionFor(input);
+    const coarse = allCoarseInput(input);
+    const before = structuredClone(coarse);
+    const advanced = advanceSituatedExpression(expression.state, expression.intent.durationSteps);
+    const cooledMemory = advanced?.recent[0];
+    if (cooledMemory === undefined) throw new Error("Pursuit-yip cooldown was not retained");
+
+    expect(coarse.world.updatedAtTick).toBe(input.event.atTick);
+    expect(coarse.world.populations.flatMap(({ members }) => members)
+      .every(({ materialization }) => materialization === "coarse")).toBe(true);
+    expect(coarse.actor).toEqual(input.actor);
+    expect(actorFor(coarse.world, "marsh-rabbit")).toEqual(actorFor(input.world, "marsh-rabbit"));
+
+    for (const retainedInput of [input, coarse, structuredClone(coarse)]) {
+      expect(retainedCoreWildlifePursuitExpressionEventForTrigger(
+        retainedInput,
+        expression.event.triggerEventId,
+      )).toEqual(expression.event);
+      expect(retainedCoreWildlifePursuitExpressionEventMatchesWorld(
+        retainedInput,
+        expression.event,
+      )).toBe(true);
+      expect(retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(
+        retainedInput,
+        expression.memory,
+      )).toBe(true);
+      expect(retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(
+        retainedInput,
+        cooledMemory,
+      )).toBe(true);
+    }
+    expect(coreWildlifePursuitExpressionIntent(coarse)).toBeNull();
+    expect(coreWildlifePursuitExpressionEventForTrigger(coarse, expression.event.triggerEventId))
+      .toBeNull();
+    expect(coreWildlifePursuitExpressionEventMatchesWorld(coarse, expression.event)).toBe(false);
+    expect(coreWildlifePursuitExpressionMemoryMatchesWorld(coarse, expression.memory)).toBe(false);
+    expect(coreWildlifePursuitExpressionMemoryMatchesWorld(coarse, cooledMemory)).toBe(false);
+    expect(coarse).toEqual(before);
+  });
+
+  it("does not turn a legal next-tick coarse step into a fresh or retained pursuit", () => {
+    const { input } = pursuitFixture();
+    const expression = expressionFor(input);
+    const coarse = allCoarseInput(input);
+    const stepped = stepCoreEcologyAggregatePatch(coarse.world, {
+      tick: input.event.atTick + 1,
+      actorSteps: [],
+    });
+    if (stepped === null) throw new Error("All-coarse pursuit fixture did not step");
+    const nextInput = {
+      actor: actorFor(stepped.patch, "marsh-fox"),
+      event: input.event,
+      world: stepped.patch,
+    };
+
+    expect(stepped.events).toEqual([]);
+    expect(stepped.patch.updatedAtTick).toBe(input.event.atTick + 1);
+    expect(nextInput.actor.updatedAtTick).toBe(input.event.atTick + 1);
+    expect(nextInput.actor.intent.enteredAtTick).toBe(input.event.atTick);
+    expect(nextInput.actor.memories.some(({ eventId }) => eventId === input.event.eventId)).toBe(true);
+    expect(coreWildlifePursuitExpressionIntent(nextInput)).toBeNull();
+    expect(coreWildlifePursuitExpressionEventForTrigger(nextInput, expression.event.triggerEventId))
+      .toBeNull();
+    expect(coreWildlifePursuitExpressionEventMatchesWorld(nextInput, expression.event)).toBe(false);
+    expect(coreWildlifePursuitExpressionMemoryMatchesWorld(nextInput, expression.memory)).toBe(false);
+    expectRetainedRejection(nextInput, expression.event, expression.memory);
+  });
+
+  it("keeps retained authentication fail-closed on malformed ownership and forged causal tuples", () => {
+    const fixture = pursuitFixture();
+    const expression = expressionFor(fixture.input);
+    const coarse = allCoarseInput(fixture.input);
+    const other = pursuitFixture("OBS-retained-pursuit-other-cause");
+    const resource = coarse.event.resourceReference;
+    if (resource === null) throw new Error("Pursuit event omitted resource");
+    const forgedEvents: readonly unknown[] = [
+      { ...coarse.event, eventId: `${coarse.event.eventId}:forged` },
+      { ...coarse.event, actorId: `${coarse.event.actorId}:other` },
+      { ...coarse.event, atTick: coarse.event.atTick + 1 },
+      { ...coarse.event, causeReferenceId: "OBS-forged-retained-cause" },
+      { ...coarse.event, observationId: "OBS-forged-retained-cause" },
+      { ...coarse.event, position: translateWorldPosition(coarse.event.position, 1, 0) },
+      { ...coarse.event, species: "marsh-rabbit" },
+      { ...coarse.event, kind: "observe" },
+      { ...coarse.event, resourceReference: { ...resource, resourceId: `${resource.resourceId}:other` } },
+      { ...coarse.event, resourceReference: { ...resource, observedAvailableUnits: 2 } },
+      { ...coarse.event, debug: true },
+      fixture.rawEvent,
+      null,
+    ];
+    const invalidInputs: readonly unknown[] = [
+      null,
+      { ...coarse, debug: true },
+      { ...coarse, actor: null },
+      { ...coarse, world: null },
+      { ...coarse, world: fixture.initialWorld },
+      { ...coarse, actor: other.input.actor },
+      ...forgedEvents.map((event) => ({ ...coarse, event })),
+    ];
+    for (const invalidInput of invalidInputs) {
+      expectRetainedRejection(
+        invalidInput as CoreWildlifePursuitExpressionInput,
+        expression.event,
+        expression.memory,
+      );
+    }
+    expect(retainedCoreWildlifePursuitExpressionEventForTrigger(
+      coarse,
+      `${expression.event.triggerEventId}:forged`,
+    )).toBeNull();
+  });
+
+  it("still requires current identified living prey and the exact committed pursuit memory when coarse", () => {
+    const fixture = pursuitFixture();
+    const expression = expressionFor(fixture.input);
+    const coarse = allCoarseInput(fixture.input);
+    const resource = coarse.actor.intent.resourceReference;
+    if (resource === null) throw new Error("Pursuit fixture omitted target");
+    const missingPreyWorld = canonicalizeCoreEcologyAggregatePatch({
+      ...coarse.world,
+      populations: coarse.world.populations.filter(({ species }) => species !== "marsh-rabbit"),
+    });
+    if (missingPreyWorld === null) throw new Error("Missing-prey fixture was not canonical");
+    expectRetainedRejection({ ...coarse, world: missingPreyWorld }, expression.event, expression.memory);
+    expectRetainedRejection({
+      ...coarse,
+      world: {
+        ...coarse.world,
+        populations: coarse.world.populations.map((population) => ({
+          ...population,
+          members: population.members.map((member) => (
+            member.actor.identity.stableId === resource.resourceId
+              ? { ...member, actor: { ...member.actor, condition: { ...member.actor.condition, health: 0 } } }
+              : member
+          )),
+        })),
+      },
+    }, expression.event, expression.memory);
+
+    const beliefInputs = [
+      replaceOwnedActor(coarse, {
+        ...coarse.actor,
+        perception: { ...coarse.actor.perception, beliefs: [], attentionKeys: [] },
+      }),
+      replaceOwnedActor(coarse, {
+        ...coarse.actor,
+        perception: {
+          ...coarse.actor.perception,
+          beliefs: coarse.actor.perception.beliefs.map((belief) => ({
+            ...belief,
+            firstObservedTick: 0,
+            lastObservedTick: 0,
+          })),
+        },
+      }),
+      replaceOwnedActor(coarse, {
+        ...coarse.actor,
+        perception: {
+          ...coarse.actor.perception,
+          beliefs: coarse.actor.perception.beliefs.map((belief) => ({
+            ...belief,
+            perceivedClass: "wildlife",
+          })),
+        },
+      }),
+    ];
+    for (const subjectId of [null, coarse.actor.identity.stableId]) {
+      const observation = createActorObservation({
+        id: resource.observationId,
+        observerId: coarse.actor.identity.stableId,
+        observedAtTick: coarse.event.atTick,
+        channel: "vision",
+        perceivedClass: "live-prey",
+        subjectId,
+        area: { center: actorFor(coarse.world, "marsh-rabbit").address.position, radiusUnits: 0 },
+        confidence: ACTOR_PERCEPTION_SCALE,
+        salience: 900_000,
+        identification: subjectId === null ? "classified" : "identified",
+      });
+      if (observation === null) throw new Error("Retained-pursuit belief fixture was invalid");
+      const perception = stepActorPerception(actorFor(fixture.initialWorld, "marsh-fox").perception, {
+        tick: coarse.event.atTick,
+        observations: [observation],
+      });
+      if (perception === null) throw new Error("Retained-pursuit belief fixture did not step");
+      beliefInputs.push(replaceOwnedActor(coarse, { ...coarse.actor, perception }));
+    }
+    for (const beliefInput of beliefInputs) {
+      expectRetainedRejection(beliefInput, expression.event, expression.memory);
+    }
+
+    const committed = coarse.actor.memories.find(({ eventId }) => eventId === coarse.event.eventId);
+    if (committed === undefined) throw new Error("Pursuit fixture omitted committed memory");
+    const otherMemories = coarse.actor.memories.filter(({ eventId }) => eventId !== committed.eventId);
+    const forgedMemories: readonly CoreWildlifeMemory[] = [
+      { ...committed, kind: "food" },
+      { ...committed, referenceId: `${committed.referenceId}:other` },
+      { ...committed, observationId: "OBS-forged-retained-memory" },
+      { ...committed, atTick: committed.atTick - 1 },
+      { ...committed, eventId: `${committed.eventId}:other` },
+    ];
+    for (const memories of [otherMemories, ...forgedMemories.map((memory) => [...otherMemories, memory])]) {
+      expectRetainedRejection(replaceMemories(coarse, memories), expression.event, expression.memory);
+    }
+  });
+
+  it("authenticates every retained immutable expression field and reachable cooldown pair", () => {
+    const { input } = pursuitFixture();
+    const expression = expressionFor(input);
+    const coarse = allCoarseInput(input);
+    const event = expression.event;
+    const memory = expression.memory;
+    const forgedEvents: readonly unknown[] = [
+      { ...event, version: 0 },
+      { ...event, catalogVersion: 0 },
+      { ...event, eventId: `${event.eventId}:forged` },
+      { ...event, sourceActorId: `${event.sourceActorId}:other` },
+      { ...event, triggerEventId: `${event.triggerEventId}:other` },
+      { ...event, position: translateWorldPosition(event.position, 1, 0) },
+      { ...event, meaning: "marsh-rabbit-alarm-thump" },
+      { ...event, family: "warning" },
+      { ...event, tone: "alarmed" },
+      { ...event, volume: "murmur" },
+      { ...event, knowledgeBasis: "self-perceived-threat" },
+      { ...event, vocalization: "marsh-rabbit-alarm-thump" },
+      { ...event, priority: event.priority + 1 },
+      { ...event, salience: event.salience - 1 },
+      { ...event, variantSeed: (event.variantSeed ^ 1) >>> 0 },
+      { ...event, realizationKey: `${event.realizationKey}:forged` },
+      { ...event, durationSteps: event.durationSteps + 1 },
+      { ...event, remainingSteps: event.durationSteps + 1 },
+      { ...event, audioAcknowledged: "yes" },
+      { ...event, debug: true },
+      null,
+    ];
+    for (const forgedEvent of forgedEvents) {
+      expect(retainedCoreWildlifePursuitExpressionEventMatchesWorld(
+        coarse,
+        forgedEvent as SituatedExpressionEvent,
+      )).toBe(false);
+    }
+    expect(retainedCoreWildlifePursuitExpressionEventMatchesWorld(coarse, {
+      ...event,
+      remainingSteps: event.remainingSteps - 1,
+      audioAcknowledged: true,
+    })).toBe(true);
+
+    const forgedCooldowns: readonly unknown[] = [
+      { ...memory, sourceActorId: `${memory.sourceActorId}:other` },
+      { ...memory, triggerEventId: `${memory.triggerEventId}:other` },
+      { ...memory, meaning: "marsh-rabbit-alarm-thump" },
+      { ...memory, family: "warning" },
+      { ...memory, priority: memory.priority + 1 },
+      { ...memory, meaningCooldownRemainingSteps: memory.meaningCooldownRemainingSteps + 1 },
+      { ...memory, familyCooldownRemainingSteps: memory.familyCooldownRemainingSteps + 1 },
+      { ...memory, meaningCooldownRemainingSteps: memory.meaningCooldownRemainingSteps - 1 },
+      { ...memory, familyCooldownRemainingSteps: memory.familyCooldownRemainingSteps - 1 },
+      { ...memory, meaningCooldownRemainingSteps: 0, familyCooldownRemainingSteps: 1 },
+      { ...memory, meaningCooldownRemainingSteps: 0, familyCooldownRemainingSteps: 0 },
+      { ...memory, meaningCooldownRemainingSteps: -1 },
+      { ...memory, debug: true },
+      null,
+    ];
+    for (const forgedCooldown of forgedCooldowns) {
+      expect(retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(
+        coarse,
+        forgedCooldown as SituatedExpressionMemory,
+      )).toBe(false);
+    }
   });
 
   it("keeps prey identity and the causal observation out of expression output", () => {

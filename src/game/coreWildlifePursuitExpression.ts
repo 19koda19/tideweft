@@ -53,7 +53,12 @@ interface CoreWildlifePursuitEvidence {
 export function coreWildlifePursuitExpressionIntent(
   inputValue: CoreWildlifePursuitExpressionInput,
 ): SituatedExpressionIntent | null {
-  const evidence = coreWildlifePursuitEvidence(inputValue);
+  return pursuitIntentFromEvidence(coreWildlifePursuitEvidence(inputValue, "fresh"));
+}
+
+function pursuitIntentFromEvidence(
+  evidence: CoreWildlifePursuitEvidence | null,
+): SituatedExpressionIntent | null {
   if (evidence === null) return null;
   const { actor, belief, event } = evidence;
   const variantSeed = Number.parseInt(hashCanonical({
@@ -92,10 +97,39 @@ export function coreWildlifePursuitExpressionEventMatchesWorld(
   input: CoreWildlifePursuitExpressionInput,
   expression: SituatedExpressionEvent,
 ): boolean {
+  return pursuitExpressionEventMatchesWorld(input, expression, "fresh");
+}
+
+/**
+ * Re-derive an already committed same-tick sound from durable ecology custody.
+ * Storage/view dematerialization does not erase its exact onset, belief, prey,
+ * memory or body locus. This is not a fresh expression-admission interface.
+ */
+export function retainedCoreWildlifePursuitExpressionEventForTrigger(
+  input: CoreWildlifePursuitExpressionInput,
+  triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return deriveCoreWildlifePursuitExpression(input, triggerEventId, "retained")?.event ?? null;
+}
+
+/** Authenticate retained immutable sound fields without inventing body detail. */
+export function retainedCoreWildlifePursuitExpressionEventMatchesWorld(
+  input: CoreWildlifePursuitExpressionInput,
+  expression: SituatedExpressionEvent,
+): boolean {
+  return pursuitExpressionEventMatchesWorld(input, expression, "retained");
+}
+
+function pursuitExpressionEventMatchesWorld(
+  input: CoreWildlifePursuitExpressionInput,
+  expression: SituatedExpressionEvent,
+  representation: "fresh" | "retained",
+): boolean {
   if (projectSituatedExpression(expression) === null) return false;
   const derived = deriveCoreWildlifePursuitExpression(
     input,
     expression.triggerEventId,
+    representation,
   );
   return derived !== null
     && stableStringify(immutableExpressionFields(expression))
@@ -106,6 +140,22 @@ export function coreWildlifePursuitExpressionEventMatchesWorld(
 export function coreWildlifePursuitExpressionMemoryMatchesWorld(
   input: CoreWildlifePursuitExpressionInput,
   memory: SituatedExpressionMemory,
+): boolean {
+  return pursuitExpressionMemoryMatchesWorld(input, memory, "fresh");
+}
+
+/** Authenticate only the reachable cooldown of the same retained onset. */
+export function retainedCoreWildlifePursuitExpressionMemoryMatchesWorld(
+  input: CoreWildlifePursuitExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  return pursuitExpressionMemoryMatchesWorld(input, memory, "retained");
+}
+
+function pursuitExpressionMemoryMatchesWorld(
+  input: CoreWildlifePursuitExpressionInput,
+  memory: SituatedExpressionMemory,
+  representation: "fresh" | "retained",
 ): boolean {
   const canonicalState = canonicalizeSituatedExpressionState({
     version: SITUATED_EXPRESSION_VERSION,
@@ -118,6 +168,7 @@ export function coreWildlifePursuitExpressionMemoryMatchesWorld(
   const derived = deriveCoreWildlifePursuitExpression(
     input,
     canonicalMemory.triggerEventId,
+    representation,
   );
   if (derived === null) return false;
   if (
@@ -144,11 +195,12 @@ export function coreWildlifePursuitExpressionMemoryMatchesWorld(
 function deriveCoreWildlifePursuitExpression(
   input: CoreWildlifePursuitExpressionInput,
   triggerEventId: string,
+  representation: "fresh" | "retained" = "fresh",
 ): Readonly<{
   event: SituatedExpressionEvent;
   memory: SituatedExpressionMemory;
 }> | null {
-  const intent = coreWildlifePursuitExpressionIntent(input);
+  const intent = pursuitIntentFromEvidence(coreWildlifePursuitEvidence(input, representation));
   if (intent === null || intent.triggerEventId !== triggerEventId) return null;
   const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
   const memory = reduction.state?.recent[0];
@@ -158,6 +210,7 @@ function deriveCoreWildlifePursuitExpression(
 
 function coreWildlifePursuitEvidence(
   inputValue: CoreWildlifePursuitExpressionInput,
+  representation: "fresh" | "retained",
 ): CoreWildlifePursuitEvidence | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["actor", "event", "world"])) return null;
@@ -177,7 +230,7 @@ function coreWildlifePursuitEvidence(
   if (
     ownedMembers.length !== 1
     || owned === undefined
-    || owned.materialization !== "materialized"
+    || (representation === "fresh" && owned.materialization !== "materialized")
     || stableStringify(owned.actor) !== stableStringify(actor)
   ) return null;
 
@@ -209,7 +262,7 @@ function coreWildlifePursuitEvidence(
   if (
     targetMembers.length !== 1
     || target === undefined
-    || target.materialization !== "materialized"
+    || (representation === "fresh" && target.materialization !== "materialized")
     || target.actor.condition.health <= 0
     || target.actor.identity.stableId === actor.identity.stableId
   ) return null;

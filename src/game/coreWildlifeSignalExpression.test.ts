@@ -13,6 +13,7 @@ import {
   deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
   serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -38,6 +39,9 @@ import {
   marshRabbitAlarmExpressionEventMatchesWorld,
   marshRabbitAlarmExpressionIntent,
   marshRabbitAlarmExpressionMemoryMatchesWorld,
+  retainedCoreWildlifeAlarmExpressionEventForTrigger,
+  retainedCoreWildlifeAlarmExpressionEventMatchesWorld,
+  retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld,
   type CoreWildlifeAlarmExpressionInput,
 } from "./coreWildlifeSignalExpression";
 import {
@@ -52,6 +56,8 @@ import {
   createSituatedExpressionState,
   projectSituatedExpression,
   reduceSituatedExpression,
+  type SituatedExpressionEvent,
+  type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
   createWorldPosition,
@@ -195,7 +201,226 @@ function sourceActor(world: CoreEcologyAggregatePatchState): CoreWildlifeActorSt
   return actor;
 }
 
+type RetainedAlarmSemantics = "current" | "legacy-fish-crow";
+
+function allCoarseAlarmInput(
+  input: CoreWildlifeAlarmExpressionInput,
+): CoreWildlifeAlarmExpressionInput {
+  const world = setCoreEcologyAggregatePatchMaterializedActors(input.world, {
+    atTick: input.world.updatedAtTick,
+    actorIds: [],
+  });
+  return Object.freeze({ ...input, actor: sourceActor(world), world });
+}
+
+function alarmExpressionFor(
+  input: CoreWildlifeAlarmExpressionInput,
+  semantics: RetainedAlarmSemantics = "current",
+) {
+  const intent = semantics === "legacy-fish-crow"
+    ? fishCrowAlarmExpressionIntent(input)
+    : coreWildlifeAlarmExpressionIntent(input);
+  if (intent === null) throw new Error("Alarm expression fixture did not authenticate");
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  const memory = reduction.state?.recent[0];
+  if (!reduction.accepted || reduction.event === null || reduction.state === null || memory === undefined) {
+    throw new Error("Alarm expression fixture was not accepted");
+  }
+  const cooledMemory = advanceSituatedExpression(reduction.state, intent.durationSteps)?.recent[0];
+  if (cooledMemory === undefined) throw new Error("Alarm cooldown fixture was not retained");
+  return { event: reduction.event, memory, cooledMemory };
+}
+
+function expectRetainedAlarmRejection(
+  input: CoreWildlifeAlarmExpressionInput,
+  event: SituatedExpressionEvent,
+  memory: SituatedExpressionMemory,
+  semantics: RetainedAlarmSemantics,
+): void {
+  expect(retainedCoreWildlifeAlarmExpressionEventForTrigger(input, event.triggerEventId, semantics))
+    .toBeNull();
+  expect(retainedCoreWildlifeAlarmExpressionEventMatchesWorld(input, event, semantics)).toBe(false);
+  expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(input, memory, semantics)).toBe(false);
+}
+
 describe("core-wildlife signal expression", () => {
+  it.each([
+    ["marsh-rabbit", "current"],
+    ["deer", "current"],
+    ["fish-crow", "current"],
+    ["fish-crow", "legacy-fish-crow"],
+  ] as const)("retains %s's exact committed event and cooldown under %s without fresh coarse admission", (species, semantics) => {
+    const { input } = alarmFixture(species);
+    const { event, memory, cooledMemory } = alarmExpressionFor(input, semantics);
+    const coarse = allCoarseAlarmInput(input);
+    const before = structuredClone(coarse);
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(serializeCoreEcologyAggregatePatch(coarse.world));
+    if (restoredWorld === null) throw new Error("Coarse alarm fixture failed roundtrip");
+    const restored = { ...coarse, actor: sourceActor(restoredWorld), world: restoredWorld };
+
+    expect(coarse.actor).toEqual(input.actor);
+    expect(coarse.world.updatedAtTick).toBe(input.event.atTick);
+    expect(coarse.world.populations.flatMap(({ members }) => members)
+      .every(({ materialization }) => materialization === "coarse")).toBe(true);
+    for (const retainedInput of [input, coarse, restored]) {
+      expect(retainedCoreWildlifeAlarmExpressionEventForTrigger(retainedInput, event.triggerEventId, semantics))
+        .toEqual(event);
+      expect(retainedCoreWildlifeAlarmExpressionEventMatchesWorld(retainedInput, event, semantics)).toBe(true);
+      expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(retainedInput, memory, semantics)).toBe(true);
+      expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(retainedInput, cooledMemory, semantics)).toBe(true);
+    }
+    expect(event.position).toEqual(input.event.position);
+    expect(coreWildlifeAlarmExpressionIntent(coarse)).toBeNull();
+    expect(coreWildlifeAlarmExpressionEventForTrigger(coarse, event.triggerEventId)).toBeNull();
+    expect(coreWildlifeAlarmExpressionEventMatchesWorld(coarse, event)).toBe(false);
+    expect(coreWildlifeAlarmExpressionMemoryMatchesWorld(coarse, cooledMemory)).toBe(false);
+    expect(fishCrowAlarmExpressionIntent(coarse)).toBeNull();
+    expect(fishCrowAlarmExpressionEventForTrigger(coarse, event.triggerEventId)).toBeNull();
+    expect(fishCrowAlarmExpressionEventMatchesWorld(coarse, event)).toBe(false);
+    expect(fishCrowAlarmExpressionMemoryMatchesWorld(coarse, cooledMemory)).toBe(false);
+
+    const stepped = stepCoreEcologyAggregatePatch(coarse.world, {
+      tick: input.event.atTick + 1,
+      actorSteps: [],
+    });
+    if (stepped === null) throw new Error("All-coarse alarm fixture did not step");
+    const later = { ...coarse, actor: sourceActor(stepped.patch), world: stepped.patch };
+    expect(stepped.events).toEqual([]);
+    expect(later.actor.updatedAtTick).toBe(input.event.atTick + 1);
+    expect(coreWildlifeAlarmExpressionIntent(later)).toBeNull();
+    expectRetainedAlarmRejection(later, event, cooledMemory, semantics);
+    expect(coarse).toEqual(before);
+  });
+
+  it("retains a rabbit's committed thump locus rather than its later same-tick body address", () => {
+    const { input } = alarmFixture("marsh-rabbit", RABBIT_PREDATOR_ID, RABBIT_OBSERVATION_ID);
+    const { event, cooledMemory } = alarmExpressionFor(input);
+    const actor = repositionCoreWildlifeActor(input.actor, {
+      atTick: input.event.atTick,
+      position: translateWorldPosition(input.actor.address.position, 500, 0),
+      heading: input.actor.address.heading,
+    });
+    const coarse = allCoarseAlarmInput({
+      ...input,
+      actor,
+      world: replaceCoreEcologyAggregatePatchActor(input.world, actor),
+    });
+    expect(coarse.actor.address.position).not.toEqual(event.position);
+    expect(retainedCoreWildlifeAlarmExpressionEventForTrigger(coarse, event.triggerEventId, "current"))
+      .toEqual(event);
+    expect(retainedCoreWildlifeAlarmExpressionEventMatchesWorld(coarse, event, "current")).toBe(true);
+    expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(coarse, cooledMemory, "current")).toBe(true);
+    expectRetainedAlarmRejection({
+      ...coarse,
+      event: { ...coarse.event, position: coarse.actor.address.position },
+    }, event, cooledMemory, "current");
+  });
+
+  it("keeps retained alarm ownership, cause, policy and committed memory fail-closed", () => {
+    const fixture = alarmFixture();
+    const { event, cooledMemory } = alarmExpressionFor(fixture.input);
+    const coarse = allCoarseAlarmInput(fixture.input);
+    const committed = coarse.actor.memories.find(({ eventId }) => eventId === coarse.event.eventId);
+    if (committed === undefined) throw new Error("Alarm fixture lost committed memory");
+    const { eventPosition: _eventPosition, ...withoutLocus } = committed;
+    const invalidInputs: readonly unknown[] = [
+      null,
+      { ...coarse, debug: true },
+      { ...coarse, actor: null },
+      { ...coarse, world: fixture.initialWorld },
+      { ...coarse, actor: alarmFixture("gull").input.actor },
+      { ...coarse, event: fixture.rawEvent },
+      ...[
+        { ...coarse.event, eventId: `${coarse.event.eventId}:forged` },
+        { ...coarse.event, atTick: coarse.event.atTick + 1 },
+        { ...coarse.event, causeReferenceId: "OBS-forged-retained-alarm" },
+        { ...coarse.event, observationId: "OBS-forged-retained-alarm" },
+        { ...coarse.event, position: translateWorldPosition(coarse.event.position, 1, 0) },
+        { ...coarse.event, species: "gull" },
+        { ...coarse.event, debug: true },
+      ].map((forgedEvent) => ({ ...coarse, event: forgedEvent })),
+    ];
+    const actorValues: readonly unknown[] = [
+      { ...coarse.actor, memories: [] },
+      ...[
+        withoutLocus,
+        { ...withoutLocus, kind: "threat" },
+        { ...committed, referenceId: `${committed.referenceId}:other` },
+        { ...committed, observationId: "OBS-forged-retained-alarm-memory" },
+        { ...committed, atTick: 0 },
+        { ...committed, eventPosition: translateWorldPosition(coarse.event.position, 1, 0) },
+      ].map((memory) => ({ ...coarse.actor, memories: [memory] })),
+      { ...coarse.actor, intent: { ...coarse.actor.intent, enteredAtTick: 0 } },
+      ...[
+        { perceivedClass: "wildlife" },
+        { confidence: 0, salience: 0 },
+        { firstObservedTick: 0, lastObservedTick: 0 },
+      ].map((change) => ({
+        ...coarse.actor,
+        perception: {
+          ...coarse.actor.perception,
+          beliefs: coarse.actor.perception.beliefs.map((belief) => ({ ...belief, ...change })),
+        },
+      })),
+    ];
+    for (const actorValue of actorValues) {
+      const actor = canonicalizeCoreWildlifeActorState(actorValue);
+      if (actor === null) throw new Error("Retained-alarm negative fixture was not canonical");
+      for (const semantics of ["current", "legacy-fish-crow"] as const) {
+        expectRetainedAlarmRejection({
+          ...coarse,
+          actor,
+          world: replaceCoreEcologyAggregatePatchActor(coarse.world, actor),
+        }, event, cooledMemory, semantics);
+      }
+    }
+    for (const invalidInput of invalidInputs) {
+      for (const semantics of ["current", "legacy-fish-crow"] as const) {
+        expectRetainedAlarmRejection(invalidInput as CoreWildlifeAlarmExpressionInput, event, cooledMemory, semantics);
+      }
+    }
+    for (const semantics of ["current", "legacy-fish-crow"] as const) {
+      expect(retainedCoreWildlifeAlarmExpressionEventForTrigger(coarse, `${event.triggerEventId}:other`, semantics))
+        .toBeNull();
+      for (const forgedEvent of [
+        { ...event, salience: event.salience - 1 },
+        { ...event, priority: event.priority + 1 },
+        { ...event, position: translateWorldPosition(event.position, 1, 0) },
+      ]) expect(retainedCoreWildlifeAlarmExpressionEventMatchesWorld(coarse, forgedEvent, semantics)).toBe(false);
+      for (const forgedMemory of [
+        { ...cooledMemory, priority: cooledMemory.priority + 1 },
+        { ...cooledMemory, sourceActorId: `${cooledMemory.sourceActorId}:other` },
+        { ...cooledMemory, meaningCooldownRemainingSteps: cooledMemory.meaningCooldownRemainingSteps - 1 },
+        { ...cooledMemory, meaningCooldownRemainingSteps: 0, familyCooldownRemainingSteps: 0 },
+      ]) expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(coarse, forgedMemory, semantics)).toBe(false);
+    }
+  });
+
+  it("requires explicit retained semantics and preserves the legacy identified aerial-predator fence", () => {
+    const broaderAlarms = [
+      alarmFixture("fish-crow", PREDATOR_ID, "OBS-classified-aerial-threat", "aerial-predator", {
+        identification: "classified", subjectId: null,
+      }),
+      alarmFixture("fish-crow", "ANONYMOUS-danger", "OBS-heard-crow-danger", "danger-sound", {
+        channel: "hearing", identification: "anonymous", radiusUnits: 3_000, subjectId: null,
+      }),
+      alarmFixture("fish-crow", "BEAR-crow-threat", "OBS-crow-sees-bear", "large-predator"),
+      alarmFixture("marsh-rabbit", RABBIT_PREDATOR_ID, RABBIT_OBSERVATION_ID),
+    ];
+    for (const { input } of broaderAlarms) {
+      const { event, cooledMemory } = alarmExpressionFor(input);
+      const coarse = allCoarseAlarmInput(input);
+      expect(retainedCoreWildlifeAlarmExpressionEventForTrigger(coarse, event.triggerEventId, "current"))
+        .toEqual(event);
+      expect(retainedCoreWildlifeAlarmExpressionEventMatchesWorld(coarse, event, "current")).toBe(true);
+      expect(retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(coarse, cooledMemory, "current")).toBe(true);
+      expectRetainedAlarmRejection(coarse, event, cooledMemory, "legacy-fish-crow");
+      for (const semantics of [undefined, null, "legacy", true]) {
+        expectRetainedAlarmRejection(coarse, event, cooledMemory, semantics as RetainedAlarmSemantics);
+      }
+    }
+  });
+
   it("authenticates one conserved goat-herd alarm without disclosing its threat", () => {
     // This is an ecology/Voice contract fixture, not a generated runtime encounter.
     const { input, initialWorld, rawEvent } = alarmFixture(

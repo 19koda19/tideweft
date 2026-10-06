@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import {
   actorCalloutViewport,
   layoutAcousticTextCallouts,
@@ -260,6 +260,7 @@ import * as situatedExpressionChannels from "./situatedExpressionChannelBank";
 import * as humanDangerWarnings from "./humanDangerWarningExpression";
 import * as expressionDiagnostics from "./situatedExpressionDiagnostics";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
+import { situatedExpressionEventIdForTrigger } from "./situatedExpression";
 import {
   deserializeSettlementDomesticAnimalRecoveryState,
 } from "./settlementDomesticAnimalRecovery";
@@ -7560,6 +7561,170 @@ describe("runtime core-ecology vertical slice", () => {
     } finally { runtime.destroy(); }
   }, 60_000);
 
+  it("keeps one real caption-refused fox call through a warm signed-window rebase without replay", async () => {
+    vi.resetModules();
+    const frames: Array<Readonly<{
+      targetTick: number;
+      samples: readonly PhysicalSoundSample[];
+      surfaceSoundSampleIds: readonly string[];
+      observations: readonly ActorObservation[];
+    }>> = [];
+    vi.doMock("./humanPerception", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./humanPerception")>();
+      return {
+        ...actual, HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES: 0,
+        collectExistingHumanObservations: (input: Parameters<typeof actual.collectExistingHumanObservations>[0]) => {
+          const batches = actual.collectExistingHumanObservations(input);
+          frames.push({
+            targetTick: input.targetTick, samples: structuredClone(input.physicalSoundSamples ?? []),
+            surfaceSoundSampleIds: [...(input.surfaceSoundSampleIds ?? [])],
+            observations: batches.flatMap(({ observations }) => observations),
+          });
+          return batches;
+        },
+      };
+    });
+    let runtime: TideweftRuntime | null = null;
+    let projectionSpy: MockInstance<typeof projectRegionalEcologyStateV6ActiveState> | null = null;
+    try {
+      const projectionModule = await import("./regionalEcologyStateV6");
+      projectionSpy = vi.spyOn(projectionModule, "projectRegionalEcologyStateV6ActiveState");
+      const runtimeModule = await import("./runtime");
+      const fixture = await createFoxEventBoundaryRuntime({
+        initialWestRebaseBoundary: true, createRuntime: runtimeModule.createTideweftRuntime,
+      });
+      runtime = fixture.runtime;
+      runtime.expressionDiagnostics!.setEnabled(true);
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const pending = requiredEnvelope(fixture.repository);
+      const tick = deserializeWorld(pending.world).meta.completedTick;
+      const fox = requiredCoreActor(requiredRegionalCoreOwner(pending, fixture.foxActorId), fixture.foxActorId);
+      const decisions = runtime.expressionDiagnostics!.getSnapshot({ sourceActorId: fixture.foxActorId }).records;
+      const refused = decisions.filter(({ reason, intent }) => reason === "sound-budget"
+        && intent.meaning === "marsh-fox-pursuit-yip");
+      expect(refused).toHaveLength(1);
+      const decision = refused[0]!;
+      expect(decision.completedTick).toBe(tick);
+      expect(decision.event).toBeNull();
+      expect(decision.admission).toBeNull();
+      expect(decision.intent).toMatchObject({ sourceActorId: fixture.foxActorId, position: fox.address.position, volume: "spoken" });
+      expect(fox.intent).toMatchObject({
+        kind: "pursue", enteredAtTick: tick,
+        resourceReference: { resourceId: fixture.rabbitActorId, foodClass: "live-prey", sourceKind: "living-actor" },
+      });
+      expect(fox.memories.filter(({ eventId }) => eventId === decision.intent.triggerEventId)).toEqual([
+        expect.objectContaining({ kind: "pursuit", referenceId: fixture.rabbitActorId, observationId: fox.intent.focusObservationId, atTick: tick }),
+      ]);
+      expect(pending.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(pending.perceptionCarry.situatedExpressionAdmissions.records).toEqual([]);
+      expect(pending.perceptionCarry.situatedExpressionChannels.channels).toEqual([]);
+      const expressionEventId = situatedExpressionEventIdForTrigger(fixture.foxActorId, decision.intent.triggerEventId);
+      if (expressionEventId === null) throw new Error("Actual refused pursuit lost its canonical event identity");
+      const eventHash = hashCanonical({ domain: "marsh-fox-pursuit-call:v1", eventId: expressionEventId, sourceActorId: fixture.foxActorId });
+      const acoustics = situatedExpressionAcoustics(decision.intent);
+      const originalSample: PhysicalSoundSample = {
+        id: `fpc-${eventHash}`, acousticEventId: `fox-pursuit-call:v1:${eventHash}`,
+        sourceId: fixture.foxActorId, position: decision.intent.position,
+        soundLoudness: acoustics.loudness, soundRangeUnits: acoustics.rangeUnits,
+        soundClass: "animal-call", soundInterrupt: "none",
+      };
+      const audioCount = soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip").length;
+      const rebased = await rebaseRealPendingFoxWest(fixture, projectionModule, projectionSpy);
+      expect(rebased.rebased.perceptionCarry.actorVocalizationSamples).toEqual([]);
+      expect(frames.some(({ samples }) => samples.some(({ id }) => id === originalSample.id))).toBe(false);
+      advancePlayerSteps(runtime, 10 - rebased.movementSteps);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      const receipts = frames.filter(({ samples }) => samples.some(({ id }) => id === originalSample.id));
+      expect(receipts).toHaveLength(1);
+      expect(receipts[0]!.targetTick).toBe(tick + 1);
+      expect(receipts[0]!.samples.filter(({ id }) => id === originalSample.id)).toEqual([originalSample]);
+      expect(receipts[0]!.surfaceSoundSampleIds).not.toContain(originalSample.id);
+      // This real edge source need not be heard. A lawful receipt reveals no
+      // prey, intent or source identity, and never becomes a positive-hearing claim.
+      expect(receipts[0]!.observations.filter(({ id }) => id.endsWith(`-${originalSample.id}`)).every((observation) => (
+        observation.channel === "hearing" && observation.perceivedClass === "animal-call"
+        && observation.identification === "anonymous" && observation.subjectId === null
+        && observation.interrupt === "none" && observation.area.radiusUnits > 0
+      ))).toBe(true);
+      advancePlayerSteps(runtime, 10);
+      expect(frames.filter(({ samples }) => samples.some(({ id }) => id === originalSample.id))).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toHaveLength(audioCount);
+    } finally {
+      runtime?.destroy(); scheduledFrame = undefined;
+      projectionSpy?.mockRestore();
+      vi.doUnmock("./humanPerception"); vi.resetModules();
+    }
+  }, 90_000);
+
+  it("restores one real admitted fox pending save after a signed-window rebase without replay", async () => {
+    const projectionModule = await import("./regionalEcologyStateV6");
+    const projectionSpy = vi.spyOn(projectionModule, "projectRegionalEcologyStateV6ActiveState");
+    const runtimeModule = await import("./runtime");
+    const humanModule = await import("./humanPerception");
+    const fixture = await createFoxEventBoundaryRuntime({
+      initialWestRebaseBoundary: true, createRuntime: runtimeModule.createTideweftRuntime,
+    });
+    let runtime = fixture.runtime;
+    try {
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      const rebased = await rebaseRealPendingFoxWest(fixture, projectionModule, projectionSpy);
+      const admission = rebased.pending.perceptionCarry.situatedExpressionAdmissions.records.find((record) => (
+        record.kind === "core-wildlife-pursuit-call" && record.sourceActorId === fixture.foxActorId
+      ));
+      if (admission?.kind !== "core-wildlife-pursuit-call") throw new Error("Actual rebased pursuit supplied no admitted call");
+      const sample = rebased.pending.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+      if (sample === undefined) throw new Error("Actual admitted pursuit lost its original sample");
+      const rabbitAdmission = rebased.pending.perceptionCarry.situatedExpressionAdmissions.records.find((record) => (
+        record.kind === "core-wildlife-alarm" && record.sourceActorId === fixture.rabbitActorId
+      ));
+      if (rabbitAdmission?.kind !== "core-wildlife-alarm") throw new Error("Actual rebased rabbit supplied no admitted alarm");
+      const rabbitSample = rebased.pending.perceptionCarry.actorVocalizationSamples[rabbitAdmission.sampleOrdinal];
+      if (rabbitSample === undefined) throw new Error("Actual admitted rabbit alarm lost its original sample");
+      const tick = deserializeWorld(rebased.pending.world).meta.completedTick;
+      expect(admission).toMatchObject({ sourceOwnerKey: rebased.sourceOwnerKey, targetActorId: fixture.rabbitActorId, acceptedAtTick: tick, admittedAtPlayerStepPhase: 0 });
+      expect(rebased.rebased.perceptionCarry.actorVocalizationSamples).toContainEqual(sample);
+      runtime.destroy(); scheduledFrame = undefined; soundscapePlay.mockClear();
+      const repository = new MemoryRepository(rebased.record);
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(repository.snapshot()).toEqual(rebased.record);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().title.hasSave).toBe(true);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await runtime.save();
+      const restored = requiredEnvelope(repository);
+      expect(restored.perceptionCarry).toEqual(rebased.rebased.perceptionCarry);
+      expect(restored.world).toBe(rebased.rebased.world);
+      expect(restored.regionalEcology).toBe(rebased.rebased.regionalEcology);
+      expect(requiredCoreActor(requiredRegionalCoreOwner(restored, fixture.foxActorId), fixture.foxActorId))
+        .toEqual(requiredCoreActor(requiredRegionalCoreOwner(rebased.rebased, fixture.foxActorId), fixture.foxActorId));
+      const perceptionSpy = vi.spyOn(humanModule, "collectExistingHumanObservations");
+      advancePlayerSteps(runtime, 10 - rebased.movementSteps);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      const frames = perceptionSpy.mock.calls.map(([input]) => input).filter(({ supplementalSoundSamples }) => (
+        supplementalSoundSamples?.some(({ id }) => id === sample.id)
+      ));
+      expect(frames).toHaveLength(1);
+      expect(frames[0]!.targetTick).toBe(tick + 1);
+      expect(frames[0]!.supplementalSoundSamples?.filter(({ id }) => id === sample.id)).toEqual([sample]);
+      expect(frames[0]!.surfaceSoundSampleIds).not.toContain(sample.id);
+      const rabbitFrames = perceptionSpy.mock.calls.filter(([input]) => (
+        input.supplementalSoundSamples?.some(({ id }) => id === rabbitSample.id)
+      ));
+      expect(rabbitFrames).toHaveLength(1);
+      expect(rabbitFrames[0]![0].targetTick).toBe(tick + 1);
+      expect(rabbitFrames[0]![0].supplementalSoundSamples?.filter(({ id }) => id === rabbitSample.id)).toEqual([rabbitSample]);
+      await runtime.save();
+      expect(requiredEnvelope(repository).perceptionCarry.actorVocalizationSamples.some(({ id }) => id === sample.id)).toBe(false);
+      advancePlayerSteps(runtime, 10);
+      expect(perceptionSpy.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id))).toHaveLength(1);
+      expect(perceptionSpy.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(({ id }) => id === rabbitSample.id))).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
+    } finally { runtime.destroy(); projectionSpy.mockRestore(); }
+  }, 90_000);
+
   it("keeps a lawful fox yip audible when optional expression capacity is saturated", async () => {
     vi.resetModules();
     const fallbackHumanObserverFrames: string[][] = [];
@@ -11422,6 +11587,88 @@ async function createFoxEventBoundaryRuntime(
     foxActorId: fox.identity.stableId,
     rabbitActorId: rabbit.identity.stableId,
   });
+}
+
+/** Move the existing pending fox/prey boundary through a real westward frame change. */
+async function rebaseRealPendingFoxWest(
+  fixture: Awaited<ReturnType<typeof createFoxEventBoundaryRuntime>>,
+  projectionModule: typeof import("./regionalEcologyStateV6"),
+  projectionSpy: MockInstance<typeof projectRegionalEcologyStateV6ActiveState>,
+) {
+  const { runtime, repository, foxActorId, rabbitActorId } = fixture;
+  await runtime.save();
+  const pending = requiredEnvelope(repository);
+  const world = deserializeWorld(pending.world);
+  const travel = restorePlayerRegionalTravel(world.meta.rootSeed, pending.player, pending.regionalTravel);
+  if (travel === null) throw new Error("Pending fox fixture lost its exact starting frame");
+  const sources = (projection: RegionalEcologyStateV6ActiveProjection) => [
+    ...projection.base.base.base.base.base.residents,
+    ...projection.base.base.base.base.alpineResidents,
+    ...projection.base.base.base.polarShoreResidents,
+    ...projection.base.base.coldShoreResidents,
+    ...projection.base.polarConsumerResidents,
+    ...projection.breadthResidents,
+  ];
+  const before = projectionModule.projectRegionalEcologyStateV6ActiveState(requiredRegionalEcologyV6(pending), {
+    origin: travel.window.origin, terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+  });
+  if (before === null) throw new Error("Pending fox fixture lost its actual starting projection");
+  const owners = sources(before).filter(({ patch }) => patch.populations.some(({ members }) => (
+    members.some(({ actor }) => actor.identity.stableId === foxActorId)
+  )));
+  expect(owners).toHaveLength(1);
+  const owner = owners[0]!;
+  const beforeSource = owner.patch.populations.flatMap(({ members }) => members)
+    .filter(({ actor }) => actor.identity.stableId === foxActorId);
+  const beforePrey = owner.patch.populations.flatMap(({ members }) => members)
+    .filter(({ actor }) => actor.identity.stableId === rabbitActorId);
+  expect(beforeSource).toHaveLength(1);
+  expect(beforeSource[0]?.materialization).toBe("materialized");
+  expect(beforePrey).toHaveLength(1);
+  expect(beforePrey[0]?.materialization).toBe("materialized");
+  const originBefore = travel.window.origin;
+  const expectedOriginAfter = { x: originBefore.x - REGIONAL_TRAVEL_SHIFT_TILES, y: originBefore.y };
+  const planned = projectionModule.projectRegionalEcologyStateV6ActiveState(requiredRegionalEcologyV6(pending), {
+    origin: expectedOriginAfter, terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+  });
+  if (planned === null) throw new Error("Pending fox fixture could not preflight its actual west frame");
+  expect(sources(planned).flatMap(({ patch }) => patch.populations.flatMap(({ members }) => members))
+    .some(({ actor, materialization }) => (
+      (actor.identity.stableId === foxActorId || actor.identity.stableId === rabbitActorId)
+      && materialization === "coarse"
+    ))).toBe(true);
+  expect(Math.floor(pending.player.x / WORLD_POSITION_UNITS_PER_TILE)).toBe(REGIONAL_TRAVEL_SAFE_MIN_X);
+  projectionSpy.mockClear();
+  runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+  let movementSteps = 0;
+  while (movementSteps < 9 && runtime.getRenderView().terrain.worldTileOrigin?.x === originBefore.x) {
+    advancePlayerSteps(runtime, 1);
+    movementSteps += 1;
+  }
+  runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+  expect(runtime.getRenderView().terrain.worldTileOrigin).toEqual(expectedOriginAfter);
+  expect(movementSteps).toBeGreaterThan(0);
+  expect(movementSteps).toBeLessThan(10);
+  expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+  const after = projectionSpy.mock.calls.flatMap(([, window], index) => {
+    const result = projectionSpy.mock.results[index];
+    return window.origin.x === expectedOriginAfter.x && window.origin.y === expectedOriginAfter.y
+      && result?.type === "return" && result.value !== null ? [result.value] : [];
+  }).at(-1);
+  if (after === undefined) throw new Error("Actual movement never projected the rebased fox ecology");
+  expect(after.atTick).toBe(world.meta.completedTick);
+  const afterOwner = sources(after).find(({ sourceKey }) => sourceKey === owner.sourceKey);
+  const afterMembers = afterOwner?.patch.populations.flatMap(({ members }) => members) ?? [];
+  const unavailable = afterOwner === undefined || afterMembers.some(({ actor, materialization }) => (
+    (actor.identity.stableId === foxActorId || actor.identity.stableId === rabbitActorId)
+    && materialization === "coarse"
+  ));
+  expect(unavailable).toBe(true);
+  await runtime.save();
+  const rebased = requiredEnvelope(repository);
+  expect(deserializeWorld(rebased.world).meta.completedTick).toBe(world.meta.completedTick);
+  expect(rebased.perceptionCarry.playerStepsSinceWorldTick).toBe(movementSteps);
+  return { pending, rebased, record: repository.snapshot(), movementSteps, sourceOwnerKey: owner.sourceKey };
 }
 
 function makeWorldShallowAndClear(world: ReturnType<typeof deserializeWorld>): void {

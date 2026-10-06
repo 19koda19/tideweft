@@ -379,9 +379,39 @@ carried from those same authenticated causes and intersected with the selected
 eight-slot hearing bank. Optional captions cannot change physical propagation
 or duplicate a receipt. Neither call discloses prey, intent or hidden identity;
 saved player reception, original audio and interruption policy remain unchanged.
-Pending cold-load authority still requires its existing reprojectable cause;
-mid-interval rebase restore and caption-refused rebase retention remain open
-Living Voice integration/persistence obligations, not proven by this enrichment.
+Marsh-fox pending retention authenticates the exact same-T committed onset from
+the already world-bound, bounded active ecology custody set, whose stored
+members are intentionally coarse. Its retained-only event/cooldown matcher
+permits that representation change but keeps exact owned actor, canonical
+event/body locus, new pursuit intent, identified current visual prey belief,
+live distinct prey, matching resource and unique pursuit memory. The fresh
+intent interface still requires both bodies materialized; coarse advancement
+cannot invent observations or a new pursuit onset. Current-save capture/restore
+and the admission-free next-interval physical fallback use this retained seam,
+not fake materialization, a second sound queue or a full sparse-history scan.
+Admission/sample acoustics, reachable cooldown and the player's original
+event-time reception still validate. Only the prepared detailed projection may
+independently ground the exact same sound; unavailable detail withholds support,
+while contradictory available detail fails closed. The existing eight-slot
+arbitration and same-T fence consume hearing once without another player cue.
+Co-occurring admitted core alarms use the same bounded durable-custody rule for
+pending sample/channel/save authentication. Their retained-only semantic owner
+still requires the trigger-eligible current belief, exact intent, unique alarm
+memory and its original event-owned locus; it never relocates that sound to a
+rematerialized body. Fresh alarm admission remains strict. The existing legacy
+fish-crow record kind keeps its identified visual aerial-predator fence, and an
+unknown semantic mode fails closed; this does not restore retired save formats.
+A real west-window fox/rabbit pair retains both pending carriers and their
+cooldowns through current reload, then consumes each once without player replay.
+Retained sound custody is not a visible-source proof. Alarm and fox receipt
+replay independently consult the already prepared ACTIVE projection: only its
+unique materialized source, matching owner/species/T and exact event locus,
+may combine with optical sight to identify the call. Missing, coarse or moved
+bodies cannot supply identity or an anchor. The original saved receipt must
+match that independent proof; it is never silently upgraded or downgraded.
+Domestic-cat pending cold-rebase restore and fox source departure into sparse
+custody remain separate unproven obligations; this does not certify general
+off-frame retention, ordinary travel or positive hearing of a distant edge call.
 
 Existing player traversal, parcel-recovery and dry-exhaustion reactions also
 derive surface support for independent human hearing. Each exact admitted
@@ -868,8 +898,9 @@ directional animal sound with no predator identity or hidden source position.
 The call uses the shared strong-alarm interruption rule and never restores the
 legacy direct player alarm cue beside the admitted sample.
 
-Alarm receipt replay uses that same authenticated V6 ACTIVE materialized source,
-not merely a serialized member address or visibility of an empty sound locus.
+Visible-source classification in alarm receipt replay uses the authenticated
+V6 ACTIVE materialized source, not merely a serialized member address or
+visibility of an empty sound locus.
 Hearing still propagates from the committed event position. Visible-source
 classification additionally requires the active body's exact position to equal
 that locus and the event-time listener's detail sight to admit it, just like
@@ -878,8 +909,8 @@ uncertainty. The real completed deer interval demonstrates an active projected
 body away from a directly visible retained locus; current47/carry14 roundtrip
 preserves its unseen receipt without replay. A structurally valid resealed
 visible-receipt forgery fails closed without overwriting the record. Source,
-event, memory, materialization, tick, sleep/interruption and masking validation
-remain; this adds no scan, reader, schema or event producer. Cat retreat's
+event, memory, visible-body materialization, tick, sleep/interruption and masking
+validation remain; this adds no scan, reader, schema or event producer. Cat retreat's
 existing bounded body/locus tolerance and pursuit's exact body rule are distinct
 and unchanged.
 

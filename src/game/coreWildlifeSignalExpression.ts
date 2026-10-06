@@ -215,8 +215,9 @@ function alarmExpressionIntent(
   inputValue: CoreWildlifeAlarmExpressionInput,
   expectedSpecies: ExpressiveAlarmSpecies | null,
   requireLegacyFishCrowEvidence: boolean,
+  representation: "fresh" | "retained" = "fresh",
 ): SituatedExpressionIntent | null {
-  const evidence = coreWildlifeAlarmEvidence(inputValue, expectedSpecies);
+  const evidence = coreWildlifeAlarmEvidence(inputValue, expectedSpecies, representation);
   if (evidence === null) return null;
   if (requireLegacyFishCrowEvidence && !isLegacyFishCrowAlarmEvidence(evidence)) return null;
   const { actor, event, profile } = evidence;
@@ -280,11 +281,24 @@ export function coreWildlifeAlarmExpressionEventMatchesWorld(
   return alarmExpressionEventMatchesWorld(input, expression, null, false);
 }
 
+/** Retained custody is not a fresh producer; legacy semantic fences remain explicit. */
+export function retainedCoreWildlifeAlarmExpressionEventMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  expression: SituatedExpressionEvent,
+  semantics: "current" | "legacy-fish-crow",
+): boolean {
+  if (semantics !== "current" && semantics !== "legacy-fish-crow") return false;
+  return alarmExpressionEventMatchesWorld(input, expression,
+    semantics === "legacy-fish-crow" ? "fish-crow" : null,
+    semantics === "legacy-fish-crow", "retained");
+}
+
 function alarmExpressionEventMatchesWorld(
   input: CoreWildlifeAlarmExpressionInput,
   expression: SituatedExpressionEvent,
   expectedSpecies: ExpressiveAlarmSpecies | null,
   requireLegacyFishCrowEvidence: boolean,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
   if (projectSituatedExpression(expression) === null) return false;
   const derived = deriveCoreWildlifeAlarmExpression(
@@ -292,6 +306,7 @@ function alarmExpressionEventMatchesWorld(
     expression.triggerEventId,
     expectedSpecies,
     requireLegacyFishCrowEvidence,
+    representation,
   );
   return derived !== null
     && stableStringify(immutableExpressionFields(expression))
@@ -330,11 +345,24 @@ export function coreWildlifeAlarmExpressionMemoryMatchesWorld(
   return alarmExpressionMemoryMatchesWorld(input, memory, null, false);
 }
 
+/** Authenticate the reachable cooldown of an exact same-T stored alarm. */
+export function retainedCoreWildlifeAlarmExpressionMemoryMatchesWorld(
+  input: CoreWildlifeAlarmExpressionInput,
+  memory: SituatedExpressionMemory,
+  semantics: "current" | "legacy-fish-crow",
+): boolean {
+  if (semantics !== "current" && semantics !== "legacy-fish-crow") return false;
+  return alarmExpressionMemoryMatchesWorld(input, memory,
+    semantics === "legacy-fish-crow" ? "fish-crow" : null,
+    semantics === "legacy-fish-crow", "retained");
+}
+
 function alarmExpressionMemoryMatchesWorld(
   input: CoreWildlifeAlarmExpressionInput,
   memory: SituatedExpressionMemory,
   expectedSpecies: ExpressiveAlarmSpecies | null,
   requireLegacyFishCrowEvidence: boolean,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
   const canonicalState = canonicalizeSituatedExpressionState({
     version: SITUATED_EXPRESSION_VERSION,
@@ -349,6 +377,7 @@ function alarmExpressionMemoryMatchesWorld(
     canonicalMemory.triggerEventId,
     expectedSpecies,
     requireLegacyFishCrowEvidence,
+    representation,
   );
   if (derived === null) return false;
   if (
@@ -409,11 +438,28 @@ export function coreWildlifeAlarmExpressionEventForTrigger(
   return deriveCoreWildlifeAlarmExpression(input, triggerEventId, null, false)?.event ?? null;
 }
 
+/**
+ * Recover only an already committed same-T alarm from normalized storage.
+ * Exact event-owned locus, trigger-eligible belief, intent and memory remain
+ * mandatory; current coarse representation does not create another alarm.
+ */
+export function retainedCoreWildlifeAlarmExpressionEventForTrigger(
+  input: CoreWildlifeAlarmExpressionInput,
+  triggerEventId: string,
+  semantics: "current" | "legacy-fish-crow",
+): SituatedExpressionEvent | null {
+  if (semantics !== "current" && semantics !== "legacy-fish-crow") return null;
+  return deriveCoreWildlifeAlarmExpression(input, triggerEventId,
+    semantics === "legacy-fish-crow" ? "fish-crow" : null,
+    semantics === "legacy-fish-crow", "retained")?.event ?? null;
+}
+
 function deriveCoreWildlifeAlarmExpression(
   input: CoreWildlifeAlarmExpressionInput,
   triggerEventId: string,
   expectedSpecies: ExpressiveAlarmSpecies | null,
   requireLegacyFishCrowEvidence: boolean,
+  representation: "fresh" | "retained" = "fresh",
 ): Readonly<{
   event: SituatedExpressionEvent;
   memory: SituatedExpressionMemory;
@@ -422,6 +468,7 @@ function deriveCoreWildlifeAlarmExpression(
     input,
     expectedSpecies,
     requireLegacyFishCrowEvidence,
+    representation,
   );
   if (intent === null || intent.triggerEventId !== triggerEventId) return null;
   const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
@@ -433,8 +480,9 @@ function deriveCoreWildlifeAlarmExpression(
 function coreWildlifeAlarmEvidence(
   inputValue: CoreWildlifeAlarmExpressionInput,
   expectedSpecies: ExpressiveAlarmSpecies | null,
+  representation: "fresh" | "retained",
 ): CoreWildlifeAlarmExpressionEvidence | null {
-  const evidence = authenticatedCoreWildlifeAlarmEvidence(inputValue);
+  const evidence = authenticatedCoreWildlifeAlarmEvidence(inputValue, representation);
   if (evidence === null) return null;
   const profile = expressiveAlarmProfile(evidence.actor.identity.species);
   if (
@@ -446,6 +494,7 @@ function coreWildlifeAlarmEvidence(
 
 function authenticatedCoreWildlifeAlarmEvidence(
   inputValue: CoreWildlifeAlarmExpressionInput,
+  representation: "fresh" | "retained",
 ): AuthenticatedCoreWildlifeAlarmEvidence | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["actor", "event", "world"])) return null;
@@ -461,7 +510,7 @@ function authenticatedCoreWildlifeAlarmEvidence(
   if (
     ownedMembers.length !== 1
     || owned === undefined
-    || owned.materialization !== "materialized"
+    || (representation === "fresh" && owned.materialization !== "materialized")
     || stableStringify(owned.actor) !== stableStringify(actor)
   ) return null;
 
