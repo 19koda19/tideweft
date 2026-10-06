@@ -156,8 +156,12 @@ import {
 import {
   canonicalizePlayerExpressionRecencyState,
   createPlayerExpressionRecencyState,
+  playerCargoRecencyAllowsExpression,
   playerFootingRecencyAllowsExpression,
+  recordAcceptedPlayerCargoExpression,
   recordAcceptedPlayerFootingExpression,
+  upgradePlayerExpressionRecencyV1,
+  type PlayerCargoRecencyReceipt,
   type PlayerExpressionRecencyState,
   type PlayerFootingRecencyReceipt,
 } from "./playerExpressionRecency";
@@ -240,6 +244,7 @@ import {
 import { playerEffortExpressionIntent } from "./playerEffortExpression";
 import {
   playerExpressionAdmissionSoundPolicy,
+  playerCargoExpressionAdmissionPolicy,
   playerExpressionEventMatchesAdmission,
   playerExpressionMemoryMatchesAdmission,
   type PlayerExpressionAuthority,
@@ -14188,43 +14193,51 @@ export async function createTideweftRuntime(
         })
       );
       const footingIntent = traversalExpressionIntent?.family === "footing";
+      const cargoIntent = traversalExpressionIntent?.family === "cargo";
       const choiceClock = {
         completedTick: world.meta.completedTick
           + (playerStepStateSample.sampleOrdinal === 9 ? 1 : 0),
         playerStepPhase: (playerStepStateSample.sampleOrdinal + 1) % PLAYER_STEPS_PER_WORLD_TICK,
       };
-      const footingBudgetAvailable = actorVocalizationSamples.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+      const choiceBudgetAvailable = actorVocalizationSamples.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
         && situatedExpressionAdmissions.records.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES;
-      const footingAllowed = !footingIntent ? true : !footingBudgetAvailable ? false : playerFootingRecencyAllowsExpression(
+      const footingAllowed = !footingIntent ? true : !choiceBudgetAvailable ? false : playerFootingRecencyAllowsExpression(
         playerExpressionRecency,
         world.meta.rootSeed,
         choiceClock,
         traversalAdmissionFor(traversalExpressionIntent!, actorVocalizationSamples.length),
       );
-      if (footingAllowed === null) throw new Error("Player footing recency lost its authority");
-      if (import.meta.env.DEV && !footingAllowed && traversalExpressionIntent !== null) {
+      const cargoAllowed = !cargoIntent ? true : !choiceBudgetAvailable ? false : playerCargoRecencyAllowsExpression(
+        playerExpressionRecency,
+        world.meta.rootSeed,
+        choiceClock,
+        traversalAdmissionFor(traversalExpressionIntent!, actorVocalizationSamples.length),
+      );
+      if (footingAllowed === null || cargoAllowed === null) throw new Error("Player expression recency lost its authority");
+      if (import.meta.env.DEV && (!footingAllowed || !cargoAllowed) && traversalExpressionIntent !== null) {
         recordExpressionDecision(
-          traversalExpressionIntent, footingBudgetAvailable ? "footing-recency" : "sound-budget",
+          traversalExpressionIntent, !choiceBudgetAvailable ? "sound-budget" : cargoIntent ? "cargo-recency" : "footing-recency",
           null, null, null, undefined, null, null, diagnosticProducerContext,
         );
       }
-      const acceptedTraversal = footingAllowed && acceptSituatedExpression(
+      const acceptedTraversal = footingAllowed && cargoAllowed && acceptSituatedExpression(
         traversalExpressionIntent,
         { kind: "self" },
         traversalAdmissionFor,
         null,
         diagnosticProducerContext,
       );
-      if (acceptedTraversal && footingIntent) {
+      if (acceptedTraversal && (footingIntent || cargoIntent)) {
         const admission = situatedExpressionAdmissions.records.at(-1);
         const authority = situatedExpressionCausalAuthority.records.at(-1);
-        const recorded = recordAcceptedPlayerFootingExpression(
+        const recordChoice = cargoIntent ? recordAcceptedPlayerCargoExpression : recordAcceptedPlayerFootingExpression;
+        const recorded = recordChoice(
           playerExpressionRecency,
           world.meta.rootSeed,
           choiceClock,
           { admission, authority, step: playerStepStateSample },
         );
-        if (recorded === null) throw new Error("Accepted footing lost its semantic history");
+        if (recorded === null) throw new Error("Accepted player expression lost its semantic history");
         playerExpressionRecency = recorded;
       }
     }
@@ -18922,13 +18935,14 @@ export async function createTideweftRuntime(
         recovered.world.region,
         recovered.world.lastEventOrdinal,
       );
-      acceptSituatedExpression(playerFallCargoRecoveryExpressionIntent({
+      const recoveryIntent = playerFallCargoRecoveryExpressionIntent({
         sourceActorId: LOCAL_PLAYER_LIVING_ACTOR_ID,
         recoveryEventId,
         position: expressionPosition,
         variantSeed: recovered.world.lastEventOrdinal >>> 0,
         recoveredFrom: "fall-separation",
-      }), { kind: "self" }, (event, sampleOrdinal) => (
+      });
+      const recoveryAdmissionFor = (event: SituatedExpressionIntent, sampleOrdinal: number) => (
         createPlayerFallRecoveryExpressionAdmissionRecord({
           sourceActorId: event.sourceActorId,
           triggerEventId: event.triggerEventId,
@@ -18937,7 +18951,33 @@ export async function createTideweftRuntime(
           recoveryEventId,
           recoveredEntityId: parcelId,
         })
-      ));
+      );
+      const choiceClock = {
+        completedTick: world.meta.completedTick,
+        playerStepPhase: playerStepsSinceWorldTick,
+      };
+      const choiceBudgetAvailable = actorVocalizationSamples.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+        && situatedExpressionAdmissions.records.length < HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES;
+      const recoveryAllowed = recoveryIntent === null ? false : !choiceBudgetAvailable ? false : playerCargoRecencyAllowsExpression(
+        playerExpressionRecency, world.meta.rootSeed, choiceClock,
+        recoveryAdmissionFor(recoveryIntent, actorVocalizationSamples.length),
+      );
+      if (recoveryAllowed === null) throw new Error("Player cargo recency lost its authority");
+      if (import.meta.env.DEV && !recoveryAllowed && recoveryIntent !== null) {
+        recordExpressionDecision(recoveryIntent, choiceBudgetAvailable ? "cargo-recency" : "sound-budget", null, null, null);
+      }
+      const acceptedRecovery = recoveryAllowed && acceptSituatedExpression(
+        recoveryIntent, { kind: "self" }, recoveryAdmissionFor,
+      );
+      if (acceptedRecovery) {
+        const recorded = recordAcceptedPlayerCargoExpression(
+          playerExpressionRecency, world.meta.rootSeed, choiceClock,
+          { admission: situatedExpressionAdmissions.records.at(-1),
+            authority: situatedExpressionCausalAuthority.records.at(-1), step: null },
+        );
+        if (recorded === null) throw new Error("Accepted cargo recovery lost its semantic history");
+        playerExpressionRecency = recorded;
+      }
       const expressionAudio = acknowledgePendingSituatedExpression();
       if (deferredAudio === undefined) releaseCommittedAudio(expressionAudio);
       else deferredAudio.push(...expressionAudio);
@@ -22970,6 +23010,32 @@ function pendingPlayerFootingRecency(carry: PlayerPerceptionCarry): readonly Pla
   return footing.sort((left, right) => compareText(left.admission.causalClass, right.admission.causalClass));
 }
 
+/** Only independently validated pending cargo origins, never reconstructed history. */
+function pendingPlayerCargoRecency(carry: PlayerPerceptionCarry): readonly PlayerCargoRecencyReceipt[] | null {
+  const cargo: PlayerCargoRecencyReceipt[] = [];
+  for (const admission of carry.situatedExpressionAdmissions.records) {
+    if (playerCargoExpressionAdmissionPolicy(admission) === null) continue;
+    const authority = carry.situatedExpressionCausalAuthority.records.find(
+      (record) => record.eventId === admission.eventId,
+    );
+    if (authority === undefined) return null;
+    if (admission.kind === "player-fall-recovery") {
+      cargo.push({ admission, authority, step: null });
+    } else if (admission.kind === "player-traversal") {
+      const ordinal = admission.admittedAtPlayerStepPhase - 1;
+      const step = carry.playerStepStateSamples[ordinal];
+      if (step === null && carry.playerStepStateAnchor !== null
+        && ordinal < carry.playerStepStateAnchor.sampleOrdinal) continue;
+      if (step == null || step.sampleOrdinal !== ordinal) return null;
+      cargo.push({ admission, authority, step });
+    } else return null;
+  }
+  return cargo.sort((left, right) => compareText(
+    playerCargoExpressionAdmissionPolicy(left.admission)!.meaning,
+    playerCargoExpressionAdmissionPolicy(right.admission)!.meaning,
+  ));
+}
+
 /** Deliberately supported readers adopt only independently validated pending facts. */
 function migratePlayerExpressionRecency(
   effort: PlayerEffortRecencyState,
@@ -22984,9 +23050,10 @@ function migratePlayerExpressionRecency(
       && carry.playerStepStateSamples.every((sample) => sample === null)
         ? [] : null
     : pendingPlayerFootingRecency(carry);
-  if (footing === null) return null;
+  const cargo = carry.playerStepStateAnchor === null ? [] : pendingPlayerCargoRecency(carry);
+  if (footing === null || cargo === null) return null;
   return canonicalizePlayerExpressionRecencyState({
-    ...createPlayerExpressionRecencyState(world.meta.rootSeed), effort, footing,
+    ...createPlayerExpressionRecencyState(world.meta.rootSeed), effort, footing, cargo,
   }, world.meta.rootSeed, {
     completedTick: world.meta.completedTick, playerStepPhase: carry.playerStepsSinceWorldTick,
   });
@@ -23002,7 +23069,8 @@ function runtimePlayerExpressionRecency(
     completedTick: world.meta.completedTick, playerStepPhase: carry.playerStepsSinceWorldTick,
   });
   const pending = pendingPlayerFootingRecency(carry);
-  if (state === null || pending === null || stableStringify(value) !== stableStringify(state)
+  const pendingCargo = pendingPlayerCargoRecency(carry);
+  if (state === null || pending === null || pendingCargo === null || stableStringify(value) !== stableStringify(state)
     || runtimePlayerEffortRecency(state.effort, world, carry) === null) return null;
   for (const receipt of pending) {
     if (!state.footing.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
@@ -23011,7 +23079,29 @@ function runtimePlayerExpressionRecency(
     if (receipt.authority.committedWorldTick === world.meta.completedTick
       && !pending.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
   }
+  for (const receipt of pendingCargo) {
+    if (!state.cargo.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
+  }
+  for (const receipt of state.cargo) {
+    if (receipt.authority.committedWorldTick === world.meta.completedTick
+      && !pendingCargo.some((saved) => stableStringify(saved) === stableStringify(receipt))) return null;
+  }
   return state;
+}
+
+/** Exact v1 is deliberately supported ONLY after checksum and complete carry validation. */
+function loadPlayerExpressionRecency(
+  value: unknown, world: WorldState, carry: PlayerPerceptionCarry,
+): PlayerExpressionRecencyState | null {
+  if (typeof value !== "object" || value === null || !("version" in value) || value.version !== 1) {
+    return runtimePlayerExpressionRecency(value, world, carry);
+  }
+  const upgraded = upgradePlayerExpressionRecencyV1(value, world.meta.rootSeed, {
+    completedTick: world.meta.completedTick, playerStepPhase: carry.playerStepsSinceWorldTick,
+  });
+  const cargo = pendingPlayerCargoRecency(carry);
+  return upgraded === null || cargo === null ? null
+    : runtimePlayerExpressionRecency({ ...upgraded, cargo }, world, carry);
 }
 
 function playerExpressionAdmissionPosition(
@@ -25592,7 +25682,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Current save perception interval does not match its saved physical authority");
     }
     const playerExpressionRecency = decoded.version === GAME_SAVE_VERSION
-      ? runtimePlayerExpressionRecency(decoded.playerExpressionRecency, world, perceptionCarry)
+      ? loadPlayerExpressionRecency(decoded.playerExpressionRecency, world, perceptionCarry)
       : (() => {
           const effort = decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
             ? runtimePlayerEffortRecency(decoded.playerEffortRecency, world, perceptionCarry)

@@ -237,7 +237,7 @@ describe("bounded player-expression choice history contract", () => {
     expect(restored).toEqual(state);
     expect(Object.isFrozen(restored)).toBe(true);
     expect(Object.isFrozen(restored?.footing)).toBe(true);
-    expect(Object.keys(state)).toEqual(["version", "effort", "footing"]);
+    expect(Object.keys(state)).toEqual(["version", "effort", "footing", "cargo"]);
     for (const receipt of restored?.footing ?? []) {
       expect(Object.isFrozen(receipt)).toBe(true);
       expect(Object.isFrozen(receipt.admission)).toBe(true);
@@ -281,7 +281,7 @@ describe("bounded player-expression choice history contract", () => {
       expect(recordAcceptedPlayerFootingExpression(empty, SEED, clockAt(1), receipt)).toBeNull();
     }
     for (const invalid of [
-      { ...valid, version: 2 }, { ...valid, caption: "forbidden" },
+      { ...valid, version: 3 }, { ...valid, caption: "forbidden" },
       { ...valid, footing: null }, { ...valid, footing: [ordinary, ordinary] },
       { ...valid, footing: [serious, ordinary] },
       { ...valid, footing: [ordinary, serious, footing("ordinary-stumble", 2)] },
@@ -356,7 +356,7 @@ describe("bounded player-expression choice history contract", () => {
     const restored = canonicalizePlayerExpressionRecencyState(JSON.parse(JSON.stringify(withFooting)), SEED, clockAt(38));
     expect(restored).toEqual(combined);
     expect(restored?.effort.lastAccepted?.admission).toEqual(admission);
-    expect(Object.keys(restored ?? {})).toEqual(["version", "effort", "footing"]);
+    expect(Object.keys(restored ?? {})).toEqual(["version", "effort", "footing", "cargo"]);
     expect(restored?.footing).toEqual([]);
     expect(Object.isFrozen(restored?.effort.lastAccepted)).toBe(true);
     for (const replayableKey of ["active", "text", "caption", "reception", "audioAcknowledged", "remainingSteps"]) {

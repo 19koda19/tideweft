@@ -34,6 +34,7 @@ export const EXPRESSION_DIAGNOSTIC_CAPACITY = 64;
 export type ExpressionDiagnosticReason = SituatedExpressionChannelBankReductionReason
   | "sound-budget"
   | "footing-recency"
+  | "cargo-recency"
   | "effort-recency"
   | "prepared-introduction-committed"
   | "porter-not-heard-or-visible";

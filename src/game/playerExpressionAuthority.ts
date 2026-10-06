@@ -80,6 +80,33 @@ export function playerFootingExpressionAdmissionPolicy(
   return null;
 }
 
+/** Current cargo choice semantics; physical cause is validated by its domain. */
+export function playerCargoExpressionAdmissionPolicy(
+  admissionValue: unknown,
+): Readonly<Omit<PlayerExpressionPolicy, "triggerEventId" | "variantSeed">> | null {
+  const admission = canonicalizeSituatedExpressionAdmissionRecord(admissionValue);
+  if (admission?.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID) return null;
+  if (admission.kind === "player-fall-recovery") return Object.freeze({
+    meaning: "relief-after-cargo-recovery", family: "cargo", tone: "relieved",
+    volume: "spoken", knowledgeBasis: "self-recovered-cargo",
+    priority: 520_000, salience: 720_000, durationSteps: 9,
+  });
+  if (admission.kind !== "player-traversal") return null;
+  if (admission.causalClass === "important-cargo-impact") return Object.freeze({
+    meaning: "protect-important-cargo", family: "cargo",
+    tone: admission.incidentKind === "stumble" ? "strained" : "alarmed",
+    volume: admission.incidentKind === "stumble" ? "spoken" : "shout",
+    knowledgeBasis: "self-observed-cargo-risk", priority: 620_000,
+    salience: 760_000, durationSteps: 12,
+  });
+  if (admission.causalClass === "cargo-separation") return Object.freeze({
+    meaning: "alarm-at-cargo-loss", family: "cargo", tone: "alarmed",
+    volume: "shout", knowledgeBasis: "self-observed-cargo-loss",
+    priority: 950_000, salience: 980_000, durationSteps: 14,
+  });
+  return null;
+}
+
 interface LocatedCargoHistory {
   readonly world: LooseCargoWorldState;
   readonly record: LooseCargoHistoryRecord;
@@ -330,18 +357,10 @@ function policyForAdmission(
       || admission.triggerEventId !== admission.recoveryEventId
       || recovery.record.entityIds[0] !== admission.recoveredEntityId
     ) return null;
-    return {
-      meaning: "relief-after-cargo-recovery",
-      family: "cargo",
-      tone: "relieved",
-      volume: "spoken",
-      knowledgeBasis: "self-recovered-cargo",
-      priority: 520_000,
-      salience: 720_000,
-      durationSteps: 9,
-      triggerEventId: admission.recoveryEventId,
-      variantSeed: recovery.record.ordinal >>> 0,
-    };
+    const policy = playerCargoExpressionAdmissionPolicy(admission);
+    return policy === null ? null : receiptTraversalPolicy(
+      admission.recoveryEventId, recovery.record.ordinal >>> 0, policy,
+    );
   }
 
   if (
@@ -363,27 +382,10 @@ function policyForAdmission(
         : receiptTraversalPolicy(admission.triggerEventId, variantSeed, policy);
     }
     case "important-cargo-impact":
-      return receiptTraversalPolicy(admission.triggerEventId, variantSeed, {
-        meaning: "protect-important-cargo",
-        family: "cargo",
-        tone: admission.incidentKind === "stumble" ? "strained" : "alarmed",
-        volume: admission.incidentKind === "stumble" ? "spoken" : "shout",
-        knowledgeBasis: "self-observed-cargo-risk",
-        priority: 620_000,
-        salience: 760_000,
-        durationSteps: 12,
-      });
-    case "cargo-separation":
-      return receiptTraversalPolicy(admission.triggerEventId, variantSeed, {
-        meaning: "alarm-at-cargo-loss",
-        family: "cargo",
-        tone: "alarmed",
-        volume: "shout",
-        knowledgeBasis: "self-observed-cargo-loss",
-        priority: 950_000,
-        salience: 980_000,
-        durationSteps: 14,
-      });
+    case "cargo-separation": {
+      const policy = playerCargoExpressionAdmissionPolicy(admission);
+      return policy === null ? null : receiptTraversalPolicy(admission.triggerEventId, variantSeed, policy);
+    }
   }
 }
 

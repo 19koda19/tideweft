@@ -2904,10 +2904,9 @@ describe("production terrain fall and physical cargo", () => {
     }
   }, 60_000);
 
-  it("characterizes interval-local cargo recovery without conflating sound lifetime with custody", async () => {
-    // Current limitation, not the final repetition acceptance: cargo has no
-    // separate cross-interval accepted-choice history. Use only a real fall
-    // and two independently recovered parcels to locate that boundary.
+  it("preserves cargo recovery choice across consumed intervals and current reload without changing custody", async () => {
+    // This was the real interval-loss characterization. The separate bounded
+    // history now preserves the existing14-step lock; sound still closes.
     const repository = new MemoryRepository();
     const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
     if (fixture.contractId === null) throw new Error("Cargo characterization requires a real Promise");
@@ -2933,24 +2932,51 @@ describe("production terrain fall and physical cargo", () => {
       expect(promiseQuantity(decodeCurrent(pending).physicalCargo, fixture.contractId)).toBe(fixture.promiseQuantity);
     } finally { initial.destroy(); }
 
-    async function recoverSecond(crossBoundary: boolean) {
+    async function recoverSecond(acceptedSteps: number, reloadAfterBoundary = false, refuseOptional = false) {
       const branchRepository = new MemoryRepository(pending);
-      const branch = await createTideweftRuntime(branchRepository);
+      let branch = await createTideweftRuntime(branchRepository);
+      let refusal: ReturnType<typeof vi.spyOn> | undefined;
       try {
         expect(branch.getUIView().saveWarning).toBeUndefined();
         branch.expressionDiagnostics!.setEnabled(true);
         branch.dispatchUI({ type: "resume-world" });
         soundscapePlay.mockClear();
-        if (crossBoundary) advancePlayerSteps(branch, 1);
+        advancePlayerSteps(branch, acceptedSteps);
+        if (reloadAfterBoundary) {
+          await branch.save();
+          const beforeReload = decodeCurrent(branchRepository.snapshot());
+          branch.destroy();
+          soundscapePlay.mockClear();
+          branch = await createTideweftRuntime(branchRepository);
+          expect(branch.getUIView().saveWarning).toBeUndefined();
+          expect(soundscapePlay).not.toHaveBeenCalled();
+          await branch.save();
+          const afterReload = decodeCurrent(branchRepository.snapshot());
+          expect(afterReload.playerExpressionRecency).toEqual(beforeReload.playerExpressionRecency);
+          expect(afterReload.perceptionCarry).toEqual(beforeReload.perceptionCarry);
+          expect(afterReload.physicalCargo).toEqual(beforeReload.physicalCargo);
+          branch.expressionDiagnostics!.setEnabled(true);
+          branch.dispatchUI({ type: "resume-world" });
+        }
         expect(branch.getRenderView().looseCargo).toContainEqual(expect.objectContaining({
           id: secondParcelId, recovery: "reachable",
         }));
         await branch.save();
         const before = decodeCurrent(branchRepository.snapshot());
-        expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(crossBoundary ? 0 : 9);
+        expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe((9 + acceptedSteps) % 10);
         const recovered = before.physicalCargo.looseWorld.entities.find(({ id }) => id === secondParcelId);
         if (recovered?.payload.kind !== "promise") throw new Error("Second parcel lost its exact physical Promise payload");
         soundscapePlay.mockClear();
+        if (refuseOptional) {
+          const reduce = expressionChannelBank.reduceSituatedExpressionChannelBank;
+          refusal = vi.spyOn(expressionChannelBank, "reduceSituatedExpressionChannelBank")
+            .mockImplementation((bank, intent, reception) => {
+              if (typeof intent !== "object" || intent === null || !("meaning" in intent)
+                || intent.meaning !== "relief-after-cargo-recovery") return reduce(bank, intent, reception);
+              return { accepted: false, reason: "channel-capacity-reached", event: null,
+                bank: expressionChannelBank.canonicalizeSituatedExpressionChannelBank(bank) };
+            });
+        }
         branch.dispatchRenderer({ type: "parcel-target", parcelId: secondParcelId, recoverOnArrival: true });
         await branch.save();
         const after = decodeCurrent(branchRepository.snapshot());
@@ -2968,24 +2994,86 @@ describe("production terrain fall and physical cargo", () => {
           .toBe(before.physicalCargo.carrier.lots.filter(({ payload }) => payload.kind === "promise")
             .reduce((sum, { payload }) => sum + (payload.kind === "promise" ? payload.quantity : 0), 0)
             + recovered.payload.quantity);
-        return { choice: choices[0]!, audio: structuredClone(soundscapePlay.mock.calls) };
-      } finally { branch.destroy(); }
+        return { choice: choices[0]!, audio: structuredClone(soundscapePlay.mock.calls), before, after,
+          record: branchRepository.snapshot() };
+      } finally { refusal?.mockRestore(); branch.destroy(); }
     }
 
-    const sameInterval = await recoverSecond(false);
-    const nextInterval = await recoverSecond(true);
+    const sameInterval = await recoverSecond(0);
+    const nextInterval = await recoverSecond(1, true);
+    const justBeforeExpiry = await recoverSecond(13);
+    const atExpiry = await recoverSecond(14);
+    const refused = await recoverSecond(14, false, true);
     expect(situatedExpressionCooldownSteps("relief-after-cargo-recovery")?.meaning).toBe(14);
-    expect(sameInterval.choice).toMatchObject({ reason: "meaning-cooldown", event: null });
+    expect(sameInterval.choice).toMatchObject({ reason: "cargo-recency", event: null });
     expect(sameInterval.choice.playerStepPhase).toBe(9);
     expect(sameInterval.audio).toEqual([["strand", 0.58]]);
-    // Exact existing consumption law: one accepted step closes the old sound
-    // interval; it does not claim that the fourteen-step choice lock elapsed.
-    expect(nextInterval.choice).toMatchObject({ reason: "accepted" });
-    expect(nextInterval.choice.event).not.toBeNull();
+    // Closing the sound interval does not reopen the choice. Reloading this
+    // consumed sound cannot replay it or forget its committed choice origin.
+    expect(nextInterval.before.perceptionCarry.situatedExpressionAdmissions.records).toEqual([]);
+    expect(nextInterval.choice).toMatchObject({ reason: "cargo-recency", event: null });
     expect(nextInterval.choice.completedTick).toBe(sameInterval.choice.completedTick + 1);
     expect(nextInterval.choice.playerStepPhase).toBe(0);
-    expect(nextInterval.choice.event?.eventId).not.toBe(firstRecoveryId);
-    expect(nextInterval.audio.filter(([cue]) => cue === "vocalization-relief")).toHaveLength(1);
+    expect(nextInterval.audio).toEqual([["strand", 0.58]]);
+    expect(nextInterval.after.playerExpressionRecency).toEqual(nextInterval.before.playerExpressionRecency);
+    expect(justBeforeExpiry.choice).toMatchObject({ reason: "cargo-recency", event: null });
+    expect(justBeforeExpiry.audio).toEqual([["strand", 0.58]]);
+    expect(atExpiry.choice).toMatchObject({ reason: "accepted" });
+    expect(atExpiry.choice.event?.eventId).not.toBe(firstRecoveryId);
+    expect(atExpiry.audio.filter(([cue]) => cue === "vocalization-relief")).toHaveLength(1);
+    expect(refused.choice).toMatchObject({ reason: "channel-capacity-reached", event: null });
+    expect(refused.after.playerExpressionRecency).toEqual(refused.before.playerExpressionRecency);
+    expect(refused.audio).toEqual([["strand", 0.58]]);
+    expect(refused.after.physicalCargo).toEqual(atExpiry.after.physicalCargo);
+    expect(refused.after.world).toEqual(atExpiry.after.world);
+
+    // Exact prior nested shape is supported only by the authenticated loader.
+    // Pending facts are independently known; consumed history cannot be guessed.
+    for (const [record, expectedCargo] of [
+      [pending, decodeCurrent(pending).playerExpressionRecency.cargo],
+      [nextInterval.record, []],
+    ] as const) {
+      const current = decodeCurrent(record);
+      const { cargo: _cargo, version: _version, ...oldHistory } = current.playerExpressionRecency;
+      const old = { ...current, playerExpressionRecency: { ...oldHistory, version: 1 } };
+      const oldRecord = { ...record, worldJson: JSON.stringify({ ...old, integrity: gameSaveEnvelopeIntegrity(old) }) };
+      const oldRepository = new MemoryRepository(oldRecord);
+      soundscapePlay.mockClear();
+      const loaded = await createTideweftRuntime(oldRepository);
+      try {
+        expect(loaded.getUIView().saveWarning).toBeUndefined();
+        expect(loaded.getUIView().title.hasSave).toBe(true);
+        expect(soundscapePlay).not.toHaveBeenCalled();
+        await loaded.save();
+        const upgraded = decodeCurrent(oldRepository.snapshot());
+        expect(upgraded.playerExpressionRecency).toEqual({ ...current.playerExpressionRecency, cargo: expectedCargo });
+        expect(upgraded.physicalCargo).toEqual(current.physicalCargo);
+        expect(upgraded.perceptionCarry).toEqual(current.perceptionCarry);
+        expect(soundscapePlay).not.toHaveBeenCalled();
+      } finally { loaded.destroy(); }
+    }
+
+    const current = decodeCurrent(pending);
+    const { cargo: _cargo, ...missingCargo } = current.playerExpressionRecency;
+    for (const recency of [
+      missingCargo, { ...missingCargo, version: 1, extra: true },
+      { ...current.playerExpressionRecency, version: 3 },
+      { ...current.playerExpressionRecency, cargo: [] },
+      { ...current.playerExpressionRecency, cargo: [current.playerExpressionRecency.cargo[0], current.playerExpressionRecency.cargo[0]] },
+    ]) {
+      const invalid = { ...current, playerExpressionRecency: recency };
+      const invalidRecord = { ...pending, worldJson: JSON.stringify({ ...invalid, integrity: gameSaveEnvelopeIntegrity(invalid) }) };
+      const rejectedRepository = new MemoryRepository(invalidRecord);
+      soundscapePlay.mockClear();
+      const rejected = await createTideweftRuntime(rejectedRepository);
+      try {
+        expect(rejected.getUIView().title.hasSave).toBe(false);
+        expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+        await expect(rejected.save()).rejects.toThrow("Choose a seed");
+        expect(rejectedRepository.snapshot()).toEqual(invalidRecord);
+        expect(soundscapePlay).not.toHaveBeenCalled();
+      } finally { rejected.destroy(); }
+    }
   }, 60_000);
 
   it("turns one deterministic diagonal ridge fall into persistent recoverable Promise parcels", async () => {

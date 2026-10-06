@@ -2134,6 +2134,44 @@ simulation clock. This proves a representative current output/authority
 separation, not device audio quality, actual assistive-technology delivery,
 all producers, long-play, performance or directive closure.
 
+### Cross-interval cargo choice repair — 2026-10-06
+
+The local implementation over `85bcae4` extends the existing bounded
+`playerExpressionRecency` owner to protection/loss/recovery, one latest origin
+per meaning and three total. Actual traversal uses its movement-step frontier;
+manual and automatic pickup use their committed action phase. Existing
+12/20/14-step meaning and 4/8/5-step family laws remain exact. Recovery resolves
+recent loss precedence without bypassing its own meaning lock. Sound-channel
+closure, physical pickup and independent audio remain separate and unchanged.
+
+The existing real-Promise/two-parcel fixture now proves relief refusal in the
+same phase, across consumed interval/current reload, and at age13; exact age14
+admits a new relief. Every pickup conserves the lot's total and exact recovered
+quantity. A controlled optional-admission refusal at that same eligible
+frontier changes neither physical cargo nor world state and mints no choice
+history. Full fall/recovery tests also retain automatic audio release and
+late-failure rollback of all authoritative roots. Factory-built contract tests
+separately cover original-frontier ordering, bounded state and malformed facts;
+they do not stand in for playable physics.
+
+Outer50/carry14 now emits nested recency2. A small deliberately supported
+exact-v1 load-only upgrade validates original state and pending physical/
+acoustic facts, then adopts only known pending cargo; consumed history starts
+empty. Actual pending/consumed loads replay no cue, and missing, duplicated,
+extra or unknown current facts fail without overwriting their records. Current
+writer validation stays strict; no outer-format retirement or dependency change.
+
+Local validation: `npx vitest run` with one worker passed the eight authority/
+recency/traversal/kernel/channel/causal-owner files (91 tests). Two-worker full
+fall/time-action/WAIT/diagnostic integration passed four files/46 tests in
+138.09s. Selected current-save/animal-knowledge/introduction-rollback runtime
+tests passed5; maintained `npm run test:smoke` passed105. Typecheck and context
+selftests28 passed. Learned-call/fox-caption selection passed49 tests; the
+production web build and static `/tideweft/` artifact smoke also passed. This
+is source/test acceptance of one repetition repair,
+not a new native hours/quality/audio/accessibility, performance, cumulative,
+published-release or whole-directive certificate.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

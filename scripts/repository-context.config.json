@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "888d802fe1fec0cd217d1ec80730a913d1ff2184a82b9948d0bb5840f59c2ef0",
+      "reviewedSourceFingerprint": "8c8f959eb5b058b77ca84a88686795b7a4ce4cd47cf2abc264b3c69093072f95",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -221,7 +221,7 @@
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
         "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted/refused pending restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; admitted carriers suppress physical twins and only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Sparse-owner departure and an originally visible call later losing detail remain unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
-        "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open.",
+        "Current exhaustion, ordinary/serious footing and protection/loss/recovery cargo choices retain bounded accepted history separate from consumed sound. Cargo keeps at most three origins with existing locks and loss-resolution precedence; pickup uses its action frontier, traversal its actual step. Other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open.",
         "Architecture's Learned animal-call recognition section owns bounded player knowledge from a genuine committed seen-and-heard call. A later lawful caption may identify the learned animal kind without a hidden individual, cause or anchor; catalogs, uncommitted intent, rabbit contact and aggregate choruses do not teach species."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
@@ -233,7 +233,9 @@
         "src/game/humanPerception.test.ts",
         "src/game/playerAnimalCallKnowledge.test.ts",
         "src/game/projection.situatedExpression.test.ts",
-        "src/game/worldAcousticPresentation.test.ts"
+        "src/game/worldAcousticPresentation.test.ts",
+        "src/game/playerExpressionCargoRecency.test.ts",
+        "src/game/runtime.fall.integration.test.ts"
       ],
       "relatedContracts": []
     },
@@ -246,7 +248,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "888d802fe1fec0cd217d1ec80730a913d1ff2184a82b9948d0bb5840f59c2ef0",
+      "reviewedSourceFingerprint": "8c8f959eb5b058b77ca84a88686795b7a4ce4cd47cf2abc264b3c69093072f95",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

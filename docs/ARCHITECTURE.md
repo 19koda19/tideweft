@@ -1234,7 +1234,14 @@ current ordinary/serious stumble meaning, two total. Each contains only the
 canonical admission, matching causal authority and actual movement-owned step;
 one newer footing meaning must not erase the other's still-live meaning lock.
 Cargo protection retains its existing precedence rather than being relabeled
-footing. Historical pairs obey the priority-qualified family law at their
+footing. Cargo now retains at most three latest origins, one each for protection,
+loss and recovery, in the same choice-history owner. Traversal origins retain
+their actual movement step; manual and automatic pickups use the committed
+action phase, not a fictitious movement step. Protection/loss/recovery keep the
+existing 12/20/14-step meaning and 4/8/5-step family locks. Recovery may resolve a
+recent loss's family precedence, but never bypass its own meaning lock. Refusal
+of optional speech neither rejects a physical pickup nor erases its independent
+sound. Historical pairs obey the priority-qualified family law at their
 acceptance frontiers, not merely today's ages.
 Age derives from the authoritative world tick and actual physical step ordinal;
 the tenth step is the next tick's phase zero, not the old admission's phase-nine
@@ -1253,7 +1260,8 @@ commits only after expression admission and rolls back with a failed tick.
 Pending origins must exactly match the current physical/admission carry;
 consumed historical depths are not compared to a later tide. Canonical seals
 prove consistency, not secret attestation of an arbitrarily rewritten history.
-`playerExpressionRecency.test.ts`, `playerEffortRecency.test.ts` and
+`playerExpressionRecency.test.ts`, `playerExpressionCargoRecency.test.ts`,
+`playerEffortRecency.test.ts` and
 `runtime.fall.integration.test.ts` own exact
 expiry, phase-ten, no-replay, pause/recovery, capacity refusal and fail-closed evidence. Other
 source meanings still have interval-local semantic memory; broader sparse
@@ -3698,6 +3706,19 @@ internal readers are not a permanent compatibility promise. Current-v50
 roundtrip and all determinism, integrity and no-overwrite laws remain mandatory.
 This is a pre-1.0 development retirement, not a relaxation of the permanent
 official-1.0 supported-save policy.
+
+Outer50/carry14 now writes `playerExpressionRecency` version2, adding the three
+bounded cargo-choice origins described above without changing physical sound
+or the meaning of existing fields; outer50 and carry14 remain unchanged. Its
+strict current writer and validator accept only
+the exact v2 shape. The deliberately supported outer50/recency1 reader runs
+only after envelope checksum, original effort/footing and the complete pending
+physical/acoustic carry validate. It adopts cargo solely from those independent
+pending facts; consumed cargo starts empty and no event is replayed. Unknown or
+malformed nested versions fail closed without overwrite, never fall back to the
+old reader. An earlier outer50 executable rejects the unknown nested v2 after
+parsing rather than at its outer future-version fence; backward loading is not
+promised. No additional outer development format is retired by this extension.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic
