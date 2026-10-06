@@ -1478,6 +1478,27 @@ async function physicalBrowserClick(client, rect) {
   });
 }
 
+function observedGreetingCaptionEvidence(firstCaption, currentCaption, cues) {
+  if (!Array.isArray(cues) || cues.length !== 2 || new Set(cues.map((cue) => cue?.id)).size !== 2) {
+    throw new Error('Paired greetings require two distinct committed speech cues');
+  }
+  const captions = [];
+  for (const caption of [firstCaption, currentCaption]) {
+    if (!caption || ['id', 'speakerLabel', 'text'].some((field) =>
+      typeof caption[field] !== 'string' || !caption[field] || caption[field].length > 1024)
+      || !cues.some((cue) => cue.id === caption.id && cue.text === caption.text
+        && cue.sourceKind === 'human' && cue.acousticKind === 'speech')) {
+      throw new Error('Expected an actual observed caption belonging to the greeting pair');
+    }
+    const previous = captions.find((item) => item.id === caption.id);
+    if (previous && (previous.speakerLabel !== caption.speakerLabel || previous.text !== caption.text)) {
+      throw new Error('One observed caption identity changed its copy');
+    }
+    if (!previous) captions.push(caption);
+  }
+  return { captions, announcements: captions.map((caption) => caption.speakerLabel + ': ' + caption.text) };
+}
+
 async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, rectangleOf, presentationState) {
   const secondTarget = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
@@ -1495,7 +1516,13 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
   if (!secondTarget) throw new Error('No second actual nearby resident for paired greeting');
   // Ordinary simulation continues throughout both real actions. Do not freeze
   // the first utterance to manufacture a second simultaneous admission.
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  // Chart snaps to its focus on the next draw with reduced motion. Waiting the
+  // normal easing interval there can consume the first native reading lease.
+  const reducedMotion = await client.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches");
+  // Normal easing gets a bounded 450 ms settling window. The subsequent native
+  // hit/selected-ID/Recognized/enabled-GREET guards still establish the target;
+  // more blind settling is not evidence and can exhaust the short first line.
+  for (let attempt = 0; attempt < (reducedMotion ? 1 : 3); attempt += 1) {
     await client.evaluate(`(() => {
       const bridge = window.__TIDEWEFT__;
       const render = bridge.runtime.getRenderView();
@@ -1506,7 +1533,9 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
       if (!porter) throw new Error('Second resident left actual visibility before selection');
       bridge.renderer.focusWorld(porter.position, 1.65);
     })()`);
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    if (reducedMotion) {
+      await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    } else await new Promise((resolve) => setTimeout(resolve, 150));
   }
   await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
   await client.waitFor(`(() => {
@@ -1534,15 +1563,25 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
     if (first.text === second.text) throw new Error('Paired DOM signatures are ambiguous; no identity claim is possible');
     const caption = view.expressionCaption;
     if (!caption || ![first.id, second.id].includes(caption.id)) return false;
+    // Cue coexistence alone does not prove a live native caption. Stopping the
+    // simulation cannot renew an expired UI lease, and a selected ABOUT heading
+    // is not evidence that the second line was admitted to the caption slot.
+    const observed = (${observedGreetingCaptionEvidence.toString()})(
+      ${JSON.stringify(firstCommitted.caption)}, caption, [first, second]);
+    const native = document.querySelector('[data-ui="situated-expression-caption"]');
+    const probe = window.__TIDEWEFT_VOICE_PROBE__;
+    if (probe.leases.some((lease) => lease.id === caption.id && lease.endedAtMs !== null)
+      && native?.hidden) throw new Error('Native greeting reading lease expired before paired capture');
+    if (!native || native.hidden || !(${matchObservedSpeechCaption.toString()})(
+      native.dataset.expressionId, native.querySelector('.situated-expression-caption__speaker')?.textContent,
+      native.querySelector('.situated-expression-caption__text')?.textContent,
+      native.getAttribute('aria-label'), observed.captions)) return false;
     bridge.runtime.stop();
     return { tick: render.tick, captionId: caption.id,
       announcement: caption.speakerLabel + ': ' + caption.text,
       cueIds: [first.id, second.id], sourceIds: [first.sourceActorId, second.sourceActorId],
       cueTexts: [first.text, second.text],
-      captions: [${JSON.stringify(firstCommitted.caption)},
-        { id: second.id, text: second.text, speakerLabel: view.selectedResident.heading }],
-      announcements: [${JSON.stringify(firstCommitted.announcement)},
-        view.selectedResident.heading + ': ' + second.text],
+      captions: observed.captions, announcements: observed.announcements,
       secondHeading: view.selectedResident.heading, secondKnown: view.selectedResident.known };
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
@@ -1747,30 +1786,39 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     if (!caption.hidden && ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(caption.dataset.expressionId)) return false;
     if (probe.overflow || (${countAnimalAnnouncementCopies.toString()})(probe.entries,
       ${JSON.stringify(committed.announcement)}) !== 1) throw new Error('Greeting was announced again or probe overflowed');
-    const pairedAnnouncements = ${JSON.stringify(pair?.announcements ?? null)};
     const countCopies = ${countAnimalAnnouncementCopies.toString()};
-    const pairedAnnouncementCounts = pairedAnnouncements?.map((text) => countCopies(probe.entries, text));
-    if (pairedAnnouncementCounts?.some((count) => count > 1)
-      || (${pair !== null} && [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
+    if (${pair !== null} && [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
         .some((node) => !node.hidden && node.getClientRects().length > 0
-          && ${JSON.stringify(pair?.cueTexts ?? [])}.includes(node.textContent)))) {
+          && ${JSON.stringify(pair?.cueTexts ?? [])}.includes(node.textContent))) {
       throw new Error('Expired paired greeting remains visible or repeats an announcement');
     }
     probe.observer.disconnect();
     probe.captionObserver.disconnect();
     const ids = ${JSON.stringify(pair?.cueIds ?? [committed.captionId])};
-    const readingLeases = probe.leases.filter((lease) => ids.includes(lease.id)).map((lease) =>
+    const nativeLeases = probe.leases.filter((lease) => ids.includes(lease.id));
+    const cueTexts = ${JSON.stringify(pair?.cueTexts ?? [committed.caption.text])};
+    if (nativeLeases.some((lease) => !lease.visibleText.endsWith(': ' + cueTexts[ids.indexOf(lease.id)]))) {
+      throw new Error('Observed native greeting copy does not match its committed speech cue');
+    }
+    const readingLeases = nativeLeases.map((lease) =>
       (${nativeCaptionLeaseEvidence.toString()})(probe, lease.id, performance.now()));
+    // The second slot may be admitted only after continued play expires the
+    // first world cue. Guard every actually displayed pair member on reload,
+    // not an ABOUT-derived guess or just the member present at capture.
+    const observedAnnouncements = (${normalizeExpiredVoiceAnnouncements.toString()})(
+      nativeLeases.map((lease) => lease.visibleText));
+    const announcementCounts = observedAnnouncements.map((text) => countCopies(probe.entries, text));
+    if (announcementCounts.some((count) => count !== 1)) throw new Error('Observed greeting announcement missing or repeated');
     return { tick: render.tick, projectionExpiredTick: ${projectionExpiredTick},
-      expiredEventAbsent: true, originalAnnouncementCount: 1, readingLeases,
-      ...(pairedAnnouncements === null ? {} : { pairedAnnouncementCounts, bothExpiredEventsAbsent: true }) };
+      expiredEventAbsent: true, originalAnnouncementCount: 1, readingLeases, observedAnnouncements,
+      ...(${pair === null} ? {} : { pairedAnnouncementCounts: announcementCounts, bothExpiredEventsAbsent: true }) };
   })()`);
   if (expired.readingLeases.length < 1 || expired.readingLeases.length > (pair === null ? 1 : 2)) {
     throw new Error('No bounded native greeting reading/expiry witness');
   }
   expired.readingLeases.forEach((lease) => assertNativeCaptionLease(lease, { expired: true }));
   await client.evaluate('window.__TIDEWEFT__.runtime.save()');
-  const reloadDiagnostics = await reloadProductionPage(pair?.announcements ?? committed.announcement);
+  const reloadDiagnostics = await reloadProductionPage(expired.observedAnnouncements);
   await client.command('browsingContext.setViewport', {
     context: client.context, viewport: VOICE_PRESENTATION_VIEWPORTS[0], devicePixelRatio: 1,
   });
@@ -2652,6 +2700,7 @@ module.exports = {
   assertNativeCaptureContinuity,
   nativeCaptionLeaseEvidence,
   matchObservedSpeechCaption,
+  observedGreetingCaptionEvidence,
   assertPairedGreetingSnapshot,
   normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,

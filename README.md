@@ -478,6 +478,9 @@ both lawful speech cues coexist; only then is simulation stopped for inspection.
 The native reading slot may lawfully retain the first actual greeting while the
 latest projection is the second; its ID, visible copy and ARIA must match that
 observed pair member. The UI clock is never stopped or extended.
+Reduced-motion Chart selection waits for actual draws rather than the normal
+camera-easing delay. Capture requires a still-live native reading slot; reload
+guards use the copies actually observed in that slot, including a later second line.
 Desktop Relief must show two distinct, nonoverlapping labels; compact-view
 suppression is reported. Both introductions expire naturally, and both learned
 ABOUT states survive current-save reload without old-cue announcements.

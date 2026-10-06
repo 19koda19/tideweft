@@ -2711,6 +2711,41 @@ Ordinary-play, hours, hardware, performance and release gates remain separate.
 No dependency, schema, production-artifact or gameplay change was made by
 this evidence/status reconciliation.
 
+### Current cumulative confidence and live-caption capture — 2026-10-06
+
+Frozen `0d46d3e4b5e11a700ae59ab56138117d3c5411ea` passed `npm run test:ci`
+with both default and JSON reporters: 364 files / 4,128 tests / zero failures,
+1,512.22 seconds, default two workers, Node 22.20.0/npm 10.9.3. Context28 and
+player-facing39 self-tests also passed. Ignored `cumulative-0d46d3e.json` SHA256
+is `9d5f9d1a78fd7edcf5990c38b41396c2c40cb1bf08953754af9dc63c7c8224b7`.
+This certifies that exact source/configuration checkpoint, not later harness
+edits or directive/release closure.
+
+The paired-GREET browser driver had stopped simulation after two world cues
+coexisted, then waited for an already consumed native caption. Its 2,239ms
+reading lease had correctly expired; renewing or extending it would conceal
+the test error. The existing driver now uses actual reduced-motion draws or
+a bounded 450ms normal camera-settling window, retaining the physical
+selected-ID, recognition and enabled-GREET checks. It requires a live actual
+pair-member caption before stopping. Expected copies come from observed
+captions, not ABOUT headings. Later displayed pair-ID leases join exact
+committed speech text and supply the once-only/reload announcement guards.
+Gameplay, audio, clocks, schemas, dependencies and build bytes are unchanged.
+
+Final harness SHA256 `a3dbdd1ca03c6ba6817bd0ffc8634f40263a40e73893a5ab280bb0514a985b01`
+passed selected production Firefox checks: `--paired-greetings
+--presentation-width 1280 --presentation-mode relief-3d`, and the same with
+`--reduced-motion --presentation-width 390`. Final ignored stems
+`voice-desktop-native-capture-05` / `voice-compact-native-capture-06` contain
+two distinct nonoverlapping world labels, live screenshot continuity, both
+learned ABOUT states, both native announcements exactly once, natural expiry,
+and zero old-copy replays across eight post-reload view states. Root reviewed
+the screenshots. Observed 47/60-code-point reading times were respectively
+2,245/2,866ms normal and 2,243/2,867ms reduced, against 2,239/2,858ms minimums.
+Earlier expired-lease and screenshot-continuity refusals remain failed attempts,
+not weakened gates. These are two selected layouts, not a full new matrix,
+mobile hardware, audible/screen-reader output, dense stress or hours acceptance.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

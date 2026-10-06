@@ -14,6 +14,7 @@ const {
   assertNativeCaptureContinuity,
   assertNativeCaptionLease,
   matchObservedSpeechCaption,
+  observedGreetingCaptionEvidence,
   nativeCaptionLeaseEvidence,
   voicePresentationStates,
   normalizeExpiredVoiceAnnouncements,
@@ -400,6 +401,22 @@ assert.throws(() => assertNativeCaptionLease(nativeCaptionLeaseEvidence(nativePr
 const observedSpeechA = Object.freeze({ id: 'speech-a', speakerLabel: 'First resident', text: 'Hello there.' });
 const observedSpeechB = Object.freeze({ id: 'speech-b', speakerLabel: 'Second resident', text: 'Good day.' });
 const observedSpeechPair = Object.freeze([observedSpeechA, observedSpeechB]);
+const observedCuePair = observedSpeechPair.map((caption) => ({ id: caption.id, text: caption.text,
+  sourceKind: 'human', acousticKind: 'speech' }));
+assert.deepEqual(observedGreetingCaptionEvidence(observedSpeechA, observedSpeechA, observedCuePair), {
+  captions: [observedSpeechA], announcements: ['First resident: Hello there.'],
+});
+assert.deepEqual(observedGreetingCaptionEvidence(observedSpeechA, observedSpeechB, observedCuePair), {
+  captions: [...observedSpeechPair], announcements: ['First resident: Hello there.', 'Second resident: Good day.'],
+});
+for (const [first, current, cues] of [
+  [observedSpeechA, { ...observedSpeechA, speakerLabel: 'Changed heading' }, observedCuePair],
+  [observedSpeechA, { ...observedSpeechB, id: 'foreign' }, observedCuePair],
+  [observedSpeechA, { ...observedSpeechB, text: 'Invented caption' }, observedCuePair],
+  [observedSpeechA, { ...observedSpeechB, speakerLabel: '' }, observedCuePair],
+  [observedSpeechA, observedSpeechB, [observedCuePair[0], observedCuePair[0]]],
+  [observedSpeechA, observedSpeechB, observedCuePair.map((cue) => ({ ...cue, sourceKind: 'animal' }))],
+]) assert.throws(() => observedGreetingCaptionEvidence(first, current, cues), /greeting|caption/u);
 assert.equal(matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
   'First resident: Hello there.', observedSpeechPair), true);
 assert.equal(matchObservedSpeechCaption('speech-b', 'Second resident:', 'Good day.',
