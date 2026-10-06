@@ -7360,6 +7360,51 @@ function runtimeRegionalCoreWildlifePursuitExpressionAuthority(
       });
 }
 
+/**
+ * Detailed materialization is optional for a retained call's terrain
+ * enrichment, not for the already committed sound. A window exchange may
+ * retire its owner or dematerialize either pursuit body before consumption.
+ * Present-but-contradictory custody must not masquerade as that normal absence.
+ */
+function runtimeRegionalWildlifeCallHasDetailedCause(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: RuntimeCoreWildlifeWeatherDistressAdmission | RuntimeCoreWildlifePursuitAdmission,
+  completedTick: number,
+): boolean {
+  if (projection.atTick !== completedTick
+    || admission.acceptedAtTick !== completedTick
+    || admission.admittedAtPlayerStepPhase !== 0) {
+    throw new Error("Wildlife surface sound has stale committed cause timing");
+  }
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  if (sources.length === 0) return false;
+  const source = sources[0];
+  if (sources.length !== 1 || source === undefined || source.patch.updatedAtTick !== completedTick) {
+    throw new Error("Wildlife surface sound has contradictory regional custody");
+  }
+  const members = source.patch.populations.flatMap(({ members }) => members);
+  const sourceMembers = members.filter(({ actor }) => actor.identity.stableId === admission.sourceActorId);
+  const member = sourceMembers[0];
+  const species = admission.kind === "core-wildlife-weather-distress" ? "domestic-cat" : "marsh-fox";
+  if (sourceMembers.length !== 1 || member === undefined
+    || member.actor.identity.species !== species || member.actor.address.species !== species
+    || member.actor.updatedAtTick !== completedTick) {
+    throw new Error("Wildlife surface sound has contradictory source identity");
+  }
+  if (admission.kind === "core-wildlife-pursuit-call") {
+    const targets = members.filter(({ actor }) => actor.identity.stableId === admission.targetActorId);
+    const target = targets[0];
+    if (targets.length !== 1 || target === undefined
+      || target.actor.identity.stableId === admission.sourceActorId || target.actor.condition.health <= 0) {
+      throw new Error("Fox surface sound has contradictory prey custody");
+    }
+    if (target.materialization === "coarse") return false;
+  }
+  return member.materialization === "materialized";
+}
+
 function mergeRuntimeCoreObservationBatches(
   observerId: string,
   batches: readonly (readonly CoreEcologyObservationBatch[])[],
@@ -13079,6 +13124,7 @@ export async function createTideweftRuntime(
   function residentPerceptionFrame(
     targetTick: number,
     physicalSoundSamples: readonly PhysicalSoundSample[],
+    regionalProjection: RegionalEcologyStateV6ActiveProjection,
     porterVisual: RuntimePorterVisualFrame | null = null,
     unadmittedAlarmSoundSamples: readonly UnadmittedAlarmSoundSample[] = [],
     surfaceFallbackSoundSampleIds: readonly string[] = [],
@@ -13129,6 +13175,48 @@ export async function createTideweftRuntime(
           throw new Error("Guardian surface sound lost its committed dog/work authority");
         }
         return acousticTerrainSupportForSpecies(dog.address.species) === "surface" ? [sample.id] : [];
+      }
+      if (admission?.kind === "core-wildlife-weather-distress"
+        || admission?.kind === "core-wildlife-pursuit-call") {
+        if (!vocalizationSampleMatchesChannel(sample, situatedExpressionChannels)) {
+          throw new Error("Wildlife surface sound lost its committed expression sample");
+        }
+        if (!runtimeRegionalWildlifeCallHasDetailedCause(regionalProjection, admission, economyView.completedTick)) {
+          // Omit only optional ground support. The original admitted sample
+          // still enters lawful coarse/out-of-frame hearing once; neither
+          // presentation expiry nor rematerialization creates another call.
+          return [];
+        }
+      }
+      if (admission?.kind === "core-wildlife-weather-distress") {
+        const authority = runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
+          regionalProjection, admission,
+        );
+        const event = authority === null ? null : coreWildlifeWeatherDistressExpressionEventForTrigger(
+          authority, admission.triggerEventId,
+        );
+        // The retained wet-track locus owns this call; the cat has already
+        // moved during its same-tick retreat and must not relocate the sound.
+        if (authority === null || event === null
+          || !coreWildlifeWeatherDistressAdmissionMatchesWorld(admission, authority, economyView.completedTick)
+          || !vocalizationSampleMatchesActiveEvent(sample, event)) {
+          throw new Error("Cat surface sound lost its committed rain-retreat authority");
+        }
+        return acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" ? [sample.id] : [];
+      }
+      if (admission?.kind === "core-wildlife-pursuit-call") {
+        const authority = runtimeRegionalCoreWildlifePursuitExpressionAuthority(
+          regionalProjection, admission,
+        );
+        const event = authority === null ? null : coreWildlifePursuitExpressionEventForTrigger(
+          authority, admission.triggerEventId,
+        );
+        if (authority === null || event === null
+          || !coreWildlifePursuitAdmissionMatchesWorld(admission, authority, economyView.completedTick)
+          || !vocalizationSampleMatchesActiveEvent(sample, event)) {
+          throw new Error("Fox surface sound lost its committed pursuit authority");
+        }
+        return acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" ? [sample.id] : [];
       }
       let event: SituatedExpressionEvent | null;
       let historicalSourceLocus = false;
@@ -14260,7 +14348,8 @@ export async function createTideweftRuntime(
         const sample = catWeatherDistressPhysicalSoundSample(expression);
         if (sample === null) throw new Error("Cat weather call could not enter shared physical hearing");
         return [{ eventId: authority.event.eventId,
-          priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample }];
+          priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample,
+          surfaceSupported: acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" }];
       });
       const pendingFoxPursuits = projectedEcologySources.flatMap(({ sourceKey, patch }) => (
         runtimeFreshCoreWildlifePursuitExpressionAuthorities(patch).map((authority) => ({
@@ -14314,6 +14403,7 @@ export async function createTideweftRuntime(
           eventId: authority.event.eventId,
           priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
           sample,
+          surfaceSupported: acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface",
         }];
       });
       const coreAlarms = projectedEcologySources.flatMap(({ patch }) => (
@@ -14466,12 +14556,20 @@ export async function createTideweftRuntime(
           fallback.kind === "alarm" ? [fallback.sample] : []
         )),
       );
-      const surfaceFallbackSampleIds = new Set(preparedCoreAlarms.flatMap((prepared) => (
-        acousticTerrainSupportForSpecies(prepared.alarm.species) === "surface"
-          ? [prepared.alarmPhysicalFallback?.id, prepared.alarmSoundFallback?.id]
-            .filter((id): id is string => id !== undefined)
-          : []
-      )));
+      const surfaceFallbackSampleIds = new Set([
+        ...catWeatherPhysicalFallbacks.flatMap(({ sample, surfaceSupported }) => (
+          surfaceSupported ? [sample.id] : []
+        )),
+        ...foxPursuitPhysicalFallbacks.flatMap(({ sample, surfaceSupported }) => (
+          surfaceSupported ? [sample.id] : []
+        )),
+        ...preparedCoreAlarms.flatMap((prepared) => (
+          acousticTerrainSupportForSpecies(prepared.alarm.species) === "surface"
+            ? [prepared.alarmPhysicalFallback?.id, prepared.alarmSoundFallback?.id]
+              .filter((id): id is string => id !== undefined)
+            : []
+        )),
+      ]);
       const selectedSurfaceFallbackSampleIds = selectedExpressionHearingFallbacks
         .filter(({ sample }) => surfaceFallbackSampleIds.has(sample.id))
         .map(({ sample }) => sample.id);
@@ -14604,10 +14702,12 @@ export async function createTideweftRuntime(
       ) {
         throw new Error("Porter world observations could not be canonicalized");
       }
-      const perceptionFrame = residentPerceptionFrame(targetTick, humanPhysicalSoundSamples, {
-        actorId: priorPorter.address.actorId,
-        observations: porterWorldObservations,
-      }, humanUnadmittedAlarmSoundSamples, selectedSurfaceSoundSampleIds);
+      const perceptionFrame = residentPerceptionFrame(
+        targetTick, humanPhysicalSoundSamples, regionalEcologyProjectionForStep, {
+          actorId: priorPorter.address.actorId,
+          observations: porterWorldObservations,
+        }, humanUnadmittedAlarmSoundSamples, selectedSurfaceSoundSampleIds,
+      );
       const firstNewWorldEventSequence = world.meta.nextEventSequence;
       world = stepWorldWithPreparedResidentIntroduction(perceptionFrame);
       // The preceding frame consumed the prior interval exactly once. New

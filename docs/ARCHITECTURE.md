@@ -362,6 +362,27 @@ whine's equal-work restore test retains the same authoritative outcome. This
 does not add guardian admission-free fallback, dog-to-dog vocal reception or
 change the saved player's event-time hearing law.
 
+The existing domestic-cat rain-distress and marsh-fox pursuit calls likewise
+derive surface support for independent human hearing, including their bounded
+physical-sound fallback when optional expression capacity refuses admission.
+Admitted samples match their exact ecology owner, retained cause, admission and
+acoustic tuple against the already prepared committed-T projection while that
+detailed cause is available. A warm window exchange may retire the owner or
+make the source or pursuit prey coarse before hearing consumes the call. The
+exact admitted bank sample then remains in ordinary hearing without inferred
+surface support; the change cannot create another call or halt merely because
+detail became unavailable. Present-but-contradictory custody, species, timing
+or prey state still fails closed. The cat's
+weather-memory wet-track locus owns its sound, not its later retreating body;
+the fox uses its committed post-locomotion pursuit locus. Fallback support is
+carried from those same authenticated causes and intersected with the selected
+eight-slot hearing bank. Optional captions cannot change physical propagation
+or duplicate a receipt. Neither call discloses prey, intent or hidden identity;
+saved player reception, original audio and interruption policy remain unchanged.
+Pending cold-load authority still requires its existing reprojectable cause;
+mid-interval rebase restore and caption-refused rebase retention remain open
+Living Voice integration/persistence obligations, not proven by this enrichment.
+
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
 explicit `unmodeled-support`, not invented ground contact. A physical domain may
