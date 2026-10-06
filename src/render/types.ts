@@ -71,13 +71,14 @@ export interface TerrainTileView {
    * Broad present-tense terrain perception, independent from durable Chart memory.
    * 0 is outside current perception and 1 is fully legible. Intermediate
    * values are a presentation-only atmospheric falloff inside the authoritative
-   * terrain field. This wider field reveals terrain form only;
+   * terrain field. This field reveals terrain form only;
    * exact actors, items, labels, and actions use currentDetailVisibility.
    * Missing legacy values remain fully visible.
    */
   readonly currentVisibility?: number;
   /**
-   * Shorter present-tense detail perception. Exact entities and interactions
+   * Present-tense detail perception in the same player cone/close circle,
+   * additionally gated by light, cover and sleep. Exact entities and interactions
    * must fail closed unless this is direct (1) when a perception view exists.
    */
   readonly currentDetailVisibility?: 0 | 0.5 | 1;

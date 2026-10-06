@@ -4,6 +4,7 @@ import { BIOME_IDS, type BiomeId } from "../sim/public";
 import {
   BIOME_PRESENTATION,
   biomeEnvironmentalEmphasis,
+  biomePresentationVisibility,
   visibleBiomePresentation,
 } from "./biomePresentation";
 import type { TerrainTileView } from "./types";
@@ -35,13 +36,37 @@ describe("shared biome presentation", () => {
     expect(new Set(entries.map((entry) => entry.motif)).size).toBe(BIOME_IDS.length);
   });
 
-  it("never reveals a biome motif on an undiscovered tile", () => {
+  it("never reveals a biome motif on an unseen, undiscovered tile", () => {
     expect(visibleBiomePresentation(biomeTile("glimmerfen", { discovered: 0 }))).toBeUndefined();
     expect(visibleBiomePresentation(biomeTile("glimmerfen", { discovered: 0.01 }))?.id)
       .toBe("glimmerfen");
     expect(visibleBiomePresentation({ kind: "meadow", elevation: 0.5, discovered: 1 }))
       .toBeUndefined();
   });
+
+  it("shows directly visible foliage without writing durable Chart discovery", () => {
+    const tile = Object.freeze(biomeTile("reed-marsh", {
+      discovered: 0,
+      currentVisibility: 1,
+      currentDetailVisibility: 1,
+    }));
+    expect(visibleBiomePresentation(tile)?.motif).toBe("reeds");
+    expect(biomePresentationVisibility(tile)).toBe(1);
+    expect(tile.discovered).toBe(0);
+  });
+
+  it.each([0, 0.5] as const)(
+    "does not disclose unseen motifs from broad terrain or peripheral detail %s",
+    (currentDetailVisibility) => {
+      const tile = biomeTile("reed-marsh", {
+        discovered: 0,
+        currentVisibility: 1,
+        currentDetailVisibility,
+      });
+      expect(visibleBiomePresentation(tile)).toBeUndefined();
+      expect(biomePresentationVisibility(tile)).toBe(0);
+    },
+  );
 
   it("uses each biome's relevant bounded climate signal", () => {
     expect(biomeEnvironmentalEmphasis(biomeTile("brine-flat"))).toBe(0.4);

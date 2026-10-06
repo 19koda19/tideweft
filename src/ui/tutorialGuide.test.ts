@@ -17,6 +17,19 @@ import {
 } from "./tutorialGuide";
 
 describe("TIDEWEFT field-manual content", () => {
+  it("explains one player field without promising sight through hills or remote interaction", () => {
+    const perception = tutorialSectionById("views-and-hud")?.steps.find(
+      ({ id }) => id === "views-perception",
+    )?.body;
+    expect(perception).toContain("fifty-two tiles through a 160-degree cone");
+    expect(perception).toContain("eight-tile close circle");
+    expect(perception).toContain("including behind you");
+    expect(perception).toContain("Hills and ridges still block sight");
+    expect(perception).toContain("does not teach their name or extend conversation reach");
+    expect(perception).toContain("Relief water keeps its visible surface even without exact detail");
+    expect(perception).not.toContain("shorter ten-tile");
+  });
+
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);

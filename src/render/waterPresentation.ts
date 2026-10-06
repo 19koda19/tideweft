@@ -161,7 +161,7 @@ function composeWaterPresentation(signals: WaterSignals): WaterPresentation {
 /**
  * Returns the only water depth a renderer may consume. Broad terrain sight can
  * reveal that a surface is wet, but exact bathymetry remains neutral until the
- * shorter detail field reaches it or the player has deliberately sounded it.
+ * current detail field reaches it or the player has deliberately sounded it.
  * Missing detail metadata preserves the fully-visible legacy view contract.
  */
 export function visibleWaterDepth(

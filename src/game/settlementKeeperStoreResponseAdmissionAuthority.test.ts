@@ -338,7 +338,7 @@ function listenerCandidate(
   distanceTiles: number,
   dx: number,
   dy: number,
-  requireFacingSensitive = false,
+  requireCloseCircleVisibility = false,
 ): Readonly<{
   position: WorldPosition;
   facingMilliRadians: number;
@@ -369,10 +369,12 @@ function listenerCandidate(
   if (projectPerception(world, listener).detailVisibilityGrades[sourceTileIndex]
     !== VISIBILITY_DIRECT) return null;
   listener.facingMilliRadians = away;
+  // The clear nearby player circle now grants direct sight in every direction,
+  // without removing the separate hearing or conversation-distance gates.
   if (
-    requireFacingSensitive
+    requireCloseCircleVisibility
     && projectPerception(world, listener).detailVisibilityGrades[sourceTileIndex]
-      === VISIBILITY_DIRECT
+      !== VISIBILITY_DIRECT
   ) return null;
   listener.facingMilliRadians = toward;
   const position = playerWorldPositionInRegionalWindow(window, listener);
@@ -406,6 +408,17 @@ describe("settlement keeper store-response event-time admission authority", () =
     const heard = authorityFixture("keeper response authority heard", "heard");
     expect(settlementKeeperStoreResponseAdmissionMatchesWorld(authorityInput(heard))).toBe(true);
     expect(settlementKeeperStoreResponseReceptionMatchesEventTime(receptionInput(heard))).toBe(true);
+    const awayAdmission = canonicalAdmission(heard, {
+      listenerFacingMilliRadians: heard.awayFacingMilliRadians,
+    });
+    // A finite turn inside the clear close circle is equivalent lawful contact;
+    // independent runtime carry-heading authentication is not this module's job.
+    expect(settlementKeeperStoreResponseAdmissionMatchesWorld(authorityInput(heard, {
+      admission: awayAdmission,
+    }))).toBe(true);
+    expect(settlementKeeperStoreResponseReceptionMatchesEventTime(receptionInput(heard, {
+      admission: awayAdmission,
+    }))).toBe(true);
     const movedPlayerTemplate: PlayerState = {
       ...heard.playerTemplate,
       x: 0,
@@ -437,7 +450,7 @@ describe("settlement keeper store-response event-time admission authority", () =
     }))).toBe(false);
   });
 
-  it("rejects forged reception, hearing certainty, listener facing, and position", () => {
+  it("rejects forged reception, hearing certainty, invalid facing, and position", () => {
     const fixture = authorityFixture("keeper response authority tamper", "heard");
     expect(settlementKeeperStoreResponseReceptionMatchesEventTime(receptionInput(fixture, {
       reception: null,
@@ -448,7 +461,7 @@ describe("settlement keeper store-response event-time admission authority", () =
     expect(settlementKeeperStoreResponseAdmissionMatchesWorld(authorityInput(fixture, {
       admission: {
         ...fixture.admission,
-        listenerFacingMilliRadians: fixture.awayFacingMilliRadians,
+        listenerFacingMilliRadians: Number.NaN,
       },
     }))).toBe(false);
     expect(settlementKeeperStoreResponseAdmissionMatchesWorld(authorityInput(fixture, {

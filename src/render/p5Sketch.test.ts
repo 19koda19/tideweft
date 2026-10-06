@@ -926,6 +926,57 @@ describe("Chart situated expression presentation", () => {
 });
 
 describe("Chart shared outdoor illumination", () => {
+  it.each([1, 0.5, 0] as const)("discloses an uncharted biome motif only with current DIRECT detail (%s)", (visibility) => {
+    const base = view("uncharted-chart-biome", { x: 12, y: 12 });
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 3,
+        signature: `uncharted-chart-biome:${visibility}`,
+        valid: true,
+        visibleTileCount: visibility > 0 ? 1 : 0,
+        directTileCount: visibility === 1 ? 1 : 0,
+        peripheralTileCount: visibility === 0.5 ? 1 : 0,
+        detailVisibleTileCount: visibility > 0 ? 1 : 0,
+        detailDirectTileCount: visibility === 1 ? 1 : 0,
+        detailPeripheralTileCount: visibility === 0.5 ? 1 : 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: [{
+          kind: "meadow",
+          biome: "rain-meadow",
+          elevation: 0.7,
+          discovered: 0,
+          currentVisibility: visibility,
+          currentDetailVisibility: visibility,
+        }],
+      },
+    };
+    const before = JSON.stringify(current);
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    try {
+      draw();
+      const line = p5Harness.instance?.line as ReturnType<typeof vi.fn>;
+      // This exact rain-stem primitive belongs to the cosmetic biome motif,
+      // not the player, generic terrain texture or durable map discovery.
+      const stem = [12, 12 + 24 * 0.3, 12, 12 - 24 * 0.16];
+      const matching = line.mock.calls.filter((coordinates) => (
+        coordinates.length === stem.length
+        && coordinates.every((coordinate, index) => coordinate === stem[index])
+      ));
+      expect(matching).toHaveLength(visibility === 1 ? 1 : 0);
+      expect(JSON.stringify(current)).toBe(before);
+      expect(current.terrain.tiles[0]?.discovered).toBe(0);
+    } finally {
+      renderer.destroy();
+    }
+  });
+
   it("does not resubmit fully undisclosed cells already covered by the chart background", () => {
     const base = view("undisclosed-chart-cell", { x: 12, y: 12 });
     const current: TideweftView = {

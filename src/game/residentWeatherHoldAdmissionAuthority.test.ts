@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   FIXED_POINT,
@@ -12,7 +12,7 @@ import { globalTileToRegion } from "../sim/regions";
 import { ambientNoiseAt } from "./physicalAcousticPerception";
 import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
 import { TILE_UNITS, createPlayer, playerTileIndex, type PlayerState } from "./player";
-import { projectPerception } from "./projection";
+import * as projection from "./projection";
 import {
   createRegionalCartography,
   projectRegionalCartographyWindow,
@@ -36,6 +36,7 @@ import {
   type SituatedExpressionEvent,
 } from "./situatedExpression";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
+import { canonicalizeSituatedExpressionReception } from "./situatedExpressionReception";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
@@ -81,7 +82,11 @@ function receptionInput(
   };
 }
 
-function authorityFixture(seed: string, mode: ReceiptMode): AuthorityFixture {
+function authorityFixture(
+  seed: string,
+  mode: ReceiptMode,
+  currentVisiblePerception?: typeof projection.projectPerception,
+): AuthorityFixture {
   const state = createWorld(seed, "standard");
   const contract = state.contracts.find(({ status }) => status === "offered");
   if (contract === undefined) throw new Error("Weather-hold authority fixture needs a Promise");
@@ -148,7 +153,7 @@ function authorityFixture(seed: string, mode: ReceiptMode): AuthorityFixture {
   const playerTemplate = createPlayer(economyWorld, contract.originSettlementId);
   playerTemplate.worldWidth = window.terrain.width;
   playerTemplate.worldHeight = window.terrain.height;
-  const listener = findListener(spatialWorld, window, playerTemplate, event, mode);
+  const listener = findListener(spatialWorld, window, playerTemplate, event, mode, currentVisiblePerception);
   playerTemplate.x = listener.x;
   playerTemplate.y = listener.y;
   playerTemplate.previousX = listener.x;
@@ -187,6 +192,7 @@ function findListener(
   template: PlayerState,
   event: SituatedExpressionEvent,
   mode: ReceiptMode,
+  currentVisiblePerception?: typeof projection.projectPerception,
 ): Readonly<{ x: number; y: number; facingMilliRadians: number }> {
   const source = pointInWindow(window, event.position);
   if (source === null) throw new Error("Weather-hold source is outside the regional window");
@@ -246,8 +252,11 @@ function findListener(
       const sourceTileX = Math.floor(source.x / TILE_UNITS);
       const sourceTileY = Math.floor(source.y / TILE_UNITS);
       const sourceTileIndex = sourceTileY * window.terrain.width + sourceTileX;
-      const directlyVisible = projectPerception(world, candidate)
+      const directlyVisible = projection.projectPerception(world, candidate)
         .detailVisibilityGrades[sourceTileIndex] === VISIBILITY_DIRECT;
+      if (currentVisiblePerception !== undefined
+        && currentVisiblePerception(world, candidate).detailVisibilityGrades[sourceTileIndex]
+          !== VISIBILITY_DIRECT) continue;
       if (
         (mode === "heard-visible" && contact !== null && directlyVisible)
         || (mode === "heard-unseen" && contact !== null && !directlyVisible)
@@ -328,6 +337,62 @@ describe("resident weather-hold event-time admission authority", () => {
         receptionKind: "heard-visible",
       },
     }))).toBe(false);
+  });
+
+  it("reauthenticates an exact former anonymous receipt without promoting current wider sight", () => {
+    // The ordinary Promise/work/weather sequence owns the event. Only receipt
+    // preparation uses the former profile; validation below uses current code.
+    const currentPerception = projection.projectPerception;
+    const legacy = vi.spyOn(projection, "projectPerception")
+      .mockImplementation(projection.projectLegacyPlayerPerception);
+    let fixture: AuthorityFixture;
+    try {
+      fixture = authorityFixture(
+        "weather hold exact former anonymous receipt", "heard-unseen", currentPerception,
+      );
+    } finally { legacy.mockRestore(); }
+    const reception = fixture.reception;
+    if (reception?.kind !== "heard-unseen") throw new Error("Former profile omitted anonymous hearing");
+    const source = pointInWindow(fixture.window, fixture.event.position);
+    if (source === null) throw new Error("Former receipt source left its real regional window");
+    const sourceTileIndex = Math.floor(source.y / TILE_UNITS) * fixture.window.terrain.width
+      + Math.floor(source.x / TILE_UNITS);
+    expect(projection.projectPerception(fixture.spatialWorld, fixture.playerTemplate)
+      .detailVisibilityGrades[sourceTileIndex]).toBe(VISIBILITY_DIRECT);
+    expect(projection.projectLegacyPlayerPerception(fixture.spatialWorld, fixture.playerTemplate)
+      .detailVisibilityGrades[sourceTileIndex]).not.toBe(VISIBILITY_DIRECT);
+    const originalReception = structuredClone(reception);
+    const originalAdmission = structuredClone(fixture.admission);
+    expect(fixture.admission.receptionKind).toBe("heard-unseen");
+    expect(reception.directVisualReceipt).toBe(false);
+    expect(residentWeatherHoldAdmissionMatchesWorld(authorityInput(fixture))).toBe(true);
+    expect(residentWeatherHoldReceptionMatchesEventTime(receptionInput(fixture))).toBe(true);
+
+    const alteredCertainty = {
+      ...reception,
+      certainty: reception.certainty === FIXED_POINT ? reception.certainty - 1 : reception.certainty + 1,
+    };
+    const alteredBearing = {
+      ...reception,
+      bearingCenterMicroradians: reception.bearingCenterMicroradians === 0
+        ? 1 : reception.bearingCenterMicroradians - 1,
+    };
+    for (const altered of [alteredCertainty, alteredBearing]) {
+      // Structurally valid evidence must still equal the independent replay.
+      expect(canonicalizeSituatedExpressionReception(altered)).toEqual(altered);
+      expect(residentWeatherHoldReceptionMatchesEventTime(receptionInput(fixture, {
+        reception: altered,
+      }))).toBe(false);
+    }
+    const wrongCause = { ...fixture.event, triggerEventId: `${fixture.event.triggerEventId}:forged` };
+    expect(residentWeatherHoldAdmissionMatchesWorld(authorityInput(fixture, {
+      event: wrongCause,
+    }))).toBe(false);
+    expect(residentWeatherHoldReceptionMatchesEventTime(receptionInput(fixture, {
+      event: wrongCause,
+    }))).toBe(false);
+    expect(fixture.reception).toEqual(originalReception);
+    expect(fixture.admission).toEqual(originalAdmission);
   });
 
   it("lawfully admits weather-masked or sleeping speech without a player receipt", () => {

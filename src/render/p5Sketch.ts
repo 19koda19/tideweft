@@ -4,6 +4,7 @@ import { configureP5RuntimePolicy } from "./p5RuntimePolicy";
 
 import {
   biomeEnvironmentalEmphasis,
+  biomePresentationVisibility,
   visibleBiomePresentation,
 } from "./biomePresentation";
 import {
@@ -1452,7 +1453,7 @@ export function createTideweftRenderer(
     ): void => {
       const presentation = visibleBiomePresentation(tile);
       if (!presentation) return;
-      const visibility = unit(tile.discovered, 1);
+      const visibility = biomePresentationVisibility(tile);
       const emphasis = biomeEnvironmentalEmphasis(tile);
       const centerX = x + tileSize * 0.5;
       const centerY = y + tileSize * 0.5;

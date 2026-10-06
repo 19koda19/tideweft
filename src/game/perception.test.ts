@@ -106,7 +106,7 @@ describe("deterministic visual perception", () => {
     expect(result.signature).toMatch(/^perception-v3:[0-9a-f]{8}$/);
   });
 
-  it("reveals broad terrain shape ahead while keeping distant detail undisclosed", () => {
+  it("retains the shorter legacy query envelope unless player detail is requested", () => {
     const result = evaluatePerception({
       columns: 91,
       rows: 1,
@@ -132,13 +132,76 @@ describe("deterministic visual perception", () => {
     // Rear and side awareness stays short rather than inheriting the longer
     // terrain horizon.
     expect(result.visibilityGrades[45 - 5]).toBe(VISIBILITY_PERIPHERAL);
-    expect(result.visibilityGrades[45 - 7]).toBe(VISIBILITY_HIDDEN);
+    expect(result.visibilityGrades[45 - 7]).toBe(VISIBILITY_PERIPHERAL);
+    expect(result.visibilityGrades[45 - 9]).toBe(VISIBILITY_HIDDEN);
     expect(result.detailVisibilityGrades[45 - 4]).toBe(VISIBILITY_HIDDEN);
     expect(result.detailVisibilityGrades[45 - 2]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibleTileIndices.length).toBeGreaterThan(result.detailVisibleTileIndices.length);
     expect(result.detailVisibleTileIndices.every(
       (index) => result.visibilityGrades[index] !== VISIBILITY_HIDDEN,
     )).toBe(true);
+  });
+
+  it("discloses the complete player cone and close circle through one spatial envelope", () => {
+    const columns = 121;
+    const center = 60;
+    const indexAt = (x: number, y: number): number => y * columns + x;
+    const result = evaluatePerception({
+      columns,
+      rows: columns,
+      cells: flatCells(columns * columns),
+      playerTileIndex: indexAt(center, center),
+      facingRadians: 0,
+      weatherVisibility: 1,
+      detailRangeOverrides: DEFAULT_PERCEPTION_RANGES,
+      closeDetailIsDirect: true,
+    });
+
+    expect(DEFAULT_PERCEPTION_RANGES.closePeripheralRange).toBe(8);
+    expect(result.detailVisibleTileIndices).toEqual(result.visibleTileIndices);
+    expect(result.detailPeripheralTileIndices).toEqual([]);
+    expect(result.detailVisibilityGrades[indexAt(center + 40, center)])
+      .toBe(VISIBILITY_DIRECT);
+    // About 68 degrees: outside the former 50-degree detail half-cone.
+    expect(result.detailVisibilityGrades[indexAt(center + 8, center + 20)])
+      .toBe(VISIBILITY_DIRECT);
+    for (const [dx, dy] of [[-8, 0], [0, -8], [0, 8], [-5, -5]]) {
+      expect(result.detailVisibilityGrades[indexAt(center + dx!, center + dy!)])
+        .toBe(VISIBILITY_DIRECT);
+    }
+    expect(result.detailVisibilityGrades[indexAt(center - 9, center)])
+      .toBe(VISIBILITY_HIDDEN);
+    expect(result.detailVisibilityGrades[indexAt(center + 52, center)])
+      .toBe(VISIBILITY_HIDDEN);
+    expect(hasValidPerceptionSignature(result, columns, columns)).toBe(true);
+  });
+
+  it("keeps ridge, opaque cover, darkness and sleep authoritative in the wider player view", () => {
+    const cells = flatCells(101);
+    const input: PerceptionInput = {
+      columns: 101, rows: 1, cells, playerTileIndex: 50,
+      facingRadians: 0, weatherVisibility: 1,
+      detailRangeOverrides: DEFAULT_PERCEPTION_RANGES,
+      closeDetailIsDirect: true,
+    };
+    expect(evaluatePerception(input).detailVisibilityGrades[80]).toBe(VISIBILITY_DIRECT);
+    cells[65] = { elevation: 1, obstruction: 0 };
+    const ridge = evaluatePerception(input);
+    expect(ridge.visibilityGrades[80]).toBe(VISIBILITY_HIDDEN);
+    expect(ridge.detailVisibilityGrades[80]).toBe(VISIBILITY_HIDDEN);
+    cells[65] = { elevation: 0, obstruction: 1 };
+    const cover = evaluatePerception(input);
+    expect(cover.terrainVisibilityStrengths[80]).toBeGreaterThan(0);
+    expect(cover.detailVisibilityGrades[80]).toBe(VISIBILITY_HIDDEN);
+    // The near circle is not an X-ray either.
+    cells[49] = { elevation: 0, obstruction: 1 };
+    expect(evaluatePerception(input).detailVisibilityGrades[43]).toBe(VISIBILITY_HIDDEN);
+    cells[49] = cells[65] = { elevation: 0, obstruction: 0 };
+    const dark = evaluatePerception({ ...input, detailIllumination: Array(101).fill(0) });
+    expect(dark.terrainVisibilityStrengths[80]).toBeGreaterThan(0);
+    expect(dark.detailVisibilityGrades[80]).toBe(VISIBILITY_HIDDEN);
+    expect(suppressPerceptionDetail(evaluatePerception(input), 101, 1)
+      ?.detailVisibleTileIndices).toEqual([]);
   });
 
   it("scales detail per target with physical illumination while preserving terrain", () => {
@@ -188,23 +251,23 @@ describe("deterministic visual perception", () => {
   });
 
   it("keeps rear and side terrain awareness inside the short peripheral field", () => {
-    const columns = 15;
-    const playerX = 7;
-    const playerY = 7;
+    const columns = 21;
+    const playerX = 10;
+    const playerY = 10;
     const indexAt = (x: number, y: number): number => y * columns + x;
     const result = evaluatePerception({
       columns,
-      rows: 15,
-      cells: flatCells(columns * 15),
+      rows: 21,
+      cells: flatCells(columns * 21),
       playerTileIndex: indexAt(playerX, playerY),
       facingRadians: 0,
       weatherVisibility: 1,
     });
 
     const rearNear = indexAt(playerX - 5, playerY);
-    const rearFar = indexAt(playerX - 7, playerY);
+    const rearFar = indexAt(playerX - 9, playerY);
     const sideNear = indexAt(playerX, playerY - 5);
-    const sideFar = indexAt(playerX, playerY - 7);
+    const sideFar = indexAt(playerX, playerY - 9);
     expect(result.visibilityGrades[rearNear]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibilityGrades[sideNear]).toBe(VISIBILITY_PERIPHERAL);
     expect(result.visibilityGrades[rearFar]).toBe(VISIBILITY_HIDDEN);
@@ -302,11 +365,11 @@ describe("deterministic visual perception", () => {
   });
 
   it("lets the authored angular boundary reach true darkness", () => {
-    const columns = 15;
-    const rows = 15;
-    const playerX = 7;
-    const playerY = 7;
-    const target = playerY * columns + playerX + 6;
+    const columns = 21;
+    const rows = 21;
+    const playerX = 10;
+    const playerY = 10;
+    const target = playerY * columns + playerX + 9;
     const input = {
       columns,
       rows,
@@ -610,7 +673,7 @@ describe("deterministic visual perception", () => {
     )).toBe(true);
   });
 
-  it("keeps the production terrain horizon materially longer than exact detail", () => {
+  it("keeps the legacy non-player detail profile separate from player terrain ranges", () => {
     const columns = 141;
     const playerTileIndex = 70;
     const result = evaluatePerception({
@@ -644,6 +707,7 @@ describe("deterministic visual perception", () => {
     const malformed: PerceptionInput[] = [
       { ...sightInput(2, 1, 0), columns: -2 },
       { ...sightInput(2, 1, 0), rows: 0 },
+      { ...sightInput(2, 1, 0), closeDetailIsDirect: "yes" as unknown as boolean },
       { ...sightInput(2, 1, 0), cells: [{ elevation: 0, obstruction: 0 }] },
       {
         ...sightInput(2, 1, 0),

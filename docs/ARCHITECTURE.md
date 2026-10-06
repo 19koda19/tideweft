@@ -2164,9 +2164,9 @@ The simulation persists four separate layers: immutable identity, dynamic condit
 
 `src/sim/actorPerception.ts` owns a deterministic fixed-point cognition kernel. Accepted vision and hearing observations become canonically ordered, decaying beliefs; a capped top-four attention set, bounded suspicion states, at most 24 active beliefs, and at most 16 salient memories prevent an actor from processing unbounded stimuli. Anonymous sound never carries an actor identity or exact source point. Only an identified visual observation can establish the courier's exact last-known area. Losing that sight starts a deterministic, expiring scan around the saved area; a new lawful visual contact reacquires the courier, while expiry returns the person to ordinary activity. The simulation advances every resident exactly once each world tick and prepares every next state before committing any of them, so malformed or partial observation frames cannot selectively teach one actor or half-advance the population.
 
-The live game bridge applies that kernel only to the original harbor country's existing 42 humans observing the local courier. Each fixed player step contributes a bounded position sample with terrain-dependent exposure, movement salience, and—when caused—footfall, splash, or impact sound. Point-to-point visual contact uses the same short detail ranges, forward field, terrain elevation, ridges, dense rough ground, and built obstruction rules that protect player-facing detail; active weather shortens sight. Hearing remains anonymous and directional: rain and turbulent water near the listener create masking pressure, while wind changes reach and uncertainty. A person may face the highest lawful attention area or the next saved search probe, never the courier's hidden live position. Segmented world positions keep the underlying observation and saved-area contracts exact across signed and extreme coordinates, but this release does not generate humans outside the original harbor country.
+The live game bridge applies that kernel only to the original harbor country's existing 42 humans observing the local courier. Each fixed player step contributes a bounded position sample with terrain-dependent exposure, movement salience, and—when caused—footfall, splash, or impact sound. Non-player point-to-point visual contact retains its own short ranges and forward field, sharing terrain elevation, ridges, dense rough ground, and built obstruction rules with player perception; active weather shortens sight. Hearing remains anonymous and directional: rain and turbulent water near the listener create masking pressure, while wind changes reach and uncertainty. A person may face the highest lawful attention area or the next saved search probe, never the courier's hidden live position. Segmented world positions keep the underlying observation and saved-area contracts exact across signed and extreme coordinates, but this release does not generate humans outside the original harbor country.
 
-The game projection places residents on non-deep tiles around their current original-estuary settlement and interpolates assigned porters along their real route. Both positions pass through the same ten-tile exact-detail perception mask before rendering, hit testing, ABOUT, or greeting. Chart and Relief emit the same typed resident command and maintain a minimum 44-pixel selection diameter. ABOUT is a pointer-local, pane-free non-modal DOM region: it never pauses the simulation, disappears when exact sight is lost, and leaves transparent space available to the world canvas. Quick labels, restrained text faces, event-owned short speech, and ABOUT behavior can truthfully say that a visible person is listening, investigating, watching, alert, or searching nearby; they do not reveal the hidden attention key, confidence, or saved search coordinate. Continuing state never fabricates speech. Desktop, touch, Chart, and Relief consume the same projection.
+The game projection places residents on non-deep tiles around their current original-estuary settlement and interpolates assigned porters along their real route. Both positions pass through the shared current-detail mask described in the [player visibility envelope](#player-visibility-envelope) before rendering, hit testing, ABOUT, or greeting; seeing a distant person does not increase conversation reach. Chart and Relief emit the same typed resident command and maintain a minimum 44-pixel selection diameter. ABOUT is a pointer-local, pane-free non-modal DOM region: it never pauses the simulation, disappears when exact sight is lost, and leaves transparent space available to the world canvas. Quick labels, restrained text faces, event-owned short speech, and ABOUT behavior can truthfully say that a visible person is listening, investigating, watching, alert, or searching nearby; they do not reveal the hidden attention key, confidence, or saved search coordinate. Continuing state never fabricates speech. Desktop, touch, Chart, and Relief consume the same projection.
 
 Actor events are stamped at emission time only when their recorded route/settlement locus was directly observable. That persisted observation fact, player-caused commands, and a very small global-event allowlist feed the player chronicle. A porter walking into view later cannot reveal an unwitnessed historical event retroactively. Full causal events remain in authoritative simulation state.
 
@@ -3836,7 +3836,47 @@ surface-water posture. Neither renderer invents an exact aggregate animal,
 bite, disease, feeding result, hidden target, continuous 3D flight body, or
 information outside current lawful perception.
 
-The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `120 × 120` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather; the exact-detail field remains 10 tiles. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Exact water presentation, actors, parcels, resources, and interaction routing continue to consume the raw current-detail field and fail closed immediately. When the bounded frame slides, its terrain impression rebases by the same exact spatial delta as both cameras and active pointer routes. World/geometry identity changes, clock/tick regression, reload/destruction, and reduced-motion presentation otherwise settle the buffer without changing authoritative perception.
+The composite renderer owns one disposable terrain-perception-memory store shared by Chart and Relief. It retains only a capped `120 × 120` scalar visibility array and eases lost terrain strength to its durable map baseline over 900 milliseconds; eight quantized Relief bands keep rebatching bounded. Clear-air terrain reaches at most 52 tiles, remains fully legible through 34, and uses an 18-tile distance feather. The buffer never retains projected terrain objects, entity/detail masks, labels, actions, hit targets, or save state. Actors, parcels, resources, and interaction routing consume the raw current-detail field and fail closed immediately; the water surface consumes broad current terrain sight, while depth disclosure remains separately gated. When the bounded frame slides, its terrain impression rebases by the same exact spatial delta as both cameras and active pointer routes. World/geometry identity changes, clock/tick regression, reload/destruction, and reduced-motion presentation otherwise settle the buffer without changing authoritative perception.
+
+### Player visibility envelope
+
+`projectPerception()` uses one player spatial envelope for terrain and visible
+content: a clear-air 52-tile, 160-degree forward cone plus an eight-tile close
+circle. Awake, sufficiently lit bodies, foliage and physical parcels are not
+removed by a second shorter cone. Close-circle detail is direct even behind
+the player; distant terrain still feathers toward its horizon. The common
+elevation ray blocks ridges and hills; opaque cover additionally blocks detail,
+and weather, genuine low light and sleep retain their disclosure gates.
+Ordinary daylight resolves the full envelope; its observer response saturates
+at half physical illumination without changing actual light. Seeing a body
+does not teach its name, inventory, intent or other unwitnessed facts, and
+interaction reach, conservation and materialization budgets do not increase.
+Non-player human and animal contact profiles are unchanged.
+
+Current direct sight also discloses cosmetic biome motifs on an otherwise
+unremembered tile. Both renderers use that present-tense detail receipt, not a
+second durable-discovery threshold; Relief anchors it to the perceived surface.
+Already-disclosed actor bodies, parcels, resources and acoustic anchors also
+use the perceived surface, so visible raised terrain does not bury them at an
+uncharted tile's flat memory height. Remote remembered destinations and routes
+retain their discovery-safe sampling. Rendering never writes Chart discovery,
+and unseen motifs remain undisclosed.
+
+Relief water already follows broad current terrain sight, not the former
+short detail cone. Missing detail may neutralize unsounded depth, never erase
+an otherwise visible wet surface. Opaque water depth/layering remains its
+existing renderer responsibility; this envelope change does not fix water
+covering submerged actors or items.
+
+Saved in-flight anonymous Voice receptions may validate against the former
+player contact profile through `projectLegacyPlayerPerception()`. This is
+historical receipt replay only, with a separate cache key: the same committed
+source/action, event-time pose, geometry, physical light and hearing must
+reproduce the exact anonymous receipt. Current replay is tried first; this
+fallback cannot admit visible, inaudible, malformed or wrong-source receipts,
+promote identity/call knowledge, generate events or replay audio. Ordinary save
+validation retains that proof too. Current gameplay always uses the new field;
+the save schema and intentionally supported formats are unchanged.
 
 Relief cord roots and bell/label placement sample the discovery-masked surface rather than authoritative hidden elevation. Reduced-motion mode sets decorative bell bob and sway to zero but leaves cords, bell, labels, crown, and active words intact. Geometry memoization keys immutable projected Harp data, keeping these derived strings/cords out of the fixed-step rules.
 

@@ -234,8 +234,10 @@ function findListener(
       if (projectPerception(world, listener).detailVisibilityGrades[sourceTileIndex]
         !== VISIBILITY_DIRECT) continue;
       listener.facingMilliRadians = away;
+      // Nearby in-person sources remain directly visible around the player's
+      // full close circle; turning away no longer hides a clear source here.
       if (projectPerception(world, listener).detailVisibilityGrades[sourceTileIndex]
-        === VISIBILITY_DIRECT) continue;
+        !== VISIBILITY_DIRECT) continue;
       listener.facingMilliRadians = toward;
       const position = playerWorldPositionInRegionalWindow(window, listener);
       const masking = ambientNoiseAt(world, playerTileIndex(listener));
@@ -289,6 +291,17 @@ describe("resident introduction event-time admission authority", () => {
     });
     expect(residentIntroductionAdmissionMatchesWorld(authorityInput(fixture))).toBe(true);
     expect(residentIntroductionReceptionMatchesEventTime(receptionInput(fixture))).toBe(true);
+    const awayAdmission = changedAdmission(fixture, {
+      listenerFacingMilliRadians: fixture.awayFacingMilliRadians,
+    });
+    // This module replays physical contact, not an independent carry heading:
+    // either finite facing is lawful inside the clear shared close circle.
+    expect(residentIntroductionAdmissionMatchesWorld(authorityInput(fixture, {
+      admission: awayAdmission,
+    }))).toBe(true);
+    expect(residentIntroductionReceptionMatchesEventTime(receptionInput(fixture, {
+      admission: awayAdmission,
+    }))).toBe(true);
     expect(resumeResidentIntroductionPresentationPair({
       economyWorld: fixture.economyWorld,
       spatialWorld: fixture.spatialWorld,
@@ -367,7 +380,7 @@ describe("resident introduction event-time admission authority", () => {
     }
   });
 
-  it("rejects forged hearing, pose, facing, reception, and mismatched regional authority", () => {
+  it("rejects forged hearing, pose, invalid facing, reception, and mismatched regional authority", () => {
     const fixture = authorityFixture("resident introduction authority sensory tamper");
     expect(residentIntroductionAdmissionMatchesWorld(authorityInput(fixture, {
       admission: changedAdmission(fixture, {
@@ -376,7 +389,7 @@ describe("resident introduction event-time admission authority", () => {
     }))).toBe(false);
     expect(residentIntroductionAdmissionMatchesWorld(authorityInput(fixture, {
       admission: changedAdmission(fixture, {
-        listenerFacingMilliRadians: fixture.awayFacingMilliRadians,
+        listenerFacingMilliRadians: Number.NaN,
       }),
     }))).toBe(false);
     expect(residentIntroductionAdmissionMatchesWorld(authorityInput(fixture, {

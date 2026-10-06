@@ -13,8 +13,9 @@ export function currentTerrainVisibility(
 }
 
 /**
- * Exact-detail disclosure is intentionally shorter than terrain sight. A
- * production perception view always supplies this field. Requiring disclosure
+ * Exact-detail disclosure shares the player's spatial envelope, but still
+ * respects illumination, solid cover and sleep. A production view supplies
+ * this field. Requiring disclosure
  * fails closed for malformed or stale views instead of borrowing the broader
  * terrain mask.
  */
@@ -63,7 +64,7 @@ export function perceptionVisibilityAt(
   return currentTerrainVisibility(grid.tiles[row * grid.columns + column], requireDisclosure);
 }
 
-/** Samples the short exact-detail field; malformed points fail closed. */
+/** Samples current exact detail; malformed points fail closed. */
 export function detailPerceptionVisibilityAt(
   grid: TerrainGridView,
   point: WorldPoint,

@@ -39,11 +39,9 @@ export interface PerceptionRangeOverrides {
 }
 
 export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
-  closePeripheralRange: 6,
-  // Terrain is readable well beyond the range at which an individual item or
-  // actor can be identified. The long axis is deliberately forward-only: it
-  // gives route-scale context without turning the player's rear awareness into
-  // an omnidirectional reveal.
+  closePeripheralRange: 8,
+  // The player's terrain and detail use this same spatial envelope. The long
+  // axis remains forward-only rather than an omnidirectional distant reveal.
   // The floating regional window is roughly 82x50 tiles. Fifty-two tiles lets
   // an unobstructed forward view carry terrain shape cleanly to that window's
   // horizon from ordinary play positions, while weather still contracts it.
@@ -52,9 +50,9 @@ export const DEFAULT_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.free
 });
 
 /**
- * Actor, item, label, and interaction disclosure intentionally has a shorter,
- * narrower envelope than terrain shape. Seeing the ground ahead must not grant
- * exact knowledge of everything standing on it.
+ * Default non-player visual contact (and legacy query) ranges. Player projection
+ * explicitly uses DEFAULT_PERCEPTION_RANGES for detail too; widening the player
+ * view must not silently change human or animal sensory/decision authority.
  */
 export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Object.freeze({
   closePeripheralRange: 2,
@@ -62,10 +60,9 @@ export const DEFAULT_DETAIL_PERCEPTION_RANGES: Readonly<PerceptionRanges> = Obje
   forwardConeRadians: (5 * Math.PI) / 9,
 });
 
-/** Soft outer terrain band; detail disclosure remains crisp and shorter. */
+/** Soft outer terrain band; exact-detail disclosure remains crisp. */
 export const TERRAIN_SIGHT_DISTANCE_FEATHER = 18 as const;
 export const TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS = Math.PI / 9;
-export const TERRAIN_CLOSE_DISTANCE_FEATHER = 2 as const;
 export const TERRAIN_OCCLUSION_FRONTIER_FEATHER = 3 as const;
 export const MAX_TERRAIN_VISIBILITY_STRENGTH = 255 as const;
 
@@ -86,6 +83,8 @@ export interface PerceptionInput {
   readonly rangeOverrides?: PerceptionRangeOverrides;
   /** Actor/item/label/interaction visibility overrides. */
   readonly detailRangeOverrides?: PerceptionRangeOverrides;
+  /** Player close awareness can resolve visible bodies, not just silhouettes. */
+  readonly closeDetailIsDirect?: boolean;
 }
 
 export interface LineTransmissionInput {
@@ -260,11 +259,12 @@ function smoothstepUnit(value: number): number {
 
 /**
  * Human-scale detail recognition adapts to low light nonlinearly. This is an
- * observer response curve, not a brighter physical-world value: physical zero
- * still yields zero range, while moonlight remains useful only nearby.
+ * observer response curve, not a brighter physical-world value. Ordinary
+ * daylight (at least half illumination) resolves the complete player envelope;
+ * physical zero still yields zero range and moonlight remains useful nearby.
  */
 function detailRangeScaleForIllumination(illumination: number): number {
-  return Math.sqrt(illumination);
+  return Math.sqrt(Math.min(1, illumination / 0.5));
 }
 
 function featheredStrength(
@@ -909,6 +909,8 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     || !ranges
     || !detailRanges
     || detailIllumination === null
+    || (rawInput.closeDetailIsDirect !== undefined
+      && typeof rawInput.closeDetailIsDirect !== "boolean")
   ) {
     return failedResult(
       dimensions.columns,
@@ -957,10 +959,6 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     0,
     halfCone - TERRAIN_SIGHT_ANGULAR_FEATHER_RADIANS,
   );
-  const closeFeatherStart = Math.max(
-    0,
-    peripheralRange - TERRAIN_CLOSE_DISTANCE_FEATHER * weatherVisibility,
-  );
 
   for (let index = 0; index < dimensions.count; index += 1) {
     if (index === playerTileIndex) continue;
@@ -989,9 +987,9 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
         distance > distanceFeatherStart + LINE_OF_SIGHT_EPSILON
         || bearingDistance > angularFeatherStart + LINE_OF_SIGHT_EPSILON
       );
-    const closeStrength = inPeripheralRange
-      ? featheredStrength(distance, closeFeatherStart, peripheralRange)
-      : 0;
+    // The complete close circle is readable, including its boundary. Only the
+    // distant forward horizon feathers out; LOS still blocks both regions.
+    const closeStrength = inPeripheralRange ? 1 : 0;
     const forwardStrength = direct
       ? featheredStrength(distance, distanceFeatherStart, directRange)
         * featheredStrength(bearingDistance, angularFeatherStart, halfCone)
@@ -1025,6 +1023,7 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
       && hasLineOfSight(grid, playerTileIndex, index, true)
     ) {
       detailVisibility[index] = detailDirect
+        || (rawInput.closeDetailIsDirect === true && detailInPeripheralRange)
         ? VISIBILITY_DIRECT
         : VISIBILITY_PERIPHERAL;
     }

@@ -345,9 +345,11 @@ Pathfinding may think in cells. Physical movement happens through space.
 Locally visible actors use appropriate speed, heading, turning, interpolation,
 and locomotion without requiring expensive AI decisions every render frame.
 
-Close awareness may keep an obvious nearby actor legible when just outside a
-narrow forward cone. Solid occlusion remains authoritative, and awareness does
-not disclose name, intent, inventory, emotion, or other hidden facts.
+Player-visible content uses the shared cone and close circle in the
+[Architecture visibility owner](./ARCHITECTURE.md#player-visibility-envelope),
+including nearby bodies behind the player. Solid occlusion remains
+authoritative, and awareness does not disclose name, intent, inventory,
+emotion, or other hidden facts.
 
 ### Human identity and social name knowledge
 

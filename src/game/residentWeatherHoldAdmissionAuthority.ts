@@ -4,7 +4,7 @@ import { stableStringify } from "../sim/util";
 import { ambientNoiseAt } from "./physicalAcousticPerception";
 import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
 import { playerTileIndex, type PlayerState } from "./player";
-import { projectPerception } from "./projection";
+import { projectLegacyPlayerPerception, projectPerception } from "./projection";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import {
   regionalCompatibilityWorldForWorld,
@@ -300,7 +300,7 @@ function residentWeatherHoldReceptionAtEventTime(
     && (activeRecovery.kind === "sleep") !== listenerWasSleepingAtIntervalStart
   ) return undefined;
 
-  const sensory = eventTimeSensoryReceipt({
+  let sensory = eventTimeSensoryReceipt({
     spatialWorld,
     window,
     playerTemplate,
@@ -309,6 +309,19 @@ function residentWeatherHoldReceptionAtEventTime(
     event,
     listenerWasSleepingAtAdmission: admission.listenerWasSleepingAtAdmission,
   });
+  // A wider view cannot promote an earlier anonymous report or invalidate
+  // its save. Only the exact former anonymous receipt may survive replay;
+  // committed action, source, listener pose, light and hearing stay required.
+  if (sensory?.receptionKind === "heard-visible"
+    && admission.receptionKind === "heard-unseen") {
+    sensory = eventTimeSensoryReceipt({
+      spatialWorld, window, playerTemplate,
+      listenerPosition: admission.listenerPosition,
+      listenerFacingMilliRadians: admission.listenerFacingMilliRadians,
+      event,
+      listenerWasSleepingAtAdmission: admission.listenerWasSleepingAtAdmission,
+    }, projectLegacyPlayerPerception);
+  }
   if (
     sensory === null
     || sensory.receptionKind !== admission.receptionKind
@@ -335,6 +348,7 @@ interface EventTimeSensoryReceipt {
 
 function eventTimeSensoryReceipt(
   input: EventTimeSensoryReceiptInput,
+  perceptionForReceipt = projectPerception,
 ): EventTimeSensoryReceipt | null {
   const sourcePoint = pointInWindow(input.window, input.event.position);
   const listenerPoint = pointInWindow(input.window, input.listenerPosition);
@@ -404,7 +418,7 @@ function eventTimeSensoryReceipt(
     });
   }
   const hearingCertainty = Math.max(1, Math.round(contact.certainty * FIXED_POINT));
-  const directlyVisible = projectPerception(input.spatialWorld, eventTimePlayer)
+  const directlyVisible = perceptionForReceipt(input.spatialWorld, eventTimePlayer)
     .detailVisibilityGrades[sourceTileIndex] === VISIBILITY_DIRECT;
   if (directlyVisible) {
     const reception = createHeardVisibleSituatedExpressionReception(

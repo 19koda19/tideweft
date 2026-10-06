@@ -404,6 +404,7 @@ import {
 } from "./wayknots";
 import {
   projectGameView,
+  projectLegacyPlayerPerception,
   projectPerception,
   RESIDENT_CONVERSATION_RANGE_TILES,
   type CoreWildlifeExpressionSource,
@@ -23265,14 +23266,17 @@ interface HumanDangerWarningReceptionAuthorityInput {
 function humanDangerWarningReceptionMatchesEventTime(
   input: HumanDangerWarningReceptionAuthorityInput,
 ): boolean {
-  const expected = humanDangerWarningReceptionAtEventTime(input);
-  return expected !== null
-    && stableStringify(expected.reception) === stableStringify(input.reception);
+  return savedExpressionReceptionMatches(
+    input.reception,
+    humanDangerWarningReceptionAtEventTime(input),
+    () => humanDangerWarningReceptionAtEventTime(input, projectLegacyPlayerPerception),
+  );
 }
 
 /** Replays one phase-zero human warning without trusting saved reception data. */
 function humanDangerWarningReceptionAtEventTime(
   input: Omit<HumanDangerWarningReceptionAuthorityInput, "reception">,
+  perceptionForReceipt = projectPerception,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -23339,7 +23343,7 @@ function humanDangerWarningReceptionAtEventTime(
   if (placement === null) return null;
   const projected = livingActorAddressInRegionalWindow(placement, window);
   const directlyVisible = projected !== null
-    && projectPerception(spatialWorld, {
+    && perceptionForReceipt(spatialWorld, {
       ...eventTimePlayer,
       timeAction: null,
     }).detailVisibilityGrades[projected.tileIndex] === VISIBILITY_DIRECT;
@@ -23550,14 +23554,17 @@ interface CoreWildlifeWeatherDistressReceptionAuthorityInput {
 function coreWildlifeWeatherDistressReceptionMatchesEventTime(
   input: CoreWildlifeWeatherDistressReceptionAuthorityInput,
 ): boolean {
-  const expected = coreWildlifeWeatherDistressReceptionAtEventTime(input);
-  return expected !== null
-    && stableStringify(expected.reception) === stableStringify(input.reception);
+  return savedExpressionReceptionMatches(
+    input.reception,
+    coreWildlifeWeatherDistressReceptionAtEventTime(input),
+    () => coreWildlifeWeatherDistressReceptionAtEventTime(input, projectLegacyPlayerPerception),
+  );
 }
 
 /** Replays one local, noninterrupting cat call through event-time acoustics. */
 function coreWildlifeWeatherDistressReceptionAtEventTime(
   input: Omit<CoreWildlifeWeatherDistressReceptionAuthorityInput, "reception">,
+  perceptionForReceipt = projectPerception,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -23634,7 +23641,7 @@ function coreWildlifeWeatherDistressReceptionAtEventTime(
           height: window.terrain.height,
         },
       },
-      perception: projectPerception(spatialWorld, eventTimePlayer),
+      perception: perceptionForReceipt(spatialWorld, eventTimePlayer),
     });
   const expected = directlyVisible
     ? createHeardVisibleSituatedExpressionReception(
@@ -23694,14 +23701,17 @@ interface CoreWildlifePursuitReceptionAuthorityInput {
 function coreWildlifePursuitReceptionMatchesEventTime(
   input: CoreWildlifePursuitReceptionAuthorityInput,
 ): boolean {
-  const expected = coreWildlifePursuitReceptionAtEventTime(input);
-  return expected !== null
-    && stableStringify(expected.reception) === stableStringify(input.reception);
+  return savedExpressionReceptionMatches(
+    input.reception,
+    coreWildlifePursuitReceptionAtEventTime(input),
+    () => coreWildlifePursuitReceptionAtEventTime(input, projectLegacyPlayerPerception),
+  );
 }
 
 /** Replays one local, noninterrupting pursuit call through event-time acoustics. */
 function coreWildlifePursuitReceptionAtEventTime(
   input: Omit<CoreWildlifePursuitReceptionAuthorityInput, "reception">,
+  perceptionForReceipt = projectPerception,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -23778,7 +23788,7 @@ function coreWildlifePursuitReceptionAtEventTime(
         height: window.terrain.height,
       },
     },
-    perception: projectPerception(spatialWorld, eventTimePlayer),
+    perception: perceptionForReceipt(spatialWorld, eventTimePlayer),
   });
   const expected = directlyVisible
     ? createHeardVisibleSituatedExpressionReception(
@@ -23811,14 +23821,17 @@ interface CoreWildlifeAlarmReceptionAuthorityInput {
 function coreWildlifeAlarmReceptionMatchesEventTime(
   input: CoreWildlifeAlarmReceptionAuthorityInput,
 ): boolean {
-  const expected = coreWildlifeAlarmReceptionAtEventTime(input);
-  return expected !== null
-    && stableStringify(expected.reception) === stableStringify(input.reception);
+  return savedExpressionReceptionMatches(
+    input.reception,
+    coreWildlifeAlarmReceptionAtEventTime(input),
+    () => coreWildlifeAlarmReceptionAtEventTime(input, projectLegacyPlayerPerception),
+  );
 }
 
 /** Replays a post-commit wildlife alarm through the same bounded human acoustics. */
 function coreWildlifeAlarmReceptionAtEventTime(
   input: Omit<CoreWildlifeAlarmReceptionAuthorityInput, "reception">,
+  perceptionForReceipt = projectPerception,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -23916,7 +23929,7 @@ function coreWildlifeAlarmReceptionAtEventTime(
         height: window.terrain.height,
       },
     },
-    perception: projectPerception(spatialWorld, {
+    perception: perceptionForReceipt(spatialWorld, {
       ...eventTimePlayer,
       timeAction: null,
     }),
@@ -23968,9 +23981,30 @@ interface GuardianDogCallEventTimeReception {
 function guardianDogCallReceptionMatchesEventTime(
   input: GuardianDogCallReceptionAuthorityInput,
 ): boolean {
-  const expected = guardianDogCallReceptionAtEventTime(input);
-  return expected !== null
-    && stableStringify(expected.reception) === stableStringify(input.reception);
+  return savedExpressionReceptionMatches(
+    input.reception,
+    guardianDogCallReceptionAtEventTime(input),
+    () => guardianDogCallReceptionAtEventTime(input, projectLegacyPlayerPerception),
+  );
+}
+
+/**
+ * A wider player view cannot rewrite an earlier anonymous observation. Accept
+ * the former policy only for an exact anonymous receipt independently replayed
+ * from the same source, committed action, pose, light and acoustics. Visible,
+ * malformed, inaudible and wrong-source receipts never gain a legacy bypass.
+ */
+function savedExpressionReceptionMatches(
+  saved: SituatedExpressionReception | null,
+  current: GuardianDogCallEventTimeReception | null,
+  replayLegacy: () => GuardianDogCallEventTimeReception | null,
+): boolean {
+  if (current === null) return false;
+  if (stableStringify(current.reception) === stableStringify(saved)) return true;
+  if (saved?.kind !== "heard-unseen" || !current.audible) return false;
+  const legacy = replayLegacy();
+  return legacy !== null && legacy.audible
+    && stableStringify(legacy.reception) === stableStringify(saved);
 }
 
 /**
@@ -23983,6 +24017,7 @@ function guardianDogCallReceptionMatchesEventTime(
  */
 function guardianDogCallReceptionAtEventTime(
   input: Omit<GuardianDogCallReceptionAuthorityInput, "reception">,
+  perceptionForReceipt = projectPerception,
 ): GuardianDogCallEventTimeReception | null {
   const {
     carry,
@@ -24072,7 +24107,7 @@ function guardianDogCallReceptionAtEventTime(
   // threat truth or a later mutable receipt, for visible versus uncertain.
   const dogPlacement = livingActorAddressInRegionalWindow(dog.address, window);
   const directlyVisible = dogPlacement !== null
-    && projectPerception(spatialWorld, {
+    && perceptionForReceipt(spatialWorld, {
       ...eventTimePlayer,
       timeAction: null,
     }).detailVisibilityGrades[dogPlacement.tileIndex] === VISIBILITY_DIRECT;

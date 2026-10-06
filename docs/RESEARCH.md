@@ -2573,6 +2573,44 @@ known startup CSP probe denials, exit normally and remove their disposable
 profiles. Application, schema, dependency and production artifact are unchanged;
 future producer breadth stays deferred and Voice's remaining gates stay open.
 
+### Shared player visibility envelope — 2026-10-06
+
+The local candidate over `d3647fa` reconciles two real player fields: terrain
+previously used six close / 52 forward tiles and 160 degrees, whereas exact
+detail used two close / ten forward tiles and 100 degrees. Current player
+projection now shares the 52-tile, 160-degree envelope with an eight-tile close
+circle, including directly seen bodies behind the player. Elevation rays,
+opaque cover, weather, genuine darkness and sleep still gate disclosure;
+non-player visual-contact profiles and interaction reach are unchanged.
+Ordinary daylight resolves the full circle without altering physical light.
+
+Directly seen cosmetic foliage no longer requires an additional durable map
+discovery threshold. Relief places disclosed bodies, parcels, their hit anchors
+and acoustic labels on the existing perceived surface; hidden/remote map
+sampling remains discovery-safe. Water already used broad terrain sight:
+the regression records 96 wet-surface vertices with detail absent, and none
+when terrain is hidden. No water-layering or above-item depth fix is claimed.
+
+Current50/carry14 is retained. Exact earlier anonymous call receipts may be
+independently reauthenticated against their former event-time player profile,
+without learning a hidden identity, changing the saved receipt or replaying
+audio. Current gameplay never uses that historical profile. Real fall/cargo
+and perception integrations passed 2 files / 56 tests; former-anonymous
+receipt and independently resealed forgery controls remain strict. The final
+affected unit/render/manual set passed 17 files / 358 tests; TypeScript and
+the maintained `npm run test:smoke` passed (6 files / 105 tests). These are
+local slice results, not a new cumulative, public-release, hardware or
+performance certification. The earlier cumulative evidence below does not
+certify this changed executable state.
+
+The real animal-source subset passed six cases: deer, gull, elk and boar retain
+anonymous hearing/WAIT/reload controls just outside the close circle, while a
+forward fox genuinely remains seen and heard during its call and learns that
+family once. Moving the anonymous fixtures to nine rear tiles first made them
+inaudible under actual masking; that run failed and was not accepted. Eight
+rear plus one side tile (radius approximately 8.062) preserves real hearing
+outside the circle without changing production thresholds or supplying events.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`

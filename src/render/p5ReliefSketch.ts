@@ -4,6 +4,7 @@ import { configureP5RuntimePolicy, preserveP5RuntimePolicy } from "./p5RuntimePo
 
 import {
   biomeEnvironmentalEmphasis,
+  biomePresentationVisibility,
   visibleBiomePresentation,
 } from "./biomePresentation";
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
@@ -921,7 +922,7 @@ export function createTideweftReliefRenderer(
     const view = latestView;
     const p = instance;
     if (!view || !p) return null;
-    const surface = discoveredReliefSurfaceHeightAt(
+    const surface = perceivedReliefSurfaceHeightAt(
       view.terrain,
       parcel.position,
       cached?.mesh.verticalScale ?? reliefScale(view.terrain),
@@ -1008,7 +1009,7 @@ export function createTideweftReliefRenderer(
           view.acousticText,
           actorCalloutViewport(activeInstance.width, activeInstance.height),
           (acousticText) => {
-            const sourceSurface = discoveredReliefSurfaceHeightAt(
+            const sourceSurface = perceivedReliefSurfaceHeightAt(
               view.terrain,
               acousticText.position,
               cache.mesh.verticalScale,
@@ -1224,7 +1225,7 @@ export function createTideweftReliefRenderer(
         view.perception
         && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
       ) continue;
-      const surface = discoveredReliefSurfaceHeightAt(
+      const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         porter.position,
         cache.mesh.verticalScale,
@@ -1267,7 +1268,7 @@ export function createTideweftReliefRenderer(
       ) continue;
       const highlighted = dog.selected || dog.actorId === dogHover;
       if (!highlighted) continue;
-      const surface = discoveredReliefSurfaceHeightAt(
+      const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         dog.position,
         cache.mesh.verticalScale,
@@ -1298,7 +1299,7 @@ export function createTideweftReliefRenderer(
       )) continue;
       const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
       if (!highlighted) continue;
-      const surface = discoveredReliefSurfaceHeightAt(
+      const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         wildlife.position,
         cache.mesh.verticalScale,
@@ -1352,7 +1353,7 @@ export function createTideweftReliefRenderer(
         carcass.position,
         view.perception !== undefined,
       ) || !carcassIsHovered(carcass)) continue;
-      const surface = discoveredReliefSurfaceHeightAt(
+      const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         carcass.position,
         cache.mesh.verticalScale,
@@ -1420,7 +1421,7 @@ export function createTideweftReliefRenderer(
       );
       if (resourceHit) {
         const node = resourceHit.node;
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           node.position,
           cache.mesh.verticalScale,
@@ -1448,7 +1449,7 @@ export function createTideweftReliefRenderer(
     const labeledParcel = parcels.find(({ id }) => id === hoverParcelId)
       ?? nearbyParcel;
     if (labeledParcel) {
-      const surface = discoveredReliefSurfaceHeightAt(
+      const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         labeledParcel.position,
         cache.mesh.verticalScale,
@@ -2783,7 +2784,7 @@ export function createTideweftReliefRenderer(
       for (let row = startRow; row <= endRow && shown < maximumDetails; row += 1) {
         for (let column = startColumn; column <= endColumn && shown < maximumDetails; column += 1) {
           const tile = grid.tiles[row * grid.columns + column];
-          const visibility = reliefDiscoveryVisibility(tile);
+          const visibility = biomePresentationVisibility(tile);
           const presentation = visibleBiomePresentation(tile);
           if (
             !tile
@@ -2805,7 +2806,7 @@ export function createTideweftReliefRenderer(
             x: grid.origin.x + (column + 0.5) * tileSize,
             y: grid.origin.y + (row + 0.5) * tileSize,
           };
-          const surface = discoveredReliefSurfaceHeightAt(
+          const surface = perceivedReliefSurfaceHeightAt(
             grid,
             center,
             cache.mesh.verticalScale,
@@ -3317,7 +3318,7 @@ export function createTideweftReliefRenderer(
       let passiveFieldResourceHaloVertices = 0;
 
       for (const { node } of visible) {
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           node.position,
           cache.mesh.verticalScale,
@@ -3404,7 +3405,7 @@ export function createTideweftReliefRenderer(
 
       for (const parcel of parcels) {
         const visual = looseCargoVisual(parcel);
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           parcel.position,
           cache.mesh.verticalScale,
@@ -4082,7 +4083,7 @@ export function createTideweftReliefRenderer(
           && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
         ) continue;
         const appearance = porterAppearancePresentation(porter);
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           porter.position,
           cache.mesh.verticalScale,
@@ -4138,7 +4139,7 @@ export function createTideweftReliefRenderer(
           && !isDirectlyDetailPerceived(view.terrain, dog.position, true)
         ) continue;
         const highlighted = dog.selected || dog.actorId === dogHover;
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           dog.position,
           cache.mesh.verticalScale,
@@ -6160,7 +6161,7 @@ export function createTideweftReliefRenderer(
           view.perception !== undefined,
         )) continue;
         const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           wildlife.position,
           cache.mesh.verticalScale,
@@ -6193,7 +6194,7 @@ export function createTideweftReliefRenderer(
           carcass.position,
           view.perception !== undefined,
         )) continue;
-        const surface = discoveredReliefSurfaceHeightAt(
+        const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           carcass.position,
           cache.mesh.verticalScale,

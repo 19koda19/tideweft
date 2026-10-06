@@ -7,6 +7,7 @@ import type {
   AggregateWildlifeEvidenceView,
   DogView,
   FieldResourceNodeView,
+  LooseCargoView,
   TideweftView,
   WeatherView,
   WildlifeCarcassView,
@@ -16,6 +17,9 @@ import { RELIEF_ATMOSPHERE_BAND_COUNT } from "./reliefAtmosphere";
 import { outdoorIlluminationPresentation } from "./outdoorIllumination";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import * as playerPresentation from "./playerPresentation";
+import * as reliefCamera from "./reliefCamera";
+import { perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
+import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
 import {
   acousticTextRectsOverlap,
   DEFAULT_ACOUSTIC_TEXT_GUTTER,
@@ -1967,6 +1971,59 @@ describe("Relief presentation-only pointer and label motion", () => {
 });
 
 describe("Relief water camera invariant", () => {
+  it.each([
+    ["visible", 1, 16 * 6],
+    ["hidden", 0, 0],
+  ] as const)("submits opaque water only for broad-%s tiles even with no detail visibility", (_label, currentVisibility, expectedVertices) => {
+    const source = warmWaterView(`water-broad-visibility-${currentVisibility}`);
+    const waterView: TideweftView = {
+      ...source,
+      terrain: {
+        ...source.terrain,
+        tiles: source.terrain.tiles.map((tile) => ({
+          ...tile,
+          currentVisibility,
+          currentDetailVisibility: 0 as const,
+        })),
+      },
+    };
+    const harness = renderHarness(waterView);
+    const waterVertices: unknown[][] = [];
+    const waterPrimitives: unknown[] = [];
+    const hasOpaqueWaterMaterial = (): boolean => {
+      const [fill, ambient, emissive] = p5Harness.materialTrace.slice(-3);
+      return fill?.method === "fill"
+        && fill.args.join(",") === "0,0,0,255"
+        && ambient?.method === "ambientMaterial"
+        && ambient.args.join(",") === "0,0,0"
+        && emissive?.method === "emissiveMaterial"
+        && typeof emissive.args[0] === "string";
+    };
+    // Count actual immediate-mode water submissions, not retained terrain
+    // geometry or actor shapes in this renderer-only disclosure fixture.
+    (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: unknown[]) => {
+      if (hasOpaqueWaterMaterial()) waterVertices.push(coordinates);
+    });
+    (harness.instance.beginShape as ReturnType<typeof vi.fn>).mockImplementation((primitive: unknown) => {
+      if (hasOpaqueWaterMaterial()) waterPrimitives.push(primitive);
+    });
+    try {
+      harness.draw();
+      expect(waterVertices).toHaveLength(expectedVertices);
+      if (currentVisibility === 1) {
+        expect(waterPrimitives.length).toBeGreaterThan(0);
+        expect(waterPrimitives.every((primitive) => primitive === harness.instance.TRIANGLES)).toBe(true);
+        expect(waterVertices.every((coordinates) => coordinates.length === 3
+          && coordinates.every((coordinate) => typeof coordinate === "number" && Number.isFinite(coordinate))))
+          .toBe(true);
+      } else {
+        expect(waterPrimitives).toEqual([]);
+      }
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
   it("keeps water blue while facing the river at every yaw and zoom bound in every weather", () => {
     const waterView = warmWaterView("water-camera-invariant");
     const harness = renderHarness(waterView);
@@ -2892,6 +2949,123 @@ describe("Relief situated expression presentation", () => {
 });
 
 describe("Relief dog presentation", () => {
+  it.each([1, 0.5, 0] as const)("grounds uncharted DIRECT biome, body and acoustic anchors without revealing hidden detail (%s)", (visibility) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("uncharted-relief-source", { x: 48, y: 48 });
+    const dog = dogView({
+      position: { x: 36, y: 36 },
+      sizeScale: 1,
+      coat: { primary: "red", secondary: null, pattern: "solid", length: "short" },
+      wetness: 0,
+      conditionLabels: [],
+    });
+    const call: AcousticTextView = {
+      acousticKind: "animal-call", id: "uncharted-direct-dog-call",
+      sourceActorId: dog.actorId, sourceKind: "animal", speakerLabel: "Nearby dog",
+      text: "BARK!", position: dog.position, progress: 0.2,
+      priority: 80, salience: 1, tone: "restrained", variantSeed: 1,
+    };
+    const parcel: LooseCargoView = {
+      id: "uncharted-direct-parcel", region: { x: 0, y: 0 },
+      position: { x: 60, y: 36 }, velocity: { x: 0, y: 0 },
+      contentKind: "raw-material", resourceKind: "cordreed", resourceLabel: "Cordreed",
+      quantity: 1, property: "ordinary", condition: 1, conditionBand: "sound",
+      wetness: 0, contamination: 0, decay: 0, motion: "resting", snaggedBy: null,
+      impactMark: "none", recoverable: true, recovery: "approach",
+    };
+    const current: TideweftView = {
+      ...base,
+      perception: {
+        version: 3,
+        signature: `uncharted-relief-source:${visibility}`,
+        valid: true,
+        visibleTileCount: visibility > 0 ? 16 : 0,
+        directTileCount: visibility === 1 ? 16 : 0,
+        peripheralTileCount: visibility === 0.5 ? 16 : 0,
+        detailVisibleTileCount: visibility > 0 ? 16 : 0,
+        detailDirectTileCount: visibility === 1 ? 16 : 0,
+        detailPeripheralTileCount: visibility === 0.5 ? 16 : 0,
+      },
+      terrain: {
+        ...base.terrain,
+        // This signed-world window contains three genuinely selected cosmetic
+        // cells under the existing hash/threshold; the local 0,0 window has none.
+        worldTileOrigin: { x: 0, y: 1 },
+        tiles: base.terrain.tiles.map((tile) => ({
+          ...tile, biome: "rain-meadow" as const, elevation: 0.7,
+          discovered: 0, currentVisibility: visibility, currentDetailVisibility: visibility,
+        })),
+      },
+      dogs: [dog],
+      looseCargo: [parcel],
+      // A renderer fixture supplies an already-authorized call, not a world
+      // producer. The negative branch makes no unheard/hidden call assertion.
+      acousticText: visibility === 1 ? [call] : [],
+    };
+    const before = JSON.stringify(current);
+    const projection = vi.spyOn(reliefCamera, "projectReliefPoint");
+    const harness = renderHarness(current);
+    try {
+      harness.draw();
+      harness.canvas.fire("pointermove", pointer(harness.canvas));
+      const line = harness.instance.line as ReturnType<typeof vi.fn>;
+      const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+      const verticalScale = current.terrain.tileSize * 2.9;
+      const motifSurface = 0.7 * verticalScale + 0.8;
+      const stemLift = current.terrain.tileSize * (0.19 + 0.5 * 0.12);
+      const eligibleStems = current.terrain.tiles.flatMap((_tile, index) => {
+        const column = index % current.terrain.columns;
+        const row = Math.floor(index / current.terrain.columns);
+        if (reliefTerrainDecorationHash01(current.terrain, column, row, 0x6269_6f6d) < 1 - 0.43) return [];
+        const x = (column + 0.5) * current.terrain.tileSize;
+        const z = (row + 0.5) * current.terrain.tileSize;
+        return [[x, -motifSurface, z, x, -motifSurface - stemLift, z]];
+      });
+      expect(eligibleStems.length).toBeGreaterThan(0);
+      const drawnStems = line.mock.calls.filter((coordinates) => coordinates.length === 6
+        && eligibleStems.some(([x, _y, z]) => coordinates[0] === x && coordinates[3] === x
+          && coordinates[2] === z && coordinates[5] === z)
+        && Math.abs(Number(coordinates[1]) - Number(coordinates[4]) - stemLift) < 1e-8);
+      expect(drawnStems).toHaveLength(visibility === 1 ? eligibleStems.length : 0);
+      for (const stem of eligibleStems) {
+        expect(line.mock.calls.some((coordinates) => coordinates.length === stem.length
+          && coordinates.every((coordinate, index) => Math.abs(Number(coordinate) - stem[index]!) < 1e-8)))
+          .toBe(visibility === 1);
+      }
+      const body = translate.mock.calls.find(([x, _y, z]) => x === dog.position.x && z === dog.position.y);
+      const layer = harness.mount.children.find(({ className }) => className === "relief-label-layer");
+      const label = layer?.children.find((node) => !node.removed && node.textContent === call.text);
+      if (visibility === 1) {
+        const surface = perceivedReliefSurfaceHeightAt(current.terrain, dog.position, verticalScale, true);
+        expect(surface).toBeGreaterThan(0);
+        const bodyBase = current.terrain.tileSize * 0.105;
+        const bodyHeight = bodyBase * 0.7 * 0.94 + bodyBase * 0.92 * 0.72;
+        expect(body?.[1]).toBeCloseTo(-surface - bodyHeight, 8);
+        expect(projection).toHaveBeenCalledWith(dog.position,
+          surface + current.terrain.tileSize * 0.72,
+          expect.any(Object), { width: 320, height: 240 });
+        expect(projection).toHaveBeenCalledWith(parcel.position,
+          perceivedReliefSurfaceHeightAt(current.terrain, parcel.position, verticalScale, true)
+            + current.terrain.tileSize * 0.24,
+          expect.any(Object), { width: 320, height: 240 });
+        expect(label?.hidden).toBe(false);
+      } else {
+        expect(body).toBeUndefined();
+        expect(label).toBeUndefined();
+        expect(projection.mock.calls.some(([position]) => position === parcel.position)).toBe(false);
+        expect(p5Harness.materialTrace.some(({ method, args }) => (
+          method === "ambientMaterial" && args[0] === "#98583d"
+        ))).toBe(false);
+      }
+      expect(JSON.stringify(current)).toBe(before);
+      expect(current.terrain.tiles.every((tile) => tile.discovered === 0)).toBe(true);
+      expect(harness.dispatch).not.toHaveBeenCalled();
+    } finally {
+      harness.renderer.destroy();
+      projection.mockRestore();
+    }
+  });
+
   it("renders a readable quadruped with honest coat/wetness, hover/selection emphasis, and detail gating", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("relief-dog", { x: 48, y: 48 });

@@ -36,7 +36,7 @@ import { deserializeSettlementWorkingAnimalState } from "./settlementWorkingAnim
 import { projectSettlementWorkingDogCircadian } from "./settlementWorkingDogCircadian";
 import { livingActorAddressInRegionalWindow } from "./livingActor";
 import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
-import { projectPerception } from "./projection";
+import * as projection from "./projection";
 import { PLAYER_MOVEMENT_STAMINA_GATE, TILE_UNITS, stepPlayer, type PlayerState } from "./player";
 import { animalCallRecognitionForVocalization } from "./playerAnimalCallKnowledge";
 import {
@@ -2435,7 +2435,11 @@ describe("production terrain fall and physical cargo", () => {
     }
   }, process.env.CI === "true" ? 90_000 : 30_000);
 
-  it.each([false, true])("composes a current storm shelter whine with real Promise fall and cargo impact (visible=%s)", async (visible) => {
+  it.each([false, true])("composes a storm shelter whine with real Promise fall and cargo under current/legacy contact profiles (current=%s)", async (visible) => {
+    // The false twin captures a genuine formerly supported anonymous receipt.
+    // It does not describe current near-circle sight or supply a vocal event.
+    let legacyPerception = visible ? undefined
+      : vi.spyOn(projection, "projectPerception").mockImplementation(projection.projectLegacyPlayerPerception);
     const repository = new MemoryRepository();
     const fixture = await createCurrentFixture(repository, "fall cargo exact test", true);
     if (fixture.contractId === null || fixture.sourceLotId === null) {
@@ -2461,7 +2465,7 @@ describe("production terrain fall and physical cargo", () => {
     // Stage the same body's wet condition, low competing needs and physical
     // location near the existing fall. No observation, intent, work
     // transaction, expression or sound is supplied by this test.
-    // Retain the original open dog tile in both cases. The visible twin
+    // Retain the original open dog tile in both profiles. The current twin
     // starts the player 200 units north: the same real diagonal movement
     // reaches the east ridge without south-edge clamping, earning diagonal
     // facing. Sight, cognition and the whine are never supplied by this test.
@@ -2580,7 +2584,7 @@ describe("production terrain fall and physical cargo", () => {
       .toEqual(playerWorldPositionInRegionalWindow(savedTravel.window, saved.player));
     expect(saved.perceptionCarry.intervalStartFacingMilliRadians).toBe(saved.player.facingMilliRadians);
     expect(saved.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
-    const detailSight = projectPerception(savedSpatialWorld, saved.player).detailVisibilityGrades;
+    const detailSight = projection.projectPerception(savedSpatialWorld, saved.player).detailVisibilityGrades;
     expect(detailSight[guardianPlacement.tileIndex] === VISIBILITY_DIRECT).toBe(visible);
     expect(saved.perceptionCarry.actorVocalizationSamples.filter(({ expressionEventId, sourceActorId }) => (
       expressionEventId === whineAdmission?.eventId && sourceActorId === guardian.identity.stableId
@@ -2774,6 +2778,47 @@ describe("production terrain fall and physical cargo", () => {
     ))).toBe(true);
     const calls = [...soundscapePlay.mock.calls];
     runtime.destroy();
+    // Load the actually captured former-profile save through the ordinary NEW
+    // loader, not through the producer spy. It must preserve the old anonymous
+    // receipt without replaying its call or teaching newly expanded sight.
+    legacyPerception?.mockRestore();
+    if (!visible) {
+      if (whineChannel?.reception?.kind !== "heard-unseen") {
+        throw new Error("legacy fixture omitted its actual anonymous whine reception");
+      }
+      const certainty = whineChannel.reception.certainty;
+      const alteredCertainty = certainty === FIXED_POINT ? certainty - 1 : certainty + 1;
+      expect(Number.isSafeInteger(alteredCertainty)).toBe(true);
+      expect(alteredCertainty).toBeGreaterThan(0);
+      expect(alteredCertainty).toBeLessThanOrEqual(FIXED_POINT);
+      const forgedRepository = new MemoryRepository(repository.snapshot());
+      const forged = structuredClone(saved);
+      replaceEnvelope(forgedRepository, {
+        ...forged,
+        perceptionCarry: {
+          ...forged.perceptionCarry,
+          situatedExpressionChannels: {
+            ...forged.perceptionCarry.situatedExpressionChannels,
+            channels: forged.perceptionCarry.situatedExpressionChannels.channels.map((channel) => (
+              channel.sourceActorId === guardian.identity.stableId && channel.reception?.kind === "heard-unseen"
+                ? { ...channel, reception: { ...channel.reception, certainty: alteredCertainty } }
+                : channel
+            )),
+          },
+        },
+      });
+      const forensicRecord = forgedRepository.snapshot();
+      const rejected = await createTideweftRuntime(forgedRepository);
+      try {
+        expect(rejected.getUIView().title.hasSave).toBe(false);
+        expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+        await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
+        expect(forgedRepository.snapshot()).toEqual(forensicRecord);
+        expect(decodeCurrent(forgedRepository.snapshot()).player.animalCallKnowledge)
+          .toEqual(saved.player.animalCallKnowledge);
+        expect(soundscapePlay.mock.calls).toEqual(calls);
+      } finally { rejected.destroy(); }
+    }
     const reloaded = await createTideweftRuntime(repository);
     expect(reloaded.getUIView().saveWarning).toBeUndefined();
     expect(reloaded.expressionDiagnostics!.getSnapshot()).toMatchObject({ enabled: false, records: [] });
@@ -2796,14 +2841,20 @@ describe("production terrain fall and physical cargo", () => {
     }
     await reloaded.save();
     const roundtrip = decodeCurrent(repository.snapshot());
-    for (const key of ["world", "player", "regionalTravel", "regionalEcology", "physicalCargo", "dogActorRoster",
-      "settlementWorkingAnimals", "perceptionCarry"] as const) {
-      expect(stableStringify(roundtrip[key])).toBe(stableStringify(saved[key]));
-    }
+    // Compare every non-session root, including knowledge and recency. Session
+    // pause/UI restoration and its derived envelope integrity are not new
+    // authoritative actor, cargo, hearing or learning consequences.
+    const { session: _savedSession, integrity: _savedIntegrity, ...savedRoots } = saved;
+    const { session: _roundtripSession, integrity: _roundtripIntegrity, ...roundtripRoots } = roundtrip;
+    expect(stableStringify(roundtripRoots)).toBe(stableStringify(savedRoots));
     reloaded.destroy();
+    if (!visible) {
+      legacyPerception = vi.spyOn(projection, "projectPerception")
+        .mockImplementation(projection.projectLegacyPlayerPerception);
+    }
 
-    // Repeat exactly the same actual fixed steps from the same current save
-    // with the observer off. Full saved roots and committed audio must agree.
+    // Repeat the same actual fixed steps under the same captured contact
+    // profile with the observer off. Full saved roots and audio must agree.
     const disabledRepository = new MemoryRepository(observerDisabledStart);
     soundscapePlay.mockClear();
     const disabled = await createTideweftRuntime(disabledRepository);
@@ -2902,6 +2953,7 @@ describe("production terrain fall and physical cargo", () => {
         )).toBe(false);
       } finally { refusal.mockRestore(); refused.destroy(); }
     }
+    legacyPerception?.mockRestore();
   }, 60_000);
 
   it("preserves cargo recovery choice across consumed intervals and current reload without changing custody", async () => {

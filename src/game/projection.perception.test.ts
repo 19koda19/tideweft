@@ -30,6 +30,58 @@ import {
 const LOCAL_PORTER = { kind: "player", id: "local-porter" } as const;
 
 describe("shared projection perception cache", () => {
+  it("projects real resident bodies throughout the larger cone and eight-tile close circle", () => {
+    const base = createWorldView(createWorld("one player envelope, no extra identity", "standard"));
+    const width = base.terrain.width;
+    const x = Math.floor(width / 2);
+    const y = Math.floor(base.terrain.height / 2);
+    const indices = [y * width + x + 20, (y + 12) * width + x + 5, y * width + x - 8];
+    const routes = base.routes.slice(0, indices.length).map((route, ordinal) => ({
+      ...route, path: [indices[ordinal]!],
+    }));
+    const residents = base.residents.slice(0, indices.length).map((resident, ordinal) => ({
+      ...resident,
+      location: { kind: "route" as const, routeId: routes[ordinal]!.id, progress: 0 },
+    }));
+    // Controlled clear, open ground isolates the spatial profile. Separate
+    // tests retain actual light, cover, hill and save authority.
+    const world = {
+      ...base, completedTick: 12 * 60, settlements: [], routes, residents,
+      weather: { ...base.weather, kind: "clear" as const, intensity: 0 },
+      terrain: { ...base.terrain, tiles: base.terrain.tiles.map((tile) => ({
+        ...tile, terrain: "meadow" as const, elevation: 0, roughness: 0,
+      })) },
+    };
+    const player = createPlayer(base);
+    player.x = (x + 0.5) * TILE_UNITS;
+    player.y = (y + 0.5) * TILE_UNITS;
+    player.facingMilliRadians = 0;
+    player.discovered.fill(0);
+    const perception = projectPerception(world, player);
+    const projected = projectGameView(world, player, { perception });
+
+    expect(projectPerception(world, player)).toBe(perception);
+    for (const [ordinal, index] of indices.entries()) {
+      expect(perception.detailVisibilityGrades[index], `resident ${ordinal} at ${index}, grid ${width}x${world.terrain.height}`)
+        .toBe(VISIBILITY_DIRECT);
+      expect(projected.terrain.tiles[index]?.currentDetailVisibility).toBe(1);
+      const porter = projected.porters.find(({ id }) => id === String(residents[ordinal]!.id));
+      expect(porter).toBeDefined();
+      expect(porter?.name).toBeUndefined();
+      expect(porter?.quickLabel).toContain("Unknown porter");
+    }
+    expect(perception.detailVisibilityGrades[y * width + x - 9]).toBe(0);
+    const dropped = dropLooseCargo(
+      createLooseCargoWorld(width, world.terrain.height),
+      createLooseCargoCarrier(LOCAL_PORTER, createCraftingInventory(100_000, { cordreed: 1 })),
+      { lotId: "crafting-stack:cordreed", quantity: 1,
+        x: (x + 40.5) * LOOSE_CARGO_TILE_UNITS, y: (y + 0.5) * LOOSE_CARGO_TILE_UNITS },
+    );
+    if (!dropped.ok || !dropped.entity) throw new Error("fixture needs a real dropped material");
+    expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: dropped.entity.id })]));
+  });
+
   it("reuses a stationary snapshot and invalidates on the sensory keys", () => {
     const world = createWorldView(createWorld("still eyes over black water", "standard"));
     const player = createPlayer(world);

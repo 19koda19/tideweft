@@ -70,11 +70,11 @@ export const BIOME_PRESENTATION: Readonly<Record<BiomeId, BiomePresentation>> = 
   },
 };
 
-/** Hidden cells deliberately return no biome presentation. */
+/** Current direct sight can reveal a motif without fabricating Chart memory. */
 export function visibleBiomePresentation(
   tile: TerrainTileView | undefined,
 ): BiomePresentation | undefined {
-  if (!tile?.biome || discovery(tile) <= 0) return undefined;
+  if (!tile?.biome || biomePresentationVisibility(tile) <= 0) return undefined;
   return BIOME_PRESENTATION[tile.biome];
 }
 
@@ -94,8 +94,11 @@ export function biomeEnvironmentalEmphasis(tile: TerrainTileView | undefined): n
   }
 }
 
-function discovery(tile: TerrainTileView): number {
-  return tile.discovered === undefined ? 1 : unit(tile.discovered);
+/** Durable Chart confidence or an explicitly disclosed present-tense detail. */
+export function biomePresentationVisibility(tile: TerrainTileView | undefined): number {
+  if (!tile) return 0;
+  const remembered = tile.discovered === undefined ? 1 : unit(tile.discovered);
+  return Math.max(remembered, tile.currentDetailVisibility === 1 ? 1 : 0);
 }
 
 function unit(value: number): number {

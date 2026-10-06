@@ -4568,7 +4568,9 @@ describe("runtime core-ecology vertical slice", () => {
   }, 90_000);
 
   it("admits one source-bound deer snort through shared audio/caption authority and reloads without replay", async () => {
-    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8);
+    // Eight tiles behind plus one sideways is outside the new eight-tile close
+    // circle while retaining the actual masked hearing gate for this call.
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime([-8, 1]);
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
       .toBe(false);
     soundscapePlay.mockClear();
@@ -4682,7 +4684,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 120_000);
 
   it("interrupts WAIT at the committed boundary of a lawfully heard strong alarm", async () => {
-    const { runtime, repository } = await createAlarmRuntime(-8);
+    const { runtime, repository } = await createAlarmRuntime([-8, 1]);
     const before = requiredEnvelope(repository);
     const beforeTick = deserializeWorld(before.world).meta.completedTick;
     soundscapePlay.mockClear();
@@ -5150,7 +5152,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 
   it("routes an authentic gull alarm through shared Voice without legacy fallback or reload replay", async () => {
-    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8, "gull");
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime([-8, 1], "gull");
     soundscapePlay.mockClear();
 
     advancePlayerSteps(runtime, 10);
@@ -5207,7 +5209,7 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 
   it.each(["elk", "wild-boar"] as const)("routes an authentic %s group alarm through shared Voice, interrupts WAIT, and reloads without replay", async (species) => {
-    const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8, species);
+    const { runtime, repository, alarmActorId } = await createAlarmRuntime([-8, 1], species);
     const cue = species === "elk" ? "vocalization-elk-alarm-bark" : "vocalization-boar-grunt";
     const beforeTick = deserializeWorld(requiredEnvelope(repository).world).meta.completedTick;
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === alarmActorId))
@@ -7686,30 +7688,37 @@ describe("runtime core-ecology vertical slice", () => {
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === foxActorId))
       .toBe(true);
+    expect(requiredEnvelope(repository).player.animalCallKnowledge?.calls.some(({ vocalization }) => (
+      vocalization === "marsh-fox-pursuit-yip"
+    ))).toBe(false);
     soundscapePlay.mockClear();
 
     advancePlayerSteps(runtime, 10);
 
     expect(runtime.getRenderView().wildlife?.some(({ actorId }) => actorId === foxActorId))
-      .toBe(false);
+      .toBe(true);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip"))
       .toHaveLength(1);
     expect(runtime.getUIView().expressionCaption).toMatchObject({
-      speakerLabel: "An animal",
-      text: "CALL.",
+      speakerLabel: "Marsh fox",
+      text: "YIP.",
       presentationKind: "animal-call",
-      animalCallKind: "animal-call",
+      animalCallKind: "marsh-fox-call",
+      recognizedAnimalCall: "Fox",
       assertive: false,
     });
-    // Seeing the animal before it calls is not a joint witness of its sound.
-    expect(runtime.getUIView().expressionCaption).not.toHaveProperty("recognizedAnimalCall");
+    // The larger forward cone retains the real moved body at the call locus;
+    // only that joint seen-and-heard event teaches the species call.
     expect(runtime.getUIView().announcement?.message).not.toContain("brief yip nearby");
 
     await runtime.save();
     const saved = requiredEnvelope(repository);
-    expect(saved.player.animalCallKnowledge?.calls.some(({ vocalization }) => (
+    expect(saved.player.animalCallKnowledge?.calls.filter(({ vocalization }) => (
       vocalization === "marsh-fox-pursuit-yip"
-    ))).toBe(false);
+    ))).toEqual([{
+      vocalization: "marsh-fox-pursuit-yip",
+      learnedAtTick: deserializeWorld(saved.world).meta.completedTick,
+    }]);
     const savedWorld = deserializeWorld(saved.world);
     const savedCore = requiredRegionalCoreOwner(saved, foxActorId);
     const savedFox = requiredCoreActor(savedCore, foxActorId);
@@ -7787,7 +7796,8 @@ describe("runtime core-ecology vertical slice", () => {
       eventId: admission.eventId,
       sourceActorId: foxActorId,
       receivedAtTick: admission.acceptedAtTick,
-      kind: "heard-unseen",
+      kind: "heard-visible",
+      directVisualReceipt: true,
     });
     const durableCarry = stableStringify(saved.perceptionCarry);
     runtime.destroy();
@@ -7797,11 +7807,12 @@ describe("runtime core-ecology vertical slice", () => {
     const resumed = await createTideweftRuntime(repository);
     expect(resumed.getUIView().saveWarning).toBeUndefined();
     // Other real animal events may retain their own unexpired presentation.
-    // Reload must not resurrect this consumed heard-unseen fox call.
+    // Reload must not resurrect this consumed fox call or reroll its learning.
     expect(resumed.getUIView().expressionCaption?.id).not.toBe(admission.eventId);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "fox-yip")).toEqual([]);
     await resumed.save();
     expect(stableStringify(requiredEnvelope(repository).perceptionCarry)).toBe(durableCarry);
+    expect(requiredEnvelope(repository).player.animalCallKnowledge).toEqual(saved.player.animalCallKnowledge);
 
     advancePlayerSteps(resumed, 10);
     await resumed.save();
@@ -9733,7 +9744,7 @@ async function createCatWeatherRuntime(
 }
 
 async function createAlarmRuntime(
-  offsetTiles: -12 | -8 | -4 | 9,
+  offsetTiles: -12 | -8 | -4 | 9 | readonly [-8, 1],
   sourceSpecies: "deer" | "marsh-rabbit" | "gull" | "elk" | "wild-boar" = "deer",
   runtimeFactory: (repository: SaveRepository) => Promise<TideweftRuntime> =
     createTideweftRuntime,
@@ -9759,8 +9770,10 @@ async function createAlarmRuntime(
   const world = deserializeWorld(envelope.world);
   makeWorldDryAndClear(world);
   const player = structuredClone(envelope.player);
+  const offsetX = typeof offsetTiles === "number" ? offsetTiles : offsetTiles[0];
+  const offsetY = typeof offsetTiles === "number" ? 0 : offsetTiles[1];
   if (sourceSpecies === "marsh-rabbit") player.stamina = 800_000;
-  player.facingMilliRadians = offsetTiles === -4
+  player.facingMilliRadians = offsetX === -4
     ? Math.round(Math.PI * 1_000)
     : 0;
   const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
@@ -9819,15 +9832,15 @@ async function createAlarmRuntime(
   }
   const alarmPosition = translateWorldPosition(
     playerPosition,
-    (sourceSpecies === "marsh-rabbit" ? rabbitDirection * 2 : offsetTiles)
+    (sourceSpecies === "marsh-rabbit" ? rabbitDirection * 2 : offsetX)
       * WORLD_POSITION_UNITS_PER_TILE,
-    sourceSpecies === "marsh-rabbit" ? -2 * WORLD_POSITION_UNITS_PER_TILE : 0,
+    (sourceSpecies === "marsh-rabbit" ? -2 : offsetY) * WORLD_POSITION_UNITS_PER_TILE,
   );
   const threatPosition = translateWorldPosition(
     sourceSpecies === "marsh-rabbit" ? playerPosition : alarmPosition,
     sourceSpecies === "marsh-rabbit"
       ? rabbitDirection * 2 * WORLD_POSITION_UNITS_PER_TILE
-      : (offsetTiles < 0 ? 1 : -1) * WORLD_POSITION_UNITS_PER_TILE,
+      : (offsetX < 0 ? 1 : -1) * WORLD_POSITION_UNITS_PER_TILE,
     sourceSpecies === "marsh-rabbit" ? 2 * WORLD_POSITION_UNITS_PER_TILE : 0,
   );
   patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(alarmActor, {
@@ -9835,14 +9848,14 @@ async function createAlarmRuntime(
     position: alarmPosition,
     heading: sourceSpecies === "marsh-rabbit"
       ? 250_000
-      : offsetTiles < 0 ? 0 : 500_000,
+      : offsetX < 0 ? 0 : 500_000,
   }));
   const positionedThreat = repositionCoreWildlifeActor(threat, {
     atTick: patch.updatedAtTick,
     position: threatPosition,
     heading: sourceSpecies === "marsh-rabbit"
       ? 750_000
-      : offsetTiles < 0 ? 500_000 : 0,
+      : offsetX < 0 ? 500_000 : 0,
   });
   patch = replaceCoreEcologyAggregatePatchActor(
     patch,

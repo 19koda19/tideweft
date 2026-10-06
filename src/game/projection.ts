@@ -10,10 +10,7 @@ import type {
   TidePhase,
   WeatherKind as RenderWeatherKind,
 } from "../render/types";
-import {
-  LOOSE_CARGO_RENDER_RADIUS_TILES,
-  projectLooseCargoWorld,
-} from "../render/looseCargoPresentation";
+import { projectLooseCargoWorld } from "../render/looseCargoPresentation";
 import {
   applyWeatherToBiomeClimate,
   canonicalizeResidentCircadianState,
@@ -112,6 +109,8 @@ import {
 } from "./looseCargo";
 import { eventSettlementLocusIds } from "./eventObservation";
 import {
+  DEFAULT_PERCEPTION_RANGES,
+  DEFAULT_DETAIL_PERCEPTION_RANGES,
   PERCEPTION_VERSION,
   VISIBILITY_DIRECT,
   VISIBILITY_HIDDEN,
@@ -790,6 +789,22 @@ export function projectPerception(
   world: WorldView,
   player: PlayerState,
 ): PerceptionResult {
+  return projectPlayerPerception(world, player, false);
+}
+
+/** Historical receipt validation only; never current sight or new knowledge. */
+export function projectLegacyPlayerPerception(
+  world: WorldView,
+  player: PlayerState,
+): PerceptionResult {
+  return projectPlayerPerception(world, player, true);
+}
+
+function projectPlayerPerception(
+  world: WorldView,
+  player: PlayerState,
+  legacyDetail: boolean,
+): PerceptionResult {
   const currentPlayerTileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
     + Math.floor(player.x / TILE_UNITS);
   const cells = buildWorldPerceptionCells(world) ?? [];
@@ -816,6 +831,7 @@ export function projectPerception(
     Math.min(1, 1 - (world.weather.intensity / FIXED_POINT) * 0.52),
   );
   const resultKey = [
+    legacyDetail,
     currentPlayerTileIndex,
     player.facingMilliRadians,
     weatherVisibility,
@@ -833,7 +849,16 @@ export function projectPerception(
     playerTileIndex: currentPlayerTileIndex,
     facingRadians: player.facingMilliRadians / 1_000,
     weatherVisibility,
-    detailIllumination: cached.detailIllumination,
+    // Replaying a historical receipt keeps its former sqrt(light) response;
+    // the new player curve saturates at half illumination. Geometry, weather
+    // and actual light still come from the same authoritative world.
+    detailIllumination: legacyDetail
+      ? cached.detailIllumination.map((value) => value * 0.5)
+      : cached.detailIllumination,
+    detailRangeOverrides: legacyDetail
+      ? DEFAULT_DETAIL_PERCEPTION_RANGES
+      : DEFAULT_PERCEPTION_RANGES,
+    closeDetailIsDirect: !legacyDetail,
   });
   cached.resultKey = resultKey;
   cached.result = result;
@@ -1412,7 +1437,7 @@ function projectRegionalLooseCargo(
         y: (cargoOrigin.y - frameOrigin.y) * tileSize,
       },
       worldUnitsPerTile: tileSize,
-      renderDistance: tileSize * LOOSE_CARGO_RENDER_RADIUS_TILES,
+      renderDistance: tileSize * DEFAULT_PERCEPTION_RANGES.directSightRange,
       focusedPromiseContractId,
       viewerOwner: { kind: "player", id: "local-porter" },
       player: {
