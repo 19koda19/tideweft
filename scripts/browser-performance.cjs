@@ -179,6 +179,8 @@ function parseArguments(argv) {
   let observeVoice = false;
   let reducedMotion = false;
   let sampleMsSpecified = false;
+  let presentationWidth = null;
+  let presentationMode = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -192,6 +194,12 @@ function parseArguments(argv) {
       observeVoice = true;
     } else if (argument === '--reduced-motion') {
       reducedMotion = true;
+    } else if (argument === '--presentation-width') {
+      presentationWidth = parseWholeNumber(requiredArgumentValue(argv, index, argument), argument, 320, 1280);
+      index += 1;
+    } else if (argument === '--presentation-mode') {
+      presentationMode = requiredArgumentValue(argv, index, argument);
+      index += 1;
     } else if (argument === '--browser-executable') {
       browserExecutable = requiredArgumentValue(argv, index, '--browser-executable');
       index += 1;
@@ -246,7 +254,13 @@ function parseArguments(argv) {
     throw new Error('--voice-presentation is a functional check, not a packaged performance comparison');
   }
   if (voicePresentation && observeVoice) {
-    throw new Error('--observe-voice samples ordinary gameplay; do not combine it with frozen --voice-presentation');
+    throw new Error('--observe-voice samples ordinary gameplay; do not combine it with functional --voice-presentation');
+  }
+  if ((presentationWidth === null) !== (presentationMode === null)
+    || (presentationWidth !== null && (!voicePresentation
+      || !VOICE_PRESENTATION_VIEWPORTS.some(({ width }) => width === presentationWidth)
+      || !['chart-2d', 'relief-3d'].includes(presentationMode)))) {
+    throw new Error('Functional --presentation-width and --presentation-mode must select one supported viewport/view together');
   }
   return {
     browserExecutable: browserExecutable ? path.resolve(browserExecutable) : '',
@@ -258,7 +272,21 @@ function parseArguments(argv) {
     pairedGreetings,
     observeVoice,
     reducedMotion,
+    presentationState: presentationWidth === null ? null : {
+      viewport: VOICE_PRESENTATION_VIEWPORTS.find(({ width }) => width === presentationWidth),
+      mode: presentationMode,
+    },
   };
+}
+
+function voicePresentationStates(selected = null) {
+  const states = VOICE_PRESENTATION_VIEWPORTS.flatMap((viewport) =>
+    ['chart-2d', 'relief-3d'].map((mode) => ({ viewport, mode })));
+  if (selected === null) return states;
+  const match = states.find(({ viewport, mode }) => mode === selected.mode
+    && viewport.width === selected.viewport?.width && viewport.height === selected.viewport?.height);
+  if (!match) throw new Error('Unsupported functional presentation state');
+  return [match];
 }
 
 function decodeRemoteValue(remote, references = new Map()) {
@@ -1203,6 +1231,133 @@ function assertIdentityUnchanged(label, before, after) {
   return true;
 }
 
+// Passive native observation only. These expectations follow the canonical
+// UI reading contract; this probe never writes a caption or changes its clock.
+function installNativeVoiceProbe() {
+  const node = document.querySelector('#announcer');
+  const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+  if (!node || !caption) throw new Error('No native caption/accessibility surfaces');
+  const state = { entries: [], leases: [], overflow: false, active: null };
+  const observer = new MutationObserver(() => {
+    const text = node.textContent.trim();
+    if (!text) return;
+    if (state.entries.length >= 32 || text.length > 1024) state.overflow = true;
+    else state.entries.push(text);
+  });
+  observer.observe(node, { childList: true, subtree: true, characterData: true });
+  const observeCaption = () => {
+    const now = performance.now();
+    const id = caption.hidden ? null : caption.dataset.expressionId;
+    const speaker = caption.querySelector('.situated-expression-caption__speaker')?.textContent ?? '';
+    const text = caption.querySelector('.situated-expression-caption__text')?.textContent ?? '';
+    const visibleText = `${speaker ? speaker + ' ' : ''}${text}`;
+    if (state.active?.id === id) {
+      if (state.active.visibleText !== visibleText) state.overflow = true;
+      return;
+    }
+    if (state.active !== null) {
+      state.active.endedAtMs = now;
+      state.active.endReason = id ? 'replacement' : 'hidden';
+      state.active = null;
+    }
+    if (!id) return;
+    if (state.leases.length >= 32 || id.length > 1024 || visibleText.length > 1024) {
+      state.overflow = true;
+      return;
+    }
+    const lease = { id, visibleText, firstVisibleMs: now, endedAtMs: null, endReason: null,
+      expectedReadingMs: Math.max(1000, Math.ceil(Array.from(visibleText).length * 1000 / 21)) };
+    state.leases.push(lease);
+    state.active = lease;
+  };
+  const captionObserver = new MutationObserver(observeCaption);
+  captionObserver.observe(caption, { attributes: true, childList: true, subtree: true, characterData: true });
+  observeCaption();
+  window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer, captionObserver });
+}
+
+function assertNativeCaptionLease(lease, { expired = false } = {}) {
+  // Mutation delivery follows the UI frame's clock. This is bounded DOM
+  // observation tolerance, not extra shipping lifetime or an FPS guarantee.
+  const observationToleranceMs = 100;
+  if (!lease || !Number.isSafeInteger(lease.visibleCodePoints) || lease.visibleCodePoints < 1
+    || lease.visibleCodePoints > 1024 || !Number.isFinite(lease.firstVisibleMs) || lease.firstVisibleMs < 0
+    || !Number.isFinite(lease.observedAtMs) || lease.observedAtMs < lease.firstVisibleMs
+    || lease.expectedReadingMs !== Math.max(1000, Math.ceil(lease.visibleCodePoints * 1000 / 21))
+    || (expired ? (!Number.isFinite(lease.endedAtMs) || !['hidden', 'replacement'].includes(lease.endReason)
+      || lease.endedAtMs > lease.observedAtMs
+      || lease.endedAtMs - lease.firstVisibleMs < lease.expectedReadingMs - observationToleranceMs)
+      : (lease.endedAtMs !== null || lease.observedAtMs - lease.firstVisibleMs
+        > lease.expectedReadingMs + observationToleranceMs))) {
+    throw new Error('Missing, expired or invalid native caption reading-lease evidence');
+  }
+  return lease;
+}
+
+function matchObservedSpeechCaption(id, speaker, text, aria, captions) {
+  if (!Array.isArray(captions) || captions.length < 1 || captions.length > 2
+    || Array.from(captions).some((caption) => !caption || ['id', 'speakerLabel', 'text'].some((field) =>
+      typeof caption[field] !== 'string' || caption[field].length < 1 || caption[field].length > 1024))
+    || new Set(captions.map((caption) => caption.id)).size !== captions.length) {
+    throw new Error('Expected one or two lawful observed speech captions');
+  }
+  return captions.some((caption) => caption.id === id && speaker === `${caption.speakerLabel}:`
+    && text === caption.text && aria === `${caption.speakerLabel}: ${caption.text}`);
+}
+
+function nativeCaptionLeaseEvidence(probe, id, observedAtMs) {
+  const matches = probe.leases.filter((lease) => lease.id === id);
+  if (probe.overflow || matches.length !== 1) throw new Error('Native caption lease is missing, repeated or overflowed');
+  const lease = matches[0];
+  return { visibleCodePoints: Array.from(lease.visibleText).length,
+    firstVisibleMs: lease.firstVisibleMs, observedAtMs,
+    expectedReadingMs: lease.expectedReadingMs, endedAtMs: lease.endedAtMs, endReason: lease.endReason };
+}
+
+async function prepareVoicePresentationState(client, state) {
+  await client.command('browsingContext.setViewport', {
+    context: client.context, viewport: state.viewport, devicePixelRatio: 1,
+  });
+  await client.waitFor(`innerWidth === ${state.viewport.width} && innerHeight === ${state.viewport.height}`);
+  await client.evaluate(`window.__TIDEWEFT__.renderer.setMode(${JSON.stringify(state.mode)})`);
+  await client.waitFor(`Boolean(document.querySelector(
+    '#p5-mount canvas[data-renderer="${state.mode}"]:not([hidden])'))`);
+  await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+}
+
+function assertNativeCaptureContinuity(before, after) {
+  if (!Number.isSafeInteger(before?.tick) || before.tick < 0
+    || !after || after.sameVisibleCaption !== true || after.mode !== before.mode
+    || after.tick !== before.tick || !stableEqual(after.viewport, before.viewport)
+    || after.readingLease?.firstVisibleMs !== before.caption?.readingLease?.firstVisibleMs
+    || after.readingLease?.visibleCodePoints !== before.caption?.readingLease?.visibleCodePoints
+    || after.readingLease?.observedAtMs < before.caption?.readingLease?.observedAtMs) {
+    throw new Error('Native caption expired, changed or lost its capture identity during screenshot');
+  }
+  assertNativeCaptionLease(after.readingLease);
+  return after;
+}
+
+async function captureVoiceScreenshot(client, snapshot, output, viewport, mode) {
+  const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
+  const continuity = await client.evaluate(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+    const probe = window.__TIDEWEFT_VOICE_PROBE__;
+    const same = Boolean(caption && !caption.hidden && caption.dataset.expressionId === probe.captureId);
+    return { sameVisibleCaption: same, mode: bridge.renderer.mode(), tick: bridge.runtime.getRenderView().tick,
+      viewport: { width: innerWidth, height: innerHeight },
+      readingLease: same ? (${nativeCaptionLeaseEvidence.toString()})(probe, probe.captureId, performance.now()) : null };
+  })()`);
+  assertNativeCaptureContinuity(snapshot, continuity);
+  const bytes = Buffer.from(screenshot.data, 'base64');
+  if (bytes.length < 1024) throw new Error('Voice screenshot is empty');
+  const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
+  await fs.writeFile(screenshotPath, bytes, { flag: 'wx', mode: 0o600 });
+  return { file: path.basename(screenshotPath), bytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'), captionContinuity: continuity };
+}
+
 // Actual DOM border boxes, not font estimates or a replacement label renderer.
 // This deliberately does not claim glyph-ink, screen-reader speech or hardware proof.
 function assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal = false } = {}) {
@@ -1219,6 +1374,7 @@ function assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal = fal
     || snapshot.labelLayerAriaHidden !== 'true') {
     throw new Error(`Invalid Voice caption/accessibility presentation: ${JSON.stringify(snapshot)}`);
   }
+  assertNativeCaptionLease(caption.readingLease);
   if (!Array.isArray(snapshot.labels) || snapshot.labels.length > 4
     || (mode === 'relief-3d' && !anonymousAnimal && snapshot.labels.length === 0)
     || (anonymousAnimal && (snapshot.labels.length !== 0 || snapshot.anonymousSourceUnanchored !== true))
@@ -1322,7 +1478,7 @@ async function physicalBrowserClick(client, rect) {
   });
 }
 
-async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, rectangleOf) {
+async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, rectangleOf, presentationState) {
   const secondTarget = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getRenderView();
@@ -1333,6 +1489,7 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
         || a.distance - b.distance || String(a.porter.id).localeCompare(String(b.porter.id)));
     const chosen = candidates[0];
     if (!chosen) return null;
+    bridge.renderer.setMode('chart-2d');
     return { id: chosen.porter.id, actorId: chosen.porter.actorId };
   })()`);
   if (!secondTarget) throw new Error('No second actual nearby resident for paired greeting');
@@ -1358,6 +1515,7 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
     return selected?.id === ${JSON.stringify(String(secondTarget.id))}
       && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
   })()`);
+  await prepareVoicePresentationState(client, presentationState);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
   const paired = await client.waitFor(`(() => {
     const bridge = window.__TIDEWEFT__;
@@ -1381,6 +1539,8 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
       announcement: caption.speakerLabel + ': ' + caption.text,
       cueIds: [first.id, second.id], sourceIds: [first.sourceActorId, second.sourceActorId],
       cueTexts: [first.text, second.text],
+      captions: [${JSON.stringify(firstCommitted.caption)},
+        { id: second.id, text: second.text, speakerLabel: view.selectedResident.heading }],
       announcements: [${JSON.stringify(firstCommitted.announcement)},
         view.selectedResident.heading + ': ' + second.text],
       secondHeading: view.selectedResident.heading, secondKnown: view.selectedResident.known };
@@ -1390,7 +1550,7 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
 }
 
 async function exerciseBrowserVoicePresentation(client, output, reducedMotion, reloadProductionPage,
-  { pairedGreetings = false } = {}) {
+  { pairedGreetings = false, presentationState } = {}) {
   const target = await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
     const view = bridge.runtime.getRenderView();
@@ -1430,20 +1590,8 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     return selected?.id === ${JSON.stringify(String(target.id))}
       && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
   })()`);
-  await client.evaluate(`(() => {
-    const node = document.querySelector('#announcer');
-    if (!node) throw new Error('No accessible live region');
-    const entries = [];
-    const state = { entries, overflow: false };
-    const observer = new MutationObserver(() => {
-      const text = node.textContent.trim();
-      if (!text) return;
-      if (entries.length >= 32 || text.length > 1024) state.overflow = true;
-      else entries.push(text);
-    });
-    observer.observe(node, { childList: true, subtree: true, characterData: true });
-    window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer });
-  })()`);
+  await prepareVoicePresentationState(client, presentationState);
+  await client.evaluate(`(${installNativeVoiceProbe.toString()})()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
   let committed = await client.waitFor(`(() => {
     const bridge = window.__TIDEWEFT__;
@@ -1455,14 +1603,14 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         && cue.sourceActorId === ${JSON.stringify(target.actorId)}
         && cue.sourceKind === 'human' && cue.acousticKind === 'speech')) return false;
     if (!${pairedGreetings}) bridge.runtime.stop();
-    return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id,
+    return { tick: bridge.runtime.getRenderView().tick, captionId: caption.id, caption,
       announcement: caption.speakerLabel + ': ' + caption.text,
       heading: view.selectedResident.heading, known: view.selectedResident.known };
   })()`);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__close'));
   const firstCommitTick = committed.tick;
   const pair = pairedGreetings
-    ? await commitSecondBrowserGreeting(client, target, committed, rectangleOf) : null;
+    ? await commitSecondBrowserGreeting(client, target, committed, rectangleOf, presentationState) : null;
   if (pair !== null && pair.tick <= firstCommitTick) {
     throw new Error('Second physical greeting did not advance beyond the first commit');
   }
@@ -1470,12 +1618,7 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     captionId: pair.captionId, announcement: pair.announcement };
   const snapshots = [];
   await fs.mkdir(path.dirname(output), { recursive: true });
-  for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
-    await client.command('browsingContext.setViewport', {
-      context: client.context, viewport, devicePixelRatio: 1,
-    });
-    await client.waitFor(`innerWidth === ${viewport.width} && innerHeight === ${viewport.height}`);
-    for (const mode of ['chart-2d', 'relief-3d']) {
+  for (const { viewport, mode } of voicePresentationStates(presentationState)) {
       await client.evaluate(`(() => {
         const bridge = window.__TIDEWEFT__;
         bridge.renderer.setMode(${JSON.stringify(mode)});
@@ -1490,15 +1633,25 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
           y: (pairedCues[0].position.y + pairedCues[1].position.y) / 2,
         } : cue.position;
         bridge.renderer.focusWorld(anchor, 1.65);
-        for (let index = 0; index < 5; index += 1) bridge.ui.update(bridge.runtime.getUIView());
       })()`);
       await client.waitFor(`Boolean(document.querySelector(
         '#p5-mount canvas[data-renderer="${mode}"]:not([hidden])'))`);
-      await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
+      await client.waitFor(`(() => {
+        const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+        const probe = window.__TIDEWEFT_VOICE_PROBE__;
+        if (!caption || caption.hidden) return false;
+        const aria = caption.getAttribute('aria-label');
+        return (${matchObservedSpeechCaption.toString()})(caption.dataset.expressionId,
+          caption.querySelector('.situated-expression-caption__speaker')?.textContent,
+          caption.querySelector('.situated-expression-caption__text')?.textContent, aria,
+          ${JSON.stringify(pair?.captions ?? [committed.caption])})
+          && (${countAnimalAnnouncementCopies.toString()})(probe.entries, aria) === 1;
+      })()`);
+      await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
       const snapshot = await client.evaluate(`(() => {
         const bridge = window.__TIDEWEFT__;
         const view = bridge.runtime.getUIView();
-        const expected = view.expressionCaption;
+        const lawfulCaptions = ${JSON.stringify(pair?.captions ?? [committed.caption])};
         const cues = bridge.runtime.getRenderView().acousticText;
         const geometry = (node) => {
           const r = node.getBoundingClientRect();
@@ -1515,9 +1668,8 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         const pairedMatches = visibleLabels.map((node) => pairedCues.findIndex((cue) =>
           cue.text === node.textContent && cue.acousticKind === node.dataset.acousticKind
           && cue.sourceKind === node.dataset.sourceKind));
-        // Diagnostic only: the shared acoustic arbiter does not yet reserve
-        // ordinary world-label space. Do not mistake pair separation for that
-        // wider integration proof. Bound this opt-in frozen DOM inspection.
+        // This finite native check supplements conservative layout envelopes;
+        // it does not certify every ordinary label, font or dense workload.
         const ordinaryLabels = pairIds === null ? [] : [...document.querySelectorAll(
           '.relief-world-label:not([data-acoustic-kind])')]
           .filter((node) => !node.hidden && node.getClientRects().length > 0);
@@ -1529,10 +1681,11 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
             acoustic: { text: node.textContent, ...geometry(node) },
             ordinary: { text: ordinary.textContent, tone: ordinary.dataset.tone, ...geometry(ordinary) },
           })));
+        window.__TIDEWEFT_VOICE_PROBE__.captureId = caption?.dataset.expressionId;
         return {
           mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
           tick: bridge.runtime.getRenderView().tick,
-          sameCommittedCaption: expected?.id === ${JSON.stringify(committed.captionId)},
+          sameCommittedCaption: view.expressionCaption?.id === ${JSON.stringify(committed.captionId)},
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
           liveRegionOverflow: window.__TIDEWEFT_VOICE_PROBE__.overflow,
           labelLayerAriaHidden: document.querySelector('.relief-label-layer')?.getAttribute('aria-hidden'),
@@ -1541,10 +1694,14 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
             dock: geometry(document.querySelector('.action-dock')).rect,
           },
           caption: caption && !caption.hidden ? { ...geometry(caption),
-            matchesProjection: caption.dataset.expressionId === expected?.id
-              && caption.querySelector('.situated-expression-caption__text')?.textContent === expected?.text,
-            ariaMatches: aria === expected?.speakerLabel + ': ' + expected?.text,
-            announcementCount: window.__TIDEWEFT_VOICE_PROBE__.entries.filter((text) => text === aria).length,
+            matchesProjection: (${matchObservedSpeechCaption.toString()})(caption.dataset.expressionId,
+              caption.querySelector('.situated-expression-caption__speaker')?.textContent,
+              caption.querySelector('.situated-expression-caption__text')?.textContent, aria, lawfulCaptions),
+            ariaMatches: lawfulCaptions.some((item) => item.id === caption.dataset.expressionId
+              && aria === item.speakerLabel + ': ' + item.text),
+            announcementCount: (${countAnimalAnnouncementCopies.toString()})(window.__TIDEWEFT_VOICE_PROBE__.entries, aria),
+            readingLease: (${nativeCaptionLeaseEvidence.toString()})(window.__TIDEWEFT_VOICE_PROBE__,
+              caption.dataset.expressionId, performance.now()),
           } : null,
           labels: visibleLabels.map((node) => ({ ...geometry(node), matchesProjection: cues.some((cue) =>
               cue.text === node.textContent && cue.acousticKind === node.dataset.acousticKind
@@ -1554,7 +1711,7 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
             sourceCount: new Set(pairedCues.map((cue) => cue.sourceActorId)).size,
             uniqueSignatureCount: new Set(pairedCues.map((cue) => JSON.stringify(
               [cue.text, cue.acousticKind, cue.sourceKind]))).size,
-            captionFromPair: pairIds.includes(expected?.id),
+            captionFromPair: pairIds.includes(caption?.dataset.expressionId),
             visibleLabelCount: pairedMatches.filter((index) => index >= 0).length,
             labelsMatchOneToOne: pairedMatches.every((index) => index >= 0)
               && new Set(pairedMatches).size === pairedMatches.length,
@@ -1568,18 +1725,10 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
         || snapshot.reducedMotion !== reducedMotion) throw new Error('Voice authority or motion preference changed');
       assertVoicePresentationSnapshot(snapshot, mode);
       if (pair !== null) assertPairedGreetingSnapshot(snapshot, mode);
-      const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
-      const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
-      const filename = path.basename(screenshotPath);
-      const bytes = Buffer.from(screenshot.data, 'base64');
-      if (bytes.length < 1024) throw new Error('Voice screenshot is empty');
-      await fs.writeFile(screenshotPath, bytes, { flag: 'wx', mode: 0o600 });
-      snapshots.push({ ...snapshot, screenshot: { file: filename, bytes: bytes.length,
-        sha256: createHash('sha256').update(bytes).digest('hex') } });
-    }
+      snapshots.push({ ...snapshot, screenshot: await captureVoiceScreenshot(client, snapshot, output, viewport, mode) });
   }
   await client.evaluate('window.__TIDEWEFT__.runtime.start()');
-  const expired = await client.waitFor(`(() => {
+  const projectionExpiredTick = await client.waitFor(`(() => {
     const bridge = window.__TIDEWEFT__;
     const render = bridge.runtime.getRenderView();
     if (render.tick < ${committed.tick + 6}
@@ -1587,13 +1736,17 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
       || ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(
         bridge.runtime.getUIView().expressionCaption?.id)) return false;
     bridge.runtime.stop();
+    return render.tick;
+  })()`);
+  const expired = await client.waitFor(`(() => {
+    const bridge = window.__TIDEWEFT__;
+    const render = bridge.runtime.getRenderView();
     const caption = document.querySelector('[data-ui="situated-expression-caption"]');
     const probe = window.__TIDEWEFT_VOICE_PROBE__;
-    if (!caption || (!caption.hidden
-        && ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(caption.dataset.expressionId))
-      || probe.overflow || probe.entries.filter((text) => text.includes(${JSON.stringify(committed.announcement)})).length !== 1) {
-      throw new Error('Expired greeting remains visible or was announced again');
-    }
+    if (!caption) throw new Error('Native caption surface disappeared');
+    if (!caption.hidden && ${JSON.stringify(pair?.cueIds ?? [committed.captionId])}.includes(caption.dataset.expressionId)) return false;
+    if (probe.overflow || (${countAnimalAnnouncementCopies.toString()})(probe.entries,
+      ${JSON.stringify(committed.announcement)}) !== 1) throw new Error('Greeting was announced again or probe overflowed');
     const pairedAnnouncements = ${JSON.stringify(pair?.announcements ?? null)};
     const countCopies = ${countAnimalAnnouncementCopies.toString()};
     const pairedAnnouncementCounts = pairedAnnouncements?.map((text) => countCopies(probe.entries, text));
@@ -1604,9 +1757,18 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
       throw new Error('Expired paired greeting remains visible or repeats an announcement');
     }
     probe.observer.disconnect();
-    return { tick: render.tick, expiredEventAbsent: true, originalAnnouncementCount: 1,
+    probe.captionObserver.disconnect();
+    const ids = ${JSON.stringify(pair?.cueIds ?? [committed.captionId])};
+    const readingLeases = probe.leases.filter((lease) => ids.includes(lease.id)).map((lease) =>
+      (${nativeCaptionLeaseEvidence.toString()})(probe, lease.id, performance.now()));
+    return { tick: render.tick, projectionExpiredTick: ${projectionExpiredTick},
+      expiredEventAbsent: true, originalAnnouncementCount: 1, readingLeases,
       ...(pairedAnnouncements === null ? {} : { pairedAnnouncementCounts, bothExpiredEventsAbsent: true }) };
   })()`);
+  if (expired.readingLeases.length < 1 || expired.readingLeases.length > (pair === null ? 1 : 2)) {
+    throw new Error('No bounded native greeting reading/expiry witness');
+  }
+  expired.readingLeases.forEach((lease) => assertNativeCaptionLease(lease, { expired: true }));
   await client.evaluate('window.__TIDEWEFT__.runtime.save()');
   const reloadDiagnostics = await reloadProductionPage(pair?.announcements ?? committed.announcement);
   await client.command('browsingContext.setViewport', {
@@ -1702,8 +1864,8 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
       bothCommitTick: committed.tick, distinctSources: 2, distinctEvents: 2,
       worldContinuedBetweenGreetings: true } }),
     limitation: pair === null
-      ? 'One natural introduction, frozen viewports, ordinary expiry and current-save browser reload; visible facts/DOM and bounded live-region observations, not exact all-root equivalence, audible audio/screen reader, mobile hardware, crowd/soak performance or desktop packaging. Old-document window counters end at pre-reload capture; guarded BiDi logs span teardown.'
-      : 'Two actual introductions compete after ordinary simulation and physical controls; desktop Relief requires two distinct nonoverlapping native labels. Compact suppression and ordinary-world-label overlap are reported; the latter is diagnostic, not a passing all-label integration gate. Chart uses canvas and screenshots, not DOM glyph bounds. Expired events and learned ABOUT facts survive one current-save reload without old announcements. Not animal/physical coexistence, active-lease restore, all-root equality, audible audio/AT, mobile hardware, hours or crowd/performance closure.' };
+      ? 'One natural introduction in the selected viewport/view, simulation stopped after commitment but UI clock untouched, native live layout and independently observed reading/projection expiry, current-save browser reload; visible facts/DOM and bounded live-region observations, not exact all-root equivalence, audible audio/screen reader, mobile hardware, crowd/soak performance or desktop packaging. Old-document window counters end at pre-reload capture; guarded BiDi logs span teardown.'
+      : 'Two actual introductions compete after ordinary simulation and physical controls in the selected viewport/view; desktop Relief requires two distinct nonoverlapping native labels. Compact suppression is reported and actual ordinary-world-label overlap is rejected in this finite scene, not a passing all-label integration gate. Chart uses canvas and screenshots, not DOM glyph bounds. The UI clock continues; actual retained pair-member copy and reading expiry are observed separately from projected-event expiry. Expired events and learned ABOUT facts survive one current-save reload without old announcements. Not animal/physical coexistence, active-lease restore, all-root equality, audible audio/AT, mobile hardware, hours or crowd/performance closure.' };
 }
 
 function assertRestoredVoiceSnapshot(snapshot, mode, tick) {
@@ -1762,28 +1924,19 @@ function countAnimalAnnouncementCopies(entries, copy) {
   return count;
 }
 
-async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, reloadProductionPage) {
+async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, reloadProductionPage,
+  { presentationState } = {}) {
+  await prepareVoicePresentationState(client, presentationState);
+  await client.evaluate(`(${installNativeVoiceProbe.toString()})()`);
   // No state/event injection: an existing ordinary move-target adapter starts
   // the same first segment as the production travel witness. Quiet is failure.
   await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
-    const node = document.querySelector('#announcer');
-    if (!node) throw new Error('No accessible live region');
-    const state = { entries: [], overflow: false };
-    const observer = new MutationObserver(() => {
-      const text = node.textContent.trim();
-      if (!text) return;
-      if (state.entries.length >= 32 || text.length > 1024) state.overflow = true;
-      else state.entries.push(text);
-    });
-    observer.observe(node, { childList: true, subtree: true, characterData: true });
-    window.__TIDEWEFT_VOICE_PROBE__ = Object.assign(state, { observer });
     const view = bridge.runtime.getRenderView();
     const p = view.player.position;
     const size = view.terrain.tileSize;
     const distance = Math.min(26, p.y / size - 1.5);
     if (!Number.isFinite(distance) || distance < 0.5) throw new Error('No bounded ordinary travel target');
-    bridge.renderer.setMode('relief-3d');
     bridge.renderer.setActive(true);
     bridge.ui.start();
     bridge.runtime.dispatchRenderer({ type: 'move-target',
@@ -1801,16 +1954,17 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
   const eventId = committed.caption.id;
   const snapshots = [];
   await fs.mkdir(path.dirname(output), { recursive: true });
-  for (const viewport of VOICE_PRESENTATION_VIEWPORTS) {
-    await client.command('browsingContext.setViewport', {
-      context: client.context, viewport, devicePixelRatio: 1,
-    });
-    await client.waitFor(`innerWidth === ${viewport.width} && innerHeight === ${viewport.height}`);
-    for (const mode of ['chart-2d', 'relief-3d']) {
+  for (const { viewport, mode } of voicePresentationStates(presentationState)) {
       await client.evaluate(`window.__TIDEWEFT__.renderer.setMode(${JSON.stringify(mode)})`);
       await client.waitFor(`Boolean(document.querySelector(
         '#p5-mount canvas[data-renderer="${mode}"]:not([hidden])'))`);
-      await client.evaluate('new Promise((resolve) => setTimeout(resolve, 400))');
+      await client.waitFor(`(() => {
+        const caption = document.querySelector('[data-ui="situated-expression-caption"]');
+        const probe = window.__TIDEWEFT_VOICE_PROBE__;
+        return Boolean(caption && !caption.hidden && caption.dataset.expressionId === ${JSON.stringify(eventId)}
+          && (${countAnimalAnnouncementCopies.toString()})(probe.entries, ${JSON.stringify(expected.announcement)}) === 1);
+      })()`);
+      await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
       const snapshot = await client.evaluate(`(() => {
         const bridge = window.__TIDEWEFT__;
         const view = bridge.runtime.getUIView();
@@ -1826,6 +1980,7 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
         const caption = document.querySelector('[data-ui="situated-expression-caption"]');
         const labels = [...document.querySelectorAll('.relief-world-label[data-acoustic-kind]')]
           .filter((node) => !node.hidden && node.getClientRects().length > 0);
+        window.__TIDEWEFT_VOICE_PROBE__.captureId = caption?.dataset.expressionId;
         return { mode: bridge.renderer.mode(), viewport: { width: innerWidth, height: innerHeight },
           tick: render.tick, sameCommittedCaption: cue?.id === ${JSON.stringify(eventId)},
           reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -1844,6 +1999,8 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
             ariaMatches: caption.getAttribute('aria-label') === ${JSON.stringify(expected.announcement)},
             announcementCount: (${countAnimalAnnouncementCopies.toString()})(
               window.__TIDEWEFT_VOICE_PROBE__.entries, ${JSON.stringify(expected.announcement)}),
+            readingLease: (${nativeCaptionLeaseEvidence.toString()})(window.__TIDEWEFT_VOICE_PROBE__,
+              caption.dataset.expressionId, performance.now()),
           } : null,
           labels: labels.map((node) => geometry(node)),
         };
@@ -1851,14 +2008,7 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
       if (snapshot.tick !== committed.tick || !snapshot.sameCommittedCaption
         || snapshot.reducedMotion !== reducedMotion) throw new Error('Animal presentation changed authority or motion preference');
       assertVoicePresentationSnapshot(snapshot, mode, { anonymousAnimal: true });
-      const screenshot = await client.command('browsingContext.captureScreenshot', { context: client.context });
-      const bytes = Buffer.from(screenshot.data, 'base64');
-      if (bytes.length < 1024) throw new Error('Animal screenshot is empty');
-      const screenshotPath = voiceScreenshotPath(output, viewport.width, mode);
-      await fs.writeFile(screenshotPath, bytes, { flag: 'wx', mode: 0o600 });
-      snapshots.push({ ...snapshot, screenshot: { file: path.basename(screenshotPath), bytes: bytes.length,
-        sha256: createHash('sha256').update(bytes).digest('hex') } });
-    }
+      snapshots.push({ ...snapshot, screenshot: await captureVoiceScreenshot(client, snapshot, output, viewport, mode) });
   }
   await client.evaluate('window.__TIDEWEFT__.runtime.start()');
   const expiredTick = await client.waitFor(`(() => {
@@ -1876,8 +2026,12 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
       probe.entries, ${JSON.stringify(expected.announcement)}) !== 1)
       throw new Error('Animal caption repeated or announcement history overflowed');
     probe.observer.disconnect();
+    probe.captionObserver.disconnect();
     return render.tick;
   })()`);
+  const readingLease = await client.evaluate(`(${nativeCaptionLeaseEvidence.toString()})(
+    window.__TIDEWEFT_VOICE_PROBE__, ${JSON.stringify(eventId)}, performance.now())`);
+  assertNativeCaptionLease(readingLease, { expired: true });
   await client.evaluate('window.__TIDEWEFT__.runtime.save()');
   const reloadDiagnostics = await reloadProductionPage(expected.announcement);
   const restoredTick = await client.evaluate('window.__TIDEWEFT__.runtime.getRenderView().tick');
@@ -1905,9 +2059,9 @@ async function exerciseBrowserAnimalPresentation(client, output, reducedMotion, 
   await client.evaluate('window.__TIDEWEFT_VOICE_RELOAD_PROBE__.observer.disconnect()');
   return { producer: 'ordinary move-target first segment; actual anonymous animal caption, no supplied source/event',
     committedTick: committed.tick, callKind: committed.caption.animalCallKind, snapshots,
-    lifecycle: { expiredTick, expiredNativeCaptionAbsent: true,
+    lifecycle: { expiredTick, expiredNativeCaptionAbsent: true, readingLeases: [readingLease],
       restoredTick, continuedTick, restored, reloadDiagnostics },
-    limitation: 'One genuine anonymous call in a synthetic corridor world, frozen native DOM/viewports and live-region deduplication, natural expiry and current-save browser reload. No exact producer identity, animal translation, visible-source glyph, emitted/audio/AT hardware, all-root equivalence, crowd/soak or performance certification.' };
+    limitation: 'One genuine anonymous call in a synthetic corridor world and selected viewport/view, simulation stopped after commitment but UI clock untouched, live native bounds and observed reading expiry, live-region deduplication and current-save browser reload. No exact producer identity, animal translation, visible-source glyph, emitted/audio/AT hardware, all-root equivalence, crowd/soak or performance certification.' };
 }
 
 async function runBrowserWitness(options) {
@@ -2124,7 +2278,7 @@ async function runBrowserWitness(options) {
     const voicePresentation = options.voicePresentation
       ? await (options.animalPresentation ? exerciseBrowserAnimalPresentation : exerciseBrowserVoicePresentation)(
         client, options.output, options.reducedMotion, reloadProductionPage,
-        { pairedGreetings: options.pairedGreetings }) : null;
+        { pairedGreetings: options.pairedGreetings, presentationState: options.presentationState }) : null;
     const rawMeasurement = options.voicePresentation ? null : await measureScenario(
       client,
       SCENARIO,
@@ -2189,12 +2343,14 @@ async function runBrowserWitness(options) {
     const relativeReference = options.voicePresentation ? null
       : path.relative(projectRoot, options.packagedBaseline).split(path.sep).join('/');
     const result = {
-      schema: options.voicePresentation ? 'tideweft-browser-voice-presentation/v1' : 'tideweft-browser-performance-witness/v1',
+      schema: options.voicePresentation ? 'tideweft-browser-voice-presentation/v2' : 'tideweft-browser-performance-witness/v1',
       capturedAt: new Date().toISOString(),
       repositoryAtCapture: repository,
       captureScope: {
         kind: options.voicePresentation ? 'functional-voice-presentation' : 'real-browser-gameplay',
-        complete: true,
+        complete: !options.voicePresentation,
+        ...(options.voicePresentation ? { selectedPresentationState: options.presentationState,
+          reducedMotion: options.reducedMotion, expectedPresentationStates: voicePresentationStates() } : {}),
         expectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal']
           : options.pairedGreetings ? ['native-paired-greetings'] : options.voicePresentation ? ['native-greet'] : [SCENARIO.id],
         selectedScenarioIds: options.animalPresentation ? ['native-anonymous-animal']
@@ -2280,10 +2436,10 @@ async function runBrowserWitness(options) {
       },
       metricScope: options.voicePresentation ? {
         authoritative: options.animalPresentation
-          ? 'Ordinary travel opportunity with actual anonymous animal caption; frozen native DOM/bounds/ARIA, no hidden anchor, natural expiry and current-save reload without old announcement replay'
+          ? 'Ordinary travel opportunity with actual anonymous animal caption; selected live native DOM/bounds/ARIA, no hidden anchor, natural reading expiry and current-save reload without old announcement replay'
           : options.pairedGreetings
             ? 'Two real physical GREETs with simultaneous source-distinct speech; native Relief labels, caption/ARIA, ordinary expiry, both learned ABOUT states and expired-event nonreplay after current-save reload'
-          : 'Native selection/GREET, frozen presentation, ordinary expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
+          : 'Native selection/GREET, selected live presentation and separately observed reading/projection expiry, current-save reload, real CONTINUE/reselection and learned-fact preservation; expired projected cue/caption absence across views/viewports',
         limitation: voicePresentation.limitation,
         omitted: 'No performance measurement, packaged comparison, glyph-ink or hardware certification',
       } : {
@@ -2389,9 +2545,87 @@ async function runBrowserWitness(options) {
   }
 }
 
+function assertVoicePresentationMatrix(results) {
+  const states = voicePresentationStates();
+  if (!Array.isArray(results) || results.length !== states.length) {
+    throw new Error('Voice matrix requires eight fresh live viewport/view witnesses');
+  }
+  const seen = new Set();
+  const first = results[0];
+  for (const result of results) {
+    const scope = result?.captureScope;
+    if (!scope?.selectedPresentationState) throw new Error('Voice matrix lacks an explicit selected state');
+    const selected = voicePresentationStates(scope?.selectedPresentationState)[0];
+    const key = `${selected.viewport.width}-${selected.mode}`;
+    const snapshots = result?.voicePresentation?.snapshots;
+    if (scope?.kind !== 'functional-voice-presentation' || scope.complete !== false
+      || !stableEqual(scope.expectedPresentationStates, states)
+      || !stableEqual(scope.expectedScenarioIds, scope.selectedScenarioIds)
+      || !Array.isArray(scope.selectedScenarioIds) || scope.selectedScenarioIds.length !== 1
+      || !['native-greet', 'native-paired-greetings', 'native-anonymous-animal'].includes(scope.selectedScenarioIds[0])
+      || typeof scope.reducedMotion !== 'boolean' || seen.has(key)
+      || !Array.isArray(snapshots) || snapshots.length !== 1
+      || !stableEqual(snapshots[0].viewport, selected.viewport) || snapshots[0].mode !== selected.mode
+      || snapshots[0].reducedMotion !== scope.reducedMotion) {
+      throw new Error('Voice matrix contains a missing, duplicate, mismatched or falsely complete child');
+    }
+    assertVoicePresentationSnapshot(snapshots[0], selected.mode,
+      { anonymousAnimal: scope.selectedScenarioIds[0] === 'native-anonymous-animal' });
+    assertNativeCaptureContinuity(snapshots[0], snapshots[0].screenshot?.captionContinuity);
+    if (scope.selectedScenarioIds[0] === 'native-paired-greetings') assertPairedGreetingSnapshot(snapshots[0], selected.mode);
+    const leases = result.voicePresentation.lifecycle?.expired?.readingLeases
+      ?? result.voicePresentation.lifecycle?.readingLeases;
+    if (!Array.isArray(leases) || leases.length < 1 || leases.length > 2) {
+      throw new Error('Voice matrix lacks native reading expiry evidence');
+    }
+    for (const lease of leases) assertNativeCaptionLease(lease, { expired: true });
+    for (const field of ['repositoryAtCapture', 'productionWebArtifact', 'profilerHarness', 'browser']) {
+      if (!result[field] || !first[field]) throw new Error(`Voice matrix lacks ${field}`);
+      assertIdentityUnchanged(`Voice matrix ${field}`, first[field], result[field]);
+    }
+    if (scope.reducedMotion !== first.captureScope.reducedMotion
+      || !stableEqual(scope.selectedScenarioIds, first.captureScope.selectedScenarioIds)) {
+      throw new Error('Voice matrix mixes functional producers or motion preferences');
+    }
+    seen.add(key);
+  }
+  return results;
+}
+
+async function runVoicePresentationMatrix(options) {
+  await validateArtifactPath(options.output, '--output');
+  await assertFreshVoicePresentationOutput(options.output);
+  const states = voicePresentationStates();
+  const outputs = states.map(({ viewport, mode }) => path.join(path.dirname(options.output),
+    `${path.basename(options.output, '.json')}-${viewport.width}-${mode}.json`));
+  for (const output of outputs) {
+    await validateArtifactPath(output, '--output');
+    await assertFreshVoicePresentationOutput(output);
+  }
+  const results = [];
+  for (let index = 0; index < states.length; index += 1) {
+    results.push(await runBrowserWitness({ ...options, output: outputs[index], presentationState: states[index] }));
+    process.stdout.write(`Live Voice state ${index + 1}/${states.length} verified\n`);
+  }
+  assertVoicePresentationMatrix(results);
+  const childFiles = await Promise.all(outputs.map(async (output) => ({
+    file: path.basename(output), ...await fileIdentity(output),
+  })));
+  const result = { schema: 'tideweft-browser-voice-matrix/v1',
+    repositoryAtCapture: results[0].repositoryAtCapture,
+    productionWebArtifact: results[0].productionWebArtifact, profilerHarness: results[0].profilerHarness,
+    browser: results[0].browser, captureScope: { ...results[0].captureScope,
+      complete: true, selectedPresentationState: undefined, selectedPresentationStates: states }, childFiles,
+    limitation: 'Eight independent fresh functional sessions of the same artifact, not one uninterrupted scenario, hardware mobile/AT/audio, desktop or performance certification.' };
+  await validateArtifactPath(options.output, '--output');
+  await fs.writeFile(options.output, `${JSON.stringify(result, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  return result;
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const result = await runBrowserWitness(options);
+  const result = options.voicePresentation && options.presentationState === null
+    ? await runVoicePresentationMatrix(options) : await runBrowserWitness(options);
   if (options.voicePresentation) {
     process.stdout.write(`Browser Voice functional witness written to ${options.output}\n`);
     return;
@@ -2412,6 +2646,12 @@ module.exports = {
   SCENARIO,
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
+  voicePresentationStates,
+  assertVoicePresentationMatrix,
+  assertNativeCaptionLease,
+  assertNativeCaptureContinuity,
+  nativeCaptionLeaseEvidence,
+  matchObservedSpeechCaption,
   assertPairedGreetingSnapshot,
   normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,

@@ -1857,6 +1857,65 @@ assistive hardware, production-browser/packaged desktop or hours acceptance.
 Old frozen-caption checks assuming indefinite paused display must be made
 deadline-aware before reuse; old projection disappearance is not DOM expiry.
 
+### Native caption-lease acceptance — 2026-10-06
+
+The local unpublished tooling slice over `9b2ab37` reconciles the existing
+Firefox functional harness with that reading contract, without changing game
+source, save formats, dependencies or shipping caption lifetimes. Each live
+viewport/view now uses a freshly earned existing producer in its own disposable
+profile. Omitted selectors still require all eight states; explicit width/view
+selectors report partial evidence. Passive bounded DOM observations count the
+actual visible Unicode copy, never the expanded ARIA description. Actual DOM
+speech may match either lawfully observed pair member, not necessarily the
+latest projection. Reading and projected-event expiry are independent gates.
+Same-ID live checks bracket screenshot capture; expiry during capture fails
+before a PNG is accepted. No UI clock, sound or hearing event is extended.
+
+Production `build:web` and nested-path `smoke:web` passed: 621 modules and five
+served files / 4,754,987 bytes. The served artifact integrity is
+`40074afa48b1bc93fa9bb02a21ace11c211f84806ab0fa2659dfc36f2cc6ee84`;
+its JavaScript SHA-256 is
+`fb679e7493b4c83ae1c786abd4673510fa7614e925a82155994fd8daf2f62414`.
+Node 22.20.0/npm 10.9.3 and installed Firefox 157 were used. The final harness
+SHA-256 is `e7374a82651d424eaaf521e9fc93c91cfabe11b24fbfd34998862ab27c62b890`;
+its selftest is `8a04b56e71543b50208a942585092695dcf5499b08338ee2307b33a503e46337`.
+The matched native capture records source HEAD and dirty diff
+`e2c73f9859bcc0dbca8dcb8f8a199ed470249927f3ea3227633cf5911f075079`.
+
+`profile:browser -- --voice-presentation --output
+artifacts/validation/voice-current49/native-lease-greet-matrix-02.json` passed
+all four supported viewports in Chart and Relief. Eight real introductions
+each displayed 47 visible code points: budget 2,239 ms, observed native duration
+2,243–2,400 ms. All eight current-save reloads preserved learned ABOUT facts
+and excluded expired cue/announcement replay. Live geometry and post-capture
+continuity passed; representative desktop, portrait and short-landscape
+screenshots were inspected. The aggregate checks exact source/artifact/harness/
+browser identity; children remain partial independent sessions, not equal-work
+or uninterrupted-play witnesses.
+
+Selected `--paired-greetings --reduced-motion --presentation-width 1280
+--presentation-mode relief-3d` and `--animal-presentation --reduced-motion
+--presentation-width 390 --presentation-mode relief-3d` passed with fresh
+`native-lease-pair-desktop-02.json` and `native-lease-animal-portrait-02.json`
+stems beside the matrix. The pair had two distinct nonoverlapping native labels,
+zero ordinary-label overlap and both learned ABOUT states after reload. The
+anonymous bird caption had no hidden-source anchor. Both observed reading
+expiry, one-copy announcements, capture continuity and current-save nonreplay.
+These selected producers do not establish their complete eight-state matrices.
+
+The direct browser-harness selftest passed with original acceptance negatives
+preserved and new lease, selector, matrix and capture-race characterizations.
+Caption/live-region tests passed 2 files / 47 tests; maintained critical smoke
+passed 6 files / 105 tests (final run 6.97 s). Initial single-state trials passed;
+an earlier matrix was deliberately stopped after four partial children to add
+the reviewer-found screenshot race guard, not counted as complete acceptance.
+The final pipeline exited successfully. A known startup/reload CSP eval-probe
+denial remains explicitly authenticated by the guard, not console-clean proof.
+Disposable harness profiles were removed. This is synthetic-world production
+browser presentation evidence, not audible audio, assistive hardware, physical
+mobile, desktop packaging, full animal/physical coexistence, crowd/soak/FPS,
+cumulative regression, publication or Living Voice closure.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

@@ -10,6 +10,12 @@ const {
   assertAdvancingWorldMeasurement,
   assertVoicePresentationSnapshot,
   assertPairedGreetingSnapshot,
+  assertVoicePresentationMatrix,
+  assertNativeCaptureContinuity,
+  assertNativeCaptionLease,
+  matchObservedSpeechCaption,
+  nativeCaptionLeaseEvidence,
+  voicePresentationStates,
   normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,
   countAnimalAnnouncementCopies,
@@ -121,6 +127,50 @@ for (const conflict of [
 ]) {
   assert.throws(() => parseArguments(['--paired-greetings', ...conflict]));
   assert.throws(() => parseArguments([...conflict, '--paired-greetings']));
+}
+const presentationStates = [
+  { viewport: { width: 1280, height: 720 }, mode: 'chart-2d' },
+  { viewport: { width: 1280, height: 720 }, mode: 'relief-3d' },
+  { viewport: { width: 390, height: 844 }, mode: 'chart-2d' },
+  { viewport: { width: 390, height: 844 }, mode: 'relief-3d' },
+  { viewport: { width: 320, height: 640 }, mode: 'chart-2d' },
+  { viewport: { width: 320, height: 640 }, mode: 'relief-3d' },
+  { viewport: { width: 844, height: 390 }, mode: 'chart-2d' },
+  { viewport: { width: 844, height: 390 }, mode: 'relief-3d' },
+];
+assert.deepEqual(voicePresentationStates(), presentationStates);
+assert.deepEqual(voicePresentationStates(null), presentationStates);
+assert.equal(functional.presentationState, null);
+for (const producer of ['--voice-presentation', '--animal-presentation', '--paired-greetings']) {
+  for (const state of presentationStates) {
+    const selected = parseArguments([producer, '--presentation-width', String(state.viewport.width),
+      '--presentation-mode', state.mode]);
+    assert.deepEqual(selected.presentationState, state);
+    assert.deepEqual(voicePresentationStates(selected.presentationState), [state]);
+    assert.equal(selected.voicePresentation, true);
+    assert.equal(selected.packagedBaseline, null);
+  }
+}
+for (const arguments_ of [
+  ['--presentation-width', '390'],
+  ['--presentation-mode', 'chart-2d'],
+  ['--presentation-width', '391', '--presentation-mode', 'chart-2d'],
+  ['--presentation-width', '390', '--presentation-mode', 'relief'],
+  ['--presentation-width', '390.5', '--presentation-mode', 'chart-2d'],
+  ['--presentation-width', '0', '--presentation-mode', 'chart-2d'],
+  ['--presentation-width', '1281', '--presentation-mode', 'chart-2d'],
+  ['--presentation-width=390', '--presentation-mode', 'chart-2d'],
+  ['--presentation-width', '390', '--presentation-mode=chart-2d'],
+  ['--presentation-width'],
+  ['--presentation-width', '390', '--presentation-mode'],
+]) assert.throws(() => parseArguments(['--voice-presentation', ...arguments_]));
+assert.throws(() => parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
+  '--presentation-width', '390', '--presentation-mode', 'chart-2d']), /Functional/u);
+for (const state of [{}, { viewport: { width: 390, height: 845 }, mode: 'chart-2d' },
+  { viewport: { width: 391, height: 844 }, mode: 'chart-2d' },
+  { viewport: { width: 390, height: 844 }, mode: 'relief' },
+  { viewport: { width: '390', height: 844 }, mode: 'chart-2d' }]) {
+  assert.throws(() => voicePresentationStates(state), /Unsupported/u);
 }
 assert.equal(parsed.observeVoice, false);
 assert.equal(parseArguments(['--packaged-baseline', 'artifacts/performance/package.json',
@@ -270,15 +320,149 @@ assert.throws(() => parseArguments(['--voice-presentation', '--packaged-baseline
 assert.throws(() => parseArguments(['--voice-presentation', '--output', 'docs/voice.json']), /ignored artifacts/u);
 assert.throws(() => parseArguments(['--reduced-motion', '--packaged-baseline', 'artifacts/a.json']), /requires --voice-presentation/u);
 
+// Supplied observations characterize the evidence validator, not native timing.
+// UI reading expiry and authoritative projected-event expiry are separate gates.
+const readingLease = Object.freeze({ visibleCodePoints: 16, firstVisibleMs: 100,
+  observedAtMs: 600, expectedReadingMs: 1000, endedAtMs: null, endReason: null });
+assert.equal(assertNativeCaptionLease(readingLease), readingLease);
+for (const [visibleCodePoints, expectedReadingMs] of [
+  [1, 1000], [16, 1000], [21, 1000], [22, 1048], [85, 4048], [1024, 48762],
+]) {
+  const lease = { ...readingLease, visibleCodePoints, expectedReadingMs };
+  assert.equal(assertNativeCaptionLease(lease), lease);
+  assert.throws(() => assertNativeCaptionLease({ ...lease, expectedReadingMs: expectedReadingMs + 1 }),
+    /reading-lease/u);
+}
+// The 100 ms bound is observer delivery tolerance, not extra shipping lifetime.
+const latestLiveObservation = { ...readingLease, observedAtMs: 1200 };
+assert.equal(assertNativeCaptionLease(latestLiveObservation), latestLiveObservation);
+assert.throws(() => assertNativeCaptionLease({ ...latestLiveObservation, observedAtMs: 1200.001 }),
+  /expired or invalid/u);
+const expiredReadingLease = Object.freeze({ ...readingLease, observedAtMs: 1200,
+  endedAtMs: 1100, endReason: 'hidden' });
+assert.equal(assertNativeCaptionLease(expiredReadingLease, { expired: true }), expiredReadingLease);
+assert.throws(() => assertNativeCaptionLease(expiredReadingLease), /expired or invalid/u);
+assert.throws(() => assertNativeCaptionLease(readingLease, { expired: true }), /reading-lease/u);
+const earliestExpiryObservation = { ...expiredReadingLease, endedAtMs: 1000 };
+assert.equal(assertNativeCaptionLease(earliestExpiryObservation, { expired: true }), earliestExpiryObservation);
+const naturallyReplacedLease = { ...expiredReadingLease, endReason: 'replacement' };
+assert.equal(assertNativeCaptionLease(naturallyReplacedLease, { expired: true }), naturallyReplacedLease);
+assert.throws(() => assertNativeCaptionLease({ ...naturallyReplacedLease, endedAtMs: 999.999 },
+  { expired: true }), /reading-lease/u);
+for (const change of [
+  { endedAtMs: 999.999 }, { endedAtMs: 1201 }, { endedAtMs: Number.NaN },
+  { endedAtMs: Infinity }, { endReason: 'urgent-preemption' }, { endReason: null },
+]) assert.throws(() => assertNativeCaptionLease({ ...expiredReadingLease, ...change }, { expired: true }),
+  /reading-lease/u);
+for (const change of [
+  { visibleCodePoints: 0 }, { visibleCodePoints: 1025 }, { visibleCodePoints: 1.5 },
+  { visibleCodePoints: '16' }, { visibleCodePoints: Number.NaN },
+  { firstVisibleMs: -1 }, { firstVisibleMs: Number.NaN }, { firstVisibleMs: Infinity },
+  { observedAtMs: 99 }, { observedAtMs: Number.NaN }, { observedAtMs: Infinity },
+  { expectedReadingMs: 999 }, { endedAtMs: 1100 }, { endedAtMs: undefined },
+]) assert.throws(() => assertNativeCaptionLease({ ...readingLease, ...change }), /reading-lease/u);
+for (const lease of [null, undefined, {}, []]) {
+  assert.throws(() => assertNativeCaptionLease(lease), /reading-lease/u);
+}
+
+const observedNativeLease = Object.freeze({ id: 'observed-a', visibleText: 'x'.repeat(16),
+  firstVisibleMs: 100, expectedReadingMs: 1000, endedAtMs: null, endReason: null });
+const nativeProbe = Object.freeze({ overflow: false, leases: Object.freeze([observedNativeLease]) });
+const nativeEvidence = nativeCaptionLeaseEvidence(nativeProbe, 'observed-a', 600);
+assert.deepEqual(nativeEvidence, readingLease);
+assert.notEqual(nativeEvidence, observedNativeLease);
+assert.equal(assertNativeCaptionLease(nativeEvidence), nativeEvidence);
+assert.equal(nativeCaptionLeaseEvidence(nativeProbe, 'observed-a', 700).firstVisibleMs, 100);
+const supplementaryProbe = { overflow: false, leases: [{ ...observedNativeLease,
+  visibleText: '😀'.repeat(21) }] };
+const supplementaryEvidence = nativeCaptionLeaseEvidence(supplementaryProbe, 'observed-a', 600);
+assert.equal(supplementaryEvidence.visibleCodePoints, 21);
+assert.equal(assertNativeCaptionLease(supplementaryEvidence), supplementaryEvidence);
+const prefixedProbe = { overflow: false, leases: [{ ...observedNativeLease,
+  visibleText: `A: ${'x'.repeat(19)}`, expectedReadingMs: 1048 }] };
+assert.equal(nativeCaptionLeaseEvidence(prefixedProbe, 'observed-a', 600).visibleCodePoints, 22);
+const endedProbe = { overflow: false, leases: [{ ...observedNativeLease,
+  endedAtMs: 1100, endReason: 'hidden' }] };
+const endedEvidence = nativeCaptionLeaseEvidence(endedProbe, 'observed-a', 1200);
+assert.deepEqual(endedEvidence, expiredReadingLease);
+assert.equal(assertNativeCaptionLease(endedEvidence, { expired: true }), endedEvidence);
+assert.throws(() => assertNativeCaptionLease(endedEvidence), /reading-lease/u);
+assert.throws(() => nativeCaptionLeaseEvidence(nativeProbe, 'foreign-id', 600), /missing/u);
+assert.throws(() => nativeCaptionLeaseEvidence({ ...nativeProbe, overflow: true }, 'observed-a', 600), /overflowed/u);
+assert.throws(() => nativeCaptionLeaseEvidence({ ...nativeProbe,
+  leases: [observedNativeLease, { ...observedNativeLease, firstVisibleMs: 200 }] }, 'observed-a', 600), /repeated/u);
+assert.throws(() => nativeCaptionLeaseEvidence({ ...nativeProbe, leases: [] }, 'observed-a', 600), /missing/u);
+assert.throws(() => assertNativeCaptionLease(nativeCaptionLeaseEvidence(nativeProbe, 'observed-a', 1201)),
+  /reading-lease/u);
+
+// A routine newer UIView caption does not invalidate the older lawful DOM slot.
+// Authentication uses the actual DOM ID and its exact observed speaker/text/ARIA.
+const observedSpeechA = Object.freeze({ id: 'speech-a', speakerLabel: 'First resident', text: 'Hello there.' });
+const observedSpeechB = Object.freeze({ id: 'speech-b', speakerLabel: 'Second resident', text: 'Good day.' });
+const observedSpeechPair = Object.freeze([observedSpeechA, observedSpeechB]);
+assert.equal(matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
+  'First resident: Hello there.', observedSpeechPair), true);
+assert.equal(matchObservedSpeechCaption('speech-b', 'Second resident:', 'Good day.',
+  'Second resident: Good day.', observedSpeechPair), true);
+assert.equal(matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
+  'First resident: Hello there.', [observedSpeechA]), true);
+for (const [id, speaker, text, aria] of [
+  ['foreign-id', 'First resident:', 'Hello there.', 'First resident: Hello there.'],
+  ['speech-a', 'Second resident:', 'Good day.', 'Second resident: Good day.'],
+  ['speech-a', 'First resident:', 'Good day.', 'First resident: Hello there.'],
+  ['speech-a', 'First resident:', 'Hello there.', 'Second resident: Good day.'],
+  ['speech-a', 'First resident', 'Hello there.', 'First resident: Hello there.'],
+]) assert.equal(matchObservedSpeechCaption(id, speaker, text, aria, observedSpeechPair), false);
+for (const captions of [null, undefined, [], {}, [observedSpeechA, observedSpeechB, observedSpeechA]]) {
+  assert.throws(() => matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
+    'First resident: Hello there.', captions), /lawful observed speech/u);
+}
+for (const field of ['id', 'speakerLabel', 'text']) {
+  for (const invalid of ['', undefined, null, 42, 'x'.repeat(1025)]) {
+    assert.throws(() => matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
+      'First resident: Hello there.', [{ ...observedSpeechA, [field]: invalid }]), /lawful observed speech/u);
+  }
+}
+for (const captions of [[null], Array(1), [observedSpeechA, { ...observedSpeechB, id: observedSpeechA.id }]]) {
+  assert.throws(() => matchObservedSpeechCaption('speech-a', 'First resident:', 'Hello there.',
+    'First resident: Hello there.', captions), /lawful observed speech/u);
+}
+
 const voiceSnapshot = {
   mode: 'relief-3d', viewport: { width: 390, height: 844 }, labelLayerAriaHidden: 'true',
   caption: { rect: { x: 20, y: 600, width: 350, height: 80 }, matchesProjection: true,
-    ariaMatches: true, announcementCount: 1, horizontalOverflow: false, verticalOverflow: false },
+    ariaMatches: true, announcementCount: 1, horizontalOverflow: false, verticalOverflow: false,
+    readingLease },
   feedback: { chronicle: { x: 20, y: 540, width: 350, height: 45 },
     dock: { x: 20, y: 710, width: 350, height: 95 } },
   labels: [{ rect: { x: 90, y: 230, width: 200, height: 40 }, matchesProjection: true,
     horizontalOverflow: false, verticalOverflow: false }],
 };
+// Supplied before/after observations characterize the screenshot race guard;
+// they do not establish what an actual browser raster contains.
+const captureBefore = { ...voiceSnapshot, tick: 420 };
+const captureContinuity = { sameVisibleCaption: true, mode: captureBefore.mode,
+  tick: captureBefore.tick, viewport: structuredClone(captureBefore.viewport),
+  readingLease: { ...readingLease, observedAtMs: 700 } };
+assert.equal(assertNativeCaptureContinuity(captureBefore, captureContinuity), captureContinuity);
+const sameClockObservation = { ...captureContinuity, readingLease: { ...readingLease } };
+assert.equal(assertNativeCaptureContinuity(captureBefore, sameClockObservation), sameClockObservation);
+for (const after of [null, undefined, {},
+  ...[false, 'true', 1, undefined].map((sameVisibleCaption) => ({ ...captureContinuity, sameVisibleCaption })),
+  { ...captureContinuity, mode: 'chart-2d' },
+  ...[421, '420', null, undefined, Number.NaN].map((tick) => ({ ...captureContinuity, tick })),
+  { ...captureContinuity, viewport: { width: 390, height: 845 } },
+  { ...captureContinuity, viewport: { width: '390', height: 844 } },
+  { ...captureContinuity, viewport: undefined },
+  { ...captureContinuity, readingLease: undefined },
+  { ...captureContinuity, readingLease: { ...expiredReadingLease } },
+  ...[{ firstVisibleMs: 101 }, { firstVisibleMs: '100' }, { visibleCodePoints: 17 },
+    { visibleCodePoints: '16' }, { observedAtMs: 599 }, { observedAtMs: -1 },
+    { observedAtMs: Number.NaN }, { observedAtMs: Infinity }, { observedAtMs: '700' },
+    { observedAtMs: 1201 }, { expectedReadingMs: 1001 }].map((change) => ({
+      ...captureContinuity, readingLease: { ...captureContinuity.readingLease, ...change },
+    })),
+]) assert.throws(() => assertNativeCaptureContinuity(captureBefore, after), /capture identity|reading-lease/u);
 assert.equal(assertVoicePresentationSnapshot(voiceSnapshot, 'relief-3d'), voiceSnapshot);
 const chartSnapshot = { ...voiceSnapshot, mode: 'chart-2d', labels: [] };
 assert.equal(assertVoicePresentationSnapshot(chartSnapshot, 'chart-2d'), chartSnapshot);
@@ -327,6 +511,10 @@ for (const caption of [null, { ...voiceSnapshot.caption, ariaMatches: false },
   { ...voiceSnapshot.caption, rect: { x: 390, y: 1, width: 50, height: 50 } },
   { ...voiceSnapshot.caption, horizontalOverflow: true }]) {
   assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot, caption }, 'relief-3d'), /caption/u);
+}
+for (const lease of [undefined, expiredReadingLease, { ...readingLease, observedAtMs: 1201 }]) {
+  assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot,
+    caption: { ...voiceSnapshot.caption, readingLease: lease } }, 'relief-3d'), /reading-lease/u);
 }
 assert.throws(() => assertVoicePresentationSnapshot({ ...voiceSnapshot, labels: [] }, 'relief-3d'), /active renderer/u);
 assert.throws(() => assertVoicePresentationSnapshot(voiceSnapshot, 'chart-2d'), /caption/u);
@@ -457,6 +645,131 @@ assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
 assert.throws(() => assertPairedGreetingSnapshot({ ...pairedDesktop,
   feedback: { ...pairedDesktop.feedback, chronicle: { x: 20, y: 560, width: 350, height: 45 } } },
   'relief-3d'), /overlaps.*journey controls/u);
+
+// Independent child clocks/causes are not one paused caption stretched through
+// eight views. Each child needs its own live layout and natural DOM expiry.
+const voiceMatrix = presentationStates.map((state) => {
+  const { width, height } = state.viewport;
+  return {
+    repositoryAtCapture: { head: 'a'.repeat(40), dirty: false, trackedDiffSha256: 'b'.repeat(64) },
+    productionWebArtifact: { manifestSha256: 'c'.repeat(64), files: [{ path: 'index.html', bytes: 20 }] },
+    profilerHarness: { sha256: 'd'.repeat(64), bytes: 100 },
+    browser: { executable: { sha256: 'e'.repeat(64), bytes: 200 }, versionOutput: 'Firefox synthetic' },
+    captureScope: { kind: 'functional-voice-presentation', complete: false,
+      selectedPresentationState: structuredClone(state), reducedMotion: false,
+      expectedPresentationStates: structuredClone(presentationStates),
+      expectedScenarioIds: ['native-greet'], selectedScenarioIds: ['native-greet'] },
+    voicePresentation: {
+      snapshots: [{ ...voiceSnapshot, mode: state.mode, viewport: structuredClone(state.viewport),
+        tick: 420, reducedMotion: false,
+        caption: { ...voiceSnapshot.caption, rect: { x: 10, y: height - 140, width: width - 20, height: 30 } },
+        screenshot: { captionContinuity: { sameVisibleCaption: true, mode: state.mode,
+          tick: 420, viewport: structuredClone(state.viewport),
+          readingLease: { ...readingLease, observedAtMs: 700 } } },
+        feedback: { chronicle: { x: 10, y: height - 190, width: width - 20, height: 30 },
+          dock: { x: 10, y: height - 90, width: width - 20, height: 30 } },
+        labels: state.mode === 'chart-2d' ? [] : [{ ...voiceSnapshot.labels[0],
+          rect: { x: 10, y: 10, width: 100, height: 30 } }] }],
+      lifecycle: { expired: { readingLeases: [{ ...expiredReadingLease }] } },
+    },
+  };
+});
+assert.equal(assertVoicePresentationMatrix(voiceMatrix), voiceMatrix);
+const reorderedMatrix = structuredClone(voiceMatrix).reverse();
+assert.equal(assertVoicePresentationMatrix(reorderedMatrix), reorderedMatrix);
+const reducedMotionMatrix = structuredClone(voiceMatrix);
+for (const child of reducedMotionMatrix) {
+  child.captureScope.reducedMotion = true;
+  child.voicePresentation.snapshots[0].reducedMotion = true;
+}
+assert.equal(assertVoicePresentationMatrix(reducedMotionMatrix), reducedMotionMatrix);
+const animalMatrix = structuredClone(voiceMatrix);
+for (const child of animalMatrix) {
+  child.captureScope.expectedScenarioIds = ['native-anonymous-animal'];
+  child.captureScope.selectedScenarioIds = ['native-anonymous-animal'];
+  child.voicePresentation.snapshots[0].labels = [];
+  child.voicePresentation.snapshots[0].anonymousSourceUnanchored = true;
+  child.voicePresentation.lifecycle = { readingLeases: [{ ...expiredReadingLease }] };
+}
+assert.equal(assertVoicePresentationMatrix(animalMatrix), animalMatrix);
+const pairedMatrix = structuredClone(voiceMatrix);
+for (const child of pairedMatrix) {
+  child.captureScope.expectedScenarioIds = ['native-paired-greetings'];
+  child.captureScope.selectedScenarioIds = ['native-paired-greetings'];
+  const snapshot = child.voicePresentation.snapshots[0];
+  snapshot.labels = snapshot.mode === 'chart-2d' ? [] : [10, 130].map((x) => ({
+    ...voiceSnapshot.labels[0], rect: { x, y: 10, width: 100, height: 30 },
+  }));
+  snapshot.pairedSpeech = { ...pairedSpeech, visibleLabelCount: snapshot.labels.length };
+  child.voicePresentation.lifecycle.expired.readingLeases = [
+    { ...naturallyReplacedLease }, { ...expiredReadingLease },
+  ];
+}
+assert.equal(assertVoicePresentationMatrix(pairedMatrix), pairedMatrix);
+for (const results of [null, undefined, {}, voiceMatrix.slice(0, 7), [...voiceMatrix, voiceMatrix[0]],
+  [...voiceMatrix.slice(0, 7), voiceMatrix[0]]]) {
+  assert.throws(() => assertVoicePresentationMatrix(results), /eight|duplicate/u);
+}
+function changedVoiceMatrixChild(change) {
+  const results = structuredClone(voiceMatrix);
+  change(results[1]);
+  return results;
+}
+for (const change of [
+  (child) => { child.captureScope.complete = true; },
+  (child) => { child.captureScope.kind = 'real-browser-gameplay'; },
+  (child) => { delete child.captureScope.selectedPresentationState; },
+  (child) => { child.captureScope.expectedPresentationStates.pop(); },
+  (child) => { child.captureScope.expectedScenarioIds = ['native-anonymous-animal']; },
+  (child) => { child.captureScope.selectedScenarioIds = []; },
+  (child) => { child.captureScope.selectedScenarioIds = ['native-greet', 'native-paired-greetings']; },
+  (child) => { child.captureScope.expectedScenarioIds = child.captureScope.selectedScenarioIds = ['forged-producer']; },
+  (child) => { child.captureScope.reducedMotion = 'false'; },
+  (child) => { child.voicePresentation.snapshots = []; },
+  (child) => { child.voicePresentation.snapshots.push(structuredClone(child.voicePresentation.snapshots[0])); },
+  (child) => { child.voicePresentation.snapshots[0].mode = 'chart-2d'; },
+  (child) => { child.voicePresentation.snapshots[0].viewport.height += 1; },
+  (child) => { child.voicePresentation.snapshots[0].reducedMotion = true; },
+  (child) => { child.voicePresentation.snapshots[0].caption = null; },
+  (child) => { child.voicePresentation.snapshots[0].caption.readingLease = { ...expiredReadingLease }; },
+  (child) => { child.voicePresentation.snapshots[0].caption.readingLease.observedAtMs = 1201; },
+  (child) => { child.voicePresentation.snapshots[0].caption.ariaMatches = false; },
+  (child) => { child.voicePresentation.snapshots[0].labels = []; },
+  (child) => { delete child.voicePresentation.snapshots[0].screenshot; },
+  (child) => { delete child.voicePresentation.snapshots[0].screenshot.captionContinuity; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.sameVisibleCaption = false; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.tick = 421; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.mode = 'chart-2d'; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.viewport.height += 1; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.readingLease = { ...expiredReadingLease }; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.readingLease.firstVisibleMs = 101; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.readingLease.visibleCodePoints = 17; },
+  (child) => { child.voicePresentation.snapshots[0].screenshot.captionContinuity.readingLease.observedAtMs = 599; },
+]) assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild(change)));
+for (const field of ['repositoryAtCapture', 'productionWebArtifact', 'profilerHarness', 'browser']) {
+  assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild((child) => {
+    child[field] = { ...child[field], changed: true };
+  })), /changed during/u);
+  assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild((child) => {
+    delete child[field];
+  })), /lacks/u);
+}
+assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild((child) => {
+  child.captureScope.reducedMotion = child.voicePresentation.snapshots[0].reducedMotion = true;
+})), /mixes/u);
+const mixedProducerMatrix = structuredClone(voiceMatrix);
+mixedProducerMatrix[1] = structuredClone(animalMatrix[1]);
+assert.throws(() => assertVoicePresentationMatrix(mixedProducerMatrix), /mixes/u);
+for (const leases of [undefined, null, [], Array(1), [null], [readingLease],
+  [{ ...expiredReadingLease, endedAtMs: 999 }],
+  [expiredReadingLease, expiredReadingLease, expiredReadingLease]]) {
+  assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild((child) => {
+    child.voicePresentation.lifecycle.expired.readingLeases = leases;
+  })), /reading/u);
+}
+assert.throws(() => assertVoicePresentationMatrix(changedVoiceMatrixChild((child) => {
+  delete child.voicePresentation.lifecycle;
+})), /reading expiry/u);
 assert.throws(
   () => parseArguments(['--packaged-baseline', 'artifacts/a.json', '--sample-ms', '4999']),
   /whole number/u,

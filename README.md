@@ -415,11 +415,26 @@ first, then run `npm run profile:browser -- --voice-presentation`.
 Output defaults to a fresh timestamped name; an explicit `--output` requires an
 unused JSON/screenshot stem under ignored `artifacts/` and preserves old evidence.
 Add `--reduced-motion` for that accessibility preference. This opt-in functional
-mode uses a disposable profile and real resident selection/GREET, then freezes
-the committed caption to inspect Chart/Relief at desktop, portrait and short
-landscape sizes. It checks DOM bounds, separation of speech/event feedback from
+mode uses eight disposable profiles and freshly earned resident selection/GREET
+to inspect Chart/Relief at desktop, portrait and short landscape sizes. Each
+layout is prepared before its cause; simulation stops after commitment, but the
+UI clock and 21-visible-code-point/second reading lease continue normally.
+It checks live DOM bounds, separation of speech/event feedback from
 journey controls, caption/ARIA parity and announcement deduplication, and
-retains local screenshots for visual review.
+retains local screenshots for visual review. Passive bounded observations
+record actual visible reading time, separately from projected event expiry;
+an expired caption cannot supply layout evidence. Screenshot capture also
+requires the same live native caption immediately afterward. The aggregate report becomes
+complete only after all eight matching artifact/repository/browser/harness
+witnesses pass. Each child report remains partial.
+
+For a targeted check, add both `--presentation-width 390` and
+`--presentation-mode relief-3d` (supported widths: 1280, 390, 320, 844;
+modes: chart-2d, relief-3d). This explicitly reports one state, not the full
+matrix. The selectors apply to all three functional producers below, never
+to performance measurement. Omit both to run the complete matrix. Matrix
+children use fresh output stems beside the aggregate; failed runs preserve
+partial evidence without writing a complete aggregate.
 
 After natural greeting expiry it saves, reloads the same production page and
 physically continues/reselects the resident, checking learned facts and no
@@ -435,15 +450,18 @@ This separate functional producer follows one ordinary movement target in a
 synthetic corridor world and waits up to 30 seconds for an actual animal call;
 no call or an unsupported caption form fails rather than injecting an event.
 It checks uncertain wording, absence of hidden-source anchors, native caption
-bounds/ARIA and exactly one announcement across the same four viewports and
-both views, then natural DOM expiry and current-save reload without old-call
+bounds/ARIA and exactly one announcement in a fresh session for each of the
+same four viewports and both views, then natural DOM expiry and current-save reload without old-call
 replay. It does not identify the caller, prove audible audio or hardware
 assistive output, or replace mixed-scene, repetition/soak and performance gates.
 Use a fresh ignored output stem; do not combine the two functional producers.
 
 `npm run profile:browser -- --paired-greetings` checks two back-to-back actual
 resident introductions through physical controls. Simulation continues until
-both lawful speech cues coexist; only then is presentation frozen for inspection.
+both lawful speech cues coexist; only then is simulation stopped for inspection.
+The native reading slot may lawfully retain the first actual greeting while the
+latest projection is the second; its ID, visible copy and ARIA must match that
+observed pair member. The UI clock is never stopped or extended.
 Desktop Relief must show two distinct, nonoverlapping labels; compact-view
 suppression is reported. Both introductions expire naturally, and both learned
 ABOUT states survive current-save reload without old-cue announcements.
@@ -466,7 +484,7 @@ span—not uninterrupted acoustic silence or actual glyph placement. Zero calls
 means no exposure was observed, not that animals are silent. It does not prove
 audio, NPC hearing, actual glyph placement or a Voice soak, and its extra
 observation cost must not be mixed into uninstrumented performance comparisons.
-Do not combine it with either frozen functional mode or resource shakedown/soak.
+Do not combine it with a functional mode or resource shakedown/soak.
 
 The opt-in `--observe-voice` runs also collect a bounded player-wording
 census: only explicitly player-attributed public render speech counts, once per
