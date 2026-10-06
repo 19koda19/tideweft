@@ -1,7 +1,7 @@
 import type { TerrainGridView, TerrainTileView, WorldPoint } from "./types";
 import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
 import { currentTerrainVisibility } from "./perceptionPresentation";
-import { visibleWaterDepth } from "./waterPresentation";
+import { physicalWaterSurfaceElevation, visibleWaterDepth } from "./waterPresentation";
 
 export type DiscoverySignature = (grid: TerrainGridView) => string;
 
@@ -39,8 +39,8 @@ export function maskReliefTileForDiscovery(tile: TerrainTileView): TerrainTileVi
 }
 
 /**
- * Samples the same discovery-masked tile surface used to build Relief's
- * visible mesh. This must be used for world-space affordances such as picking
+ * Samples discovery-masked land and the observed water free surface. This
+ * must be used for world-space affordances such as picking
  * and label anchors so hidden topography cannot be inferred indirectly.
  */
 export function discoveredReliefSurfaceHeightAt(
@@ -71,19 +71,17 @@ export function discoveredReliefSurfaceHeightAt(
   const tile = grid.tiles[row * grid.columns + column];
   if (!tile) return landHeight;
   const visibility = reliefDiscoveryVisibility(tile);
-  const visibleDepth = visibleWaterDepth(tile) * visibility;
+  const surfaceElevation = physicalWaterSurfaceElevation(tile);
   if (
     visibility <= MIN_RENDERED_WATER_VISIBILITY
-    || visibleDepth <= 0
+    || surfaceElevation === undefined
   ) {
     return landHeight;
   }
 
-  // The rendered local sheet follows the bed's exact triangle corners plus
-  // the disclosed tile depth. A flat center-height sheet can disappear inside
-  // sloping terrain even though this physical tile is wet. This is a visual
-  // tile surface, not a change to hydrology or a global horizontal water level.
-  return landHeight + visibleDepth * scale;
+  // Depth disclosure affects colour, never the level of the water. A shore
+  // triangle above that level remains land; unseen water remains masked.
+  return Math.max(landHeight, surfaceElevation * visibility * scale);
 }
 
 /**
@@ -117,9 +115,9 @@ export function perceivedReliefSurfaceHeightAt(
   const scale = Math.max(0, finite(verticalScale, 0));
   const landHeight = sampleTerrainMeshLandHeightAt(grid, point, scale);
   if (!includeWater) return landHeight;
-  const visibleDepth = visibleWaterDepth(tile);
-  if (visibleDepth <= 0) return landHeight;
-  return landHeight + visibleDepth * scale;
+  const surfaceElevation = physicalWaterSurfaceElevation(tile);
+  if (surfaceElevation === undefined) return landHeight;
+  return Math.max(landHeight, surfaceElevation * scale);
 }
 
 /** Stable summary of per-tile discovery confidence for the terrain mesh key. */

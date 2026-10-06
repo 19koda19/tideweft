@@ -19,7 +19,6 @@ import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import * as playerPresentation from "./playerPresentation";
 import * as reliefCamera from "./reliefCamera";
 import { perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
-import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
 import {
   acousticTextRectsOverlap,
@@ -1972,17 +1971,61 @@ describe("Relief presentation-only pointer and label motion", () => {
 });
 
 describe("Relief water camera invariant", () => {
-  it("keeps direct shallow water triangles above every corner of their sloping bed", () => {
-    const source = warmWaterView("sloping-shallow-water");
-    const waterView: TideweftView = {
+  it("reveals newly wet uncharted cells without relying on stale cached water-plane metadata", () => {
+    const source = warmWaterView("uncharted-water-cached-geometry");
+    const dry: TideweftView = {
       ...source,
       terrain: {
         ...source.terrain,
-        tiles: source.terrain.tiles.map((tile, index) => ({
-          ...tile,
-          elevation: index % 3 === 0 ? 0.05 : 0.85,
-          waterDepth: 0.02,
+        tiles: source.terrain.tiles.map((tile) => ({
+          ...tile, elevation: 0.4, waterDepth: 0, discovered: 0,
+          currentVisibility: 1, currentDetailVisibility: 0 as const,
         })),
+      },
+    };
+    const harness = renderHarness(dry);
+    const waterVertices: number[][] = [];
+    (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+      const [fill, ambient, emissive] = p5Harness.materialTrace.slice(-3);
+      if (fill?.args.join(",") === "0,0,0,255"
+        && ambient?.method === "ambientMaterial"
+        && emissive?.method === "emissiveMaterial") waterVertices.push(coordinates);
+    });
+    try {
+      harness.draw();
+      expect(waterVertices).toHaveLength(0);
+      harness.setView({
+        ...dry,
+        tide: { ...dry.tide, level: 0.7 },
+        terrain: { ...dry.terrain, tiles: dry.terrain.tiles.map((tile) => ({
+          ...tile, waterDepth: 0.3,
+        })) },
+      });
+      harness.draw();
+      expect(waterVertices).toHaveLength(16 * 6);
+      for (const [, y] of waterVertices) {
+        expect(-y!).toBeCloseTo(0.7 * dry.terrain.tileSize * 2.9 + 0.45, 8);
+      }
+      expect(dry.terrain.tiles.every((tile) => tile.discovered === 0 && tile.waterDepth === 0)).toBe(true);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
+  it("keeps one physical water level across different submerged beds and depth-disclosure changes", () => {
+    const source = warmWaterView("level-water-over-submerged-beds");
+    const tideLevel = 0.9;
+    const waterView: TideweftView = {
+      ...source,
+      tide: { ...source.tide, level: tideLevel },
+      terrain: {
+        ...source.terrain,
+        // Unlike the former constant-depth sloping fixture, each physical
+        // depth here is exactly tide minus its submerged bed elevation.
+        tiles: source.terrain.tiles.map((tile, index) => {
+          const elevation = index % 3 === 0 ? 0.05 : index % 3 === 1 ? 0.35 : 0.85;
+          return { ...tile, elevation, waterDepth: tideLevel - elevation };
+        }),
       },
     };
     const harness = renderHarness(waterView);
@@ -1994,17 +2037,54 @@ describe("Relief water camera invariant", () => {
         && emissive?.method === "emissiveMaterial") waterVertices.push(coordinates);
     });
     try {
-      harness.draw();
-      expect(waterVertices).toHaveLength(16 * 6);
       const scale = waterView.terrain.tileSize * 2.9;
-      for (const [x, y, z] of waterVertices) {
-        const bed = sampleTerrainMeshLandHeightAt(waterView.terrain, { x: x!, y: z! }, scale);
-        // Both triangle meshes share their diagonal: positive clearance at
-        // every vertex proves clearance across the whole submitted wet tile,
-        // not merely that blue vertices were emitted below opaque terrain.
-        expect(-y! - bed).toBeCloseTo(0.02 * scale + 0.45, 8);
+      const captureWater = (level: number): number[][] => {
+        waterVertices.length = 0;
+        harness.draw();
+        expect(waterVertices).toHaveLength(16 * 6);
+        for (const [, y] of waterVertices) {
+          expect(-y!).toBeCloseTo(level * scale + 0.45, 8);
+        }
+        // Disclosure can regroup material batches; compare the complete
+        // geometric multiset rather than assuming material submission order.
+        return waterVertices.map((coordinates) => [...coordinates]).sort((left, right) => (
+          left[0]! - right[0]! || left[2]! - right[2]! || left[1]! - right[1]!
+        ));
+      };
+      const directVertices = captureWater(tideLevel);
+      for (const depthKnown of [0, 1]) {
+        harness.setView({
+          ...waterView,
+          terrain: {
+            ...waterView.terrain,
+            tiles: waterView.terrain.tiles.map((tile) => ({
+              ...tile,
+              currentDetailVisibility: 0 as const,
+              depthKnown,
+            })),
+          },
+        });
+        expect(captureWater(tideLevel)).toEqual(directVertices);
       }
-      expect(waterView.terrain.tiles.every((tile) => tile.waterDepth === 0.02)).toBe(true);
+
+      const nextTideLevel = 0.95;
+      harness.setView({
+        ...waterView,
+        tide: { ...waterView.tide, level: nextTideLevel },
+        terrain: {
+          ...waterView.terrain,
+          // An unchanged external revision must not preserve stale geometry
+          // when a new immutable physical depth field accompanies the tide.
+          tiles: waterView.terrain.tiles.map((tile) => ({
+            ...tile,
+            waterDepth: nextTideLevel - tile.elevation,
+          })),
+        },
+      });
+      expect(captureWater(nextTideLevel)).not.toEqual(directVertices);
+      expect(waterView.terrain.tiles.every((tile) => (
+        tile.waterDepth === tideLevel - tile.elevation
+      ))).toBe(true);
     } finally {
       harness.renderer.destroy();
     }

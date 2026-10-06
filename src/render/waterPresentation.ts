@@ -161,7 +161,8 @@ function composeWaterPresentation(signals: WaterSignals): WaterPresentation {
 }
 
 /**
- * Returns the only water depth a renderer may consume. Broad terrain sight can
+ * Returns the water depth allowed for material/depth disclosure, not geometry.
+ * Broad terrain sight can
  * reveal that a surface is wet, but exact bathymetry remains neutral until the
  * current detail field reaches it or the player has deliberately sounded it.
  * Missing detail metadata preserves the fully-visible legacy view contract.
@@ -174,6 +175,23 @@ export function visibleWaterDepth(
   const actualDepth = unit(tile.waterDepth, derivedDepth);
   if (actualDepth <= 0 || isWaterDepthDisclosed(tile)) return actualDepth;
   return 0.5;
+}
+
+/**
+ * Physical free-surface level of a wet source cell. In current tidal hydrology
+ * elevation + depth equals the public tide level even over different beds.
+ * This is not a sounding: callers must gate surface visibility/discovery, and
+ * keep depth colours on visibleWaterDepth rather than feeding its neutral
+ * unknown-depth value into geometry. No source state is changed.
+ */
+export function physicalWaterSurfaceElevation(
+  tile: TerrainTileView | undefined,
+  derivedDepth = 0,
+): number | undefined {
+  if (!tile || !Number.isFinite(tile.elevation)
+    || (tile.waterDepth !== undefined && !Number.isFinite(tile.waterDepth))) return undefined;
+  const depth = unit(tile.waterDepth, derivedDepth);
+  return depth > 0 ? unit(tile.elevation) + depth : undefined;
 }
 
 export function isWaterDepthDisclosed(tile: TerrainTileView | undefined): boolean {

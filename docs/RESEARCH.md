@@ -20,6 +20,44 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Relief water range-boundary repair — 2026-10-06
+
+Local, unpublished follow-up over `ef6b3df`: a player screenshot exposed a
+remaining height discontinuity between nearby and distant water. Source
+inspection found neutral undisclosed depth (`0.5`) used as a geometric lift;
+bed-corner plus per-cell depth also produced seams. Current simulation instead
+defines depth as tide level minus source elevation. The renderer now consumes
+that existing free-surface level, separately from depth-colour disclosure.
+Land above the plane retains depth-test occlusion; current surface anchors and
+masked remembered anchors follow the same land-or-water top. Current bounded
+wet-cell batches replace the redundant cached-water-plane eligibility guard.
+No hydrology, perception authority, save format or dependency changed.
+
+The corrected regression uses differing submerged beds with depth = tide minus
+bed. Before repair it submitted height `52.65` instead of `63.09`; the focused
+water-camera selection had one expected failure and four passes. Two surface
+sampler characterizations also failed before repair. Final affected validation
+passed 10 files / 303 tests, typecheck and the exact critical smoke suite
+(6 files / 105 tests); context-tool selftests passed 28. Tests cover invariant
+vertices across direct/broad/sounded metadata, tide changes, newly wet cells
+with unchanged cache keys, hidden refusal, land occlusion and neutral colours.
+
+Paired Firefox 157 production-WebGL captures use five stopped, display-only
+12×12 fixtures with physically consistent tidal depths. The mixed detail
+boundary visibly steps before and stays level after; shallow/channel/deep
+colours remain distinct on one plane. Both captures passed with zero unexpected
+browser errors (the existing startup CSP eval denial is separately recorded).
+After bundle `index-BTr0mWhr.js` SHA-256:
+`13abc61b69df2df3249d2419fe130b2f405b2981c092dd8ec8302dccb5c77bba`.
+The local reusable probe and images are under
+`artifacts/validation/voice-current49/water-9751b6b/`, `plane-before` / `plane-after`.
+The earlier alternating-bed/uniform-depth fixture was not a physically valid
+tidal world and proved only its renderer overlap case, not this fix. Pixel blue
+counts include sky and are not exact water coverage or performance evidence.
+Static `/tideweft/` smoke passed on the after artifact. These finite render
+checks do not certify long play, GPU throughput, future water layering or a
+public release; ordinary gameplay/packaged validation is separately recorded.
+
 ## What makes play rewarding and restorative
 
 ### Psychological needs beat a pile of prizes

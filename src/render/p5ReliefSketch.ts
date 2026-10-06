@@ -12,7 +12,6 @@ import { reliefSurfaceMaterialColor } from "./reliefMaterialPresentation";
 import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
 import {
   buildTerrainMesh,
-  sampleTerrainMeshLandHeightAt,
   type TerrainMesh,
   type TerrainMeshChunk,
 } from "./terrainMesh";
@@ -30,7 +29,7 @@ import {
   reliefWaterOpacity,
   reliefWaterSurfaceColor,
 } from "./reliefWaterBatches";
-import { visibleWaterDepth } from "./waterPresentation";
+import { physicalWaterSurfaceElevation } from "./waterPresentation";
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
@@ -2836,7 +2835,6 @@ export function createTideweftReliefRenderer(
     };
 
     const drawWater = (view: TideweftView, cache: CachedReliefMesh): void => {
-      if (!cache.mesh.waterPlane && !cache.perceptionMesh.waterPlane) return;
       const grid = view.terrain;
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = grid.tileSize;
@@ -2882,26 +2880,21 @@ export function createTideweftReliefRenderer(
             const x1 = x0 + tileSize;
             const z0 = grid.origin.y + row * tileSize;
             const z1 = z0 + tileSize;
-            // Use this wet tile's disclosed depth at all four corners (not
-            // the neighboring tile selected by a boundary point). Matching
-            // the bed's diagonal keeps shallow surface triangles above the
-            // depth-writing land instead of buried in a center-height plane.
-            const depthLift = visibleWaterDepth(grid.tiles[row * grid.columns + column])
-              * cache.mesh.verticalScale + RELIEF_WATER_SURFACE_LIFT;
-            const surfaceAt = (x: number, z: number): number =>
-              sampleTerrainMeshLandHeightAt(grid, { x, y: z }, cache.mesh.verticalScale)
-                + depthLift;
-            const h00 = surfaceAt(x0, z0);
-            const h10 = surfaceAt(x1, z0);
-            const h11 = surfaceAt(x1, z1);
-            const h01 = surfaceAt(x0, z1);
+            const tile = grid.tiles[row * grid.columns + column];
+            // A neutral undisclosed depth is a colour signal, not a physical
+            // lift. All corners use this cell's observed free-surface level;
+            // real tidal cells agree even when their submerged beds differ.
+            const level = physicalWaterSurfaceElevation(tile,
+              unit(view.tide.level) * 0.82 - unit(tile?.elevation));
+            if (level === undefined) continue;
+            const height = level * cache.mesh.verticalScale + RELIEF_WATER_SURFACE_LIFT;
             p.normal(0, -1, 0);
-            p.vertex(x0, -h00, z0);
-            p.vertex(x1, -h10, z0);
-            p.vertex(x1, -h11, z1);
-            p.vertex(x0, -h00, z0);
-            p.vertex(x1, -h11, z1);
-            p.vertex(x0, -h01, z1);
+            p.vertex(x0, -height, z0);
+            p.vertex(x1, -height, z0);
+            p.vertex(x1, -height, z1);
+            p.vertex(x0, -height, z0);
+            p.vertex(x1, -height, z1);
+            p.vertex(x0, -height, z1);
           }
           p.endShape();
         }
@@ -2942,7 +2935,7 @@ export function createTideweftReliefRenderer(
       });
       if (cues.length === 0) return;
 
-      const heights = cues.map((cue) => discoveredReliefSurfaceHeightAt(
+      const heights = cues.map((cue) => perceivedReliefSurfaceHeightAt(
         grid,
         cue.center,
         cache.mesh.verticalScale,

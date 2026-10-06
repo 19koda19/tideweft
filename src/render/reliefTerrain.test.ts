@@ -132,9 +132,9 @@ describe("discovery-masked Relief surfaces", () => {
     expect(seen.tiles[0]?.discovered).toBe(0);
   });
 
-  it("uses one neutral Relief water surface beyond direct detail unless it was sounded", () => {
+  it("keeps a visible tidal surface level independent of depth disclosure and submerged bed", () => {
     const remoteSurface = (waterDepth: number, depthKnown = 0, detail = 0) => grid([tile({
-      elevation: 0.2,
+      elevation: 0.98 - waterDepth,
       waterDepth,
       discovered: 1,
       depthKnown,
@@ -144,18 +144,20 @@ describe("discovery-masked Relief surfaces", () => {
     const point = { x: 5, y: 5 };
 
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08), point, 100, true))
-      .toBe(perceivedReliefSurfaceHeightAt(remoteSurface(0.96), point, 100, true));
+      .toBeCloseTo(perceivedReliefSurfaceHeightAt(remoteSurface(0.96), point, 100, true), 12);
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 0, 0.5), point, 100, true))
-      .toBe(perceivedReliefSurfaceHeightAt(remoteSurface(0.96, 0, 0.5), point, 100, true));
+      .toBeCloseTo(perceivedReliefSurfaceHeightAt(remoteSurface(0.96, 0, 0.5), point, 100, true), 12);
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08), point, 100, true))
-      .toBeCloseTo(70, 12);
+      .toBeCloseTo(98, 12);
 
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 1), point, 100, true))
-      .toBeCloseTo(28, 12);
+      .toBeCloseTo(98, 12);
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.96, 1), point, 100, true))
-      .toBeCloseTo(116, 12);
+      .toBeCloseTo(98, 12);
     expect(perceivedReliefSurfaceHeightAt(remoteSurface(0.08, 0, 1), point, 100, true))
-      .toBeCloseTo(28, 12);
+      .toBeCloseTo(98, 12);
+    expect(discoveredReliefSurfaceHeightAt(remoteSurface(0.08), point, 100, true))
+      .toBeCloseTo(98, 12);
   });
 
   it("uses the same partial-discovery values for mesh tiles and surface anchors", () => {
@@ -167,6 +169,22 @@ describe("discovery-masked Relief surfaces", () => {
     expect(masked.waterDepth).toBeCloseTo(0.05, 12);
     expect(discoveredReliefSurfaceHeightAt(terrain, { x: 5, y: 5 }, 100, false)).toBeCloseTo(20, 12);
     expect(discoveredReliefSurfaceHeightAt(terrain, { x: 5, y: 5 }, 100, true)).toBeCloseTo(25, 12);
+  });
+
+  it("anchors visible water at one level across submerged mesh corners without chart writes", () => {
+    const elevations = [0.05, 0.4, 0.55, 0.5, 0.1, 0.52, 0.45, 0.2, 0.54];
+    const terrain = reliefGrid(elevations, { depths: elevations.map((height) => 0.6 - height) });
+    const broad = {
+      ...terrain,
+      tiles: terrain.tiles.map((entry) => ({
+        ...entry, discovered: 0, currentVisibility: 1, currentDetailVisibility: 0 as const,
+      })),
+    };
+    for (const point of [{ x: 12.5, y: 17.5 }, { x: 17.5, y: 12.5 }, { x: 15, y: 15 }]) {
+      expect(perceivedReliefSurfaceHeightAt(broad, point, 100, true)).toBeCloseTo(60, 12);
+      expect(discoveredReliefSurfaceHeightAt(broad, point, 100, true)).toBe(0);
+    }
+    expect(broad.tiles.every((entry) => entry.discovered === 0)).toBe(true);
   });
 
   it("keeps omitted discovery compatible with fully visible legacy projections", () => {
@@ -245,7 +263,7 @@ describe("discovery-masked Relief surfaces", () => {
     }
   });
 
-  it("matches the rendered bed-following water triangles without exposing hidden depth", () => {
+  it("samples the visible top of a physical water plane without exposing hidden water", () => {
     const elevations = [
       0.62, 0.78, 0.91,
       0.55, 0.12, 0.84,
@@ -269,9 +287,9 @@ describe("discovery-masked Relief surfaces", () => {
     for (const point of points) {
       const land = meshTriangleHeightAt(mesh, terrain, point);
       expect(discoveredReliefSurfaceHeightAt(terrain, point, verticalScale, true))
-        .toBeCloseTo(land + 20, 10);
+        .toBeCloseTo(Math.max(land, 32), 10);
       expect(perceivedReliefSurfaceHeightAt(terrain, point, verticalScale, true))
-        .toBeCloseTo(land + 20, 10);
+        .toBeCloseTo(Math.max(land, 32), 10);
     }
     const dryPoint = { x: 25, y: 15 };
     expect(discoveredReliefSurfaceHeightAt(terrain, dryPoint, verticalScale, true))

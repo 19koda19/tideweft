@@ -3891,15 +3891,19 @@ and unseen motifs remain undisclosed.
 Relief water already follows broad current terrain sight, not the former
 short detail cone. Missing detail may neutralize unsounded depth, never erase
 an otherwise visible wet surface. Resolving a thin visible surface's true depth
-does not filter it out. Its local triangles follow the exact bed corners plus
-the disclosed tile depth and the existing small lift; anchors sample the same
-bed-following surface. This presentation approximation prevents a flat
-center-height sheet from sinking into sloping, depth-writing terrain; it does
-not change hydrology or establish a global horizontal water level. Existing
-shallow/channel/deep blue bands remain, with neutral unsounded depth outside
-DIRECT sight. Depth testing, hills and hidden-water masks remain intact. The
-broader actor/item water-layering and coherent water-level work remains future
-work; this repair does not claim that entire presentation problem solved.
+does not filter it out. Surface geometry uses the source cell's elevation plus
+actual depth, with the existing small rendering lift; under current hydrology
+this equals the public tide level across different submerged beds. Neutral
+unsounded depth is a material/colour signal, never a geometric lift. Detail or
+sounding changes cannot raise or lower the sheet. Surface anchors take the
+higher of land and that free surface, applying discovery masking for remembered
+locations and lawful terrain sight for current ones. Current bounded material
+batches determine wet eligibility, not cached mesh water-plane metadata.
+Existing shallow/channel/deep blue bands remain, with neutral unsounded depth
+outside DIRECT sight. Depth testing lets genuine land above water occlude the
+shore; hills, hidden-water masks and Chart memory remain intact. This consumes
+existing physical hydrology without changing it. Broader actor/item water
+layering remains future work, not a claim made by this narrow surface repair.
 
 Saved in-flight anonymous Voice receptions may validate against the former
 player contact profile through `projectLegacyPlayerPerception()`. This is

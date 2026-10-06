@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   WATER_PRESENTATION_PALETTE,
+  physicalWaterSurfaceElevation,
   quantizeWaterPresentation,
   visibleWaterPresentation,
 } from "./waterPresentation";
@@ -34,6 +35,33 @@ function biomeWater(biome: BiomeId): TerrainTileView {
 }
 
 describe("shared visible-water presentation", () => {
+  it("separates observable surface height from undisclosed depth colour", () => {
+    const broad = waterTile(0.08, {
+      elevation: 0.82, currentVisibility: 1, currentDetailVisibility: 0, depthKnown: 0,
+    });
+    const deep = { ...broad, elevation: 0.02, waterDepth: 0.88 };
+    const direct = { ...broad, currentDetailVisibility: 1 as const };
+    const sounded = { ...broad, depthKnown: 1 };
+    for (const source of [broad, deep, direct, sounded]) {
+      expect(physicalWaterSurfaceElevation(source)).toBeCloseTo(0.9, 12);
+    }
+    expect(visibleWaterPresentation(broad)).toEqual(visibleWaterPresentation(deep));
+    expect(visibleWaterPresentation(broad)?.depth).toBe(0.5);
+    expect(visibleWaterPresentation(direct)?.depth).toBe(0.08);
+    expect(visibleWaterPresentation(sounded)?.depth).toBe(0.08);
+    expect(broad.depthKnown).toBe(0);
+  });
+
+  it("rejects missing, dry and malformed surfaces and preserves explicit dry depth", () => {
+    expect(physicalWaterSurfaceElevation(undefined)).toBeUndefined();
+    expect(physicalWaterSurfaceElevation(waterTile(0), 0.6)).toBeUndefined();
+    expect(physicalWaterSurfaceElevation(waterTile(Number.NaN))).toBeUndefined();
+    expect(physicalWaterSurfaceElevation(waterTile(0.2, { elevation: Number.NaN }))).toBeUndefined();
+    const missing: TerrainTileView = { kind: "channel", elevation: 0.2 };
+    expect(physicalWaterSurfaceElevation(missing)).toBeUndefined();
+    expect(physicalWaterSurfaceElevation(missing, 0.6)).toBeCloseTo(0.8, 12);
+  });
+
   it("keeps a visible thin water surface when approaching reveals its true shallow depth", () => {
     const shallow = waterTile(0.01, {
       discovered: 0,
