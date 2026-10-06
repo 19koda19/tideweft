@@ -2332,6 +2332,32 @@ This is one controlled desktop production scene, not ordinary encounter rates,
 full crowd, hours, device audio/AT, mobile hardware, performance or directive
 closure. No source, dependency, schema, visual-quality or publication change.
 
+#### Warning follow-up and expedition-driver limits — 2026-10-06
+
+A separate existing test exports a current quiet phase-zero save with a
+genuinely acquired eight-unit fresh-water Promise. Its original warning/bark/
+fall/cargo and hearing assertions pass; the temporary export hook is removed
+exactly. Two running native captures genuinely observe the unseen human's
+`Heads up! · direction unclear`, matching anonymous ARIA, and the guardian
+bark at tick423. Northeast keyboard movement then causes a real fall and
+cargo separation, but the six-step bark expires before the mixed projection.
+The second capture reduces controller polling latency without changing world
+timing; it still fails the simultaneous witness. Neither failed capture is a
+crowd pass, a demonstrated game defect, or a frozen reconstruction. Their JSON
+SHA256 values are `8d56268b71b9d162c6e22d8c9f79e8a79f4ee7007b726f924a09d285aeac1350`
+and `5acd4f785d113367600a007cdccbeb69a9c067006b1edd19abc3d37f45acb450`.
+
+The ordinary expedition driver now permits bounded native paddling with
+stamina hysteresis rather than always releasing movement while ADRIFT. It
+uses no hidden bank guidance and records paddling separately from floating.
+An initial 60,956ms window on the unchanged production build advances420→507,
+with46.086 sampled northward tiles, one real REST and no terminal recovery.
+Nine sampled cues, no observer overflow and normal browser cleanup are
+retained; the terminal Chart screenshot is inspected. This window contains
+no ADRIFT episode, so it does not validate escape or the hours gate. Longer
+play and current dense-settlement stress remain open. No application,
+dependency, schema, presentation-quality or publication change.
+
 ### Current cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
