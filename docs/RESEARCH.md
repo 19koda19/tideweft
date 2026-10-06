@@ -2793,6 +2793,49 @@ The next bounded candidate is equivalent segment submission at that measured
 render owner, preserving sight, water height/colour, styles, physical currents
 and all simulation. Depth-state preservation cannot be replaced by guessing.
 
+#### Current-segment submission experiment — discarded, 2026-10-06
+
+Starting at `d04223a`, one candidate replaced each cue/pass's independent p5
+`line` calls with one supported `LINES` shape, duplicating endpoints to retain
+independent caps. Characterization normalizes both submission forms into the
+same ordered styled segments and foam points. Ordinary/SCAN, motion/time,
+220-cue density, immutable inputs and absent/peripheral/direct-detail boundaries
+are covered. No simulation, visibility, water height, schema or dependency changed.
+
+Before editing, the ignored experiment record froze a minimum repeated 15%
+draw-CPU reduction on each available platform, beyond run spread, as necessary
+but insufficient acceptance; the existing absolute performance floors remain.
+Two sequential 60s estuary repetitions per artifact/platform retained AC power,
+Low Power Mode off, 1440×900 CSS, 30-frame warmup and unchanged quality, without
+CPU sampling or hitch traces. The first BEFORE is the preceding record; the
+second BEFORE and both AFTERs are retained alongside frozen artifacts in
+`artifacts/validation/voice-current49/current-segment-submission/`.
+
+| Platform | BEFORE draw means (ms) | Candidate draw means (ms) | Two-run mean reduction | BEFORE callbacks/s | Candidate callbacks/s |
+| --- | --- | --- | ---: | --- | --- |
+| Electron estuary | 23.359 / 23.296 | 21.373 / 21.752 | 7.6% | 35.73 / 35.49 | 38.85 / 38.39 |
+| Firefox estuary | 19.678 / 19.576 | 17.209 / 18.050 | 10.2% | 32.40 / 32.20 | 33.57 / 32.66 |
+
+The candidate **failed** its frozen gain threshold and still failed both
+stationary callback floors. It was discarded, not relabeled a hitch repair.
+The application renderer is byte-equal to the starting source. Electron pairs
+accept 599 fixed steps/59 advances. Firefox's second BEFORE and both AFTERs
+accept 602/60; its first BEFORE accepts 599/59. Matching counts are not full
+authoritative-state/event/save equivalence. World-step means remain about
+89–92ms Electron and 161–167ms Firefox; low-count world p99 equals the sample
+maximum. These callback/CPU proxies do not measure presented FPS or GPU cost.
+
+Useful characterization tests were retained independently of batching: final
+seven affected render/current/water/perception files pass 270 tests; typecheck
+and the maintained six-file/105-test critical smoke pass. The unpublished
+candidate correctly failed the player-facing release wrapper, then packaged
+with the existing Forge artifact subcommand and passed nested-path static web
+smoke for comparison. No wrapper, version or release policy was weakened.
+Frozen baseline ASAR `63ea252c…` and discarded candidate ASAR `af8e6507…` retain
+distinct identities. Candidate dense/travel/soak, full visual/current-save
+integration, other desktop targets and publication were not run: rejection
+preceded those gates. No optimization or upstream/dependency change is retained.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

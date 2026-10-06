@@ -19,6 +19,7 @@ import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import * as playerPresentation from "./playerPresentation";
 import * as reliefCamera from "./reliefCamera";
 import { perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
+import { buildSurfaceCurrentCues } from "./currentCues";
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
 import {
   acousticTextRectsOverlap,
@@ -101,6 +102,7 @@ vi.mock("p5", () => {
         height: p5Harness.viewport?.height ?? 240,
         WEBGL: "webgl",
         TRIANGLES: "triangles",
+        LINES: "lines",
         HALF_PI: Math.PI / 2,
         drawingContext: {
           DEPTH_TEST: 0x0b71,
@@ -2224,6 +2226,175 @@ describe("Relief water camera invariant", () => {
   });
 });
 
+type CurrentStrokeOperation = {
+  readonly kind: "segment" | "point";
+  readonly color: string;
+  readonly alpha: number;
+  readonly weight: number;
+  readonly coordinates: readonly number[];
+};
+
+/** Normalize immediate lines and independent LINES pairs without joining them. */
+function recordCurrentStrokes(
+  harness: ReturnType<typeof renderHarness>,
+  surfaces: ReadonlySet<number>,
+): { readonly operations: CurrentStrokeOperation[] } {
+  const operations: CurrentStrokeOperation[] = [];
+  let color = "";
+  let alpha = 0;
+  let weight = 0;
+  let shapeKind: unknown;
+  let vertices: number[][] = [];
+  const record = (kind: CurrentStrokeOperation["kind"], coordinates: number[]): void => {
+    if ((color === "#061416" || color === "#ddfff1") && surfaces.has(coordinates[1]!)) {
+      operations.push({ kind, color, alpha, weight, coordinates });
+    }
+  };
+  (harness.instance.stroke as ReturnType<typeof vi.fn>).mockImplementation((value: {
+    readonly value?: unknown;
+    readonly setAlpha?: ReturnType<typeof vi.fn>;
+  }) => {
+    color = String(value?.value ?? value);
+    alpha = Number(value?.setAlpha?.mock.calls.at(-1)?.[0] ?? 255);
+  });
+  (harness.instance.strokeWeight as ReturnType<typeof vi.fn>)
+    .mockImplementation((value: number) => { weight = value; });
+  (harness.instance.line as ReturnType<typeof vi.fn>)
+    .mockImplementation((...coordinates: number[]) => record("segment", coordinates));
+  (harness.instance.point as ReturnType<typeof vi.fn>)
+    .mockImplementation((...coordinates: number[]) => record("point", coordinates));
+  (harness.instance.beginShape as ReturnType<typeof vi.fn>).mockImplementation((kind: unknown) => {
+    shapeKind = kind;
+    vertices = [];
+  });
+  (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+    if (shapeKind === "lines") vertices.push(coordinates);
+  });
+  (harness.instance.endShape as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    if (shapeKind === "lines") {
+      expect(vertices.length % 2).toBe(0);
+      for (let index = 0; index < vertices.length; index += 2) {
+        record("segment", [...vertices[index]!, ...vertices[index + 1]!]);
+      }
+    }
+    shapeKind = undefined;
+  });
+  return { operations };
+}
+
+describe("Relief surface-current submission equivalence", () => {
+  it.each([0, 0.5, undefined] as const)("does not submit current strokes without direct detail (%s)", (detail) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    p5Harness.reducedMotion = true;
+    const base = warmWaterView("current-detail-boundary");
+    const current: TideweftView = {
+      ...base,
+      tide: { ...base.tide, surfaceCurrent: { x: -1, y: 1 } },
+      perception: {
+        version: 1, signature: "no-direct-current", valid: true,
+        visibleTileCount: 16, directTileCount: 16, peripheralTileCount: 0,
+        detailVisibleTileCount: detail === 0.5 ? 16 : 0,
+        detailDirectTileCount: 0, detailPeripheralTileCount: detail === 0.5 ? 16 : 0,
+      },
+      terrain: {
+        ...base.terrain,
+        tiles: base.terrain.tiles.map((tile) => {
+          const { currentDetailVisibility: _oldDetail, ...rest } = tile;
+          return { ...rest, ...(detail === undefined ? {} : { currentDetailVisibility: detail }) };
+        }),
+      },
+    };
+    const harness = renderHarness(current);
+    try {
+      harness.draw();
+      const surfaces = new Set(current.terrain.tiles.map((_tile, index) => -(
+        perceivedReliefSurfaceHeightAt(current.terrain, {
+          x: (index % 4 + 0.5) * 24, y: (Math.floor(index / 4) + 0.5) * 24,
+        }, 24 * 2.9, true) + 1.25
+      )));
+      const trace = recordCurrentStrokes(harness, surfaces);
+      harness.draw();
+      expect(trace.operations).toEqual([]);
+      const shapes = harness.instance.beginShape as ReturnType<typeof vi.fn>;
+      expect(shapes.mock.calls.some(([kind]) => kind === "triangles")).toBe(true);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
+  it.each([
+    [false, false, 0, 4], [false, false, 50_000, 4],
+    [false, true, 0, 4], [false, true, 50_000, 4],
+    [true, false, 0, 4], [true, false, 50_000, 4],
+    [true, true, 0, 4], [true, true, 50_000, 4],
+    [true, true, 50_000, 32],
+  ] as const)("preserves ordered geometry/styles/flecks (scan %s, reduced %s, time %s, size %s)",
+    (analytical, reducedMotion, timeMs, size) => {
+      vi.stubGlobal("performance", { now: () => timeMs });
+      p5Harness.reducedMotion = reducedMotion;
+      const base = warmWaterView("current-submission");
+      const center = { x: size * 12, y: size * 12 };
+      const current: TideweftView = {
+        ...base,
+        terrain: {
+          ...base.terrain, columns: size, rows: size,
+          tiles: Array.from({ length: size * size }, (_, index) => ({
+            ...base.terrain.tiles[index % 16]!, roughness: index % 2 ? 0.1 : 0.9,
+          })),
+        },
+        player: { ...base.player, position: center, scanProgress: analytical ? 1 : 0 },
+        camera: { ...base.camera, center, bounds: { minX: 0, minY: 0, maxX: size * 24, maxY: size * 24 } },
+        tide: { ...base.tide, surfaceCurrent: { x: -1, y: 1 } },
+      };
+      const freeze = (value: unknown): void => {
+        if (value && typeof value === "object") {
+          for (const child of Object.values(value)) freeze(child);
+          Object.freeze(value);
+        }
+      };
+      freeze(current);
+      const original = JSON.stringify(current);
+      const cues = buildSurfaceCurrentCues(current.terrain, current.tide.surfaceCurrent, {
+        analytical, focus: center, tideLevel: current.tide.level,
+        weatherIntensity: current.weather.intensity, timeMs, reducedMotion, maxCues: 220,
+      });
+      expect(cues).toHaveLength(size === 32 ? 220 : 4);
+      const heights = cues.map((cue) => -(
+        perceivedReliefSurfaceHeightAt(current.terrain, cue.center, 24 * 2.9, true) + 1.25
+      ));
+      const expected: CurrentStrokeOperation[] = [];
+      for (const pass of ["ink", "foam"] as const) {
+        cues.forEach((cue, index) => {
+          const y = heights[index]!;
+          const color = pass === "ink" ? "#061416" : "#ddfff1";
+          const alpha = pass === "ink" ? 145 + cue.strength * 80 : 110 + cue.strength * 115;
+          const weight = pass === "ink" ? 2.8 + cue.turbulence * 1.5 : 0.8 + cue.strength * 0.9;
+          const [start, controlA, controlB, end] = cue.streamline;
+          const pairs = [[start, controlA], [controlA, controlB], [controlB, end]] as const;
+          for (const [from, to] of [...pairs, ...(analytical
+            ? [[cue.tip, cue.headLeft], [cue.tip, cue.headRight]] as const : [])]) {
+            expected.push({ kind: "segment", color, alpha, weight,
+              coordinates: [from.x, y, from.y, to.x, y, to.y] });
+          }
+          if (pass === "foam") {
+            for (const fleck of cue.foam) expected.push({ kind: "point", color, alpha,
+              weight: 1.2 + cue.turbulence * 2.2, coordinates: [fleck.x, y, fleck.y] });
+          }
+        });
+      }
+      const harness = renderHarness(current);
+      try {
+        harness.draw(); // Retained terrain preparation is outside the stroke trace.
+        const trace = recordCurrentStrokes(harness, new Set(heights));
+        harness.draw();
+        expect(trace.operations).toEqual(expected);
+        expect(JSON.stringify(current)).toBe(original);
+      } finally {
+        harness.renderer.destroy();
+      }
+    });
+});
+
 describe("Relief ambient-water acoustic authority", () => {
   it.each([
     ["ohm", false],
@@ -2247,7 +2418,6 @@ describe("Relief ambient-water acoustic authority", () => {
       tide: { ...base.tide, level: 0.5, surfaceCurrent: { x: 1, y: 0 } },
     };
     const harness = renderHarness(current);
-    const line = harness.instance.line as ReturnType<typeof vi.fn>;
     const point = harness.instance.point as ReturnType<typeof vi.fn>;
     const layer = harness.mount.children.find((child) => child.className === "relief-label-layer");
     const labels = (): FakeElement[] => layer?.children.filter((child) => (
@@ -2255,20 +2425,30 @@ describe("Relief ambient-water acoustic authority", () => {
     )) ?? [];
     try {
       harness.draw();
+      const cues = buildSurfaceCurrentCues(current.terrain, current.tide.surfaceCurrent, {
+        analytical: false, tideLevel: current.tide.level,
+        weatherIntensity: current.weather.intensity, timeMs: 0, reducedMotion, maxCues: 220,
+      });
+      const surfaces = new Set(cues.map((cue) => -(
+        perceivedReliefSurfaceHeightAt(current.terrain, cue.center, 24 * 2.9, true) + 1.25
+      )));
+      const trace = recordCurrentStrokes(harness, surfaces);
+      point.mockClear();
+      harness.draw();
       const legacyLabels = labels();
       expect(legacyLabels.map(({ textContent }) => textContent)).toContain(voice);
-      const flowStrokeCount = line.mock.calls.length;
+      const flowStrokes = [...trace.operations];
       const foamCount = point.mock.calls.length;
-      expect(flowStrokeCount).toBeGreaterThan(0);
+      expect(flowStrokes.filter(({ kind }) => kind === "segment")).toHaveLength(cues.length * 6);
       if (voice === "whissh") expect(foamCount).toBeGreaterThan(0);
 
-      line.mockClear();
+      trace.operations.length = 0;
       point.mockClear();
       harness.setView({ ...current, acousticText: [] });
       harness.draw();
       expect(labels()).toEqual([]);
       expect(legacyLabels.every(({ removed }) => removed)).toBe(true);
-      expect(line).toHaveBeenCalledTimes(flowStrokeCount);
+      expect(trace.operations).toEqual(flowStrokes);
       expect(point).toHaveBeenCalledTimes(foamCount);
 
       harness.setView({ ...current, acousticText: [{
