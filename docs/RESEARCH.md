@@ -2255,6 +2255,39 @@ cleanup completed normally. JSON SHA256:
 This qualifies the driver only—not long expedition, hours, audio/AT, mobile,
 performance, all-species or whole-directive acceptance. No gameplay change.
 
+The same existing driver then completed a 360,606ms observation on clean
+`f72b22f`, using the unchanged production artifact: ticks420→885,
+296.223 sampled/net northward tiles, four actual REST actions, empty cargo,
+342,291ms classified as movement and no terminal recovery. Its 2,754 reads
+retained 12 projected cues (five player, one anonymous bird, six physical),
+at most two candidates and 2,705 empty reads. A 300,274ms empty-projection
+span is not proof of acoustic silence. No observer overflow/incomplete was
+reported; the largest sampling gap was 891ms. Three initial `That was close.`
+cues still clustered within 6,861ms, followed by `Nearly had me.` and
+`Still here.`; this remains qualitative evidence, not a demonstrated clock
+defect or grounds to alter eligible physical incidents. Final Chart screenshot
+and normal browser/profile cleanup were inspected; only the known startup CSP
+probe denial was retained. JSON SHA256:
+`aee4646cd68110d23ce2590f62520a041dab1cc03c88227b6fbb289e0f811281`.
+This longer observation is still not hours, Relief, hardware audio/AT, mobile,
+performance, absent NPC/dog or whole-directive acceptance.
+
+### Current cumulative checkpoint — 2026-10-06
+
+The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
+(tree `616e84f1c0e0d6efda3fde90f59bbea9f6b40dab`) remained immutable during
+`caffeinate -i npm run test:ci -- --reporter=default --reporter=json --outputFile=artifacts/validation/voice-current49/cumulative-f72b22f.json`.
+The command exited successfully: context-index 28 and player-facing-sync 39
+selftests passed; Vitest passed all 364 files / 4,052 tests in 1,655.36s,
+with no failed or pending tests. Report SHA256:
+`44afba28d25f1088b2b0b32bc645443db6171bbc967433cc3846e07e8f631289`.
+This certifies these executable/test inputs, not a later changed runtime or
+public deployment. The earlier failed cumulative run remains failed; the
+test-only equal-work reconciliation above is the explicit intervening change.
+Ordinary-play, hours, hardware, performance and release gates remain separate.
+No dependency, schema, production-artifact or gameplay change was made by
+this evidence/status reconciliation.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
