@@ -2294,6 +2294,44 @@ JSON SHA256:
 `95e27b85a912dea9018210739bca37c488fe0b778edef4b2cd2d78e84879ce9e`.
 No gameplay repair or repeated blind route follows from this driver limit.
 
+### Running native mixed acoustic scene — 2026-10-06
+
+On clean `1237ed0` and the unchanged production artifact, an existing current
+fixture supplies initial storm/ridge/guardian conditions and a genuinely
+acquired 14-Reed Promise. Export follows nine actual neutral steps and ordinary
+save: outer50/carry14, tick421/phase9, with no prior incident, admitted call or
+learned sound. The temporary export hook was removed byte-for-byte after the
+two original mixed tests passed; no application or permanent test change.
+
+The same existing native probe loads that record through production IndexedDB
+in a disposable Firefox profile. A disclosed startup scheduler hold warms
+Relief, then native D+S precedes one ordinary start. The genuine mid-action save
+already presents play, not a Continue button; the first probe's incorrect title
+assumption failed before movement and remains failed. The corrected capture
+does not invent a title or stop the running world to retain its sounds.
+
+At tick422, real movement produces a fall, cargo separation, player speech,
+body impact and cargo impact; the actual guardian supplies its fresh shelter
+whine. Four public acoustic candidates yield two readable speech/whine labels;
+the two physical glyphs are legitimately unplaced. Native bounds and the
+inspected, before/after-bracketed screenshot show no acoustic, ordinary-label
+or feedback overlap in that mixed window. Source association uses a unique
+current public tuple, not an invented DOM event ID. Two later expiry-boundary
+samples briefly lack a current tuple until the next render; they are reported,
+not recast as new sound or hidden identity.
+
+The 3,020ms observation retains 21 states without overflow and continues to
+tick424. Current save conserves the 14 units as12+1+1 and retains the genuinely
+learned shelter-whine family at422. Actual caption/ARIA copy agrees and its
+announcement appears once. Normal browser/profile cleanup completes, with
+only the two known document-start CSP probe denials. JSON SHA256:
+`cacf744052808f5063b346634433160441df2e3c94daa8b10799608c19e0f1d6`;
+PNG SHA256:
+`88b6365979a872a76cd6f306fff962f9aed8a442ac149335a462cc1a8f284f87`.
+This is one controlled desktop production scene, not ordinary encounter rates,
+full crowd, hours, device audio/AT, mobile hardware, performance or directive
+closure. No source, dependency, schema, visual-quality or publication change.
+
 ### Current cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
