@@ -2230,6 +2230,31 @@ dependency, artifact or release change was needed. This narrow revalidation
 does not turn the earlier failed full run into a passing cumulative result or
 close the remaining ordinary-play, hours, platform and release gates.
 
+### Native unladen expedition driver — 2026-10-06
+
+The existing ignored normal-controls probe on clean `35717e9` qualified its
+short northward Chart driver on the unchanged production artifact above.
+The 60,095ms journey advanced ticks420→506, kept cargo empty, performed one
+actual REST and retained 45.213 tiles of sampled/net northward displacement.
+Successive public reads classified 54,352ms as movement and 3,169ms as recovery;
+these are approximate exposure categories, not authoritative continuous motion.
+
+The 445-read observation retained nine projected cues: four player, one
+anonymous bird call and four physical. Maximum candidates were two; 406 reads
+were empty, with no overflow/incomplete and a 651ms maximum gap. Three separate
+player cues said `That was close.` within 6,764ms. Static inspection confirms
+the existing 16-accepted-step relief lock and deterministic three-line pool
+permit this; projection samples do not prove exact admission age or a clock
+bug. The repeated wording remains an unresolved qualitative concern, not a
+quietness/annoyance pass or grounds to randomize captions.
+
+The final Chart screenshot was inspected; known startup CSP probe denial was
+the only retained error, guarded lifecycle counts were zero, and browser/profile
+cleanup completed normally. JSON SHA256:
+`28a23b0e132be31ff5fd370302344e9a970e801f079042e873dcb466c357fb9a`.
+This qualifies the driver only—not long expedition, hours, audio/AT, mobile,
+performance, all-species or whole-directive acceptance. No gameplay change.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
