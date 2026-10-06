@@ -2358,6 +2358,26 @@ no ADRIFT episode, so it does not validate escape or the hours gate. Longer
 play and current dense-settlement stress remain open. No application,
 dependency, schema, presentation-quality or publication change.
 
+#### Pending crow cause survives a current save — 2026-10-06
+
+A new runtime characterization saves the existing acquired-cargo/crow fixture
+after19 neutral accepted steps, at phase9. The crow's presentation has expired,
+but its authenticated hearing cause remains pending. Destroy/load/save preserves
+the exact authoritative world, player, cargo, ecology, dog/work, perception and
+journey roots, with no replayed crow cue. One genuine northeast player step then
+causes a fall and physical cargo separation as fresh guardian and human warning
+responses consume that original crow cause. Their observation IDs identify that
+cause; the acquired Promise quantity remains conserved, with a positive partial
+drop. A further interval does not replay the crow or the bark.
+
+This ordering legitimately receives the guardian as heard-unseen. Its fresh
+audio is committed, but no exact source glyph is authorized; the projected
+fall/cargo candidates remain. The original visible-guardian mixed-scene test is
+unchanged. Both tests pass together, with type-checking and the maintained
+105-test smoke suite. This is current-schema causal/replay/conservation evidence,
+not a four-anchored-label native scene, a full listener census or dense stress.
+No application, schema, sound lifetime or production artifact changed.
+
 ### Current cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
