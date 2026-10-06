@@ -9,6 +9,7 @@ import {
   type WorldView,
 } from "../sim/types";
 import { residentKnowsFact } from "../sim/npcIdentity";
+import { getPlayerAnimalCallRecognition } from "./playerAnimalCallKnowledge";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
 import { regionLocalToGlobalTile } from "../sim/regions";
@@ -482,6 +483,10 @@ export function projectUIView(
   const semanticAnimalCallKind = situatedExpressionEvent === null
     ? null
     : animalCallKind(situatedExpressionEvent.meaning);
+  const recognizedAnimalCall = receivedSituatedExpression
+    && situatedExpressionSource !== null && semanticAnimalCallKind !== null
+    ? getPlayerAnimalCallRecognition(player.animalCallKnowledge, situatedExpressionEvent!)
+    : null;
   const presentedAnimalCallKind = options.situatedExpressionReception?.kind === "heard-unseen"
     ? semanticAnimalCallKind === "fish-crow-call"
       || semanticAnimalCallKind === "gull-call"
@@ -535,6 +540,9 @@ export function projectUIView(
           ...(presentedAnimalCallKind === null
             ? {}
             : { animalCallKind: presentedAnimalCallKind }),
+          ...(recognizedAnimalCall === null
+            ? {}
+            : { recognizedAnimalCall: recognizedAnimalCall.animalLabel }),
           ...(situatedExpressionContact === null
             ? {}
             : { directionLabel: audibleContactDirection(situatedExpressionContact) }),
@@ -667,6 +675,7 @@ export function projectUIView(
         ? "no-expression-direction"
         : audibleContactDirection(situatedExpressionContact),
       situatedExpressionSource?.speakerLabel ?? "no-expression-source",
+      recognizedAnimalCall?.animalLabel ?? "unrecognized-animal-call",
       suppressDetail
         ? "sleep-store-action-hidden"
         : options.settlementFoodStoreAction?.id ?? "no-store-action",

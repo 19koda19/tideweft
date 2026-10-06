@@ -3777,6 +3777,7 @@ describe("runtime core-ecology vertical slice", () => {
       expect(admittedAudio).toHaveLength(lawfullyHeard ? 1 : 0);
       if (lawfullyHeard) {
         expect(prepared.runtime.getUIView().expressionCaption?.animalCallKind).toBe("cat-call");
+        expect(prepared.runtime.getUIView().expressionCaption?.recognizedAnimalCall).toBe("Cat");
       } else {
         // The same real weather retreat occurs two tiles away, beyond its
         // quiet rain-masked range. Sight alone does not make a sound heard.
@@ -3805,6 +3806,7 @@ describe("runtime core-ecology vertical slice", () => {
       const before = requiredEnvelope(repository);
       const nextTick = deserializeWorld(before.world).meta.completedTick + 1;
       expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      expect(before.player.animalCallKnowledge).toEqual({ version: 1, calls: [] });
 
       const intentFor = weatherExpression.coreWildlifeWeatherDistressExpressionIntent;
       const sourceEventIds = new Set<string>();
@@ -3848,6 +3850,14 @@ describe("runtime core-ecology vertical slice", () => {
       }
       await runtime.save();
       const after = requiredEnvelope(repository);
+      // Joint sight + hearing teaches the sound even when optional text is
+      // refused. A masked sound or failed transaction must teach nothing.
+      expect(after.player.animalCallKnowledge?.version).toBe(1);
+      expect(after.player.animalCallKnowledge?.calls.filter(({ vocalization }) => (
+        vocalization === "domestic-cat-rain-distress"
+      ))).toEqual(lawfullyHeard && !reject
+        ? [{ vocalization: "domestic-cat-rain-distress", learnedAtTick: nextTick }]
+        : []);
       expect(after.perceptionCarry.actorVocalizationSamples).toEqual([]);
       expect(after.perceptionCarry.situatedExpressionAdmissions.records.filter(
         (record) => record.kind === "core-wildlife-weather-distress",
@@ -3884,6 +3894,7 @@ describe("runtime core-ecology vertical slice", () => {
       expect(restored.regionalEcology).toBe(after.regionalEcology);
       expect(restored.physicalCargo).toEqual(after.physicalCargo);
       expect(restored.perceptionCarry).toEqual(after.perceptionCarry);
+      expect(restored.player.animalCallKnowledge).toEqual(after.player.animalCallKnowledge);
       if (!reject) {
         // A consumed call remains consumed through the next real interval,
         // not merely while construction is idle. Rejected work is different:
@@ -7500,6 +7511,7 @@ describe("runtime core-ecology vertical slice", () => {
       text: "YIP.",
       presentationKind: "animal-call",
       animalCallKind: "marsh-fox-call",
+      recognizedAnimalCall: "Fox",
       assertive: false,
     });
     expect(runtime.getUIView().announcement?.message).not.toContain("soft thump");
@@ -7515,6 +7527,15 @@ describe("runtime core-ecology vertical slice", () => {
     if (savedRabbit === undefined || savedFox === undefined) {
       throw new Error("marsh-edge actors did not persist after their event");
     }
+    expect(after.player.animalCallKnowledge?.calls.filter(({ vocalization }) => (
+      vocalization === "marsh-fox-pursuit-yip"
+    ))).toEqual([{
+      vocalization: "marsh-fox-pursuit-yip",
+      learnedAtTick: deserializeWorld(after.world).meta.completedTick,
+    }]);
+    expect(after.player.animalCallKnowledge?.calls.some(({ vocalization }) => (
+      (vocalization as string) === "marsh-rabbit-alarm-thump"
+    ))).toBe(false);
     expect(savedRabbit.intent.kind).toBe("alarm");
     expect(savedRabbit.address.position).toEqual(rabbitPosition);
     expect(savedRabbit.memories.some(({ kind }) => kind === "movement")).toBe(false);
@@ -7536,6 +7557,7 @@ describe("runtime core-ecology vertical slice", () => {
     const resumed = await createTideweftRuntime(repository);
     await resumed.save();
     expect(requiredEnvelope(repository).regionalEcology).toBe(durableCore);
+    expect(requiredEnvelope(repository).player.animalCallKnowledge).toEqual(after.player.animalCallKnowledge);
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "rabbit-thump"))
       .toHaveLength(0);
     expect(soundscapePlay.mock.calls.filter(
@@ -7567,10 +7589,15 @@ describe("runtime core-ecology vertical slice", () => {
       animalCallKind: "animal-call",
       assertive: false,
     });
+    // Seeing the animal before it calls is not a joint witness of its sound.
+    expect(runtime.getUIView().expressionCaption).not.toHaveProperty("recognizedAnimalCall");
     expect(runtime.getUIView().announcement?.message).not.toContain("brief yip nearby");
 
     await runtime.save();
     const saved = requiredEnvelope(repository);
+    expect(saved.player.animalCallKnowledge?.calls.some(({ vocalization }) => (
+      vocalization === "marsh-fox-pursuit-yip"
+    ))).toBe(false);
     const savedWorld = deserializeWorld(saved.world);
     const savedCore = requiredRegionalCoreOwner(saved, foxActorId);
     const savedFox = requiredCoreActor(savedCore, foxActorId);

@@ -69,6 +69,7 @@ import {
 import { deriveWaterFlowProfile } from "./waterFlow";
 import { WORLD_POSITION_UNITS_PER_TILE } from "./worldPosition";
 import type { PlayerTimeActionState } from "./playerTimeAction";
+import { createPlayerAnimalCallKnowledge, type PlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 
 /** Shared authoritative sub-tile precision for player and world-position math. */
 export const TILE_UNITS = WORLD_POSITION_UNITS_PER_TILE;
@@ -170,6 +171,8 @@ export interface PlayerState {
   reportsDelivered: number;
   /** Durable authority for a player-chosen REST or SLEEP already in progress. */
   timeAction: PlayerTimeActionState | null;
+  /** Learned vocal families; absence in supported earlier records explicitly means empty. */
+  animalCallKnowledge?: PlayerAnimalCallKnowledge;
 }
 
 export interface PlayerControl {
@@ -334,6 +337,7 @@ export function createPlayer(world: WorldView, startSettlementId?: number): Play
     rescues: 0,
     reportsDelivered: 0,
     timeAction: null,
+    animalCallKnowledge: createPlayerAnimalCallKnowledge(),
   };
   discoverAround(player, world, 5);
   return player;

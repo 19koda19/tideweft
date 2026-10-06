@@ -428,6 +428,87 @@ describe("situated expression caption", () => {
     expect(unseenCopy).not.toMatch(/fox|prey|pursuit|YIP/iu);
   });
 
+  it.each([
+    ["Dog", "dog call"],
+    ["Cat", "cat call"],
+    ["Fish crow", "fish crow call"],
+    ["Deer", "deer call"],
+    ["Gull", "gull call"],
+    ["Elk", "elk call"],
+    ["Wild boar", "wild boar call"],
+    ["Chicken", "chicken call"],
+    ["Duck", "duck call"],
+    ["Goat", "goat call"],
+    ["Fox", "fox call"],
+  ] as const)("uses plain lowercase learned %s call text for both visible copy and ARIA", (animal, copy) => {
+    const recognized: SituatedExpressionCaptionUIView = {
+      id: "situated-expression:event:v1:recognized-call",
+      speakerLabel: "An animal",
+      text: "CALL.",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      recognizedAnimalCall: animal,
+      assertive: false,
+    };
+    expect(situatedExpressionCaptionVisibleText(recognized)).toBe(copy);
+    expect(situatedExpressionCaptionCopy(recognized)).toBe(copy);
+    expect(copy).not.toMatch(/[\[\]"]/u);
+  });
+
+  it("preserves only the received coarse direction and uncertainty in a learned call", () => {
+    const recognized: SituatedExpressionCaptionUIView = {
+      id: "situated-expression:event:v1:recognized-fox-call",
+      speakerLabel: "An animal",
+      text: "CALL.",
+      tone: "restrained",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      recognizedAnimalCall: "Fox",
+      assertive: false,
+    };
+    for (const directionLabel of [
+      "east", "south-east", "south", "south-west", "west", "north-west",
+      "north", "north-east", "all around", "direction unclear",
+    ] as const) {
+      const directed = { ...recognized, directionLabel };
+      const copy = `fox call · ${directionLabel}`;
+      expect(situatedExpressionCaptionVisibleText(directed)).toBe(copy);
+      expect(situatedExpressionCaptionCopy(directed)).toBe(copy);
+      expect(copy).not.toMatch(/prey|pursuit|alarm|sourceActorId|position|[\[\]]/u);
+      expect(situatedExpressionCaptionReadingTimeMs(directed)).toBe(Math.max(
+        ACOUSTIC_CAPTION_MINIMUM_READING_MS,
+        Math.ceil(Array.from(copy).length * 1000 / ACOUSTIC_CAPTION_CHARACTERS_PER_SECOND),
+      ));
+    }
+    expect(recognized).not.toHaveProperty("sourceActorId");
+    expect(recognized).not.toHaveProperty("position");
+  });
+
+  it("does not apply an animal recognition hint to speech or physical text", () => {
+    expect(situatedExpressionCaptionVisibleText({
+      ...caption,
+      presentationKind: "speech",
+      recognizedAnimalCall: "Fox",
+    })).toBe(caption.text);
+    expect(situatedExpressionCaptionCopy({
+      ...caption,
+      presentationKind: "speech",
+      recognizedAnimalCall: "Fox",
+    })).toBe("Nearby courier: Keep off the flooded boards.");
+    const physical: SituatedExpressionCaptionUIView = {
+      id: "acoustic:contact:recognized-hint-is-not-a-call",
+      speakerLabel: "Sound",
+      text: "rustle",
+      tone: "restrained",
+      presentationKind: "physical",
+      physicalSoundKind: "rustle",
+      recognizedAnimalCall: "Fox",
+    };
+    expect(situatedExpressionCaptionVisibleText(physical)).toBe("[rustle]");
+    expect(situatedExpressionCaptionCopy(physical)).toBe("[rustle]");
+  });
+
   it("presents a visible deer snort without naming an unseen source", () => {
     const visible: SituatedExpressionCaptionUIView = {
       id: "expression:deer:alarm",

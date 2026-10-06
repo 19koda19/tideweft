@@ -1413,6 +1413,37 @@ the complete selectable producer-context expression lab. See
 [Local development](../README.md#local-development) for access and
 `runtime.expressionDiagnostics.test.ts` for current-state/audio/save parity.
 
+### Learned animal-call recognition
+
+The current Living Voice learning slice associates a call with an animal only
+when the player genuinely **hears and directly sees the calling source** at
+the committed event. Merely seeing an animal, reading its ABOUT entry, hearing
+an unseen first call, or loading an animal catalog does not teach its sounds.
+Learning from committed ecology calls is independent of optional caption
+admission, text preferences and audio presentation. An uncommitted vocal intent
+never teaches a sound: current guardian signals become calls only on successful
+vocal admission. Failed transactions restore the prior knowledge.
+
+`playerAnimalCallKnowledge.ts` owns a bounded, versioned set of learned vocal
+families in the existing player state. One witnessed call does not unlock every
+call from that species. Current-schema save/load preserves this knowledge but
+does not replay the original sound or caption. Existing supported player
+records without this additive field explicitly mean no learned calls; any
+present malformed, unsupported or future-tick record fails closed.
+
+A later lawful receipt for a learned family may display plain text such as
+`fox call`, retaining only the original heard bearing and uncertainty. This is
+recognition of a sound, not revelation of the hidden individual's identity,
+exact position, prey, intent or alarm cause. Unlearned calls remain anonymous;
+unheard calls show nothing. Source-bound field glyphs remain onomatopoeia and
+require their existing direct-source proof. NPC hearing remains independently
+anonymous. Rabbit contact signals and aggregate choruses do not acquire a
+fictional individual/species association through this first learning slice.
+
+This is a current authorized integration, not a claim that every species has
+a runtime call, that future repertoires are playable, or that Living Voice's
+ordinary-play and release gates have passed.
+
 ### Repository asset and storage law
 
 The tracked repository stays below 1 GB, targets roughly 600 MB, and requires

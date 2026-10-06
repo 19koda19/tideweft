@@ -1940,6 +1940,48 @@ harness change followed those observations. The normal animal aggregate is
 `native-lease-animal-matrix-03.json`; successful paired children span the `-03`,
 `-04`, `-05` and `-08` stems under the same ignored validation directory.
 
+### Learned animal-call recognition — 2026-10-06
+
+The local unpublished slice over `03eb624` learns only an existing vocal family
+from a fresh committed call jointly heard and directly seen. Real ecology
+calls teach even with refused optional captions; a refused guardian vocal
+intent is not a committed call and teaches nothing. The player root stores
+at most thirteen current families, no caller identity, position or motive.
+Later lawful captions use plain lowercase copy such as `fox call`, retaining
+only the original direction/uncertainty. Public caption values contain animal
+labels, not cause-bearing vocalization keys. Rabbit contact and aggregate
+chorus identification remain excluded, not newly scaffolded gameplay.
+
+Focused memory/projection/caption tests passed 3 files / 142 tests. Eleven
+runtime persistence, real cat/fox/guardian, masked/unseen, refused-capacity and
+late-failure cases passed across three owners. They preserve current roundtrip,
+consumption and rollback; supported absent knowledge explicitly means empty,
+whereas malformed present records fail closed. Reception/human hearing/save
+policy/live-region tests passed 4 files / 69 tests; maintained smoke passed
+6 files / 105 tests. Typecheck, context-index selftests, production web build
+(622 modules) and nested static smoke (5 files / 4,759,431 bytes) passed.
+These are correctness checks, not performance measurements or a new native
+recognized-call/browser, package, hours, cumulative or Voice-closure proof.
+Schema 50/carry 14 and release identity remain unchanged. The release-sync
+wrapper correctly rejects the unpublished source delta until an intentional
+atomic tutorial/patch/version review; no release gate was weakened.
+
+### Ordinary Voice journey observation — 2026-10-06
+
+Before that learning slice, clean `03eb624` used the unchanged production
+artifact recorded above for one six-minute Firefox normal-controls journey.
+The existing bounded passive probe observed 2,451 reads / 59 distinct projected
+cues: 25 player, one keeper and 33 physical, with no animal call observed.
+There were eleven player wordings, no adjacent-observation identical repeat,
+and at most three projected candidates. Warning/recovery wording fit the
+actual travel/cargo context; most reads had no projected cue. Empty projection
+is not acoustic silence, and this finite run is not hours-annoyance acceptance.
+Physical pickup/drop/recovery and two chronicle arrivals occurred, but the
+final native Chart still required recovering three Reed before delivery.
+The terminal probe passed and removed its disposable profile. One previously
+authenticated startup CSP eval-probe denial was recorded; this is not
+console-clean, exhaustive conservation, reload, audio/AT or performance proof.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief

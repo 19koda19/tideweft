@@ -13,6 +13,7 @@ import type { LivingActorSpecies } from "../game/livingActor";
 import type { CoreEcologyAggregateSpecies } from "../game/coreEcologyAggregatePolicy";
 import type { AcousticTextRect } from "../render/acousticTextLayout";
 import type { AnimalCallTextControlOptions } from "./animalCallTextControl";
+import type { AnimalCallLabel } from "../game/playerAnimalCallKnowledge";
 
 export type SessionShape = "drift" | "weave" | "wander";
 /**
@@ -478,6 +479,8 @@ export interface SituatedExpressionCaptionUIView {
   readonly text: string;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
   readonly presentationKind?: "speech" | "animal-call" | "embodied-signal" | "physical";
+  /** Player-learned sound family only; never a hidden individual or exact position. */
+  readonly recognizedAnimalCall?: AnimalCallLabel;
   /** Explicit knowledge-safe presentation kind; never inferred from localized text. */
   readonly animalCallKind?:
     | "bark"

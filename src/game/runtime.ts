@@ -98,6 +98,12 @@ import {
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
 import { surfaceCurrentDirection } from "./currentDirection";
+import {
+  animalCallRecognitionForVocalization,
+  canonicalizePlayerAnimalCallKnowledge,
+  createPlayerAnimalCallKnowledge,
+  rememberPlayerAnimalCall,
+} from "./playerAnimalCallKnowledge";
 import { deriveWaterFlowProfile } from "./waterFlow";
 import {
   smoothAutopilotPath,
@@ -13066,6 +13072,23 @@ export async function createTideweftRuntime(
     }
   }
 
+  /** Fresh producer receipt only; optional text/channel budgets cannot erase learning. */
+  function rememberSeenAnimalCall(
+    intent: SituatedExpressionIntent,
+    reception: Parameters<typeof acceptSituatedExpression>[1],
+  ): void {
+    if (reception.kind !== "heard-visible") return;
+    const vocalization = situatedExpressionVocalizationFor(intent);
+    if (animalCallRecognitionForVocalization(vocalization) === null) return;
+    const learned = rememberPlayerAnimalCall(
+      player.animalCallKnowledge,
+      { meaning: intent.meaning, vocalization },
+      world.meta.completedTick,
+    );
+    if (learned === null) throw new Error("Witnessed animal call lost its knowledge authority");
+    player.animalCallKnowledge = learned;
+  }
+
   function acceptSituatedExpression(
     intent: SituatedExpressionIntent | null,
     reception: Readonly<{
@@ -16017,6 +16040,9 @@ export async function createTideweftRuntime(
             : null,
           diagnosticListeningContext,
         );
+        // This owner commits a vocal signal through admission; unlike a
+        // physical ecology call, its refused intent is not yet a world sound.
+        if (admitted) rememberSeenAnimalCall(guardianDogSignalIntent, reception);
         if (
           admitted
           && situatedExpressionSoundInterrupt(guardianDogSignalIntent) === "strong"
@@ -16225,6 +16251,7 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
+        rememberSeenAnimalCall(intent, reception);
         const expressionAdmitted = acceptSituatedExpression(
           intent,
           reception,
@@ -16318,6 +16345,7 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
+        rememberSeenAnimalCall(intent, reception);
         const expressionAdmitted = acceptSituatedExpression(
           intent,
           reception,
@@ -16410,6 +16438,7 @@ export async function createTideweftRuntime(
           : playerDirectlyObservesExpressionSource(intent)
             ? { kind: "heard-visible" as const, certainty: audible.certainty }
             : { kind: "heard-unseen" as const, contact: audible.contact };
+        rememberSeenAnimalCall(intent, reception);
         const expressionAdmitted = acceptSituatedExpression(
           intent,
           reception,
@@ -20022,6 +20051,14 @@ export async function createTideweftRuntime(
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     const playerSnapshot = structuredClone(player);
+    const callKnowledge = Object.hasOwn(playerSnapshot, "animalCallKnowledge")
+      ? canonicalizePlayerAnimalCallKnowledge(playerSnapshot.animalCallKnowledge, worldSnapshot.meta.completedTick)
+      : createPlayerAnimalCallKnowledge();
+    if (callKnowledge === null || (Object.hasOwn(playerSnapshot, "animalCallKnowledge")
+      && stableStringify(callKnowledge) !== stableStringify(playerSnapshot.animalCallKnowledge))) {
+      throw new Error("Refusing to save invalid learned animal calls");
+    }
+    playerSnapshot.animalCallKnowledge = callKnowledge;
     const sessionSnapshot = structuredClone(session);
     if (playerSnapshot.timeAction !== null) {
       const canonicalTimeAction = canonicalizePlayerTimeAction(
@@ -26156,6 +26193,12 @@ function validatePlayer(
   world: WorldState,
   expectedChartTiles = world.terrain.tiles.length,
 ): void {
+  if (Object.hasOwn(player, "animalCallKnowledge")) {
+    const knowledge = canonicalizePlayerAnimalCallKnowledge(player.animalCallKnowledge, world.meta.completedTick);
+    if (knowledge === null || stableStringify(knowledge) !== stableStringify(player.animalCallKnowledge)) {
+      throw new Error("Save contains invalid learned animal calls");
+    }
+  }
   for (const value of [player.x, player.y, player.stamina, player.stability, player.scanCharge]) {
     if (!Number.isFinite(value)) throw new Error("Save contains invalid player state");
   }

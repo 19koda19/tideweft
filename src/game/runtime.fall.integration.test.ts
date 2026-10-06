@@ -2534,6 +2534,11 @@ describe("production terrain fall and physical cargo", () => {
       },
     });
     expect(whineChannel?.reception?.certainty).toBeGreaterThan(0);
+    expect(saved.player.animalCallKnowledge?.calls.filter(({ vocalization }) => (
+      vocalization === "dog-shelter-whine"
+    ))).toEqual(visible
+      ? [{ vocalization: "dog-shelter-whine", learnedAtTick: world.meta.completedTick + 1 }]
+      : []);
     const guardianCall = mixedView.acousticText?.find((item) => (
       item.acousticKind === "animal-call" && item.sourceActorId === guardian.identity.stableId
     ));
@@ -2796,6 +2801,34 @@ describe("production terrain fall and physical cargo", () => {
           }
         } finally { closure.mockRestore(); mapper.mockRestore(); }
       } finally { failed.destroy(); }
+    } else {
+      // A genuine work/condition-owned candidate refused BEFORE vocal
+      // commitment is not a call heard by the player and cannot teach it.
+      const refusedRepository = new MemoryRepository(observerDisabledStart);
+      const refused = await createTideweftRuntime(refusedRepository);
+      const reduce = expressionChannelBank.reduceSituatedExpressionChannelBank;
+      let refusals = 0;
+      const refusal = vi.spyOn(expressionChannelBank, "reduceSituatedExpressionChannelBank")
+        .mockImplementation((bankValue, intent, reception) => {
+          if (typeof intent !== "object" || intent === null || !("meaning" in intent)
+            || intent.meaning !== "guardian-dog-shelter-whine") return reduce(bankValue, intent, reception);
+          refusals += 1;
+          return { accepted: false, reason: "channel-capacity-reached", event: null,
+            bank: expressionChannelBank.canonicalizeSituatedExpressionChannelBank(bankValue) };
+        });
+      try {
+        refused.dispatchUI({ type: "resume-world" });
+        advancePlayerSteps(refused, 9);
+        soundscapePlay.mockClear();
+        refused.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+        advancePlayerSteps(refused, 1);
+        expect(refusals).toBe(1);
+        expect(incidentCueCalls("vocalization-dog-shelter-whine")).toBe(0);
+        await refused.save();
+        expect(decodeCurrent(refusedRepository.snapshot()).player.animalCallKnowledge?.calls.some(
+          ({ vocalization }) => vocalization === "dog-shelter-whine",
+        )).toBe(false);
+      } finally { refusal.mockRestore(); refused.destroy(); }
     }
   }, 60_000);
 

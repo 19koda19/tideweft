@@ -388,6 +388,12 @@ hearing/localization; supernatural beings are not omniscient exposition tools.
 An actor may react only to what it perceives, remembers, infers, or lawfully
 learns from another source.
 
+Applicable animal vocalizations reuse [learned call recognition](./ARCHITECTURE.md#learned-animal-call-recognition):
+a genuine joint sight/hearing receipt may teach a bounded vocal family. Later
+hearing identifies only the learned animal kind, never a hidden individual,
+position or cause. A repertoire entry or uncommitted intent teaches nothing.
+Rabbit contact and aggregate chorus identification remain excluded.
+
 Player condition expression likewise requires a committed causal transition,
 not a sampled HUD value. Current dry exhaustion is one representative proof:
 future effort states extend the same situated-expression, acoustic,

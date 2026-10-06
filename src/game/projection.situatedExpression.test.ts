@@ -56,6 +56,14 @@ import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 import { MARSH_RABBIT_THUMP_EXPRESSION_PRIORITY } from "./coreWildlifeSignalExpression";
 import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
+import {
+  createPlayerAnimalCallKnowledge,
+  rememberPlayerAnimalCall,
+} from "./playerAnimalCallKnowledge";
+import {
+  situatedExpressionCaptionCopy,
+  situatedExpressionCaptionVisibleText,
+} from "../ui/situatedExpressionCaption";
 
 const SIGNED_REGION = createRegionCoord(-7, -12);
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
@@ -2081,6 +2089,119 @@ describe("situated expression game projection", () => {
     const serializedCaption = JSON.stringify(caption);
     expect(serializedCaption).not.toContain(expression.sourceActorId);
     expect(serializedCaption).not.toMatch(/fox|YIP|prey|pursuit/iu);
+  });
+
+  it("never teaches a vocal family merely by projecting an authenticated visible caller", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalMarshFoxPursuitYip(
+      wildlifePositionInWindow(window),
+      "marsh-fox-signal:projection-is-not-learning",
+    );
+    player.animalCallKnowledge = createPlayerAnimalCallKnowledge();
+    const priorPlayer = structuredClone(player);
+    const options = {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+      coreWildlifeExpressionSources: [marshFoxSource(expression)],
+    };
+    for (let render = 0; render < 3; render += 1) {
+      const view = projectUIView(world, player, session, options);
+      expect(view.expressionCaption).toMatchObject({
+        speakerLabel: "Marsh fox",
+        presentationKind: "animal-call",
+        animalCallKind: "marsh-fox-call",
+      });
+      expect(view.expressionCaption).not.toHaveProperty("recognizedAnimalCall");
+      expect(projectGameView(world, player, options).expressions).toHaveLength(1);
+    }
+    expect(player).toEqual(priorPlayer);
+    expect(player.animalCallKnowledge.calls).toEqual([]);
+  });
+
+  it("uses previously learned fox sound knowledge without disclosing an unseen caller or cause", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const expression = canonicalMarshFoxPursuitYip(
+      wildlifePositionInWindow(window),
+      "marsh-fox-signal:previously-witnessed-family:prey-hidden",
+    );
+    const unseen = createHeardUnseenSituatedExpressionReception(expression, 42, {
+      bearing: { centerRadians: Math.PI / 4, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Learned fox hearing fixture was rejected");
+    const options = {
+      economyWorld: compatibility,
+      situatedExpression: expression,
+      situatedExpressionReception: unseen,
+    };
+    const unlearned = projectUIView(world, player, session, options);
+    expect(unlearned.expressionCaption).not.toHaveProperty("recognizedAnimalCall");
+    if (unlearned.expressionCaption === undefined) throw new Error("Unlearned fox caption was not projected");
+    expect(situatedExpressionCaptionCopy(unlearned.expressionCaption))
+      .toBe("[An animal calls somewhere south-east.]");
+
+    // A prior witnessed transaction supplies this bounded knowledge; neither
+    // UI nor field projection is allowed to manufacture that transaction.
+    const knowledge = rememberPlayerAnimalCall(createPlayerAnimalCallKnowledge(), expression, 42);
+    if (knowledge === null) throw new Error("Previously learned fox fixture was rejected");
+    player.animalCallKnowledge = knowledge;
+    const priorPlayer = structuredClone(player);
+    const learned = projectUIView(world, player, session, options);
+    const caption = learned.expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "An animal",
+      presentationKind: "animal-call",
+      animalCallKind: "animal-call",
+      recognizedAnimalCall: "Fox",
+      directionLabel: "south-east",
+    });
+    if (caption === undefined) throw new Error("Learned fox caption was not projected");
+    expect(situatedExpressionCaptionVisibleText(caption)).toBe("fox call · south-east");
+    expect(situatedExpressionCaptionCopy(caption)).toBe("fox call · south-east");
+    expect(learned.revision).not.toBe(unlearned.revision);
+    expect(JSON.stringify(learned)).not.toContain(expression.sourceActorId);
+    expect(JSON.stringify(learned)).not.toMatch(/pursuit|prey-hidden/iu);
+    for (const field of ["sourceActorId", "position", "distanceBand", "bearing", "meaning", "vocalization"]) {
+      expect(caption).not.toHaveProperty(field);
+    }
+    expect(projectGameView(world, player, options).expressions).toEqual([]);
+    expect(player).toEqual(priorPlayer);
+  });
+
+  it("does not let learned cat calls identify an unseen fox or bypass missing reception", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const position = wildlifePositionInWindow(window);
+    const fox = canonicalMarshFoxPursuitYip(position, "marsh-fox-signal:different-learned-family");
+    const cat = canonicalDomesticCatRainDistress(position, "CAT-call:previous-witness");
+    const knowledge = rememberPlayerAnimalCall(createPlayerAnimalCallKnowledge(), cat, 42);
+    if (knowledge === null) throw new Error("Previously learned cat fixture was rejected");
+    player.animalCallKnowledge = knowledge;
+    const priorPlayer = structuredClone(player);
+    const unseen = createHeardUnseenSituatedExpressionReception(fox, 42, {
+      bearing: { centerRadians: Math.PI, uncertaintyRadians: Math.PI / 30 },
+      distanceBand: { minimum: 4_000, maximum: 12_000 },
+      certainty: 0.7,
+    });
+    if (unseen === null) throw new Error("Different-family fox hearing fixture was rejected");
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: fox,
+      situatedExpressionReception: unseen,
+    }).expressionCaption;
+    expect(caption).toMatchObject({ animalCallKind: "animal-call", directionLabel: "west" });
+    expect(caption).not.toHaveProperty("recognizedAnimalCall");
+    for (const event of [cat, fox]) {
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        situatedExpression: event,
+      }).expressionCaption).toBeUndefined();
+    }
+    expect(player).toEqual(priorPlayer);
   });
 
   it("anchors a visible marsh-rabbit thump only to its authenticated body", () => {

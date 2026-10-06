@@ -106,6 +106,10 @@ export function createAcousticCaptionReadingLease(): AcousticCaptionReadingLease
 
 /** Shared visible wording for the bounded expression-caption surface. */
 export function situatedExpressionCaptionVisibleText(caption: Caption): string {
+  if (caption.presentationKind === "animal-call" && caption.recognizedAnimalCall !== undefined) {
+    const text = `${caption.recognizedAnimalCall.toLowerCase()} call`;
+    return caption.directionLabel === undefined ? text : `${text} · ${caption.directionLabel}`;
+  }
   if (
     caption.presentationKind === "physical"
     || caption.presentationKind === "embodied-signal"
@@ -137,6 +141,9 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
     return `[${sound} somewhere ${caption.directionLabel}.]`;
   }
   if (caption.presentationKind === "animal-call") {
+    if (caption.recognizedAnimalCall !== undefined) {
+      return situatedExpressionCaptionVisibleText(caption);
+    }
     if (caption.animalCallKind === "chorus") {
       if (caption.directionLabel === undefined) return "[A chorus sounds.]";
       if (caption.directionLabel === "all around") {

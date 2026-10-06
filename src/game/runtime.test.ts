@@ -2696,6 +2696,9 @@ describe("perpetual new worlds", () => {
     created.destroy();
 
     expect(repository.snapshot().payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(decodeGameSave(repository.snapshot()).player.animalCallKnowledge).toEqual({
+      version: 1, calls: [],
+    });
     expect(decodeGameSave(repository.snapshot()).perceptionCarry).toMatchObject({
       version: 14,
     });
@@ -2709,6 +2712,88 @@ describe("perpetual new worlds", () => {
       version: 14,
     });
     resumed.destroy();
+  });
+
+  it("roundtrips learned animal calls and explicitly reads earlier absence as empty without replay", async () => {
+    const repository = new MemoryRepository();
+    const created = await createTideweftRuntime(repository);
+    created.dispatchUI({
+      type: "new-world", seed: "animal call knowledge persistence", posture: "gale", sessionShape: "wander",
+    });
+    await created.save();
+    created.destroy();
+    const sourceRecord = repository.snapshot();
+    const tick = deserializeWorld(decodeGameSave(sourceRecord).world).meta.completedTick;
+    const learned = {
+      version: 1 as const,
+      calls: [{ vocalization: "marsh-fox-pursuit-yip" as const, learnedAtTick: tick }],
+    };
+    for (const knowledge of [undefined, learned]) {
+      // This is a persistence fixture, not a claim that editing a save proves
+      // acquisition. The real seen-and-heard producer is tested separately.
+      const record = structuredClone(sourceRecord);
+      const envelope = decodeGameSave(record);
+      if (knowledge === undefined) delete envelope.player.animalCallKnowledge;
+      else envelope.player.animalCallKnowledge = knowledge;
+      resealGameSave(envelope);
+      record.worldJson = JSON.stringify(envelope);
+      const currentRepository = new MemoryRepository(record);
+      soundscapePlay.mockClear();
+      const resumed = await createTideweftRuntime(currentRepository);
+      try {
+        expect(resumed.getUIView().saveWarning).toBeUndefined();
+        expect(soundscapePlay).not.toHaveBeenCalled();
+        await resumed.save();
+        const restored = decodeGameSave(currentRepository.snapshot());
+        expect(restored.player.animalCallKnowledge).toEqual(knowledge ?? { version: 1, calls: [] });
+        expect(restored.world).toBe(envelope.world);
+        expect(restored.physicalCargo).toEqual(envelope.physicalCargo);
+        expect(restored.regionalEcology).toBe(envelope.regionalEcology);
+        expect(restored.perceptionCarry).toEqual(envelope.perceptionCarry);
+        expect(restored.version).toBe(CURRENT_GAME_SAVE_VERSION);
+      } finally {
+        resumed.destroy();
+      }
+    }
+  });
+
+  it("rejects resealed malformed animal-call knowledge instead of partially loading or rewriting it", async () => {
+    const repository = new MemoryRepository();
+    const created = await createTideweftRuntime(repository);
+    created.dispatchUI({
+      type: "new-world", seed: "animal call knowledge validation", posture: "gale", sessionShape: "wander",
+    });
+    await created.save();
+    created.destroy();
+    const sourceRecord = repository.snapshot();
+    const tick = deserializeWorld(decodeGameSave(sourceRecord).world).meta.completedTick;
+    const invalidRecords: unknown[] = [
+      null,
+      { version: 2, calls: [] },
+      { version: 1, calls: [{ vocalization: "marsh-fox-pursuit-yip", learnedAtTick: tick + 1 }] },
+      { version: 1, calls: [{ vocalization: "future-animal-call", learnedAtTick: tick }] },
+      { version: 1, calls: [
+        { vocalization: "marsh-fox-pursuit-yip", learnedAtTick: tick },
+        { vocalization: "dog-warning-bark", learnedAtTick: tick },
+      ] },
+    ];
+    for (const knowledge of invalidRecords) {
+      const record = structuredClone(sourceRecord);
+      const envelope = decodeGameSave(record);
+      (envelope.player as unknown as Record<string, unknown>).animalCallKnowledge = knowledge;
+      resealGameSave(envelope);
+      record.worldJson = JSON.stringify(envelope);
+      const invalidRepository = new MemoryRepository(record);
+      const rejected = await createTideweftRuntime(invalidRepository);
+      try {
+        expect(rejected.getUIView().title.visible).toBe(true);
+        expect(rejected.getUIView().title.hasSave).toBe(false);
+        expect(rejected.getUIView().announcement?.message).toContain("could not be read");
+        expect(invalidRepository.snapshot()).toEqual(record);
+      } finally {
+        rejected.destroy();
+      }
+    }
   });
 
   it.each([0, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49])(
