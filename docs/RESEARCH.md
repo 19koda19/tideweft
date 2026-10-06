@@ -2172,6 +2172,37 @@ is source/test acceptance of one repetition repair,
 not a new native hours/quality/audio/accessibility, performance, cumulative,
 published-release or whole-directive certificate.
 
+### Cargo repair ordinary-controls check — 2026-10-06
+
+Clean `41ca12c742b8d17ed4d97fa77da1163bf7337ad0` passed the existing
+six-minute Firefox production normal-controls journey at 1440×900/DPR1,
+served under `/tideweft/`. Its `index-B09tJR1g.js` SHA256 was
+`d985be59199d644f9f82bb36ae1be9318e5b238372e67f9afde4bb600c8204a1`.
+Initial eight-unit pickup/drop/E-key recovery passed; the journey lasted
+361,966ms, advanced ticks420→931, and retained two distinct `Promise kept`
+receipts. Three delivery input attempts do not establish three deliveries.
+The inspected final Chart screenshot still requires recovering four Reed.
+
+The bounded observer retained 2,355 reads/69 projected cues: 28 player, one
+keeper and 40 physical, with 12 player wordings and no adjacent-observation
+identical repeat. At most three candidates were sampled; 2,143 reads had no
+cue. No animal call was observed. Raw/census overflow and incomplete flags
+were false; the largest sampling gap was 1,324ms. These samples do not establish
+emitted-event counts, acoustic silence, native label geometry or hours quality.
+
+Only the known startup CSP eval-probe denial was retained. Added local bounded
+transport/lifecycle evidence records no guarded navigation, context destruction
+or prompt; cleanup closed the socket normally, the browser exited with code0, and its
+disposable profile was removed. This does not diagnose the earlier v17 loss.
+Terminal JSON SHA256 is
+`0874c3ecdec6cfc21291117152308b93e2c185363e7dfb108bd70a3f68bd9952`.
+The existing real warning/guardian-bark/fall/acquired-cargo integration case
+also passed on this executable (one selected test, 78 unselected, 21.34s), including
+bounded nonoverlap, independent anonymous NPC hearing, conserved physical cargo
+and exact current reload without replay. No new producer, desktop package,
+hardware audio/AT, performance, cumulative, release or directive closure is
+claimed by this finite functional check.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
