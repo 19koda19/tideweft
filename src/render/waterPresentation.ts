@@ -54,9 +54,9 @@ export interface WaterPresentationOptions {
 }
 
 /**
- * Builds only information that the chart is allowed to reveal. An uncharted
- * tile produces no material at all; partial discovery progressively reveals
- * depth instead of leaking the raw bathymetry through a color band.
+ * Builds only information that current sight or Chart memory may reveal.
+ * Uncharted, unseen tiles produce no material; partial disclosure fades depth
+ * instead of leaking raw bathymetry through a color band.
  */
 export function visibleWaterPresentation(
   tile: TerrainTileView | undefined,
@@ -73,7 +73,9 @@ export function visibleWaterPresentation(
   const depthDisclosed = isWaterDepthDisclosed(tile);
   const actualDepth = visibleWaterDepth(tile, options.derivedDepth);
   const depth = actualDepth * Math.pow(visibility, 0.72);
-  if (depth <= 0.015) return undefined;
+  // Resolving an already visible surface's shallow depth must not erase it.
+  // Wet/dry eligibility is physical; depth controls colour, not existence.
+  if (depth <= 0) return undefined;
 
   const biome = visibleBiomePresentation(tile);
   return composeWaterPresentation({

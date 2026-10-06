@@ -1103,6 +1103,130 @@ describe("runtime BIO0 ecology persistence", () => {
     runtime.destroy();
   });
 
+  it("keeps a real dog body while ordinary turning closes medium-range ABOUT and stale inspection", async () => {
+    const repository = new MemoryRepository(legacyRecord("bio0 medium recognition keeps body", {
+      kind: "clear",
+      intensity: 0,
+      windX: 0,
+      windY: 0,
+      nextChangeTick: WORLD_NEW_GAME_START_TICK + 1_000,
+    }));
+    const setup = await createTideweftRuntime(repository);
+    let point: { x: number; y: number } | undefined;
+    let initialPlayerPoint: { x: number; y: number };
+    let tileSize: number;
+    try {
+      const view = setup.getRenderView();
+      expect(view.player.facing).toBe(0);
+      initialPlayerPoint = { ...view.player.position };
+      tileSize = view.terrain.tileSize;
+      const column = Math.floor((view.player.position.x - view.terrain.origin.x) / tileSize);
+      const row = Math.floor((view.player.position.y - view.terrain.origin.y) / tileSize);
+      // Choose an existing DIRECT tile, not a fabricated visibility grade. A
+      // single southeast step then moves its bearing outside 65 but inside 80
+      // degrees, while its distance remains beyond the shared eight-tile circle.
+      const candidates: { x: number; y: number; preference: number }[] = [];
+      for (let offsetY = -6; offsetY <= -4; offsetY += 1) {
+        for (let offsetX = 9; offsetX <= 14; offsetX += 1) {
+          const x = column + offsetX;
+          const y = row + offsetY;
+          if (x < 0 || y < 0 || x >= view.terrain.columns || y >= view.terrain.rows) continue;
+          if (view.terrain.tiles[y * view.terrain.columns + x]?.currentDetailVisibility !== 1) continue;
+          const candidate = {
+            x: view.terrain.origin.x + (x + 0.5) * tileSize,
+            y: view.terrain.origin.y + (y + 0.5) * tileSize,
+          };
+          const angle = Math.atan2(candidate.y - initialPlayerPoint.y, candidate.x - initialPlayerPoint.x);
+          if (angle < -32 * Math.PI / 180 || angle > -24 * Math.PI / 180) continue;
+          candidates.push({ ...candidate, preference: Math.abs(offsetX - 10) + Math.abs(offsetY + 5) });
+        }
+      }
+      candidates.sort((left, right) => left.preference - right.preference || left.x - right.x || left.y - right.y);
+      const candidate = candidates[0];
+      if (!candidate) throw new Error("Current sensory field has no DIRECT dog turn fixture candidate");
+      point = { x: candidate.x, y: candidate.y };
+      await setup.save();
+    } finally { setup.destroy(); }
+
+    resealCurrent(repository, (decoded) => {
+      const envelope = decoded as unknown as CurrentEnvelope;
+      const world = deserializeWorld(envelope.world);
+      const travel = restorePlayerRegionalTravel(world.meta.rootSeed, envelope.player, envelope.regionalTravel);
+      const playerPosition = travel === null ? null : playerWorldPositionInRegionalWindow(travel.window, envelope.player);
+      if (!playerPosition || !point) throw new Error("Dog turn fixture lost its canonical player/source point");
+      expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+      const ecology = requiredBio0(envelope);
+      const dog = repositionDogActor(ecology.dog, {
+        position: translateWorldPosition(playerPosition,
+          Math.round((point.x - initialPlayerPoint.x) / tileSize * WORLD_POSITION_UNITS_PER_TILE),
+          Math.round((point.y - initialPlayerPoint.y) / tileSize * WORLD_POSITION_UNITS_PER_TILE)),
+        heading: ecology.dog.address.heading,
+        atTick: ecology.tick,
+      });
+      const positioned = canonicalizeBio0EcologyState({ ...ecology, dog });
+      if (!positioned) throw new Error("Dog turn fixture produced invalid persisted dog state");
+      decoded.bio0Ecology = serializeBio0Ecology(positioned);
+    });
+    const before = currentEnvelope(repository);
+    const dogActorId = requiredBio0(before).dog.identity.stableId;
+    scheduledFrame = undefined;
+    const runtime = await createTideweftRuntime(repository);
+    try {
+      const dog = runtime.getRenderView().dogs?.find(({ actorId }) => actorId === dogActorId);
+      if (!dog) throw new Error("Actual DIRECT dog source was not projected");
+      expect(dog.position).toEqual(point);
+      const selection = {
+        type: "select" as const,
+        entity: "living-actor" as const,
+        species: "domestic-dog" as const,
+        id: dogActorId,
+        point: dog.position,
+      };
+      runtime.dispatchRenderer(selection);
+      expect(runtime.getUIView().selectedLivingActor?.target.actorId).toBe(dogActorId);
+      expect(runtime.getRenderView().dogs?.find(({ actorId }) => actorId === dogActorId)?.selected).toBe(true);
+
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 1 } });
+      advancePlayerSteps(runtime, 1);
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      const turned = runtime.getRenderView();
+      expect(turned.player.position).not.toEqual(initialPlayerPoint);
+      const delta = { x: dog.position.x - turned.player.position.x, y: dog.position.y - turned.player.position.y };
+      const relative = Math.atan2(delta.y, delta.x) - turned.player.facing;
+      const angle = Math.abs(Math.atan2(Math.sin(relative), Math.cos(relative)));
+      expect(Math.hypot(delta.x, delta.y) / tileSize).toBeGreaterThan(8);
+      expect(angle).toBeGreaterThan(65 * Math.PI / 180);
+      expect(angle).toBeLessThan(80 * Math.PI / 180);
+      expect(turned.dogs?.find(({ actorId }) => actorId === dogActorId)).toMatchObject({
+        actorId: dogActorId, position: dog.position, selected: false, conditionLabels: [],
+      });
+      expect(runtime.getUIView().selectedLivingActor).toBeUndefined();
+      runtime.dispatchRenderer(selection);
+      expect(runtime.getUIView().selectedLivingActor).toBeUndefined();
+      await runtime.save();
+      const saved = currentEnvelope(repository);
+      expect(saved.version).toBe(50);
+      expect(saved.perceptionCarry.version).toBe(14);
+      expect(saved.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
+      expect(saved.bio0Ecology).toBe(before.bio0Ecology);
+      expect(saved.perceptionCarry.actorVocalizationSamples).toEqual(before.perceptionCarry.actorVocalizationSamples);
+    } finally { runtime.destroy(); }
+
+    const saved = currentEnvelope(repository);
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    try {
+      expect(resumed.getRenderView().dogs?.find(({ actorId }) => actorId === dogActorId)).toMatchObject({
+        actorId: dogActorId, position: point, selected: false,
+      });
+      expect(resumed.getUIView().selectedLivingActor).toBeUndefined();
+      await resumed.save();
+      const restored = currentEnvelope(repository);
+      expect(restored.bio0Ecology).toBe(saved.bio0Ecology);
+      expect(restored.perceptionCarry).toEqual(saved.perceptionCarry);
+    } finally { resumed.destroy(); }
+  }, 90_000);
+
   it.each([
     {
       label: "missing regional ecology root",

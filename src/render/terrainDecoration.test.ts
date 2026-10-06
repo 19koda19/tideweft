@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   chartTerrainDecorationHash01,
+  hasChartBotanicalDecoration,
   reliefTerrainDecorationHash01,
   terrainTileGlobalCoordinate,
 } from "./terrainDecoration";
@@ -21,6 +22,27 @@ const legacyReliefHash = (x: number, y: number, salt: number): number => {
 };
 
 describe("global terrain decoration identity", () => {
+  it("keeps quarter-density Chart botanical presence attached to the same signed global cell", () => {
+    expect(hasChartBotanicalDecoration({}, 0, 0)).toBe(false);
+    expect(hasChartBotanicalDecoration({ worldTileOrigin: { x: 0, y: 1 } }, 0, 0)).toBe(true);
+    const first = { worldTileOrigin: { x: -4, y: -4 } };
+    const rebased = { worldTileOrigin: { x: -3, y: -4 } };
+    let selected = 0;
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 8; column += 1) {
+        if (hasChartBotanicalDecoration(first, column, row)) selected += 1;
+        if (column > 0) {
+          expect(hasChartBotanicalDecoration(first, column, row))
+            .toBe(hasChartBotanicalDecoration(rebased, column - 1, row));
+        }
+      }
+    }
+    expect(selected).toBe(8);
+    const target = { x: -8_000_000_000_000_000, y: 7_999_999_999_999_900 };
+    expect(hasChartBotanicalDecoration({ worldTileOrigin: { x: target.x - 40, y: target.y - 30 } }, 40, 30))
+      .toBe(hasChartBotanicalDecoration({ worldTileOrigin: target }, 0, 0));
+  });
+
   it("preserves exact finite region-zero Chart and Relief hashes", () => {
     const finite = {};
     const explicitOrigin = { worldTileOrigin: { x: 0, y: 0 } };

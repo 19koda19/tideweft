@@ -4,6 +4,7 @@ import type {
   AcousticTextView,
   AggregateWildlifeEvidenceView,
   DogView,
+  LooseCargoView,
   RendererCommand,
   TerrainTileView,
   TideweftView,
@@ -17,6 +18,7 @@ import {
 } from "./acousticTextLayout";
 import { actorCalloutViewport, layoutAcousticTextCallouts } from "./playerPresentation";
 import { MAX_TERRAIN_PERCEPTION_MEMORY_TILES } from "./terrainPerceptionMemory";
+import { hasChartBotanicalDecoration } from "./terrainDecoration";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import {
   outdoorIlluminationPresentation,
@@ -741,6 +743,14 @@ describe("Chart situated expression presentation", () => {
     expect(text.mock.calls.some(([copy]) => copy === "SOURCE OWNED SPEECH")).toBe(true);
     expect(text.mock.calls.some(([copy]) => copy === ":S")).toBe(false);
     expect(text.mock.calls.some(([copy]) => copy === "Unknown porter · alert")).toBe(false);
+    text.mockClear();
+    current = { ...current, acousticText: [{
+      ...sourceOwnedSpeech, acousticKind: "indistinct-voice", text: "indistinct voice",
+    }] };
+    draw();
+    expect(text.mock.calls.some(([copy]) => copy === "indistinct voice")).toBe(true);
+    expect(text.mock.calls.some(([copy]) => copy === "SOURCE OWNED SPEECH")).toBe(false);
+    expect(p5Harness.instance?.textStyle).toHaveBeenCalledWith(p5Harness.instance?.ITALIC);
     current = { ...current, acousticText: originalAcousticText };
 
     text.mockClear();
@@ -926,7 +936,12 @@ describe("Chart situated expression presentation", () => {
 });
 
 describe("Chart shared outdoor illumination", () => {
-  it.each([1, 0.5, 0] as const)("discloses an uncharted biome motif only with current DIRECT detail (%s)", (visibility) => {
+  it.each([
+    [1, 1, 1],
+    [1, 0, 0],
+    [0.5, 1, 0],
+    [0, 1, 0],
+  ] as const)("discloses an uncharted biome motif only with sampled DIRECT detail (%s, world row %s)", (visibility, worldRow, expectedMotifs) => {
     const base = view("uncharted-chart-biome", { x: 12, y: 12 });
     const current: TideweftView = {
       ...base,
@@ -943,6 +958,7 @@ describe("Chart shared outdoor illumination", () => {
       },
       terrain: {
         ...base.terrain,
+        worldTileOrigin: { x: 0, y: worldRow },
         tiles: [{
           kind: "meadow",
           biome: "rain-meadow",
@@ -950,8 +966,14 @@ describe("Chart shared outdoor illumination", () => {
           discovered: 0,
           currentVisibility: visibility,
           currentDetailVisibility: visibility,
+          trace: 0.3,
+          blocked: true,
         }],
       },
+      fieldResources: visibility === 1 && worldRow === 0 ? [{
+        id: "charted-cordreed-on-unsampled-tile", material: "cordreed", label: "Cordreed",
+        position: { x: 12, y: 12 }, knowledge: "charted", currentVisibility: 1,
+      }] : [],
     };
     const before = JSON.stringify(current);
     const renderer = createTideweftRenderer({
@@ -969,9 +991,124 @@ describe("Chart shared outdoor illumination", () => {
         coordinates.length === stem.length
         && coordinates.every((coordinate, index) => coordinate === stem[index])
       ));
-      expect(matching).toHaveLength(visibility === 1 ? 1 : 0);
+      expect(matching).toHaveLength(expectedMotifs);
+      if (visibility === 1 && worldRow === 0) {
+        // Suppressing a cosmetic stem never removes a real projected resource,
+        // travel trace or obstruction. This is rendering, not acquisition proof.
+        const resourceSize = 24 * 0.38;
+        expect(line).toHaveBeenCalledWith(0, resourceSize * 0.58, 0, -resourceSize * 0.58);
+        expect(line).toHaveBeenCalledWith(24 * 0.12, 24 * 0.78, 24 * 0.88, 24 * 0.22);
+        expect(line).toHaveBeenCalledWith(24 * 0.18, 24 * 0.18, 24 * 0.82, 24 * 0.82);
+      }
       expect(JSON.stringify(current)).toBe(before);
       expect(current.terrain.tiles[0]?.discovered).toBe(0);
+    } finally {
+      renderer.destroy();
+    }
+  });
+
+  it("keeps actual botanical and biome marks sparse, paired and stable across frames and rebasing", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = view("sparse-chart-botanicals", { x: 96, y: 48 });
+    let current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain, columns: 8, rows: 4,
+        worldTileOrigin: { x: -4, y: -4 },
+        tiles: Array.from({ length: 32 }, (_value, index) => ({
+          kind: (["meadow", "salt-marsh", "scrub"] as const)[index % 3]!, biome: "rain-meadow" as const,
+          elevation: 0.7, discovered: 0, currentVisibility: 1,
+          currentDetailVisibility: 1 as const,
+        })),
+      },
+    };
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    try {
+      const drawMarks = () => {
+        const before = JSON.stringify(current);
+        const line = p5Harness.instance?.line as ReturnType<typeof vi.fn>;
+        line.mockClear();
+        draw();
+        const marks = current.terrain.tiles.map((tile, index) => {
+          const column = index % current.terrain.columns;
+          const row = Math.floor(index / current.terrain.columns);
+          const centerX = (column + 0.5) * 24;
+          const centerY = (row + 0.5) * 24;
+          const matches = (coordinates: readonly number[]) => line.mock.calls.some((call) => (
+            call.length === coordinates.length
+            && call.every((coordinate, index) => coordinate === coordinates[index])
+          ));
+          const surfaceStem = tile.kind === "meadow"
+            ? [centerX, centerY + 24 * 0.24, centerX, centerY - 24 * 0.22]
+            : tile.kind === "salt-marsh"
+              ? [centerX, centerY + 24 * 0.28, centerX, centerY - 24 * 0.31]
+              : [centerX - 24 * 0.26, centerY + 24 * 0.26, centerX + 24 * 0.26, centerY - 24 * 0.26];
+          const botanical = matches(surfaceStem);
+          const biome = matches([centerX, centerY + 24 * 0.3, centerX, centerY - 24 * 0.16]);
+          const selected = hasChartBotanicalDecoration(current.terrain, column, row);
+          expect(botanical).toBe(selected);
+          expect(biome).toBe(selected);
+          return { x: current.terrain.worldTileOrigin!.x + column,
+            y: current.terrain.worldTileOrigin!.y + row, botanical, biome };
+        });
+        expect(JSON.stringify(current)).toBe(before);
+        return marks;
+      };
+      const first = drawMarks();
+      expect(first.filter(({ botanical }) => botanical)).toHaveLength(8);
+      expect(first.filter(({ botanical }) => !botanical)).toHaveLength(24);
+      expect(drawMarks()).toEqual(first);
+      current = {
+        ...current, spatialEpoch: "sparse-chart-botanicals-rebased",
+        player: { ...current.player, position: { x: 72, y: 48 } },
+        camera: { ...current.camera, center: { x: 72, y: 48 } },
+        terrain: {
+          ...current.terrain, worldTileOrigin: { x: -3, y: -4 },
+          // Retain each overlap cell's actual surface kind, not just its mark.
+          tiles: current.terrain.tiles.map((tile, index) => ({
+            ...tile, kind: (["meadow", "salt-marsh", "scrub"] as const)[(index + 1) % 3]!,
+          })),
+        },
+      };
+      const rebased = drawMarks();
+      expect(rebased.filter(({ x }) => x <= 3)).toEqual(first.filter(({ x }) => x >= -3));
+    } finally {
+      renderer.destroy();
+    }
+  });
+
+  it.each(["visible-water", "ripple-biome"] as const)("retains %s accents on an unsampled Chart tile", (kind) => {
+    const base = view("unthinned-chart-water", { x: 12, y: 12 });
+    const current: TideweftView = {
+      ...base,
+      terrain: {
+        ...base.terrain,
+        worldTileOrigin: { x: 0, y: 0 },
+        tiles: [{
+          kind: kind === "visible-water" ? "shallows" : "meadow",
+          biome: kind === "visible-water" ? "rain-meadow" : "tide-channel",
+          elevation: 0.7, waterDepth: kind === "visible-water" ? 0.3 : 0,
+          discovered: 0, currentVisibility: 1, currentDetailVisibility: 1,
+        }],
+      },
+    };
+    expect(hasChartBotanicalDecoration(current.terrain, 0, 0)).toBe(false);
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: vi.fn(),
+    });
+    try {
+      draw();
+      if (kind === "visible-water") {
+        expect(p5Harness.instance?.line).toHaveBeenCalledWith(12, 12 + 24 * 0.3, 12, 12 - 24 * 0.16);
+      } else {
+        expect(p5Harness.instance?.arc).toHaveBeenCalledWith(12, 12 - 24 * 0.08, 24 * 0.54, 24 * 0.2, 0, Math.PI);
+      }
     } finally {
       renderer.destroy();
     }
@@ -1868,6 +2005,98 @@ describe("Chart ADRIFT presentation path", () => {
 });
 
 describe("Chart dog presentation", () => {
+  it.each([
+    ["close behind", -7, 0, true],
+    ["medium forward", 20, 0, true],
+    ["far forward", 40, 0, false],
+    ["medium sideways", 0, 20, false],
+  ] as const)("retains broad-visible bodies but clips fine labels, style and picking %s", (_name, dx, dy, recognized) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const player = { x: 12, y: 12 };
+    const point = { x: player.x + dx * 24, y: player.y + dy * 24 };
+    const base = view("chart-recognition-range", player, { center: point, followPlayer: false });
+    const origin = { x: Math.min(0, point.x - 24), y: Math.min(0, point.y - 24) };
+    const columns = Math.max(4, Math.ceil((Math.max(player.x, point.x) - origin.x + 24) / 24));
+    const rows = Math.max(4, Math.ceil((Math.max(player.y, point.y) - origin.y + 24) / 24));
+    // Public renderer fixture: all bodies have already passed broad DIRECT
+    // sight. This does not manufacture a simulation perception receipt.
+    const current: TideweftView = {
+      ...base,
+      perception: { version: 3, signature: "range-body", valid: true, visibleTileCount: columns * rows,
+        directTileCount: columns * rows, peripheralTileCount: 0, detailVisibleTileCount: columns * rows,
+        detailDirectTileCount: columns * rows, detailPeripheralTileCount: 0 },
+      terrain: { ...base.terrain, origin, columns, rows, tiles: Array.from({ length: columns * rows }, () => ({
+        kind: "meadow" as const, elevation: 0.2, discovered: 1, currentVisibility: 1, currentDetailVisibility: 1 as const,
+      })) },
+      porters: [{ actorId: "human:range", id: "porter:range", quickLabel: "Range keeper", position: point,
+        facing: 0, state: "alert", selected: true, emotionMark: ":S",
+        appearance: { heightScale: 1, build: "average", palette: "ember", wetness: 1 } }],
+      dogs: [dogView({ position: point, selected: true })],
+      wildlife: [wildlifeView("deer", { position: point, selected: true })],
+      aggregateWildlifeEvidence: [aggregateWildlifeEvidenceView({ position: point, selected: true })],
+      wildlifeCarcasses: [wildlifeCarcassView({ position: point })],
+    };
+    const before = JSON.stringify(current), dispatch = vi.fn();
+    const renderer = createTideweftRenderer({ mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current, dispatch });
+    try {
+      draw();
+      const p = p5Harness.instance!;
+      const text = p.text as ReturnType<typeof vi.fn>;
+      const translate = p.translate as ReturnType<typeof vi.fn>;
+      expect(translate.mock.calls.filter(([x, y]) => x === point.x && y === point.y).length).toBeGreaterThanOrEqual(5);
+      const copies = text.mock.calls.map(([copy]) => String(copy));
+      for (const copy of ["Range keeper", ":S", "Unknown dog · wet", "Deer", "Brown rat signs · rat gnaw marks"]) {
+        expect(copies.includes(copy), copy).toBe(recognized);
+      }
+      expect((p.fill as ReturnType<typeof vi.fn>).mock.calls.some(([color]) => color === "#e58b62")).toBe(recognized);
+      expect(canvas.attributes.has("aria-description")).toBe(recognized);
+      canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 151 });
+      canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 151 });
+      expect(dispatch.mock.calls.some(([command]) => command.type === "select" && command.entity === "porter")).toBe(recognized);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { renderer.destroy(); }
+  });
+
+  it.each([[7, true], [9, true], [20, false], [40, false]] as const)("clips physical pickup silhouettes and hits at %s tiles without changing reach", (distance, visible) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const player = { x: 12, y: 12 }, point = { x: 12 + distance * 24, y: 12 };
+    const base = view("chart-pickup-range", player, { center: point, followPlayer: false });
+    const columns = distance + 3;
+    const parcel: LooseCargoView = { id: "range-parcel", region: { x: 0, y: 0 }, position: point, velocity: { x: 0, y: 0 },
+      contentKind: "raw-material", resourceKind: "cordreed", resourceLabel: "Cordreed", quantity: 1, property: "ordinary",
+      condition: 1, conditionBand: "sound", wetness: 0, contamination: 0, decay: 0, motion: "resting", snaggedBy: null,
+      impactMark: "none", recoverable: true, recovery: "approach" };
+    const current: TideweftView = { ...base,
+      perception: { version: 3, signature: "range-pickup", valid: true, visibleTileCount: columns * 4,
+        directTileCount: columns * 4, peripheralTileCount: 0, detailVisibleTileCount: columns * 4,
+        detailDirectTileCount: columns * 4, detailPeripheralTileCount: 0 },
+      terrain: { ...base.terrain, columns, rows: 4, tiles: Array.from({ length: columns * 4 }, () => ({
+        kind: "meadow" as const, elevation: 0.2, discovered: 1, currentVisibility: 1, currentDetailVisibility: 1 as const,
+      })) }, looseCargo: [parcel],
+      fieldResources: [{ id: "range-cordreed", material: "cordreed", label: "Cordreed", knowledge: "charted",
+        currentVisibility: 1, position: { x: point.x, y: point.y + 24 } }],
+    };
+    const before = JSON.stringify(current), dispatch = vi.fn();
+    const renderer = createTideweftRenderer({ mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current, dispatch });
+    try {
+      draw();
+      const translate = p5Harness.instance!.translate as ReturnType<typeof vi.fn>;
+      expect(translate.mock.calls.some(([x, y]) => x === point.x && y === point.y)).toBe(visible);
+      expect(translate.mock.calls.some(([x, y]) => x === point.x && y === point.y + 24)).toBe(visible);
+      canvas.emit("pointerdown", { clientX: 100, clientY: 50, pointerId: 152 });
+      canvas.emit("pointerup", { clientX: 100, clientY: 50, pointerId: 152 });
+      expect(dispatch.mock.calls.some(([command]) => command.type === "parcel-target")).toBe(visible);
+      expect(dispatch.mock.calls.some(([command]) => command.type === "recover-loose-cargo")).toBe(false);
+      dispatch.mockClear();
+      canvas.emit("pointerdown", { clientX: 100, clientY: 74, pointerId: 153 });
+      canvas.emit("pointerup", { clientX: 100, clientY: 74, pointerId: 153 });
+      expect(dispatch.mock.calls.some(([command]) => command.type === "resource-target")).toBe(visible);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { renderer.destroy(); }
+  });
+
   it("draws a distinct observable dog, highlights selection/hover, and cuts it off with live detail", () => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("chart-dog", { x: 12, y: 12 });

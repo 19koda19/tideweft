@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { evaluateAudibleContact } from "./perception";
 import {
   SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
   canonicalizeSituatedExpressionSemanticFact,
@@ -8,9 +9,63 @@ import {
   situatedExpressionSemanticFactForMemory,
   situatedExpressionSoundClass,
   situatedExpressionSoundInterrupt,
+  situatedExpressionWordsAreIntelligible,
 } from "./situatedExpressionAcoustics";
 
 describe("situated expression acoustics", () => {
+  it.each([
+    { volume: "murmur" as const, threshold: 198_000, near: 500, far: 2_500 },
+    { volume: "spoken" as const, threshold: 341_000, near: 2_000, far: 10_000 },
+    { volume: "shout" as const, threshold: 522_500, near: 4_000, far: 30_000 },
+  ])("separates intelligible $volume words from a real faint audible contact", ({
+    volume, threshold, near, far,
+  }) => {
+    const acoustics = situatedExpressionAcoustics(volume);
+    const hearAt = (distance: number) => evaluateAudibleContact({
+      listener: { x: 0, y: 0 }, source: { x: distance, y: 0 },
+      wind: { x: 0, y: 0 }, ambientNoise: 0,
+      baseRange: acoustics.rangeUnits, sourceLoudness: acoustics.loudness / 1_000_000,
+    });
+    const clear = hearAt(near);
+    const faint = hearAt(far);
+    expect(clear).not.toBeNull();
+    expect(faint).not.toBeNull();
+    expect(situatedExpressionWordsAreIntelligible(volume, Math.round(clear!.certainty * 1_000_000)))
+      .toBe(true);
+    expect(situatedExpressionWordsAreIntelligible(volume, Math.round(faint!.certainty * 1_000_000)))
+      .toBe(false);
+    expect(situatedExpressionWordsAreIntelligible(volume, threshold - 1)).toBe(false);
+    expect(situatedExpressionWordsAreIntelligible(volume, threshold)).toBe(true);
+    expect(situatedExpressionWordsAreIntelligible(volume, 1_000_000)).toBe(true);
+  });
+
+  it("shortens spoken word clarity under real masking without deleting the audible contact", () => {
+    const acoustics = situatedExpressionAcoustics("spoken");
+    const input = {
+      listener: { x: 0, y: 0 }, source: { x: 4_000, y: 0 }, wind: { x: 0, y: 0 },
+      baseRange: acoustics.rangeUnits, sourceLoudness: acoustics.loudness / 1_000_000,
+    };
+    const clear = evaluateAudibleContact({ ...input, ambientNoise: 0 });
+    const masked = evaluateAudibleContact({ ...input, ambientNoise: 0.35 });
+    expect(clear).not.toBeNull();
+    expect(masked).not.toBeNull();
+    expect(masked!.certainty).toBeLessThan(clear!.certainty);
+    expect(situatedExpressionWordsAreIntelligible("spoken", Math.round(clear!.certainty * 1_000_000)))
+      .toBe(true);
+    expect(situatedExpressionWordsAreIntelligible("spoken", Math.round(masked!.certainty * 1_000_000)))
+      .toBe(false);
+    expect(evaluateAudibleContact({ ...input, ambientNoise: 1 })).toBeNull();
+  });
+
+  it("fails closed for malformed word-clarity volume or certainty", () => {
+    for (const certainty of [0, -1, 1_000_001, 341_000.5, NaN, Infinity]) {
+      expect(situatedExpressionWordsAreIntelligible("spoken", certainty)).toBe(false);
+    }
+    expect(situatedExpressionWordsAreIntelligible("whisper" as "spoken", 1_000_000)).toBe(false);
+    expect(situatedExpressionWordsAreIntelligible(undefined as unknown as "spoken", 1_000_000))
+      .toBe(false);
+  });
+
   it("keeps a carrying goat bleat strong without teaching humans its private alarm intent", () => {
     const expression = {
       meaning: "domestic-goat-alarm-call" as const,

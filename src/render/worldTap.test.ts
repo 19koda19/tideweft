@@ -9,6 +9,15 @@ import {
 } from "./worldTap";
 
 const view = {
+  terrain: {
+    columns: 50,
+    rows: 50,
+    tileSize: 10,
+    origin: { x: 0, y: 0 },
+    revision: 1,
+    tiles: Array.from({ length: 2_500 }, () => ({ kind: "meadow", elevation: 0.4 })),
+  },
+  player: { position: { x: 200, y: 200 }, facing: 0 },
   settlements: [
     {
       id: "harbor-7",
@@ -195,7 +204,95 @@ const perceivedView = ({
   camera: { center: { x: 20, y: 5 }, zoom: 1 },
 });
 
+const rangedView = (position: { readonly x: number; readonly y: number }): TideweftView => {
+  const base = perceivedView();
+  return {
+    ...base,
+    terrain: {
+      ...base.terrain,
+      columns: 80,
+      rows: 80,
+      origin: { x: -400, y: -400 },
+      tiles: Array.from({ length: 6_400 }, () => ({
+        kind: "meadow" as const,
+        elevation: 0.4,
+        currentVisibility: 1 as const,
+        currentDetailVisibility: 1 as const,
+      })),
+    },
+    player: { ...base.player, position: { x: 0, y: 0 } },
+    fieldResources: base.fieldResources.map((node) => ({ ...node, position })),
+    looseCargo: (base.looseCargo ?? []).map((parcel) => ({ ...parcel, position })),
+    porters: base.porters.map((porter) => ({ ...porter, position })),
+    dogs: (base.dogs ?? []).map((dog) => ({ ...dog, position })),
+    wildlife: (base.wildlife ?? []).map((actor) => ({ ...actor, position })),
+    aggregateWildlifeEvidence: (base.aggregateWildlifeEvidence ?? []).map((evidence) => ({ ...evidence, position })),
+  };
+};
+
 describe("world tap intent", () => {
+  it("retains lawful broad bodies but refuses remote recognition targets at release", () => {
+    const broad = rangedView({ x: 270, y: 0 });
+    const targets = [
+      { type: "select", entity: "porter", id: "porter-1", point: { x: 270, y: 0 } },
+      { type: "select", entity: "living-actor", species: "domestic-dog", id: "D-R-v1-world-tap", point: { x: 270, y: 0 } },
+      { type: "select", entity: "living-actor", species: "deer", id: "DEER-v1-world-tap", point: { x: 270, y: 0 } },
+      {
+        type: "select",
+        entity: "aggregate-wildlife-evidence",
+        species: "brown-rat",
+        aggregateId: "rat-population:world-tap",
+        evidenceId: "rat-evidence:gnaw:world-tap",
+        point: { x: 270, y: 0 },
+      },
+    ] as const;
+    for (const command of targets) {
+      expect(validatePerceivedEntityCommand(broad, command)).toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: 260, y: 0 }), command)).not.toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: -80, y: 0 }), command)).not.toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: -80.01, y: 0 }), command)).toBeNull();
+    }
+    expect(broad.porters).toHaveLength(1);
+    expect(broad.dogs).toHaveLength(1);
+    expect(broad.wildlife).toHaveLength(1);
+    // Route/terrain interaction remains at the original full disclosure tier.
+    expect(routePointerTargetIsDirectlyPerceived(broad, { x: 270, y: 0 })).toBe(true);
+  });
+
+  it("uses the shorter pickup tier for resources and parcels without changing plain travel", () => {
+    const resource = {
+      type: "resource-target" as const,
+      nodeId: "field-v1:reed",
+      point: { x: 100, y: 0 },
+      gatherOnArrival: true,
+    };
+    const parcel = { type: "parcel-target" as const, parcelId: "parcel-1", recoverOnArrival: true };
+    for (const command of [resource, parcel]) {
+      expect(validatePerceivedEntityCommand(rangedView({ x: 100, y: 0 }), command)).not.toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: 100.01, y: 0 }), command)).toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: -80, y: 0 }), command)).not.toBeNull();
+      expect(validatePerceivedEntityCommand(rangedView({ x: -80.01, y: 0 }), command)).toBeNull();
+    }
+    const distant = rangedView({ x: 110, y: 0 });
+    expect(commandForWorldTap(distant, { entity: "resource", id: resource.nodeId },
+      { x: 110, y: 0 }, true)).toEqual({ type: "move-target", point: { x: 110, y: 0 }, additive: false });
+  });
+
+  it("refuses recognition and pickup outside their cones even inside broad direct sight", () => {
+    const actor = rangedView({ x: 100, y: 200 }); // 63.4 degrees: recognition, not pickup.
+    expect(validatePerceivedEntityCommand(actor, {
+      type: "select", entity: "porter", id: "porter-1", point: { x: 100, y: 200 },
+    })).not.toBeNull();
+    const outsideRecognition = rangedView({ x: 50, y: 150 }); // 71.6 degrees.
+    expect(validatePerceivedEntityCommand(outsideRecognition, {
+      type: "select", entity: "porter", id: "porter-1", point: { x: 50, y: 150 },
+    })).toBeNull();
+    const outsidePickup = rangedView({ x: 50, y: 75 }); // 56.3 degrees, nine tiles away.
+    expect(validatePerceivedEntityCommand(outsidePickup, {
+      type: "parcel-target", parcelId: "parcel-1", recoverOnArrival: true,
+    })).toBeNull();
+  });
+
   it("sends coarse settlement taps to the exact harbor center", () => {
     expect(commandForWorldTap(
       view,

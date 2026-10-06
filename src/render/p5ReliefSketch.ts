@@ -12,6 +12,7 @@ import { reliefSurfaceMaterialColor } from "./reliefMaterialPresentation";
 import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
 import {
   buildTerrainMesh,
+  sampleTerrainMeshLandHeightAt,
   type TerrainMesh,
   type TerrainMeshChunk,
 } from "./terrainMesh";
@@ -29,6 +30,7 @@ import {
   reliefWaterOpacity,
   reliefWaterSurfaceColor,
 } from "./reliefWaterBatches";
+import { visibleWaterDepth } from "./waterPresentation";
 import {
   MAX_RELIEF_PITCH,
   MIN_RELIEF_PITCH,
@@ -111,6 +113,8 @@ import {
   currentTerrainDetailVisibility,
   currentTerrainVisibility,
   isDirectlyDetailPerceived,
+  isWithinPlayerPickupRange,
+  isWithinPlayerRecognitionRange,
 } from "./perceptionPresentation";
 import {
   commandForWorldTap,
@@ -647,11 +651,7 @@ export function createTideweftReliefRenderer(
     if (!canvasElement) return;
     const labels = view
       ? [...new Set((view.wildlifeCarcasses ?? [])
-          .filter((carcass) => isDirectlyDetailPerceived(
-            view.terrain,
-            carcass.position,
-            view.perception !== undefined,
-          ))
+          .filter((carcass) => isWithinPlayerRecognitionRange(view, carcass.position))
           .map((carcass) => carcass.quickLabel.trim())
           .filter((label) => label.length > 0))]
       : [];
@@ -914,8 +914,8 @@ export function createTideweftReliefRenderer(
   const looseCargoViews = (): readonly LooseCargoView[] => {
     const view = latestView;
     const parcels = safeLooseCargoViews(view?.looseCargo ?? []);
-    if (!view?.perception) return parcels;
-    return parcels.filter((parcel) => isDirectlyDetailPerceived(view.terrain, parcel.position, true));
+    if (!view) return [];
+    return parcels.filter((parcel) => isWithinPlayerPickupRange(view, parcel.position));
   };
 
   const projectParcelScreen = (parcel: LooseCargoView): WorldPoint | null => {
@@ -1221,10 +1221,7 @@ export function createTideweftReliefRenderer(
       );
     }
     for (const porter of view.porters) {
-      if (
-        view.perception
-        && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
-      ) continue;
+      if (!isWithinPlayerRecognitionRange(view, porter.position)) continue;
       const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         porter.position,
@@ -1262,10 +1259,7 @@ export function createTideweftReliefRenderer(
     }
     const dogHover = hoveredDogActorId();
     for (const dog of view.dogs ?? []) {
-      if (
-        view.perception
-        && !isDirectlyDetailPerceived(view.terrain, dog.position, true)
-      ) continue;
+      if (!isWithinPlayerRecognitionRange(view, dog.position)) continue;
       const highlighted = dog.selected || dog.actorId === dogHover;
       if (!highlighted) continue;
       const surface = perceivedReliefSurfaceHeightAt(
@@ -1292,11 +1286,7 @@ export function createTideweftReliefRenderer(
     for (const wildlife of view.wildlife ?? []) {
       const descriptor = reliefWildlifeDescriptor(wildlife.species);
       if (descriptor === null) continue;
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        wildlife.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, wildlife.position)) continue;
       const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
       if (!highlighted) continue;
       const surface = perceivedReliefSurfaceHeightAt(
@@ -1324,11 +1314,7 @@ export function createTideweftReliefRenderer(
     }
     for (const evidence of view.aggregateWildlifeEvidence ?? []) {
       if (evidence.representation !== "population-evidence") continue;
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        evidence.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, evidence.position)) continue;
       const highlighted = evidence.selected || aggregateEvidenceIsHovered(evidence);
       if (!highlighted) continue;
       const surface = discoveredReliefSurfaceHeightAt(
@@ -1348,11 +1334,7 @@ export function createTideweftReliefRenderer(
       );
     }
     for (const carcass of view.wildlifeCarcasses ?? []) {
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        carcass.position,
-        view.perception !== undefined,
-      ) || !carcassIsHovered(carcass)) continue;
+      if (!isWithinPlayerRecognitionRange(view, carcass.position) || !carcassIsHovered(carcass)) continue;
       const surface = perceivedReliefSurfaceHeightAt(
         view.terrain,
         carcass.position,
@@ -1414,7 +1396,8 @@ export function createTideweftReliefRenderer(
     if (pointerWorld && !hoverParcelId) {
       const resourceHit = hitTestFieldResource(
         view.fieldResources.filter((node) =>
-          !view.perception || node.currentVisibility === 1
+          (!view.perception || node.currentVisibility === 1)
+          && isWithinPlayerPickupRange(view, node.position)
         ),
         pointerWorld,
         Math.max(tileSize * 0.58, unitsPerPixel() * 22),
@@ -1579,6 +1562,7 @@ export function createTideweftReliefRenderer(
         node.dataset.placement = centerY < placed.candidate.anchor.y ? "above" : "below";
         node.dataset.tone = acousticText.acousticKind === "physical"
           || acousticText.acousticKind === "embodied-signal"
+          || acousticText.acousticKind === "indistinct-voice"
           ? "incident"
           : "expression";
         node.dataset.acousticKind = acousticText.acousticKind;
@@ -1662,7 +1646,8 @@ export function createTideweftReliefRenderer(
     const resourceRadius = Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22);
     const resourceHit = hitTestFieldResource(
       view.fieldResources.filter((node) =>
-        !view.perception || node.currentVisibility === 1
+        (!view.perception || node.currentVisibility === 1)
+        && isWithinPlayerPickupRange(view, node.position)
       ),
       point,
       resourceRadius,
@@ -1675,7 +1660,7 @@ export function createTideweftReliefRenderer(
     }
     const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 22);
     for (const porter of view.porters) {
-      if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
+      if (!isWithinPlayerRecognitionRange(view, porter.position)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = { target: { entity: "porter", id: porter.id }, distance };
@@ -1683,7 +1668,7 @@ export function createTideweftReliefRenderer(
     }
     const dogRadius = Math.max(view.terrain.tileSize * 0.4, unitsPerPixel() * 22);
     for (const dog of view.dogs ?? []) {
-      if (!isDirectlyDetailPerceived(view.terrain, dog.position, view.perception !== undefined)) continue;
+      if (!isWithinPlayerRecognitionRange(view, dog.position)) continue;
       const distance = distanceSquared(point, dog.position);
       if (distance <= dogRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -1699,11 +1684,7 @@ export function createTideweftReliefRenderer(
     for (const wildlife of view.wildlife ?? []) {
       const descriptor = reliefWildlifeDescriptor(wildlife.species);
       if (descriptor === null) continue;
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        wildlife.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, wildlife.position)) continue;
       const wildlifeRadius = Math.max(
         view.terrain.tileSize
           * descriptor.hitRadiusScale
@@ -1723,11 +1704,7 @@ export function createTideweftReliefRenderer(
       }
     }
     for (const carcass of view.wildlifeCarcasses ?? []) {
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        carcass.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, carcass.position)) continue;
       const carcassRadius = Math.max(
         view.terrain.tileSize * 0.5 * clamp(carcass.sizeScale, 0.7, 2.2),
         unitsPerPixel() * 22,
@@ -1742,11 +1719,7 @@ export function createTideweftReliefRenderer(
     }
     for (const evidence of view.aggregateWildlifeEvidence ?? []) {
       if (evidence.representation !== "population-evidence") continue;
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        evidence.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, evidence.position)) continue;
       const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
       const evidenceRadius = Math.max(
         view.terrain.tileSize
@@ -2909,19 +2882,26 @@ export function createTideweftReliefRenderer(
             const x1 = x0 + tileSize;
             const z0 = grid.origin.y + row * tileSize;
             const z1 = z0 + tileSize;
-            const surface = perceivedReliefSurfaceHeightAt(
-              grid,
-              { x: x0 + tileSize / 2, y: z0 + tileSize / 2 },
-              cache.mesh.verticalScale,
-              true,
-            ) + RELIEF_WATER_SURFACE_LIFT;
+            // Use this wet tile's disclosed depth at all four corners (not
+            // the neighboring tile selected by a boundary point). Matching
+            // the bed's diagonal keeps shallow surface triangles above the
+            // depth-writing land instead of buried in a center-height plane.
+            const depthLift = visibleWaterDepth(grid.tiles[row * grid.columns + column])
+              * cache.mesh.verticalScale + RELIEF_WATER_SURFACE_LIFT;
+            const surfaceAt = (x: number, z: number): number =>
+              sampleTerrainMeshLandHeightAt(grid, { x, y: z }, cache.mesh.verticalScale)
+                + depthLift;
+            const h00 = surfaceAt(x0, z0);
+            const h10 = surfaceAt(x1, z0);
+            const h11 = surfaceAt(x1, z1);
+            const h01 = surfaceAt(x0, z1);
             p.normal(0, -1, 0);
-            p.vertex(x0, -surface, z0);
-            p.vertex(x1, -surface, z0);
-            p.vertex(x1, -surface, z1);
-            p.vertex(x0, -surface, z0);
-            p.vertex(x1, -surface, z1);
-            p.vertex(x0, -surface, z1);
+            p.vertex(x0, -h00, z0);
+            p.vertex(x1, -h10, z0);
+            p.vertex(x1, -h11, z1);
+            p.vertex(x0, -h00, z0);
+            p.vertex(x1, -h11, z1);
+            p.vertex(x0, -h01, z1);
           }
           p.endShape();
         }
@@ -3296,7 +3276,8 @@ export function createTideweftReliefRenderer(
     ): ReliefFieldResourceDrawResult => {
       const reachSquared = (orbit.distance * 1.18) ** 2;
       const visible = view.fieldResources
-        .filter((node) => !view.perception || node.currentVisibility === 1)
+        .filter((node) => (!view.perception || node.currentVisibility === 1)
+          && isWithinPlayerPickupRange(view, node.position))
         .map((node) => ({
           node,
           distance: distanceSquared(node.position, { x: orbit.x, y: orbit.y }),
@@ -3307,7 +3288,8 @@ export function createTideweftReliefRenderer(
         .slice(0, 220);
       const hoveredId = pointerWorld
         ? hitTestFieldResource(
-            view.fieldResources.filter((node) => !view.perception || node.currentVisibility === 1),
+            view.fieldResources.filter((node) => (!view.perception || node.currentVisibility === 1)
+              && isWithinPlayerPickupRange(view, node.position)),
             pointerWorld,
             Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22),
           )?.node.id
@@ -3393,7 +3375,7 @@ export function createTideweftReliefRenderer(
       now: number,
     ): void => {
       const parcels = safeLooseCargoViews(view.looseCargo ?? []).filter((parcel) =>
-        !view.perception || isDirectlyDetailPerceived(view.terrain, parcel.position, true)
+        isWithinPlayerPickupRange(view, parcel.position)
       );
       if (parcels.length === 0) return;
       const nearby = nearestRecoverableLooseCargo(
@@ -4082,7 +4064,9 @@ export function createTideweftReliefRenderer(
           view.perception
           && !isDirectlyDetailPerceived(view.terrain, porter.position, true)
         ) continue;
-        const appearance = porterAppearancePresentation(porter);
+        const recognized = isWithinPlayerRecognitionRange(view, porter.position);
+        const disclosedAppearance = porterAppearancePresentation(porter);
+        const appearance = recognized ? disclosedAppearance : { ...disclosedAppearance, color: RELIEF_PALETTE.foam, wetness: 0 };
         const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           porter.position,
@@ -4091,7 +4075,7 @@ export function createTideweftReliefRenderer(
         );
         p.push();
         p.noStroke();
-        const highlighted = Boolean(
+        const highlighted = recognized && Boolean(
           porter.selected
           || (hoverTarget?.entity === "porter" && hoverTarget.id === porter.id),
         );
@@ -4123,7 +4107,7 @@ export function createTideweftReliefRenderer(
           );
           p.noStroke();
         }
-        p.ambientMaterial(porter.cargoColor ?? porterStateColor(porter));
+        p.ambientMaterial(recognized ? porter.cargoColor ?? porterStateColor(porter) : RELIEF_PALETTE.foam);
         p.translate(-Math.cos(porter.facing) * size * 0.18, size * 0.05, -Math.sin(porter.facing) * size * 0.18);
         p.box(size * 0.16 * appearance.widthScale);
         p.pop();
@@ -4138,7 +4122,8 @@ export function createTideweftReliefRenderer(
           view.perception
           && !isDirectlyDetailPerceived(view.terrain, dog.position, true)
         ) continue;
-        const highlighted = dog.selected || dog.actorId === dogHover;
+        const recognized = isWithinPlayerRecognitionRange(view, dog.position);
+        const highlighted = recognized && (dog.selected || dog.actorId === dogHover);
         const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           dog.position,
@@ -4149,7 +4134,7 @@ export function createTideweftReliefRenderer(
         const secondary = dog.coat.secondary === null
           ? primary
           : RELIEF_DOG_COAT_COLORS[dog.coat.secondary];
-        const wetness = unit(dog.wetness / 1_000_000);
+        const wetness = recognized ? unit(dog.wetness / 1_000_000) : 0;
         const coatVolume = dog.coat.length === "short"
           ? 0.94
           : dog.coat.length === "medium"
@@ -4238,7 +4223,7 @@ export function createTideweftReliefRenderer(
         );
         p.noStroke();
 
-        if (dog.conditionLabels.includes("INJURED") && !resting) {
+        if (recognized && dog.conditionLabels.includes("INJURED") && !resting) {
           p.push();
           p.translate(-bodyHalfLength * 0.62, legHeight * 0.38, -bodyHalfWidth * 0.58);
           p.ambientMaterial(RELIEF_PALETTE.coral);
@@ -6038,7 +6023,8 @@ export function createTideweftReliefRenderer(
           view.perception !== undefined,
         )) continue;
         const descriptor = RELIEF_AGGREGATE_EVIDENCE[evidence.form];
-        if (evidence.selected || aggregateEvidenceIsHovered(evidence)) {
+        if (isWithinPlayerRecognitionRange(view, evidence.position)
+          && (evidence.selected || aggregateEvidenceIsHovered(evidence))) {
           drawGroundRing(
             view,
             cache,
@@ -6160,7 +6146,8 @@ export function createTideweftReliefRenderer(
           wildlife.position,
           view.perception !== undefined,
         )) continue;
-        const highlighted = Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
+        const highlighted = isWithinPlayerRecognitionRange(view, wildlife.position)
+          && Boolean(wildlife.selected || wildlifeIsHovered(wildlife));
         const surface = perceivedReliefSurfaceHeightAt(
           view.terrain,
           wildlife.position,
@@ -6200,7 +6187,7 @@ export function createTideweftReliefRenderer(
           cache.mesh.verticalScale,
           true,
         );
-        if (carcassIsHovered(carcass)) {
+        if (isWithinPlayerRecognitionRange(view, carcass.position) && carcassIsHovered(carcass)) {
           drawGroundRing(
             view,
             cache,

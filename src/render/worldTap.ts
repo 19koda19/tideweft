@@ -13,6 +13,8 @@ import type {
 import {
   currentSettlementVisibility,
   isDirectlyDetailPerceived,
+  isWithinPlayerPickupRange,
+  isWithinPlayerRecognitionRange,
 } from "./perceptionPresentation";
 import {
   isLivingActorSpecies,
@@ -85,21 +87,18 @@ const directlyPerceivedSettlement = (
 const directlyPerceivedResource = (
   view: TideweftView,
   node: FieldResourceNodeView,
-): boolean => view.perception === undefined || (
-  view.perception.valid === true
-  && node.currentVisibility === 1
-  && isDirectlyDetailPerceived(view.terrain, node.position, true)
-);
+): boolean => (view.perception === undefined || node.currentVisibility === 1)
+  && isWithinPlayerPickupRange(view, node.position);
 
 const directlyPerceivedPorter = (
   view: TideweftView,
   porter: PorterView,
-): boolean => directlyPerceivedPoint(view, porter.position);
+): boolean => isWithinPlayerRecognitionRange(view, porter.position);
 
 const directlyPerceivedParcel = (
   view: TideweftView,
   parcel: LooseCargoView,
-): boolean => directlyPerceivedPoint(view, parcel.position);
+): boolean => isWithinPlayerPickupRange(view, parcel.position);
 
 const directlyPerceivedLivingActor = (
   view: TideweftView,
@@ -117,7 +116,7 @@ const directlyPerceivedLivingActor = (
       ));
   if (matches.length !== 1) return null;
   const actor = matches[0];
-  return finitePoint(actor?.position) && directlyPerceivedPoint(view, actor.position)
+  return finitePoint(actor?.position) && isWithinPlayerRecognitionRange(view, actor.position)
     ? actor
     : null;
 };
@@ -143,7 +142,7 @@ const directlyPerceivedAggregateWildlifeEvidence = (
   if (matches.length !== 1) return null;
   const evidence = matches[0];
   return finitePoint(evidence?.position)
-    && directlyPerceivedPoint(view, evidence.position)
+    && isWithinPlayerRecognitionRange(view, evidence.position)
     ? evidence
     : null;
 };

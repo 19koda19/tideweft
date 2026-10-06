@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "1162da0e2c17a647610391f722f83f63398ff64b89b82cf71f114ecb0f8f8d08",
+      "reviewedSourceFingerprint": "9bbde59beebf730c0f0a7cc9018e7193e43646388dd0703ffeac47c6f57fcd7b",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -212,6 +212,7 @@
         "The causal domain owns why the sound happened; presentation never creates the event.",
         "Heard-unseen receipts do not reveal exact source identity or position.",
         "Presentation suppression cannot erase lawful hearing or committed audio.",
+        "Human dialogue text requires intelligible event-time hearing; faint lawful hearing shows only an indistinct voice, and unheard speech shows nothing.",
         "Consumed ephemeral sound presentation does not replay after save/load."
       ],
       "prohibitions": [
@@ -248,7 +249,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "1162da0e2c17a647610391f722f83f63398ff64b89b82cf71f114ecb0f8f8d08",
+      "reviewedSourceFingerprint": "9bbde59beebf730c0f0a7cc9018e7193e43646388dd0703ffeac47c6f57fcd7b",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

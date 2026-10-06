@@ -35,13 +35,18 @@ describe("shared projection perception cache", () => {
     const width = base.terrain.width;
     const x = Math.floor(width / 2);
     const y = Math.floor(base.terrain.height / 2);
-    const indices = [y * width + x + 20, (y + 12) * width + x + 5, y * width + x - 8];
+    const indices = [y * width + x + 20, (y + 12) * width + x + 5, y * width + x - 8,
+      y * width + x + 30];
     const routes = base.routes.slice(0, indices.length).map((route, ordinal) => ({
       ...route, path: [indices[ordinal]!],
     }));
     const residents = base.residents.slice(0, indices.length).map((resident, ordinal) => ({
       ...resident,
       location: { kind: "route" as const, routeId: routes[ordinal]!.id, progress: 0 },
+      ...(ordinal === 3 ? { playerKnowledge: {
+        ...resident.playerKnowledge,
+        level: "acquainted" as const, facts: ["name" as const],
+      } } : {}),
     }));
     // Controlled clear, open ground isolates the spatial profile. Separate
     // tests retain actual light, cover, hill and save authority.
@@ -68,9 +73,21 @@ describe("shared projection perception cache", () => {
       const porter = projected.porters.find(({ id }) => id === String(residents[ordinal]!.id));
       expect(porter).toBeDefined();
       expect(porter?.name).toBeUndefined();
-      expect(porter?.quickLabel).toContain("Unknown porter");
+      if (ordinal === 0 || ordinal === 2) expect(porter?.quickLabel).toContain("Unknown porter");
+      else {
+        // Broad bodies remain visible, but the medium cone owns fine copy.
+        expect(porter?.quickLabel).toBeUndefined();
+        expect(porter?.emotionMark).toBeUndefined();
+        expect(porter?.conditionLabels).toEqual([]);
+        expect(porter?.selected).toBe(false);
+      }
     }
     expect(perception.detailVisibilityGrades[y * width + x - 9]).toBe(0);
+    player.x += 10 * TILE_UNITS;
+    expect(projectGameView(world, player).porters.find(({ id }) => id === String(residents[3]!.id))?.name)
+      .toBe(residents[3]!.name);
+    expect(residents[3]!.playerKnowledge.facts).toEqual(["name"]);
+    player.x -= 10 * TILE_UNITS;
     const dropped = dropLooseCargo(
       createLooseCargoWorld(width, world.terrain.height),
       createLooseCargoCarrier(LOCAL_PORTER, createCraftingInventory(100_000, { cordreed: 1 })),
@@ -79,7 +96,19 @@ describe("shared projection perception cache", () => {
     );
     if (!dropped.ok || !dropped.entity) throw new Error("fixture needs a real dropped material");
     expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: dropped.entity.id })]));
+    // The same conserved parcel is revealed on approach, not destroyed by
+    // presentation culling. It returns to hiding when the player turns away.
+    player.x = (x + 31.5) * TILE_UNITS;
+    expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo)
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: dropped.entity.id })]));
+    player.facingMilliRadians = Math.round(Math.PI * 1_000);
+    expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ id: dropped.entity.id })]));
+    player.x = (x + 32.5) * TILE_UNITS;
+    expect(projectGameView(world, player, { looseCargoWorld: dropped.world }).looseCargo)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: dropped.entity.id })]));
+    expect(dropped.world.entities.some(({ id }) => id === dropped.entity!.id)).toBe(true);
   });
 
   it("reuses a stationary snapshot and invalidates on the sensory keys", () => {

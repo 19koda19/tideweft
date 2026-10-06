@@ -74,7 +74,8 @@ export function createSelfSituatedExpressionReception(
 }
 
 /**
- * Creates evidence for exact words heard from a directly visible source.
+ * Creates evidence of hearing a directly visible source. Presentation separately
+ * decides whether its certainty supports words or only an indistinct voice.
  * `directVisualReceipt` must be explicitly true; unseen hearing is not an
  * exact-anchor mode in this schema.
  */

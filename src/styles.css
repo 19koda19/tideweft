@@ -492,6 +492,7 @@ button:disabled {
 }
 
 .relief-world-label[data-acoustic-kind="physical"],
+.relief-world-label[data-acoustic-kind="indistinct-voice"],
 .relief-world-label[data-acoustic-kind="embodied-signal"] {
   font-style: italic;
   font-weight: 560;

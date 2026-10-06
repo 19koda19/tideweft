@@ -40,6 +40,18 @@ export function chartTerrainDecorationHash01(
   return (value >>> 0) / 4_294_967_295;
 }
 
+/**
+ * Nominal quarter-density cosmetic Chart marks, stable across signed-world
+ * streaming. This never selects or suppresses an actual physical plant/source.
+ */
+export function hasChartBotanicalDecoration(
+  grid: Pick<TerrainGridView, "worldTileOrigin">,
+  column: number,
+  row: number,
+): boolean {
+  return chartTerrainDecorationHash01(grid, column, row, 0x666f_6c69) < 0.25;
+}
+
 /** Relief's established biome-detail hash, addressed by stable global tile. */
 export function reliefTerrainDecorationHash01(
   grid: Pick<TerrainGridView, "worldTileOrigin">,

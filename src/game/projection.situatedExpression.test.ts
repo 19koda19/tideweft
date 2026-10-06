@@ -28,6 +28,7 @@ import {
   SITUATED_EXPRESSION_VERSION,
   advanceSituatedExpression,
   createSituatedExpressionState,
+  projectSituatedExpression,
   reduceSituatedExpression,
   type SituatedExpressionEvent,
   type SituatedExpressionIntent,
@@ -1123,6 +1124,141 @@ describe("situated expression game projection", () => {
     expect(JSON.stringify(caption)).not.toContain(resident.identity.stableId);
     expect(JSON.stringify(caption)).not.toContain(resident.name);
     expect(JSON.stringify(caption)).not.toContain(String(placement.position.localX));
+  });
+
+  it("keeps faint visible human speech anchored without presenting unintelligible words", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    resident.playerKnowledge.facts.push("name");
+    const expression = canonicalResidentWeatherHoldExpression(
+      resident.identity.stableId, placement.position,
+    );
+    const originalExpression = structuredClone(expression);
+    const faintReception = createHeardVisibleSituatedExpressionReception(expression, 42, 200_000, true);
+    if (faintReception === null) throw new Error("Faint visible hearing receipt was rejected");
+    const clear = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+    }).expressions?.[0];
+    const faint = projectGameView(world, player, {
+      situatedExpression: expression, situatedExpressionReception: faintReception,
+    }).expressions?.[0];
+    const caption = projectUIView(world, player, createSessionState(world.seedText), {
+      economyWorld: compatibility,
+      situatedExpression: expression, situatedExpressionReception: faintReception,
+    }).expressionCaption;
+
+    expect(clear).toMatchObject({ acousticKind: "speech", text: "We'll hold here." });
+    expect(faint).toMatchObject({
+      id: expression.eventId, sourceActorId: resident.identity.stableId,
+      sourceKind: "human", acousticKind: "indistinct-voice", text: "indistinct voice",
+      position: clear?.position,
+    });
+    expect(caption).toMatchObject({
+      id: expression.eventId, speakerLabel: "Voice",
+      presentationKind: "indistinct-voice", text: "indistinct voice",
+    });
+    expect(JSON.stringify({ faint, caption })).not.toContain("We'll hold here.");
+    expect(JSON.stringify(caption)).not.toContain(resident.name);
+    expect(expression).toEqual(originalExpression);
+  });
+
+  it("keeps faint unseen human speech coarse and refuses absent, unheard, or mismatched receipts", () => {
+    const { compatibility, player, world } = projectionFixture(COMPATIBILITY_REGION);
+    const resident = compatibility.residents.find((candidate) =>
+      projectResidentWorldPosition(world, candidate, 1) !== null
+    );
+    if (!resident) throw new Error("fixture needs a resident in the active window");
+    const placement = resolveResidentWorldPlacement(compatibility, resident);
+    if (!placement) throw new Error("fixture resident has no authoritative placement");
+    resident.playerKnowledge.facts.push("name");
+    const expression = canonicalResidentWeatherHoldExpression(
+      resident.identity.stableId, placement.position,
+    );
+    const originalExpression = structuredClone(expression);
+    const contact = {
+      bearing: { centerRadians: 0, uncertaintyRadians: Math.PI / 6 },
+      distanceBand: { minimum: 4_000, maximum: 11_000 }, certainty: 0.2,
+    };
+    const faintReception = createHeardUnseenSituatedExpressionReception(expression, 42, contact);
+    if (faintReception === null) throw new Error("Faint unseen hearing receipt was rejected");
+    const session = createSessionState(world.seedText);
+    expect(projectGameView(world, player, {
+      situatedExpression: expression, situatedExpressionReception: faintReception,
+    }).expressions).toEqual([]);
+    const caption = projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: expression, situatedExpressionReception: faintReception,
+    }).expressionCaption;
+    expect(caption).toMatchObject({
+      speakerLabel: "Voice", presentationKind: "indistinct-voice",
+      text: "indistinct voice", directionLabel: "direction unclear",
+    });
+    expect(caption).not.toHaveProperty("position");
+    expect(JSON.stringify(caption)).not.toContain("We'll hold here.");
+    expect(JSON.stringify(caption)).not.toContain(resident.name);
+    expect(JSON.stringify(caption)).not.toContain(resident.identity.stableId);
+
+    const otherExpression = canonicalHumanDangerWarning(
+      placement.position, "projection:faint-unseen-mismatched", resident.identity.stableId,
+    );
+    const mismatch = createHeardUnseenSituatedExpressionReception(otherExpression, 42, contact);
+    const unheard = { ...faintReception, certainty: 0 } as SituatedExpressionReception;
+    for (const reception of [undefined, null, mismatch, unheard]) {
+      const options = {
+        situatedExpression: expression,
+        ...(reception === undefined ? {} : { situatedExpressionReception: reception }),
+      };
+      expect(projectGameView(world, player, {
+        ...options,
+      }).expressions).toEqual([]);
+      expect(projectUIView(world, player, session, {
+        economyWorld: compatibility,
+        ...options,
+      }).expressionCaption).toBeUndefined();
+    }
+    expect(expression).toEqual(originalExpression);
+  });
+
+  it("does not replace a faint animal call or the player's own words with indistinct human speech", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    const dog = dogInWindow(window);
+    const dogActorRoster = createDogActorRoster([dog]);
+    const animalExpression = canonicalDogWarning(dog, "projection:faint-dog-remains-call");
+    const animalOriginal = structuredClone(animalExpression);
+    const animalReception = createHeardVisibleSituatedExpressionReception(
+      animalExpression, 42, 120_000, true,
+    );
+    if (animalReception === null) throw new Error("Faint animal hearing receipt was rejected");
+    expect(projectGameView(world, player, {
+      situatedExpression: animalExpression, situatedExpressionReception: animalReception, dogActorRoster,
+    }).expressions?.[0]).toMatchObject({ acousticKind: "animal-call", text: "BARK!" });
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: animalExpression, situatedExpressionReception: animalReception, dogActorRoster,
+    }).expressionCaption).toMatchObject({ presentationKind: "animal-call", text: "BARK!" });
+
+    const selfExpression = canonicalExpression(
+      "projection:self-words-remain-clear", createWorldPosition(COMPATIBILITY_REGION, 25_250, 44_500),
+    );
+    const selfOriginal = structuredClone(selfExpression);
+    const selfWords = projectSituatedExpression(selfExpression)?.text;
+    expect(selfWords).toBeDefined();
+    expect(projectGameView(world, player, {
+      situatedExpression: selfExpression, situatedExpressionReception: selfReception(selfExpression),
+    }).expressions?.[0]).toMatchObject({ acousticKind: "speech", text: selfWords });
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility,
+      situatedExpression: selfExpression, situatedExpressionReception: selfReception(selfExpression),
+    }).expressionCaption).toMatchObject({ presentationKind: "speech", text: selfWords });
+    expect(animalExpression).toEqual(animalOriginal);
+    expect(selfExpression).toEqual(selfOriginal);
   });
 
   it("anchors a heard-visible guardian bark to its authenticated dog without inventing a name", () => {

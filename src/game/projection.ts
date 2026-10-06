@@ -12,6 +12,12 @@ import type {
 } from "../render/types";
 import { projectLooseCargoWorld } from "../render/looseCargoPresentation";
 import {
+  isWithinPlayerPresentationRange,
+  isWithinPlayerRecognitionRange,
+  PLAYER_PICKUP_PRESENTATION_RANGE,
+  PLAYER_RECOGNITION_PRESENTATION_RANGE,
+} from "../render/perceptionPresentation";
+import {
   applyWeatherToBiomeClimate,
   canonicalizeResidentCircadianState,
   classifyBiome,
@@ -81,7 +87,10 @@ import {
   type SituatedExpressionEvent,
 } from "./situatedExpression";
 import { projectResidentIntroductionExpression } from "./residentIntroductionExpression";
-import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
+import {
+  situatedExpressionSoundInterrupt,
+  situatedExpressionWordsAreIntelligible,
+} from "./situatedExpressionAcoustics";
 import {
   situatedExpressionReceptionMatchesActiveEvent,
   type SituatedExpressionReception,
@@ -536,11 +545,13 @@ function projectSituatedExpressionView(
     if (point === null) return Object.freeze([]);
     const callKind = animalCallKind(event.meaning);
     const embodiedSignal = event.meaning === "marsh-rabbit-alarm-thump";
+    const indistinctVoice = source.sourceKind === "human"
+      && !situatedExpressionWordsAreIntelligible(event.volume, reception!.certainty);
     return Object.freeze([Object.freeze({
       acousticKind: embodiedSignal
         ? "embodied-signal" as const
         : callKind === null
-          ? "speech" as const
+          ? indistinctVoice ? "indistinct-voice" as const : "speech" as const
           : "animal-call" as const,
       ...(callKind === null || embodiedSignal ? {} : {
         criticalCall: situatedExpressionSoundInterrupt(event) === "strong",
@@ -549,7 +560,7 @@ function projectSituatedExpressionView(
       sourceActorId: event.sourceActorId,
       sourceKind: source.sourceKind,
       speakerLabel: source.speakerLabel,
-      text: introduction?.text ?? realization.text,
+      text: indistinctVoice ? "indistinct voice" : introduction?.text ?? realization.text,
       position: Object.freeze({
         x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
         y: point.y / WORLD_POSITION_UNITS_PER_TILE * tileSize,
@@ -901,6 +912,10 @@ export function projectGameView(
   const tileSize = 24;
   const playerX = (player.x / TILE_UNITS) * tileSize;
   const playerY = (player.y / TILE_UNITS) * tileSize;
+  const presentationPlayer = {
+    position: { x: playerX, y: playerY },
+    facing: player.facingMilliRadians / 1_000,
+  };
   const adrift = projectAdriftView(world, player, options.adriftControl);
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
@@ -942,6 +957,8 @@ export function projectGameView(
         world.terrain.height,
         tileSize,
         perception.detailVisibilityGrades,
+      ) && isWithinPlayerPresentationRange(
+        presentationPlayer, parcel.position, tileSize, PLAYER_PICKUP_PRESENTATION_RANGE,
       )
     )
     .sort((left, right) => {
@@ -1343,9 +1360,12 @@ export function projectGameView(
       const routeProjection = projectResidentWorldPosition(world, resident, tileSize);
       if (!routeProjection) return [];
       if (perception.detailVisibilityGrades[routeProjection.tileIndex] !== VISIBILITY_DIRECT) return [];
-      const selected = options.selectedResidentId === resident.id;
-      const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
-      const emotionMark = porterEmotionMark(resident, selected);
+      const detailsVisible = isWithinPlayerPresentationRange(
+        presentationPlayer, routeProjection.position, tileSize, PLAYER_RECOGNITION_PRESENTATION_RANGE,
+      );
+      const selected = detailsVisible && options.selectedResidentId === resident.id;
+      const knowsName = detailsVisible && residentKnowsFact(resident.playerKnowledge, "name");
+      const emotionMark = detailsVisible ? porterEmotionMark(resident, selected) : undefined;
       const identityLabel = knowsName
         ? resident.name
         : resident.location.kind === "route"
@@ -1359,18 +1379,18 @@ export function projectGameView(
           actorId: resident.identity.stableId,
           id: String(resident.id),
           ...(knowsName ? { name: resident.name } : {}),
-          quickLabel: restState === "asleep"
+          ...(detailsVisible ? { quickLabel: restState === "asleep"
             ? `${identityLabel} · asleep`
             : perceptionLabel
               ? `${identityLabel} · ${perceptionLabel}`
               : restState
                 ? `${identityLabel} · ${restState}`
-                : identityLabel,
+                : identityLabel } : {}),
           position: routeProjection.position,
           facing: routeProjection.facing,
           state: restState === "asleep"
             ? "resting" as const
-            : perceptionState
+            : (detailsVisible ? perceptionState : undefined)
               ?? (resident.condition.sheltering
               ? "resting" as const
               : restState
@@ -1382,9 +1402,9 @@ export function projectGameView(
             heightScale: resident.identity.heightCm / 171,
             build: resident.identity.build,
             palette: resident.identity.appearance.palette,
-            wetness: resident.condition.wetness / FIXED_POINT,
+            wetness: detailsVisible ? resident.condition.wetness / FIXED_POINT : 0,
           },
-          conditionLabels: porterConditionLabels(resident),
+          conditionLabels: detailsVisible ? porterConditionLabels(resident) : [],
           ...(emotionMark ? { emotionMark } : {}),
           progress: routeProjection.progress,
           selected,
@@ -1456,6 +1476,23 @@ function projectRegionalLooseCargo(
     }
   }
   return projected;
+}
+
+/** Keep distant bodies, but do not publish their fine labels/condition copy. */
+export function projectActorRecognitionDetails(view: TideweftView): TideweftView {
+  return {
+    ...view,
+    ...(view.dogs === undefined ? {} : { dogs: view.dogs.map((dog) =>
+      isWithinPlayerRecognitionRange(view, dog.position) ? dog : {
+        ...dog, quickLabel: "Unknown dog" as const, conditionLabels: [], wetness: 0, selected: false,
+      },
+    ) }),
+    ...(view.wildlife === undefined ? {} : { wildlife: view.wildlife.map((actor) => {
+      if (isWithinPlayerRecognitionRange(view, actor.position)) return actor;
+      const { groupSize: _groupSize, ...body } = actor;
+      return { ...body, quickLabel: "Animal", conditionLabels: [], selected: false };
+    }) }),
+  };
 }
 
 function squaredPointDistance(
@@ -1593,6 +1630,12 @@ function projectFieldResources(
       || settlementTiles.has(node.tileIndex)
       || (player.discovered[node.tileIndex] ?? 0) <= 0
       || visibilityGrades[node.tileIndex] !== VISIBILITY_DIRECT
+      || !isWithinPlayerPresentationRange(
+        { position: { x: player.x, y: player.y }, facing: player.facingMilliRadians / 1_000 },
+        tilePoint(node.tileIndex, world.terrain.width, TILE_UNITS),
+        TILE_UNITS,
+        PLAYER_PICKUP_PRESENTATION_RANGE,
+      )
       || !Number.isSafeInteger(node.capacityUnits)
       || node.capacityUnits <= FIELD_RESOURCE_LIVING_RESERVE_UNITS
     ) continue;

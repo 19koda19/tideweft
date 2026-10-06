@@ -48,6 +48,7 @@ export function shouldResetAcousticCaptionAnnouncementLedger(
 export function situatedExpressionCaptionReadingTimeMs(caption: Caption): number {
   const showSpeaker = caption.presentationKind !== "animal-call"
     && caption.presentationKind !== "embodied-signal"
+    && caption.presentationKind !== "indistinct-voice"
     && caption.presentationKind !== "physical";
   const visible = `${showSpeaker ? `${caption.speakerLabel}: ` : ""}${situatedExpressionCaptionVisibleText(caption)}`;
   // Count Unicode code points rather than UTF-16 surrogate halves. Combining
@@ -113,10 +114,13 @@ export function situatedExpressionCaptionVisibleText(caption: Caption): string {
   if (
     caption.presentationKind === "physical"
     || caption.presentationKind === "embodied-signal"
+    || caption.presentationKind === "indistinct-voice"
   ) {
-    const sound = caption.presentationKind === "embodied-signal"
-      ? caption.text
-      : caption.physicalSoundKind === undefined ? "sound" : caption.text;
+    const sound = caption.presentationKind === "indistinct-voice"
+      ? "indistinct voice"
+      : caption.presentationKind === "embodied-signal"
+        ? caption.text
+        : caption.physicalSoundKind === undefined ? "sound" : caption.text;
     return caption.directionLabel === undefined
       ? `[${sound}]`
       : `[${sound} · ${caption.directionLabel}]`;
@@ -131,10 +135,13 @@ export function situatedExpressionCaptionCopy(caption: Caption): string {
   if (
     caption.presentationKind === "physical"
     || caption.presentationKind === "embodied-signal"
+    || caption.presentationKind === "indistinct-voice"
   ) {
-    const sound = caption.presentationKind === "embodied-signal"
-      ? caption.text
-      : caption.physicalSoundKind === undefined ? "sound" : caption.text;
+    const sound = caption.presentationKind === "indistinct-voice"
+      ? "indistinct voice"
+      : caption.presentationKind === "embodied-signal"
+        ? caption.text
+        : caption.physicalSoundKind === undefined ? "sound" : caption.text;
     if (caption.directionLabel === undefined) return `[${sound}]`;
     if (caption.directionLabel === "all around") return `[${sound}; all around.]`;
     if (caption.directionLabel === "direction unclear") return `[${sound}; direction unclear.]`;

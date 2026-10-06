@@ -119,6 +119,56 @@ describe("situated expression caption", () => {
     expect(situatedExpressionCaptionCopy(physical)).not.toContain(":");
   });
 
+  it.each([
+    [undefined, "[indistinct voice]", "[indistinct voice]"],
+    ["east", "[indistinct voice · east]", "[indistinct voice somewhere east.]"],
+    ["south-east", "[indistinct voice · south-east]", "[indistinct voice somewhere south-east.]"],
+    ["south", "[indistinct voice · south]", "[indistinct voice somewhere south.]"],
+    ["south-west", "[indistinct voice · south-west]", "[indistinct voice somewhere south-west.]"],
+    ["west", "[indistinct voice · west]", "[indistinct voice somewhere west.]"],
+    ["north-west", "[indistinct voice · north-west]", "[indistinct voice somewhere north-west.]"],
+    ["north", "[indistinct voice · north]", "[indistinct voice somewhere north.]"],
+    ["north-east", "[indistinct voice · north-east]", "[indistinct voice somewhere north-east.]"],
+    ["all around", "[indistinct voice · all around]", "[indistinct voice; all around.]"],
+    ["direction unclear", "[indistinct voice · direction unclear]", "[indistinct voice; direction unclear.]"],
+  ] as const)("renders indistinct speech with only its lawful coarse direction %s", (
+    directionLabel, visible, accessible,
+  ) => {
+    const indistinct: SituatedExpressionCaptionUIView = {
+      id: "expression:anonymous-voice",
+      // Deliberately unsafe fixture values prove that the fixed presentation
+      // kind cannot disclose arbitrary words or a supplied source name.
+      speakerLabel: "Hidden keeper",
+      text: "The concealed stock is behind the locked gate.",
+      tone: "restrained",
+      presentationKind: "indistinct-voice",
+      ...(directionLabel === undefined ? {} : { directionLabel }),
+    };
+    const before = JSON.stringify(indistinct);
+
+    expect(situatedExpressionCaptionVisibleText(indistinct)).toBe(visible);
+    expect(situatedExpressionCaptionCopy(indistinct)).toBe(accessible);
+    expect(`${visible} ${accessible}`).not.toMatch(/keeper|stock|gate|concealed|locked/iu);
+    expect(JSON.stringify(indistinct)).toBe(before);
+  });
+
+  it("does not turn unrelated sound hints or arbitrary prose into intelligible indistinct speech", () => {
+    const indistinct: SituatedExpressionCaptionUIView = {
+      ...caption,
+      presentationKind: "indistinct-voice",
+      recognizedAnimalCall: "Fox",
+      animalCallKind: "bark",
+      physicalSoundKind: "scrape",
+    };
+    expect(situatedExpressionCaptionVisibleText(indistinct)).toBe("[indistinct voice]");
+    expect(situatedExpressionCaptionCopy(indistinct)).toBe("[indistinct voice]");
+    expect(situatedExpressionCaptionVisibleText({
+      ...indistinct,
+      text: "x".repeat(1_000),
+      speakerLabel: "y".repeat(1_000),
+    })).toBe("[indistinct voice]");
+  });
+
   it("renders animal calls as sounds rather than quoted human speech", () => {
     const unknownDog: SituatedExpressionCaptionUIView = {
       id: "expression:dog:warning",
@@ -610,7 +660,9 @@ describe("situated expression caption", () => {
     expect(uiSource).toContain("expressionCaption.hidden = true");
     expect(uiSource).toContain("situatedExpressionCaptionVisibleText(caption)");
     expect(uiSource).toContain('caption.presentationKind !== "embodied-signal"');
+    expect(uiSource).toContain('caption.presentationKind !== "indistinct-voice"');
     expect(uiSource).toContain('caption.presentationKind !== "physical"');
+    expect(styles).toContain('.relief-world-label[data-acoustic-kind="indistinct-voice"]');
     expect(styles).toContain('.relief-world-label[data-acoustic-kind="embodied-signal"]');
     expect(styles).toContain("text-transform: lowercase");
     expect(uiSource).not.toContain("expression-transcript");
@@ -751,6 +803,32 @@ describe("acoustic caption reading time", () => {
     };
     expect(situatedExpressionCaptionReadingTimeMs(embodied))
       .toBe(expectedTime(`[${embodied.text} · direction unclear]`));
+  });
+
+  it("measures only the fixed indistinct cue and keeps its lease at no more than 21 characters per second", () => {
+    const indistinct: SituatedExpressionCaptionUIView = {
+      ...caption,
+      presentationKind: "indistinct-voice",
+      speakerLabel: "Never displayed source name".repeat(10),
+      text: "Never disclosed words".repeat(10),
+      directionLabel: "east",
+    };
+    const visible = "[indistinct voice · east]";
+    const duration = expectedTime(visible);
+    expect(situatedExpressionCaptionReadingTimeMs(indistinct)).toBe(duration);
+    expect(Array.from(visible).length / (duration / 1_000)).toBeLessThanOrEqual(21);
+    expect(situatedExpressionCaptionReadingTimeMs(indistinct))
+      .not.toBe(expectedTime(situatedExpressionCaptionCopy(indistinct)));
+
+    const lease = createAcousticCaptionReadingLease();
+    const displayed = lease.update(indistinct, 100);
+    expect(situatedExpressionCaptionVisibleText(displayed!)).toBe(visible);
+    expect(lease.update(undefined, 100 + duration - 1)).toBe(displayed);
+    expect(lease.update(undefined, 100 + duration)).toBeUndefined();
+    expect(situatedExpressionCaptionReadingTimeMs({
+      ...indistinct,
+      directionLabel: "direction unclear",
+    })).toBe(expectedTime("[indistinct voice · direction unclear]"));
   });
 });
 

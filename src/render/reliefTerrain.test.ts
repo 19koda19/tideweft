@@ -245,7 +245,7 @@ describe("discovery-masked Relief surfaces", () => {
     }
   });
 
-  it("matches the rendered flat local water sheet without exposing hidden depth", () => {
+  it("matches the rendered bed-following water triangles without exposing hidden depth", () => {
     const elevations = [
       0.62, 0.78, 0.91,
       0.55, 0.12, 0.84,
@@ -260,7 +260,6 @@ describe("discovery-masked Relief surfaces", () => {
     const verticalScale = 100;
     const mesh = maskedMesh(terrain, verticalScale);
     const center = { x: 15, y: 15 };
-    const waterLevel = meshTriangleHeightAt(mesh, terrain, center) + 20;
     const points = [
       center,
       { x: 17.5, y: 12.5 },
@@ -270,7 +269,9 @@ describe("discovery-masked Relief surfaces", () => {
     for (const point of points) {
       const land = meshTriangleHeightAt(mesh, terrain, point);
       expect(discoveredReliefSurfaceHeightAt(terrain, point, verticalScale, true))
-        .toBeCloseTo(Math.max(land, waterLevel), 10);
+        .toBeCloseTo(land + 20, 10);
+      expect(perceivedReliefSurfaceHeightAt(terrain, point, verticalScale, true))
+        .toBeCloseTo(land + 20, 10);
     }
     const dryPoint = { x: 25, y: 15 };
     expect(discoveredReliefSurfaceHeightAt(terrain, dryPoint, verticalScale, true))

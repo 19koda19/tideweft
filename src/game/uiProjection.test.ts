@@ -195,6 +195,38 @@ describe("active Promise recovery guidance", () => {
 });
 
 describe("sleeping UI disclosure", () => {
+  it("keeps distant human bodies without granting a remote ABOUT inspector", () => {
+    const base = createWorldView(createWorld("medium human recognition tier"));
+    const width = base.terrain.width;
+    const x = Math.floor(width / 2);
+    const y = Math.floor(base.terrain.height / 2);
+    const route = base.routes[0]!;
+    const resident = base.residents[0]!;
+    const tileIndex = y * width + x + 30;
+    const world = {
+      ...base, completedTick: 12 * 60, settlements: [],
+      weather: { ...base.weather, kind: "clear" as const, intensity: 0 },
+      routes: [{ ...route, path: [tileIndex] }],
+      residents: [{ ...resident, location: { kind: "route" as const, routeId: route.id, progress: 0 } }],
+      terrain: { ...base.terrain, tiles: base.terrain.tiles.map((tile) => ({
+        ...tile, terrain: "meadow" as const, elevation: 0, roughness: 0,
+      })) },
+    };
+    const player = createPlayer(base);
+    player.x = (x + 0.5) * TILE_UNITS;
+    player.y = (y + 0.5) * TILE_UNITS;
+    player.facingMilliRadians = 0;
+    const session = createSessionState(world.seedText);
+    const options = () => ({ selectedResidentId: resident.id, perception: projectPerception(world, player) });
+    expect(projectGameView(world, player).porters.some(({ id }) => id === String(resident.id))).toBe(true);
+    expect(projectUIView(world, player, session, options()).selectedResident).toBeUndefined();
+    player.x += 5 * TILE_UNITS;
+    expect(projectUIView(world, player, session, options()).selectedResident?.id).toBe(String(resident.id));
+    player.x -= 5 * TILE_UNITS;
+    expect(projectUIView(world, player, session, options()).selectedResident).toBeUndefined();
+    expect(projectGameView(world, player).porters.some(({ id }) => id === String(resident.id))).toBe(true);
+  });
+
   it("withholds a directly visible settlement, resident, and store action", () => {
     const state = createWorld("sleep closes the inspector");
     const world = createWorldView(state);

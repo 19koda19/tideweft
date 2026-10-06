@@ -72,14 +72,16 @@ export interface TerrainTileView {
    * 0 is outside current perception and 1 is fully legible. Intermediate
    * values are a presentation-only atmospheric falloff inside the authoritative
    * terrain field. This field reveals terrain form only;
-   * exact actors, items, labels, and actions use currentDetailVisibility.
+   * bodies and scenery use currentDetailVisibility; pickup and inspection
+   * additionally obey their shared near/medium presentation clips.
    * Missing legacy values remain fully visible.
    */
   readonly currentVisibility?: number;
   /**
    * Present-tense detail perception in the same player cone/close circle,
-   * additionally gated by light, cover and sleep. Exact entities and interactions
-   * must fail closed unless this is direct (1) when a perception view exists.
+   * additionally gated by light, cover and sleep. Bodies and scenery require
+   * direct (1) when a perception view exists; pickup and fine actor inspection
+   * also require their shared short/medium presentation range.
    */
   readonly currentDetailVisibility?: 0 | 0.5 | 1;
   /**
@@ -240,7 +242,7 @@ export interface PlayerIncidentView {
  * bounded callout budget and never infer additional dialogue.
  */
 export interface SituatedExpressionView {
-  readonly acousticKind: "speech" | "animal-call" | "embodied-signal";
+  readonly acousticKind: "speech" | "indistinct-voice" | "animal-call" | "embodied-signal";
   /** Safe heard urgency from the shared semantic owner; absent means unknown. */
   readonly criticalCall?: boolean;
   readonly id: string;

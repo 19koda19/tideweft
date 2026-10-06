@@ -478,7 +478,7 @@ export interface SituatedExpressionCaptionUIView {
   readonly speakerLabel: string;
   readonly text: string;
   readonly tone: "restrained" | "strained" | "alarmed" | "relieved";
-  readonly presentationKind?: "speech" | "animal-call" | "embodied-signal" | "physical";
+  readonly presentationKind?: "speech" | "indistinct-voice" | "animal-call" | "embodied-signal" | "physical";
   /** Player-learned sound family only; never a hidden individual or exact position. */
   readonly recognizedAnimalCall?: AnimalCallLabel;
   /** Explicit knowledge-safe presentation kind; never inferred from localized text. */

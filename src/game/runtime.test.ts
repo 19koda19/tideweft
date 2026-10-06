@@ -52,6 +52,7 @@ import { RESIDENT_INTRODUCTION_EXPRESSION_DURATION_STEPS } from "./residentIntro
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import { RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
 import {
   captureSessionBaseline,
   createSessionState,
@@ -1803,8 +1804,13 @@ describe("perpetual new worlds", () => {
       posture: "journey",
       sessionShape: "wander",
     });
-    const porter = runtime.getRenderView().porters[0];
-    if (porter === undefined) throw new Error("masked introduction fixture needs a resident");
+    // Broad bodies are no longer all inspectable. Exercise the actual nearby
+    // GREET affordance rather than assuming the first distant body can talk.
+    const current = runtime.getRenderView();
+    const porter = current.porters.find(({ position, quickLabel }) => quickLabel !== undefined
+      && Math.hypot(position.x - current.player.position.x, position.y - current.player.position.y)
+        <= current.terrain.tileSize * RESIDENT_CONVERSATION_RANGE_TILES);
+    if (porter === undefined) throw new Error("masked introduction fixture needs a greetable resident");
     runtime.dispatchRenderer({
       type: "select",
       entity: "porter",

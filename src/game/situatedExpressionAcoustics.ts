@@ -340,3 +340,21 @@ export function situatedExpressionAcoustics(
     rangeUnits: rangeTiles * WORLD_POSITION_UNITS_PER_TILE,
   });
 }
+
+/**
+ * Presentation-only word clarity after an exact lawful hearing receipt. A
+ * faint voice remains audible; this does not change its audio or cognition.
+ */
+export function situatedExpressionWordsAreIntelligible(
+  volume: SituatedExpressionEvent["volume"],
+  certainty: number,
+): boolean {
+  if (
+    (volume !== "murmur" && volume !== "spoken" && volume !== "shout")
+    || !Number.isSafeInteger(certainty)
+    || certainty < 1
+    || certainty > 1_000_000
+  ) return false;
+
+  return certainty >= Math.ceil(situatedExpressionAcoustics(volume).loudness * 55 / 100);
+}

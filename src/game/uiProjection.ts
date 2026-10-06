@@ -35,6 +35,10 @@ import type {
 } from "../ui/types";
 import { adriftPresentation } from "../render/adriftPresentation";
 import {
+  isWithinPlayerPresentationRange,
+  PLAYER_RECOGNITION_PRESENTATION_RANGE,
+} from "../render/perceptionPresentation";
+import {
   FIELD_TOOL_LABELS,
   PACK_LOAD_MILLI_PER_UNIT,
   TILE_UNITS,
@@ -122,7 +126,10 @@ import {
   situatedExpressionReceptionAudibleContact,
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
-import { situatedExpressionSoundInterrupt } from "./situatedExpressionAcoustics";
+import {
+  situatedExpressionSoundInterrupt,
+  situatedExpressionWordsAreIntelligible,
+} from "./situatedExpressionAcoustics";
 import type { DogActorRosterState } from "./dogActorRoster";
 import { audibleContactDirection } from "./audibleContactPresentation";
 import { eventSettlementLocusIds } from "./eventObservation";
@@ -257,6 +264,12 @@ function projectResidentAbout(
   const route = projectResidentWorldPosition(spatialWorld, resident, TILE_UNITS);
   if (!route) return undefined;
   if (perception && perception.detailVisibilityGrades[route.tileIndex] !== VISIBILITY_DIRECT) return undefined;
+  if (!isWithinPlayerPresentationRange(
+    { position: { x: player.x, y: player.y }, facing: player.facingMilliRadians / 1_000 },
+    route.position,
+    TILE_UNITS,
+    PLAYER_RECOGNITION_PRESENTATION_RANGE,
+  )) return undefined;
 
   const knowsName = residentKnowsFact(resident.playerKnowledge, "name");
   const known = [] as ResidentAboutUIView["known"][number][];
@@ -505,7 +518,15 @@ export function projectUIView(
         : semanticAnimalCallKind
     : semanticAnimalCallKind;
   const embodiedSignal = situatedExpressionEvent?.meaning === "marsh-rabbit-alarm-thump";
-  const presentedExpressionText = presentedAnimalCallKind === "bird-call"
+  const indistinctVoice = situatedExpressionSource?.sourceKind === "human"
+    && situatedExpressionEvent !== null
+    && !situatedExpressionWordsAreIntelligible(
+      situatedExpressionEvent.volume,
+      options.situatedExpressionReception!.certainty,
+    );
+  const presentedExpressionText = indistinctVoice
+    ? "indistinct voice"
+    : presentedAnimalCallKind === "bird-call"
     ? semanticAnimalCallKind === "chicken-call" || semanticAnimalCallKind === "duck-call"
       ? "CALL." : "CALL! CALL!"
     : options.situatedExpressionReception?.kind === "heard-unseen"
@@ -529,13 +550,13 @@ export function projectUIView(
     ? {
         caption: {
           id: situatedExpressionEvent.eventId,
-          speakerLabel: situatedExpressionSource.speakerLabel,
+          speakerLabel: indistinctVoice ? "Voice" : situatedExpressionSource.speakerLabel,
           text: presentedExpressionText ?? situatedExpression.text,
           tone: embodiedSignal ? "restrained" : situatedExpressionEvent.tone,
           presentationKind: embodiedSignal
             ? "embodied-signal"
             : presentedAnimalCallKind === null
-              ? "speech"
+              ? indistinctVoice ? "indistinct-voice" : "speech"
               : "animal-call",
           ...(presentedAnimalCallKind === null
             ? {}

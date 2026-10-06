@@ -1,4 +1,97 @@
-import type { SettlementView, TerrainGridView, TerrainTileView, WorldPoint } from "./types";
+import type {
+  SettlementView,
+  TerrainGridView,
+  TerrainTileView,
+  TideweftView,
+  WorldPoint,
+} from "./types";
+
+export interface PlayerPresentationRange {
+  readonly closeRangeTiles: number;
+  readonly forwardRangeTiles: number;
+  readonly forwardConeRadians: number;
+}
+
+export const PLAYER_RECOGNITION_PRESENTATION_RANGE: Readonly<PlayerPresentationRange> = Object.freeze({
+  closeRangeTiles: 8,
+  forwardRangeTiles: 26,
+  forwardConeRadians: 13 * Math.PI / 18,
+});
+
+export const PLAYER_PICKUP_PRESENTATION_RANGE: Readonly<PlayerPresentationRange> = Object.freeze({
+  closeRangeTiles: 8,
+  forwardRangeTiles: 10,
+  forwardConeRadians: 5 * Math.PI / 9,
+});
+
+/**
+ * Clear-air presentation clip only. Callers must first establish lawful current
+ * direct sight; this geometry never supplies hearing, knowledge or action reach.
+ */
+export function isWithinPlayerPresentationRange(
+  player: Readonly<{ readonly position: WorldPoint; readonly facing: number }>,
+  point: WorldPoint,
+  tileSize: number,
+  profile: Readonly<PlayerPresentationRange>,
+): boolean {
+  if (
+    !player?.position
+    || !point
+    || !Number.isFinite(player.position.x)
+    || !Number.isFinite(player.position.y)
+    || !Number.isFinite(player.facing)
+    || !Number.isFinite(point.x)
+    || !Number.isFinite(point.y)
+    || !Number.isFinite(tileSize)
+    || tileSize <= 0
+    || !Number.isFinite(profile.closeRangeTiles)
+    || profile.closeRangeTiles < 0
+    || !Number.isFinite(profile.forwardRangeTiles)
+    || profile.forwardRangeTiles < profile.closeRangeTiles
+    || !Number.isFinite(profile.forwardConeRadians)
+    || profile.forwardConeRadians <= 0
+    || profile.forwardConeRadians > 2 * Math.PI
+  ) return false;
+
+  const dx = (point.x - player.position.x) / tileSize;
+  const dy = (point.y - player.position.y) / tileSize;
+  const distance = Math.hypot(dx, dy);
+  if (!Number.isFinite(distance)) return false;
+  if (distance <= profile.closeRangeTiles) return true;
+  if (distance > profile.forwardRangeTiles) return false;
+  const bearing = Math.atan2(dy, dx) - player.facing;
+  const angle = Math.abs(Math.atan2(Math.sin(bearing), Math.cos(bearing)));
+  return angle <= profile.forwardConeRadians / 2;
+}
+
+type PlayerPresentationView = Pick<TideweftView, "terrain" | "player" | "perception">;
+
+function isWithinDisclosedPlayerPresentationRange(
+  view: PlayerPresentationView,
+  point: WorldPoint,
+  profile: Readonly<PlayerPresentationRange>,
+): boolean {
+  return Boolean(view.terrain && view.player && point)
+    && (view.perception === undefined || (view.perception.valid === true
+      && isDirectlyDetailPerceived(view.terrain, point, true)))
+    && isWithinPlayerPresentationRange(view.player, point, view.terrain.tileSize, profile);
+}
+
+/** A visible body may remain outside this optional recognition/inspection tier. */
+export function isWithinPlayerRecognitionRange(
+  view: PlayerPresentationView,
+  point: WorldPoint,
+): boolean {
+  return isWithinDisclosedPlayerPresentationRange(view, point, PLAYER_RECOGNITION_PRESENTATION_RANGE);
+}
+
+/** Visibility of pickup targets, not the physical distance at which pickup succeeds. */
+export function isWithinPlayerPickupRange(
+  view: PlayerPresentationView,
+  point: WorldPoint,
+): boolean {
+  return isWithinDisclosedPlayerPresentationRange(view, point, PLAYER_PICKUP_PRESENTATION_RANGE);
+}
 
 /** Legacy views predate perception and remain fully visible for compatibility. */
 export function currentTerrainVisibility(

@@ -34,6 +34,22 @@ function biomeWater(biome: BiomeId): TerrainTileView {
 }
 
 describe("shared visible-water presentation", () => {
+  it("keeps a visible thin water surface when approaching reveals its true shallow depth", () => {
+    const shallow = waterTile(0.01, {
+      discovered: 0,
+      depthKnown: 0,
+      currentVisibility: 1,
+      currentDetailVisibility: 0,
+    });
+    const options = { transientVisibility: 1, visibilityCap: 1 };
+    expect(visibleWaterPresentation(shallow, options)).toBeDefined();
+    expect(visibleWaterPresentation({ ...shallow, currentDetailVisibility: 1 }, options))
+      .toMatchObject({ depth: 0.01, band: "shallows", depthDisclosed: true });
+    expect(visibleWaterPresentation({ ...shallow, waterDepth: 0 }, options)).toBeUndefined();
+    expect(visibleWaterPresentation(shallow, { visibilityCap: 0 })).toBeUndefined();
+    expect(shallow.discovered).toBe(0);
+  });
+
   it("uses the established Chart palette for shallow, channel, and deep water", () => {
     expect(visibleWaterPresentation(waterTile(0.2))?.baseColor)
       .toBe(WATER_PRESENTATION_PALETTE.shallows);

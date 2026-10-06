@@ -2533,6 +2533,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     const copy = situatedExpressionCaptionCopy(caption);
     const showSpeakerLabel = caption.presentationKind !== "animal-call"
       && caption.presentationKind !== "embodied-signal"
+      && caption.presentationKind !== "indistinct-voice"
       && caption.presentationKind !== "physical";
     refs.expressionCaptionSpeaker.textContent = showSpeakerLabel
       ? `${caption.speakerLabel}:`

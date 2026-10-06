@@ -16,7 +16,6 @@ export type TerrainGeometrySignatures = (
   grid: TerrainGridView,
 ) => ReliefTerrainGeometrySignatures;
 
-const MIN_RENDERED_WATER_DEPTH = 0.002;
 const MIN_RENDERED_WATER_VISIBILITY = 0.08;
 
 /** Missing legacy confidence is visible; malformed or missing tiles are not. */
@@ -75,26 +74,16 @@ export function discoveredReliefSurfaceHeightAt(
   const visibleDepth = visibleWaterDepth(tile) * visibility;
   if (
     visibility <= MIN_RENDERED_WATER_VISIBILITY
-    || visibleDepth <= MIN_RENDERED_WATER_DEPTH
+    || visibleDepth <= 0
   ) {
     return landHeight;
   }
 
-  // Relief draws one flat local water sheet per wet tile. Its level is the
-  // discovery-masked triangulated bed at that tile's center plus local masked
-  // depth. Returning the upper of that sheet and land matches the actual
-  // depth-tested surface at arbitrary points within the tile.
-  const waterCenter = {
-    x: grid.origin.x + (column + 0.5) * grid.tileSize,
-    y: grid.origin.y + (row + 0.5) * grid.tileSize,
-  };
-  const waterHeight = sampleTerrainMeshLandHeightAt(
-    grid,
-    waterCenter,
-    scale,
-    maskedElevation,
-  ) + visibleDepth * scale;
-  return Math.max(landHeight, waterHeight);
+  // The rendered local sheet follows the bed's exact triangle corners plus
+  // the disclosed tile depth. A flat center-height sheet can disappear inside
+  // sloping terrain even though this physical tile is wet. This is a visual
+  // tile surface, not a change to hydrology or a global horizontal water level.
+  return landHeight + visibleDepth * scale;
 }
 
 /**
@@ -129,14 +118,8 @@ export function perceivedReliefSurfaceHeightAt(
   const landHeight = sampleTerrainMeshLandHeightAt(grid, point, scale);
   if (!includeWater) return landHeight;
   const visibleDepth = visibleWaterDepth(tile);
-  if (visibleDepth <= MIN_RENDERED_WATER_DEPTH) return landHeight;
-  const waterCenter = {
-    x: grid.origin.x + (column + 0.5) * grid.tileSize,
-    y: grid.origin.y + (row + 0.5) * grid.tileSize,
-  };
-  const waterHeight = sampleTerrainMeshLandHeightAt(grid, waterCenter, scale)
-    + visibleDepth * scale;
-  return Math.max(landHeight, waterHeight);
+  if (visibleDepth <= 0) return landHeight;
+  return landHeight + visibleDepth * scale;
 }
 
 /** Stable summary of per-tile discovery confidence for the terrain mesh key. */

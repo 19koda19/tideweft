@@ -9,6 +9,7 @@ import {
 } from "./biomePresentation";
 import {
   chartTerrainDecorationHash01,
+  hasChartBotanicalDecoration,
   terrainTileGlobalCoordinate,
 } from "./terrainDecoration";
 import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
@@ -55,6 +56,8 @@ import {
   currentTerrainDetailVisibility,
   currentTerrainVisibility,
   isDirectlyDetailPerceived,
+  isWithinPlayerPickupRange,
+  isWithinPlayerRecognitionRange,
 } from "./perceptionPresentation";
 import {
   commandForWorldTap,
@@ -461,11 +464,7 @@ export function createTideweftRenderer(
     if (!canvasElement) return;
     const labels = view
       ? [...new Set((view.wildlifeCarcasses ?? [])
-          .filter((carcass) => isDirectlyDetailPerceived(
-            view.terrain,
-            carcass.position,
-            view.perception !== undefined,
-          ))
+          .filter((carcass) => isWithinPlayerRecognitionRange(view, carcass.position))
           .map((carcass) => carcass.quickLabel.trim())
           .filter((label) => label.length > 0))]
       : [];
@@ -531,8 +530,8 @@ export function createTideweftRenderer(
   const looseCargoViews = (): readonly LooseCargoView[] => {
     const view = latestView;
     const parcels = safeLooseCargoViews(view?.looseCargo ?? []);
-    if (!view?.perception) return parcels;
-    return parcels.filter((parcel) => isDirectlyDetailPerceived(view.terrain, parcel.position, true));
+    if (!view) return [];
+    return parcels.filter((parcel) => isWithinPlayerPickupRange(view, parcel.position));
   };
 
   const releaseActiveTouchPointerCaptures = (): void => {
@@ -679,7 +678,8 @@ export function createTideweftRenderer(
     );
     const resourceHit = hitTestFieldResource(
       view.fieldResources.filter((node) =>
-        !view.perception || node.currentVisibility === 1
+        (!view.perception || node.currentVisibility === 1)
+        && isWithinPlayerPickupRange(view, node.position)
       ),
       point,
       resourceRadius,
@@ -693,7 +693,7 @@ export function createTideweftRenderer(
 
     const porterRadius = 22 / Math.max(camera.zoom, 0.01);
     for (const porter of view.porters) {
-      if (!isDirectlyDetailPerceived(view.terrain, porter.position, view.perception !== undefined)) continue;
+      if (!isWithinPlayerRecognitionRange(view, porter.position)) continue;
       const distance = distanceSquared(point, porter.position);
       if (distance <= porterRadius * porterRadius && (!nearest || distance < nearest.distance)) {
         nearest = { target: { entity: "porter", id: porter.id }, distance };
@@ -705,7 +705,7 @@ export function createTideweftRenderer(
       22 / Math.max(camera.zoom, 0.01),
     );
     for (const dog of view.dogs ?? []) {
-      if (!isDirectlyDetailPerceived(view.terrain, dog.position, view.perception !== undefined)) continue;
+      if (!isWithinPlayerRecognitionRange(view, dog.position)) continue;
       const distance = distanceSquared(point, dog.position);
       if (distance <= dogRadius * dogRadius && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -721,7 +721,7 @@ export function createTideweftRenderer(
 
     for (const actor of view.wildlife ?? []) {
       if (!isWildlifeVisualSpecies(actor.species)) continue;
-      if (!isDirectlyDetailPerceived(view.terrain, actor.position, view.perception !== undefined)) continue;
+      if (!isWithinPlayerRecognitionRange(view, actor.position)) continue;
       const visual = wildlifeVisualProfile(actor.species);
       const wildlifeRadius = Math.max(
         view.terrain.tileSize
@@ -747,11 +747,7 @@ export function createTideweftRenderer(
       22 / Math.max(camera.zoom, 0.01),
     );
     for (const carcass of view.wildlifeCarcasses ?? []) {
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        carcass.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, carcass.position)) continue;
       const distance = distanceSquared(point, carcass.position);
       if (distance <= carcassRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -767,11 +763,7 @@ export function createTideweftRenderer(
     );
     for (const evidence of view.aggregateWildlifeEvidence ?? []) {
       if (evidence.representation !== "population-evidence") continue;
-      if (!isDirectlyDetailPerceived(
-        view.terrain,
-        evidence.position,
-        view.perception !== undefined,
-      )) continue;
+      if (!isWithinPlayerRecognitionRange(view, evidence.position)) continue;
       const distance = distanceSquared(point, evidence.position);
       if (distance <= evidenceRadius ** 2 && (!nearest || distance < nearest.distance)) {
         nearest = {
@@ -1663,8 +1655,18 @@ export function createTideweftRenderer(
             view.perception !== undefined,
           );
           if (detailVisibility >= 1) {
-            drawTerrainTexture(grid, tile, column, row, x, y, tileSize, waterDepth);
-            drawBiomeAccent(grid, tile, column, row, x, y, tileSize);
+            const botanicalDecoration = hasChartBotanicalDecoration(grid, column, row);
+            const botanicalSurface = tile.kind === "meadow"
+              || tile.kind === "salt-marsh"
+              || tile.kind === "scrub";
+            if (!botanicalSurface || botanicalDecoration) {
+              drawTerrainTexture(grid, tile, column, row, x, y, tileSize, waterDepth);
+            }
+            // One shared presence budget leaves genuinely quiet cells instead
+            // of independently stacking ubiquitous plant and biome glyphs.
+            if (water || visibleBiomePresentation(tile)?.motif === "ripple" || botanicalDecoration) {
+              drawBiomeAccent(grid, tile, column, row, x, y, tileSize);
+            }
           }
 
           const trace = unit(tile.trace);
@@ -2297,6 +2299,7 @@ export function createTideweftRenderer(
     const drawFieldResources = (view: TideweftView, now: number): void => {
       const baseSize = Math.max(view.terrain.tileSize * 0.38, 5.5 / camera.zoom);
       for (const node of view.fieldResources) {
+        if (!isWithinPlayerPickupRange(view, node.position)) continue;
         const direct = !view.perception || node.currentVisibility === 1;
         const projectedScreen = worldToScreen(node.position);
         const hovered = direct && hoverTarget?.entity === "resource" && hoverTarget.id === node.id;
@@ -2365,7 +2368,7 @@ export function createTideweftRenderer(
 
     const drawLooseCargo = (view: TideweftView, now: number): void => {
       const parcels = safeLooseCargoViews(view.looseCargo ?? []).filter((parcel) =>
-        !view.perception || isDirectlyDetailPerceived(view.terrain, parcel.position, true)
+        isWithinPlayerPickupRange(view, parcel.position)
       );
       if (parcels.length === 0) return;
       const coarsePointer = window.matchMedia?.("(pointer: coarse)").matches ?? false;
@@ -3066,10 +3069,12 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, porter.position, true)
         ) continue;
-        const appearance = porterAppearancePresentation(porter);
-        const stateColor = porterStateColor(porter);
-        const hovered = hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
-        const radius = (porter.selected || hovered ? 6.2 : 4.8) / camera.zoom;
+        const recognized = Boolean(latestView && isWithinPlayerRecognitionRange(latestView, porter.position));
+        const disclosedAppearance = porterAppearancePresentation(porter);
+        const appearance = recognized ? disclosedAppearance : { ...disclosedAppearance, color: PALETTE.foam, wetness: 0 };
+        const stateColor = recognized ? porterStateColor(porter) : PALETTE.foam;
+        const hovered = recognized && hoverTarget?.entity === "porter" && hoverTarget.id === porter.id;
+        const radius = (recognized && (porter.selected || hovered) ? 6.2 : 4.8) / camera.zoom;
         const length = radius * appearance.heightScale;
         const breadth = radius * appearance.widthScale;
         p.push();
@@ -3087,10 +3092,12 @@ export function createTideweftRenderer(
         }
         p.fill(appearance.color);
         p.triangle(length * 1.2, 0, -length * 0.75, -breadth * 0.72, -length * 0.75, breadth * 0.72);
-        p.fill(withAlpha(porter.cargoColor ?? stateColor, 220));
+        p.fill(withAlpha(recognized ? porter.cargoColor ?? stateColor : PALETTE.foam, 220));
         p.rectMode(p.CENTER);
         p.rect(-length * 0.9, 0, length * 0.72, breadth * 0.88, radius * 0.12);
         p.pop();
+
+        if (!recognized) continue;
 
         // A real source-owned acoustic callout outranks ordinary state copy
         // from that same person. Other residents keep their lawful labels.
@@ -3142,12 +3149,13 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, dog.position, true)
         ) continue;
-        const highlighted = dog.selected || dog.actorId === hoveredDogId;
+        const recognized = Boolean(latestView && isWithinPlayerRecognitionRange(latestView, dog.position));
+        const highlighted = recognized && (dog.selected || dog.actorId === hoveredDogId);
         const coat = DOG_COAT_COLORS[dog.coat.primary];
         const secondary = dog.coat.secondary === null
           ? coat
           : DOG_COAT_COLORS[dog.coat.secondary];
-        const wetness = unit(dog.wetness / 1_000_000);
+        const wetness = recognized ? unit(dog.wetness / 1_000_000) : 0;
         const coatVolume = dog.coat.length === "short"
           ? 0.94
           : dog.coat.length === "medium"
@@ -3204,7 +3212,7 @@ export function createTideweftRenderer(
           -headRadius * 0.14,
         );
 
-        if (dog.conditionLabels.includes("INJURED") && !resting) {
+        if (recognized && dog.conditionLabels.includes("INJURED") && !resting) {
           p.stroke(withAlpha(PALETTE.coral, 225));
           p.strokeWeight(Math.max(0.65, scale * 0.12));
           p.line(-bodyLength * 0.3, bodyHeight * 0.43, -bodyLength * 0.15, bodyHeight * 0.52);
@@ -4667,9 +4675,10 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, evidence.position, true)
         ) continue;
-        const highlighted = evidence.selected
-          || (hovered?.aggregateId === evidence.aggregateId
-            && hovered.evidenceId === evidence.evidenceId);
+        const highlighted = Boolean(latestView && isWithinPlayerRecognitionRange(latestView, evidence.position))
+          && (evidence.selected
+            || (hovered?.aggregateId === evidence.aggregateId
+              && hovered.evidenceId === evidence.evidenceId));
         const base = (highlighted ? 5.4 : 4.7)
           * clamp(evidence.sizeScale, 0.55, 1.4)
           / camera.zoom;
@@ -4986,8 +4995,9 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, actor.position, true)
         ) continue;
-        const highlighted = Boolean(actor.selected)
-          || (hovered?.species === actor.species && hovered.id === actor.actorId);
+        const highlighted = Boolean(latestView && isWithinPlayerRecognitionRange(latestView, actor.position))
+          && (Boolean(actor.selected)
+            || (hovered?.species === actor.species && hovered.id === actor.actorId));
         const base = (highlighted ? 6 : 5.2) * actor.sizeScale / camera.zoom;
 
         p.push();
@@ -5037,7 +5047,8 @@ export function createTideweftRenderer(
           latestView?.perception
           && !isDirectlyDetailPerceived(latestView.terrain, carcass.position, true)
         ) continue;
-        const hovered = hoverTarget?.entity === "wildlife-carcass"
+        const hovered = Boolean(latestView && isWithinPlayerRecognitionRange(latestView, carcass.position))
+          && hoverTarget?.entity === "wildlife-carcass"
           && hoverTarget.id === carcass.carcassId;
         const base = (hovered ? 5.2 : 4.8)
           * clamp(carcass.sizeScale, 0.7, 2.2)
@@ -5353,6 +5364,7 @@ export function createTideweftRenderer(
           p.textStyle(
             acousticText.acousticKind === "physical"
               || acousticText.acousticKind === "embodied-signal"
+              || acousticText.acousticKind === "indistinct-voice"
               ? p.ITALIC
               : p.BOLD,
           );

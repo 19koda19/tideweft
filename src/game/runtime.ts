@@ -1,4 +1,9 @@
 import type { RendererCommand, TideweftView, WorldPoint } from "../render/types";
+import {
+  isWithinPlayerPresentationRange,
+  isWithinPlayerRecognitionRange,
+  PLAYER_PICKUP_PRESENTATION_RANGE,
+} from "../render/perceptionPresentation";
 import { validatePerceivedEntityCommand } from "../render/worldTap";
 import {
   createWorld,
@@ -403,6 +408,7 @@ import {
   type WayknotPlacementReason,
 } from "./wayknots";
 import {
+  projectActorRecognitionDetails,
   projectGameView,
   projectLegacyPlayerPerception,
   projectPerception,
@@ -11265,7 +11271,7 @@ export async function createTideweftRuntime(
     projectActiveRegionalEcology(),
     initialSituatedExpressions,
   );
-  let renderView = projectRuntimeSettlementFoodStore(
+  let renderView = projectActorRecognitionDetails(projectRuntimeSettlementFoodStore(
     {
       ...projectGameView(worldView, player, {
         paused: true,
@@ -11283,7 +11289,7 @@ export async function createTideweftRuntime(
     settlementEcology,
     worldView,
     perception,
-  );
+  ));
   let uiView = projectUIView(worldView, player, session, {
     economyWorld: economyView,
     fieldResourceCatalog: fieldResourceProjection.catalog,
@@ -11867,7 +11873,7 @@ export async function createTideweftRuntime(
     ) {
       selectedWildlifeEvidenceTarget = null;
     }
-    renderView = projectRuntimeSettlementFoodStore(
+    renderView = projectActorRecognitionDetails(projectRuntimeSettlementFoodStore(
       {
         ...projectGameView(worldView, player, {
           selectedSettlementId: session.selectedSettlementId,
@@ -11898,16 +11904,30 @@ export async function createTideweftRuntime(
       settlementEcology,
       worldView,
       perception,
-    );
+    ));
     // ABOUT is a live sensory affordance, not a durable remote tracker. Once
-    // the selected person leaves direct detail perception, that selection is
+    // the selected person leaves the medium recognition tier, that selection is
     // discarded and cannot silently reappear after a region or camera change.
     if (
       selectedResidentId !== null
-      && !renderView.porters.some((porter) => Number(porter.id) === selectedResidentId)
+      && !renderView.porters.some((porter) => Number(porter.id) === selectedResidentId
+        && isWithinPlayerRecognitionRange(renderView, porter.position))
     ) {
       selectedResidentId = null;
     }
+    if (selectedDogActorId !== null && !renderView.dogs?.some((dog) =>
+      dog.actorId === selectedDogActorId && isWithinPlayerRecognitionRange(renderView, dog.position)
+    )) selectedDogActorId = null;
+    if (selectedWildlifeTarget !== null && !renderView.wildlife?.some((actor) =>
+      actor.actorId === selectedWildlifeTarget?.actorId
+      && actor.species === selectedWildlifeTarget?.species
+      && isWithinPlayerRecognitionRange(renderView, actor.position)
+    )) selectedWildlifeTarget = null;
+    if (selectedWildlifeEvidenceTarget !== null && !renderView.aggregateWildlifeEvidence?.some((evidence) =>
+      evidence.aggregateId === selectedWildlifeEvidenceTarget?.aggregateId
+      && evidence.evidenceId === selectedWildlifeEvidenceTarget?.evidenceId
+      && isWithinPlayerRecognitionRange(renderView, evidence.position)
+    )) selectedWildlifeEvidenceTarget = null;
     const selectedDog = runtimeDogActorById(
       bio0Ecology,
       dogActorRoster,
@@ -12034,7 +12054,8 @@ export async function createTideweftRuntime(
     if (selectedWildlifeTarget !== null && wildlifeSelection === null) {
       selectedWildlifeTarget = null;
     }
-    const wildlifeEvidenceSelection = aggregateEvidenceProjection.selectedAbout;
+    const wildlifeEvidenceSelection = selectedWildlifeEvidenceTarget === null
+      ? null : aggregateEvidenceProjection.selectedAbout;
     const projectedUIView = projectUIView(worldView, player, session, {
         economyWorld: economyView,
         selectedResidentId,
@@ -18857,7 +18878,15 @@ export async function createTideweftRuntime(
       || row >= worldView.terrain.height
     ) return false;
     return perception.detailVisibilityGrades[row * worldView.terrain.width + column]
-      === VISIBILITY_DIRECT;
+      === VISIBILITY_DIRECT && isWithinPlayerPresentationRange(
+        { position: {
+          x: player.x / TILE_UNITS * RENDER_TILE_SIZE,
+          y: player.y / TILE_UNITS * RENDER_TILE_SIZE,
+        }, facing: player.facingMilliRadians / 1_000 },
+        point,
+        RENDER_TILE_SIZE,
+        PLAYER_PICKUP_PRESENTATION_RANGE,
+      );
   }
 
   // Automatic arrival shares the enclosing fail-closed tick's audio queue;

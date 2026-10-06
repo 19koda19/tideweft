@@ -19,6 +19,7 @@ import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import * as playerPresentation from "./playerPresentation";
 import * as reliefCamera from "./reliefCamera";
 import { perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
+import { sampleTerrainMeshLandHeightAt } from "./terrainMesh";
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
 import {
   acousticTextRectsOverlap,
@@ -1971,6 +1972,44 @@ describe("Relief presentation-only pointer and label motion", () => {
 });
 
 describe("Relief water camera invariant", () => {
+  it("keeps direct shallow water triangles above every corner of their sloping bed", () => {
+    const source = warmWaterView("sloping-shallow-water");
+    const waterView: TideweftView = {
+      ...source,
+      terrain: {
+        ...source.terrain,
+        tiles: source.terrain.tiles.map((tile, index) => ({
+          ...tile,
+          elevation: index % 3 === 0 ? 0.05 : 0.85,
+          waterDepth: 0.02,
+        })),
+      },
+    };
+    const harness = renderHarness(waterView);
+    const waterVertices: number[][] = [];
+    (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+      const [fill, ambient, emissive] = p5Harness.materialTrace.slice(-3);
+      if (fill?.args.join(",") === "0,0,0,255"
+        && ambient?.method === "ambientMaterial"
+        && emissive?.method === "emissiveMaterial") waterVertices.push(coordinates);
+    });
+    try {
+      harness.draw();
+      expect(waterVertices).toHaveLength(16 * 6);
+      const scale = waterView.terrain.tileSize * 2.9;
+      for (const [x, y, z] of waterVertices) {
+        const bed = sampleTerrainMeshLandHeightAt(waterView.terrain, { x: x!, y: z! }, scale);
+        // Both triangle meshes share their diagonal: positive clearance at
+        // every vertex proves clearance across the whole submitted wet tile,
+        // not merely that blue vertices were emitted below opaque terrain.
+        expect(-y! - bed).toBeCloseTo(0.02 * scale + 0.45, 8);
+      }
+      expect(waterView.terrain.tiles.every((tile) => tile.waterDepth === 0.02)).toBe(true);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
   it.each([
     ["visible", 1, 16 * 6],
     ["hidden", 0, 0],
@@ -2881,6 +2920,16 @@ describe("Relief situated expression presentation", () => {
       child.dataset.tone === "porter-emotion" && !child.removed)).toBe(false);
     expect(layer?.children.some((child) =>
       child.dataset.tone === "porter" && !child.removed)).toBe(false);
+    current = { ...current, acousticText: [{
+      ...sourceOwnedSpeech, acousticKind: "indistinct-voice", text: "indistinct voice",
+    }] };
+    harness.setView(current);
+    harness.draw();
+    const indistinct = layer?.children.find((child) => !child.removed && !child.hidden
+      && child.textContent === "indistinct voice");
+    expect(indistinct?.dataset).toMatchObject({ acousticKind: "indistinct-voice", tone: "incident" });
+    expect(layer?.children.some((child) => !child.removed && !child.hidden
+      && child.textContent === "RELIEF SOURCE OWNED SPEECH")).toBe(false);
     current = { ...current, acousticText: originalAcousticText };
     harness.setView(current);
 
@@ -2949,6 +2998,110 @@ describe("Relief situated expression presentation", () => {
 });
 
 describe("Relief dog presentation", () => {
+  it.each([
+    ["close behind", -7, 0, true],
+    ["medium forward", 20, 0, true],
+    ["far forward", 40, 0, false],
+    ["medium sideways", 0, 20, false],
+  ] as const)("retains broad-visible bodies but clips fine labels, style and picking %s", (_name, dx, dy, recognized) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const player = { x: 12, y: 12 }, point = { x: 12 + dx * 24, y: 12 + dy * 24 };
+    const base = view("relief-recognition-range", player);
+    const origin = { x: Math.min(0, point.x - 24), y: Math.min(0, point.y - 24) };
+    const columns = Math.max(4, Math.ceil((Math.max(player.x, point.x) - origin.x + 24) / 24));
+    const rows = Math.max(4, Math.ceil((Math.max(player.y, point.y) - origin.y + 24) / 24));
+    // Public renderer fixture, not a world perception receipt: each body is
+    // already broadly DIRECT and fine presentation alone varies by range.
+    const current: TideweftView = { ...base,
+      camera: { center: point, zoom: 1, followPlayer: false,
+        bounds: { minX: origin.x, minY: origin.y, maxX: origin.x + columns * 24, maxY: origin.y + rows * 24 } },
+      perception: { version: 3, signature: "range-body", valid: true, visibleTileCount: columns * rows,
+        directTileCount: columns * rows, peripheralTileCount: 0, detailVisibleTileCount: columns * rows,
+        detailDirectTileCount: columns * rows, detailPeripheralTileCount: 0 },
+      terrain: { ...base.terrain, origin, columns, rows, tiles: Array.from({ length: columns * rows }, () => ({
+        kind: "meadow" as const, elevation: 0.2, discovered: 1, currentVisibility: 1, currentDetailVisibility: 1 as const,
+      })) },
+      porters: [{ actorId: "human:range", id: "porter:range", quickLabel: "Range keeper", position: point,
+        facing: 0, state: "alert", selected: true, emotionMark: ":S",
+        appearance: { heightScale: 1, build: "average", palette: "ember", wetness: 1 } }],
+      dogs: [dogView({ position: point, selected: true })],
+      wildlife: [wildlifeView("deer", { position: point, selected: true })],
+      aggregateWildlifeEvidence: [aggregateWildlifeEvidenceView({ position: point, selected: true })],
+      wildlifeCarcasses: [wildlifeCarcassView({ position: point })],
+    };
+    const before = JSON.stringify(current), harness = renderHarness(current);
+    const ray = vi.spyOn(reliefCamera, "screenToDiscoveredReliefSurface").mockReturnValue(point);
+    try {
+      harness.draw();
+      const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+      expect(translate.mock.calls.filter(([x, _y, z]) => x === point.x && z === point.y).length).toBeGreaterThanOrEqual(5);
+      const layer = harness.mount.children.find(({ className }) => className === "relief-label-layer");
+      const copies = layer?.children.filter(({ removed, hidden }) => !removed && !hidden).map(({ textContent }) => textContent) ?? [];
+      for (const copy of ["Range keeper", ":S", "Unknown dog · soaked", "Deer", "Brown rat signs · rat gnaw marks"]) {
+        expect(copies.includes(copy), copy).toBe(recognized);
+      }
+      expect(p5Harness.materialTrace.some(({ method, args }) => method === "ambientMaterial" && args[0] === "#e58b62")).toBe(recognized);
+      expect(harness.canvas.attributes.has("aria-description")).toBe(recognized);
+      // Only the ray intersection is fixed here; the real selection predicate
+      // and release-frame validator must independently enforce the tier.
+      harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 151 }));
+      harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 151 }));
+      expect(harness.dispatch.mock.calls.some(([command]) => command.type === "select" && command.entity === "porter")).toBe(recognized);
+      if (!recognized) {
+        const call: AcousticTextView = { acousticKind: "animal-call", id: "broad-range-bark",
+          sourceActorId: current.dogs![0]!.actorId, sourceKind: "animal", speakerLabel: "Nearby dog", text: "BARK!",
+          position: point, progress: 0.2, priority: 80, salience: 1, tone: "restrained", variantSeed: 1 };
+        harness.setView({ ...current, acousticText: [call] });
+        harness.draw();
+        expect(layer?.children.some((node) => !node.removed && !node.hidden && node.textContent === "BARK!")).toBe(true);
+      }
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { ray.mockRestore(); harness.renderer.destroy(); }
+  });
+
+  it.each([[7, true], [9, true], [20, false], [40, false]] as const)("clips physical pickup silhouettes and hits at %s tiles without changing reach", (distance, visible) => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const player = { x: 12, y: 12 }, point = { x: 12 + distance * 24, y: 12 };
+    const base = view("relief-pickup-range", player), columns = distance + 3;
+    const parcel: LooseCargoView = { id: "range-parcel", region: { x: 0, y: 0 }, position: point, velocity: { x: 0, y: 0 },
+      contentKind: "raw-material", resourceKind: "cordreed", resourceLabel: "Cordreed", quantity: 1, property: "ordinary",
+      condition: 1, conditionBand: "sound", wetness: 0, contamination: 0, decay: 0, motion: "resting", snaggedBy: null,
+      impactMark: "none", recoverable: true, recovery: "approach" };
+    const resourcePosition = { x: point.x, y: point.y + 24 };
+    const current: TideweftView = { ...base,
+      camera: { center: point, zoom: 1, followPlayer: false, bounds: { minX: 0, minY: 0, maxX: columns * 24, maxY: 96 } },
+      perception: { version: 3, signature: "range-pickup", valid: true, visibleTileCount: columns * 4,
+        directTileCount: columns * 4, peripheralTileCount: 0, detailVisibleTileCount: columns * 4,
+        detailDirectTileCount: columns * 4, detailPeripheralTileCount: 0 },
+      terrain: { ...base.terrain, columns, rows: 4, tiles: Array.from({ length: columns * 4 }, () => ({
+        kind: "meadow" as const, elevation: 0.2, discovered: 1, currentVisibility: 1, currentDetailVisibility: 1 as const,
+      })) }, looseCargo: [parcel],
+      fieldResources: [{ id: "range-cordreed", material: "cordreed", label: "Cordreed", knowledge: "charted",
+        currentVisibility: 1, position: resourcePosition }],
+    };
+    const before = JSON.stringify(current), harness = renderHarness(current);
+    let hitPoint = point;
+    const ray = vi.spyOn(reliefCamera, "screenToDiscoveredReliefSurface").mockImplementation(() => hitPoint);
+    const projection = vi.spyOn(reliefCamera, "projectReliefPoint").mockImplementation((position) => ({
+      x: 160, y: 120 + position.y - point.y, depth: 100, visible: true,
+    }));
+    try {
+      harness.draw();
+      const translate = harness.instance.translate as ReturnType<typeof vi.fn>;
+      expect(translate.mock.calls.some(([x, _y, z]) => x === point.x && z === point.y)).toBe(visible);
+      expect(translate.mock.calls.some(([x, _y, z]) => x === resourcePosition.x && z === resourcePosition.y)).toBe(visible);
+      harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 152 }));
+      harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 152 }));
+      expect(harness.dispatch.mock.calls.some(([command]) => command.type === "parcel-target")).toBe(visible);
+      expect(harness.dispatch.mock.calls.some(([command]) => command.type === "recover-loose-cargo")).toBe(false);
+      harness.dispatch.mockClear(); hitPoint = resourcePosition;
+      harness.canvas.fire("pointerdown", pointer(harness.canvas, { pointerId: 153, clientY: 144 }));
+      harness.canvas.fire("pointerup", pointer(harness.canvas, { pointerId: 153, clientY: 144 }));
+      expect(harness.dispatch.mock.calls.some(([command]) => command.type === "resource-target")).toBe(visible);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { ray.mockRestore(); projection.mockRestore(); harness.renderer.destroy(); }
+  });
+
   it.each([1, 0.5, 0] as const)("grounds uncharted DIRECT biome, body and acoustic anchors without revealing hidden detail (%s)", (visibility) => {
     vi.stubGlobal("performance", { now: () => 0 });
     const base = view("uncharted-relief-source", { x: 48, y: 48 });

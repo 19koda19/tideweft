@@ -618,6 +618,19 @@ hearing, or alter audio timing. Other actors receive only the acoustic fact
 their own perception admitted, so a `thud` behind a wall cannot disclose who
 dropped which object.
 
+Human speech presentation also distinguishes hearing a voice from making out
+its words. Both field callouts and the accessible caption require the matched
+event-time receipt's certainty to reach 55% of that volume's source loudness
+before showing dialogue. With calm, quiet acoustics this permits roughly
+6.3 tiles for normal speech, 19.2 for shouting and 1.6 for murmuring; wind and
+masking affect the existing receipt rather than a new visual-distance rule.
+A weaker lawful human receipt produces only **indistinct voice**, with a
+visible-source anchor or the original anonymous coarse direction. No receipt
+means no cue, and seeing a distant speaker does not bypass comprehension.
+Self-expression, animal calls, physical sounds, committed audio, NPC semantic
+cognition and receipt/save schemas are unchanged. This is optional player
+word disclosure, not a new hearing or factual-learning authority.
+
 The current unpublished candidate also brings the ecology-owned southern-
 leopard-frog rain chorus through this boundary. On each qualifying 24-tick
 cadence, a conserved aggregate whose committed activity is an active
@@ -3220,7 +3233,7 @@ The published `29ea8dc` checkpoint adds a pure `src/sim/biomes.ts` kernel withou
 
 Long-lived baseline climate classifies one of seven stable IDs: tide-channel, brine-flat, reed-marsh, rain-meadow, sun-meadow, wind-ridge, or glimmerfen. A passing clear/mist/rain/storm front changes the current climate without renaming that baseline place. Biome coefficients expose bounded rain-retention, heat-load, salt-stress, and magical-resonance signals.
 
-The immutable game projection derives and caches stable biome profiles from seed plus terrain, applies live weather only to the current climate layer, and attaches biome/climate views to projected tiles. `src/render/biomePresentation.ts` maps each discovered biome to one restrained color triplet and a redundant motif shared by Chart and Relief; fully undiscovered cells return no biome presentation. The local field readout names the derived biome. These remain presentation signals, not resources or saved state: courier exposure, cargo condition, ecology, infrastructure, and settlement rules do not consume them yet.
+The immutable game projection derives and caches stable biome profiles from seed plus terrain, applies live weather only to the current climate layer, and attaches biome/climate views to projected tiles. `src/render/biomePresentation.ts` maps each remembered or currently directly seen biome to one restrained color triplet and a redundant motif shared by Chart and Relief; unseen, unremembered cells return no biome presentation. Chart's cosmetic plant textures and dry biome accents share one stable signed-world quarter-density presence sample, leaving quiet tiles without thinning actual conserved resource plants, water/ripple cues, trace or blocked-ground marks. The local field readout names the derived biome. The original biome/climate slice established presentation signals, not resources or saved state; later causal consumers retain their own domain authorities.
 
 ## Physical cargo environment and continuous custody
 
@@ -3840,9 +3853,9 @@ The composite renderer owns one disposable terrain-perception-memory store share
 
 ### Player visibility envelope
 
-`projectPerception()` uses one player spatial envelope for terrain and visible
-content: a clear-air 52-tile, 160-degree forward cone plus an eight-tile close
-circle. Awake, sufficiently lit bodies, foliage and physical parcels are not
+`projectPerception()` uses one player spatial envelope for terrain, bodies and
+scenery: a clear-air 52-tile, 160-degree forward cone plus an eight-tile close
+circle. Awake, sufficiently lit bodies and aesthetic foliage are not
 removed by a second shorter cone. Close-circle detail is direct even behind
 the player; distant terrain still feathers toward its horizon. The common
 elevation ray blocks ridges and hills; opaque cover additionally blocks detail,
@@ -3852,6 +3865,19 @@ at half physical illumination without changing actual light. Seeing a body
 does not teach its name, inventory, intent or other unwitnessed facts, and
 interaction reach, conservation and materialization budgets do not increase.
 Non-player human and animal contact profiles are unchanged.
+
+Optional fine presentation uses two bounded clips of that same authenticated
+DIRECT field, not additional ray casts or actor sensory authority. NPC/animal
+labels, condition/emotion copy, hover, selection and ABOUT use a medium
+26-tile/130-degree forward cone. Pickup-able parcels and resource targets use
+the old short 10-tile/100-degree forward cone. Both retain the eight-tile
+nearby circle. Broad-only actor bodies remain present without fine copy or
+inspection; stale selections clear on leaving the medium tier. Public pickup
+projection, drawing, release-frame input and live parcel-follow updates share
+the short clip. Culling never deletes stock or custody, and physical pickup,
+gathering and conversation reach remain unchanged. These are presentation
+limits: lawful hearing, source-bound call observation, learned knowledge and
+save receipts continue to use their existing full sensory authority.
 
 Current direct sight also discloses cosmetic biome motifs on an otherwise
 unremembered tile. Both renderers use that present-tense detail receipt, not a
@@ -3864,9 +3890,16 @@ and unseen motifs remain undisclosed.
 
 Relief water already follows broad current terrain sight, not the former
 short detail cone. Missing detail may neutralize unsounded depth, never erase
-an otherwise visible wet surface. Opaque water depth/layering remains its
-existing renderer responsibility; this envelope change does not fix water
-covering submerged actors or items.
+an otherwise visible wet surface. Resolving a thin visible surface's true depth
+does not filter it out. Its local triangles follow the exact bed corners plus
+the disclosed tile depth and the existing small lift; anchors sample the same
+bed-following surface. This presentation approximation prevents a flat
+center-height sheet from sinking into sloping, depth-writing terrain; it does
+not change hydrology or establish a global horizontal water level. Existing
+shallow/channel/deep blue bands remain, with neutral unsounded depth outside
+DIRECT sight. Depth testing, hills and hidden-water masks remain intact. The
+broader actor/item water-layering and coherent water-level work remains future
+work; this repair does not claim that entire presentation problem solved.
 
 Saved in-flight anonymous Voice receptions may validate against the former
 player contact profile through `projectLegacyPlayerPerception()`. This is
