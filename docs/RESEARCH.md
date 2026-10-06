@@ -2062,6 +2062,51 @@ The terminal probe passed and removed its disposable profile. One previously
 authenticated startup CSP eval-probe denial was recorded; this is not
 console-clean, exhaustive conservation, reload, audio/AT or performance proof.
 
+### Interrupted extended ordinary Voice observation — 2026-10-06
+
+Clean `11498d2ed44dfc419be940d121720b6dc6482a61` used the unchanged
+production `index-CdoXx_bE.js` (SHA256
+`22efa0f7fdda413a4dd916064657d1b5aa5e55a95a9ed328582cc56f75df4bb9`)
+in Firefox at 1440×900/DPR1, served as static files under `/tideweft/`.
+The local ordinary-controls probe requested 7,200,000ms, used the public
+`phase ten glass ebb` start, and injected no actors, events, weather, inventory,
+positions or saves. Initial physical pickup/drop/documented E-key recovery
+passed its eight-unit lot, condition and restored-delivery checks. Subsequent
+compass-guided travel, parcel recovery, rest and handoff inputs were ordinary
+controls, not a safe-route oracle or a full transaction-conservation witness.
+
+The run ended **incompletely** after its minute-56 checkpoint: WebDriver BiDi
+reported a closed socket while a command was pending. Retained sampled exposure
+is 3,366,629ms / 16,788 reads, with world tick420→4356. Three closed nominal
+fifteen-minute windows retained177/124/172 first-observed projection IDs; the
+665,647ms partial window retained104. Windows can recount an already-active
+boundary cue, so these are not summed unique emitted events. Their player
+speech counts are76/51/76/46, with5/8/6/2 adjacent single-observation wording
+repeats. Repeated genuine cargo incidents under crude compass steering limit
+annoyance conclusions. Distinct retained player events repeat `Got it back.`
+575ms apart, `We've lost cargo!`1,204ms apart and `Hold fast.`1,853ms apart.
+These are sampled wording gaps, not audio timing or invalid physical actions;
+they warrant a narrow current cargo/traversal cooldown review before annoyance
+acceptance. Snapshot chronicles retain five distinct `Promise kept` receipts;
+seven delivery input attempts alone would not establish seven deliveries.
+At most four projected candidates were sampled—not a
+native four-label geometry or overlap certificate. No animal call was sampled;
+that is not proof that no call occurred.
+
+All window and wording incomplete/overflow flags are false. The separate raw
+trace reached its512-event cap; it is not a complete event history. Sampling
+gaps reach2,860ms. The sole retained console error is the previously identified
+startup CSP eval-probe denial, not a console-clean claim. The owned browser
+exited with SIGTERM during cleanup and its disposable profile was removed;
+that does not establish a browser crash or the cause of the connection loss.
+No terminal screenshot or authoritative save was obtained. This attempt does
+not pass the requested two-hour observation, qualitative audio/accessibility,
+wilderness coverage, performance or directive-closure gates. No game fix,
+dependency, schema or quality reduction follows from the unverified failure.
+Terminal local artifact `native-play-11498d2-7200000-v17.json` has SHA256
+`a1d46bba5419b68add50a413e3a663ca44f3a6d108e3c0ec5f9f8fe13a3e2c6d`;
+probe SHA256 is `ef8d78a858ca20950ee29f7d1be561b004c0d4e4558b97ca8ed55be01455a0c9`.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
