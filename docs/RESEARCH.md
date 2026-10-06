@@ -2484,6 +2484,35 @@ Ordinary-play, sustained stress, hours, hardware, performance and release gates
 remain separate. No application, dependency, schema, production artifact or
 completed directive changed in this evidence/status reconciliation.
 
+### Native public-route qualification — 2026-10-06
+
+One production Firefox157/native-control opportunity on tracked-clean
+`d7073ecfb4f61dd77d3fc6efd422dc7edab36075` follows the selected remembered route
+after real pickup, DROP and E-key recovery. The six-minute argument is an upper
+bound: the journey ends at its first fresh delivery after 72,418ms, ticks
+425→545. Sampled movement is 61,441ms, recovery 10,390ms and stationary exposure
+585ms; 189 reads retain 40.388 tiles of sampled displacement and 41 successive
+waypoint advances, excluding the initial route join. Two native REST actions
+occur; no ADRIFT episode does.
+
+The public loop retains eight Fresh Water through pickup/drop/recovery, then
+the actual Deliver action at 544 produces a fresh eight-unit Latchmere receipt
+at 545, with carried/visible loose custody removed and no pending recovery.
+This is public transaction evidence, not a full aggregate-stock digest or a
+save/reload/relaunch test. The 77,857ms setup-inclusive observer retains 507
+samples, one keeper line and one anonymous physical rustle, no observed animal
+call/player speech, no overflow and a largest sample gap of 924ms. Sparse
+projections do not establish emitted silence, annoyance or complete chronology.
+The actual Chart screenshot is inspected: arrival feedback and public route
+remain legible, unknown ground remains masked; no acoustic cue is active in
+that terminal image. Only the known startup CSP probe denial occurs; the owned
+browser exits normally and its synthetic profile is removed. JSON SHA256:
+`e242781305a6cc9823e62f51b36691baf39e63359600545ee4976d9b21cbfbbf`.
+The unchanged application bundle and existing local driver match their recorded
+fingerprints. This qualifies one current player-accessible loop, not six minutes,
+regional transitions, sustained itinerary availability, hours, dense stress,
+hardware audio/AT/mobile, performance or release. No application change is made.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
