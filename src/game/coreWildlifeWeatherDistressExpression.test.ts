@@ -10,7 +10,10 @@ import { seedFromText } from "../sim/rng";
 import {
   canonicalizeCoreEcologyAggregatePatch,
   createCoreEcologyAggregatePatch,
+  deserializeCoreEcologyAggregatePatch,
   replaceCoreEcologyAggregatePatchActor,
+  serializeCoreEcologyAggregatePatch,
+  setCoreEcologyAggregatePatchMaterializedActors,
   stepCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
@@ -29,6 +32,9 @@ import {
   coreWildlifeWeatherDistressExpressionEventMatchesWorld,
   coreWildlifeWeatherDistressExpressionIntent,
   coreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
+  retainedCoreWildlifeWeatherDistressExpressionEventForTrigger,
+  retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld,
+  retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
   type CoreWildlifeWeatherDistressExpressionInput,
 } from "./coreWildlifeWeatherDistressExpression";
 import {
@@ -36,6 +42,8 @@ import {
   createSituatedExpressionState,
   projectSituatedExpression,
   reduceSituatedExpression,
+  type SituatedExpressionEvent,
+  type SituatedExpressionMemory,
 } from "./situatedExpression";
 import {
   createWorldPosition,
@@ -243,7 +251,184 @@ function eventAtNextRainTick(
   return Object.freeze({ actor, event, world: stepped.patch });
 }
 
+function retainedWeatherFixture() {
+  const fixture = weatherDistressFixture();
+  const intent = coreWildlifeWeatherDistressExpressionIntent(fixture.input);
+  if (intent === null) throw new Error("Cat rain-distress intent was not derived");
+  const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
+  const memory = reduction.state?.recent[0];
+  if (!reduction.accepted || reduction.event === null || reduction.state === null || memory === undefined) {
+    throw new Error("Cat rain-distress expression was not accepted");
+  }
+  const cooledMemory = advanceSituatedExpression(reduction.state, intent.durationSteps)?.recent[0];
+  if (cooledMemory === undefined) throw new Error("Cat rain-distress cooldown was not retained");
+  const world = setCoreEcologyAggregatePatchMaterializedActors(fixture.input.world, {
+    atTick: fixture.input.world.updatedAtTick,
+    actorIds: [],
+  });
+  const coarse = Object.freeze({ ...fixture.input, actor: sourceActor(world), world });
+  return { ...fixture, coarse, expressionEvent: reduction.event, memory, cooledMemory };
+}
+
+function expectRetainedWeatherRejection(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  event: SituatedExpressionEvent,
+  memory: SituatedExpressionMemory,
+): void {
+  expect(retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(input, event.triggerEventId))
+    .toBeNull();
+  expect(retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(input, event)).toBe(false);
+  expect(retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(input, memory)).toBe(false);
+}
+
 describe("core-wildlife weather-distress expression", () => {
+  it("retains the original cat call, wet-track locus and cooldown through same-tick coarse serialization", () => {
+    const { input, coarse, expressionEvent, memory, cooledMemory } = retainedWeatherFixture();
+    const before = structuredClone(coarse);
+    const restoredWorld = deserializeCoreEcologyAggregatePatch(serializeCoreEcologyAggregatePatch(coarse.world));
+    if (restoredWorld === null) throw new Error("Coarse cat fixture failed roundtrip");
+    const restored = { ...coarse, actor: sourceActor(restoredWorld), world: restoredWorld };
+
+    expect(coarse.actor).toEqual(input.actor);
+    expect(coarse.world.updatedAtTick).toBe(input.event.atTick);
+    expect(coarse.world.populations[0]?.members[0]?.materialization).toBe("coarse");
+    expect(expressionEvent.position).toEqual(input.event.position);
+    expect(expressionEvent.position).not.toEqual(coarse.actor.address.position);
+    for (const retainedInput of [input, coarse, restored]) {
+      expect(retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(retainedInput, expressionEvent.triggerEventId))
+        .toEqual(expressionEvent);
+      expect(retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(retainedInput, expressionEvent)).toBe(true);
+      expect(retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(retainedInput, memory)).toBe(true);
+      expect(retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(retainedInput, cooledMemory)).toBe(true);
+    }
+    expect(coreWildlifeWeatherDistressExpressionIntent(coarse)).toBeNull();
+    expect(coreWildlifeWeatherDistressExpressionEventForTrigger(coarse, expressionEvent.triggerEventId)).toBeNull();
+    expect(coreWildlifeWeatherDistressExpressionEventMatchesWorld(coarse, expressionEvent)).toBe(false);
+    expect(coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(coarse, cooledMemory)).toBe(false);
+    expect(coarse).toEqual(before);
+  });
+
+  it("cannot replay an old rain onset after a legal next-tick coarse step", () => {
+    const { coarse, expressionEvent, cooledMemory } = retainedWeatherFixture();
+    const stepped = stepCoreEcologyAggregatePatch(coarse.world, {
+      tick: coarse.event.atTick + 1,
+      actorSteps: [],
+    });
+    if (stepped === null) throw new Error("All-coarse cat fixture did not step");
+    const later = { ...coarse, actor: sourceActor(stepped.patch), world: stepped.patch };
+    expect(stepped.events).toEqual([]);
+    expect(later.actor.updatedAtTick).toBe(coarse.event.atTick + 1);
+    expect(later.actor.memories.some(({ eventId }) => eventId === coarse.event.eventId)).toBe(true);
+    expect(coreWildlifeWeatherDistressExpressionIntent(later)).toBeNull();
+    expectRetainedWeatherRejection(later, expressionEvent, cooledMemory);
+  });
+
+  it("keeps retained weather-call ownership, cause and event shape exact", () => {
+    const { input, initialWorld, coarse, expressionEvent, cooledMemory } = retainedWeatherFixture();
+    const invalidInputs: readonly unknown[] = [
+      null,
+      { ...coarse, debug: true },
+      { ...coarse, actor: null },
+      { ...coarse, world: initialWorld },
+      { ...coarse, actor: weatherDistressFixture("OBS-cat-other-retained-rain").input.actor },
+      nonRainRetreatFixture(),
+      nonCatFixture(),
+      ...[
+        { ...input.event, eventId: `${input.event.eventId}:forged` },
+        { ...input.event, actorId: `${input.event.actorId}:other` },
+        { ...input.event, atTick: input.event.atTick + 1 },
+        { ...input.event, causeReferenceId: "OBS-forged-retained-rain" },
+        { ...input.event, observationId: "OBS-forged-retained-rain" },
+        { ...input.event, position: coarse.actor.address.position },
+        { ...input.event, species: "deer" },
+        { ...input.event, debug: true },
+      ].map((event) => ({ ...coarse, event })),
+    ];
+    for (const invalidInput of invalidInputs) {
+      expectRetainedWeatherRejection(invalidInput as CoreWildlifeWeatherDistressExpressionInput, expressionEvent, cooledMemory);
+    }
+    expect(retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(coarse, `${expressionEvent.triggerEventId}:other`))
+      .toBeNull();
+  });
+
+  it("still requires the unique rain memory, exact wet tracks and threshold-passing rain belief when coarse", () => {
+    const { coarse, expressionEvent, cooledMemory } = retainedWeatherFixture();
+    const causal = coarse.actor.memories.find(({ eventId }) => eventId === coarse.event.eventId);
+    const trace = causal?.environmentalEvidence;
+    if (causal === undefined || trace === undefined) throw new Error("Cat fixture lost wet tracks");
+    const duplicateEventId = `${coarse.actor.identity.stableId}:weather:${coarse.event.atTick}`;
+    const competingMemory: CoreWildlifeMemory = {
+      ...causal,
+      eventId: duplicateEventId,
+      environmentalEvidence: { ...trace, evidenceId: `${duplicateEventId}:wet-tracks` },
+    };
+    const invalidMemoryInputs = [
+      replaceMemories(coarse, []),
+      replaceMemories(coarse, [...coarse.actor.memories, competingMemory]),
+      ...[
+        { ...causal, referenceId: "weather:cold" },
+        { ...causal, observationId: "OBS-forged-retained-weather-memory" },
+        { ...causal, environmentalEvidence: { ...trace, position: translateWorldPosition(trace.position, 1, 0) } },
+        { ...causal, environmentalEvidence: { ...trace, strength: trace.strength - 1 } },
+      ].map((memory) => replaceMemories(coarse, [memory])),
+    ];
+    for (const invalidInput of invalidMemoryInputs) {
+      expectRetainedWeatherRejection(invalidInput, expressionEvent, cooledMemory);
+    }
+    for (const change of [
+      { perceivedClass: "danger-sound" },
+      { firstObservedTick: 0, lastObservedTick: 0 },
+      { area: { center: translateWorldPosition(coarse.event.position, 1, 0), radiusUnits: MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS } },
+      { strongInterrupt: true },
+      { area: { center: coarse.event.position, radiusUnits: MIN_ANONYMOUS_HEARING_UNCERTAINTY_UNITS + 1 } },
+    ]) {
+      const actor = canonicalizeCoreWildlifeActorState({
+        ...coarse.actor,
+        perception: {
+          ...coarse.actor.perception,
+          beliefs: coarse.actor.perception.beliefs.map((belief) => ({ ...belief, ...change })),
+        },
+      });
+      if (actor === null) throw new Error("Retained-rain belief fixture was not canonical");
+      expectRetainedWeatherRejection({
+        ...coarse, actor, world: replaceCoreEcologyAggregatePatchActor(coarse.world, actor),
+      }, expressionEvent, cooledMemory);
+    }
+    const weakActor = canonicalizeCoreWildlifeActorState({
+      ...coarse.actor,
+      perception: {
+        ...coarse.actor.perception,
+        beliefs: coarse.actor.perception.beliefs.map((belief) => ({ ...belief, confidence: 300_000, salience: 300_000 })),
+      },
+      memories: [{ ...causal, environmentalEvidence: { ...trace, strength: 300_000 } }],
+    });
+    if (weakActor === null) throw new Error("Weak retained-rain fixture was not canonical");
+    expect(weakActor.perception.attentionKeys).toEqual(coarse.actor.perception.attentionKeys);
+    expectRetainedWeatherRejection({
+      ...coarse, actor: weakActor, world: replaceCoreEcologyAggregatePatchActor(coarse.world, weakActor),
+    }, expressionEvent, cooledMemory);
+  });
+
+  it("rejects forged retained expression fields and unreachable cooldowns", () => {
+    const { coarse, expressionEvent, cooledMemory } = retainedWeatherFixture();
+    for (const event of [
+      { ...expressionEvent, salience: expressionEvent.salience - 1 },
+      { ...expressionEvent, priority: expressionEvent.priority + 1 },
+      { ...expressionEvent, position: coarse.actor.address.position },
+      { ...expressionEvent, variantSeed: (expressionEvent.variantSeed ^ 1) >>> 0 },
+      { ...expressionEvent, durationSteps: expressionEvent.durationSteps + 1 },
+      { ...expressionEvent, debug: true },
+    ]) expect(retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(coarse, event)).toBe(false);
+    for (const memory of [
+      { ...cooledMemory, sourceActorId: `${cooledMemory.sourceActorId}:other` },
+      { ...cooledMemory, triggerEventId: `${cooledMemory.triggerEventId}:other` },
+      { ...cooledMemory, priority: cooledMemory.priority + 1 },
+      { ...cooledMemory, meaningCooldownRemainingSteps: cooledMemory.meaningCooldownRemainingSteps - 1 },
+      { ...cooledMemory, meaningCooldownRemainingSteps: 0, familyCooldownRemainingSteps: 0 },
+      { ...cooledMemory, debug: true },
+    ]) expect(retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(coarse, memory)).toBe(false);
+  });
+
   it("derives one deterministic restrained cat call from exact committed rain roots", () => {
     const { input, rawActor } = weatherDistressFixture();
     const first = coreWildlifeWeatherDistressExpressionIntent(input);

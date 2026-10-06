@@ -337,7 +337,9 @@ import {
   coreWildlifeWeatherDistressExpressionEventForTrigger,
   coreWildlifeWeatherDistressExpressionEventMatchesWorld,
   coreWildlifeWeatherDistressExpressionIntent,
-  coreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
+  retainedCoreWildlifeWeatherDistressExpressionEventForTrigger,
+  retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld,
+  retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld,
   type CoreWildlifeWeatherDistressExpressionInput,
 } from "./coreWildlifeWeatherDistressExpression";
 import {
@@ -6956,6 +6958,7 @@ function runtimeCoreWildlifeWeatherDistressExpressionAuthority(
     sourceObservationId: string;
     acceptedAtTick: number;
   }>,
+  representation: "fresh" | "retained" = "fresh",
 ): CoreWildlifeWeatherDistressExpressionInput | null {
   const actor = coreEcologyAggregatePatchActor(patch, input.actorId);
   if (
@@ -6989,7 +6992,10 @@ function runtimeCoreWildlifeWeatherDistressExpressionAuthority(
     position,
   });
   const authority = Object.freeze({ actor, event, world: patch });
-  return coreWildlifeWeatherDistressExpressionIntent(authority) === null
+  const valid = representation === "fresh"
+    ? coreWildlifeWeatherDistressExpressionIntent(authority) !== null
+    : retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(authority, input.triggerEventId) !== null;
+  return !valid
     ? null
     : authority;
 }
@@ -7365,6 +7371,23 @@ function runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
       });
 }
 
+/** The same retained rain onset keeps its historical wet-track locus. */
+function runtimeRetainedCoreWildlifeWeatherDistressExpressionAuthority(
+  sources: readonly RegionalEcologyResidentPatch[],
+  admission: RuntimeCoreWildlifeWeatherDistressAdmission,
+): CoreWildlifeWeatherDistressExpressionInput | null {
+  const matching = sources.filter(({ sourceKey }) => sourceKey === admission.sourceOwnerKey);
+  const source = matching[0];
+  return matching.length !== 1 || source === undefined
+    ? null
+    : runtimeCoreWildlifeWeatherDistressExpressionAuthority(source.patch, {
+        actorId: admission.sourceActorId,
+        triggerEventId: admission.triggerEventId,
+        sourceObservationId: admission.sourceObservationId,
+        acceptedAtTick: admission.acceptedAtTick,
+      }, "retained");
+}
+
 /** Original alarm locus/cause survives storage dematerialization, not stale clocks. */
 function runtimeRetainedCoreWildlifeAlarmExpressionAuthority(
   sources: readonly RegionalEcologyResidentPatch[],
@@ -7445,6 +7468,35 @@ function runtimeRegionalWildlifeCallSourceBodyAtLocus(
     && member.actor.address.species === species
     && member.actor.updatedAtTick === admission.acceptedAtTick
     && sameRuntimeWorldPosition(member.actor.address.position, event.position);
+}
+
+/** The cat may have retreated one step after its event-owned wet-track locus. */
+function runtimeRegionalCatCallSourceBodyWithinCommittedStep(
+  projection: RegionalEcologyStateV6ActiveProjection,
+  admission: RuntimeCoreWildlifeWeatherDistressAdmission,
+  event: SituatedExpressionEvent,
+): boolean {
+  if (projection.atTick !== admission.acceptedAtTick) return false;
+  const sources = runtimeRegionalEcologyProjectedSources(projection).filter(
+    ({ sourceKey }) => sourceKey === admission.sourceOwnerKey,
+  );
+  const source = sources[0];
+  if (sources.length !== 1 || source === undefined
+    || source.patch.updatedAtTick !== admission.acceptedAtTick) return false;
+  const members = source.patch.populations.flatMap(({ members }) => members).filter(
+    ({ actor }) => actor.identity.stableId === admission.sourceActorId,
+  );
+  const member = members[0];
+  if (members.length !== 1 || member === undefined
+    || member.materialization !== "materialized"
+    || member.actor.identity.species !== "domestic-cat"
+    || member.actor.address.species !== "domestic-cat"
+    || member.actor.updatedAtTick !== admission.acceptedAtTick) return false;
+  try {
+    const delta = worldPositionDelta(event.position, member.actor.address.position);
+    const maximumStepUnits = coreWildlifeMaximumStepUnits("domestic-cat", "retreat");
+    return delta.x * delta.x + delta.y * delta.y <= maximumStepUnits * maximumStepUnits;
+  } catch { return false; }
 }
 
 /**
@@ -21938,13 +21990,13 @@ function playerPerceptionCarryMatchesPosition(
         );
     }
     if (admission.kind === "core-wildlife-weather-distress") {
-      const authority = runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
-        regionalProjection,
+      const authority = runtimeRetainedCoreWildlifeWeatherDistressExpressionAuthority(
+        retainedEcologySources,
         admission,
       );
       const event = authority === null
         ? null
-        : coreWildlifeWeatherDistressExpressionEventForTrigger(
+        : retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(
             authority,
             admission.triggerEventId,
           );
@@ -21955,6 +22007,7 @@ function playerPerceptionCarryMatchesPosition(
           admission,
           authority,
           economy.completedTick,
+          "retained",
         )
         || !vocalizationSampleMatchesActiveEvent(sample, event)
       ) return false;
@@ -21964,6 +22017,7 @@ function playerPerceptionCarryMatchesPosition(
         window: regionalTravel.window,
         playerTemplate: player,
         authority,
+        sourceBodyWithinCommittedStep: runtimeRegionalCatCallSourceBodyWithinCommittedStep(regionalProjection, admission, event),
         event,
         admission,
       }) !== null;
@@ -22260,8 +22314,8 @@ function situatedExpressionChannelsMatchWorld(
         const admission = admissionFor(triggerEventId);
         return admission === null
           ? null
-          : runtimeRegionalCoreWildlifeWeatherDistressExpressionAuthority(
-              regionalProjection,
+          : runtimeRetainedCoreWildlifeWeatherDistressExpressionAuthority(
+              retainedEcologySources,
               admission,
             );
       };
@@ -22270,7 +22324,7 @@ function situatedExpressionChannelsMatchWorld(
         const authority = authorityFor(memory.triggerEventId);
         return admission !== null
           && authority !== null
-          && coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
+          && retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
             authority,
             memory,
           );
@@ -22281,7 +22335,7 @@ function situatedExpressionChannelsMatchWorld(
         if (
           admission === null
           || authority === null
-          || !coreWildlifeWeatherDistressExpressionEventMatchesWorld(
+          || !retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(
             authority,
             active,
           )
@@ -22294,6 +22348,7 @@ function situatedExpressionChannelsMatchWorld(
             admission,
             authority,
             economy.completedTick,
+            "retained",
           )
           && (active?.eventId !== admission.eventId || (
             active !== null
@@ -22303,6 +22358,7 @@ function situatedExpressionChannelsMatchWorld(
               window: regionalTravel.window,
               playerTemplate: player,
               authority,
+              sourceBodyWithinCommittedStep: runtimeRegionalCatCallSourceBodyWithinCommittedStep(regionalProjection, admission, active),
               event: active,
               admission,
               reception: channel.reception,
@@ -23296,13 +23352,19 @@ function coreWildlifeWeatherDistressAdmissionMatchesWorld(
   admission: CoreWildlifeWeatherDistressAdmission,
   authority: CoreWildlifeWeatherDistressExpressionInput,
   completedTick: number,
+  representation: "fresh" | "retained" = "fresh",
 ): boolean {
-  const event = coreWildlifeWeatherDistressExpressionEventForTrigger(
+  const deriveEvent = representation === "fresh"
+    ? coreWildlifeWeatherDistressExpressionEventForTrigger
+    : retainedCoreWildlifeWeatherDistressExpressionEventForTrigger;
+  const event = deriveEvent(
     authority,
     admission.triggerEventId,
   );
   return event !== null
-    && coreWildlifeWeatherDistressExpressionEventMatchesWorld(authority, event)
+    && (representation === "fresh"
+      ? coreWildlifeWeatherDistressExpressionEventMatchesWorld(authority, event)
+      : retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(authority, event))
     && admission.sourceActorId === authority.actor.identity.stableId
     && admission.sourceActorId === authority.event.actorId
     && admission.triggerEventId === authority.event.eventId
@@ -23321,6 +23383,7 @@ interface CoreWildlifeWeatherDistressReceptionAuthorityInput {
   readonly window: RegionalPlayerTravelState["window"];
   readonly playerTemplate: PlayerState;
   readonly authority: CoreWildlifeWeatherDistressExpressionInput;
+  readonly sourceBodyWithinCommittedStep: boolean;
   readonly event: SituatedExpressionEvent;
   readonly admission: CoreWildlifeWeatherDistressAdmission;
   readonly reception: SituatedExpressionReception | null;
@@ -23344,6 +23407,7 @@ function coreWildlifeWeatherDistressReceptionAtEventTime(
     window,
     playerTemplate,
     authority,
+    sourceBodyWithinCommittedStep,
     event,
     admission,
   } = input;
@@ -23403,19 +23467,7 @@ function coreWildlifeWeatherDistressReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
-  let sourceWithinCommittedStep = false;
-  try {
-    const sourceDelta = worldPositionDelta(
-      event.position,
-      authority.actor.address.position,
-    );
-    const maximumStepUnits = coreWildlifeMaximumStepUnits("domestic-cat", "retreat");
-    sourceWithinCommittedStep = sourceDelta.x * sourceDelta.x + sourceDelta.y * sourceDelta.y
-      <= maximumStepUnits * maximumStepUnits;
-  } catch {
-    sourceWithinCommittedStep = false;
-  }
-  const directlyVisible = sourceWithinCommittedStep
+  const directlyVisible = sourceBodyWithinCommittedStep
     && isWildlifeWorldPositionDirectlyObserved(event.position, {
       window: {
         origin: window.origin,

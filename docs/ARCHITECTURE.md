@@ -409,9 +409,19 @@ unique materialized source, matching owner/species/T and exact event locus,
 may combine with optical sight to identify the call. Missing, coarse or moved
 bodies cannot supply identity or an anchor. The original saved receipt must
 match that independent proof; it is never silently upgraded or downgraded.
-Domestic-cat pending cold-rebase restore and fox source departure into sparse
-custody remain separate unproven obligations; this does not certify general
-off-frame retention, ordinary travel or positive hearing of a distant edge call.
+Domestic-cat admitted pending saves also authenticate the exact same-T rain
+onset from bounded durable custody, retaining the unique anonymous rain belief,
+retreat cause/expiry, weather memory, wet-track locus/strength and cooldown.
+Fresh cat admission remains materialized-only. Visible-source replay separately
+requires the ACTIVE materialized cat within its existing maximum retreat step
+of the historical wet-track locus; stored sound custody is not body proof and
+exact body/locus equality would incorrectly reject its real same-T movement.
+A controlled dry-ground west-window call keeps its original sample and current
+roots through reload and consumes once without audio replay or inferred terrain
+support. Cat caption-refused rebase retention and either source's departure into
+sparse custody remain unproven. These distant edge witnesses do not certify
+positive hearing, an originally visible call later losing detail, ordinary
+travel or general off-frame retention.
 
 Existing player traversal, parcel-recovery and dry-exhaustion reactions also
 derive surface support for independent human hearing. Each exact admitted

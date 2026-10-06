@@ -229,6 +229,8 @@ import {
   REGIONAL_TRAVEL_COLUMNS,
   REGIONAL_TRAVEL_ROWS,
   REGIONAL_TRAVEL_SAFE_MIN_X,
+  REGIONAL_TRAVEL_SAFE_MIN_Y,
+  REGIONAL_TRAVEL_SAFE_MAX_Y,
   REGIONAL_TRAVEL_SHIFT_TILES,
   type RegionalTerrainWindow,
 } from "./regionalTravel";
@@ -4245,6 +4247,132 @@ describe("runtime core-ecology vertical slice", () => {
     expect(legacyCatAnnouncement).toBe(false);
     ordinary.runtime.destroy();
   }, 120_000);
+
+  it("restores one real admitted cat rain call after a signed-window rebase without replay", async () => {
+    const projectionModule = await import("./regionalEcologyStateV6");
+    // The runtime memo retains its projector at construction, so observe the
+    // actual projected body before creating this controlled existing actor.
+    const projectionSpy = vi.spyOn(projectionModule, "projectRegionalEcologyStateV6ActiveState");
+    const runtimeModule = await import("./runtime");
+    const humanModule = await import("./humanPerception");
+    const fixture = await createCatWeatherRuntime("rain-distress", 1, false, {
+      initialWestRebaseBoundary: true,
+      createRuntime: runtimeModule.createTideweftRuntime,
+    });
+    let runtime = fixture.runtime;
+    const sources = (projection: RegionalEcologyStateV6ActiveProjection) => [
+      ...projection.base.base.base.base.base.residents,
+      ...projection.base.base.base.base.alpineResidents,
+      ...projection.base.base.base.polarShoreResidents,
+      ...projection.base.base.coldShoreResidents,
+      ...projection.base.polarConsumerResidents,
+      ...projection.breadthResidents,
+    ];
+    try {
+      await runtime.save();
+      const before = requiredEnvelope(fixture.repository);
+      const world = deserializeWorld(before.world);
+      const travel = restorePlayerRegionalTravel(world.meta.rootSeed, before.player, before.regionalTravel);
+      if (travel === null) throw new Error("Cat rebase fixture lost its actual initial frame");
+      const initialProjection = projectionModule.projectRegionalEcologyStateV6ActiveState(requiredRegionalEcologyV6(before), {
+        origin: travel.window.origin, terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS },
+      });
+      if (initialProjection === null) throw new Error("Cat rebase fixture lost its actual initial projection");
+      const initialOwners = sources(initialProjection).filter(({ patch }) => patch.populations.some(({ members }) => (
+        members.some(({ actor }) => actor.identity.stableId === fixture.catActorId)
+      )));
+      expect(initialOwners).toHaveLength(1);
+      const sourceOwnerKey = initialOwners[0]!.sourceKey;
+      const sourceMembers = initialOwners[0]!.patch.populations.flatMap(({ members }) => members)
+        .filter(({ actor }) => actor.identity.stableId === fixture.catActorId);
+      expect(sourceMembers).toHaveLength(1);
+      expect(sourceMembers[0]!.materialization).toBe("materialized");
+      const initialSpatial = createRegionalWorldView(createWorldView(world), travel.window, {
+        discovered: before.player.discovered, depthSoundings: before.player.depthSoundings,
+      });
+      const initialCatPosition = sourceMembers[0]!.actor.address.position;
+      const catWindowY = initialCatPosition.region.y * WORLD_HEIGHT
+        + Math.floor(initialCatPosition.localY / WORLD_POSITION_UNITS_PER_TILE) - travel.window.origin.y;
+      const sourceTile = initialSpatial.terrain.tiles[
+        catWindowY * REGIONAL_TRAVEL_COLUMNS + 105
+      ];
+      expect(sourceTile).toBeDefined();
+      expect(sourceTile!.terrain).not.toBe("deep-water");
+      expect(sourceTile!.waterDepth).toBeLessThanOrEqual(ADRIFT_STAND_DEPTH);
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const pending = requiredEnvelope(fixture.repository);
+      const tick = deserializeWorld(pending.world).meta.completedTick;
+      const admission = pending.perceptionCarry.situatedExpressionAdmissions.records.find((record) => (
+        record.kind === "core-wildlife-weather-distress" && record.sourceActorId === fixture.catActorId
+      ));
+      if (admission?.kind !== "core-wildlife-weather-distress") throw new Error("Real edge cat never earned rain-call admission");
+      expect(admission).toMatchObject({ sourceOwnerKey, acceptedAtTick: tick, admittedAtPlayerStepPhase: 0 });
+      const cat = requiredCoreActor(requiredRegionalCoreOwner(pending, fixture.catActorId), fixture.catActorId);
+      const memory = cat.memories.find(({ eventId }) => eventId === admission.triggerEventId);
+      expect(memory).toMatchObject({ kind: "weather", referenceId: "weather:rain", observationId: admission.sourceObservationId, atTick: tick });
+      expect(cat.intent).toMatchObject({ kind: "retreat", enteredAtTick: tick, focusObservationId: admission.sourceObservationId });
+      const sample = pending.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
+      if (sample === undefined) throw new Error("Actual edge cat admission lost its original sound");
+      expect(sample.position).toEqual(memory?.environmentalEvidence?.position);
+      const originBefore = travel.window.origin;
+      const originAfter = { x: originBefore.x - REGIONAL_TRAVEL_SHIFT_TILES, y: originBefore.y };
+      projectionSpy.mockClear();
+      runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+      let movementSteps = 0;
+      while (movementSteps < 9 && runtime.getRenderView().terrain.worldTileOrigin?.x === originBefore.x) {
+        advancePlayerSteps(runtime, 1);
+        movementSteps += 1;
+      }
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      expect(runtime.getRenderView().terrain.worldTileOrigin).toEqual(originAfter);
+      expect(movementSteps).toBeGreaterThan(0);
+      expect(movementSteps).toBeLessThan(10);
+      const actualProjection = projectionSpy.mock.calls.flatMap(([, window], index) => {
+        const result = projectionSpy.mock.results[index];
+        return window.origin.x === originAfter.x && window.origin.y === originAfter.y
+          && result?.type === "return" && result.value !== null ? [result.value] : [];
+      }).at(-1);
+      if (actualProjection === undefined) throw new Error("Real movement never projected the rebased cat");
+      expect(actualProjection.atTick).toBe(tick);
+      const actualOwners = sources(actualProjection).filter(({ sourceKey }) => sourceKey === sourceOwnerKey);
+      expect(actualOwners).toHaveLength(1);
+      const actualMembers = actualOwners[0]!.patch.populations.flatMap(({ members }) => members)
+        .filter(({ actor }) => actor.identity.stableId === fixture.catActorId);
+      expect(actualMembers).toHaveLength(1);
+      expect(actualMembers[0]!.materialization).toBe("coarse");
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      await runtime.save();
+      const rebased = requiredEnvelope(fixture.repository);
+      expect(rebased.perceptionCarry.playerStepsSinceWorldTick).toBe(movementSteps);
+      expect(rebased.perceptionCarry.actorVocalizationSamples).toContainEqual(sample);
+      const record = fixture.repository.snapshot();
+      runtime.destroy(); scheduledFrame = undefined; soundscapePlay.mockClear();
+      const repository = new MemoryRepository(record);
+      runtime = await runtimeModule.createTideweftRuntime(repository);
+      expect(repository.snapshot()).toEqual(record);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(runtime.getUIView().title.hasSave).toBe(true);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await runtime.save();
+      const restored = requiredEnvelope(repository);
+      expect(restored.perceptionCarry).toEqual(rebased.perceptionCarry);
+      expect(restored.world).toBe(rebased.world);
+      expect(restored.regionalEcology).toBe(rebased.regionalEcology);
+      const perceptionSpy = vi.spyOn(humanModule, "collectExistingHumanObservations");
+      advancePlayerSteps(runtime, 10 - movementSteps);
+      expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+      const frames = perceptionSpy.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id));
+      expect(frames).toHaveLength(1);
+      expect(frames[0]![0].targetTick).toBe(tick + 1);
+      expect(frames[0]![0].supplementalSoundSamples?.filter(({ id }) => id === sample.id)).toEqual([sample]);
+      expect(frames[0]![0].surfaceSoundSampleIds).not.toContain(sample.id);
+      advancePlayerSteps(runtime, 10);
+      expect(perceptionSpy.mock.calls.filter(([input]) => input.supplementalSoundSamples?.some(({ id }) => id === sample.id))).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "cat-call")).toEqual([]);
+    } finally { runtime.destroy(); projectionSpy.mockRestore(); }
+  }, 90_000);
 
   it("admits one source-bound deer snort through shared audio/caption authority and reloads without replay", async () => {
     const { runtime, repository, alarmActorId } = await createAlarmRuntime(-8);
@@ -9060,14 +9188,19 @@ async function createCatWeatherRuntime(
   mode: "rain-distress" | "non-rain-control",
   catOffsetTiles: 1 | 2 = 1,
   stageNearbyHuman: false | 500 | 2_000 = false,
+  options: Readonly<{
+    initialWestRebaseBoundary?: boolean;
+    createRuntime?: typeof createTideweftRuntime;
+  }> = {},
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   catActorId: string;
   listenerActorId: string | null;
 }>> {
+  const createRuntime = options.createRuntime ?? createTideweftRuntime;
   const repository = new MemoryRepository();
-  const initial = await createTideweftRuntime(repository);
+  const initial = await createRuntime(repository);
   initial.dispatchUI({
     type: "new-world",
     seed: "settlement shadows",
@@ -9096,11 +9229,42 @@ async function createCatWeatherRuntime(
   world.weather.nextChangeTick = world.meta.completedTick + 100_000;
   const player = structuredClone(envelope.player);
   player.facingMilliRadians = 0;
+  if (options.initialWestRebaseBoundary) {
+    player.x = REGIONAL_TRAVEL_SAFE_MIN_X * WORLD_POSITION_UNITS_PER_TILE + 1;
+    player.previousX = player.x;
+    player.velocityX = 0;
+    player.velocityY = 0;
+    const index = Math.floor(player.y / WORLD_POSITION_UNITS_PER_TILE)
+      * REGIONAL_TRAVEL_COLUMNS + REGIONAL_TRAVEL_SAFE_MIN_X;
+    player.currentTrace = [index];
+    player.surveyTrace = [index];
+  }
   const regional = restorePlayerRegionalTravel(world.meta.rootSeed, player, envelope.regionalTravel);
   if (regional === null) throw new Error("Cat weather fixture could not restore its frame");
   const playerPosition = playerWorldPositionInRegionalWindow(regional.window, player);
   if (playerPosition === null) throw new Error("Cat weather fixture could not locate its player");
   let catPosition = translateWorldPosition(playerPosition, catOffsetTiles * WORLD_POSITION_UNITS_PER_TILE, 0);
+  if (options.initialWestRebaseBoundary) {
+    const spatial = createRegionalWorldView(createWorldView(world), regional.window, {
+      discovered: player.discovered, depthSoundings: player.depthSoundings,
+    });
+    const playerRow = Math.floor(player.y / WORLD_POSITION_UNITS_PER_TILE);
+    const dry = (index: number): boolean => {
+      const tile = spatial.terrain.tiles[index];
+      return tile !== undefined && tile.terrain !== "deep-water" && tile.waterDepth <= ADRIFT_STAND_DEPTH;
+    };
+    // Select actual generated standable ground in one bounded edge band, not
+    // an artificial dry cell or forced accessible action on flooded terrain.
+    const candidates = Array.from({ length: REGIONAL_TRAVEL_SAFE_MAX_Y - REGIONAL_TRAVEL_SAFE_MIN_Y + 1 }, (_, offset) => (
+      (REGIONAL_TRAVEL_SAFE_MIN_Y + offset) * REGIONAL_TRAVEL_COLUMNS + 105
+    )).filter((index) => dry(index)
+      && [index - 1, index + 1, index - REGIONAL_TRAVEL_COLUMNS, index + REGIONAL_TRAVEL_COLUMNS].some(dry))
+      .sort((left, right) => Math.abs(Math.floor(left / REGIONAL_TRAVEL_COLUMNS) - playerRow)
+        - Math.abs(Math.floor(right / REGIONAL_TRAVEL_COLUMNS) - playerRow) || left - right);
+    const catIndex = candidates[0];
+    if (catIndex === undefined) throw new Error("Cat rebase fixture has no real standable edge cell");
+    catPosition = worldPositionAtWindowTile(regional.window, catIndex);
+  }
   let catHeading = 0;
   let listenerActorId: string | null = null;
   if (stageNearbyHuman) {
@@ -9184,14 +9348,15 @@ async function createCatWeatherRuntime(
   let displacedCatOrdinal = 0;
   for (const actor of coreActors(patch)) {
     if (
-      actor.identity.species !== "domestic-cat"
+      (!options.initialWestRebaseBoundary && actor.identity.species !== "domestic-cat")
       || actor.identity.stableId === sourceCatId
     ) continue;
     patch = replaceCoreEcologyAggregatePatchActor(patch, repositionCoreWildlifeActor(actor, {
       atTick: patch.updatedAtTick,
       position: translateWorldPosition(
         playerPosition,
-        (100 + displacedCatOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
+        (options.initialWestRebaseBoundary ? -1 : 1)
+          * (100 + displacedCatOrdinal * 2) * WORLD_POSITION_UNITS_PER_TILE,
         20 * WORLD_POSITION_UNITS_PER_TILE,
       ),
       heading: actor.address.heading,
@@ -9202,6 +9367,13 @@ async function createCatWeatherRuntime(
   let prepared = resealedCurrentEnvelopeWithCorePatch(envelope, patch, {
     world: serializeWorld(world),
     player,
+    ...(options.initialWestRebaseBoundary ? {
+      perceptionCarry: {
+        ...envelope.perceptionCarry,
+        intervalStartPosition: playerPosition,
+        intervalStartFacingMilliRadians: player.facingMilliRadians,
+      },
+    } : {}),
   });
   for (const source of [
     requiredRegionalEcology(envelope).settlementHome,
@@ -9230,7 +9402,7 @@ async function createCatWeatherRuntime(
   }
   await repository.save(recordWithEnvelope(record, prepared));
   scheduledFrame = undefined;
-  const runtime = await createTideweftRuntime(repository);
+  const runtime = await createRuntime(repository);
   if (runtime.getUIView().saveWarning !== undefined) {
     throw new Error(`Cat weather fixture rejected: ${stableStringify(
       runtime.getUIView().saveWarning,

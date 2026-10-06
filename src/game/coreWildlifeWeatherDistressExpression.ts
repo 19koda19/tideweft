@@ -59,7 +59,12 @@ interface CoreWildlifeWeatherDistressEvidence {
 export function coreWildlifeWeatherDistressExpressionIntent(
   inputValue: CoreWildlifeWeatherDistressExpressionInput,
 ): SituatedExpressionIntent | null {
-  const evidence = coreWildlifeWeatherDistressEvidence(inputValue);
+  return weatherDistressIntentFromEvidence(coreWildlifeWeatherDistressEvidence(inputValue, "fresh"));
+}
+
+function weatherDistressIntentFromEvidence(
+  evidence: CoreWildlifeWeatherDistressEvidence | null,
+): SituatedExpressionIntent | null {
   if (evidence === null) return null;
   const { actor, belief, event } = evidence;
   const triggerEventId = event.eventId;
@@ -99,10 +104,35 @@ export function coreWildlifeWeatherDistressExpressionEventMatchesWorld(
   input: CoreWildlifeWeatherDistressExpressionInput,
   expression: SituatedExpressionEvent,
 ): boolean {
+  return weatherDistressExpressionEventMatchesWorld(input, expression, "fresh");
+}
+
+/** Retain only the already committed same-T rain call across body-detail loss. */
+export function retainedCoreWildlifeWeatherDistressExpressionEventForTrigger(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  triggerEventId: string,
+): SituatedExpressionEvent | null {
+  return deriveCoreWildlifeWeatherDistressExpression(input, triggerEventId, "retained")?.event ?? null;
+}
+
+/** Stored sound custody preserves its exact wet-track locus, not a visible body. */
+export function retainedCoreWildlifeWeatherDistressExpressionEventMatchesWorld(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  expression: SituatedExpressionEvent,
+): boolean {
+  return weatherDistressExpressionEventMatchesWorld(input, expression, "retained");
+}
+
+function weatherDistressExpressionEventMatchesWorld(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  expression: SituatedExpressionEvent,
+  representation: "fresh" | "retained",
+): boolean {
   if (projectSituatedExpression(expression) === null) return false;
   const derived = deriveCoreWildlifeWeatherDistressExpression(
     input,
     expression.triggerEventId,
+    representation,
   );
   return derived !== null
     && stableStringify(immutableExpressionFields(expression))
@@ -113,6 +143,22 @@ export function coreWildlifeWeatherDistressExpressionEventMatchesWorld(
 export function coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
   input: CoreWildlifeWeatherDistressExpressionInput,
   memory: SituatedExpressionMemory,
+): boolean {
+  return weatherDistressExpressionMemoryMatchesWorld(input, memory, "fresh");
+}
+
+/** Authenticate the reachable cooldown of this same retained rain onset. */
+export function retainedCoreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  memory: SituatedExpressionMemory,
+): boolean {
+  return weatherDistressExpressionMemoryMatchesWorld(input, memory, "retained");
+}
+
+function weatherDistressExpressionMemoryMatchesWorld(
+  input: CoreWildlifeWeatherDistressExpressionInput,
+  memory: SituatedExpressionMemory,
+  representation: "fresh" | "retained",
 ): boolean {
   const canonicalState = canonicalizeSituatedExpressionState({
     version: SITUATED_EXPRESSION_VERSION,
@@ -125,6 +171,7 @@ export function coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
   const derived = deriveCoreWildlifeWeatherDistressExpression(
     input,
     canonicalMemory.triggerEventId,
+    representation,
   );
   if (derived === null) return false;
   if (
@@ -151,11 +198,12 @@ export function coreWildlifeWeatherDistressExpressionMemoryMatchesWorld(
 function deriveCoreWildlifeWeatherDistressExpression(
   input: CoreWildlifeWeatherDistressExpressionInput,
   triggerEventId: string,
+  representation: "fresh" | "retained" = "fresh",
 ): Readonly<{
   event: SituatedExpressionEvent;
   memory: SituatedExpressionMemory;
 }> | null {
-  const intent = coreWildlifeWeatherDistressExpressionIntent(input);
+  const intent = weatherDistressIntentFromEvidence(coreWildlifeWeatherDistressEvidence(input, representation));
   if (intent === null || intent.triggerEventId !== triggerEventId) return null;
   const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
   const memory = reduction.state?.recent[0];
@@ -165,6 +213,7 @@ function deriveCoreWildlifeWeatherDistressExpression(
 
 function coreWildlifeWeatherDistressEvidence(
   inputValue: CoreWildlifeWeatherDistressExpressionInput,
+  representation: "fresh" | "retained",
 ): CoreWildlifeWeatherDistressEvidence | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["actor", "event", "world"])) return null;
@@ -184,7 +233,7 @@ function coreWildlifeWeatherDistressEvidence(
   if (
     ownedMembers.length !== 1
     || owned === undefined
-    || owned.materialization !== "materialized"
+    || (representation === "fresh" && owned.materialization !== "materialized")
     || stableStringify(owned.actor) !== stableStringify(actor)
   ) return null;
 
