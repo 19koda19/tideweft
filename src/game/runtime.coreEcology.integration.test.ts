@@ -4,6 +4,7 @@ import {
   layoutAcousticTextCallouts,
 } from "../render/playerPresentation";
 import { acousticTextRectsOverlap } from "../render/acousticTextLayout";
+import { isWithinPlayerRecognitionRange } from "../render/perceptionPresentation";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import {
@@ -3661,8 +3662,12 @@ describe("runtime core-ecology vertical slice", () => {
     });
 
     const view = runtime.getRenderView();
-    const evidence = view.aggregateWildlifeEvidence?.find(({ species }) => (
-      species === "brown-rat"
+    // Broad direct sight now retains distant physical signs without granting
+    // their finer inspection target. Select a genuine currently recognized
+    // sign rather than assuming the first broad-visible sign is inspectable.
+    const evidence = view.aggregateWildlifeEvidence?.find((candidate) => (
+      candidate.species === "brown-rat"
+      && isWithinPlayerRecognitionRange(view, candidate.position)
     ));
     if (evidence === undefined || evidence.representation !== "population-evidence") {
       throw new Error("Settlement-shadows fixture has no selectable rat evidence");
@@ -3676,6 +3681,26 @@ describe("runtime core-ecology vertical slice", () => {
     expect(view.wildlife?.some(({ actorId, species }) => (
       species === ("brown-rat" as never) || actorId.startsWith("RAT-")
     ))).toBe(false);
+
+    const broadOnlyEvidence = view.aggregateWildlifeEvidence?.find((candidate) => (
+      candidate.species === "brown-rat"
+      && !isWithinPlayerRecognitionRange(view, candidate.position)
+    ));
+    if (broadOnlyEvidence === undefined) {
+      throw new Error("Settlement-shadows fixture lost its broad-visible non-recognized sign");
+    }
+    runtime.dispatchRenderer({
+      type: "select",
+      entity: "aggregate-wildlife-evidence",
+      species: "brown-rat",
+      aggregateId: broadOnlyEvidence.aggregateId,
+      evidenceId: broadOnlyEvidence.evidenceId,
+      point: broadOnlyEvidence.position,
+    });
+    expect(runtime.getUIView().selectedWildlifeEvidence).toBeUndefined();
+    expect(runtime.getRenderView().aggregateWildlifeEvidence?.find(({ evidenceId }) => (
+      evidenceId === broadOnlyEvidence.evidenceId
+    ))).toMatchObject({ selected: false });
 
     runtime.dispatchRenderer({
       type: "select",
@@ -5945,17 +5970,30 @@ describe("runtime core-ecology vertical slice", () => {
         // This real scene also produces an actual human warning. Its greater
         // priority wins the shared caption slot with or without optional alarm
         // text; never suppress that warning or inflate the alarm to force a win.
+        // The enlarged current DIRECT envelope genuinely sees this warning's
+        // source. Unlike the separate anonymous deer receipt, it is now an
+        // intelligible visible human warning, without a directional substitute.
         expect(caption).toMatchObject({
-          speakerLabel: "Someone", text: "Heads up!", presentationKind: "speech",
-          directionLabel: "east", assertive: true,
+          speakerLabel: "Unknown porter", text: "Heads up!", presentationKind: "speech",
+          assertive: true,
         });
+        expect(caption).not.toHaveProperty("directionLabel");
         expect(caption?.id).not.toBe(presentation.event.eventId);
         await runtime.save();
         const completed = requiredEnvelope(repository);
         expect(deserializeWorld(completed.world).meta.completedTick).toBe(targetTick);
-        const warning = completed.perceptionCarry.situatedExpressionChannels.channels
-          .find(({ state }) => state.active?.eventId === caption?.id)?.state.active;
+        const warningChannel = completed.perceptionCarry.situatedExpressionChannels.channels
+          .find(({ state }) => state.active?.eventId === caption?.id);
+        const warning = warningChannel?.state.active;
         expect(warning?.meaning).toBe("human-danger-warning");
+        expect(warning?.volume).toBe("shout");
+        expect(warningChannel?.reception).toMatchObject({
+          kind: "heard-visible",
+          directVisualReceipt: true,
+          eventId: warning?.eventId,
+          sourceActorId: warning?.sourceActorId,
+        });
+        expect(warningChannel?.reception?.certainty).toBeGreaterThanOrEqual(Math.ceil(950_000 * 55 / 100));
         expect(warning?.priority).toBeGreaterThan(presentation.event.priority);
         const source = requiredCoreActor(requiredRegionalCoreOwner(completed, alarmActorId), alarmActorId);
         expect(source.memories).toContainEqual(expect.objectContaining({

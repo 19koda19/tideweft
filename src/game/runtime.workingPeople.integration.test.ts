@@ -28,6 +28,7 @@ import type {
 } from "./situatedExpressionAdmissionLedger";
 import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
+import { projectSituatedExpression } from "./situatedExpression";
 import { workingPeopleExpressionEventMatchesWorld } from "./workingPeopleExpression";
 import { REGION_WIDTH_UNITS, type WorldPosition } from "./worldPosition";
 
@@ -381,7 +382,7 @@ function weatherHoldFixture(seed: string): WeatherHoldFixture {
 }
 
 describe("runtime Working People heavy-porter expression", () => {
-  it("voices one committed storm hold, persists its event locus, and never replays audio", async () => {
+  it("voices one committed storm hold with masked words, persists its event locus, and never replays audio", async () => {
     const fixture = weatherHoldFixture("runtime resident weather hold voice");
     const repository = new MemoryRepository(fixture.record);
     const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
@@ -390,20 +391,25 @@ describe("runtime Working People heavy-porter expression", () => {
 
     advancePlayerSteps(runtime, 10);
     const weatherHoldExpression = (runtime.getRenderView().expressions ?? [])
-      .find(({ sourceActorId, text }) => (
-        sourceActorId === fixture.actorId && text === "We'll hold here."
-      ));
+      .find(({ sourceActorId }) => sourceActorId === fixture.actorId);
     expect(weatherHoldExpression).toMatchObject({
       sourceKind: "human",
       speakerLabel: "Unknown porter",
+      acousticKind: "indistinct-voice",
+      text: "indistinct voice",
       tone: "restrained",
     });
+    // The severe storm admits the actual voice, not intelligible dialogue.
+    // Seeing its source does not bypass the event-time hearing certainty.
     expect(runtime.getUIView().expressionCaption).toMatchObject({
       id: weatherHoldExpression?.id,
-      text: "We'll hold here.",
-      speakerLabel: "Unknown porter",
+      text: "indistinct voice",
+      speakerLabel: "Voice",
+      presentationKind: "indistinct-voice",
       tone: "restrained",
     });
+    expect(JSON.stringify(runtime.getUIView().expressionCaption)).not.toContain("We'll hold here.");
+    expect(JSON.stringify(runtime.getUIView().expressionCaption)).not.toContain(fixture.hiddenName);
     expect(steadyCueCount()).toBe(1);
     await runtime.save();
     const committed = decodeCurrent(repository);
@@ -418,8 +424,17 @@ describe("runtime Working People heavy-porter expression", () => {
       sourceActorId: fixture.actorId,
       meaning: "resident-weather-hold",
       tone: "restrained",
+      volume: "spoken",
       audioAcknowledged: true,
     });
+    expect(residentChannel?.reception).toMatchObject({
+      kind: "heard-visible",
+      sourceActorId: fixture.actorId,
+      eventId: residentChannel?.state.active?.eventId,
+      directVisualReceipt: true,
+    });
+    expect(residentChannel?.reception?.certainty).toBeGreaterThan(0);
+    expect(residentChannel?.reception?.certainty).toBeLessThan(Math.ceil(620_000 * 55 / 100));
     const admission = committed.perceptionCarry.situatedExpressionAdmissions.records.find(
       (candidate): candidate is ResidentWeatherHoldExpressionAdmissionRecord => (
         candidate.kind === "resident-weather-hold"
@@ -432,8 +447,10 @@ describe("runtime Working People heavy-porter expression", () => {
     ) {
       throw new Error("saved weather hold lost its shared Living Voice trajectory");
     }
+    expect(projectSituatedExpression(residentChannel.state.active)?.text).toBe("We'll hold here.");
     expect(admission).toMatchObject({
       sourceActorId: fixture.actorId,
+      hearingCertainty: residentChannel.reception?.certainty,
       contractId: fixture.contractId,
       shelteredAtTick: committedWorld.meta.completedTick,
       eventRouteId: shelterEvents[0]?.data.eventRouteId,

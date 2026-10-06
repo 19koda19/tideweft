@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { deserializeWorld } from "../sim/public";
+import { deserializeWorld, serializeWorld } from "../sim/public";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
@@ -176,12 +176,51 @@ describe("runtime performance telemetry", () => {
         expect(Object.hasOwn(envelope, "playerEffortRecency")).toBe(false);
         expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
         // These stationary inputs create no effort, footing or learned-call history.
-        // Preserve the exact 6215116, 30-step oracle for every older root after
-        // removing only the later combined recency root and additive player call
-        // knowledge, restoring the outer version, and recomputing its seal.
+        // Preserve the original 6215116 physical-state oracle. A matched 30-step
+        // old/current source comparison proved exactly two new player-sight
+        // consequences: estuary's witnessed stock message and density's observed
+        // event bit. Assert those outputs before reversing only that known delta;
+        // all other roots remain covered by the unchanged historical hashes.
         const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
         const { animalCallKnowledge: _callKnowledge, ...v47Player } = player;
         v47Base.player = v47Player;
+        if (seed === "runtime baseline estuary") {
+          const session = envelope.session as Record<string, unknown>;
+          expect(session.announcement).toEqual({
+            id: 2,
+            message: "Domestic chicken eats one produce unit from the open store. The physical stock is reduced.",
+            assertive: false,
+          });
+          expect(session.nextAnnouncementId).toBe(3);
+          v47Base.session = {
+            ...session,
+            announcement: {
+              id: 1,
+              message: "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.",
+              assertive: false,
+            },
+            nextAnnouncementId: 2,
+          };
+        } else {
+          const observedWorld = deserializeWorld(envelope.world as string);
+          const newlyObserved = observedWorld.events.find(({ sequence }) => sequence === 7);
+          expect(newlyObserved).toEqual({
+            data: {
+              destinationSettlementId: 6,
+              originSettlementId: 3,
+              playerObserved: true,
+              quantity: 14,
+              resource: "reed",
+            },
+            sequence: 7,
+            subjectId: 132,
+            tick: 420,
+            type: "contract-offered",
+          });
+          if (newlyObserved === undefined) throw new Error("Density fixture lost its newly witnessed event");
+          delete newlyObserved.data.playerObserved;
+          v47Base.world = serializeWorld(observedWorld);
+        }
         v47Base.version = 47;
         const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });
         const v47Digest = createHash("sha256").update(v47Json).digest("hex");

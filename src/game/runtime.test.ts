@@ -28,6 +28,7 @@ import {
 } from "../sim/public";
 import { tideAtTick } from "../sim/terrain";
 import { hashCanonical, stableStringify } from "../sim/util";
+import { isWithinPlayerRecognitionRange } from "../render/perceptionPresentation";
 import {
   createRegionCoord,
   regionKey,
@@ -1717,15 +1718,34 @@ describe("perpetual new worlds", () => {
       posture: "journey",
       sessionShape: "wander",
     });
-    const porter = runtime.getRenderView().porters[0];
-    if (porter === undefined) throw new Error("v40 semantic-fence fixture needs a resident");
+    // A broad visible body is not necessarily inspectable or close enough to
+    // greet. Commit this fixture's introduction through a real nearby source.
+    const currentView = runtime.getRenderView();
+    const porter = currentView.porters.find(({ position }) => (
+      isWithinPlayerRecognitionRange(currentView, position)
+      && Math.hypot(position.x - currentView.player.position.x, position.y - currentView.player.position.y)
+        <= currentView.terrain.tileSize * RESIDENT_CONVERSATION_RANGE_TILES
+    ));
+    if (porter === undefined) throw new Error("v40 semantic-fence fixture needs a greetable resident");
     runtime.dispatchRenderer({
       type: "select",
       entity: "porter",
       id: porter.id,
       point: porter.position,
     });
+    expect(runtime.getUIView().selectedResident).toMatchObject({
+      id: porter.id,
+      knowledgeLabel: "Unfamiliar",
+      actionLabel: "GREET",
+      actionDisabled: false,
+    });
     advancePlayerSteps(runtime, 10);
+    expect(runtime.getUIView().selectedResident).toMatchObject({
+      id: porter.id,
+      knowledgeLabel: "Recognized",
+      actionLabel: "GREET",
+      actionDisabled: false,
+    });
     runtime.dispatchUI({ type: "resident", action: "greet", residentId: porter.id });
     advancePlayerSteps(runtime, 10);
     await runtime.save();

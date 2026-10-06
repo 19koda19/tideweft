@@ -58,6 +58,52 @@ Static `/tideweft/` smoke passed on the after artifact. These finite render
 checks do not certify long play, GPU throughput, future water layering or a
 public release; ordinary gameplay/packaged validation is separately recorded.
 
+## Visibility and voice-clarity regression reconciliation — 2026-10-06
+
+The complete suite on frozen `93cc63b` finished with 357/364 files and
+4,115/4,128 tests passing; thirteen assertions failed, not timeouts. The failures
+used obsolete short-cone, rear-circle, selectable-silhouette or fully
+intelligible-storm assumptions after the intentional player visibility and
+speech-clarity changes. Corrected fixtures use the current shared recognition
+gate and real enabled interaction, retain broad-only selection refusal, and
+distinguish committed spoken words/audio from an indistinct public caption.
+Actual visible/intelligible warning receipts stay visible; genuine hidden calls
+stay anonymous. An awake daylight chicken witness now has one modest physical
+intervening crest, not a forged visibility mask. Full darkness removed its
+actual alarm cause and a maximal ridge masked its quiet call; both unsuitable
+fixture attempts were discarded. Conservation, hearing, exact saved meaning,
+late rollback, optional-caption refusal and nonreplaying restore checks remain.
+
+The two historical equal-work hash failures received a full state comparison,
+not replacement hashes. Disposable source witnesses at `d3647fa` (before sight
+changes) and `93cc63b` each accepted exactly 30 fixed steps / three world
+advances for the estuary and density seeds, using the same dependencies and
+synthetic clock. Estuary changed only the newly witnessed stock-consumption
+announcement's id/message and next id. Density changed only event sequence 7's
+`playerObserved` bit. Their required seals changed accordingly; every other
+root and field was exact. These changes follow runtime's witnessed-consumption
+and event-locus observation owners, not altered production, ecology or custody.
+Reversing only those asserted observation outputs reproduces both original
+`6215116` v47 digests. Maintained tests keep those hashes, current50 integrity,
+empty additive knowledge/recency assertions and exact telemetry-disabled
+current-save equality. Focused equal-work cases pass; chicken controls pass
+11 tests. Four synthetic saves and diagnostic source witnesses remain ignored
+under `artifacts/validation/voice-current49/save-characterization-93cc63b/`;
+the temporary old worktree and untracked test sources were removed afterward.
+
+The seven affected files finish with 235 passing tests and two timeouts, not a
+clean domain pass. System power records show clamshell/maintenance sleep during
+both timed-out unchanged generation cases, including a 971-second sleep inside
+the egret witness. Both pass unchanged in a serial focused recheck (39.70 seconds
+of tests / 41.66 seconds total), with original timeouts intact. This is scoped
+recheck evidence, not a replacement cumulative certificate. Typecheck and the
+maintained critical smoke suite (six files / 105 tests) pass.
+
+This reconciliation changes tests and evidence, not runtime, schema, dependencies
+or the packaged water repair. The old failed cumulative result is not a current
+passing certificate. Broader validation and directive closure remain separate;
+none of this establishes hours of play, dense acoustic stress or a release.
+
 ## What makes play rewarding and restorative
 
 ### Psychological needs beat a pile of prizes

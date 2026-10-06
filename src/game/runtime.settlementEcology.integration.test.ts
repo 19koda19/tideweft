@@ -2396,7 +2396,32 @@ async function createChickenAlarmRuntime(
     position: dogPosition, heading: guardian.address.heading, atTick: world.meta.completedTick,
   }));
   if (movedRoster === null) throw new Error("Chicken fixture guardian replacement rejected");
+  if (observer === "unseen") {
+    // A physical intervening crest, not rear heading, hides this nearby body.
+    // The chicken and its actual guardian stay together on their original
+    // traversable footing; only the observer's line of sight crosses the crest.
+    const crest = translateWorldPosition(position, -1_000, 0);
+    const crestIndex = Math.floor(crest.localY / WORLD_POSITION_UNITS_PER_TILE) * WORLD_WIDTH
+      + Math.floor(crest.localX / WORLD_POSITION_UNITS_PER_TILE);
+    if (crest.region.x !== 0 || crest.region.y !== 0 || world.terrain.tiles[crestIndex] === undefined) {
+      throw new Error("Chicken fixture crest left the actual compatibility terrain");
+    }
+    const sourceTile = view.terrain.tiles[Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * WORLD_WIDTH + Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE)];
+    const observerTile = view.terrain.tiles[Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * WORLD_WIDTH + Math.floor((position.localX - 2_000) / WORLD_POSITION_UNITS_PER_TILE)];
+    if (sourceTile === undefined || observerTile === undefined) throw new Error("Chicken fixture lacks crest endpoints");
+    // Just above the optical eye ray; a maximal ridge would also silence this
+    // quiet call rather than providing a genuinely hidden-but-heard source.
+    world.terrain.tiles[crestIndex]!.elevation = Math.min(FIXED_POINT,
+      Math.max(sourceTile.elevation, observerTile.elevation) + 140_000);
+    expect(world.terrain.tiles.filter((tile, index) => (
+      tile.elevation !== view.terrain.tiles[index]?.elevation
+    )).map(({ index }) => index)).toEqual([crestIndex]);
+    assertWorldInvariants(world);
+  }
   const staged = withCurrentEnvelopeFields(withCurrentSettlementHomeCore(record, core), {
+    world: serializeWorld(world),
     dogActorRoster: serializeDogActorRoster(movedRoster),
     bio0Ecology: serializeBio0Ecology({
       ...bio0, dog: repositionDogActor(bio0.dog, {
@@ -2404,8 +2429,10 @@ async function createChickenAlarmRuntime(
       }),
     }),
   });
-  const observerPosition = observer === "unseen" ? translateWorldPosition(position, -3_000, 0)
+  const observerPosition = observer === "unseen" ? translateWorldPosition(position, -2_000, 0)
     : observer === "unheard" ? translateWorldPosition(position, -7_000, 0) : position;
+  // The unseen positive retains daylight and an awake courier. Genuine
+  // intervening terrain, not the old short rear cone, hides the sound source.
   const lookAt = observer === "unseen" || observer === "unheard"
     ? translateWorldPosition(observerPosition, -1_000, 0) : dogPosition;
   const repository = new MemoryRepository(withPlayerWitnessingWorldPosition(
@@ -2413,6 +2440,20 @@ async function createChickenAlarmRuntime(
   ));
   const runtime = await runtimeFactory(repository);
   expect(runtime.getUIView().saveWarning).toBeUndefined();
+  if (observer === "unseen") {
+    const projected = runtime.getRenderView();
+    const origin = projected.terrain.worldTileOrigin;
+    if (origin === undefined) throw new Error("Chicken fixture omitted its actual signed render frame");
+    const column = position.region.x * WORLD_WIDTH
+      + Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE) - origin.x;
+    const row = position.region.y * WORLD_HEIGHT
+      + Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE) - origin.y;
+    expect(projected.perception?.valid).toBe(true);
+    expect(projected.worldTime?.phase).toBe("day");
+    expect(runtime.getUIView().controls?.recoveryActive).toBe(false);
+    expect(projected.terrain.tiles[row * projected.terrain.columns + column]?.currentDetailVisibility).toBe(0);
+    expect(projected.wildlife?.some(({ actorId }) => custody.memberActorIds.includes(actorId))).toBe(false);
+  }
   return { runtime, repository, memberActorIds: custody.memberActorIds, guardianActorId: guardian.identity.stableId };
 }
 
@@ -9669,10 +9710,14 @@ describe("runtime settlement ecology integration", () => {
     );
     secured.destroy();
 
+    const awayFromStore = worldPositionDelta(sourceStore.identity.position, hiddenObserverPosition);
     const hiddenRepository = new MemoryRepository(withPlayerWitnessingWorldPosition(
       stagedRecord,
       hiddenObserverPosition,
-      sourceStore.identity.position,
+      // Outside close awareness and facing away from the physical store;
+      // a distant visible silhouette is no longer a valid hidden control.
+      translateWorldPosition(hiddenObserverPosition,
+        awayFromStore.x, awayFromStore.y),
     ));
     const hidden = await createTideweftRuntime(hiddenRepository);
     runtimeEcologyHarness.disableDomesticFoodInvestigation = true;

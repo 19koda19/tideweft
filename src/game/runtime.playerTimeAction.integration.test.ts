@@ -14,6 +14,7 @@ import {
   serializeWorld,
 } from "../sim/public";
 import type { TideweftUIView } from "../ui/types";
+import { isWithinPlayerRecognitionRange } from "../render/perceptionPresentation";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer, type PlayerState } from "./player";
 import * as playerTimeAction from "./playerTimeAction";
@@ -535,8 +536,13 @@ describe("runtime player REST/SLEEP authority", () => {
       player.stamina = 800_000;
     });
     const runtime = await createTideweftRuntime(new MemoryRepository(tiredRecord));
-    const porter = runtime.getRenderView().porters[0];
-    if (!porter) throw new Error("recovery receipt fixture has no directly visible porter");
+    // Only a currently recognizable source can create the real observation
+    // command; broad distant silhouettes do not supply a queued interaction.
+    const current = runtime.getRenderView();
+    const porter = current.porters.find(({ position }) => (
+      isWithinPlayerRecognitionRange(current, position)
+    ));
+    if (!porter) throw new Error("recovery receipt fixture has no recognizable porter");
 
     runtime.dispatchRenderer({
       type: "select",

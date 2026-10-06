@@ -7,6 +7,11 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
 import type { TideweftView } from "../render/types";
 import { commandForWorldTap, usesCoarseWorldPointer } from "../render/worldTap";
 import {
+  isDirectlyDetailPerceived,
+  isWithinPlayerRecognitionRange,
+  PLAYER_RECOGNITION_PRESENTATION_RANGE,
+} from "../render/perceptionPresentation";
+import {
   createCoreEcologyAggregatePatch,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
@@ -19,7 +24,11 @@ import {
   createCoreWildlifeActorState,
   type CoreWildlifeActorState,
 } from "./coreWildlifeActor";
-import { evaluatePerception, type PerceptionCell } from "./perception";
+import {
+  DEFAULT_PERCEPTION_RANGES,
+  evaluatePerception,
+  type PerceptionCell,
+} from "./perception";
 import {
   projectWildlifePresentation,
   type WildlifeDirectObservation,
@@ -46,6 +55,8 @@ const REGION = createRegionCoord(3, -7);
 const OBSERVATION_COLUMNS = 100;
 const OBSERVATION_ROWS = 9;
 const OBSERVER_ROW = 4;
+const RECOGNIZABLE_TARGET_COLUMN = 14;
+const BROAD_ONLY_TARGET_COLUMN = 30;
 
 describe("Rain Chorus mobile parity", () => {
   // These are the renderer-neutral data and coarse-pointer contracts consumed
@@ -98,8 +109,14 @@ describe("Rain Chorus mobile parity", () => {
     expect(about?.observed).toContainEqual({ label: "Species", value: speciesLabel });
     expect(JSON.stringify(about)).not.toMatch(/hunger|populationSize|focusObservationId/iu);
 
+    const mobileView = mobileTapView([mobile], [], observation);
+    expect(Math.hypot(
+      mobile.position.x - mobileView.player.position.x,
+      mobile.position.y - mobileView.player.position.y,
+    ) / MOBILE_TILE_SIZE).toBeGreaterThan(PLAYER_RECOGNITION_PRESENTATION_RANGE.closeRangeTiles);
+    expect(isWithinPlayerRecognitionRange(mobileView, mobile.position)).toBe(true);
     const coarseCommand = commandForWorldTap(
-      mobileTapView([mobile], []),
+      mobileView,
       { entity: "living-actor", species, id: actor.identity.stableId },
       { x: mobile.position.x + 1, y: mobile.position.y + 1 },
       true,
@@ -111,6 +128,24 @@ describe("Rain Chorus mobile parity", () => {
       id: actor.identity.stableId,
       point: mobile.position,
     });
+
+    const farObservation = directObservation(
+      actor.address.position,
+      undefined,
+      BROAD_ONLY_TARGET_COLUMN,
+    );
+    const farBody = presentation(actor, farObservation, MOBILE_TILE_SIZE);
+    const farView = mobileTapView([farBody], [], farObservation);
+    expect(farView.wildlife).toContain(farBody);
+    expect(isDirectlyDetailPerceived(farView.terrain, farBody.position, true)).toBe(true);
+    expect(isWithinPlayerRecognitionRange(farView, farBody.position)).toBe(false);
+    const farTap = { x: farBody.position.x + 1, y: farBody.position.y + 1 };
+    expect(commandForWorldTap(
+      farView,
+      { entity: "living-actor", species, id: actor.identity.stableId },
+      farTap,
+      true,
+    )).toEqual({ type: "move-target", point: farTap, additive: false });
   });
 
   it("keeps frog population evidence touch-selectable without inventing a frog actor", () => {
@@ -176,8 +211,10 @@ describe("Rain Chorus mobile parity", () => {
     expect(JSON.stringify({ mobileSign, about }))
       .not.toMatch(/actorId|populationSize|activitySignal|rainIntensity/iu);
 
+    const mobileView = mobileTapView([], mobile.renderEvidence, observation);
+    expect(isWithinPlayerRecognitionRange(mobileView, mobileSign.position)).toBe(true);
     expect(commandForWorldTap(
-      mobileTapView([], mobile.renderEvidence),
+      mobileView,
       { entity: "aggregate-wildlife-evidence", ...selectedTarget },
       { x: mobileSign.position.x + 1, y: mobileSign.position.y + 1 },
       true,
@@ -187,6 +224,31 @@ describe("Rain Chorus mobile parity", () => {
       ...selectedTarget,
       point: mobileSign.position,
     });
+
+    const farObservation = observationAt(evidence.position, BROAD_ONLY_TARGET_COLUMN);
+    const farProjection = projectCoreEcologyAggregateEvidence({
+      patch,
+      window: farObservation.window,
+      perception: farObservation.perception,
+      tileSize: MOBILE_TILE_SIZE,
+    });
+    const farSign = farProjection?.renderEvidence.find(({ evidenceId }) => (
+      evidenceId === evidence.evidenceId
+    ));
+    if (farProjection === null || farSign === undefined) {
+      throw new Error("Broad-only frog evidence must remain physically projected");
+    }
+    const farView = mobileTapView([], farProjection.renderEvidence, farObservation);
+    expect(farView.wildlife).toEqual([]);
+    expect(isDirectlyDetailPerceived(farView.terrain, farSign.position, true)).toBe(true);
+    expect(isWithinPlayerRecognitionRange(farView, farSign.position)).toBe(false);
+    const farTap = { x: farSign.position.x + 1, y: farSign.position.y + 1 };
+    expect(commandForWorldTap(
+      farView,
+      { entity: "aggregate-wildlife-evidence", ...selectedTarget },
+      farTap,
+      true,
+    )).toEqual({ type: "move-target", point: farTap, additive: false });
   });
 });
 
@@ -219,8 +281,9 @@ function presentation(
 function directObservation(
   position: WorldPosition,
   visibleAggregateCount?: number,
+  targetColumn = RECOGNIZABLE_TARGET_COLUMN,
 ): WildlifeDirectObservation {
-  const observation = observationAt(position);
+  const observation = observationAt(position, targetColumn);
   return Object.freeze({
     ...observation,
     ...(visibleAggregateCount === undefined ? {} : { visibleAggregateCount }),
@@ -231,7 +294,7 @@ function evidenceObservation(position: WorldPosition): WildlifePopulationEvidenc
   return observationAt(position);
 }
 
-function observationAt(position: WorldPosition) {
+function observationAt(position: WorldPosition, targetColumn = RECOGNIZABLE_TARGET_COLUMN) {
   const globalTileX = position.region.x * WORLD_WIDTH
     + Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE);
   const globalTileY = position.region.y * WORLD_HEIGHT
@@ -244,7 +307,7 @@ function observationAt(position: WorldPosition) {
   );
   return Object.freeze({
     window: Object.freeze({
-      origin: Object.freeze({ x: globalTileX - 4, y: globalTileY - OBSERVER_ROW }),
+      origin: Object.freeze({ x: globalTileX - targetColumn, y: globalTileY - OBSERVER_ROW }),
       terrain: Object.freeze({ width, height }),
     }),
     perception: evaluatePerception({
@@ -254,16 +317,11 @@ function observationAt(position: WorldPosition) {
       playerTileIndex: OBSERVER_ROW * width,
       facingRadians: 0,
       weatherVisibility: 1,
-      rangeOverrides: {
-        closePeripheralRange: 2,
-        directSightRange: 96,
-        forwardConeRadians: Math.PI / 2,
-      },
-      detailRangeOverrides: {
-        closePeripheralRange: 2,
-        directSightRange: 96,
-        forwardConeRadians: Math.PI / 2,
-      },
+      // Match current player body sight, then let the shared presentation
+      // helper enforce the smaller optional recognition/inspection tier.
+      rangeOverrides: DEFAULT_PERCEPTION_RANGES,
+      detailRangeOverrides: DEFAULT_PERCEPTION_RANGES,
+      closeDetailIsDirect: true,
     }),
   });
 }
@@ -327,21 +385,30 @@ function individualInputs(
 function mobileTapView(
   wildlife: readonly WildlifePresentation[],
   aggregateWildlifeEvidence: readonly WildlifePopulationEvidencePresentation[],
+  observation: WildlifePopulationEvidenceObservation,
 ): TideweftView {
-  const columns = OBSERVATION_COLUMNS;
-  const rows = OBSERVATION_ROWS;
+  const columns = observation.window.terrain.width;
+  const rows = observation.window.terrain.height;
+  const { perception } = observation;
   return {
     terrain: {
       columns,
       rows,
       tileSize: MOBILE_TILE_SIZE,
       origin: { x: 0, y: 0 },
-      tiles: Array.from({ length: columns * rows }, () => ({
-        currentVisibility: 1,
-        currentDetailVisibility: 1,
+      tiles: Array.from({ length: columns * rows }, (_, index) => ({
+        currentVisibility: (perception.visibilityGrades[index] ?? 0) / 2,
+        currentDetailVisibility: (perception.detailVisibilityGrades[index] ?? 0) / 2,
       })),
     },
-    perception: { valid: true },
+    player: {
+      position: {
+        x: (perception.playerTileIndex % columns + 0.5) * MOBILE_TILE_SIZE,
+        y: (Math.floor(perception.playerTileIndex / columns) + 0.5) * MOBILE_TILE_SIZE,
+      },
+      facing: 0,
+    },
+    perception: { valid: perception.valid },
     dogs: [],
     wildlife,
     aggregateWildlifeEvidence,
