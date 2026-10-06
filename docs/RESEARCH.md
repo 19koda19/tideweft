@@ -2417,7 +2417,33 @@ and no preferred caption winner is assumed. This is same-save coexistence
 evidence, not native overlap, broad chatter or sixteen-channel saturation.
 No application, fixture, schema, production artifact or old test was changed.
 
-### Current cumulative checkpoint — 2026-10-06
+#### Running keeper/flock presentation — 2026-10-06
+
+One controlled production Firefox157/Relief witness on clean `513d21d` uses
+the same quiet current-schema initial state as the coexistence test. After
+disclosed renderer warm-up, the ordinary scheduler runs continuously. Only
+after both real chicken calls and the public keeper action appear does native
+E secure the store. Three current vocal candidates yield a readable keeper
+line and one flock glyph, with no measured label/feedback overlap or clipping
+in that window. The actual screenshot is inspected; its before/after brackets
+retain all three public event IDs. Identical flock glyph tuples remain
+ambiguous and do not identify an individual chicken.
+
+The 8,205ms observation advances 420→428 with 43 retained states and no overflow.
+Original cues expire during continued play. The physical `whump` reading lease
+legitimately remains instead of a forced keeper caption; one real combined
+interaction/keeper announcement is observed. The ordinary current save retains
+the secured store, unchanged eight-unit stock, learned chicken family at 421
+and two anonymous keeper-hearing receipts at 422. Two later expiry-boundary
+DOM/current-tuple gaps remain reported; this is not exhaustive all-frame
+identity certification. Cleanup completes normally, with only known startup
+CSP probe denials. JSON SHA256:
+`be8e2a03a53ae6f8c8c35d5e6fd0938b8bb3ac1b3e89756c05f6703be0c40859`.
+This is a finite controlled three-source scene, not broad chatter, saturation,
+hours, hardware audio/AT/mobile, performance, or release acceptance. No
+application, schema, sound lifetime, dependency or production artifact changed.
+
+### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
 (tree `616e84f1c0e0d6efda3fde90f59bbea9f6b40dab`) remained immutable during
