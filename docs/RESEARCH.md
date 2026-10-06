@@ -1967,6 +1967,34 @@ No schema, save reader, dependency, version or gameplay scope changed.
 
 ### Learned animal-call recognition — 2026-10-06
 
+Native follow-up on clean `ba6deb0` uses the same current production bundle
+`index-CdoXx_bE.js`, with an exported pre-call current50/carry14 rainy-cat
+fixture from the existing ecology integration owner. Its temporary read-only
+export hook was removed and the original test bytes restored. Initial knowledge
+and pending vocal events are empty: the starting actor/environment fixture is
+synthetic, not the call, learning or caption.
+
+Firefox157 passed desktop Chart1280×720 and narrow Relief390×844 functional
+checks. Actual fixed-step rain retreat at tick421 presents plain `cat call`,
+without brackets or an extra speaker label, in both native text and ARIA copy.
+Screenshots were inspected; both captions have positive in-viewport bounds and
+no overflow. Each actual live region delivers exactly one `cat call`.
+At tick427 current saves retain learned cat and chicken families from tick421;
+the fixture also lawfully caused a chicken alarm, so it is not cat-exclusive.
+Reload accepts the save and preserves the exact knowledge; the next real
+interval reaches428 without replaying the consumed caption or announcement.
+
+The local probe reuses existing BiDi/static-Pages serving and disposable
+profiles. Both final children exit normally and remove those profiles. Three
+retained known CSP eval-probe denials occur per child across its three documents;
+this is not an unrestricted console-clean certificate or a security-policy
+change. Earlier children verified text/ARIA/reload only; the final observation
+uses the actual `#announcer`, rather than a generic polite region. Evidence is
+local under `native-learned-cat-ba6deb0-*-announcer-v2`; this proves one selected
+learned family from controlled initial conditions, not a later new unseen call,
+ordinary encounter rate, emitted audio/AT hardware, full-root equivalence,
+hours, mobile hardware, performance, packaging or directive closure.
+
 The local unpublished slice over `03eb624` learns only an existing vocal family
 from a fresh committed call jointly heard and directly seen. Real ecology
 calls teach even with refused optional captions; a refused guardian vocal
