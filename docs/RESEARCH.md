@@ -2361,7 +2361,7 @@ dependency, schema, presentation-quality or publication change.
 #### Pending crow cause survives a current save — 2026-10-06
 
 A new runtime characterization saves the existing acquired-cargo/crow fixture
-after19 neutral accepted steps, at phase9. The crow's presentation has expired,
+after 19 neutral accepted steps, at phase 9. The crow's presentation has expired,
 but its authenticated hearing cause remains pending. Destroy/load/save preserves
 the exact authoritative world, player, cargo, ecology, dog/work, perception and
 journey roots, with no replayed crow cue. One genuine northeast player step then
@@ -2377,6 +2377,45 @@ unchanged. Both tests pass together, with type-checking and the maintained
 105-test smoke suite. This is current-schema causal/replay/conservation evidence,
 not a four-anchored-label native scene, a full listener census or dense stress.
 No application, schema, sound lifetime or production artifact changed.
+
+#### Fifteen-minute ordinary expedition qualification — 2026-10-06
+
+On clean `5e7207a` and the same production artifact, the existing native-input
+driver completes 900,190ms, tick420→1533, with empty cargo, ten real REST actions
+and 604.394 sampled northward tiles. One actual ADRIFT episode ends after 64,418ms
+with public swept=false, following three paddle/float cycles; no hidden bank or
+route guides the inputs. The terminal Chart screenshot is inspected. Browser
+and disposable-profile cleanup complete normally, with only the known startup
+CSP probe denial and no guarded lifecycle interruption.
+
+The 6,155 public reads retain 36 distinct projected cues: 12 player speech, one
+anonymous bird call and 23 physical cues. Maximum candidate count is two;
+6,038 samples are empty, and the longest sampled empty stretch is 299,761ms.
+No observation or wording overflow is reported. The near-fall pool repeats
+`That was close.` five times, including three separate early events; their
+timing is compatible with existing cooldowns, but this remains a qualitative
+repetition concern, not proof of a clock/replay defect. These are sampled
+projections, not emitted audio, complete event chronology, silence, native
+caption geometry or hours acceptance. JSON SHA256:
+`5cf2bdfaafd0db9205286dd29790252bbc6ec22763afd4ab5e0972c45c952d4d`.
+No application, dependency, schema, production-artifact or publication change.
+
+#### Keeper and finite flock coexistence — 2026-10-06
+
+One new runtime test uses the unchanged generated-chicken/store fixture. The
+same current save offers the real keeper interaction before and after the
+flock's T+1 calls. Securing the store commits its response without replacing
+the finite chicken admissions, audio attempts or active source channels. Store
+contents and domestic custody remain conserved. At the next interval, each
+chicken sample produces its exact anonymous, noninterrupting keeper receipt;
+neither the keeper response nor the chicken audio is repeated.
+
+The new case passes alongside the existing keeper closure and ordinary/refused
+chicken-hearing cases (four selected tests), plus type-checking and the maintained
+105-test smoke suite. Its projected candidates are not measured placements,
+and no preferred caption winner is assumed. This is same-save coexistence
+evidence, not native overlap, broad chatter or sixteen-channel saturation.
+No application, fixture, schema, production artifact or old test was changed.
 
 ### Current cumulative checkpoint — 2026-10-06
 

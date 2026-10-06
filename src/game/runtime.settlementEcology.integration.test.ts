@@ -3086,6 +3086,117 @@ describe("runtime settlement ecology integration", () => {
     }
   }, 120_000);
 
+  it("coexists with generated chicken calls when the visible keeper secures the same store", async () => {
+    const fixture = await createChickenAlarmRuntime(createTideweftRuntime, { observer: "store" });
+    const { runtime, repository, memberActorIds } = fixture;
+    try {
+      // This is one finite generated flock and one actual public action, not a
+      // fabricated channel-capacity fixture or a broad settlement-chatter soak.
+      expect(memberActorIds.length).toBeGreaterThanOrEqual(2);
+      expect(memberActorIds.length).toBeLessThanOrEqual(3);
+      expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+      await runtime.save();
+      const initial = savedEnvelope(repository);
+      const initialStore = deserializeSettlementEcologyState(initial.settlementEcology);
+      expect(initialStore.closure).toBe("open");
+      soundscapePlay.mockClear();
+
+      runtime.dispatchUI({ type: "wait", action: "begin" });
+      advanceWaitFrames(runtime, 10);
+      expect(runtime.getUIView().controls?.waitActive).toBe(true);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk"))
+        .toHaveLength(memberActorIds.length);
+      runtime.dispatchUI({ type: "wait", action: "cancel" });
+      expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+      await runtime.save();
+      const beforeClosure = savedEnvelope(repository);
+      const beforeStore = deserializeSettlementEcologyState(beforeClosure.settlementEcology);
+      const chickenCarry = beforeClosure.perceptionCarry as ChickenVoiceCarry;
+      const chickenAdmissions = chickenCarry.situatedExpressionAdmissions.records.filter((record) => (
+        record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-chicken"
+      ));
+      expect(chickenAdmissions.map(({ sourceActorId }) => sourceActorId).sort())
+        .toEqual([...memberActorIds].sort());
+      const chickenSamples = chickenAdmissions.map(({ sampleOrdinal }) => (
+        chickenCarry.actorVocalizationSamples[sampleOrdinal]
+      ));
+      expect(chickenSamples.every((sample) => sample !== undefined)).toBe(true);
+
+      runtime.dispatchUI({ type: "interact" });
+      const mixed = runtime.getRenderView();
+      expect(mixed.tick).toBe(deserializeWorld(String(beforeClosure.world)).meta.completedTick);
+      expect(runtime.getUIView().controls?.interactLabel).not.toBe("Warn the store keeper");
+      // A lawful physical impact may win the optional caption slot without
+      // erasing either the committed keeper response or the chicken calls.
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk"))
+        .toHaveLength(memberActorIds.length);
+      await runtime.save();
+      const committed = savedEnvelope(repository);
+      const committedStore = deserializeSettlementEcologyState(committed.settlementEcology);
+      expect(committedStore.closure).toBe("secured");
+      expect(committedStore.lastClosureTransactionId).not.toBeNull();
+      expect(committedStore.carrier).toEqual(beforeStore.carrier);
+      expect(committedStore.domesticCustodies).toEqual(initialStore.domesticCustodies);
+      const carry = committed.perceptionCarry as ChickenVoiceCarry;
+      const keeperAdmissions = carry.situatedExpressionAdmissions.records.filter(({ kind }) => (
+        kind === "settlement-keeper-store-response"
+      ));
+      expect(keeperAdmissions).toHaveLength(1);
+      expect(keeperAdmissions[0]).toMatchObject({
+        sourceActorId: committedStore.identity.keeperActorId,
+        closureTransactionId: committedStore.lastClosureTransactionId,
+      });
+      expect(carry.situatedExpressionAdmissions.records.filter((record) => (
+        record.kind === "core-wildlife-alarm" && record.sourceSpecies === "domestic-chicken"
+      ))).toEqual(chickenAdmissions);
+      const coexistenceSources = new Set([...memberActorIds, committedStore.identity.keeperActorId]);
+      const channels = carry.situatedExpressionChannels.channels.filter(({ sourceActorId }) => (
+        coexistenceSources.has(sourceActorId)
+      ));
+      expect(channels).toHaveLength(memberActorIds.length + 1);
+      expect(channels.every(({ state }) => state.active !== null)).toBe(true);
+      expect(carry.situatedExpressionChannels.channels.length)
+        .toBeLessThanOrEqual(situatedExpressionChannels.SITUATED_EXPRESSION_CHANNEL_BANK_MAX_CHANNELS);
+      const candidates = (mixed.acousticText ?? []).filter((candidate) => (
+        candidate.acousticKind !== "physical" && coexistenceSources.has(candidate.sourceActorId)
+      ));
+      expect(candidates).toHaveLength(memberActorIds.length + 1);
+      expect(new Set(candidates.map(({ id }) => id)).size).toBe(candidates.length);
+      // Candidates are not renderer placements: this test does not certify a
+      // native four-label collision layout or sixteen concurrent speakers.
+
+      advancePlayerSteps(runtime, 10);
+      await runtime.save();
+      const receivedWorld = deserializeWorld(String(savedEnvelope(repository).world));
+      const keeper = receivedWorld.residents.find(({ identity }) => (
+        identity.stableId === committedStore.identity.keeperActorId
+      ));
+      if (keeper === undefined) throw new Error("Coexisting calls lost their actual store keeper");
+      const hearing = keeper.perception.beliefs.filter((belief) => (
+        belief.channel === "hearing" && belief.lastObservedTick === receivedWorld.meta.completedTick
+        && belief.perceivedClass === "animal-call"
+      ));
+      expect(hearing).toHaveLength(memberActorIds.length);
+      expect(new Set(hearing.map(({ sourceObservationId }) => sourceObservationId)).size)
+        .toBe(memberActorIds.length);
+      expect(hearing.map(({ sourceObservationId }) => sourceObservationId).sort())
+        .toEqual(chickenSamples.map((sample) => {
+          if (sample === undefined) throw new Error("Chicken admission lost its actual sound sample");
+          return `hp-h-${receivedWorld.meta.completedTick}-${keeper.id}-${sample.id}`;
+        }).sort());
+      for (const belief of hearing) expect(belief).toMatchObject({
+        identification: "anonymous", subjectId: null, strongInterrupt: false,
+      });
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(1);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-chicken-alarm-squawk"))
+        .toHaveLength(memberActorIds.length);
+    } finally {
+      runtime.destroy();
+      scheduledFrame = undefined;
+    }
+  }, 120_000);
+
   it("routes one ecology-owned frog chorus through shared actor hearing and Living Voice", async () => {
     const sourceRepository = new MemoryRepository();
     const source = await createTideweftRuntime(sourceRepository);
