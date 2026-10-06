@@ -347,6 +347,21 @@ humans; warning hearing conveys anonymous danger, not the hidden cause, and
 cannot recursively generate warnings. This is a current-consumer integration,
 not new chatter, work, dialogue or general human-to-dog hearing.
 
+The three existing guardian signals—warning bark, defensive growl and shelter
+whine—also supply surface support to their independent T+1 human audience.
+Exact admission, sample/event tuple, conserved current dog pose and the original
+working-animal/perception transaction reauthenticate each cause. The shelter
+whine uses its admitted weather score and outside-kennel proof, not a new weather
+evaluation. Warning/growl hearing remains anonymous animal alarm with the
+original strong/none interruption; whine remains a non-interrupting animal call.
+A controlled pending-bark pair changes only one dry crest between the same
+source and an existing route listener; exact next-minute hearing weakens while
+source, listener masking, dog/work roots and saved player receipt remain intact.
+Pending hearing is consumed once, including after current-schema reload. The
+whine's equal-work restore test retains the same authoritative outcome. This
+does not add guardian admission-free fallback, dog-to-dog vocal reception or
+change the saved player's event-time hearing law.
+
 This is **PARTIAL** acoustic coverage. Aerial/amphibious/aquatic poses have no
 event-time acoustic altitude/depth, so generic calls and those listeners retain
 explicit `unmodeled-support`, not invented ground contact. A physical domain may

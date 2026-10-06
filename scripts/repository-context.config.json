@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "53b7fd786d2c94ec14c92c663a0565560041aea6891363f615a6e6c154698f8f",
+      "reviewedSourceFingerprint": "e7aaba86c6c5936d32208737d7afc5c82148f43c2ccb892c06cf866e29a1c437",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -220,7 +220,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning speech's independent human audience; saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
+        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call sources' independent human audience; saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion and ordinary/serious footing choices retain bounded accepted history separate from consumed sound; other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open."
       ],
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
@@ -243,7 +243,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "53b7fd786d2c94ec14c92c663a0565560041aea6891363f615a6e6c154698f8f",
+      "reviewedSourceFingerprint": "e7aaba86c6c5936d32208737d7afc5c82148f43c2ccb892c06cf866e29a1c437",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

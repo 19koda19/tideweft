@@ -13092,6 +13092,44 @@ export async function createTideweftRuntime(
         && candidate.eventId === sample.expressionEventId
         && candidate.sourceActorId === sample.sourceActorId
       ));
+      if (admission?.kind === "guardian-dog-warning"
+        || admission?.kind === "guardian-dog-defensive-growl"
+        || admission?.kind === "guardian-dog-shelter-whine") {
+        const dog = dogActorRosterActor(dogActorRoster, sample.sourceActorId);
+        if (dog === null) throw new Error("Guardian surface sound lost its roster source");
+        const authority = { dog, workingAnimals: settlementWorkingAnimals, completedTick: economyView.completedTick };
+        const shelterAuthority = admission.kind === "guardian-dog-shelter-whine"
+          ? runtimeGuardianDogShelterWhineAuthority({
+              ...authority,
+              settlement: settlementEcology,
+              shelterIntentScore: admission.shelterIntentScore,
+            })
+          : null;
+        const event = admission.kind === "guardian-dog-warning"
+          ? guardianDogWarningExpressionEventForTrigger(authority, admission.triggerEventId)
+          : admission.kind === "guardian-dog-defensive-growl"
+            ? guardianDogDefensiveGrowlExpressionEventForTrigger(authority, admission.triggerEventId)
+            : shelterAuthority === null ? null : guardianDogShelterWhineExpressionEventForTrigger(
+                shelterAuthority,
+                admission.triggerEventId,
+              );
+        const admissionMatches = admission.kind === "guardian-dog-warning"
+          ? guardianDogWarningAdmissionMatchesWorld(
+              admission, dog, settlementWorkingAnimals, economyView.completedTick,
+            )
+          : admission.kind === "guardian-dog-defensive-growl"
+            ? guardianDogDefensiveGrowlAdmissionMatchesWorld(
+                admission, dog, settlementWorkingAnimals, economyView.completedTick,
+              )
+            : guardianDogShelterWhineAdmissionMatchesWorld(admission, shelterAuthority);
+        if (event === null
+          || !admissionMatches
+          || !vocalizationSampleMatchesActiveEvent(sample, event)
+          || stableStringify(dog.address.position) !== stableStringify(sample.position)) {
+          throw new Error("Guardian surface sound lost its committed dog/work authority");
+        }
+        return acousticTerrainSupportForSpecies(dog.address.species) === "surface" ? [sample.id] : [];
+      }
       let event: SituatedExpressionEvent | null;
       let historicalSourceLocus = false;
       switch (admission?.kind) {

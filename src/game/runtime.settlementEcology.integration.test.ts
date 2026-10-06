@@ -958,28 +958,34 @@ function withCurrentEnvelopeFields(
   };
 }
 
-/** A current route listener, not a new human body or a fabricated utterance. */
-function prepareKeeperReportSurfacePair(
+/** Two real pending vocal sources share one bounded route/dry-crest fixture. */
+function prepareVocalSurfacePair(
   original: WorldState,
   window: RegionalTerrainWindow,
   player: PlayerState,
   sample: humanPerception.SupplementalSoundSample,
-  fact: SituatedExpressionSemanticFact,
+  fact: SituatedExpressionSemanticFact | null,
   porterActorId: string,
 ) {
   const listener = [...original.residents]
     .sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : 1)
     .find(({ identity, activeContractId }) => identity.stableId !== sample.sourceActorId
       && identity.stableId !== porterActorId && activeContractId === null);
-  if (listener === undefined) throw new Error("Keeper surface fixture lacks an existing listener");
+  if (listener === undefined) throw new Error("Vocal surface fixture lacks an existing listener");
   const sourceX = Math.floor(sample.position.localX / WORLD_POSITION_UNITS_PER_TILE);
   const sourceY = Math.floor(sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  // The conserved guardian stands away from the nearest route. Keep the
+  // keeper's original short comprehension witness, but allow an actual route
+  // within eight tiles for the much farther-reaching warning bark.
+  const maximumDistance = fact === null ? 8 : 3.5;
+  let clearCount = 0;
+  let dryCrestCount = 0;
   const candidates = original.routes.flatMap((route) => route.path.flatMap((tileIndex, offset) => {
     const tile = original.terrain.tiles[tileIndex];
     if (tile === undefined || route.path.length < 2) return [];
     const distance = Math.hypot(tile.x + 0.5 - sample.position.localX / WORLD_POSITION_UNITS_PER_TILE,
       tile.y + 0.5 - sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
-    return distance >= 1.5 && distance <= 3.5
+    return distance >= 1.5 && distance <= maximumDistance
       ? [{ routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance }]
       : [];
   })).sort((left, right) => left.distance - right.distance || left.routeId - right.routeId
@@ -988,6 +994,21 @@ function prepareKeeperReportSurfacePair(
     const clearWorld = deserializeWorld(serializeWorld(original));
     const stagedListener = clearWorld.residents.find(({ id }) => id === listener.id)!;
     stagedListener.location = { kind: "route", routeId: location.routeId, progress: location.progress };
+    if (stagedListener.circadian !== undefined) {
+      // A settled rest receipt cannot follow a controlled listener onto a
+      // route. Keep its real owner/policy and stage the matching awake receipt
+      // in both branches rather than discarding circadian authority.
+      clearWorld.residents[clearWorld.residents.indexOf(stagedListener)] = replaceResidentCircadian(
+        stagedListener, {
+          atTick: clearWorld.meta.completedTick,
+          circadian: {
+            ...stagedListener.circadian,
+            restDestinationArrived: false,
+            posture: { state: "awake", enteredAtTick: clearWorld.meta.completedTick },
+          },
+        },
+      );
+    }
     const economy = createWorldView(clearWorld);
     const placement = resolveResidentWorldPlacement(economy, stagedListener);
     if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) continue;
@@ -997,10 +1018,11 @@ function prepareKeeperReportSurfacePair(
     const collect = (view: WorldView) => humanPerception.collectExistingHumanObservations({
       world: view, window, targetTick: original.meta.completedTick + 1,
       playerSamples: [], supplementalSoundSamples: [sample],
-      supplementalSemanticFacts: [fact], surfaceSoundSampleIds: [sample.id],
+      supplementalSemanticFacts: fact === null ? [] : [fact], surfaceSoundSampleIds: [sample.id],
     }).find(({ observerId }) => observerId === listener.identity.stableId);
     const clear = collect(clearView)?.observations.find(({ channel }) => channel === "hearing");
-    if (clear?.perceivedClass !== "store-secured-report") continue;
+    if (clear?.perceivedClass !== (fact?.perceivedClass ?? sample.soundClass)) continue;
+    clearCount += 1;
     for (let y = Math.min(sourceY, listenerY); y <= Math.max(sourceY, listenerY); y += 1) {
       for (let x = Math.min(sourceX, listenerX); x <= Math.max(sourceX, listenerX); x += 1) {
         if ((x === sourceX && y === sourceY) || (x === listenerX && y === listenerY)
@@ -1010,13 +1032,14 @@ function prepareKeeperReportSurfacePair(
         const viewTile = regionLocalToWindowTile(window, createRegionCoord(0, 0), x, y);
         if (tile === undefined || viewTile === null || tile.elevation >= FIXED_POINT
           || clearView.terrain.tiles[viewTile.y * clearView.terrain.width + viewTile.x]?.waterDepth !== 0) continue;
+        dryCrestCount += 1;
         const maskedWorld = deserializeWorld(serializeWorld(clearWorld));
         maskedWorld.terrain.tiles[index]!.elevation = FIXED_POINT;
         const maskedView = createRegionalWorldView(createWorldView(maskedWorld), window, player);
         const masked = collect(maskedView)?.observations.find(({ id }) => id === clear.id);
-        if (masked?.perceivedClass !== "human-vocalization" || masked.confidence >= clear.confidence) continue;
+        if (masked?.perceivedClass !== sample.soundClass || masked.confidence >= clear.confidence) continue;
         const projected = residentPlacementInRegionalWindow(placement, window);
-        if (projected === null) throw new Error("Keeper route listener left its actual frame");
+        if (projected === null) throw new Error("Vocal route listener left its actual frame");
         expect(ambientNoiseAt(maskedView, projected.tileIndex)).toBe(ambientNoiseAt(clearView, projected.tileIndex));
         expect(maskedWorld.terrain.tiles.filter((candidate, ordinal) => (
           stableStringify(candidate) !== stableStringify(clearWorld.terrain.tiles[ordinal])
@@ -1025,7 +1048,9 @@ function prepareKeeperReportSurfacePair(
       }
     }
   }
-  throw new Error("Real keeper report has no bounded route/dry-crest comprehension witness");
+  throw new Error(`Real pending voice has no bounded route/dry-crest hearing witness: ${JSON.stringify({
+    sourcePosition: sample.position, candidates: candidates.length, clearCount, dryCrestCount,
+  })}`);
 }
 
 function legacyRuntimeSaveRecord(world: WorldState): SaveRecord {
@@ -4320,7 +4345,7 @@ describe("runtime settlement ecology integration", () => {
     const travel = restorePlayerRegionalTravel(world.meta.rootSeed, player, String(saved.regionalTravel));
     const bio0 = deserializeBio0Ecology(saved.bio0Ecology);
     if (travel === null || bio0 === null) throw new Error("Keeper fixture lost its actual saved frame");
-    const pair = prepareKeeperReportSurfacePair(world, travel.window, player, sample, fact, bio0.porterAddress.actorId);
+    const pair = prepareVocalSurfacePair(world, travel.window, player, sample, fact, bio0.porterAddress.actorId);
     expect(pair.clear.confidence).toBeGreaterThanOrEqual(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
     expect(pair.masked.confidence).toBeLessThan(SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE);
     for (const [branchWorld, expected] of [[pair.clearWorld, pair.clear], [pair.maskedWorld, pair.masked]] as const) {
@@ -5466,6 +5491,10 @@ describe("runtime settlement ecology integration", () => {
         soundInterrupt: "strong",
       }),
     ]);
+    const warningSample = carry.actorVocalizationSamples[0];
+    if (warningSample === undefined) {
+      throw new Error("unheard guardian fixture omitted its exact pending bark");
+    }
     expect(dogChannel).toMatchObject({
       sourceActorId: guardian.identity.stableId,
       reception: null,
@@ -5930,6 +5959,32 @@ describe("runtime settlement ecology integration", () => {
       soundLoudness: guardianContact.event.intensity,
       soundRangeUnits: guardianContact.event.rangeUnits,
     });
+    const warningIntervals = hearingSpy.mock.calls.flatMap(([input], ordinal) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === warningSample.id)
+        ? [{ input, ordinal }] : []
+    ));
+    expect(warningIntervals).toHaveLength(1);
+    const warningInterval = warningIntervals[0];
+    if (warningInterval === undefined) {
+      throw new Error("unheard guardian bark never entered shared human hearing");
+    }
+    expect(warningInterval.input.surfaceSoundSampleIds).toContain(warningSample.id);
+    expect(warningInterval.input.supplementalSoundSamples?.filter(({ id }) => (
+      id === warningSample.id
+    ))).toEqual([warningSample]);
+    const warningBatches: ReturnType<typeof humanPerception.collectExistingHumanObservations> =
+      hearingSpy.mock.results[warningInterval.ordinal]!.value;
+    const warningObservations = warningBatches.flatMap(({ observations }) => (
+      observations.filter(({ id }) => id.endsWith(`-${warningSample.id}`))
+    ));
+    expect(warningObservations.length).toBeGreaterThan(0);
+    expect(warningObservations.every((observation) => (
+      observation.channel === "hearing"
+      && observation.perceivedClass === "animal-alarm"
+      && observation.interrupt === "strong"
+      && observation.identification === "anonymous"
+      && observation.subjectId === null
+    ))).toBe(true);
     const hearingWorld = deserializeWorld(String(savedEnvelope(hearingRepository).world));
     const contactBeliefs = hearingWorld.residents.flatMap(({ perception }) => (
       perception.beliefs.filter(({ perceivedClass }) => (
@@ -5950,7 +6005,80 @@ describe("runtime settlement ecology integration", () => {
       .filter((samples) => samples.some(({ acousticEventId }) => (
         acousticEventId === guardianContact?.event.eventId
       )))).toHaveLength(1);
+    expect(hearingSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === warningSample.id)
+    ))).toHaveLength(1);
     reloaded.destroy();
+
+    // The already committed world-only bark, not a synthetic call: two saved
+    // route-listener worlds differ by exactly one intervening dry crest.
+    const warningPlayer = committed.player as PlayerState;
+    const warningTravel = restorePlayerRegionalTravel(
+      hearingFixtureWorld.meta.rootSeed, warningPlayer, String(committed.regionalTravel),
+    );
+    if (warningTravel === null) throw new Error("Bark surface pair lost its original saved frame");
+    const originalBark = warningSample as unknown as humanPerception.SupplementalSoundSample;
+    const barkPair = prepareVocalSurfacePair(
+      hearingFixtureWorld, warningTravel.window, warningPlayer,
+      originalBark, null, assignment.handlerActorId,
+    );
+    for (const [pairedWorld, expected] of [
+      [barkPair.clearWorld, barkPair.clear], [barkPair.maskedWorld, barkPair.masked],
+    ] as const) {
+      const pairedRepository = new MemoryRepository(withCurrentEnvelopeFields(committedRecord, {
+        world: serializeWorld(pairedWorld),
+      }));
+      hearingSpy.mockClear();
+      soundscapePlay.mockClear();
+      const paired = await createTideweftRuntime(pairedRepository);
+      expect(paired.getUIView().saveWarning).toBeUndefined();
+      await paired.save();
+      const pending = savedEnvelope(pairedRepository);
+      expect(pending.perceptionCarry).toEqual(committed.perceptionCarry);
+      expect(pending.dogActorRoster).toBe(committed.dogActorRoster);
+      expect(pending.settlementWorkingAnimals).toBe(committed.settlementWorkingAnimals);
+      expect(soundscapePlay.mock.calls).toEqual([]);
+      // REST accepts ten fixed steps in one frame. Ten ordinary-step frames
+      // here would run eleven world minutes and age the original belief.
+      advanceWaitFrames(paired, 1);
+      await paired.save();
+      const receivedWorld = deserializeWorld(String(savedEnvelope(pairedRepository).world));
+      expect(receivedWorld.meta.completedTick).toBe(pairedWorld.meta.completedTick + 1);
+      const listener = receivedWorld.residents.find(({ identity }) => identity.stableId === barkPair.listenerActorId);
+      expect(listener).toBeDefined();
+      const barkCallOrdinal = hearingSpy.mock.calls.findIndex(([input]) => (
+        input.supplementalSoundSamples?.some(({ id }) => id === originalBark.id)
+      ));
+      expect(barkCallOrdinal).toBeGreaterThanOrEqual(0);
+      const receivedBatches: ReturnType<typeof humanPerception.collectExistingHumanObservations> =
+        hearingSpy.mock.results[barkCallOrdinal]!.value;
+      const receivedObservation = receivedBatches.find(({ observerId }) => (
+        observerId === barkPair.listenerActorId
+      ))?.observations.find(({ id }) => id === expected.id);
+      expect(receivedObservation).toEqual(expected);
+      const belief = listener?.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === expected.id);
+      expect(belief).toMatchObject({
+        channel: "hearing", perceivedClass: "animal-alarm", subjectId: null, identification: "anonymous",
+        confidence: expected.confidence, firstObservedTick: pairedWorld.meta.completedTick + 1,
+        lastObservedTick: pairedWorld.meta.completedTick + 1,
+      });
+      expect(belief?.area.radiusUnits).toBeGreaterThan(0);
+      expect(JSON.stringify(belief)).not.toContain(originalBark.sourceActorId);
+      const pairedInputs = hearingSpy.mock.calls.map(([input]) => input).filter((input) => (
+        input.supplementalSoundSamples?.some(({ id }) => id === originalBark.id)
+      ));
+      expect(pairedInputs).toHaveLength(1);
+      expect(pairedInputs[0]?.supplementalSoundSamples).toContainEqual(originalBark);
+      expect(pairedInputs[0]?.surfaceSoundSampleIds).toContain(originalBark.id);
+      advanceWaitFrames(paired, 1);
+      await paired.save();
+      expect(deserializeWorld(String(savedEnvelope(pairedRepository).world)).meta.completedTick)
+        .toBe(pairedWorld.meta.completedTick + 2);
+      expect(hearingSpy.mock.calls.filter(([input]) => (
+        input.supplementalSoundSamples?.some(({ id }) => id === originalBark.id)
+      ))).toHaveLength(1);
+      paired.destroy();
+    }
 
     const replacementRepository = new MemoryRepository(committedRecord);
     const replacement = await createTideweftRuntime(replacementRepository);
@@ -6475,6 +6603,7 @@ describe("runtime settlement ecology integration", () => {
       intervalStartPosition: WorldPosition;
       animalContactAcousticCarry: unknown;
       actorVocalizationSamples: Array<{
+        id: string;
         expressionEventId: string;
         position: WorldPosition;
         soundClass: string;
@@ -6553,6 +6682,12 @@ describe("runtime settlement ecology integration", () => {
         sourceActorId: growlGuardian.identity.stableId,
       }),
     ]);
+    const growlSample = growlCarry.actorVocalizationSamples.find(({ expressionEventId }) => (
+      expressionEventId === growlAdmission.eventId
+    ));
+    if (growlSample === undefined) {
+      throw new Error("rest-growl fixture omitted its exact pending sound");
+    }
     const growlChannel = growlCarry.situatedExpressionChannels.channels.find(
       ({ sourceActorId }) => sourceActorId === growlGuardian.identity.stableId,
     );
@@ -6704,12 +6839,12 @@ describe("runtime settlement ecology integration", () => {
     });
     expect(resumed.getRenderView().player.recoveryKind).toBe("rest");
     const growlSoundIntervals = perceptionSpy.mock.calls
-      .map(([input]) => input.supplementalSoundSamples ?? [])
-      .filter((samples) => samples.some(({ expressionEventId }) => (
+      .map(([input]) => input)
+      .filter((input) => input.supplementalSoundSamples?.some(({ expressionEventId }) => (
         expressionEventId === growlAdmission.eventId
       )));
     expect(growlSoundIntervals).toHaveLength(1);
-    expect(growlSoundIntervals[0]?.filter(({ expressionEventId }) => (
+    expect(growlSoundIntervals[0]?.supplementalSoundSamples?.filter(({ expressionEventId }) => (
       expressionEventId === growlAdmission.eventId
     ))).toEqual([
       expect.objectContaining({
@@ -6718,6 +6853,31 @@ describe("runtime settlement ecology integration", () => {
         soundInterrupt: "none",
       }),
     ]);
+    const growlInput = growlSoundIntervals[0];
+    if (growlInput === undefined) {
+      throw new Error("defensive growl never entered shared human hearing");
+    }
+    expect(growlInput.surfaceSoundSampleIds).toContain(growlSample.id);
+    expect(growlInput.supplementalSoundSamples?.filter(({ id }) => id === growlSample.id))
+      .toEqual([growlSample]);
+    const growlCallOrdinal = perceptionSpy.mock.calls.findIndex(([input]) => input === growlInput);
+    const growlBatches: ReturnType<typeof humanPerception.collectExistingHumanObservations> =
+      perceptionSpy.mock.results[growlCallOrdinal]!.value;
+    const growlObservations = growlBatches.flatMap(({ observations }) => (
+      observations.filter(({ id }) => id.endsWith(`-${growlSample.id}`))
+    ));
+    expect(growlObservations.length).toBeGreaterThan(0);
+    expect(growlObservations.every((observation) => (
+      observation.channel === "hearing"
+      && observation.perceivedClass === "animal-alarm"
+      && observation.interrupt === "none"
+      && observation.identification === "anonymous"
+      && observation.subjectId === null
+    ))).toBe(true);
+    advanceWaitFrames(resumed, 1);
+    expect(perceptionSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === growlSample.id)
+    ))).toHaveLength(1);
     resumed.destroy();
     perceptionSpy.mockRestore();
 
@@ -7079,6 +7239,7 @@ describe("runtime settlement ecology integration", () => {
       intervalStartPosition: WorldPosition;
       animalContactAcousticCarry: unknown;
       actorVocalizationSamples: Array<{
+        id: string;
         expressionEventId: string;
         position: WorldPosition;
         soundClass: string;
@@ -7184,6 +7345,12 @@ describe("runtime settlement ecology integration", () => {
         sourceActorId: whineGuardian.identity.stableId,
       }),
     ]);
+    const whineSample = whineCarry.actorVocalizationSamples.find(({ expressionEventId }) => (
+      expressionEventId === whineAdmission.eventId
+    ));
+    if (whineSample === undefined) {
+      throw new Error("rest-whine fixture omitted its exact pending sound");
+    }
     expect(whineCarry.situatedExpressionChannels.channels.find(
       ({ sourceActorId }) => sourceActorId === whineGuardian.identity.stableId,
     )).toMatchObject({
@@ -7287,6 +7454,8 @@ describe("runtime settlement ecology integration", () => {
         ));
         if (samples.length === 0) return [];
         expect(samples).toHaveLength(1);
+        expect(input.surfaceSoundSampleIds).toContain(whineSample.id);
+        expect(samples).toEqual([whineSample]);
         const result = perceptionSpy.mock.results[hearingFrontier + offset];
         if (result?.type !== "return") throw new Error("Shelter hearing did not complete");
         const batches: ReturnType<typeof humanPerception.collectExistingHumanObservations> = result.value;
@@ -7703,12 +7872,33 @@ describe("runtime settlement ecology integration", () => {
           soundInterrupt: "none",
         }),
       ]);
+    const whineInput = perceptionSpy.mock.calls[whineSoundCallOrdinal]![0];
+    expect(whineInput.surfaceSoundSampleIds).toContain(whineSample.id);
+    expect(whineInput.supplementalSoundSamples?.filter(({ id }) => id === whineSample.id))
+      .toEqual([whineSample]);
     const whineHumanBatches = perceptionSpy.mock.results[whineSoundCallOrdinal]?.value;
     expect(whineHumanBatches.some(({ observations }: {
       observations: readonly { perceivedClass: string; interrupt: string }[];
     }) => observations.some(({ perceivedClass, interrupt }) => (
       perceivedClass === "animal-call" && interrupt === "none"
     )))).toBe(true);
+    const whineObservations = (whineHumanBatches as ReturnType<
+      typeof humanPerception.collectExistingHumanObservations
+    >).flatMap(({ observations }) => observations.filter(({ id }) => (
+      id.endsWith(`-${whineSample.id}`)
+    )));
+    expect(whineObservations.length).toBeGreaterThan(0);
+    expect(whineObservations.every((observation) => (
+      observation.channel === "hearing"
+      && observation.perceivedClass === "animal-call"
+      && observation.interrupt === "none"
+      && observation.identification === "anonymous"
+      && observation.subjectId === null
+    ))).toBe(true);
+    advanceWaitFrames(resumed, 1);
+    expect(perceptionSpy.mock.calls.filter(([input]) => (
+      input.supplementalSoundSamples?.some(({ id }) => id === whineSample.id)
+    ))).toHaveLength(1);
     resumed.destroy();
     perceptionSpy.mockRestore();
 
