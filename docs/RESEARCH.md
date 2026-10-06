@@ -2540,6 +2540,39 @@ fifteen-minute, hours, sound-quality or product-failure claim follows. No
 application, schema, dependency or production artifact changes; the remaining
 continuous-play observation requires an uninterrupted host window.
 
+### Current Voice closure triage — 2026-10-06
+
+On clean `8c7f09e`, the next native journey completes both eight Fresh Water
+and fourteen Food deliveries. The existing local driver now checks the fresh
+material receipt and cleared public custody rather than a replaceable latest
+announcement. Campaign resolution can replace that announcement in the same
+step; this was a driver false negative, not broken delivery. The 180,872ms
+journey then stops at a new fourteen-Reed Promise whose destination is outside
+the bounded spatial view. Its real distance/bearing remains available.
+`regionalWorldView.ts`, `projection.ts` and `uiProjection.ts` confirm this lawful
+distinction; the strict waypoint driver does not invent an unseen itinerary.
+JSON SHA256: `caeb3e0ba75c4f025945dfd81058411536b8d98293b6ea51c862f5aa34ea65a6`.
+This is incomplete prolonged-play evidence, not a game failure or fifteen-minute
+pass. Another blind route retry or new route infrastructure is not warranted.
+
+The existing keeper/flock observer then adds only bounded public resident counts
+and a keeper-only 8–60-second duration option. The single production Firefox157
+Relief run observes 60,008ms, ticks420→479, with 83 retained states and no overflow.
+Exactly two DIRECT-detail-visible residents appear throughout: waiting then
+watching, not invented future work. Three vocal candidates yield at most two
+placed glyphs; the keeper/flock coexistence window has no measured overlap or
+clipping. The actual screenshot is inspected and retains readable keeper speech,
+one ambiguous flock glyph and the legitimate physical-caption reading lease.
+Two later DOM/current-tuple expiry gaps remain reported, not an all-frame pass.
+The current50/carry14 save preserves the secured store, unchanged eight-unit
+stock and learned chicken family; no vocal sample or active channel remains.
+JSON SHA256: `04c503c6c943b08150cf872652ffa9ea140baf37a8a53dd444a5eab1bcbc152a`.
+This is continuing current-context evidence, not dense crowd/work, hours,
+hardware audio/AT/mobile or performance certification. Both runs retain only
+known startup CSP probe denials, exit normally and remove their disposable
+profiles. Application, schema, dependency and production artifact are unchanged;
+future producer breadth stays deferred and Voice's remaining gates stay open.
+
 ### Retained cumulative checkpoint — 2026-10-06
 
 The committed, tracked-clean `f72b22fa0d87b0931972506bccb967fd8fc87dfb`
