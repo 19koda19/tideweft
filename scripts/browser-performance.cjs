@@ -1580,13 +1580,52 @@ async function commitSecondBrowserGreeting(client, firstTarget, firstCommitted, 
       await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     } else await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
-  await client.waitFor(`(() => {
-    const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
+  // Capture around the actual native action as well as after failure. A late
+  // timeout alone cannot establish which source or overlay received the click.
+  const selectionDiagnostic = `(() => {
+    const bridge = window.__TIDEWEFT__;
+    const view = bridge.runtime.getRenderView();
+    const selected = bridge.runtime.getUIView().selectedResident;
     const greet = document.querySelector('.resident-about__greet');
-    return selected?.id === ${JSON.stringify(String(secondTarget.id))}
-      && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
-  })()`);
+    const canvas = document.querySelector('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])');
+    const r = canvas?.getBoundingClientRect();
+    const hit = r ? document.elementFromPoint(Math.round(r.x + r.width / 2),
+      Math.round(r.y + r.height / 2)) : null;
+    const targets = ${JSON.stringify([String(firstTarget.id), String(secondTarget.id)])};
+    return { pageNowMs: performance.now(), tick: view.tick, mode: bridge.renderer.mode(),
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      rendererFrameCount: bridge.renderer.telemetry().frameCount,
+      requestedId: targets[1], selected: selected ? {
+        id: selected.id, knowledgeLabel: selected.knowledgeLabel } : null,
+      greet: greet ? { hidden: greet.hidden, disabled: greet.disabled,
+        hasClientRect: greet.getClientRects().length > 0 } : null,
+      residents: targets.map((id) => {
+        const resident = view.porters.find((item) => String(item.id) === id);
+        return resident ? { id, position: resident.position, state: resident.state } : { id, absent: true };
+      }),
+      centerHitsCanvas: Boolean(canvas && hit === canvas), hitTag: hit?.tagName ?? null,
+      hitClass: String(hit?.className ?? '').slice(0, 256),
+      openDialogs: [...document.querySelectorAll('dialog[open]')].slice(0, 4)
+        .map((dialog) => String(dialog.className).slice(0, 256)),
+      hoverEntity: canvas?.dataset.hoverEntity ?? null,
+      firstCuePresent: view.acousticText.some((cue) => cue.id === ${JSON.stringify(firstCommitted.captionId)}) };
+  })()`;
+  const beforeClick = await client.evaluate(selectionDiagnostic);
+  await physicalBrowserClick(client, await rectangleOf('#p5-mount canvas[data-renderer="chart-2d"]:not([hidden])'));
+  const afterClick = await client.evaluate(selectionDiagnostic);
+  try {
+    await client.waitFor(`(() => {
+      const selected = window.__TIDEWEFT__.runtime.getUIView().selectedResident;
+      const greet = document.querySelector('.resident-about__greet');
+      return selected?.id === ${JSON.stringify(String(secondTarget.id))}
+        && selected.knowledgeLabel === 'Recognized' && greet && !greet.hidden && !greet.disabled;
+    })()`, 5_000);
+  } catch (error) {
+    // Only already public projections and bounded DOM metadata are inspected.
+    const selection = { beforeClick, afterClick,
+      afterTimeout: await client.evaluate(selectionDiagnostic) };
+    throw new Error(`Second native resident selection failed: ${JSON.stringify(selection)}`, { cause: error });
+  }
   await prepareVoicePresentationState(client, presentationState);
   await physicalBrowserClick(client, await rectangleOf('.resident-about__greet'));
   const paired = await client.waitFor(`(() => {

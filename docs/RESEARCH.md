@@ -20,6 +20,48 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Current Voice native selection and caption check — 2026-10-06
+
+Bounded tooling/evidence slice over `1c3f477`, unchanged Alpha63 game artifact.
+Second-GREET failure diagnostics now bracket the one actual native canvas
+click and observe the timeout separately: public projected selection/knowledge,
+two resident positions, tick/frame/time and bounded DOM hit/control metadata.
+No retries, forced selection, clock stop or caption extension were added.
+Selection publishes synchronously, but recognition awaits the real queued
+observation and DOM rendering follows separately. These observations can narrow
+a failure; they do not establish exact click-time camera state or a past cause.
+The selection guard remains intended ID + Recognized + enabled GREET, with a
+five-second failure bound rather than a minute beyond the first reading lease.
+Browser selftest and maintained critical smoke6files/105 pass (4.07s).
+
+One fresh production Firefox157.0.1 run passes:
+`npm run profile:browser -- --paired-greetings --reduced-motion
+--presentation-width 390 --presentation-mode relief-3d --output
+artifacts/validation/voice-current49/voice-pair-alpha63-selection-diagnostic.json`
+with temporary `caffeinate -i`. Harness SHA256
+`b5db38aaefc298027cc25818b4481849901412ab6ca36ac6764b6a9c80d988c3`;
+game JS `015495e5529937a4797eb68d6bf5aa0343f27bb294dc6c7e49329e380f6c11cd`;
+report `cde7eaacc37ec46711df8ee655645c64ef43b696d52d5a08e49f6b3b69906d04`.
+The capture identifies dirty tooling over that HEAD, not a clean commit.
+Real greetings commit424/426 while ordinary simulation continues between them;
+the inspected image has two distinct, nonoverlapping source labels and separate
+caption/ordinary feedback. Actual47/60-code-point reading leases last2243/2864ms
+against2239/2858ms requirements, one announcement each. Both expire, current
+save reload preserves both learned ABOUT records, and neither replays across
+the existing eight post-restore absence checks. Only one live compact layout
+was captured; this is not the eight-state live matrix or physical mobile proof.
+No unexpected browser error or CSP increase; owned browser/profile cleaned.
+The intermittent prior selection failure's cause remains unknown, not fixed.
+
+The prior clean-HEAD normal-motion1280Chart single-GREET check also passes on
+the same game artifact with the earlier unchanged harness4bbada5d…65a507.
+Report `voice-chart-alpha63.json` SHA256
+`9a77feaf4c0d6bbd7fec07e60b46e333d496ade20e42d93eefc80949fc53bf9c`;
+actual47-code-point caption lasts2243ms, readable canvas speech/caption inspected,
+and current-save facts survive without replay. These are finite latest-artifact
+presentation/lifecycle witnesses, not mixed animal/physical coexistence,
+audible AT/audio, whole-root equivalence, crowd/soak/performance or release gates.
+
 ## Finite Voice reload-control check — 2026-10-06
 
 Local harness repair over `507468e`, not a gameplay/release change. After the
