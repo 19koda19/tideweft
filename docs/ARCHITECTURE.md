@@ -1276,7 +1276,18 @@ movement/stamina/camp, generate a timed line, or silence unrelated warnings.
 The same one physical-origin receipt survives consumed intervals and current
 save/reload, then prunes at the 600-step horizon. Previously forgotten consumed
 history is not reconstructed when loading older supported records. The 12/16-step
-footing meaning locks remain unchanged. This state contains no
+footing semantic locks and priority-qualified 4/6-step family locks remain
+unchanged, but each admitted ordinary/serious footing meaning now retains its
+existing origin for 600 accepted player steps before a fresh same-meaning
+reaction is eligible. This is pre-admission restraint, not one total line per
+minute or a timer that creates speech; a first serious reaction may still
+outrank ordinary footing, and cargo protection/loss/recovery remain separate.
+The deliberately supported nested-v1 reader keeps its original 12/16-step
+canonical prune fence; the longer current-v2 horizon must not legitimize expired
+legacy facts. Current saved origins remain exact and already-pruned history
+stays absent. Fewer chosen optional utterances legitimately produce fewer vocal
+receipts, without suppressing physical incidents/contact sounds or their hearing.
+This state contains no
 audio, caption or hearing queue and cannot replay an old event. New history
 commits only after expression admission and rolls back with a failed tick.
 Pending origins must exactly match the current physical/admission carry;

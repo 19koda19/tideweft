@@ -1139,8 +1139,37 @@ describe("production terrain fall and physical cargo", () => {
         expect(runRepository.snapshot()).toEqual(beforePreview.save);
         await runtime.save();
         expect(runRepository.snapshot().worldJson).toBe(beforePreview.save.worldJson);
+        const final = decodeCurrent(runRepository.snapshot());
+        // Quiet real steps consume the interval and pass the old16-step
+        // horizon. Choice history survives, without keeping a sound alive.
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+        advancePlayerSteps(runtime, 19);
+        await runtime.save();
+        const quiet = decodeCurrent(runRepository.snapshot());
+        expect(quiet.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+        expect(quiet.playerExpressionRecency.footing).toEqual(final.playerExpressionRecency.footing);
+        expect(quiet.playerExpressionRecency.footing[0]?.step.sampleOrdinal).toBe(6);
+        expect(quiet.perceptionCarry.actorVocalizationSamples).toEqual([]);
+        expect(quiet.perceptionCarry.situatedExpressionChannels.channels.some(
+          ({ sourceActorId }) => sourceActorId === "player:local",
+        )).toBe(false);
+        if (reloadAtBoundary) {
+          runtime.destroy();
+          soundscapePlay.mockClear();
+          runtime = await createTideweftRuntime(runRepository);
+          expect(runtime.getUIView().title.hasSave).toBe(true);
+          expect(incidentCueCalls("vocalization-relief")).toBe(0);
+          expect(incidentCueCalls("stumble")).toBe(0);
+          await runtime.save();
+          const roundtripped = decodeCurrent(runRepository.snapshot());
+          expect(roundtripped.playerExpressionRecency).toEqual(quiet.playerExpressionRecency);
+          expect(roundtripped.perceptionCarry).toEqual(quiet.perceptionCarry);
+          expect(roundtripped.player).toEqual(quiet.player);
+          expect(roundtripped.physicalCargo).toEqual(quiet.physicalCargo);
+          expect(roundtripped.world).toBe(quiet.world);
+        }
         return { events, trajectory, vocalAudio, physicalAudio, decisions, replays, previews,
-          final: decodeCurrent(runRepository.snapshot()) };
+          final, quietFinal: quiet };
       } finally { runtime.destroy(); }
     }
 
@@ -1157,8 +1186,8 @@ describe("production terrain fall and physical cargo", () => {
     expect(uninterrupted.events.map(({ incidentId }) => incidentId)).toEqual([
       "player:0:traversal:73", "player:0:traversal:74",
     ]);
-    // Both physical incidents survive. Retiring sound cannot erase the first
-    // accepted choice's sixteen-step lock or admit another relief four later.
+    // Both physical incidents survive. Consumed sound cannot erase the new
+    // sparse choice horizon; the semantic kernel lock itself is still16.
     expect(situatedExpressionCooldownSteps("relief-after-near-fall")?.meaning).toBe(16);
     expect(uninterrupted.vocalAudio).toBe(1);
     expect(uninterrupted.physicalAudio).toBe(2);
@@ -1196,6 +1225,11 @@ describe("production terrain fall and physical cargo", () => {
     const { session: _restoredSession, integrity: _restoredSeal, regionalTravel: _restoredTravel,
       ...restoredRoots } = restored.final;
     expect(restoredRoots).toEqual(firstRoots);
+    const { session: _quietSession, integrity: _quietSeal, regionalTravel: _quietTravel,
+      ...quietRoots } = uninterrupted.quietFinal;
+    const { session: _quietRestoredSession, integrity: _quietRestoredSeal, regionalTravel: _quietRestoredTravel,
+      ...quietRestoredRoots } = restored.quietFinal;
+    expect(quietRestoredRoots).toEqual(quietRoots);
     const comparableTravel = (saved: CurrentGameSaveEnvelope) => {
       const actual = restorePlayerRegionalTravel(
         deserializeWorld(saved.world).meta.rootSeed, saved.player, saved.regionalTravel,
@@ -1213,6 +1247,9 @@ describe("production terrain fall and physical cargo", () => {
     const restoredTravel = comparableTravel(restored.final);
     expect(restoredTravel.facts).toEqual(firstTravel.facts);
     expect(restoredTravel.revision).toBe(firstTravel.revision + 1);
+    // Subsequent quiet steps may publish different partition revisions after
+    // reload, while retaining the exact chart knowledge and travel frame.
+    expect(comparableTravel(restored.quietFinal).facts).toEqual(comparableTravel(uninterrupted.quietFinal).facts);
     console.info("Actual repeated storm-stumble recency proof:", JSON.stringify({
       scope: "controlled initial current world, then actual input/steps; not ordinary-play frequency",
       selectedOrdinal, events: uninterrupted.events, vocalAudio: uninterrupted.vocalAudio,

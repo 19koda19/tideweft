@@ -26,6 +26,8 @@ import { situatedExpressionCooldownSteps } from "./situatedExpression";
 
 export const PLAYER_EXPRESSION_RECENCY_VERSION = 2 as const;
 export const PLAYER_FOOTING_RECENCY_MAX_RECEIPTS = 2 as const;
+/** Earliest fresh same-meaning choice; never a timer that emits speech. */
+export const PLAYER_FOOTING_REANNOUNCEMENT_STEPS = 600 as const;
 export const PLAYER_CARGO_RECENCY_MAX_RECEIPTS = 3 as const;
 
 /** Committed choice history, never a sound, channel, caption or active line. */
@@ -98,7 +100,7 @@ export function canonicalizePlayerExpressionRecencyState(
     const cooldown = policy === null ? null : situatedExpressionCooldownSteps(policy.meaning);
     if (age === null || cooldown === null) return null;
     accepted.push({ receipt, age });
-    if (age < Math.max(cooldown.meaning, cooldown.family)) footing.push(receipt);
+    if (age < Math.max(cooldown.meaning, cooldown.family, PLAYER_FOOTING_REANNOUNCEMENT_STEPS)) footing.push(receipt);
   }
   if (accepted.length === 2) {
     const first = accepted[0]!;
@@ -148,7 +150,7 @@ export function canonicalizePlayerExpressionRecencyState(
   )).map(({ receipt }) => receipt));
 }
 
-/** Applies existing meaning and priority-qualified family law, not a new timer. */
+/** Sparse future choice eligibility plus the unchanged priority-qualified family law. */
 export function playerFootingRecencyAllowsExpression(
   value: unknown,
   rootSeed: RootSeed,
@@ -165,7 +167,8 @@ export function playerFootingRecencyAllowsExpression(
     const cooldown = policy === null ? null : situatedExpressionCooldownSteps(policy.meaning);
     if (policy === null || age === null || cooldown === null) return null;
     if (receipt.admission.triggerEventId === admission.triggerEventId
-      || (candidate.meaning === policy.meaning && age < cooldown.meaning)
+      || (candidate.meaning === policy.meaning
+        && age < Math.max(cooldown.meaning, PLAYER_FOOTING_REANNOUNCEMENT_STEPS))
       || (age < cooldown.family && candidate.priority <= policy.priority)) return false;
   }
   return true;
@@ -197,7 +200,14 @@ export function upgradePlayerExpressionRecencyV1(
   if (!plainRecord(value) || !exactKeys(value, ["version", "effort", "footing"])
     || value.version !== 1) return null;
   const state = canonicalizePlayerExpressionRecencyState({ ...value, version: 2, cargo: [] }, rootSeed, clock);
-  return state !== null && stableStringify(value) === stableStringify({
+  // Deliberately supported v1 bytes used the original 12/16-step prune fence.
+  // A longer CURRENT choice horizon cannot make expired legacy history valid.
+  if (state === null || state.footing.some((receipt) => {
+    const policy = playerFootingExpressionAdmissionPolicy(receipt.admission)!;
+    const cooldown = situatedExpressionCooldownSteps(policy.meaning)!;
+    return playerFootingRecencyAge(receipt, clock)! >= Math.max(cooldown.meaning, cooldown.family);
+  })) return null;
+  return stableStringify(value) === stableStringify({
     version: 1, effort: state.effort, footing: state.footing,
   }) ? state : null;
 }

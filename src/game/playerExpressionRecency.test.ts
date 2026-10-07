@@ -12,11 +12,13 @@ import {
 import { playerFootingExpressionAdmissionPolicy } from "./playerExpressionAuthority";
 import {
   PLAYER_FOOTING_RECENCY_MAX_RECEIPTS,
+  PLAYER_FOOTING_REANNOUNCEMENT_STEPS,
   canonicalizePlayerExpressionRecencyState,
   createPlayerExpressionRecencyState,
   playerFootingRecencyAge,
   playerFootingRecencyAllowsExpression,
   recordAcceptedPlayerFootingExpression,
+  upgradePlayerExpressionRecencyV1,
   type PlayerExpressionRecencyState,
   type PlayerFootingRecencyReceipt,
 } from "./playerExpressionRecency";
@@ -111,7 +113,7 @@ describe("bounded player-expression choice history contract", () => {
   it.each([
     ["ordinary-stumble", "steady-after-stumble", 12, 4],
     ["serious-stumble", "relief-after-near-fall", 16, 6],
-  ] as const)("retains exact existing meaning/family law for %s", (causalClass, meaning, meaningSteps, familySteps) => {
+  ] as const)("keeps kernel locks but requires sparse future %s reannouncement", (causalClass, meaning, meaningSteps, familySteps) => {
     const origin = footing(causalClass);
     const policy = playerFootingExpressionAdmissionPolicy(origin.admission);
     expect(policy).toMatchObject({ meaning, family: "footing" });
@@ -122,10 +124,19 @@ describe("bounded player-expression choice history contract", () => {
       expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(1 + age), fresh.admission)).toBe(false);
       expect(recordAcceptedPlayerFootingExpression(state, SEED, clockAt(1 + age), fresh)).toBeNull();
     }
-    const fresh = footing(causalClass, 1 + meaningSteps);
-    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(1 + meaningSteps), fresh.admission)).toBe(true);
-    expect(canonicalizePlayerExpressionRecencyState(state, SEED, clockAt(1 + meaningSteps))?.footing).toEqual([]);
-    expect(accepted(state, fresh, 1 + meaningSteps).footing).toEqual([fresh]);
+    // The short semantic kernel lock remains unchanged. A consumed channel
+    // must not turn repeated real stumbles into another line every few steps.
+    expect(PLAYER_FOOTING_REANNOUNCEMENT_STEPS).toBe(600);
+    for (const age of [meaningSteps, meaningSteps + 1, 599]) {
+      const fresh = footing(causalClass, 1 + age);
+      expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(1 + age), fresh.admission)).toBe(false);
+      expect(recordAcceptedPlayerFootingExpression(state, SEED, clockAt(1 + age), fresh)).toBeNull();
+      expect(canonicalizePlayerExpressionRecencyState(state, SEED, clockAt(1 + age))?.footing).toEqual([origin]);
+    }
+    const fresh = footing(causalClass, 601);
+    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(601), fresh.admission)).toBe(true);
+    expect(canonicalizePlayerExpressionRecencyState(state, SEED, clockAt(601))?.footing).toEqual([]);
+    expect(accepted(state, fresh, 601).footing).toEqual([fresh]);
   });
 
   it("preserves the 4/6-step family law with priority-qualified suppression", () => {
@@ -143,8 +154,8 @@ describe("bounded player-expression choice history contract", () => {
       )).toBe(false);
     }
     expect(playerFootingRecencyAllowsExpression(serious, SEED, clockAt(7), footing("ordinary-stumble", 7).admission)).toBe(true);
-    // Equal-priority ordinary/serious candidates still obey their own longer
-    // meaning lock after the 4/6-step family lock has ended.
+    // Each meaning still obeys its own future reannouncement horizon after
+    // the unchanged priority-qualified 4/6-step family lock has ended.
     expect(playerFootingRecencyAllowsExpression(ordinary, SEED, clockAt(5), footing("ordinary-stumble", 5).admission)).toBe(false);
     expect(playerFootingRecencyAllowsExpression(serious, SEED, clockAt(7), footing("serious-stumble", 7).admission)).toBe(false);
   });
@@ -198,13 +209,13 @@ describe("bounded player-expression choice history contract", () => {
     const mixed = accepted(serious, ordinaryOrigin, 7);
     expect(mixed.footing).toEqual([ordinaryOrigin, strongOrigin]);
     expect(mixed.footing).toHaveLength(PLAYER_FOOTING_RECENCY_MAX_RECEIPTS);
-    for (let step = 8; step <= 16; step += 1) {
+    for (const step of [8, 16, 17, 19, 600]) {
       expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(step), footing("serious-stumble", step).admission)).toBe(false);
     }
-    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(17), footing("serious-stumble", 17).admission)).toBe(true);
-    expect(canonicalizePlayerExpressionRecencyState(mixed, SEED, clockAt(17))?.footing).toEqual([ordinaryOrigin]);
-    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(18), footing("ordinary-stumble", 18).admission)).toBe(false);
-    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(19), footing("ordinary-stumble", 19).admission)).toBe(true);
+    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(601), footing("serious-stumble", 601).admission)).toBe(true);
+    expect(canonicalizePlayerExpressionRecencyState(mixed, SEED, clockAt(601))?.footing).toEqual([ordinaryOrigin]);
+    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(606), footing("ordinary-stumble", 606).admission)).toBe(false);
+    expect(playerFootingRecencyAllowsExpression(mixed, SEED, clockAt(607), footing("ordinary-stumble", 607).admission)).toBe(true);
   });
 
   it("uses physical ordinal rather than sound index and normalizes the phase-ten clamp", () => {
@@ -215,7 +226,9 @@ describe("bounded player-expression choice history contract", () => {
       expect(playerFootingRecencyAge(origin, clockAt(7))).toBe(0);
       expect(playerFootingRecencyAge(origin, clockAt(10))).toBe(3);
       expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(22), footing("serious-stumble", 22).admission)).toBe(false);
-      expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(23), footing("serious-stumble", 23).admission)).toBe(true);
+      expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(23), footing("serious-stumble", 23).admission)).toBe(false);
+      expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(606), footing("serious-stumble", 606).admission)).toBe(false);
+      expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(607), footing("serious-stumble", 607).admission)).toBe(true);
     }
     const tenth = footing("serious-stumble", 10, 0);
     expect(tenth.admission.admittedAtPlayerStepPhase).toBe(9);
@@ -224,7 +237,9 @@ describe("bounded player-expression choice history contract", () => {
     const state = accepted(createPlayerExpressionRecencyState(SEED), tenth, 10);
     expect(playerFootingRecencyAge(tenth, clockAt(10))).toBe(0);
     expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(25), footing("serious-stumble", 25).admission)).toBe(false);
-    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(26), footing("serious-stumble", 26).admission)).toBe(true);
+    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(26), footing("serious-stumble", 26).admission)).toBe(false);
+    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(609), footing("serious-stumble", 609).admission)).toBe(false);
+    expect(playerFootingRecencyAllowsExpression(state, SEED, clockAt(610), footing("serious-stumble", 610).admission)).toBe(true);
     expect(recordAcceptedPlayerFootingExpression(createPlayerExpressionRecencyState(SEED), SEED, clockAt(11), tenth)).toBeNull();
   });
 
@@ -317,7 +332,7 @@ describe("bounded player-expression choice history contract", () => {
     }, SEED, clockAt(1))).toBeNull();
   });
 
-  it("delegates the effort-only600-step eligibility while leaving the pending-sound and footing laws unchanged", () => {
+  it("keeps effort and footing choice histories independent of pending sound", () => {
     expect(PLAYER_EFFORT_REANNOUNCEMENT_STEPS).toBe(600);
     expect(situatedExpressionCooldownSteps("need-rest-after-exertion")).toEqual({ meaning: 36, family: 12 });
     const evidence = {
@@ -354,13 +369,35 @@ describe("bounded player-expression choice history contract", () => {
 
     const withFooting = accepted(combined, footing("ordinary-stumble", 7), 7);
     const restored = canonicalizePlayerExpressionRecencyState(JSON.parse(JSON.stringify(withFooting)), SEED, clockAt(38));
-    expect(restored).toEqual(combined);
+    expect(restored).toEqual(withFooting);
     expect(restored?.effort.lastAccepted?.admission).toEqual(admission);
     expect(Object.keys(restored ?? {})).toEqual(["version", "effort", "footing", "cargo"]);
-    expect(restored?.footing).toEqual([]);
+    expect(restored?.footing).toEqual([footing("ordinary-stumble", 7)]);
+    expect(canonicalizePlayerExpressionRecencyState(withFooting, SEED, clockAt(601))?.effort)
+      .toEqual(createPlayerExpressionRecencyState(SEED).effort);
+    expect(canonicalizePlayerExpressionRecencyState(withFooting, SEED, clockAt(601))?.footing)
+      .toEqual([footing("ordinary-stumble", 7)]);
+    expect(canonicalizePlayerExpressionRecencyState(withFooting, SEED, clockAt(607)))
+      .toEqual(createPlayerExpressionRecencyState(SEED));
     expect(Object.isFrozen(restored?.effort.lastAccepted)).toBe(true);
     for (const replayableKey of ["active", "text", "caption", "reception", "audioAcknowledged", "remainingSteps"]) {
       expect(JSON.stringify(restored)).not.toContain(`"${replayableKey}":`);
     }
+  });
+
+  it.each(["ordinary-stumble", "serious-stumble"] as const)("preserves the exact original v1 prune fence for %s", (causalClass) => {
+    const origin = footing(causalClass);
+    const state = accepted(createPlayerExpressionRecencyState(SEED), origin, 1);
+    const legacy = { version: 1, effort: state.effort, footing: state.footing };
+    const originalHorizon = causalClass === "ordinary-stumble" ? 12 : 16;
+    expect(upgradePlayerExpressionRecencyV1(JSON.parse(JSON.stringify(legacy)), SEED, clockAt(originalHorizon)))
+      .toEqual(state);
+    expect(upgradePlayerExpressionRecencyV1(legacy, SEED, clockAt(1 + originalHorizon))).toBeNull();
+    // The current reader keeps genuine consumed history longer, without
+    // relaxing old canonical bytes or reconstructing an already pruned fact.
+    expect(canonicalizePlayerExpressionRecencyState(JSON.parse(JSON.stringify(state)), SEED, clockAt(30))).toEqual(state);
+    const empty = createPlayerExpressionRecencyState(SEED);
+    expect(upgradePlayerExpressionRecencyV1({ version: 1, effort: empty.effort, footing: [] }, SEED, clockAt(30))).toEqual(empty);
+    expect(canonicalizePlayerExpressionRecencyState(empty, SEED, clockAt(30))).toEqual(empty);
   });
 });
