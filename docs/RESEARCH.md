@@ -120,6 +120,39 @@ particular photo is not a mandatory fixture. Actual current contention acceptanc
 must combine relevant representative runtime/layout/native evidence, without
 claiming broad chatter, hardware, hours, saturation or whole-directive closure.
 
+## Current finite wilderness wording check — 2026-10-06
+
+On clean `0df578b`, unchanged Alpha63 production JS `015495e5…c11cd` and local
+probe `aa425bdb…5a9b`, the existing command
+`caffeinate -i node artifacts/validation/voice-current49/native-play-9cc87d3.cjs
+360000 wilderness` passes. Physical START/seed/W and ordinary REST only; no
+save, actor, weather, event, position or safe-route injection. Firefox157.0.1,
+1440×900/DPR1;361.333s,420→885,295.978 sampled northward tiles,331 public
+movement reads/four rests. Sampled exposure is339.963s moving/12.766s recovery/
+7.295s stationary, with no ADRIFT or terminal recovery. These are public sample
+categories, not exact continuous distance or equal-work/performance evidence.
+
+The362.604s bounded census has2619 reads/14 distinct retained candidates: five
+player lines, three animal calls and six physical sounds, no incomplete/overflow
+or raw-trace truncation. Five player lines use three wordings; **That was close.**
+appears at29.244/31.250/36.010s, followed by **Nearly had me.** at46.259s and
+**Still here.** at358.980s. Long gaps support finite sparse presentation, not
+acoustic silence; the short near-fall repetition cluster remains a concrete
+quality finding. Current `situatedExpression.ts:selectRealization` independently
+hashes each event. `playerExpressionRecency.ts` preserves only the existing
+12/16-step footing meaning locks, so distinct committed slips can repeat quickly.
+Investigate optional footing reannouncement eligibility at that bounded owner;
+do not change physical incidents, contact sounds or authenticated saved line keys
+to hide the finding. No such gameplay repair is implemented by this observation.
+
+Terminal Chart image is inspected, with no active acoustic-caption wall. Report
+`native-wilderness-0df578b-360000-v20.json` SHA256
+`a6631b1912ce62a206c8eb4ff21fef531047d04261157d9c5b44f73ff678d4f1`;
+PNG `93b699fa5047023bcc543f8df5d53cb4e5450578dd9c3cfda8dade8a6550acd1`.
+Console/lifecycle and owned browser/profile cleanup pass, apart from the one
+known CSP probe denial. No actual audio/AT hardware, hours, saturation,
+current-save reload, performance or whole-directive closure claim follows.
+
 ## Current Voice native selection and caption check — 2026-10-06
 
 Bounded tooling/evidence slice over `1c3f477`, unchanged Alpha63 game artifact.
