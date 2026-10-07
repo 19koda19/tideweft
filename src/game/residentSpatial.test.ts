@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorld, createWorldView } from "../sim/public";
+import { findAutonomousRoutePlan } from "../sim/network";
+import { createWorld, createWorldView, stepWorld } from "../sim/public";
 import {
   REGION_COORD_LIMIT,
   createRegionCoord,
@@ -24,6 +25,7 @@ import {
   residentPlacementInRegionalWindow,
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacement,
+  resolveResidentWorldPlacementAtEventLocation,
   type ResidentWorldPlacement,
 } from "./residentSpatial";
 import { createWorldPosition } from "./worldPosition";
@@ -103,6 +105,89 @@ describe("authoritative compatibility-resident spatial identity", () => {
     resident.location = { kind: "route", routeId: route.id, progress: FIXED_POINT * 3 / 4 };
     expect(resolveResidentRouteWorldPlacement(createWorldView(state), resident))
       .toMatchObject({ compatibilityTileIndex: toIndex, progress: 0.75 });
+  });
+
+  it.each(["forward", "reverse"] as const)("faces actual porter displacement on a %s itinerary", (direction) => {
+    const reverse = direction === "reverse";
+    const { state, resident } = travellingResident(reverse);
+    const departed = resolveResidentRouteWorldPlacement(createWorldView(state), resident);
+    if (!departed || resident.location.kind !== "route") throw new Error("fixture needs a departure");
+    const initialProgress = resident.location.progress;
+
+    stepWorld(state);
+    const moving = resolveResidentRouteWorldPlacement(createWorldView(state), resident);
+    if (!moving || resident.location.kind !== "route") throw new Error("fixture needs a moving porter");
+    const dx = moving.position.localX - departed.position.localX;
+    const dy = moving.position.localY - departed.position.localY;
+
+    expect(Math.abs(dx) + Math.abs(dy)).toBeGreaterThan(0);
+    expect(Math.cos(moving.facing) * dx + Math.sin(moving.facing) * dy).toBeGreaterThan(0);
+    if (reverse) expect(resident.location.progress).toBeLessThan(initialProgress);
+    else expect(resident.location.progress).toBeGreaterThan(initialProgress);
+  });
+
+  it.each(["forward", "reverse"] as const)("uses the %s itinerary tangent at interior bends and both endpoints", (direction) => {
+    const reverse = direction === "reverse";
+    const { state, resident, route } = travellingResident(reverse);
+    // A bounded geometry fixture isolates segment selection; the resident's
+    // assignment and leg direction came from real acceptance and departure.
+    const a = 10 * state.terrain.width + 10;
+    const b = a + 1;
+    const c = b + state.terrain.width;
+    route.path = [a, b, c];
+    const expected = reverse
+      ? [Math.PI, Math.PI, Math.PI, -Math.PI / 2, -Math.PI / 2]
+      : [0, 0, Math.PI / 2, Math.PI / 2, Math.PI / 2];
+
+    for (const [index, progress] of [0, 250_000, 500_000, 750_000, FIXED_POINT].entries()) {
+      resident.location = { kind: "route", routeId: route.id, progress };
+      const placement = resolveResidentRouteWorldPlacement(createWorldView(state), resident);
+      if (!placement) throw new Error("fixture needs a spatially valid route");
+      expect(placement.facing).toBeCloseTo(expected[index] ?? NaN, 12);
+      // Direction changes heading, never the canonical stored-path arithmetic.
+      expect(placement.position).toEqual(createWorldPosition(
+        { x: 0, y: 0 },
+        10 * TILE_UNITS + TILE_UNITS / 2 + Math.min(progress * 2, FIXED_POINT) / FIXED_POINT * TILE_UNITS,
+        10 * TILE_UNITS + TILE_UNITS / 2 + Math.max(0, progress * 2 - FIXED_POINT) / FIXED_POINT * TILE_UNITS,
+      ));
+      expect(placement.progress).toBe(progress / FIXED_POINT);
+    }
+  });
+
+  it("does not borrow a current reverse itinerary for a historical route-event locus", () => {
+    const { state, resident, route } = travellingResident(true);
+    const a = 10 * state.terrain.width + 10;
+    route.path = [a, a + 1, a + 1 + state.terrain.width];
+    resident.location = { kind: "route", routeId: route.id, progress: FIXED_POINT / 2 };
+    const economy = createWorldView(state);
+    const current = resolveResidentRouteWorldPlacement(economy, resident);
+    const historical = resolveResidentWorldPlacementAtEventLocation(
+      economy,
+      resident,
+      { kind: "route", routeId: route.id, progress: FIXED_POINT / 2 },
+      null,
+    );
+
+    expect(current?.facing).toBeCloseTo(Math.PI, 12);
+    expect(historical?.facing).toBeCloseTo(Math.PI / 2, 12);
+    expect(historical?.position).toEqual(current?.position);
+    expect(historical?.occupiedTile).toEqual(current?.occupiedTile);
+    expect(historical?.progress).toBe(current?.progress);
+  });
+
+  it("does not infer reverse travel from a disconnected or foreign assignment", () => {
+    const { state, resident, route, contract } = travellingResident(true);
+    const a = 10 * state.terrain.width + 10;
+    route.path = [a, a + 1];
+    resident.location = { kind: "route", routeId: route.id, progress: FIXED_POINT / 4 };
+    const assignedResidentId = contract.assignedResidentId;
+    contract.assignedResidentId = state.residents.find(({ id }) => id !== resident.id)?.id ?? null;
+    expect(resolveResidentRouteWorldPlacement(createWorldView(state), resident)?.facing).toBe(0);
+
+    contract.assignedResidentId = assignedResidentId;
+    const leg = contract.porterRouteIds.indexOf(route.id);
+    contract.porterSettlementIds[leg + 1] = contract.porterSettlementIds[leg] ?? 0;
+    expect(resolveResidentRouteWorldPlacement(createWorldView(state), resident)?.facing).toBe(0);
   });
 
   it("fails closed instead of treating a non-contiguous path as a regional route", () => {
@@ -203,6 +288,43 @@ describe("authoritative compatibility-resident spatial identity", () => {
     expect(playerWorldPositionInRegionalWindow(secondWindow, player)).toEqual(before);
   });
 });
+
+function travellingResident(reverse: boolean) {
+  const state = createWorld("first lantern", "standard");
+  state.weather = {
+    kind: "clear",
+    intensity: 0,
+    windX: 0,
+    windY: 0,
+    nextChangeTick: state.meta.completedTick + 1_000,
+  };
+  const contract = state.contracts.find((candidate) => {
+    const plan = findAutonomousRoutePlan(state, candidate.originSettlementId, candidate.destinationSettlementId);
+    const route = state.routes.find(({ id }) => id === plan?.routeIds[0]);
+    return candidate.status === "offered"
+      && route !== undefined
+      && (route.fromSettlementId !== candidate.originSettlementId) === reverse;
+  });
+  const resident = state.residents.find((candidate) => candidate.location.kind === "settlement"
+    && candidate.location.settlementId === contract?.originSettlementId
+    && candidate.activeContractId === null);
+  if (!contract || !resident) throw new Error(`fixture needs a real ${reverse ? "reverse" : "forward"} Promise`);
+  stepWorld(state, [{
+    id: `spatial-accept-${reverse}`,
+    type: "accept-contract",
+    carrier: "resident",
+    contractId: contract.id,
+    residentId: resident.id,
+  }]);
+  expect(contract.status).toBe("accepted");
+  stepWorld(state);
+  expect(contract.status).toBe("in-transit");
+  expect(contract.cargoQuantity).toBe(contract.quantity);
+  const route = state.routes.find(({ id }) => resident.location.kind === "route"
+    && id === resident.location.routeId);
+  if (!route) throw new Error("fixture needs the departed itinerary leg");
+  return { state, resident, route, contract };
+}
 
 function minimalWindow(
   origin: { readonly x: number; readonly y: number },

@@ -5,6 +5,7 @@ import {
   WORLD_WIDTH,
   type ResidentLocation,
   type ResidentState,
+  type RouteState,
   type WorldView,
 } from "../sim/types";
 import type { PlayerState } from "./player";
@@ -74,7 +75,9 @@ export function resolveResidentWorldPlacementAtEventLocation(
   const eventResident = { ...resident, location };
   if (location.kind === "route") {
     return settlementOrdinal === null
-      ? resolveResidentRouteWorldPlacement(economy, eventResident)
+      // Historical loci saved location, not itinerary direction. Do not
+      // reinterpret their facing through the resident's current Promise.
+      ? resolveResidentRoutePlacement(economy, eventResident, false)
       : null;
   }
   return Number.isSafeInteger(settlementOrdinal) && (settlementOrdinal ?? -1) >= 0
@@ -90,6 +93,14 @@ export function resolveResidentWorldPlacementAtEventLocation(
 export function resolveResidentRouteWorldPlacement(
   economy: WorldView,
   resident: ResidentState,
+): ResidentWorldPlacement | null {
+  return resolveResidentRoutePlacement(economy, resident, true);
+}
+
+function resolveResidentRoutePlacement(
+  economy: WorldView,
+  resident: ResidentState,
+  useCurrentItinerary: boolean,
 ): ResidentWorldPlacement | null {
   if (
     !isCompatibilityEconomy(economy)
@@ -147,13 +158,57 @@ export function resolveResidentRouteWorldPlacement(
   const occupiedIndex = segmentProgress < FIXED_POINT / 2 ? fromIndex : toIndex;
   const occupiedTile = compatibilityTileCenter(economy, occupiedIndex);
   if (occupiedTile === null) return null;
+  let facing = tileDx === 0 && tileDy === 0 ? 0 : Math.atan2(tileDy, tileDx);
+  const direction = useCurrentItinerary
+    ? residentRouteTravelDirection(economy, resident, route)
+    : null;
+  if (direction !== null) {
+    // At a vertex choose the segment the itinerary actually enters. At an
+    // endpoint retain that itinerary's first/last physical tangent instead
+    // of collapsing heading when position interpolation reaches one tile.
+    const headingFromOffset = direction === 1
+      ? Math.min(segmentCount - 1, Math.floor(scaledProgress / FIXED_POINT))
+      : Math.max(1, Math.ceil(scaledProgress / FIXED_POINT));
+    const headingFrom = compatibilityTile(economy, route.path[headingFromOffset] ?? -1);
+    const headingTo = compatibilityTile(economy, route.path[headingFromOffset + direction] ?? -1);
+    if (!headingFrom || !headingTo) return null;
+    const headingDx = headingTo.x - headingFrom.x;
+    const headingDy = headingTo.y - headingFrom.y;
+    if (Math.abs(headingDx) > 1 || Math.abs(headingDy) > 1) return null;
+    facing = headingDx === 0 && headingDy === 0 ? 0 : Math.atan2(headingDy, headingDx);
+  }
   return Object.freeze({
     position,
     occupiedTile,
     compatibilityTileIndex: occupiedIndex,
-    facing: tileDx === 0 && tileDy === 0 ? 0 : Math.atan2(tileDy, tileDx),
+    facing,
     progress: progressFixed / FIXED_POINT,
   });
+}
+
+/** Same ordered leg authority that orients progress in updatePorterLocation. */
+function residentRouteTravelDirection(
+  economy: WorldView,
+  resident: ResidentState,
+  route: RouteState,
+): 1 | -1 | null {
+  if (resident.activeContractId === null) return null;
+  const contract = economy.contracts.find(({ id }) => id === resident.activeContractId);
+  if (!contract
+    || contract.carrierKind !== "resident"
+    || contract.status !== "in-transit"
+    || contract.assignedResidentId !== resident.id
+    || contract.porterSettlementIds.length !== contract.porterRouteIds.length + 1
+  ) return null;
+  const legIndex = contract.porterRouteIds.indexOf(route.id);
+  if (legIndex < 0 || contract.porterRouteIds.lastIndexOf(route.id) !== legIndex) return null;
+  const fromSettlementId = contract.porterSettlementIds[legIndex];
+  const toSettlementId = contract.porterSettlementIds[legIndex + 1];
+  if (fromSettlementId === route.fromSettlementId && toSettlementId === route.toSettlementId) return 1;
+  if (fromSettlementId === route.toSettlementId && toSettlementId === route.fromSettlementId) return -1;
+  // A location without a valid live leg retains legacy path-facing placement;
+  // its progress alone cannot lawfully establish increasing/reverse travel.
+  return null;
 }
 
 /** Project a canonical resident into a moving frame without flattening it globally. */

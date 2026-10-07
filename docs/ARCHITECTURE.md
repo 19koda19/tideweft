@@ -2172,6 +2172,14 @@ audio event, presentation timer or save root. Canonical human bodies, physical
 refuge approach and the remaining enacted services are still unfinished; this
 change does not claim those consumers or a new public release.
 
+The local route-heading correction derives increasing or decreasing direction
+from the assigned in-transit Promise's ordered leg, matching the existing
+progress owner. Bends and endpoints use that direction's physical tangent;
+position, occupied cell and cargo/progress accounting are unchanged. Missing
+or invalid live itinerary metadata cannot establish reverse direction. Legacy
+event-time loci retain their original reconstruction rather than borrowing a
+later Promise's heading. This is not yet fine-step physical route execution.
+
 ## World representation
 
 The playable slice uses:
