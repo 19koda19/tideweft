@@ -20,6 +20,77 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Ordinary learned animal-call caption check — 2026-10-06
+
+The ignored ordinary-controls observer compared raw call text with DOM copy,
+missing the existing learned wording in
+`src/ui/situatedExpressionCaption.ts:situatedExpressionCaptionVisibleText`.
+It now derives expected animal copy only from the actually received public
+recognition field, with unchanged anonymous text and coarse direction. DOM
+expiry is distinct from projected-event expiry: screenshot checks may reference
+the previously observed exact caption while its same-ID reading lease remains
+visible. This does not create hearing, extend a world glyph or infer an emitter.
+Syntax/local serialized-helper characterization passes; caption/layout tests
+pass87 and maintained critical smoke passes105 (4.08s). No product change.
+
+Frozen clean `d69764b`, unchanged Alpha63 JS
+`015495e5529937a4797eb68d6bf5aa0343f27bb294dc6c7e49329e380f6c11cd`:
+`caffeinate -i node artifacts/validation/voice-current49/native-play-9cc87d3.cjs
+60000 animal` passes with observer revision22, SHA256
+`40270c9eda47ada3c13784b42f416e18fad0d84dbd8645f77bce461051e33e0e`.
+Report `native-animal-d69764b-60000-v22.json` SHA256
+`4031bb12d7418f8a98e85c8b63055b9e0e6084e8bab59f10b9c3594c029d961c`.
+Actual physical START/seed typing/movement, no save/actor/sound injection;
+60.015s,420→480. At423 the DOM and ARIA say plain `chicken call`. Both inspected
+1440×900 images have readable matching copy, no clipping or checked-caption
+collision. Chart brackets retain the current receipt; Relief brackets honestly
+record its reading lease after the current projection ends or changes. Actual
+DOM disappearance is observed3433ms after observer start, at424. The bounded
+observer has2128 frames;454 public reads over60.551s have no overflow. This is
+one ordinary learned-call opportunity, not natural call rates, complete event
+census, hardware audio/AT, saturation, long play or performance certification.
+
+Earlier records remain: revision19 captured no qualifying DOM match despite
+three chicken calls/one animal-caption census entry. Revision20's nominal PASS
+confused projection disappearance with DOM expiry. Revision21 correctly found
+DOM expiry but exited2 because its current-projection-only screenshot guard
+rejected a legitimate retained lease. Neither is promoted to a complete current
+presentation pass. Revision22 fixes both distinctions without changing native
+actions or the game; subsequent local limitation-copy correction changes no
+behavior. The captured script bytes are separately preserved. Each browser
+exited and its disposable profile was removed; real saves were untouched.
+
+## Current keeper/flock contention attempt — 2026-10-06
+
+On that same clean HEAD/artifact, the unchanged existing local command
+`caffeinate -i node artifacts/validation/voice-current49/native-learned-cat.cjs
+keeper 60000` exits1: the two current chicken projections end during screenshot
+capture. The requested60s observation/save continuation therefore did not run.
+Report `native-keeper-running-d69764b-60000-v2.json` SHA256
+`1cc14cf98ae6b14b7e3e48ae880b2ce690ffd05726bfc4dc3b99bb386e5c2498`.
+Its exact current50/carry14 pre-action fixture is1,921,672bytes,
+`ba937cd31ad9621d1c45b5dd4fa523b5aec5dc951c6e9a118e0386e2f6176269`:
+real generated chickens/guardian/store footing, no supplied expression,
+knowledge or closure. One neutral ordinary start and native E produce a real
+secured-store response while two chicken calls compete. No scheduler stop
+occurs during capture. The1.817s observer has13 states/149 callbacks,12 directly
+projected humans, at most4 candidates/3 labels and17 readable keeper samples.
+Two transient current-tuple mismatches remain reported; no overlap is recorded.
+The inspected PNG visibly separates keeper speech, a flock cue and retained
+physical caption, but the after-bracket has only keeper speech. This is not a
+passing three-current-source screenshot, sustained dense stress, expiry/save,
+audio/AT or performance proof; no world-glyph bracket was relaxed to obtain it.
+Owned browser/profile cleanup passes. No blind retry or new producer follows.
+
+The existing runtime case `voices the committed store closure once through
+shared Living Voice authority` passes separately:
+`npx vitest run src/game/runtime.settlementEcology.integration.test.ts
+--maxWorkers=1 -t 'voices the committed store closure once through shared
+Living Voice authority'` (1 selected/38 unselected,8.45s). Its genuine closure,
+single committed audio, authenticated current restore/tamper rejection and
+anonymous bounded NPC fact transfer/nonreplay are software evidence, not a
+replacement for the failed native stress bracket. Broader acceptance stays open.
+
 ## Current Voice native selection and caption check — 2026-10-06
 
 Bounded tooling/evidence slice over `1c3f477`, unchanged Alpha63 game artifact.
