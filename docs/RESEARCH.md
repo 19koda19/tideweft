@@ -20,6 +20,66 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Finite Voice reload-control check — 2026-10-06
+
+Local harness repair over `507468e`, not a gameplay/release change. After the
+compact capture reload, the native title/CONTINUE path now settles two render
+frames and requires the enabled target's rounded pointer center to hit that
+control or its child inside the viewport. One real click must produce matching
+runtime and dialog state. Failure reports bounded target/overlay diagnostics;
+it does not inject dispatch, override title state or retry a failed click.
+Synthetic helper/selftests and critical smoke 6 files/105 tests pass (4.05s).
+This characterizes readiness, not proof of the old failure's exact cause.
+
+Actual production Firefox 157.0.1 command:
+`npm run profile:browser -- --voice-presentation --reduced-motion
+--presentation-width 390 --presentation-mode relief-3d --output
+artifacts/validation/voice-current49/voice-single-alpha63-postreload.json`
+with a temporary `caffeinate -i` assertion passes. Artifact JS SHA256
+`015495e5529937a4797eb68d6bf5aa0343f27bb294dc6c7e49329e380f6c11cd`;
+harness `4bbada5d2973e19f83281ed046d48e4e2392145f76dac8e0d5d791b21e65a507`;
+JSON `7dba4f913ec6aa24104d8b7dab3d41c32a1fa4c8fde6d85e77d6e9dd9c3468cd`.
+Capture identity records dirty tooling/docs over that HEAD, not a clean-source
+certificate. Actual GREET commits at424, expires430, reload resumes431.
+The 47-code-point caption requires2239ms and was visible2331ms; announcement
+count1, current-save learned facts/ABOUT preserved, expired cue never replayed.
+The inspected 390px image contains a separate readable world label and caption.
+Post-restore absence is checked in both views/four sizes, but only one live
+caption layout was captured; this is not the eight-state matrix or hardware,
+audible AT/audio, performance, all-root equality or long-play certification.
+No unexpected browser errors; owned browser/profile cleanly removed.
+
+The fresh paired run instead fails reselecting its second moving NPC before
+the edited reload path. No completed report exists and it is not called a pass
+or proof of a game defect. The earlier paired image discussed below remains
+partial evidence. No repeated pair attempt, game change, packaging, dependency
+or public deployment accompanies this bounded check.
+
+## Finite current animal-source audit — 2026-10-06
+
+Current cause/semantic review plus
+`npx vitest run src/game/dogSignalExpression.test.ts
+src/game/coreWildlifeSignalExpression.test.ts
+src/game/coreWildlifeWeatherDistressExpression.test.ts
+src/game/coreWildlifePursuitExpression.test.ts
+src/game/coreEcologyAggregateAudio.test.ts --maxWorkers=1`
+passes 5 files/80 tests in4.71s over the unchanged game source at `507468e`.
+The existing guardian, species alarm, cat-rain and fox-pursuit adapters bind
+voices to exact committed causes; continued shelter/rain/pursuit states cannot
+mint routine repeated calls. Species-appropriate semantics and quiet-versus-
+warning policies stay source-bound. Aggregate frog chorus requires real active
+rain-chorus intensity and24-tick cadence; rat rustle is physical redistribution,
+not an invented rat voice. Shared hearing tests refuse out-of-range/masked cues.
+
+Existing runtime tests separately contain the guardian's forty-step continuation
+and step19 reload trace, real rain-masked unheard-cat negatives and lawful human/
+dog frog hearing. Those long fixtures were inspected, not rerun here. The DEV
+repetition report counts captured admitted vocal decisions, not every world
+sound, audio release or refused event. This finite audit finds no new producer
+defect; it does not establish sustained ordinary call rates, hours-level spam
+acceptance, every-species runtime coverage or whole Living Voice completion.
+Future repertoires stay future-owned; no new mechanics or audit subsystem.
+
 ## Water-motion readability and current-sight labels — 2026-10-06
 
 Local source repair over `f1a4324`, not a release or directive closure. The
@@ -60,9 +120,13 @@ retaining the historical Alpha62 record test. Actual mixed/pending-restore
 runtime controls 2 selected pass; late rollback/reduced-output controls 2
 selected pass. Critical105, context28, release-sync39, production typecheck/
 build and nested static smoke pass. Alpha63 metadata is a local preview only.
-The attempted compact native paired-GREET recheck times out at its title-state
-setup before any greeting, so post-repair native caption/reload proof is not
-claimed; the prior clean `f1a4324` compact pass remains pre-repair evidence.
+Correction after source and retained-image inspection: the attempted compact
+native paired-GREET recheck captured both greetings, observed their expiry,
+saved and reloaded before timing out at the post-reload title-menu click. The
+retained 390px image contains both speech labels, but no completed JSON report
+exists; a full post-repair caption/reload pass is still not claimed. The earlier
+description of failure before any greeting was incorrect. The prior clean
+`f1a4324` compact pass remains pre-repair evidence.
 The user's Alpha62 app is still open and untouched; desktop replacement/smoke,
 current performance, hardware, cumulative and public release gates remain
 unrun. No dependencies, upstream source, supported formats or save policy change.

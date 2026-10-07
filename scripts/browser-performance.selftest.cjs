@@ -15,6 +15,7 @@ const {
   assertNativeCaptionLease,
   matchObservedSpeechCaption,
   observedGreetingCaptionEvidence,
+  nativeControlRectangle,
   nativeCaptionLeaseEvidence,
   voicePresentationStates,
   normalizeExpiredVoiceAnnouncements,
@@ -39,6 +40,56 @@ const {
 assert.equal(BASE_PATH, '/tideweft/');
 assert.equal(SCENARIO.mode, 'relief-3d');
 assert.equal(SCENARIO.viewport.width, 1440);
+
+const controlRect = { x: 8.2, y: 5.6, width: 100, height: 24 };
+const controlChild = {};
+const controlNode = { hidden: false, disabled: false,
+  getBoundingClientRect: () => controlRect,
+  contains: (node) => node === controlChild };
+let controlHit = controlNode;
+let controlPresent = true;
+let lastControlPoint;
+const controlDocument = {
+  defaultView: { innerWidth: 1280, innerHeight: 720 },
+  querySelector: () => controlPresent ? controlNode : null,
+  elementFromPoint: (x, y) => { lastControlPoint = [x, y]; return controlHit; },
+};
+assert.deepEqual(nativeControlRectangle(controlDocument, '.button'), controlRect);
+assert.deepEqual(lastControlPoint, [58, 18]);
+controlHit = controlChild;
+assert.deepEqual(nativeControlRectangle(controlDocument, '.button'), controlRect);
+for (const hit of [null, {}]) {
+  controlHit = hit;
+  assert.equal(nativeControlRectangle(controlDocument, '.button'), null);
+}
+controlHit = controlNode;
+for (const flag of ['hidden', 'disabled']) {
+  controlNode[flag] = true;
+  assert.equal(nativeControlRectangle(controlDocument, '.button'), null);
+  controlNode[flag] = false;
+}
+controlPresent = false;
+assert.equal(nativeControlRectangle(controlDocument, '.button'), null);
+controlPresent = true;
+for (const rect of [
+  { ...controlRect, width: 0 }, { ...controlRect, height: -1 },
+  { ...controlRect, x: Number.NaN }, { ...controlRect, width: Number.POSITIVE_INFINITY },
+  { ...controlRect, x: -51 }, { ...controlRect, y: -20 },
+  { ...controlRect, x: 1230 }, { ...controlRect, y: 708 },
+]) {
+  controlNode.getBoundingClientRect = () => rect;
+  assert.equal(nativeControlRectangle(controlDocument, '.button'), null);
+}
+controlNode.getBoundingClientRect = () => controlRect;
+const viewport = controlDocument.defaultView;
+for (const invalid of [null, {}, { innerWidth: Number.NaN, innerHeight: 720 }]) {
+  controlDocument.defaultView = invalid;
+  assert.equal(nativeControlRectangle(controlDocument, '.button'), null);
+}
+controlDocument.defaultView = viewport;
+// The serialized helper must not depend on a Node closure when read in-page.
+assert.deepEqual(new Function(`return (${nativeControlRectangle.toString()})`)()(
+  controlDocument, '.button'), controlRect);
 
 assert.deepEqual(decodeRemoteValue({
   type: 'object',

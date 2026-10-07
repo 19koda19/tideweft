@@ -1478,6 +1478,49 @@ async function physicalBrowserClick(client, rect) {
   });
 }
 
+// A resized DOM rectangle alone does not establish a native pointer target.
+// Keep this page-read helper serializable and use the same rounded coordinates
+// as physicalBrowserClick; an overlay or clipped center must fail closed.
+function nativeControlRectangle(doc, selector) {
+  const node = doc.querySelector(selector);
+  if (!node || node.hidden || node.disabled) return null;
+  const r = node.getBoundingClientRect();
+  if (![r.x, r.y, r.width, r.height].every(Number.isFinite)
+    || r.width <= 0 || r.height <= 0) return null;
+  const x = Math.round(r.x + r.width / 2), y = Math.round(r.y + r.height / 2);
+  const viewport = doc.defaultView;
+  if (!viewport || !Number.isFinite(viewport.innerWidth) || !Number.isFinite(viewport.innerHeight)
+    || x < 0 || y < 0 || x >= viewport.innerWidth || y >= viewport.innerHeight) return null;
+  const hit = doc.elementFromPoint(x, y);
+  if (!hit || (hit !== node && !node.contains(hit))) return null;
+  return { x: r.x, y: r.y, width: r.width, height: r.height };
+}
+
+async function physicalBrowserControlClick(client, selector, expectedState) {
+  try {
+    const rect = await client.waitFor(
+      `(${nativeControlRectangle.toString()})(document, ${JSON.stringify(selector)})`, 5_000);
+    await physicalBrowserClick(client, rect);
+    await client.waitFor(expectedState, 5_000);
+  } catch (error) {
+    const target = await client.evaluate(`(() => {
+      const node = document.querySelector(${JSON.stringify(selector)});
+      const r = node?.getBoundingClientRect();
+      const hit = r ? document.elementFromPoint(Math.round(r.x + r.width / 2),
+        Math.round(r.y + r.height / 2)) : null;
+      return { selector: ${JSON.stringify(selector)}, viewport: { width: innerWidth, height: innerHeight },
+        hidden: node?.hidden ?? null, disabled: node?.disabled ?? null,
+        rect: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null,
+        centerHitsTarget: Boolean(node && hit && (hit === node || node.contains(hit))),
+        hitTag: hit?.tagName ?? null, hitClass: String(hit?.className ?? '').slice(0, 256),
+        openDialogs: [...document.querySelectorAll('dialog[open]')].slice(0, 4)
+          .map((dialog) => String(dialog.className).slice(0, 256)),
+        titleVisible: window.__TIDEWEFT__?.runtime.getUIView().title.visible ?? null };
+    })()`);
+    throw new Error(`Native Voice control failed: ${JSON.stringify(target)}`, { cause: error });
+  }
+}
+
 function observedGreetingCaptionEvidence(firstCaption, currentCaption, cues) {
   if (!Array.isArray(cues) || cues.length !== 2 || new Set(cues.map((cue) => cue?.id)).size !== 2) {
     throw new Error('Paired greetings require two distinct committed speech cues');
@@ -1823,12 +1866,13 @@ async function exerciseBrowserVoicePresentation(client, output, reducedMotion, r
     context: client.context, viewport: VOICE_PRESENTATION_VIEWPORTS[0], devicePixelRatio: 1,
   });
   await client.waitFor('innerWidth === 1280 && innerHeight === 720');
+  await client.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   // Current loads resume directly. Exercise the real title/CONTINUE controls
   // instead of assuming a load creates title state or assigning it ourselves.
-  await physicalBrowserClick(client, await rectangleOf('.title-menu-button'));
-  await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === true');
-  await physicalBrowserClick(client, await rectangleOf('.continue-card'));
-  await client.waitFor('window.__TIDEWEFT__.runtime.getUIView().title.visible === false');
+  await physicalBrowserControlClick(client, '.title-menu-button',
+    'window.__TIDEWEFT__.runtime.getUIView().title.visible === true && document.querySelector(".title-dialog")?.open === true');
+  await physicalBrowserControlClick(client, '.continue-card',
+    'window.__TIDEWEFT__.runtime.getUIView().title.visible === false && document.querySelector(".title-dialog")?.open === false');
   const verifyLearnedResident = async (residentTarget, learned) => {
   await client.evaluate(`(() => {
     const bridge = window.__TIDEWEFT__;
@@ -2701,6 +2745,7 @@ module.exports = {
   nativeCaptionLeaseEvidence,
   matchObservedSpeechCaption,
   observedGreetingCaptionEvidence,
+  nativeControlRectangle,
   assertPairedGreetingSnapshot,
   normalizeExpiredVoiceAnnouncements,
   anonymousAnimalCaptionExpectation,
