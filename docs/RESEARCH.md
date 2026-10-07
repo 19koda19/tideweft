@@ -91,6 +91,35 @@ single committed audio, authenticated current restore/tamper rejection and
 anonymous bounded NPC fact transfer/nonreplay are software evidence, not a
 replacement for the failed native stress bracket. Broader acceptance stays open.
 
+## Keeper capture-readiness correction and limit — 2026-10-06
+
+One source-linked local observer correction replaces its historical readable-hit
+latch plus second remote read with a new current public sample returned by the
+same readiness query. Missing/stopped/overflow observations fail closed, including
+overflow during sampling. Serialized-helper characterization and the maintained
+critical suite pass (6files/105,4.07s); independent read-only review passes.
+The strict post-image current-source, copy, geometry and identity guards remain.
+This is ignored diagnostic tooling, not a scheduler, event-lifetime or game fix.
+
+One justified attempt of the existing `keeper 60000` command on clean `54637ef`
+and the unchanged Alpha63 artifact again exits1 at the screenshot bracket.
+Probe SHA256 `1acf81900a345c26b9bfb3ee8df3cb5e64925eedf283af273e76c2bf9d309305`;
+report `native-keeper-running-54637ef-60000-v2.json` SHA256
+`3cbc22d8fa4b4b16fbda62ae38abbf642b43a17cabefb11d8a8125112ef6f2cd`.
+Firefox157.0.1, exact same current fixture:1.892s/13states/163callbacks,17readable
+samples; before1687ms has three current vocal sources, after1861ms has one.
+The inspected image visibly separates keeper speech, flock cue and retained
+physical caption; its SHA256 is
+`da8870d2127ef75d1ac85f98ff7e15fc611f4ec6cc1841c1d03793e337995735`.
+At most4candidates/3labels and12DIRECT public humans; two transient tuple timing
+mismatches, no recorded overlap/overflow or unexpected console/lifecycle errors.
+Owned browser/profile cleanup passes. Requested60s, continued-save and expiry
+assertions were not reached. Neither capture is a sustained-stress certificate.
+No further screenshot retry, extended event or runtime repair follows: this
+particular photo is not a mandatory fixture. Actual current contention acceptance
+must combine relevant representative runtime/layout/native evidence, without
+claiming broad chatter, hardware, hours, saturation or whole-directive closure.
+
 ## Current Voice native selection and caption check — 2026-10-06
 
 Bounded tooling/evidence slice over `1c3f477`, unchanged Alpha63 game artifact.
