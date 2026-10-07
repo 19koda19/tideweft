@@ -2579,7 +2579,7 @@ async function runBrowserWitness(options) {
         limitation: 'one representative desktop Relief scene in one installed Firefox build; packaged Chart/mobile/travel/resource/soak evidence remains separate',
       },
       privacy: options.voicePresentation
-        ? 'Local synthetic world only: JSON omits actor IDs/names and save payloads; screenshots retain legitimately visible game text and learned generated names. No real profile/save, private planning, personal data or telemetry service; artifacts remain ignored.'
+        ? 'Local synthetic world only: JSON omits actor IDs and save payloads, but retains observed caption/announcement copy including legitimately learned generated names; screenshots retain visible game text. No real profile/save, private planning, personal data or telemetry service; artifacts remain ignored.'
         : 'no save payload, actor identity, cache key, browser profile path, ephemeral port, console message, or private planning path is retained',
     };
     assertNotInterrupted('before browser shutdown');
