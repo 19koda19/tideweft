@@ -20,6 +20,84 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Alpha64 short production comparison — 2026-10-07
+
+Clean executable `785ff0f3359581bd3c3b2fce7550a976152c0fb5` prepares the
+bounded Living Voice release candidate without changing gameplay contract51,
+save50/carry14, generator or dependency versions. Standard web build, nested
+static smoke, macOS arm64 package/normal packaged smoke and ZIP generation pass.
+The measured and subsequently repackaged ASAR is exactly
+`648a24e80ea2bc5558cec8ff0d4d9a087a75d53e19b8178701b616c70a3474bd`;
+production JS SHA256 is
+`96848c89394907d83b45571ca1a5ae82415eab1cffbe39887216480de107d90d`.
+This record does not itself establish publication or directive closure.
+
+The existing pre-AFTER Alpha62 rule is frozen before capture: paired mean
+draw cost may increase at most5%, with no consistent callback-rate loss over5%.
+Comparison uses the retained `water-motion-4f7b189` AFTER pair, not the older
+Alpha60 scene with only three visible actors. Four new15-second estuary Relief
+production windows run sequentially, two per platform, after the existing
+at-least-30-frame controlled warm-up. Host is AC Apple M4/16GiB, macOS26.5.2,
+Low Power Mode off;
+Node22.20.0/npm10.9.3, Electron44.1.0/Chromium152 and Firefox157.0.1. CSS
+viewport1440×900, DPR1, renderer quality and workloads are matched:72 actors,
+54 materialized,22 visible/4 wildlife,950 aggregate units,1704 drawn terrain
+tiles, one perception-material submission consuming156 visible chunk-local
+perception segments,20 halos and7 active Relief label nodes. The generic node
+count is not seven visible acoustic captions.
+The user's ordinary Firefox stays open as in the retained comparison; possible
+background contention remains a limit. No competing test, game or profiler runs.
+
+| Platform | Retained paired draw mean | Candidate paired draw mean | Retained callback rate | Candidate callback rate |
+| --- | --- | --- | --- | --- |
+| Electron | 24.671824ms | 25.215441ms (+2.2034%) | 34.054161/s | 33.308016/s (−2.1911%) |
+| Firefox | 20.702806ms | 20.459267ms (−1.1764%) | 31.732260/s | 32.152449/s (+1.3242%) |
+
+Both platforms pass that **no-additional-short-regression** criterion. World
+means remain89.81–90.49ms Electron and154.8–157.2ms Firefox; worst callback
+gaps remain142.9ms and206ms. Each run contains only14–15 advances, so empirical
+world p99 is effectively max, not a reliable population tail estimate. Accepted
+steps are149/150 Electron and152/152 Firefox, with14/15 and15/15 advances;
+these wall-window repetitions are not equal-terminal-state witnesses. Callback
+rates and draw CPU are not GPU timing or verified presented FPS. Both Firefox
+captures record zero runtime errors/rejections; all four finish with all six
+selected pending counters at zero.
+Explicit tail saves occur outside timed windows; no timed autosave or long-run
+heap/resource convergence is certified. DOM count3753 versus3682 reflects the
+new manual; identical DOM bytes are not claimed.
+
+Commands are the existing `profile:baseline` with packaged executable,
+`--scenario estuary-desktop-relief --sample-ms 15000`, and `profile:browser`
+with its matching `--packaged-baseline` and `--sample-ms 15000`, each under
+`caffeinate -i`. Ignored evidence is
+`artifacts/validation/voice-current49/short-performance-785ff0f/`:
+`electron-{1,2}.json` and `firefox-{1,2}.json`, with corresponding command logs.
+No CPU sampler, hitch trace, new harness, optimization or fidelity reduction is
+used. Historical45/40 callback floors remain unmet; the expanded Relief cost
+and synchronous world hitch are documented known limitations, not fixed by
+this comparison. Longer profiling/repair and longitudinal acceptance remain
+unperformed. Installation/signing, other desktop targets, physical mobile
+hardware, formal spoken assistive-output tests and exact live release checks
+are not established by these observations. Dependency changes: NONE; upstream
+p5/Electron source modified: NO.
+
+The final local complete-correctness attempt on the same executable starts
+2026-10-07T12:54:38.816Z under the explicit1500-second whole-command cap:
+`caffeinate -i npm run test:ci -- --reporter=default --reporter=json
+--outputFile=artifacts/validation/voice-current49/cumulative-785ff0f.json`.
+Context28 and player-facing39 self-tests pass. The cap terminates only the
+owned process group with SIGKILL after1500.020702seconds; supervisor exit124.
+The log contains97 completed files/1409 passed tests and no reported failure
+lines, but268 tracked test files lack completed results. No final JSON result
+exists. This is **INCOMPLETE**, not a full cumulative pass, an identified game
+regression or release permission. No extension/restart occurs. Log SHA256 is
+`a91403ae51d339d77588598a6301add1a30a8c4ce4e5e2bcff79a6fd5cedb970`;
+the local `cumulative-785ff0f-cap-coverage.json` records exact completed and
+uncompleted paths without treating in-flight tests as passed. Runtime, tests,
+schemas, configuration and build inputs remain unchanged; only prose evidence
+is edited during the run. Complete correctness, CI, deployment and exact-live
+verification remain unestablished, and Living Voice is not closed.
+
 ## Non-pausing modal announcement exposure — 2026-10-07
 
 A short native macOS arm64 observation on clean `4f3a260` reproduced a real
