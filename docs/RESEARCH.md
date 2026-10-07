@@ -2491,6 +2491,24 @@ This is one controlled desktop production scene, not ordinary encounter rates,
 full crowd, hours, device audio/AT, mobile hardware, performance or directive
 closure. No source, dependency, schema, visual-quality or publication change.
 
+Current-artifact recheck on clean `4f2fd6d` uses the same initial fixture and
+native controls, with production JS SHA256
+`2005f5f4c24ae8db19a35aa4127dc53b4131115bdb498bc8763a583d6ecd89a5`.
+The existing `native-learned-cat.cjs mixed` command passes: 3,008ms, 19 retained
+states without overflow, tick421→424, four candidates and at most two readable
+labels. Manual PNG review confirms separate speech/whine/cargo placement;
+physical glyph suppression remains legitimate. Two expiry-boundary tuple gaps
+each resolve at the next sampled render eight milliseconds later. Current
+outer50/carry14 save retains14 units as12+1+1 and the real whine learned at422;
+caption/ARIA agrees and the cargo announcement occurs once. Source/artifact
+identity remains fixed; normal owned-browser/profile cleanup completes with
+no unexpected console errors. JSON SHA256
+`e9286dba88222bb825c5c575190fe34ddaa45bbd6ddeba82359d64fd3ebca9db`;
+PNG SHA256
+`147ddd846bd60eb6f86e62c869a3a7906ab9f802b3fd35a7658e8c7adda64af5`.
+The same controlled-scene, hardware and duration limits above still apply;
+this is not a fresh performance, crowd, assistive-device or closure certificate.
+
 #### Warning follow-up and expedition-driver limits — 2026-10-06
 
 A separate existing test exports a current quiet phase-zero save with a
