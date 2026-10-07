@@ -98,6 +98,36 @@ schemas, configuration and build inputs remain unchanged; only prose evidence
 is edited during the run. Complete correctness, CI, deployment and exact-live
 verification remain unestablished, and Living Voice is not closed.
 
+### Remaining-file completion — 2026-10-07
+
+The subsequent user continuation authorizes finishing only the268 uncompleted
+files, in batches individually capped at1500seconds. Two explicit134-file
+Vitest invocations retain the current default isolation/configuration and
+`--maxWorkers=2`, with default and JSON reporters. Batch1 passes1216 tests in
+23.492seconds; batch2 passes1572 in15.371seconds, both terminal exit0.
+No test expectation, timeout, executable or dependency changes. Their union
+with the97 positive completed-file witnesses from the capped log covers exactly
+365 tracked test files / **4,197 passing tests**, with no duplicate, unexpected,
+missing, pending, todo or failed assertions in the completed batch reports.
+Context28 and player-facing39 prerequisite passes are retained.
+
+The ignored `voice-current49/complete-batched-785ff0f.json` certificate has
+SHA256 `4f9beda0b8c225bfa304c833b2f4375664f6d0d57d7e3541f9f1cf9b9e738736`.
+Its plan captures666 source/test/configuration inputs, all byte-unchanged at
+completion; public HEAD3769c6e differs from785ff0f only in this Research prose.
+Exact file membership, per-file assertions, terminal statuses and report/log
+hashes are checked. Commands use the installed `vitest.mjs run` with the plan's
+explicit file paths, the existing reporters and worker limit under
+`caffeinate -i`; no new simulator, harness or published planning tool is added.
+
+This is **complete batched cumulative coverage**, not a retroactive PASS of
+the original capped `npm run test:ci`. That invocation remains incomplete and
+has no terminal JSON/global teardown result for its97 log-backed file passes.
+Separate invocations do not reproduce monolithic co-scheduling. The evidence
+supports current local cumulative confidence on the unchanged executable,
+not a longitudinal soak, performance repair or remote release. CI, Pages and
+exact-live verification remain pending at this local checkpoint.
+
 ## Non-pausing modal announcement exposure — 2026-10-07
 
 A short native macOS arm64 observation on clean `4f3a260` reproduced a real
