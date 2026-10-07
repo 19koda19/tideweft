@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createActorObservation } from "../sim/actorPerception";
-import { createWorld, createWorldView, stepWorld, type WorldView } from "../sim/public";
+import { STRAND_AUTOMATION_THRESHOLD, createWorld, createWorldView, stepWorld, type WorldView } from "../sim/public";
 import { seedFromText } from "../sim/rng";
 import { FIXED_POINT } from "../sim/types";
 import { createCoreEcologyAggregatePatch, type CoreEcologyPopulationInput } from "./coreEcology";
@@ -26,6 +26,7 @@ import {
   situatedExpressionSemanticFactForEvent, situatedExpressionSoundClass,
 } from "./situatedExpressionAcoustics";
 import { checkExpressionKnowledgeSource, expressionKnowledgeListenerIssues } from "./situatedExpressionKnowledgeAudit";
+import { workingPeopleExpressionIntent } from "./workingPeopleExpression";
 
 function acceptedEvent(intent: SituatedExpressionIntent | null): SituatedExpressionEvent {
   if (intent === null) throw new Error("knowledge fixture omitted its existing producer intent");
@@ -120,7 +121,81 @@ function weatherHoldFixture() {
   return { world, event: acceptedEvent(residentWeatherHoldExpressionIntent({ world, event: cause })) };
 }
 
+// Reuse the work owner's real accept/depart transaction. Only its synthetic
+// starting Promise/resource and route readiness are prepared, not a departure
+// event, custody claim, or expression.
+function heavyDepartureFixture() {
+  const state = createWorld("working people carry what the world entrusts", "standard");
+  const contract = state.contracts.find(({ status }) => status === "offered");
+  const origin = contract === undefined ? undefined : state.settlements.find(({ id }) => id === contract.originSettlementId);
+  const resident = contract === undefined ? undefined : state.residents.find(({ activeContractId, location }) => (
+    activeContractId === null && location.kind === "settlement" && location.settlementId === contract.originSettlementId
+  ));
+  if (contract === undefined || origin === undefined || resident === undefined) {
+    throw new Error("knowledge fixture needs an offered Promise and available origin porter");
+  }
+  contract.resource = "parts";
+  contract.quantity = 1;
+  if (origin.inventory.parts < contract.quantity) {
+    const added = contract.quantity - origin.inventory.parts;
+    origin.inventory.parts += added;
+    state.ledger.initial.parts += added;
+  }
+  state.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: state.meta.completedTick + 1_000 };
+  for (const route of state.routes) {
+    route.traceStrength = Math.max(route.traceStrength, STRAND_AUTOMATION_THRESHOLD);
+    route.condition = Math.max(route.condition, 180_000);
+  }
+  stepWorld(state, [{ id: "working-people-heavy-accept", type: "accept-contract", carrier: "resident",
+    contractId: contract.id, residentId: resident.id }]);
+  stepWorld(state);
+  const world = createWorldView(state);
+  const cause = [...world.events].reverse().find((event) => event.type === "contract-departed" && event.subjectId === contract.id);
+  if (cause === undefined) throw new Error("knowledge fixture did not commit heavy departure");
+  const intent = workingPeopleExpressionIntent({ world, event: cause });
+  if (intent === null) throw new Error("knowledge fixture omitted its heavy-departure intent");
+  return { world, intent, event: acceptedEvent(intent), causeSequence: cause.sequence,
+    contractId: contract.id, residentId: resident.id };
+}
+
 describe("event-time expression knowledge source checks", () => {
+  it("authenticates only a committed heavy-porter departure through its existing owner without changing inputs", () => {
+    const fixture = heavyDepartureFixture();
+    const settlement = keeperFixture().settlement;
+    const before = JSON.stringify([fixture, settlement]);
+    const checked = checkExpressionKnowledgeSource(fixture.event, fixture.world, settlement);
+    expect(checked).toEqual({ eventId: fixture.event.eventId, sourceActorId: fixture.event.sourceActorId,
+      triggerEventId: fixture.event.triggerEventId, checkedAtTick: fixture.world.completedTick,
+      owner: "workingPeopleExpression", validated: true });
+    expect(Object.isFrozen(checked)).toBe(true);
+    expect(checkExpressionKnowledgeSource(structuredClone(fixture.event), fixture.world, settlement)).toEqual(checked);
+
+    // These events are canonical kernel outputs; their cause/identity/locus
+    // disagrees with the actual committed departure rather than its schema.
+    for (const intent of [
+      { ...fixture.intent, sourceActorId: "RES-forged" },
+      { ...fixture.intent, triggerEventId: `${fixture.intent.triggerEventId}:forged` },
+      { ...fixture.intent, position: { ...fixture.intent.position, localX: fixture.intent.position.localX + 1 } },
+    ]) expect(checkExpressionKnowledgeSource(acceptedEvent(intent), fixture.world, settlement)?.validated).toBe(false);
+    // Unlike the canonical mismatches above, this unsupported knowledge basis
+    // is rejected by the semantic kernel itself; do not fabricate its admission.
+    expect(checkExpressionKnowledgeSource({ ...fixture.event, knowledgeBasis: "self-perceived-threat" },
+      fixture.world, settlement)?.validated).toBe(false);
+
+    const missingCause: WorldView = { ...fixture.world,
+      events: fixture.world.events.filter(({ sequence }) => sequence !== fixture.causeSequence) };
+    const emptyCargo: WorldView = { ...fixture.world,
+      contracts: fixture.world.contracts.map((contract) => contract.id === fixture.contractId
+        ? { ...contract, cargoQuantity: 0 } : contract) };
+    const missingCustody: WorldView = { ...fixture.world,
+      residents: fixture.world.residents.map((resident) => resident.id === fixture.residentId
+        ? { ...resident, activeContractId: null } : resident) };
+    for (const world of [missingCause, emptyCargo, missingCustody]) {
+      expect(checkExpressionKnowledgeSource(fixture.event, world, settlement)?.validated).toBe(false);
+    }
+    expect(JSON.stringify([fixture, settlement])).toBe(before);
+  });
+
   it("authenticates the committed keeper closure but not the prior open root, without changing inputs", () => {
     const fixture = keeperFixture();
     const before = JSON.stringify(fixture);
@@ -189,6 +264,18 @@ function syntheticReceipt(event: SituatedExpressionEvent, confidence: number = S
 }
 
 describe("synthetic expression knowledge listener consistency checks", () => {
+  it("keeps a heavy-porter report anonymous without adding a factual decoder", () => {
+    const { event } = heavyDepartureFixture();
+    const receipt = syntheticReceipt(event, 700_000, situatedExpressionSoundClass(event));
+    const before = JSON.stringify([event, receipt]);
+    expect(receipt.semanticFact).toBeNull();
+    expect(receipt.observation).toMatchObject({ subjectId: null, identification: "anonymous", perceivedClass: "human-vocalization" });
+    expect(expressionKnowledgeListenerIssues(event, receipt)).toEqual([]);
+    expect(expressionKnowledgeListenerIssues(event, syntheticReceipt(event, 700_000, "store-secured-report")))
+      .toContain("unsupported-understanding");
+    expect(JSON.stringify([event, receipt])).toBe(before);
+  });
+
   it.each([SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE, SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE - 1])(
     "keeps anonymous understanding at its exact threshold (%s) without mutating the receipt", (confidence) => {
       const { event } = keeperFixture();

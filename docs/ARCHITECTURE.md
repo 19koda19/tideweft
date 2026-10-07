@@ -1382,10 +1382,13 @@ unavailable environmental propagation is implemented.
 
 `auditKnowledge(query)` inspects captured evidence for current keeper
 secure-store replies, resident introductions, human danger warnings and
-resident weather holds. At event time it calls each existing domain's
+resident weather holds, plus committed porter heavy-load departures. At event
+time it calls each existing domain's
 `*ExpressionEventMatchesWorld` validator and retains only a small verdict with
 event/source/trigger/tick and owner. The keeper uses the exact committed closure
-root, not the prior open store. Other producers retain null source evidence;
+root, not the prior open store. Porter evidence uses the existing exact departure,
+contract cargo/custody and event-locus validator, not a role or apparent load.
+Other producers retain null source evidence;
 neither declared knowledge basis nor realized words establish possession of a
 fact. This captured verdict is not a portable attestation and cannot grant
 knowledge or validate a later mutable world.
@@ -1403,8 +1406,9 @@ new observation channel, world scan or listener authority.
 The report checks event/source agreement, canonical anonymous hearing,
 confidence and the existing semantic decoder. Only a keeper's secure-store
 report currently supplies `store-secured-report` at confidence450000 or higher.
-Below that threshold it remains human vocalization. Introduction, warning and
-weather speech do not decode names, hidden causes, destinations or other facts:
+Below that threshold it remains human vocalization. Introduction, warning,
+weather and heavy-load speech do not decode names, hidden causes, cargo contents,
+destinations or other facts:
 their received class is the existing semantic sound class. A matching retained
 player receipt is reported separately and does not prove player comprehension.
 

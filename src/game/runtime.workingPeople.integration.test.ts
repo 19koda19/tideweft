@@ -535,6 +535,129 @@ describe("runtime Working People heavy-porter expression", () => {
     resumed.destroy();
   });
 
+  it("audits the committed heavy departure and actual anonymous audience without changing gameplay", async () => {
+    async function run(inspect: boolean) {
+      const fixture = workingPeopleFixture("runtime audited heavy porter voice", {
+        heavy: true,
+        nearPlayer: true,
+      });
+      const repository = new MemoryRepository(fixture.record);
+      const perceptionSpy = vi.spyOn(humanPerception, "collectExistingHumanObservations");
+      const runtime = await createTideweftRuntime(repository);
+      try {
+        const inspector = runtime.expressionDiagnostics;
+        if (inspector === undefined) throw new Error("Development inspector is unavailable");
+        inspector.setEnabled(inspect);
+        soundscapePlay.mockClear();
+        advancePlayerSteps(runtime, 10);
+        await runtime.save();
+        const pending = decodeCurrent(repository);
+        const channel = pending.perceptionCarry.situatedExpressionChannels.channels
+          .find(({ sourceActorId }) => sourceActorId === fixture.actorId);
+        const event = channel?.state.active;
+        if (!event) throw new Error("Audited porter did not commit a heavy departure");
+        const initial = inspector.auditKnowledge({ meaning: "porter-heavy-load" });
+        if (inspect) {
+          expect(initial.records).toHaveLength(1);
+          expect(initial.records[0]).toMatchObject({
+            meaning: "porter-heavy-load",
+            sourceStatus: "validated",
+            sourceCheck: {
+              eventId: event.eventId,
+              sourceActorId: fixture.actorId,
+              triggerEventId: event.triggerEventId,
+              checkedAtTick: deserializeWorld(pending.world).meta.completedTick,
+              owner: "workingPeopleExpression",
+              validated: true,
+            },
+            playerReceiptStatus: "matching-retained-receipt",
+            humanListeners: null,
+            issues: [],
+          });
+        } else expect(initial.records).toEqual([]);
+
+        advancePlayerSteps(runtime, 10);
+        await runtime.save();
+        const saved = repository.snapshot();
+        const finalWorld = deserializeWorld(decodeCurrent(repository).world);
+        const view = structuredClone(runtime.getRenderView());
+        const ui = structuredClone(runtime.getUIView());
+        const audio = structuredClone(soundscapePlay.mock.calls);
+        const audit = inspector.auditKnowledge({ meaning: "porter-heavy-load" });
+        if (inspect) {
+          expect(audit.records).toHaveLength(1);
+          const record = audit.records[0]!;
+          expect(record).toMatchObject({
+            sourceStatus: "validated", sourceCheck: initial.records[0]?.sourceCheck,
+            playerReceiptStatus: "matching-retained-receipt", issues: [],
+          });
+          if (record.humanListeners === null) throw new Error("Porter audience was not captured");
+          const selected = perceptionSpy.mock.calls.findIndex(([input]) => (
+            input.targetTick === finalWorld.meta.completedTick
+            && input.supplementalSoundSamples?.some(({ expressionEventId }) => (
+              expressionEventId === event.eventId
+            ))
+          ));
+          const result = perceptionSpy.mock.results[selected];
+          if (result?.type !== "return") throw new Error("Porter has no actual selected-human frame");
+          expect(record.humanListeners.map(({ receipt }) => receipt.observerId)).toEqual(
+            result.value.map(({ observerId }: { observerId: string }) => observerId),
+          );
+          expect(record.humanListeners.length).toBeGreaterThan(0);
+          expect(record.humanListeners.length).toBeLessThanOrEqual(humanPerception.HUMAN_PERCEPTION_MAX_RESIDENTS);
+          expect(record.humanListeners.filter(({ receipt }) => receipt.outcome === "heard").length)
+            .toBeGreaterThan(0);
+          for (const listener of record.humanListeners) {
+            expect(listener.receipt).toMatchObject({
+              expressionEventId: event.eventId,
+              sourceActorId: fixture.actorId,
+              observedAtTick: finalWorld.meta.completedTick,
+              semanticFact: null,
+            });
+            if (listener.receipt.outcome === "heard") {
+              expect(listener.receipt.observation).toMatchObject({
+                channel: "hearing", identification: "anonymous",
+                subjectId: null, perceivedClass: "human-vocalization",
+              });
+            } else expect(listener.receipt.observation).toBeNull();
+            const resident = finalWorld.residents.find(({ identity }) => (
+              identity.stableId === listener.receipt.observerId
+            ));
+            if (!resident) throw new Error("Captured porter listener has no saved resident");
+            const belief = resident.perception.beliefs.find(({ sourceObservationId, lastObservedTick }) => (
+              listener.receipt.observation !== null
+              && sourceObservationId === listener.receipt.observation.id
+              && lastObservedTick === listener.receipt.observedAtTick
+            ));
+            expect(listener.retainedBelief).toBe(belief !== undefined);
+            if (belief) expect(belief).toMatchObject({
+              channel: "hearing", identification: "anonymous",
+              subjectId: null, perceivedClass: "human-vocalization",
+            });
+          }
+        } else expect(audit.records).toEqual([]);
+
+        // Reading a captured verdict cannot mutate the inspected roots or replay audio.
+        inspector.auditKnowledge();
+        expect(runtime.getRenderView()).toEqual(view);
+        expect(runtime.getUIView()).toEqual(ui);
+        expect(soundscapePlay.mock.calls).toEqual(audio);
+        expect(repository.snapshot()).toEqual(saved);
+        await runtime.save();
+        expect(repository.snapshot().worldJson).toBe(saved.worldJson);
+        return { worldJson: saved.worldJson, view, ui, audio };
+      } finally {
+        perceptionSpy.mockRestore();
+        runtime.destroy();
+      }
+    }
+    const withoutInspection = await run(false);
+    scheduledFrame = undefined;
+    nextFrameTime = 100;
+    const inspected = await run(true);
+    expect(inspected).toEqual(withoutInspection);
+  });
+
   it("presents, persists, and perceives one nearby heavy departure without replaying audio", async () => {
     const fixture = workingPeopleFixture("runtime heavy porter voice", {
       heavy: true,

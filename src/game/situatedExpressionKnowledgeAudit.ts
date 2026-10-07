@@ -9,6 +9,7 @@ import { settlementKeeperStoreResponseExpressionEventMatchesWorld } from "./sett
 import { projectSituatedExpression, type SituatedExpressionEvent, type SituatedExpressionMeaning } from "./situatedExpression";
 import { canonicalizeSituatedExpressionSemanticFact, situatedExpressionSemanticFactForEvent,
   situatedExpressionSoundClass } from "./situatedExpressionAcoustics";
+import { workingPeopleExpressionEventMatchesWorld } from "./workingPeopleExpression";
 
 /** Captured DEV evidence, never a portable attestation or knowledge authority. */
 export interface ExpressionKnowledgeSourceCheck {
@@ -21,7 +22,7 @@ export interface ExpressionKnowledgeSourceCheck {
 }
 
 export const EXPRESSION_KNOWLEDGE_SOURCE_MEANINGS: readonly SituatedExpressionMeaning[] = Object.freeze([
-  "keeper-secure-store-response", "resident-introduction", "human-danger-warning", "resident-weather-hold",
+  "keeper-secure-store-response", "resident-introduction", "human-danger-warning", "resident-weather-hold", "porter-heavy-load",
 ]);
 
 /** Calls existing domain authentication against the actual event-time owners. */
@@ -53,6 +54,10 @@ export function checkExpressionKnowledgeSource(
     case "resident-weather-hold":
       owner = "residentWeatherHoldExpression";
       validated = residentWeatherHoldExpressionEventMatchesWorld(world, event);
+      break;
+    case "porter-heavy-load":
+      owner = "workingPeopleExpression";
+      validated = workingPeopleExpressionEventMatchesWorld(world, event);
       break;
     default: return null;
   }
