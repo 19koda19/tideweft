@@ -51,7 +51,7 @@ The published `29ea8dc` checkpoint gives each discovered place one stable derive
 - A connected, non-collinear triangle of one Reed mat, one Tide anchor, and one Wind knot can become a Tide Harp. Standing inside/on one gives a single capped +900 Loom recharge each player tick. Space still sounds radius 8 from the ferrier and also sounds radius 6 from each of the three knots: four origins, one existing charge cost, and no hidden depth shortcut.
 - Every consequential command responds through animation, sound, text, or an accessible live announcement.
 
-The current unpublished Living Voice source makes expression belong to the
+Released Alpha64's bounded Living Voice scope makes expression belong to the
 actor rather than to the system log. Mild player stumbles, severe near-falls,
 danger to important carried cargo, an actual parcel breaking loose, and
 successful recovery can produce one restrained contextual line. A committed
@@ -66,6 +66,13 @@ custody. It does not fire for light cargo or an attempted or stale action, and
 requires the player to both lawfully hear the porter and directly see the source
 at event time. Matching captions and original synthetic voice contours use the
 same accepted semantic event.
+
+The [release receipt](../README.md#alpha64-living-voice-release-receipt) owns
+source, CI, deployment and current-save evidence. The scope below is not a
+promise of every species repertoire or future physical producer. Accepted
+Relief cost/world hitch and extended profiling/soaks remain deferred until full
+Living Foliage; functional accessibility is not hardware-wide AT certification.
+
 The starting-store keeper now answers an immediate in-person warning only after
 that report commits the exact persistent closure transaction. The retained
 store, keeper, source evidence, recorded listener pose, visibility/range, and
@@ -253,10 +260,10 @@ identity, or a visual position from sound alone. Other work lines remain silent
 until their real completed-work facts have an authoritative owner. This slice
 does not yet add general NPC conversation or a broad animal-expression system.
 
-The current unpublished status is deliberately narrower than the shared
+The current Alpha64 status is deliberately narrower than the shared
 vocabulary. Receipt-backed player/human representatives, three guardian-dog
 signals, fish-crow/deer/gull/elk/boar/chicken calls, the rabbit thump, and the frog chorus are live in
-the candidate. The aggregate rat rustle and one exact domestic-cat rain-distress
+the released scope. The aggregate rat rustle and one exact domestic-cat rain-distress
 call are also live through the shared acoustic path; the cat representative
 requires a freshly committed rain-caused retreat plus matching rain memory and
 wet-track evidence, not merely a visible intent transition. A fresh marsh-fox
@@ -362,7 +369,7 @@ hearing and localization. Humans retain only physical-sound knowledge and no
 strong interruption. This does not make arbitrary rabbit locomotion, broad
 non-dog animal contact, or the remaining species repertoires complete.
 
-The current unpublished candidate also replaces the frog chorus's former
+The released Alpha64 scope also replaces the frog chorus's former
 ecology-only sound-and-announcement route with the shared acoustic world. Every
 qualifying 24-tick `rain-chorus` cadence derives one structured anonymous
 `animal-call` event per conserved frog aggregate, never one call per frog or
@@ -497,7 +504,7 @@ Each seed creates:
   closure at exactly 45 core-wildlife profiles / 47 total Living Weft catalog
   records, preserving the exact 27-record Alpha33 prefix, outer save v30,
   `RegionalEcologyStateV6`, gameplay contract 37, and Field Manual 49. The
-  current **LIVE_VERIFIED** Alpha60 release retains that catalog and ecology
+  historical **LIVE_VERIFIED** Alpha60 release retains that catalog and ecology
   authority, outer save v32, and gameplay contract 51 while advancing the Field
   Manual to 70. This is not worldwide species breadth, ecological
   migration behavior, or a complete bestiary.
@@ -978,7 +985,7 @@ gray-wolf movement can leave paired tracks or canid pawprints at the saved
 movement site. Crows, the harrier, the egret, the duck, the otter, harbor
 seals, polar bears, chickens, goats, boars, elk, cougars, and brown bears do
 not manufacture ground tracks.
-Gray-wolf voice profiles remain foundation-only. The current unpublished elk
+Gray-wolf voice profiles remain foundation-only. The released Alpha64 elk
 alarm bark and wild-boar alarm grunt use shared Living Voice; elk bugling,
 boar squealing and routine social grunts remain foundation-only. Cougar and
 brown-bear voice behavior is not implemented. Directly visible individual
@@ -1059,7 +1066,7 @@ conservation, and one representative store-rat-visible-cat composition. The
 existing shared fuzz and performance gates remain in regression; this is not
 an exhaustive species or pair matrix.
 
-In the current unpublished Living Voice candidate, the applied in-person
+In the released Alpha64 Living Voice scope, the applied in-person
 closure also causes one restrained keeper reply through the shared
 source-bound acoustic/expression channel. It replaces the former session-local
 label and generic UI cue without changing the physical settlement owner.
@@ -1084,7 +1091,7 @@ conservation, migration/replay properties, bounded performance, and one
 representative visible-yard composition—not a species-by-species or N² test
 matrix.
 
-The frog aggregate conserves 64–72 units across no more than three suitable wetland anchors. Rain raises its bounded activity while lawful nearby pressure can quiet it or redistribute at most one existing unit on the fixed opportunity. Marsh-fox pressure reaches it through the same small-prey trophic rule as the rat aggregate; nearby rabbit presence remains neutral. In the current unpublished candidate, each qualifying 24-tick activity cadence derives exactly one structured group acoustic event for the aggregate at its largest occupied anchor, using the lowest stable ordinal to break a tie; it never creates a call per unit or anchor. The same rain that encourages chorus also contributes to listener-local masking. A lawful awake player may therefore hear one directional stereo chorus and a shared Living Voice caption whose text says only **chorus** plus no more direction than the uncertain receipt supports. When admitted to the shared bounded input, nearby humans and eligible full-simulation in-window dogs evaluate the same anonymous `animal-call` sample through ordinary hearing. The event is explicitly non-interrupting, discloses neither frog nor aggregate identity, exact location, nor hidden population count, and never fabricates a frog actor. Player audio and caption state are not saved or replayed; next-interval actor input can only be re-derived from the authoritative ecology patch. Weather alone cannot create, kill, duplicate, or reroll frogs.
+The frog aggregate conserves 64–72 units across no more than three suitable wetland anchors. Rain raises its bounded activity while lawful nearby pressure can quiet it or redistribute at most one existing unit on the fixed opportunity. Marsh-fox pressure reaches it through the same small-prey trophic rule as the rat aggregate; nearby rabbit presence remains neutral. In the released Alpha64 scope, each qualifying 24-tick activity cadence derives exactly one structured group acoustic event for the aggregate at its largest occupied anchor, using the lowest stable ordinal to break a tie; it never creates a call per unit or anchor. The same rain that encourages chorus also contributes to listener-local masking. A lawful awake player may therefore hear one directional stereo chorus and a shared Living Voice caption whose text says only **chorus** plus no more direction than the uncertain receipt supports. When admitted to the shared bounded input, nearby humans and eligible full-simulation in-window dogs evaluate the same anonymous `animal-call` sample through ordinary hearing. The event is explicitly non-interrupting, discloses neither frog nor aggregate identity, exact location, nor hidden population count, and never fabricates a frog actor. Player audio and caption state are not saved or replayed; next-interval actor input can only be re-derived from the authoritative ecology patch. Weather alone cannot create, kill, duplicate, or reroll frogs.
 
 The Tide Table derives each saved tidal anchor's current depth from its baseline elevation and the target tick's authoritative tide. An Atlantic-silverside school evacuates any drying anchor into an existing saved wet refuge immediately; ordinary ebb/flood redistribution moves at most one conserved unit on a fixed opportunity. Atlantic-marsh-fiddler-crab activity emerges or retreats as mudflat inundation changes. A snowy egret uses only current depth-safe wading edges and one saved dry refuge. In daylight it holds or returns to refuge unless shared vision supplies a current anonymous aquatic-activity observation, after which ordinary aerial locomotion can move it toward that observed edge. A lawfully visible egret may exert shared wader pressure on either tidal aggregate, but the result remains conserved avoidance. No interaction captures, injures, kills, consumes, creates a carcass, implements fishing, or touches cargo. Surface dimples, brief school glints, burrow openings, and feeding scrapes become selectable close ABOUT evidence only through current direct-detail sight and reveal neither a hidden count nor a fake fish or crab actor.
 
@@ -1140,7 +1147,7 @@ not increase the existing materialization ceiling or population totals.
 
 At the released Alpha 17 boundary, player-facing rat rustles, domestic-cat
 calls, rabbit thumps, fox yips, and fish-crow double calls occurred only for
-activity visible at event time. The current unpublished Living Voice candidate
+activity visible at event time. The released Alpha64 Living Voice scope
 supersedes witnessed-only fish-crow alarm playback with source-bound audible
 reception: direct sight may anchor the exact call, while heard-unseen reception
 remains bird-generic and directional. It also moves the frog chorus out of the
@@ -1490,7 +1497,7 @@ beneath validation-only descendants `f6a8816`, `e3fe15d`, and
 test files / 2,791 tests and the production build; Pages `35375612200` deployed
 that same final executable SHA, and a cache-bypassed comparison matched all 5/5 live
 production files in the exact 4,251,968-byte web artifact. Directive 04_1A is
-complete. Current **LIVE_VERIFIED** Alpha 60 preserves outer save v32,
+complete. Historical **LIVE_VERIFIED** Alpha60 preserves outer save v32,
 simulation v4, Regional Ecology V6, wildlife actor v1, and gameplay contract 51
 while advancing the Field Manual to 70. Exact source, executable, and pushed
 commit `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed 312 test files / 3,009
@@ -1498,7 +1505,8 @@ tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
 cache-bypassed deployed files matched the exact 4,377,380-byte tested web
 artifact; and the runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
-is active in the local unpublished candidate.
+was next at that historical boundary; current bounded Voice release truth
+belongs to the [Alpha64 receipt](../README.md#alpha64-living-voice-release-receipt).
 
 The audited current Turning Day boundary is deliberately narrower than “every
 actor has a daily life.” Its live play is the shared clock/light, player time
@@ -2466,9 +2474,9 @@ relationship-bearing continuity witness rather than a bonded companion, and
 packaged timing is not universal low-end certification. The harness's materialized
 wildlife representative is one real activity-bound Alpine golden eagle, not
 every species at once.
-Directive 04_1A is complete. Current **LIVE_VERIFIED** Alpha 60 closes Directive
-04_1B **The Breathing Room**, and 04_2 **Living Voice** is active in the local
-unpublished candidate.
+Directive 04_1A is complete. Historical **LIVE_VERIFIED** Alpha60 closes
+Directive 04_1B **The Breathing Room**; the current bounded Living Voice release
+is [Alpha64](../README.md#alpha64-living-voice-release-receipt).
 
 Live through Alpha 60:
 
@@ -2617,9 +2625,11 @@ Released in Alpha60:
   not certify universal 60 FPS or low-power hardware, and still show the
   periodic world-update hitch in worst-frame gaps.
 
-Alpha60 is the current **LIVE_VERIFIED** release. It closes Directive 04_1B
-**The Breathing Room**; 04_2 **Living Voice** is active in the local unpublished
-candidate and is not yet part of that public release.
+Alpha60 is the historical **LIVE_VERIFIED** Breathing Room boundary.
+Current **LIVE_VERIFIED** Alpha64 closes the bounded available-producer Living
+Voice scope; the [release receipt](../README.md#alpha64-living-voice-release-receipt)
+owns its exact evidence and unverified/deferred limits. Later gameplay remains
+separately authorized rather than becoming live through this status update.
 
 Expansion runway, not current behavior:
 

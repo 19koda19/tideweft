@@ -186,6 +186,31 @@ typecheck, web/static and YAML checks. All five web hashes remain unchanged.
 No new remote success, deployment, timing repair, dependency change or Voice
 closure is inferred.
 
+The ensuing bootstrap is now terminal PASS at exact
+`28c7e0c71dbcc7c94d94b71936a7424d0ebc64bd`: CI 37648061922 runs the complete
+365-file/4,197-test suite in 2835.56 seconds, with context 28, synchronization 39,
+policy 45, typecheck, build and static smoke. Pages 37648062032's read-only
+scope returns `reuse:true`, basis `head`, baseline 37648061922 at 16:44:50 UTC.
+Its cumulative Test step is explicitly skipped, not reported as another pass;
+independent release synchronization/typecheck/build/static/deployment succeed.
+Environment deployment 6915584726 succeeds at 16:45:31 UTC. At 16:47:03 UTC all
+five cache-bypassed HTTPS files match the retained production bytes and hashes,
+HTTP 200/appropriate MIME, total 4,780,761 bytes. The
+[primary release receipt](../README.md#alpha64-living-voice-release-receipt)
+owns the asset table and current public status.
+
+This is actual application-release and workflow-reuse evidence, not a runtime
+optimization. Both original failed Pages attempts and the locally capped
+INCOMPLETE remain historical failures/limits. The game sources/dependencies
+and product files remain unchanged from 785ff0f. The current available-producer
+Voice scope has finite/cumulative/release evidence; broader repertoires,
+physical-mobile/formal-AT/other-desktop certification and the accepted Relief
+cost/world hitch are not promoted. Extended profiling/repair and longitudinal
+Voice evidence remain deferred until full Living Foliage. Local terminal logs
+have SHA-256 `704432d2162ad8ed22fa2aa18fd9f9a9030454335d36d08c7aa612fb09cf6ec4`
+(CI) and `925ee84f3c51194252ff2efa8c5c68ec1bbf913a7c0bc16b9e33e64e84e2b333`
+(Pages); they stay in the existing ignored validation owner, not public assets.
+
 ## Non-pausing modal announcement exposure — 2026-10-07
 
 A short native macOS arm64 observation on clean `4f3a260` reproduced a real

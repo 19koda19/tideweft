@@ -95,7 +95,7 @@ preserve what matters later.**
 
 ### Alpha 60 Breathing Room boundary
 
-The current **LIVE_VERIFIED** Alpha 60 release completes the early-performance
+The historical **LIVE_VERIFIED** Alpha60 release completes the early-performance
 architecture without creating a second simulation owner. Exact bounded
 same-stack receipts may reuse already-authenticated regional-ecology lineage,
 canonical encodings, immutable projections, and stable presentation work only
@@ -126,13 +126,21 @@ The runtime-only packaged ASAR contains 10 entries totalling 4,599,453 bytes.
 Outer save v32, simulation v4, `RegionalEcologyStateV6`, wildlife actor v1, and
 gameplay contract 51 remain unchanged; Field Manual 70 records this release
 boundary. Directive 04_1B **The Breathing Room** is closed, and 04_2 **The
-Living Voice** is active. The standing per-directive performance-regression
+Living Voice** was next at that boundary. The standing per-directive performance-regression
 gate applies to its transition and later gameplay work; Breathing Room remains
 completed history and Lean World retains its separate mature-scale role.
 
 ### Living Voice: situated-expression foundation
 
-The current unpublished Directive 04_2 source begins with one event-driven
+Current release: Alpha64's bounded available-producer scope is **LIVE_VERIFIED**;
+the [release receipt](../README.md#alpha64-living-voice-release-receipt) owns
+exact source, CI, deployment and asset evidence. Historical internal save/slice
+boundaries below are lineage, not independent releases or new compatibility
+promises. Future producers/repertoires remain at their domain owners. The
+accepted Relief cost/world hitch and extended profiling/longitudinal evidence
+remain deferred until full Living Foliage, not repaired or passed.
+
+The released Alpha64 Living Voice scope uses one event-driven
 situated-expression owner. A player traversal adapter can submit a committed
 stumble, near-fall, important-cargo impact, physical parcel separation, or
 causally proven recovery. A separate effort adapter may submit one restrained
@@ -156,7 +164,7 @@ a line.
 #### Audited implementation frontier
 
 The shared schema is deliberately broader than the current set of producers.
-In the unpublished candidate, receipt-backed player reactions, the porter
+In Alpha64, receipt-backed player reactions, the porter
 heavy-load departure, keeper response, resident introduction and weather hold,
 one human danger warning, three guardian-dog signals, fish-crow and deer calls,
 one gull alarm cry, one elk alarm bark, one wild-boar alarm grunt, one domestic-
@@ -631,7 +639,7 @@ Self-expression, animal calls, physical sounds, committed audio, NPC semantic
 cognition and receipt/save schemas are unchanged. This is optional player
 word disclosure, not a new hearing or factual-learning authority.
 
-The current unpublished candidate also brings the ecology-owned southern-
+The Alpha64 representative also brings the ecology-owned southern-
 leopard-frog rain chorus through this boundary. On each qualifying 24-tick
 cadence, a conserved aggregate whose committed activity is an active
 `rain-chorus` derives one anonymous `animal-call` world event—not one event per
@@ -1311,8 +1319,9 @@ prove consistency, not secret attestation of an arbitrarily rewritten history.
 `playerEffortRecency.test.ts` and
 `runtime.fall.integration.test.ts` own exact
 expiry, phase-ten, no-replay, pause/recovery, capacity refusal and fail-closed evidence. Other
-source meanings still have interval-local semantic memory; broader sparse
-choice and hours-of-play annoyance remain open Voice gates. Physical
+source meanings still have interval-local semantic memory. Finite representative
+review supports current Voice closure; broader natural-rate/longitudinal
+annoyance evidence remains deferred until full Living Foliage, not passed. Physical
 exhaustion/camp cycling remains movement-owned, not repaired by this policy.
 This slice does not yet claim other work expression where no authoritative
 completed-work event exists; it also does not claim complete bark/growl/whine
@@ -1321,7 +1330,7 @@ language/relationship realization, or complete Living Voice.
 
 #### Development expression inspection
 
-The unpublished development runtime exposes a default-off
+The development runtime exposes a default-off
 `expressionDiagnostics` observer, implemented by
 `src/game/situatedExpressionDiagnostics.ts`. It retains at most 64 detached,
 immutable decisions from existing producers: semantic intent, source-local
@@ -2065,7 +2074,7 @@ passed 290 test files / 2,791 tests, and Pages run `35375612200` succeeded. The
 first cache-bypassed exact-live comparison matched all 5/5 production files,
 totalling 4,251,968 bytes; the packaged runtime-only ASAR contains 10 entries
 totalling 4,472,022 bytes. Directive 04_1A **The Turning Day** is closed and
-**LIVE_VERIFIED**. Current **LIVE_VERIFIED** Alpha 60 retains the same save,
+**LIVE_VERIFIED**. Historical **LIVE_VERIFIED** Alpha60 retains the same save,
 simulation, ecology, wildlife-actor, and gameplay-contract versions while
 advancing the Field Manual to 70. Exact source, executable, and pushed commit
 `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0` passed 312 test files / 3,009
@@ -2073,7 +2082,8 @@ tests locally; CI `36442886220` and Pages `36442886243` succeeded; all 5/5
 cache-bypassed production files matched the exact 4,377,380-byte tested web
 artifact; and its runtime-only ASAR contains 10 entries / 4,599,453 bytes.
 Directive 04_1B **The Breathing Room** is closed, and 04_2 **The Living Voice**
-is active in the local unpublished candidate.
+was next at that historical boundary. Current release status belongs to the
+[Alpha64 receipt](../README.md#alpha64-living-voice-release-receipt).
 
 ### Turning Day audited current boundary
 
@@ -2187,7 +2197,7 @@ The playable slice uses:
   catalog at the released 45 core-wildlife-profile boundary, not worldwide
   species breadth, ecological migration behavior, or a complete bestiary.
   Alpha39 remains the historical **LIVE_VERIFIED** Directive 04_1 biodiversity
-  closure; current **LIVE_VERIFIED** Alpha60 does not change this catalog, and
+  closure; historical **LIVE_VERIFIED** Alpha60 does not change this catalog, and
   Alpha53 remains the historical daily-continuity release. Alpha34–38 were
   never standalone releases; their exact
   append-only lineage is incorporated into Alpha39. Alpha40–52 likewise remain
@@ -2230,7 +2240,7 @@ Actor events are stamped at emission time only when their recorded route/settlem
 This is not universal perception or a universal NPC architecture. The first porter-dog web, separate settlement working dog, separate starting-settlement home ecology, and signed-region wild-population owners extend the shared boundary through a narrow set of current consumers: one dog's physical food scent, bounded species-neutral external perception participants, individual-wildlife visual contact, explicit anonymous alarm calls, bounded individual decisions, exact physical resource and carcass transactions, one generic working-animal assignment, deer/gull/fish-crow/wild-boar/elk/gray-wolf group topology, the released conserved aggregate populations—including capelin—receiving only declared lawful pressure, role-and-size-aware rabbit/fox/harrier/gray-wolf/cougar/bear pursuit, exact marsh-fox/gray-wolf/cougar contact against an eligible solitary rabbit, and snowy-egret, American-black-duck, North American river-otter, or harbor-seal actors receiving current anonymous aquatic-activity facts through ordinary visual occlusion. A polar bear may pursue a currently visible seal through those same role and cognition rules, but owns no contact or mortality outcome. A fish crow can alarm at a directly perceived aerial predator; only that causally retained, directly visible behavior can become mobbing pressure that interrupts a northern harrier. A working dog may investigate an anonymous alarm area, but a fox is deterred only after lawfully seeing the dog. Current physical evidence is limited to directly observable rat/frog area signs, silverside or capelin surface activity, fiddler-crab burrows or feeding scrapes, rain-response cat pawprints, rabbit paired tracks, and fox or gray-wolf canid pawprints. The Arctic fox reuses the anonymous canid-pawprint evidence form rather than adding a private track system; seals and polar bears add no track-evidence owner. Fish crows, harriers, snowy egrets, American black ducks, river otters, harbor seals, polar bears, wild boars, elk, and the working dog do not create ground-track evidence. The authored boar, elk, and wolf voice profiles remain inaudible, while wolves do create canid pawprints in this release. General scent fields, broad evidence and tracking, social reports and rumors, broad cross-group communication, physical human pursuit/search pathfinding, human-to-human sensing, generated people beyond the original estuary, additional dogs beyond the current two, worldwide species breadth, the full bestiary, wider ownership and social networks, general physical NPC inventory, negotiation, guaranteed deterrence, foliage consumption, complete circadian life, and companion behavior remain later slices.
 
 The preceding inaudible boar/elk/wolf profile statement records the released
-ecology boundary. In the current unpublished candidate, the elk's existing
+ecology boundary. In the released Alpha64 representative, the elk's existing
 alarm bark now enters shared Living Voice; its bugle and wider repertoire
 remain foundation-only. See the [current Voice frontier](#audited-implementation-frontier)
 for live producers rather than inferring current audio from that release-era
@@ -2876,15 +2886,15 @@ files / 2,633 checks for `c67f30b`, Pages published five files totalling
 production files byte-for-byte. Directive 04_1 is closed. At that released
 checkpoint, the next authorized directive was 04_1A **The Turning Day**.
 Alpha53 has now shipped that bounded architecture as **LIVE_VERIFIED** and
-closes 04_1A. Current **LIVE_VERIFIED** Alpha 60 closes Directive 04_1B **The
-Breathing Room**; 04_2 **The Living Voice** is active in the local unpublished
-candidate.
+closes 04_1A. Historical **LIVE_VERIFIED** Alpha60 closes Directive 04_1B **The
+Breathing Room**; the current bounded Living Voice release is
+[Alpha64](../README.md#alpha64-living-voice-release-receipt).
 
 ## Bounded habitat-derived core-wildlife assemblage
 
 Current broad physical predator pressure requires the explicit
 `large-predator-pressure` runtime capability as well as the predator role and
-non-small-predator declaration. The current unpublished correction declares it
+non-small-predator declaration. The released Alpha64 correction declares it
 for black bear, brown bear, gray wolf, cougar and polar bear. A predator diet
 alone cannot classify golden eagle, heron, osprey or cormorant as a large threat
 to a goat, human or dog; ordinary direct sight retains the bird's identity.
@@ -3207,7 +3217,7 @@ wildlife held by non-home regional owners; it never follows a later hidden
 animal position. If no detour exists, the prior route and choice ledger remain
 unchanged.
 
-`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the current unpublished Living Voice candidate, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The same candidate adapts the existing core-deer alarm through a short synthesized `vocalization-deer-alarm-snort`; it does not invent a second alarm or player-only ecology path. A freshly committed gull alarm now follows that same authenticated ecology event, species-aware admission, hearing, source projection, audio and caption trajectory through `vocalization-gull-alarm-cry`. Visible receipt may identify **Gull** and render **KEE-AH!**; heard-unseen receipt is only an anonymous directional bird call, with no predator identity or exact hidden locus. The frog chorus now follows that common acoustic boundary without inventing an individual: qualifying aggregate activity derives one `animal-call` world event on its cadence at the deterministic representative occupied anchor. A sample admitted to the shared bound can drive anonymous human/dog hearing; a lawful awake player receipt independently releases the existing stereo synthesis after commit and competes for the shared accessible caption as **chorus**. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. The aggregate ID, exact coordinates, hidden population, and opaque source identity remain undisclosed, and no actor-anchored Chart/Relief callout is fabricated. A freshly committed marsh-fox pursuit yip now uses that same carrier and delegates to the existing `fox-yip` synthesis only after causal authentication: an unseen receipt is an anonymous **CALL.**, while lawful nearby humans receive only an anonymous animal-call fact. If optional expression admission is saturated, lawful player audio and bounded anonymous human hearing still derive from that same authenticated ecology event without manufacturing a caption or retained Voice record. The migrated crow, gull, frog, and fox events no longer use their former ecology session-announcement/direct-playback bypasses, and reload does not replay ephemeral player audio or text. At the Alpha 17 release, the northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear had no live audible call. In the current unpublished candidate, narrow elk alarm bark, wild-boar alarm grunt and American-black-duck alarm quack also use shared Voice, as do the generated domestic-chicken alarm squawk and finite-herd domestic-goat alarm bleat. Elk bugling, boar squealing/social grunts, chicken clucking/crowing and routine duck/livestock calls remain foundation-only or deferred. Northern harrier, North American river otter, gray wolf, cougar and brown bear still have no live species-specific Voice call. The [audited implementation frontier](#audited-implementation-frontier) owns the current roster and proof limits. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
+`src/audio/soundscape.ts` retains the original fish-crow nasal double-call synthesis and southern-leopard-frog chorus beside the earlier ecology cues. At the Alpha 17 boundary, the direct crow cue played only for a causative alarm transition witnessed at event time. In the released Alpha64 Living Voice scope, that alarm instead uses `vocalization-fish-crow-alarm`, which delegates to the same synthesis while shared hearing—not visual witnessing—decides player receipt. The same released scope adapts the existing core-deer alarm through a short synthesized `vocalization-deer-alarm-snort`; it does not invent a second alarm or player-only ecology path. A freshly committed gull alarm now follows that same authenticated ecology event, species-aware admission, hearing, source projection, audio and caption trajectory through `vocalization-gull-alarm-cry`. Visible receipt may identify **Gull** and render **KEE-AH!**; heard-unseen receipt is only an anonymous directional bird call, with no predator identity or exact hidden locus. The frog chorus now follows that common acoustic boundary without inventing an individual: qualifying aggregate activity derives one `animal-call` world event on its cadence at the deterministic representative occupied anchor. A sample admitted to the shared bound can drive anonymous human/dog hearing; a lawful awake player receipt independently releases the existing stereo synthesis after commit and competes for the shared accessible caption as **chorus**. Caption direction and uncertainty-attenuated pan derive from the same heard-bearing band; a co-located or insufficiently resolved contact says `all around` or `direction unclear` rather than inventing a cardinal fact. The aggregate ID, exact coordinates, hidden population, and opaque source identity remain undisclosed, and no actor-anchored Chart/Relief callout is fabricated. A freshly committed marsh-fox pursuit yip now uses that same carrier and delegates to the existing `fox-yip` synthesis only after causal authentication: an unseen receipt is an anonymous **CALL.**, while lawful nearby humans receive only an anonymous animal-call fact. If optional expression admission is saturated, lawful player audio and bounded anonymous human hearing still derive from that same authenticated ecology event without manufacturing a caption or retained Voice record. The migrated crow, gull, frog, and fox events no longer use their former ecology session-announcement/direct-playback bypasses, and reload does not replay ephemeral player audio or text. At the Alpha 17 release, the northern harrier, American black duck, North American river otter, wild boar, elk, gray wolf, cougar, and brown bear had no live audible call. In the released Alpha64 scope, narrow elk alarm bark, wild-boar alarm grunt and American-black-duck alarm quack also use shared Voice, as do the generated domestic-chicken alarm squawk and finite-herd domestic-goat alarm bleat. Elk bugling, boar squealing/social grunts, chicken clucking/crowing and routine duck/livestock calls remain foundation-only or deferred. Northern harrier, North American river otter, gray wolf, cougar and brown bear still have no live species-specific Voice call. The [audited implementation frontier](#audited-implementation-frontier) owns the current roster and proof limits. These are redundant presentation cues and never permission to reveal hidden motives or activity outside legitimate sight/hearing.
 
 ## First settlement-store ecology composition
 
@@ -3217,7 +3227,7 @@ An open store with a matching scent observation may propose attraction, but the 
 
 The knowledge kernel admits only an authenticated direct keeper observation or an explicit in-person player report. Alpha 23's playable runtime wires the report path: it is offered only while the player is physically near both the store and its actual keeper, and a remote settlement selection cannot command them. Autonomous keeper observation is not generated in this slice. Applying the response persistently secures the door and reduces later store leakage to zero without deleting the store, remaining food, rats, or cat pressure. Chart and Relief derive the same store mark and closure from this state. Store detail, the keeper action, and any loss narration remain gated by current lawful proximity or event-time observation, so returning later cannot turn unseen history into an EVENTS report.
 
-In the current unpublished Living Voice candidate, that same committed closure
+In the released Alpha64 Living Voice scope, that same committed closure
 also authorizes one keeper response through shared situated expression and
 acoustic perception. It replaces the former session-local resident label and
 generic UI cue without changing the settlement transaction owner. Shared
@@ -3717,10 +3727,10 @@ simulation format 4, `RegionalEcologyStateV6`, and wildlife actor schema/version
 1 unchanged. Alpha51's optional resident receipts and Alpha52's byte-identical
 reciprocal settlement-rest digest add no new root or migration. Alpha40–52 are
 internal cumulative milestones first shipped in Alpha53, not standalone
-releases. Outer version 32 remains the current **LIVE_VERIFIED** Alpha60 save
+releases. Outer version32 remains the historical **LIVE_VERIFIED** Alpha60 save
 boundary.
 
-The current unpublished Directive 04_2 source lineage advances the outer
+The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
 the current source writer emits outer version 50. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
@@ -4123,13 +4133,18 @@ seasons, a packaged mobile Chart matrix, or universal low-end-device
 certification. Released Alpha60 advances the Field Manual/tutorial to version
 70 while retaining gameplay contract 51, outer save v32, simulation v4,
 `RegionalEcologyStateV6`, and wildlife actor v1. These are the current
-**LIVE_VERIFIED** manual, gameplay, and save boundaries.
+**LIVE_VERIFIED** manual, gameplay, and save boundaries at Alpha60.
 
-The unpublished local Alpha61 preview advances the manual to71 and writes
+The historical unpublished local Alpha61 preview advances the manual to71 and writes
 outer save50, while gameplay contract51 and the public Alpha60 baseline remain
 distinct. Its What's New and Accessibility entries describe only current Voice
 representatives, caption reading time and label controls; its save entry states
 the deliberate development-format retirement. Metadata is not release proof.
+
+Released Alpha64 now uses Field Manual74, gameplay contract51 and outer
+save50/carry14. Its [verified release receipt](../README.md#alpha64-living-voice-release-receipt)
+supplies the publication proof; internal Alpha61–63 previews were not separate
+public releases.
 
 `src/ui/tutorialDialog.ts` renders that one source into a native modal. Desktop T and the header control open a two-pane topic/page layout; the mobile ? opens the same content with a horizontal topic strip, independently scrolling page, safe-area sizing, and 44-pixel navigation. Opening the manual does not mutate simulation state or invoke the removed manual pause. The controller restores focus on close, and audience content is recomputed when the viewport changes.
 
@@ -4413,7 +4428,7 @@ boundary, outer save v32, gameplay contract 51, and tutorial/Field Manual
 version 63 were current. Directive 04_1A is closed
 and **LIVE_VERIFIED**.
 
-Released Alpha60 **The Breathing Room** is the current **LIVE_VERIFIED**
+Released Alpha60 **The Breathing Room** is the historical **LIVE_VERIFIED**
 release. It adds no parallel simulation owner and preserves deterministic
 ecology, physical custody, knowledge, difficulty, and save bytes while bounded
 exact-match receipts, retained presentation geometry, and stable projections
@@ -4426,8 +4441,9 @@ succeeded; and all 5/5 cache-bypassed deployed production files matched the
 wildlife actor v1, and gameplay contract 51 remain unchanged; Field Manual 70
 is current. Host-specific cadence is not universal 60 FPS or low-power
 certification, and the periodic world-update hitch remains visible in
-worst-frame gaps. Directive 04_1B is closed; 04_2 **The Living Voice** is active
-in the local unpublished candidate and is not part of the Alpha60 release.
+worst-frame gaps. Directive 04_1B is closed. Living Voice was not part of
+Alpha60; its current bounded release is
+[Alpha64](../README.md#alpha64-living-voice-release-receipt).
 
 31. Vite production build under relative paths.
 32. Packaged Electron launch, visible title controls, `app://` resource load, preserved-estuary content inside the 120 × 120 moving frame, deterministic R1/A3/W5 Harp placement and remote echo, both Chart/Relief canvas switches, actual Relief bell/cord evidence, desktop plus portrait/landscape mobile probes, Node-global absence, and zero renderer warnings/resource failures.

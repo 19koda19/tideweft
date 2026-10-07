@@ -4,18 +4,16 @@
 
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
-The current release is the **LIVE_VERIFIED**
-`0.3.3-alpha.60 — The Breathing Room` at exact executable, source, and pushed
-commit `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0`. CI `36442886220` and
-Pages `36442886243` succeeded after the local gate passed 312 test files /
-3,009 tests, and the cache-bypassed live comparison matched all five production
-files in the exact 4,377,380-byte build. The exact deployed artifact is
-recorded in the GitHub Pages section below.
+The current release is **LIVE_VERIFIED**
+`0.3.3-alpha.64 — The Living Voice`. Its exact source, CI, deployment and
+five-file live comparison are recorded in [GitHub Pages](#github-pages).
 
 Alpha 39 remains preserved below as the historical biodiversity closure for
 Directive 04_1. Alpha 53 closes The Turning Day, Alpha 60 closes Directive
-04_1B **Breathing Room**, and 04_2 **Living Voice** is active in local
-unpublished development.
+04_1B **Breathing Room**, and Alpha64 closes the currently available Living
+Voice scope. Future repertoires and physical producers remain future work;
+the known Relief/world-update hitch and extended profiling/soaks are not fixed
+or certified by this release.
 
 TIDEWEFT is a playable, original strand-type simulation game built with p5.js, TypeScript, Vite, and Electron. You cross a seeded estuary with physical supplies or an accountable signed report, strengthen the exact corridors you use, and watch autonomous settlements begin routing care through the network.
 
@@ -49,7 +47,7 @@ Alpha 0.3 grows the earlier slices with fieldcraft, seamless travel, shared perc
 - **Talus and Sky:** released Alpha 33 keeps the complete 24-record Alpha32 catalog as a frozen prefix and appends mountain goat, American pika, and golden eagle. Sparse Alpine authority is a sibling layer around the exact regional-ecology-v1 child: goats are addressable `HERD` members with shared directed-grade movement, pikas remain a conserved non-addressable talus aggregate, and a solitary eagle uses authenticated ridge soar/perch activity. A lawfully visible eagle can nonlethally quiet or redistribute pika activity through the existing visual/evidence/occlusion policy; a ridge between them blocks that pressure. All owners still share one group-atomic 24-actor materialization cap and one atomic commit. Outer save 26 wraps an authenticated v25 child exactly once without rewriting it. Chart, Relief, quick inspection, and ABOUT disclose only current lawful evidence. Relief presents eagle flight by elevating, flapping, and banking the state-based actor projection; this is not authoritative continuous 3D flight physics. This bounded first Alpine slice adds no new mortality, capture, exact pika target, reproduction, audible Living Voice, tactical combat, polar breadth, or Wave-F completion.
 - **Alpha 34–38 internal biodiversity checkpoints:** Coldwater Glint, the Arctic-fox cold shore, Breath Between Tides, Estuary Surface Break, and Marsh Channel Web preserve the exact 27-record Alpha33 catalog as their compatibility prefix, then append records 28–43 through sparse polar-shore, cold-shore, polar-consumer, and estuary-breadth owners. These were non-independent implementation checkpoints, not standalone public releases; their complete append-only lineage ships cumulatively in Alpha 39.
 - **Saltmarsh Small Worlds:** released Alpha 39 preserves that complete forty-three-record checkpoint lineage and the exact first two append-only breadth epochs, then adds eastern saltmarsh mosquito, marsh periwinkle, seaside sparrow, and diamondback terrapin as records 44–47. Mosquitoes and periwinkles are conserved non-addressable aggregates over at most two authenticated anchors; seaside sparrows form one group-atomic flock of two to four; the terrapin is solitary. Sparrows require their local mosquito substrate and terrapins require periwinkle, while shared territory, density, and quiet gates preserve lawful absence. The final cohort reuses the existing identity, habitat, activity, perception, locomotion, group, aggregate, persistence, knowledge, and dual-view presentation owners. Breadth epoch 3 keeps outer save 30 and `RegionalEcologyStateV6`, preserves earlier epochs as an exact prefix, and cannot reroll on reload. This historical Directive 04_1 closure reached exactly 45 core-wildlife profiles / 47 total living records. It added no bites, disease, exact insect or snail actors, capture or consumption, new mortality, sound, reproduction, full circadian life, or continuous 3D flight. At that checkpoint, **The Turning Day** was next; it is now released as Alpha 53.
-- **The Turning Day:** released Alpha 53 completes the bounded daily-continuity architecture accumulated through Alpha 40–52. One deterministic civil clock drives outdoor light, WAIT, REST, SLEEP, all forty-two current residents, the relationship-bearing settlement working dog, and the seventeen existing wildlife activity profiles. Physical arrival, ordinary locomotion, danger, work, weather, needs, and lawful perception still decide what happens; dusk never teleports or commands an actor. Closure evidence uses shared production owners and representative witnesses rather than a scripted all-species matrix: a three-day direct production-owner routine harness projects every current resident and one real activity-bound golden eagle with daily world serialization, restored regional-ecology continuation, bounded growth, and source dematerialization/rematerialization; separate witnesses prove exact frame-cadence equivalence, lawful automatic WAIT interruption, working-dog integration, and packaged desktop plus mobile recovery controls. It is not a whole-runtime or all-wildlife soak. Packaged mobile covers Relief while desktop covers Chart and Relief through the same authority. The working dog is not a bonded player companion, and packaged timing is a regression/liveness floor rather than a universal low-end performance claim. Alpha 60 subsequently closed Directive 04_1B **Breathing Room**; **Living Voice** is the active local unpublished directive.
+- **The Turning Day:** released Alpha 53 completes the bounded daily-continuity architecture accumulated through Alpha 40–52. One deterministic civil clock drives outdoor light, WAIT, REST, SLEEP, all forty-two current residents, the relationship-bearing settlement working dog, and the seventeen existing wildlife activity profiles. Physical arrival, ordinary locomotion, danger, work, weather, needs, and lawful perception still decide what happens; dusk never teleports or commands an actor. Closure evidence uses shared production owners and representative witnesses rather than a scripted all-species matrix: a three-day direct production-owner routine harness projects every current resident and one real activity-bound golden eagle with daily world serialization, restored regional-ecology continuation, bounded growth, and source dematerialization/rematerialization; separate witnesses prove exact frame-cadence equivalence, lawful automatic WAIT interruption, working-dog integration, and packaged desktop plus mobile recovery controls. It is not a whole-runtime or all-wildlife soak. Packaged mobile covers Relief while desktop covers Chart and Relief through the same authority. The working dog is not a bonded player companion, and packaged timing is a regression/liveness floor rather than a universal low-end performance claim. Alpha 60 subsequently closed Directive 04_1B **Breathing Room**; Alpha64 subsequently closes the bounded **Living Voice** scope; its [release receipt](#alpha64-living-voice-release-receipt) records current evidence and limitations.
 - **The Breathing Room:** released Alpha 60 preserves the complete Alpha 59 world while removing repeated authenticated ecology, projection, serialization, terrain-submission, traversal-query, and stable-HUD work through bounded exact-match reuse with complete canonical fallbacks. Representative dense Relief and browser evidence on the primary development machine occupies the preferred 45–60 FPS band instead of the former sustained 4–8 FPS failure state. The once-per-world-update hitch remains visible in worst-frame gaps, so this host- and scene-specific evidence does not claim universal 60 FPS, perfect frame pacing, or broad low-power certification. The exact packaged matrix, resource, hour-soak, persistence/migration, cumulative, CI, Pages, and cache-bypassed live-verification gates passed without reducing world truth.
 - **Living commons:** nine seed-derived material families now grow visibly in suitable biomes. Desktop and touch gathering feed one exact shared pack, while the anywhere **KIT** turns those finds into six prepared components and eleven durable tools through mobile-safe **PACK / MAKE / MEND** tabs.
 - **Footing and physical parcels:** stability is a live 0–100% physical-balance calculation, not a second stamina bar or accumulated drain. Actual speed, turning, grade, roughness, moisture, local water force, wind, load, footwear, fixtures, and BRACE determine the currently supported percentage; unchanged conditions hold one value and a safer bank recalculates it immediately. Hazardous entries can still deterministically stumble or fall, briefly alter the courier's color and silhouette, speak a tiny Atari-like callout, damage one exact cargo lot, and separate persistent parcels that drift, tumble, weather, save, reload, and remain recoverable.
@@ -934,7 +932,8 @@ build contains 5 files totaling 4,251,968 bytes, and the runtime-only Electron
 ASAR contains 10 entries totaling 4,472,022 bytes. The cache-bypassed exact-live
 asset totals remain part of this historical release record. Alpha 53 closes
 Directive 04_1A; Alpha 60 later closed Directive 04_1B **Breathing Room**, and
-04_2 **Living Voice** is now active in local unpublished development.
+Living Voice was next at that historical boundary; current release truth is
+the [Alpha64 receipt](#alpha64-living-voice-release-receipt).
 
 ### Historical release — Alpha 39 Saltmarsh Small Worlds
 
@@ -980,8 +979,8 @@ explanatory copy, and the cache-bypassed comparison matched that checkpoint's
 deployed production files exactly. This closed Directive 04_1's bounded
 biodiversity scope. At that historical checkpoint, **The Turning Day** was
 next; it later released as Alpha 53. Alpha 60 subsequently closed Directive
-04_1B **Breathing Room**, and 04_2 **Living Voice** is now active in local
-unpublished development.
+04_1B **Breathing Room**. The bounded Living Voice scope later ships in
+[Alpha64](#alpha64-living-voice-release-receipt).
 
 ### Internal Alpha 34 checkpoint — Coldwater Glint
 
@@ -1229,9 +1228,43 @@ Development artifacts are not code-signed or notarized. Public desktop distribut
 
 ## GitHub Pages
 
-[The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) type-checks, tests, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch. Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
+[The current alpha is live](https://19koda19.github.io/tideweft/). [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) validates, builds, uploads `dist/`, and deploys on pushes to `main` or manual dispatch, using the [exact-commit CI reuse policy](#local-development). Vite uses `base: './'`; the HTML, web manifest, SVG icon, and bundled assets therefore work below an arbitrary repository subpath.
 
-The current Alpha 60 release is **LIVE_VERIFIED** at exact executable, source,
+### Alpha64 Living Voice release receipt
+
+Alpha64 is **LIVE_VERIFIED**. Its final game-source candidate is
+`785ff0f3359581bd3c3b2fce7550a976152c0fb5`; later changes through deployed
+`28c7e0c71dbcc7c94d94b71936a7424d0ebc64bd` affect only prose and validation
+tooling/workflows, not game sources, dependencies or product bytes. [CI
+37648061922](https://github.com/19koda19/tideweft/actions/runs/37648061922)
+passes all 365 files/4,197 tests plus context, synchronization and policy
+selftests. [Pages 37648062032](https://github.com/19koda19/tideweft/actions/runs/37648062032)
+reuses that exact successful CI, independently passes synchronization,
+typecheck/build/static smoke, and deploys through environment receipt 6915584726.
+At 2026-10-07T16:47:03Z, cache-bypassed HTTPS checks match all five emitted
+files byte-for-byte, with HTTP 200 and appropriate MIME types: 4,780,761 bytes.
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `index.html` | 4,168 | `ed2c8bc293c02bb67d740062068784e235e484b1c471719af73768d470301653` |
+| `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
+| `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
+| `assets/index-CpUfCeh6.js` | 4,665,985 | `96848c89394907d83b45571ca1a5ae82415eab1cffbe39887216480de107d90d` |
+| `assets/index-BlQsrKTn.css` | 109,227 | `0a37b095c85363085c4f8206277e4d91cc8b4853ea5dc389b40eea9bf631c0bb` |
+
+Current save 50/carry 14, gameplay contract 51 and Field Manual 74 accompany the
+bounded available-producer Voice scope. Functional native/browser evidence and
+the user's chicken-audibility confirmation are not all-species, physical-mobile
+or formal assistive-technology certification. macOS arm64 packaging, ZIP and
+normal packaged smoke pass; installation, signing/notarization and other
+desktop targets remain unverified. The accepted Relief cost/world-update hitch
+remains a known limitation; extended Voice profiling/repair and longitudinal
+soaks are deferred until full Living Foliage, not passed. See the
+[research evidence and limits](docs/RESEARCH.md#remote-correctness-and-pages-timing-diagnosis--2026-10-07).
+
+### Historical Alpha60 Breathing Room receipt
+
+The historical Alpha60 release is **LIVE_VERIFIED** at exact executable, source,
 and pushed commit `c78977ba9733dbb17a1f2461a0a94c5dcdfc1fd0`. CI
 `36442886220` and Pages `36442886243` succeeded after the local release gate
 passed 312 test files / 3,009 tests. The exact 5-file, 4,377,380-byte production

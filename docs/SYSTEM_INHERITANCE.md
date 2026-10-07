@@ -443,10 +443,12 @@ Current exhaustion and ordinary/serious footing representatives use the bounded
 `playerExpressionRecency` root, with the unchanged effort proof nested;
 future consumers must not retain old acoustic admissions merely to stay quiet.
 
-The current unpublished aggregate-frog chorus and brown-rat redistribution
+The released Alpha64 aggregate-frog chorus and brown-rat redistribution
 rustle are representative aggregate proofs: ecology identity/activity or a
 committed physical disturbance is `INTEGRATED`; item custody is `NOT
-APPLICABLE`; other aggregate repertoires remain `DEFERRED` to Living Voice. An
+APPLICABLE`; other aggregate repertoires remain `DEFERRED` to their later ecology
+producers, which inherit this contract. The [Alpha64 receipt](../README.md#alpha64-living-voice-release-receipt)
+owns the bounded release proof, not universal aggregate breadth. An
 aggregate acoustic source may hold opaque stable
 source/repetition identity, but it must not manufacture an addressable actor,
 per-member events, exact listener knowledge, or serialized presentation.
