@@ -20,6 +20,60 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Non-pausing modal announcement exposure — 2026-10-07
+
+A short native macOS arm64 observation on clean `4f3a260` reproduced a real
+accessibility defect in the current unpublished Alpha63 package, ASAR
+`adb1beb0…5fac2`. Actual START, T, I and Escape controls showed the world
+running while Chromium's partial AX query marked the sole `#announcer`
+`ignored:true`, reason `activeModalDialog`, during both Manual and KIT. It
+returned as a nonignored `status` on close. Full-tree inclusion agreed with the
+direct backend-node query; absence from a pruned tree alone was not used as
+proof. The five-stage run lasted5.877s. It did not generate a fictional sound,
+change global accessibility settings or supply player saves.
+
+The retained application-only correction in `createTideweftUI.ts` moves the one
+existing endpoint into the current modal's non-inert subtree. It clears old
+copy before host changes, keeps the existing queue and caption-ID ledger, and
+re-primes a changed host before publishing pending copy. An open-only fallback
+cannot displace a native modal; focus and observed open order handle stacked
+dialogs. The observer watches only five `open` attributes. Teardown disconnects,
+clears and restores the endpoint. No producer, audio, hearing, save/schema,
+dependency, renderer-quality or simulation authority changes.
+
+Five new queue/routing tests characterize pending-host changes, no replay on
+reopen, close during hold, stacked/fallback routing and teardown. The affected
+UI run passes seven files/139 tests; tutorial/KIT domain passes two files/30;
+actual `npm run test:smoke` passes six files/105. Typecheck and the623-module
+production build pass. The release synchronization wrapper correctly rejects
+this ordinary unpublished delta; no new release identity or weakened gate was
+manufactured. `npx electron-forge package` executes the existing build/security
+configuration for a local functional candidate only. Static nested-path smoke
+and the existing packaged desktop smoke pass.
+
+On that candidate, ASAR `5136dc23…84241`, production JS `72d516a9…55fd0`, the
+same native five-stage observation lasts6.694s: the one endpoint is a nonignored
+live `status` inside Manual/KIT, then returns to BODY empty, without replay.
+The world remains unpaused. A separate fresh Firefox157.0.1 production
+`/tideweft/` observation lasts7.588s and confirms the same actual controls,
+single endpoint, modal ancestry and empty restoration using passive reads.
+No fetch/HTTP failures occur. One CSP eval denial is retained in the browser
+record; this run does not assert an entirely clean console or certify audible
+output. Its first attempt failed a probe's unsupported DOM-node return before
+START; boolean readiness reads fix the probe, not game code.
+
+Evidence is retained locally under `artifacts/validation/voice-current49/`:
+`modal-ax-before-4f3a260.json` SHA256 `8d336749…826d6`,
+`modal-ax-after-4f3a260-candidate.json` `90685d60…885b6`, and
+`modal-firefox-candidate-v2.json` `b8c88949…10556`, plus the named
+`modal-live-region-*` validation logs. Disposable profiles/processes are closed
+and removed; real saves and the user's browser are untouched. The CDP client
+uses its existing evaluation flags; these captures are not trusted-audio
+activation evidence. Firefox reads explicitly request `userActivation:false`.
+Native AX and DOM eligibility do not prove spoken VoiceOver output, actual
+audio quality or physical mobile performance. No extended profile, soak,
+cumulative rerun, distribution, signing or publication is claimed.
+
 ## Sparse footing reactions — 2026-10-06/07
 
 Local unpublished `2da94a8` repairs the rapid near-fall wording cluster found

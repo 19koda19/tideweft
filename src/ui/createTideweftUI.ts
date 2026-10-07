@@ -276,6 +276,8 @@ interface LiveRegionAnnouncement {
 
 export interface LiveRegionAnnouncementQueueOptions {
   readonly announcer: Pick<HTMLElement, "setAttribute" | "textContent">;
+  /** Routes the one endpoint and returns its host-change revision. */
+  readonly prepareAnnouncer?: () => number;
   readonly schedule: (callback: () => void, delayMs: number) => number;
   readonly cancel: (timer: number) => void;
 }
@@ -321,11 +323,21 @@ export function createLiveRegionAnnouncementQueue(
     const next = pending[0];
     if (!next) return;
     phase = "clearing";
+    let preparedRevision = options.prepareAnnouncer?.() ?? 0;
     options.announcer.setAttribute("aria-live", next.assertive ? "assertive" : "polite");
     options.announcer.textContent = "";
-    timer = options.schedule(() => {
+    const publish = (): void => {
       timer = null;
       if (destroyed) return;
+      const currentRevision = options.prepareAnnouncer?.() ?? 0;
+      if (currentRevision !== preparedRevision) {
+        // A modal changed during the clear/publish interval. Prime its empty
+        // endpoint before delivering the still-pending batch, without replay.
+        preparedRevision = currentRevision;
+        options.announcer.textContent = "";
+        timer = options.schedule(publish, LIVE_REGION_CLEAR_DELAY_MS);
+        return;
+      }
       const delivered = pending.splice(0, pending.length);
       if (delivered.length === 0) {
         phase = "idle";
@@ -344,7 +356,8 @@ export function createLiveRegionAnnouncementQueue(
         phase = "idle";
         beginNext();
       }, LIVE_REGION_MESSAGE_HOLD_MS);
-    }, LIVE_REGION_CLEAR_DELAY_MS);
+    };
+    timer = options.schedule(publish, LIVE_REGION_CLEAR_DELAY_MS);
   };
 
   return {
@@ -367,6 +380,70 @@ export function createLiveRegionAnnouncementQueue(
       if (timer !== null) options.cancel(timer);
       timer = null;
       phase = "idle";
+    },
+  };
+}
+
+/** Keeps the single live region inside the active modal's non-inert subtree. */
+export function bindModalLiveRegion(
+  announcer: HTMLElement,
+  dialogs: readonly HTMLDialogElement[],
+): { readonly sync: () => number; readonly destroy: () => void } {
+  const home = announcer.parentElement;
+  if (!home) throw new Error("The live region must have a mounted home.");
+  let openOrder: HTMLDialogElement[] = [];
+  let revision = 0;
+  let destroyed = false;
+  const isNativeModal = (dialog: HTMLDialogElement): boolean => {
+    try { return dialog.matches(":modal"); } catch { return false; }
+  };
+  const sync = (): number => {
+    if (destroyed) return revision;
+    openOrder = openOrder.filter((dialog) => dialog.open);
+    for (const dialog of dialogs) {
+      if (dialog.open && !openOrder.includes(dialog)) openOrder.push(dialog);
+    }
+    const nativeModals = openOrder.filter(isNativeModal);
+    const candidates = nativeModals.length > 0 ? nativeModals : openOrder;
+    const focused = announcer.ownerDocument.activeElement;
+    const host = candidates.find((dialog) => focused !== null && dialog.contains(focused))
+      ?? candidates.at(-1)
+      ?? home;
+    if (announcer.parentElement !== host) {
+      // Moving delivered copy into a newly exposed subtree can replay it.
+      // Pending copy belongs to the queue and is never stored in this node.
+      announcer.textContent = "";
+      host.append(announcer);
+      revision += 1;
+    }
+    return revision;
+  };
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      const dialog = dialogs.find((candidate) => candidate === record.target);
+      if (!dialog) continue;
+      if (!dialog.open) openOrder = openOrder.filter((candidate) => candidate !== dialog);
+      else if (record.oldValue === null) {
+        openOrder = openOrder.filter((candidate) => candidate !== dialog);
+        openOrder.push(dialog);
+      }
+    }
+    sync();
+  });
+  // Five owned dialog nodes, open changes only; no subtree/frame polling.
+  for (const dialog of dialogs) {
+    observer.observe(dialog, { attributes: true, attributeFilter: ["open"], attributeOldValue: true });
+  }
+  sync();
+  return {
+    sync,
+    destroy: () => {
+      if (destroyed) return;
+      destroyed = true;
+      observer.disconnect();
+      announcer.textContent = "";
+      if (announcer.parentElement !== home) home.append(announcer);
+      openOrder = [];
     },
   };
 }
@@ -2453,8 +2530,13 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
     announcer.setAttribute("aria-live", "polite");
     options.root.append(announcer);
   }
+  const modalLiveRegion = bindModalLiveRegion(announcer, [
+    refs.titleDialog, refs.quietDialog, refs.tutorial.element,
+    refs.patchNotes.element, refs.kit.element,
+  ]);
   const liveRegionAnnouncements = createLiveRegionAnnouncementQueue({
     announcer,
+    prepareAnnouncer: modalLiveRegion.sync,
     schedule: (callback, delayMs) => window.setTimeout(callback, delayMs),
     cancel: (timer) => window.clearTimeout(timer),
   });
@@ -3631,6 +3713,7 @@ export function createTideweftUI(options: TideweftUIOptions): TideweftUIControll
       acousticTextReservations.destroy();
       refs.chronicleDetails.removeEventListener("toggle", acousticTextReservations.invalidate);
       refs.animalCallTextControl?.destroy();
+      modalLiveRegion.destroy();
       liveRegionAnnouncements.destroy();
       restoreResidentAboutFocus();
       mobileBrace.destroy();

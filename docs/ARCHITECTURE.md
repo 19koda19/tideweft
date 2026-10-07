@@ -835,6 +835,20 @@ teardown clear the reading slot; only confirmed world replacement resets its ID
 namespace. This ephemeral lease changes no audio, hearing, simulation timing,
 save state or source-anchored world-label lifetime.
 
+`src/ui/createTideweftUI.ts` owns one serialized live-region announcement queue
+and one endpoint. Native dialogs make the rest of the document inert, even
+when the Field Manual or KIT does not pause the world. A bounded observer of
+the five owned dialogs' `open` attributes routes that endpoint into the active
+modal, using native modality, focus and observed opening order; it restores the
+original parent when no dialog is open. Host changes clear already delivered
+copy before moving, never replay it, and leave pending messages and their
+urgency in the existing queue. Publication rechecks the host-change revision
+and primes the empty endpoint again if it changed during the clear interval.
+Teardown disconnects routing and restores the endpoint before removing the UI.
+This presentation repair changes no hearing, audio, world event or saved state.
+Native accessibility-tree exposure is evidence of eligibility, not proof of
+spoken assistive-technology delivery.
+
 The application also supplies at most three measured UI reservations to that
 same layout: the shared caption, full EVENTS panel, and journey action dock.
 These boxes use mount-relative CSS coordinates; a candidate tries the existing

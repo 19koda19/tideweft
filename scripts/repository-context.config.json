@@ -107,7 +107,8 @@
         "src/game/playerEffortRecency.ts",
         "src/game/playerExpressionRecency.ts",
         "src/audio/soundscape.ts",
-        "src/ui/situatedExpressionCaption.ts"
+        "src/ui/situatedExpressionCaption.ts",
+        "src/ui/createTideweftUI.ts"
       ],
       "tests": [
         "src/game/coreWildlifePursuitExpression.test.ts",
@@ -122,7 +123,8 @@
         "src/game/playerExpressionRecency.test.ts",
         "src/game/runtime.fall.integration.test.ts",
         "src/game/situatedExpressionReception.test.ts",
-        "src/ui/situatedExpressionCaption.test.ts"
+        "src/ui/situatedExpressionCaption.test.ts",
+        "src/ui/liveRegionAnnouncementQueue.test.ts"
       ],
       "validationCommands": [
         "npx vitest run src/game/coreWildlifePursuitExpression.test.ts src/game/situatedExpressionAcoustics.test.ts",
@@ -192,7 +194,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "6a51c90829b957237920d6131abc719a48fb9c3c0fdb71049c2ffaa820a17779",
+      "reviewedSourceFingerprint": "07ced26d7773b05d0ec490819e3ff1bda170ccb2eb19dfd1fc6ce5cf4285ebb7",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -212,6 +214,7 @@
         "The causal domain owns why the sound happened; presentation never creates the event.",
         "Heard-unseen receipts do not reveal exact source identity or position.",
         "Presentation suppression cannot erase lawful hearing or committed audio.",
+        "One queued live-region endpoint stays in the active modal's non-inert subtree; moving it clears delivered copy, preserves pending urgency and does not replay old announcements.",
         "Exact nonself vocal and heard-visible contact labels require current DIRECT sight at the authenticated event anchor; historical hearing does not retain a hidden marker. Self/tactile cues and lawful captions remain independent of sight.",
         "Human dialogue text requires intelligible event-time hearing; faint lawful hearing shows only an indistinct voice, and unheard speech shows nothing.",
         "Consumed ephemeral sound presentation does not replay after save/load."
@@ -250,7 +253,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "6a51c90829b957237920d6131abc719a48fb9c3c0fdb71049c2ffaa820a17779",
+      "reviewedSourceFingerprint": "07ced26d7773b05d0ec490819e3ff1bda170ccb2eb19dfd1fc6ce5cf4285ebb7",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."
