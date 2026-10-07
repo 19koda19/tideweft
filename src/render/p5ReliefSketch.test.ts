@@ -18,9 +18,16 @@ import { outdoorIlluminationPresentation } from "./outdoorIllumination";
 import type { WildlifeVisualSpecies } from "./wildlifeVisualProfile";
 import * as playerPresentation from "./playerPresentation";
 import * as reliefCamera from "./reliefCamera";
-import { perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
+import { discoveredReliefSurfaceHeightAt, perceivedReliefSurfaceHeightAt } from "./reliefTerrain";
 import { buildSurfaceCurrentCues } from "./currentCues";
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
+import {
+  BIOME_PRESENTATION,
+  biomeEnvironmentalEmphasis,
+  biomePresentationVisibility,
+  visibleBiomePresentation,
+} from "./biomePresentation";
+import { currentTerrainDetailVisibility } from "./perceptionPresentation";
 import {
   acousticTextRectsOverlap,
   DEFAULT_ACOUSTIC_TEXT_GUTTER,
@@ -2392,6 +2399,235 @@ describe("Relief surface-current submission equivalence", () => {
       } finally {
         harness.renderer.destroy();
       }
+    });
+});
+
+type BiomeStroke = Omit<CurrentStrokeOperation, "kind">;
+type BiomeMotifFixture = {
+  readonly tileIndex: number;
+  readonly center: { readonly x: number; readonly y: number };
+  readonly surface: number;
+  readonly operations: readonly BiomeStroke[];
+};
+
+function biomeFixture(size = 4, tileSize = 24, worldOriginY = 1): TideweftView {
+  const base = view("biome-submission-fixture", { x: size * tileSize / 2, y: size * tileSize / 2 });
+  const biomes = Object.keys(BIOME_PRESENTATION) as Array<keyof typeof BIOME_PRESENTATION>;
+  return {
+    ...base,
+    terrain: {
+      ...base.terrain, columns: size, rows: size, tileSize,
+      worldTileOrigin: { x: 0, y: worldOriginY },
+      tiles: Array.from({ length: size * size }, (_, index) => ({
+        kind: "meadow" as const, elevation: 0.2, waterDepth: 0.6,
+        biome: biomes[index % biomes.length]!, discovered: 0,
+        currentVisibility: 1, currentDetailVisibility: 1 as const,
+        climate: { rainfall: 0.2, heat: 0.3, salinity: 0.4, exposure: 0.5, magicalWater: 0.6 },
+      })),
+    },
+    camera: { ...base.camera, bounds: { minX: 0, minY: 0, maxX: size * tileSize, maxY: size * tileSize } },
+    perception: { version: 3, signature: "biome-submission-fixture", valid: true,
+      visibleTileCount: size * size, directTileCount: size * size, peripheralTileCount: 0,
+      detailVisibleTileCount: size * size, detailDirectTileCount: size * size, detailPeripheralTileCount: 0 },
+    acousticText: [],
+  };
+}
+
+function biomeFixtureCamera(current: TideweftView, viewport = { width: 320, height: 240 }, yaw = 0): reliefCamera.ReliefCameraState {
+  const distance = Math.max(150, Math.min(2_200,
+    Math.max(430, Math.min(780, Math.min(viewport.width, viewport.height) * 0.96)) / current.camera.zoom,
+  ));
+  return { target: current.player.position,
+    targetHeight: discoveredReliefSurfaceHeightAt(current.terrain, current.player.position, Math.max(1, current.terrain.tileSize * 2.9), false),
+    distance, yaw, pitch: Math.PI * 0.29, verticalFov: Math.PI / 3.5, near: 1,
+    far: Math.max(4_000, Math.hypot(current.terrain.columns * current.terrain.tileSize,
+      current.terrain.rows * current.terrain.tileSize) * 2.5) };
+}
+
+/** Original row-major/hash admission and motif geometry; no camera rejection. */
+function originalBiomeMotifs(current: TideweftView, camera: reliefCamera.ReliefCameraState): readonly BiomeMotifFixture[] {
+  const grid = current.terrain, tileSize = grid.tileSize, reach = camera.distance * 1.15;
+  const bound = (value: number, maximum: number): number => Math.max(0, Math.min(maximum, value));
+  const firstColumn = bound(Math.floor((camera.target.x - reach - grid.origin.x) / tileSize), grid.columns - 1);
+  const lastColumn = bound(Math.ceil((camera.target.x + reach - grid.origin.x) / tileSize), grid.columns - 1);
+  const firstRow = bound(Math.floor((camera.target.y - reach - grid.origin.y) / tileSize), grid.rows - 1);
+  const lastRow = bound(Math.ceil((camera.target.y + reach - grid.origin.y) / tileSize), grid.rows - 1);
+  const threshold = 1 - Math.min(0.43, 420 / Math.max(1, (lastColumn - firstColumn + 1) * (lastRow - firstRow + 1)));
+  const motifs: BiomeMotifFixture[] = [];
+  for (let row = firstRow; row <= lastRow; row += 1) for (let column = firstColumn; column <= lastColumn; column += 1) {
+    const tileIndex = row * grid.columns + column, tile = grid.tiles[tileIndex];
+    const presentation = visibleBiomePresentation(tile), visibility = biomePresentationVisibility(tile);
+    if (!tile || tile.kind === "built" || !presentation || visibility < 0.3
+      || currentTerrainDetailVisibility(tile, current.perception !== undefined) < 1) continue;
+    const variant = reliefTerrainDecorationHash01(grid, column, row, 0x6269_6f6d);
+    if (variant < threshold) continue;
+    const emphasis = biomeEnvironmentalEmphasis(tile), center = {
+      x: grid.origin.x + (column + 0.5) * tileSize, y: grid.origin.y + (row + 0.5) * tileSize,
+    };
+    const surface = perceivedReliefSurfaceHeightAt(grid, center, Math.max(1, tileSize * 2.9),
+      presentation.motif === "ripple" || presentation.motif === "glimmer") + 0.8;
+    const baseY = -surface, lift = tileSize * (0.19 + emphasis * 0.12), half = tileSize * 0.13;
+    const skew = (variant - 0.5) * tileSize * 0.18;
+    const operations: BiomeStroke[] = [];
+    const line = (...coordinates: number[]): void => { operations.push({ coordinates,
+      color: presentation.accentColor, alpha: (70 + emphasis * 90) * visibility, weight: 0.85 + visibility * 0.65 }); };
+    switch (presentation.motif) {
+      case "ripple":
+        line(center.x - half * 1.4, baseY, center.y, center.x + half * 1.4, baseY, center.y + skew * 0.3);
+        line(center.x - half * 0.8, baseY - 0.5, center.y + half, center.x + half * 0.8, baseY - 0.5, center.y + half + skew * 0.2);
+        break;
+      case "salt-crystal":
+        line(center.x, baseY, center.y - half, center.x + half, baseY - lift * 0.45, center.y);
+        line(center.x + half, baseY - lift * 0.45, center.y, center.x, baseY, center.y + half);
+        line(center.x, baseY, center.y + half, center.x - half, baseY - lift * 0.45, center.y);
+        line(center.x - half, baseY - lift * 0.45, center.y, center.x, baseY, center.y - half);
+        break;
+      case "reeds":
+        for (let reed = -1; reed <= 1; reed += 1) {
+          const x = center.x + reed * half * 0.72;
+          line(x, baseY, center.y, x + skew * 0.1, baseY - lift * (reed === 0 ? 1 : 0.72), center.y);
+        }
+        break;
+      case "rain-stem":
+        line(center.x, baseY, center.y, center.x, baseY - lift, center.y);
+        line(center.x, baseY - lift * 0.56, center.y, center.x - half, baseY - lift * 0.77, center.y + half * 0.35);
+        line(center.x, baseY - lift * 0.45, center.y, center.x + half, baseY - lift * 0.66, center.y - half * 0.35);
+        break;
+      case "sunburst":
+        line(center.x, baseY, center.y, center.x, baseY - lift * 0.7, center.y);
+        line(center.x - half, baseY - lift * 0.7, center.y, center.x + half, baseY - lift * 0.7, center.y);
+        line(center.x, baseY - lift * 0.7, center.y - half, center.x, baseY - lift * 0.7, center.y + half);
+        break;
+      case "wind-stroke":
+        line(center.x - half * 1.5, baseY - lift * 0.25, center.y + half, center.x + half * 1.4, baseY - lift * 0.55, center.y - half);
+        line(center.x - half, baseY - lift * 0.58, center.y - half, center.x + half * 0.9, baseY - lift * 0.78, center.y - half * 1.35);
+        break;
+      case "glimmer":
+        line(center.x, baseY, center.y, center.x, baseY - lift, center.y);
+        line(center.x - half, baseY - lift * 0.62, center.y, center.x + half, baseY - lift * 0.62, center.y);
+        line(center.x, baseY - lift * 0.62, center.y - half, center.x, baseY - lift * 0.62, center.y + half);
+        break;
+    }
+    motifs.push({ tileIndex, center, surface, operations });
+  }
+  return motifs;
+}
+
+function projectBiomeStroke(operation: BiomeStroke, camera: reliefCamera.ReliefCameraState,
+  viewport: { readonly width: number; readonly height: number }) {
+  const point = (offset: number) => reliefCamera.projectReliefPoint({ x: operation.coordinates[offset]!,
+    y: operation.coordinates[offset + 2]! }, -operation.coordinates[offset + 1]!, camera, viewport);
+  return [point(0), point(3)] as const;
+}
+
+function recordBiomeStrokes(harness: ReturnType<typeof renderHarness>): BiomeStroke[] {
+  const operations: BiomeStroke[] = [], colors = new Set(Object.values(BIOME_PRESENTATION).map(({ accentColor }) => accentColor));
+  let color = "", alpha = 0, weight = 0;
+  (harness.instance.stroke as ReturnType<typeof vi.fn>).mockImplementation((value: {
+    readonly value?: unknown; readonly setAlpha?: ReturnType<typeof vi.fn>;
+  }) => { color = String(value?.value ?? value); alpha = Number(value?.setAlpha?.mock.calls.at(-1)?.[0] ?? 255); });
+  (harness.instance.strokeWeight as ReturnType<typeof vi.fn>).mockImplementation((value: number) => { weight = value; });
+  (harness.instance.line as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+    if (colors.has(color) && coordinates.length === 6) operations.push({ color, alpha, weight, coordinates });
+  });
+  return operations;
+}
+
+describe("Relief biome submission characterization", () => {
+  it.each(Object.keys(BIOME_PRESENTATION) as Array<keyof typeof BIOME_PRESENTATION>)(
+    "preserves original on-camera %s membership, ordered geometry, style and grounding", (biome) => {
+      vi.stubGlobal("performance", { now: () => 0 }); p5Harness.reducedMotion = true;
+      const base = biomeFixture(), current: TideweftView = { ...base,
+        terrain: { ...base.terrain, tiles: base.terrain.tiles.map((tile) => Object.freeze({ ...tile, biome })) } };
+      const viewport = { width: 320, height: 240 }, camera = biomeFixtureCamera(current, viewport);
+      const selected = originalBiomeMotifs(current, camera).slice(0, 420);
+      expect(selected.length).toBeGreaterThan(0);
+      expect(selected.every((motif) => motif.operations.some((operation) =>
+        projectBiomeStroke(operation, camera, viewport).some(({ visible }) => visible)))).toBe(true);
+      const before = JSON.stringify(current), harness = renderHarness(current, { viewport });
+      try {
+        harness.renderer.setOrbit(0, camera.pitch); harness.draw();
+        const operations = recordBiomeStrokes(harness); harness.draw();
+        expect(operations).toEqual(selected.flatMap(({ operations: lines }) => lines));
+        expect(JSON.stringify(current)).toBe(before);
+        expect(current.terrain.tiles.every((tile) => tile.discovered === 0)).toBe(true);
+        expect(harness.dispatch).not.toHaveBeenCalled();
+      } finally { harness.renderer.destroy(); }
+    });
+
+  it.each([0, 0.5, undefined] as const)("does not disclose biome strokes without direct detail (%s)", (detail) => {
+    vi.stubGlobal("performance", { now: () => 0 }); p5Harness.reducedMotion = true;
+    const base = biomeFixture(), current: TideweftView = { ...base, terrain: { ...base.terrain,
+      tiles: base.terrain.tiles.map((tile) => { const { currentDetailVisibility: _old, ...rest } = tile;
+        return { ...rest, ...(detail === undefined ? {} : { currentDetailVisibility: detail }) }; }) } };
+    const harness = renderHarness(current);
+    try { harness.draw(); const operations = recordBiomeStrokes(harness); harness.draw(); expect(operations).toEqual([]); }
+    finally { harness.renderer.destroy(); }
+  });
+
+  it.each([0, Math.PI] as const)("preserves the original first 420 motif submissions and ordering at yaw %s", (yaw) => {
+    vi.stubGlobal("performance", { now: () => 0 }); p5Harness.reducedMotion = true;
+    const viewport = { width: 200, height: 240 };
+    // Bounded search chooses a real signed-world hash fixture, not mocked
+    // admission: more than 420 selected cells exercise the original cap.
+    const dense = (worldOriginY: number): TideweftView => {
+      const base = biomeFixture(48, 24, worldOriginY);
+      const position = { x: base.player.position.x, y: base.player.position.y + 64 };
+      return { ...base, player: { ...base.player, position }, camera: { ...base.camera,
+        center: position, zoom: MIN_RELIEF_MANUAL_ZOOM } };
+    };
+    let current = dense(1), camera = biomeFixtureCamera(current, viewport, yaw);
+    let selected = originalBiomeMotifs(current, camera);
+    for (let origin = 2; origin <= 32 && selected.length <= 420; origin += 1) {
+      current = dense(origin); camera = biomeFixtureCamera(current, viewport, yaw);
+      selected = originalBiomeMotifs(current, camera);
+    }
+    expect(selected.length).toBeGreaterThan(420);
+    const admitted = selected.slice(0, 420);
+    expect(admitted).toHaveLength(420);
+    expect(admitted.some((motif) => motif.operations.some((operation) =>
+      projectBiomeStroke(operation, camera, viewport).some(({ visible }) => visible)))).toBe(true);
+    const before = JSON.stringify(current), harness = renderHarness(current, { viewport });
+    try {
+      harness.renderer.setOrbit(yaw, camera.pitch); harness.draw();
+      const operations = recordBiomeStrokes(harness); harness.draw();
+      const expected = admitted.flatMap(({ operations: lines }) => lines);
+      expect(operations).toHaveLength(expected.length);
+      expect(operations).toEqual(expected);
+      expect(JSON.stringify(current)).toBe(before); expect(harness.dispatch).not.toHaveBeenCalled();
+    } finally { harness.renderer.destroy(); }
+  });
+
+  it.each([[24, 48, 320, 240], [0.25, 32, 4, 720]] as const)(
+    "retains a real viewport-crossing stroke with its center outside (tile %s, grid %s, viewport %sx%s)",
+    (tileSize, size, width, height) => {
+      vi.stubGlobal("performance", { now: () => 0 }); p5Harness.reducedMotion = true;
+      const viewport = { width, height }, base = biomeFixture(size, tileSize);
+      // Camera movement is presentation-only. Find an actual segment crossing
+      // the viewport edge using real projection, not a forged visibility flag.
+      let current = base, camera = biomeFixtureCamera(current, viewport);
+      let admitted = originalBiomeMotifs(current, camera).slice(0, 420);
+      const crossing = (motif: BiomeMotifFixture): boolean => !reliefCamera.projectReliefPoint(
+        motif.center, motif.surface, camera, viewport).visible && motif.operations.some((operation) => {
+        const [a, b] = projectBiomeStroke(operation, camera, viewport); return a.visible !== b.visible;
+      });
+      for (let offset = 1; offset <= 32 && !admitted.some(crossing); offset += 1) {
+        const position = { x: base.player.position.x + offset * tileSize / 64, y: base.player.position.y };
+        current = { ...base, player: { ...base.player, position }, camera: { ...base.camera, center: position } };
+        camera = biomeFixtureCamera(current, viewport); admitted = originalBiomeMotifs(current, camera).slice(0, 420);
+      }
+      const edge = admitted.filter(crossing); expect(edge.length).toBeGreaterThan(0);
+      const before = JSON.stringify(current), harness = renderHarness(current, { viewport });
+      try {
+        harness.renderer.setOrbit(0, camera.pitch); harness.draw();
+        const operations = recordBiomeStrokes(harness); harness.draw();
+        for (const motif of edge) for (const operation of motif.operations) expect(operations).toContainEqual(operation);
+        const expected = admitted.flatMap(({ operations: lines }) => lines);
+        expect(operations).toHaveLength(expected.length);
+        expect(operations).toEqual(expected);
+        expect(JSON.stringify(current)).toBe(before);
+        expect(harness.dispatch).not.toHaveBeenCalled();
+      } finally { harness.renderer.destroy(); }
     });
 });
 

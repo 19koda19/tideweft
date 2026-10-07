@@ -2836,6 +2836,45 @@ distinct identities. Candidate dense/travel/soak, full visual/current-save
 integration, other desktop targets and publication were not run: rejection
 preceded those gates. No optimization or upstream/dependency change is retained.
 
+#### Biome-frustum submission experiment — discarded, 2026-10-06
+
+At `da77b66`, a second bounded candidate omitted wholly off-camera aesthetic
+biome strokes. Conservative whole-cell/height bounds included side-plane and
+pixel-stroke guards; original detail disclosure, signed-world hash, first 420
+row-major admission, visible geometry/styles and terminal style state remained.
+It did not change terrain/water polygons, visibility, simulation or save state.
+The same pre-edit minimum 15% repeated draw-CPU reduction and absolute guardrails
+applied. Accepted baseline ASAR `63ea252c…` and candidate `e3eeb490…` were frozen
+with their dist files in the ignored local experiment records.
+
+Two sequential production Electron estuary 60s windows used the preceding
+matched AC/Low Power Mode off, 1440×900 CSS, 30-frame warmup and unchanged-quality
+conditions without heavy diagnostics. BEFORE draw means 23.359/23.296ms versus
+candidate 21.714/21.655ms give a two-run mean reduction of **7.0%**, below the
+frozen threshold. Candidate callbacks 38.19/38.38s^-1 still miss the 45 floor;
+world means 90.708/90.597ms and renderer-interval p99s 116.4/115.5ms do not establish
+a world-hitch repair. Windows accept 600/60 and 599/59 fixed steps/advances, so
+these are wall-window comparisons, not equal-work state/event/save witnesses.
+Full-window rAF worsts 133.3/149.5ms are CPU callback proxies, not presented FPS.
+
+The browser attempt timed out before acquiring a Firefox BiDi endpoint during
+an application-update launch. It produced **no browser measurements**. An
+inherited updater output pipe kept the failed Node harness alive after cleanup;
+only that owned harness was terminated, leaving the user's browser/application
+updater untouched. No timing gain is inferred for Firefox. The candidate was
+discarded before visual/current-save, dense/travel, soak or other-platform
+acceptance; its runtime hunk is removed. Useful original motif/disclosure/cap/
+edge characterization remains independent of culling. No optimization, policy,
+schema, dependency or upstream source change is retained.
+
+Final retained characterization passes nine affected files/302 tests, typecheck
+and the maintained six-file/105-test smoke. `package:desktop` passes its actual
+release-sync, build and packaging hooks; nested `/tideweft/` static smoke passes.
+All five regenerated dist files and Mac arm64 ASAR are byte-identical to the
+accepted baseline. Prior exact-byte functional evidence retains its original
+limits; no new interactive, ZIP/install/sign, other-platform or publication
+verification is claimed.
+
 ### Local surface-hearing boundary — 2026-10-05
 
 The unpublished candidate over `3630001` adds the first bounded relief
