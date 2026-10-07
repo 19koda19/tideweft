@@ -4263,6 +4263,99 @@ describe("runtime settlement ecology integration", () => {
     reloaded.destroy();
   });
 
+  it.each(["idle", "moving"] as const)("preserves an accepted-phase keeper reply after one %s step", async (movement) => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    runtime.dispatchUI({
+      type: "new-world",
+      seed: "one keeper reply in the acoustic world",
+      posture: "gale",
+      sessionShape: "wander",
+    });
+    const initialPosition = { ...runtime.getRenderView().player.position };
+    if (movement === "moving") {
+      runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    }
+    advancePlayerSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const interactionPosition = { ...runtime.getRenderView().player.position };
+    if (movement === "moving") expect(interactionPosition).not.toEqual(initialPosition);
+    else expect(interactionPosition).toEqual(initialPosition);
+    expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "interact" });
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+      .toHaveLength(1);
+    await runtime.save();
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    const saved = savedEnvelope(repository);
+    const carry = saved.perceptionCarry as {
+      intervalStartPosition: WorldPosition;
+      playerSenseSamples: Array<{ position: WorldPosition }>;
+      situatedExpressionAdmissions: { records: Array<{
+        admittedAtPlayerStepPhase: number;
+        listenerPosition: WorldPosition;
+        listenerFacingMilliRadians: number;
+      }> };
+    };
+    const admission = carry.situatedExpressionAdmissions.records[0];
+    expect(admission?.admittedAtPlayerStepPhase).toBe(1);
+    expect(admission?.listenerPosition).toEqual(carry.playerSenseSamples[0]?.position);
+    if (movement === "moving") {
+      expect(admission?.listenerPosition).not.toEqual(carry.intervalStartPosition);
+      for (const fault of ["position", "facing", "phase"] as const) {
+        const forged = structuredClone(carry);
+        const forgedAdmission = forged.situatedExpressionAdmissions.records[0];
+        if (forgedAdmission === undefined) throw new Error("keeper test lost its genuine admission");
+        if (fault === "position") forgedAdmission.listenerPosition = forged.intervalStartPosition;
+        if (fault === "facing") forgedAdmission.listenerFacingMilliRadians += 1;
+        if (fault === "phase") forgedAdmission.admittedAtPlayerStepPhase = 0;
+        const rejectedRecord = withCurrentEnvelopeFields(repository.snapshot(), { perceptionCarry: forged });
+        const rejectedRepository = new MemoryRepository(rejectedRecord);
+        const rejected = await createTideweftRuntime(rejectedRepository);
+        expect(rejected.getUIView().saveWarning?.message, `reject altered keeper ${fault}`)
+          .toBe("LOCAL AUTOSAVE UNREADABLE");
+        expect(hashCanonical(rejectedRepository.snapshot()))
+          .toBe(hashCanonical(rejectedRecord));
+        rejected.destroy();
+      }
+    }
+    expect(deserializeSettlementEcologyState(saved.settlementEcology).closure).toBe("secured");
+    runtime.destroy();
+
+    soundscapePlay.mockClear();
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getUIView().saveWarning).toBeUndefined();
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    expect(resumed.getRenderView().player.position).toEqual(interactionPosition);
+    await resumed.save();
+    const restored = savedEnvelope(repository);
+    // Boot changes title/pause/session presentation and its envelope checksum;
+    // authoritative simulation, custody and pending sensory roots do not.
+    for (const key of Object.keys(saved)) {
+      if (key === "session" || key === "integrity") continue;
+      expect(hashCanonical(restored[key]), `restored authoritative root ${key}`)
+        .toBe(hashCanonical(saved[key]));
+    }
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    if (movement === "moving") {
+      resumed.dispatchUI({ type: "resume-world" });
+      resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 1 } });
+      advancePlayerSteps(resumed, 2);
+      resumed.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      await resumed.save();
+      const continued = savedEnvelope(repository).perceptionCarry as typeof carry;
+      expect(continued.playerSenseSamples).toHaveLength(3);
+      expect(continued.situatedExpressionAdmissions.records[0])
+        .toMatchObject({ admittedAtPlayerStepPhase: 1, listenerPosition: admission?.listenerPosition });
+      expect(continued.playerSenseSamples[2]?.position).not.toEqual(admission?.listenerPosition);
+      expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady"))
+        .toHaveLength(0);
+    }
+    resumed.destroy();
+  }, 30_000);
+
   it("voices the committed store closure once through shared Living Voice authority", async () => {
     const repository = new MemoryRepository();
     const runtime = await createTideweftRuntime(repository);

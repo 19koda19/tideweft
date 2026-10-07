@@ -21750,6 +21750,13 @@ function playerPerceptionCarryMatchesPosition(
   );
   let priorIntervalPosition = carry.intervalStartPosition;
   let replayedFacingMilliRadians = carry.intervalStartFacingMilliRadians;
+  // The accepted movement prefix independently authenticates a listener's
+  // pose at each phase. Sound-list ordinal is not temporal phase, and a
+  // between-step keeper interaction need not occur at phase zero.
+  const acceptedPlayerPoses = [{
+    position: priorIntervalPosition,
+    facingMilliRadians: replayedFacingMilliRadians,
+  }];
   let finalDeltaX = 0;
   let finalDeltaY = 0;
   let priorStepStamina = carry.playerStepStateAnchor?.stamina ?? null;
@@ -21812,6 +21819,10 @@ function playerPerceptionCarryMatchesPosition(
     finalDeltaX = delta.x;
     finalDeltaY = delta.y;
     priorIntervalPosition = sample.position;
+    acceptedPlayerPoses.push({
+      position: sample.position,
+      facingMilliRadians: replayedFacingMilliRadians,
+    });
   }
   if (
     carry.playerStepStateAnchor !== null
@@ -22232,15 +22243,17 @@ function playerPerceptionCarryMatchesPosition(
     }
     if (admission.kind === "settlement-keeper-store-response") {
       const authority = { world: economy, settlement } as const;
+      const listenerPose = acceptedPlayerPoses[admission.admittedAtPlayerStepPhase];
       const event = settlementKeeperStoreResponseExpressionEventForTrigger(
         authority,
         admission.triggerEventId,
       );
       return event !== null
+        && listenerPose !== undefined
         && stableStringify(admission.listenerPosition)
-          === stableStringify(carry.intervalStartPosition)
+          === stableStringify(listenerPose.position)
         && admission.listenerFacingMilliRadians
-          === carry.intervalStartFacingMilliRadians
+          === listenerPose.facingMilliRadians
         && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
         && vocalizationSampleMatchesActiveEvent(sample, event)
         && settlementKeeperStoreResponseAdmissionMatchesWorld({

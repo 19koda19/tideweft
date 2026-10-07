@@ -1198,7 +1198,13 @@ above), and final player pose. Player traversal/recovery speech must also
 match its separately retained current-interval causal-authority record; effort
 must additionally match the independently retained movement-owned step-state
 trajectory described above. Porter departure receipts exist only at phase
-zero and must reproduce that exact anchored listener pose. A lawfully heard,
+zero and must reproduce that exact anchored listener pose. A keeper response
+may occur between accepted steps: its listener pose and facing must reproduce
+the movement prefix at its recorded admission phase (phase zero is the anchor;
+phase N is after N accepted steps). The sound-list ordinal is not elapsed time.
+Later movement cannot rewrite that event-time pose, and cold load rejects a
+forged pose, facing or phase without overwriting the stored record. This reuses
+the existing carry; it adds no save field or replayed sound. A lawfully heard,
 strong guardian warning, fish-crow alarm, deer alarm, gull alarm, or elk alarm interrupts WAIT or
 REST/SLEEP before source visibility is classified. The rabbit foot-thump has
 explicit `none` interruption authority and leaves authentic WAIT/REST active.
