@@ -9,6 +9,7 @@ import {
   type ResidentState,
 } from "./types";
 import { hashCanonical } from "./util";
+import { queryResidentAttentionState } from "./residentAttention";
 import {
   WORLD_DAWN_START_TICK,
   WORLD_DAY_START_TICK,
@@ -194,20 +195,21 @@ export interface ResidentCircadianUrgentPreference {
 }
 
 /**
- * Current cognition states that amount to active watch/search work. Weak
- * noticed or suspicious states remain compatible with settling; a resident
- * does not lose an entire night merely for hearing something uncertain.
+ * Active appraisal, not recognition alone, can establish watch/search work.
+ * A neutral courier glance retains the belief without monopolizing rest.
  */
 export function residentCircadianWatchReference(
   perceptionValue: unknown,
 ): string | null {
-  const perception = canonicalizeActorPerceptionState(perceptionValue);
-  if (perception === null) return null;
-  switch (perception.suspicion) {
+  const attention = queryResidentAttentionState(perceptionValue);
+  switch (attention) {
     case "identified":
     case "alert":
     case "searching":
-      return `perception:${perception.suspicion}`;
+      return `perception:${attention}`;
+    case null:
+    case "none":
+    case "glance":
     case "unaware":
     case "noticed":
     case "suspicious":

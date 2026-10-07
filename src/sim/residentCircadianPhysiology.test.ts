@@ -365,9 +365,9 @@ describe("resident circadian physiology", () => {
     assertWorldInvariants(world);
   });
 
-  it("denies a stale sleep-recovery tick while the resident owns an active watch", () => {
+  it("preserves restorative sleep despite a neutral player's retained identification/search", () => {
     const world = worldBeforeNeedsTick(
-      "an identified resident is still on watch",
+      "recognition is not watch duty",
       NIGHT_NEEDS_TICK,
     );
     const resident = world.residents.find(({ activeContractId }) => activeContractId === null);
@@ -390,8 +390,9 @@ describe("resident circadian physiology", () => {
 
     const watched = residentById(world, resident.id);
     expect(["identified", "searching"]).toContain(watched.perception.suspicion);
-    expect(watched.condition.exhaustion).toBe(BASE_EXHAUSTION);
-    expect(watched.needs.rest).toBe(BASE_REST_PRESSURE + 24_000);
+    // WORLD0 deliberately changes appraisal, not the underlying saved belief.
+    expect(watched.condition.exhaustion).toBe(BASE_EXHAUSTION - 2_500);
+    expect(watched.needs.rest).toBe(BASE_REST_PRESSURE - 52_000);
     assertWorldInvariants(world);
   });
 

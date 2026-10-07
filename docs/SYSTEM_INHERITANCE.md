@@ -117,6 +117,11 @@ The table is intentionally responsibility-oriented. A contract marked RESERVED
 still matters: it prevents an earlier feature from inventing an incompatible
 parallel owner. It does not claim that the reserved gameplay is available.
 
+Human `actor-perception` and `circadian-routine` consumers also inherit the
+[recognition/appraisal distinction](./ARCHITECTURE.md#resident-recognition-and-enacted-attention):
+knowing a neutral person is not indefinite watch duty or a reason to deny rest.
+The current local consumer does not establish physical refuge approach.
+
 ## Mandatory feature inheritance audit
 
 Before implementing any substantial new actor, species, human role,

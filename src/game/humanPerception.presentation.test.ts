@@ -32,7 +32,6 @@ import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 import {
   translateWorldPosition,
-  worldPositionDelta,
   type WorldPosition,
 } from "./worldPosition";
 
@@ -128,11 +127,11 @@ describe("existing-human perception presentation", () => {
     },
     {
       cognition: "identified" as const,
-      quickLabel: "Unknown porter · watching you",
+      quickLabel: "Unknown porter · glancing nearby",
       state: "watching",
       emotionMark: ":|",
       emotion: "Appears calm",
-      behavior: "Watching you",
+      behavior: "Glancing nearby",
     },
     {
       cognition: "alert" as const,
@@ -144,11 +143,11 @@ describe("existing-human perception presentation", () => {
     },
     {
       cognition: "searching" as const,
-      quickLabel: "Unknown porter · searching nearby",
-      state: "searching",
-      emotionMark: ":S",
-      emotion: "Appears wary",
-      behavior: "Searching the nearby area",
+      quickLabel: "Unknown porter",
+      state: "waiting",
+      emotionMark: ":)",
+      emotion: "Appears calm",
+      behavior: "Traveling nearby",
     },
   ])("maps $cognition into observable quick and ABOUT copy", (expected) => {
     const fixture = presentationFixture(expected.cognition);
@@ -213,17 +212,15 @@ describe("existing-human perception presentation", () => {
     }
   });
 
-  it("turns a searching human toward the deterministic saved probe", () => {
+  it("preserves the saved neutral search without turning a traveling body toward it", () => {
     const fixture = presentationFixture("searching", 3);
     const search = queryActorSearch(fixture.resident.perception);
     const placement = resolveResidentWorldPlacement(fixture.world, fixture.resident);
     const projected = projectResidentWorldPosition(fixture.world, fixture.resident, TILE_UNITS);
     if (!search || !placement || !projected) throw new Error("fixture needs an active search");
-    const expectedDelta = worldPositionDelta(placement.position, search.nextProbe);
-    const expectedFacing = Math.atan2(expectedDelta.y, expectedDelta.x);
 
     expect(search.nextProbe).not.toEqual(search.lastKnownArea.center);
-    expect(projected.facing).toBeCloseTo(expectedFacing, 8);
+    expect(projected.facing).toBe(placement.facing);
   });
 
   it("withholds cognition, learned identity, speech, and ABOUT outside exact detail sight", () => {

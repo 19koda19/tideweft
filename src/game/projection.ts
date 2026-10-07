@@ -45,10 +45,10 @@ import {
   type WorldView,
 } from "../sim/types";
 import { residentKnowsFact } from "../sim/npcIdentity";
+import { queryResidentAttentionState, type ResidentAttentionState } from "../sim/residentAttention";
 import {
   queryActorAttention,
   queryActorSearch,
-  type ActorSuspicionState,
 } from "../sim/actorPerception";
 import {
   TILE_UNITS,
@@ -636,7 +636,11 @@ function residentAttentionPlacement(
   resident: ResidentState,
   placement: ResidentWorldPlacement,
 ): ResidentWorldPlacement {
-  if (resident.perception.suspicion === "unaware") return placement;
+  // A renderer without separate head/gaze geometry must not turn a traveling
+  // body (and its pack) away from its real route to imitate eye contact.
+  const attention = queryResidentAttentionState(resident.perception);
+  if (resident.location.kind === "route"
+    || attention === "unaware" || attention === "none") return placement;
   const search = queryActorSearch(resident.perception);
   const focus = search?.nextProbe ?? queryActorAttention(resident.perception)[0]?.area.center;
   if (!focus) return placement;
@@ -652,30 +656,36 @@ function residentAttentionPlacement(
   }
 }
 
-function porterPerceptionState(suspicion: ActorSuspicionState): PorterView["state"] | null {
+function porterPerceptionState(suspicion: ResidentAttentionState | null): PorterView["state"] | null {
   switch (suspicion) {
     case "noticed":
     case "suspicious":
       return "listening";
     case "identified":
+    case "glance":
       return "watching";
     case "alert":
       return "alert";
     case "searching":
       return "searching";
     case "unaware":
+    case "none":
+    case null:
       return null;
   }
 }
 
-function porterPerceptionLabel(suspicion: ActorSuspicionState): string | null {
+function porterPerceptionLabel(suspicion: ResidentAttentionState | null): string | null {
   switch (suspicion) {
     case "noticed": return "listening";
     case "suspicious": return "investigating";
     case "identified": return "watching you";
+    case "glance": return "glancing nearby";
     case "alert": return "alert";
     case "searching": return "searching nearby";
     case "unaware": return null;
+    case "none": return null;
+    case null: return null;
   }
 }
 
@@ -748,14 +758,16 @@ function porterEmotionMark(
   resident: ResidentState,
   selected: boolean,
 ): NonNullable<PorterView["emotionMark"]> | undefined {
+  const attention = queryResidentAttentionState(resident.perception);
   if (
-    resident.perception.suspicion === "noticed"
-    || resident.perception.suspicion === "suspicious"
-    || resident.perception.suspicion === "searching"
+    attention === "noticed"
+    || attention === "suspicious"
+    || attention === "searching"
   ) return ":S";
   if (
-    resident.perception.suspicion === "identified"
-    || resident.perception.suspicion === "alert"
+    attention === "identified"
+    || attention === "glance"
+    || attention === "alert"
   ) return ":|";
   switch (resident.condition.emotion) {
     case "afraid": return ":[";
@@ -1389,8 +1401,9 @@ export function projectGameView(
         : resident.location.kind === "route"
           ? "Unknown porter"
           : "Unknown resident";
-      const perceptionLabel = porterPerceptionLabel(resident.perception.suspicion);
-      const perceptionState = porterPerceptionState(resident.perception.suspicion);
+      const attention = queryResidentAttentionState(resident.perception);
+      const perceptionLabel = porterPerceptionLabel(attention);
+      const perceptionState = porterPerceptionState(attention);
       const restState = observableResidentRestState(resident);
       return [
         {

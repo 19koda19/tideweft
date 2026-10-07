@@ -2153,6 +2153,25 @@ One world tick:
 
 The main thread is sufficient at the current seven-settlement/42-resident scale. The view boundary permits a future Worker move after profiling without introducing a second implementation of the rules.
 
+### Resident recognition and enacted attention
+
+The local, unpublished resident-appraisal change separates knowing a person
+from sustained watch duty. `src/sim/residentAttention.ts` derives a neutral
+visual glance from the persisted belief's first-observed tick: it lasts at most
+two accepted civil ticks, and repeated sight or reload cannot renew it. Losing
+that neutral contact retains the shared search/recognition evidence without
+automatically making search an active human commitment. Fresh strong signals,
+anonymous uncertainty and applicable nonhuman attention keep their existing
+rules. The shared perception schema and beliefs are not rewritten.
+
+Circadian priority and restorative physiology consume the same appraisal;
+field sensing, Chart/Relief labels and ABOUT do not present an expired glance
+as permanent watching. Route-body/pack heading is not replaced by gaze in a
+renderer without a separate head representation. There is no new speech or
+audio event, presentation timer or save root. Canonical human bodies, physical
+refuge approach and the remaining enacted services are still unfinished; this
+change does not claim those consumers or a new public release.
+
 ## World representation
 
 The playable slice uses:

@@ -281,14 +281,15 @@ describe("shared resident circadian adapter", () => {
         expectedPosture: "awake",
       },
       {
-        label: "current identified watch before an urgent rest need",
+        // WORLD0: recognition is not an active watch commitment.
+        label: "neutral recognition preserves an urgent rest need",
         resident: { ...urgentRest, perception: watchPerception },
         duty: null,
         weather: weatherAt(SAFE_NIGHT_TICK),
-        expectedKind: "active-commitment",
-        expectedReferenceId: "perception:identified",
-        expectedPreference: "active",
-        expectedPosture: "awake",
+        expectedKind: "urgent-need",
+        expectedReferenceId: "need:rest",
+        expectedPreference: "rest",
+        expectedPosture: "resting",
       },
       {
         label: "urgent rest",

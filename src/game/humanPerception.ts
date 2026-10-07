@@ -10,6 +10,7 @@ import {
   type ObservationInterrupt,
 } from "../sim/actorPerception";
 import { globalTileToRegion } from "../sim/regions";
+import { queryResidentAttentionState } from "../sim/residentAttention";
 import { FIXED_POINT, type WorldView } from "../sim/types";
 import {
   evaluateAudibleContact,
@@ -839,8 +840,12 @@ function lawfulResidentFacing(
 ): number {
   const search = queryActorSearch(priorState);
   if (search !== null) {
+    // A bounded saved probe remains lawful sensory direction. It does not
+    // imply watch duty, task cancellation or an omniscient live target.
     return facingTowardSavedPoint(placement, search.nextProbe);
   }
+  const appraisal = queryResidentAttentionState(priorState);
+  if (appraisal === "unaware" || appraisal === "none") return placement.facing;
   const attention = queryActorAttention(priorState)[0];
   if (attention !== undefined) {
     return facingTowardSavedPoint(placement, attention.area.center);

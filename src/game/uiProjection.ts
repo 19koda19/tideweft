@@ -9,6 +9,7 @@ import {
   type WorldView,
 } from "../sim/types";
 import { residentKnowsFact } from "../sim/npcIdentity";
+import { queryResidentAttentionState } from "../sim/residentAttention";
 import { getPlayerAnimalCallRecognition } from "./playerAnimalCallKnowledge";
 import { deriveBiomeProfile, deriveMagicalWaterInfluence, type BiomeId } from "../sim/biomes";
 import { seedFromText } from "../sim/rng";
@@ -214,11 +215,12 @@ function observableResidentEmotion(resident: ResidentState): string {
   if (observableResidentRestState(resident) === "asleep") {
     return "Hard to read while asleep";
   }
-  if (resident.perception.suspicion === "alert") return "Appears alert";
-  if (resident.perception.suspicion === "searching") return "Appears wary";
+  const attention = queryResidentAttentionState(resident.perception);
+  if (attention === "alert") return "Appears alert";
+  if (attention === "searching") return "Appears wary";
   if (
-    resident.perception.suspicion === "noticed"
-    || resident.perception.suspicion === "suspicious"
+    attention === "noticed"
+    || attention === "suspicious"
   ) return "Appears uncertain";
   switch (resident.condition.emotion) {
     case "afraid": return "Appears frightened";
@@ -233,13 +235,15 @@ function observableResidentEmotion(resident: ResidentState): string {
 function observableResidentBehavior(resident: ResidentState): string {
   const restState = observableResidentRestState(resident);
   if (restState === "asleep") return "Asleep here";
-  switch (resident.perception.suspicion) {
+  switch (queryResidentAttentionState(resident.perception)) {
     case "noticed": return "Listening toward a nearby sound";
     case "suspicious": return "Investigating something nearby";
     case "identified": return "Watching you";
+    case "glance": return "Glancing nearby";
     case "alert": return "Alert and scanning nearby";
     case "searching": return "Searching the nearby area";
     case "unaware": break;
+    case "none": break;
   }
   if (restState === "resting") return "Resting here";
   return resident.condition.sheltering

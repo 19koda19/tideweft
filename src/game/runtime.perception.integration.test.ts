@@ -142,7 +142,7 @@ afterEach(() => {
 });
 
 describe("runtime existing-human perception path", () => {
-  it("turns ordinary player steps into saved human knowledge and a visible watching state", async () => {
+  it("turns ordinary player steps into saved human knowledge and a brief visible glance", async () => {
     const fixture = perceptionFixture("runtime perception handoff");
     const repository = new MemoryRepository(fixture.record);
     const runtime = await createTideweftRuntime(repository);
@@ -155,7 +155,7 @@ describe("runtime existing-human perception path", () => {
     const visible = runtime.getRenderView().porters.find(({ id }) => id === fixture.residentId);
     expect(visible).toMatchObject({
       state: "watching",
-      quickLabel: expect.stringContaining("watching you"),
+      quickLabel: expect.stringContaining("glancing nearby"),
       emotionMark: ":|",
     });
 
@@ -201,6 +201,38 @@ describe("runtime existing-human perception path", () => {
     expect(resumed.getRenderView().porters.find(({ id }) => id === fixture.residentId))
       .toMatchObject({ state: "watching" });
 
+    await resumed.save();
+    expect(savedResidentPerception(repository, fixture.residentId)).toEqual(beforeReload);
+    resumed.destroy();
+  }, 30_000);
+
+  it("returns to ordinary activity after a neutral glance without forgetting or renewing it on reload", async () => {
+    const fixture = perceptionFixture("runtime neutral glance expires");
+    const repository = new MemoryRepository(fixture.record);
+    const first = await createTideweftRuntime(repository);
+    advancePlayerSteps(first, 10);
+    expect(first.getRenderView().porters.find(({ id }) => id === fixture.residentId))
+      .toMatchObject({ quickLabel: expect.stringContaining("glancing nearby") });
+    await first.save();
+    const firstSeen = savedResidentPerception(repository, fixture.residentId).beliefs
+      .find(({ subjectId }) => subjectId === "player:local")?.firstObservedTick;
+
+    advancePlayerSteps(first, 20);
+    const ended = first.getRenderView().porters.find(({ id }) => id === fixture.residentId);
+    expect(ended).toBeDefined();
+    expect(ended?.state).not.toBe("watching");
+    expect(ended?.quickLabel).not.toContain("glancing");
+    await first.save();
+    const beforeReload = savedResidentPerception(repository, fixture.residentId);
+    expect(beforeReload.suspicion).toBe("identified");
+    expect(beforeReload.beliefs.find(({ subjectId }) => subjectId === "player:local"))
+      .toMatchObject({ firstObservedTick: firstSeen });
+    first.destroy();
+
+    scheduledFrame = undefined;
+    const resumed = await createTideweftRuntime(repository);
+    expect(resumed.getRenderView().porters.find(({ id }) => id === fixture.residentId))
+      .toEqual(ended);
     await resumed.save();
     expect(savedResidentPerception(repository, fixture.residentId)).toEqual(beforeReload);
     resumed.destroy();
