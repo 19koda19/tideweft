@@ -1421,9 +1421,15 @@ Before finalization retention is null. A later transaction failure publishes
 neither provisional audience nor new source decisions. Query reports are
 detached/frozen, have no effect on hearing/audio/captions, and follow the same
 64-record eviction, reset/reload, no-save and production-exclusion policy.
-Uncaptured provenance/listeners, unsupported semantic transfer and player
-comprehension remain explicitly outside this partial factual-audit spine;
-the complete knowledge-leak auditor and broader labs remain open.
+This supplies the bounded current-source factual-audit capability: existing
+domain validators prove possession, captured actual receipts distinguish hearing
+from the existing semantic decoder, and player words remain separately gated by
+event-time intelligibility. Runtime proofs preserve actual anonymous listeners,
+finalized beliefs, rollback and inspection-on/off state/audio equivalence.
+Uncaptured provenance, listeners outside the selected frame, portable attestations,
+future semantic/language/social breadth and broader labs remain outside this
+accepted current capability, not an obligation to invent unavailable gameplay.
+It does not certify ordinary-play quality, hardware, performance or release gates.
 
 `reportRepetition()` retains capture-period totals separately from the 64-record
 inspection ring. It counts captured decisions and reasons, and groups decisions
