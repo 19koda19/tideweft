@@ -128,6 +128,35 @@ supports current local cumulative confidence on the unchanged executable,
 not a longitudinal soak, performance repair or remote release. CI, Pages and
 exact-live verification remain pending at this local checkpoint.
 
+### Remote correctness and Pages timing diagnosis — 2026-10-07
+
+CI run `37633687939` succeeds on pushed
+`377df3ff63108cc5f6abb8b7b42b8462c7c2ffb4`, whose executable inputs remain
+unchanged from `785ff0f`. The complete monolithic Vitest run passes365 files /
+4,197 tests in2138.62seconds, together with context28, synchronization39,
+type-check, web build and static smoke. This supplies the complete-run evidence
+missing from the original locally capped invocation; that historical invocation
+still remains INCOMPLETE.
+
+Pages run `37633688000`, attempt1, fails one unchanged marsh-edge ecology
+wall-time assertion:384 desktop ecology steps take8015.039ms against a strict
+8000ms ceiling. The other364 files /4,196 tests pass. The same fixture passes
+in the successful exact-commit CI run at6324.37ms and in two unchanged isolated
+local rechecks at3458.22/3430.29ms (two tests each,6.32/6.28seconds overall).
+Those passing witnesses report the same17 allocations,14 actors,384 desktop
+steps,128 mobile steps and91,136 save bytes. Reported counts are not a full
+intermediate-state equality proof; attempt1 fails before its later assertions.
+
+Pages is approximately35% slower across the complete suite and neighboring
+unchanged ecology/time files; the failed loop is26.7% slower than CI and misses
+its ceiling by0.188%. This supports hosted-runner timing variability, not a
+proved semantic regression, GC diagnosis or application repair. The assertion
+measures synchronous ecology work, not rendered frames or presentation FPS.
+No source, timeout, expectation, dependency or workflow is changed. Only the
+failed Pages job is retried on the same commit; successful CI is retained.
+Local evidence stays in the existing ignored `voice-current49` validation
+owner. Deployment and exact-live verification remain pending at this record.
+
 ## Non-pausing modal announcement exposure — 2026-10-07
 
 A short native macOS arm64 observation on clean `4f3a260` reproduced a real
