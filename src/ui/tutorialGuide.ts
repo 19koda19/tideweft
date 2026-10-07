@@ -432,6 +432,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Opening Patch Notes never advances simulation or starts a save. From the active field, the world continues underneath; if WAIT is active, opening the notes first cancels that transient action at its committed boundary. From the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
       {
+        id: "whats-new-living-voice-current",
+        audience: "all",
+        title: "Alpha 64 · The audible world",
+        body: "Committed human reactions, nearby warnings, representative animal calls and salient physical sounds share one hearing and caption path. A call genuinely seen and heard teaches its vocal family; later heard calls can read fox call or chicken call without identifying a hidden individual or its exact position. Captions allow about 21 characters per second; urgent warnings can interrupt. Exact world labels require current sight, while lawful directional captions remain available. The single live announcer stays accessible inside the open Field Manual or KIT without replaying old messages. These are bounded examples, not continuous conversations, a complete animal repertoire, or playable future crafting, violence and boats. See Patch Notes for current save support and remaining limits.",
+      },
+      {
         id: "whats-new-water-motion-preview",
         audience: "all",
         title: "Alpha 63 · Visible water motion local preview",
@@ -1642,7 +1648,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 73 as const;
+export const TUTORIAL_CONTENT_VERSION = 74 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

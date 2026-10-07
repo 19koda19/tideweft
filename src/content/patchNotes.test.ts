@@ -21,15 +21,28 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.63",
-      releaseDate: "2026-10-06",
-      buildIdentity: "0.3.3-alpha.63",
+      version: "0.3.3-alpha.64",
+      releaseDate: "2026-10-07",
+      buildIdentity: "0.3.3-alpha.64",
       gameplayContractVersion: 51,
-      tutorialVersion: 73,
+      tutorialVersion: 74,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
     )).toBe(true);
+  });
+
+  it("keeps current acoustic behavior separate from future breadth and performance certification", () => {
+    const currentCopy = PATCH_NOTE_CATEGORIES
+      .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
+    expect(currentCopy).toContain("fox call or chicken call without brackets");
+    expect(currentCopy).toContain("other actors' lawful hearing");
+    expect(currentCopy).toContain("without losing pending messages or replaying an old announcement");
+    expect(currentCopy).toContain("outer save version 50");
+    expect(currentCopy).toContain("intentionally incompatible and are left untouched");
+    expect(currentCopy).toContain("do not make those actions playable");
+    expect(currentCopy).toContain("recurring world-advance stalls remain");
+    expect(currentCopy).toContain("do not certify presented FPS");
   });
 
   it("uses SemVer precedence to reject newest-first mistakes on the same date", () => {

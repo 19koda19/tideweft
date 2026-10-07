@@ -4,6 +4,43 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.64 — 2026-10-07
+
+Build: `0.3.3-alpha.64` · Gameplay contract: 51 · Tutorial: 74
+
+Alpha 64 brings committed human expressions, representative animal calls and physical sounds into one lawful, readable acoustic world.
+
+### Gameplay
+
+- Player travel and recovery reactions, current porter and keeper actions, nearby introductions and warnings, representative animal calls and salient physical sounds follow their real committed causes and ordinary hearing.
+- Seeing and hearing an animal make a qualifying call teaches that vocal family. Later lawful hearing can caption fox call or chicken call without brackets, hidden individual identity or precise hidden position.
+
+### Fixes
+
+- Speech, animal calls and physical sounds share restrained collision-aware world labels. Optional label suppression cannot erase committed audio or other actors' lawful hearing.
+- The single live announcer remains exposed inside the open Field Manual and KIT. Moving it clears delivered text without losing pending messages or replaying an old announcement.
+- Footing reactions use bounded per-meaning recency; cargo movement and physical contact remain independently event-owned. Reload does not replay consumed calls, captions or incidental sounds.
+
+### Balancing
+
+- A CHALLENGING HARD, physical custody, deterministic world time and hearing remain unchanged. Quiet calls do not interrupt recovery; qualifying strong disturbances retain their existing interruption rules.
+
+### Interface
+
+- Captions retain reading time at about 21 characters per second with a one-second minimum; urgent warnings may interrupt. Full or Important animal world labels change presentation, not hearing or world knowledge.
+- Broad terrain and aesthetic visibility, medium-range actor detail and close-range pickup visibility remain distinct and terrain-occluded. Relief water retains depth colours and current-sensitive decorative polygon motion; reduced motion keeps it still.
+- Field Manual version 74 explains the current bounded acoustic behavior and its limits.
+
+### Save changes
+
+- Current outer save version 50 and its supported formats are unchanged. Published formats 1–32 remain supported; internal Voice formats 33–49 remain intentionally incompatible and are left untouched rather than partially loaded or silently overwritten.
+- Learned vocal families persist; ephemeral label positions and consumed incidental audio do not replay on reload.
+
+### Known limitations
+
+- Calls and conversations are representative real behaviors, not continuous animal chatter, universal species coverage or a general social dialogue system. Future tool, violence and vessel contracts do not make those actions playable.
+- Expanded Relief visibility has a documented rendering cost and recurring world-advance stalls remain. Short local checks do not certify presented FPS, prolonged-session stability, low-end mobile hardware or every desktop platform.
+
 ## 0.3.3-alpha.63 — 2026-10-06
 
 Build: `0.3.3-alpha.63` · Gameplay contract: 51 · Tutorial: 73
