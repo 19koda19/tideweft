@@ -408,6 +408,25 @@ player-facing slice may correctly fail that gate until its intentional release
 checkpoint. Preserve the gate and record the unpublished state; do not repeat
 the wrapper on unchanged inputs or manufacture a release to satisfy it.
 
+CI and Pages can reuse successful CI at the exact preceding pushed commit for
+a documentation-only attestation on `main`. The local
+[scope checker](scripts/check-documentation-reuse.cjs) accepts modifications to
+its explicit list of existing regular Markdown files only; additions, deletions,
+renames, mode changes, source, tests, assets, dependencies and configuration
+require the full suite. Manual dispatch, pull requests, a dirty checkout or
+missing/unverifiable baseline evidence also require full validation. Successful
+prose-only runs may form a chain because each edge preserves executable inputs.
+The job summary names the reused CI run; it does not claim the suite ran again.
+
+Both workflows still run release synchronization, type-checking, the production
+build and static web smoke. Pages uploads only `dist/` through the existing
+deployment path. Its baseline lookup runs in a separate read-only job, without
+deployment permissions. `npm run test:documentation-reuse` checks the policy;
+`node scripts/check-documentation-reuse.cjs` reports the scope without changing
+source files. Changes to the checker or workflows themselves always require
+full validation. This does not waive applicable interactive, platform or exact
+live-build checks, and does not make unpublished work a release.
+
 Run the assembled web quality gates for a release candidate:
 
 ```bash
