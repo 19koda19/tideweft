@@ -55,6 +55,17 @@ or proof of a game defect. The earlier paired image discussed below remains
 partial evidence. No repeated pair attempt, game change, packaging, dependency
 or public deployment accompanies this bounded check.
 
+Later local preview rebuild: after the user quit Alpha62, normal
+`npm run package:desktop` passes on `909ef27` (sync, typecheck, Vite and Forge),
+producing macOS arm64 Alpha63 with the same JS identity above. ASAR SHA256
+`63cea4f8c27303ed9a27f351ed1223701e9c4fb89dce017d524700774ea978b9`
+contains only10 permitted runtime entries. The existing `npm run smoke:desktop`
+against that generated executable passes through hardened `app://` serving,
+desktop/compact/title controls and its current-save probes, using disposable
+data and fresh screenshots. Renderer warnings/navigation/resource failures
+are empty. This is a local packaged preview, not ZIP/install/signing, another
+platform, a performance certificate or public deployment; real saves untouched.
+
 ## Finite current animal-source audit — 2026-10-06
 
 Current cause/semantic review plus
