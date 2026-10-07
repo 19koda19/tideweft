@@ -63,6 +63,10 @@ const p5Harness = vi.hoisted(() => ({
   perceptionShaderSupported: false,
   perceptionShaderThrowsAfterBind: false,
   perceptionShaderHooks: [] as object[],
+  waterShaderSupported: false,
+  waterShaderThrowsAfterBind: false,
+  waterShaderHooks: [] as object[],
+  waterShaderUniforms: [] as Array<{ readonly name: string; readonly value: unknown }>,
   friendlyErrorsDisabled: false,
   viewport: null as null | { readonly width: number; readonly height: number },
 }));
@@ -104,6 +108,9 @@ vi.mock("p5", () => {
       let geometryOrdinal = 0;
       const vertex = vi.fn();
       const modifiedPerceptionShader = { kind: "fake-perception-shader" };
+      const modifiedWaterShader = { kind: "fake-water-shader", setUniform: vi.fn(
+        (name: string, value: unknown) => p5Harness.waterShaderUniforms.push({ name, value }),
+      ) };
       const target: Record<PropertyKey, unknown> = {
         width: p5Harness.viewport?.width ?? 320,
         height: p5Harness.viewport?.height ?? 240,
@@ -157,9 +164,16 @@ vi.mock("p5", () => {
           };
         }),
         baseMaterialShader: vi.fn(() => {
-          if (!p5Harness.perceptionShaderSupported) return undefined;
+          if (!p5Harness.perceptionShaderSupported && !p5Harness.waterShaderSupported) return undefined;
           return {
             modify: vi.fn((hooks: object) => {
+              if ("Vertex getObjectInputs" in hooks) {
+                p5Harness.waterShaderHooks.push(hooks);
+                if (!p5Harness.waterShaderSupported) throw new Error("unsupported synthetic water shader");
+                p5Harness.friendlyErrorsDisabled = false;
+                return modifiedWaterShader;
+              }
+              if (!p5Harness.perceptionShaderSupported) throw new Error("unsupported synthetic perception shader");
               p5Harness.perceptionShaderHooks.push(hooks);
               // Reproduce the pinned library's object-modifier cleanup, which
               // restores its module-load flag rather than the caller's policy.
@@ -168,7 +182,11 @@ vi.mock("p5", () => {
             }),
           };
         }),
-        shader: vi.fn(() => {
+        shader: vi.fn((value: { readonly kind: string }) => {
+          if (value.kind === "fake-water-shader") {
+            if (p5Harness.waterShaderThrowsAfterBind) throw new Error("synthetic water shader failure after bind");
+            return;
+          }
           if (p5Harness.perceptionShaderThrowsAfterBind) {
             throw new Error("synthetic shader compilation failure after bind");
           }
@@ -682,6 +700,10 @@ beforeEach(() => {
   p5Harness.perceptionShaderSupported = false;
   p5Harness.perceptionShaderThrowsAfterBind = false;
   p5Harness.perceptionShaderHooks.length = 0;
+  p5Harness.waterShaderSupported = false;
+  p5Harness.waterShaderThrowsAfterBind = false;
+  p5Harness.waterShaderHooks.length = 0;
+  p5Harness.waterShaderUniforms.length = 0;
   p5Harness.friendlyErrorsDisabled = false;
   p5Harness.viewport = null;
   vi.unstubAllGlobals();
@@ -1976,6 +1998,105 @@ describe("Relief presentation-only pointer and label motion", () => {
     if (!replacement) throw new Error("expected replacement Relief label");
     expect(Number.parseFloat(String(replacement.style.left))).toBeCloseTo(231.2, 1);
     harness.renderer.destroy();
+  });
+});
+
+describe("Relief water motion", () => {
+  it("reuses one water-only GPU program and a bounded render clock without changing source vertices", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    p5Harness.waterShaderSupported = true;
+    p5Harness.friendlyErrorsDisabled = true;
+    const source = warmWaterView("gpu-water-motion");
+    const sourceBytes = JSON.stringify(source);
+    const harness = renderHarness(source);
+    const waterVertices: number[][] = [];
+    (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+      if (p5Harness.materialTrace.slice(-3)[0]?.args.join(",") === "0,0,0,255") waterVertices.push(coordinates);
+    });
+    const time = (): number => p5Harness.waterShaderUniforms.filter(
+      (entry) => entry.name === "waterMotionTime",
+    ).at(-1)!.value as number;
+    try {
+      harness.draw();
+      expect(p5Harness.waterShaderHooks).toHaveLength(1);
+      expect(time()).toBe(0);
+      const initialVertices = waterVertices.map((coordinates) => [...coordinates]);
+      expect(initialVertices).toHaveLength(16 * 6);
+      waterVertices.length = 0;
+      now = 100;
+      harness.draw();
+      const advanced = time();
+      expect(advanced).toBeGreaterThan(0);
+      expect(advanced).toBeLessThanOrEqual(0.225);
+      expect(waterVertices).toEqual(initialVertices);
+      now = 100_000;
+      harness.draw();
+      expect(time() - advanced).toBeLessThanOrEqual(0.25 * 2.25);
+      expect(p5Harness.waterShaderHooks).toHaveLength(1);
+      expect(harness.instance.resetShader).toHaveBeenCalled();
+      expect(JSON.stringify(source)).toBe(sourceBytes);
+      expect(p5Harness.friendlyErrorsDisabled).toBe(true);
+      const hooks = p5Harness.waterShaderHooks[0] as Record<string, unknown>;
+      expect(hooks["Vertex getObjectInputs"]).toContain("inputs.position.y -= waterMotionAmplitude * wave");
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
+  it("keeps reduced-motion water flat without allocating its optional GPU program", () => {
+    p5Harness.reducedMotion = true;
+    p5Harness.waterShaderSupported = true;
+    const harness = renderHarness(warmWaterView("reduced-water-motion"));
+    try {
+      harness.draw();
+      harness.draw();
+      expect(p5Harness.waterShaderHooks).toHaveLength(0);
+      expect(p5Harness.waterShaderUniforms).toHaveLength(0);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
+  it("restores the flat opaque sheet after a bind failure without retrying each frame", () => {
+    p5Harness.waterShaderSupported = true;
+    p5Harness.waterShaderThrowsAfterBind = true;
+    p5Harness.friendlyErrorsDisabled = true;
+    const harness = renderHarness(warmWaterView("unsupported-water-motion"));
+    const waterVertices: number[][] = [];
+    (harness.instance.vertex as ReturnType<typeof vi.fn>).mockImplementation((...coordinates: number[]) => {
+      if (p5Harness.materialTrace.slice(-3)[0]?.args.join(",") === "0,0,0,255") waterVertices.push(coordinates);
+    });
+    try {
+      expect(() => harness.draw()).not.toThrow();
+      expect(waterVertices).toHaveLength(16 * 6);
+      expect(harness.instance.resetShader).toHaveBeenCalled();
+      waterVertices.length = 0;
+      harness.draw();
+      expect(waterVertices).toHaveLength(16 * 6);
+      expect(p5Harness.waterShaderHooks).toHaveLength(1);
+      expect(p5Harness.waterShaderUniforms).toHaveLength(0);
+      expect(p5Harness.friendlyErrorsDisabled).toBe(true);
+    } finally {
+      harness.renderer.destroy();
+    }
+  });
+
+  it("allows a fresh water program after context restoration", () => {
+    p5Harness.waterShaderSupported = true;
+    p5Harness.waterShaderThrowsAfterBind = true;
+    const harness = renderHarness(warmWaterView("restored-water-motion"));
+    try {
+      harness.draw();
+      harness.canvas.fire("webglcontextlost", { preventDefault: vi.fn() });
+      p5Harness.waterShaderThrowsAfterBind = false;
+      harness.canvas.fire("webglcontextrestored");
+      harness.draw();
+      expect(p5Harness.waterShaderHooks).toHaveLength(2);
+      expect(p5Harness.waterShaderUniforms.some((entry) => entry.name === "waterMotionAmplitude")).toBe(true);
+    } finally {
+      harness.renderer.destroy();
+    }
   });
 });
 

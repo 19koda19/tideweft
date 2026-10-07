@@ -3905,6 +3905,20 @@ shore; hills, hidden-water masks and Chart memory remain intact. This consumes
 existing physical hydrology without changing it. Broader actor/item water
 layering remains future work, not a claim made by this narrow surface repair.
 
+Optional Relief water motion is decoration over that same physical free-surface
+baseline. One lazily compiled GPU material moves the existing six vertices per
+wet cell, with no extra tessellation, mesh rebuild or draw pass. Positive lift
+is capped at the smaller of 0.65 world units and two percent of tile width;
+a restrained interpolated glint preserves blue depth bands and opaque alpha.
+Wave rate and amplitude use at most eight nearby, already-disclosed surface
+current cues from the existing shared hydrology reading; current heading
+magnitude is not speed. No perceived cues means neutral ambient motion, not a
+hidden-flow disclosure. Current strokes and waves share one cue preparation.
+Signed-world phase keeps the wave continuous across floating-origin slides.
+The bounded render clock cannot change water, traversal, hearing, knowledge,
+events or saves. Reduced motion uses the still surface; unsupported shader
+contexts fall back to it without removing water or retrying every frame.
+
 Saved in-flight anonymous Voice receptions may validate against the former
 player contact profile through `projectLegacyPlayerPerception()`. This is
 historical receipt replay only, with a separate cache key: the same committed

@@ -2,6 +2,35 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.62",
+      "releaseDate": "2026-10-06",
+      "buildIdentity": "0.3.3-alpha.62",
+      "summary": "Alpha 62 is an unpublished local water-motion update to the Living Voice playtest preview, not a public release or directive closure.",
+      "gameplayContractVersion": 51,
+      "tutorialVersion": 72,
+      "categories": {
+        "gameplay": [
+          "Relief's existing water polygons gently undulate and glint. Nearby perceived current makes the visual motion stronger and faster; no extra surface polygons are added."
+        ],
+        "fixes": [
+          "Optional water animation falls back to the existing opaque blue surface if its shader is unavailable. Broad water visibility, depth-colour disclosure and shoreline occlusion remain intact."
+        ],
+        "balancing": [
+          "There are no changes to current force, physical water level, footing, cargo, sound or the A CHALLENGING HARD ruleset."
+        ],
+        "interface": [
+          "Field Manual version 72 identifies this local update. Reduced motion keeps the water sheet still; no new controls are required."
+        ],
+        "saves": [
+          "The current outer save version remains 50, with the same intentionally supported formats and fail-closed incompatibility policy as Alpha 61. Decorative water motion is not saved and cannot create or replay a world event."
+        ],
+        "knownLimitations": [
+          "This is an unpublished local playtest build. Alpha 60 remains the latest LIVE_VERIFIED public baseline; Living Voice remains active and unfinished.",
+          "Motion expresses a bounded nearby perceived flow context, not an exact per-cell velocity field. Short local cost checks do not certify universal FPS, prolonged-session performance or every platform."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.61",
       "releaseDate": "2026-10-05",
       "buildIdentity": "0.3.3-alpha.61",

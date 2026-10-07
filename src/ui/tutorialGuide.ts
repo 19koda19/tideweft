@@ -432,6 +432,12 @@ export const TUTORIAL_GUIDE_SECTIONS = [
         body: "Opening Patch Notes never advances simulation or starts a save. From the active field, the world continues underneath; if WAIT is active, opening the notes first cancels that transient action at its committed boundary. From the title or Quiet Hour, the existing stopped state is preserved. Close them to return to this exact field-manual page; keyboard and touch use the same release history.",
       },
       {
+        id: "whats-new-water-motion-preview",
+        audience: "all",
+        title: "Alpha 62 · Water motion local preview",
+        body: "Relief water now has restrained undulation and glints, stronger and faster with nearby perceived current. It uses the same visible water, depth colours and physical tide level; animation never changes footing, current force or sound. Reduced motion keeps the sheet still. This is an unpublished local update, not completed Living Voice or a new public release; Alpha 60 remains the latest LIVE_VERIFIED public baseline.",
+      },
+      {
         id: "whats-new-living-voice-preview",
         audience: "all",
         title: "Alpha 61 · Living Voice local preview",
@@ -1636,7 +1642,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 71 as const;
+export const TUTORIAL_CONTENT_VERSION = 72 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

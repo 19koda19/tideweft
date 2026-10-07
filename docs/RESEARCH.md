@@ -20,6 +20,81 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Flow-informed decorative water motion — 2026-10-06
+
+Local Alpha62 candidate over `4f7b189`; no public release or Living Voice
+closure. One optional p5 material applies bounded positive vertex lift and a
+small interpolated blue glint to the existing water triangles. It consumes the
+first eight existing nearby, disclosed current cues, not hidden terrain or a
+new velocity simulation. Shared hydrology strength increases amplitude/rate;
+heading length is not speed. Reduced motion and unsupported shader contexts
+retain the still opaque surface. Physical free surface, depth disclosure,
+Chart, authority, save format50 and dependencies are unchanged.
+
+Before/after artifacts are identified separately from their dirty source tree:
+Alpha61 ASAR `63ea252cad4a0bae81fac5c4be2f142bbbea5ea99acf4c8e321aea3280da4857`,
+web JS `13abc61b69df2df3249d2419fe130b2f405b2981c092dd8ec8302dccb5c77bba`;
+Alpha62 ASAR `358b19d2c00bb53166502c8bbf3858a5b57b387e63a13ea7e0c9bf39a4251538`,
+web JS `cca477bbb4c7558f35b4d32e85c25abb61ee8616fdabdeb5951d4bc7d3e5cf50`.
+Frozen binaries remain unchanged during sampling. Two 15-second estuary Relief
+windows per artifact/platform use the existing `profile:baseline` executable,
+`--scenario estuary-desktop-relief --sample-ms 15000`, then `profile:browser`
+with each matching packaged baseline. Host: AC Apple M4/10 logical cores/16GiB,
+Low Power Mode0, Node22.20.0, Electron44.1.0/Chromium152 and Firefox157.0.1;
+1440x900 CSS, existing 30-frame warm-up and unchanged quality. Normal user
+Firefox was left open; background contention remains a limit. No CPU sampler,
+GPU timing or presented-frame measurement. Local ignored outputs are under
+`artifacts/validation/water-motion-4f7b189/`.
+
+Finite triage criterion recorded before AFTER: real linked/visible motion,
+paired-mean draw increase <=5%, no consistent callback-rate loss >5%, and no
+visual/authority regression. This is not a full performance transition gate.
+
+| Platform / artifact | Draw means, ms | Draw samples | Renderer callbacks/s | p99 / worst callback gaps, ms |
+| --- | --- | --- | --- | --- |
+| Electron before | 24.415 / 25.172 | 516 / 500 | 34.31 / 33.28 | 124.7 / 145.3; 124.4 / 141.7 |
+| Electron after | 24.088 / 25.255 | 524 / 501 | 34.83 / 33.28 | 118.7 / 145.2; 118.6 / 145.6 |
+| Firefox before | 20.846 / 20.379 | 482 / 486 | 31.47 / 31.88 | 184 / 222; 180 / 209 |
+| Firefox after | 20.610 / 20.795 | 490 / 479 | 32.11 / 31.35 | 178 / 186; 180 / 202 |
+
+Paired-mean draw delta: -0.49% Electron, +0.44% Firefox; callback-rate delta
++0.77% / +0.18%. These are within repetition noise, not optimization gains.
+Intervals/draws fit the existing bounded4096 store; empirical nearest-rank p99
+is short-window evidence only. Actual windows15.02–15.31s; Electron accepts149
+fixed steps/14 world advances in every window, Firefox151–152/15. Matching
+counts alone are not equal-state proof. All retain72 actors/54 materialized,
+22 visible,4 visible wildlife and950 aggregate units. Post-window saves remain
+1,891,170 bytes Electron; Firefox1,888,333–1,888,864 varies with accepted work.
+No save occurs in the timed windows. No heap-convergence, long-soak or hitch-
+repair claim; existing whole-game callback floors remain unmet.
+
+The actual production Firefox WebGL2 renderer also passes four finite synthetic
+public-view fixtures through `/tideweft/`: calm, faster-flow, reduced motion and
+hidden water. Linked shader uniforms advance only for ordinary visible water;
+amplitude0.072 calm /0.1869 faster flow, with unchanged fixture tick/terrain and
+zero unexpected console errors. Paired images show motion; sky/camera/other
+presentation can also change pixels, so counts do not isolate water. Manual
+inspection preserves blue opacity/depth bands. Fixtures do not establish lawful
+gameplay admission or exact per-cell velocity. Focused source tests separately
+cover shared-flow derivation, hidden-input refusal, signed-origin continuity,
+bounded clocks, shader fallback/context restoration and reduced motion.
+Decision: retain the small presentation addition; prolonged/mobile/other-host
+certification remains unrun rather than waived.
+
+Final local checks pass: 12 affected files/270 tests, maintained critical
+6 files/105 tests, context28 and player-facing39 checks, production typecheck/
+web compilation, five-file nested static web smoke, and Macarm64 Forge package
+plus the ordinary packaged smoke (no screenshot duplication). Packaged smoke
+reports Alpha62 with no renderer warnings, navigation diagnostics or resource
+failures. No ZIP, installation, signing/notarization, other-OS, complete
+cumulative rerun, remote CI, deployment or exact-live claim.
+
+Artifact cleanup in the same local session permanently removed99,390,405 bytes
+of obsolete generated builds, closed checkpoints and superseded captures.
+Current fixtures, certificates, accepted evidence and active work remain.
+Historical paths remain provenance; deleted captures are not recoverable from
+Git, and future comparisons must rebuild or recapture the matching artifact.
+
 ## Relief water range-boundary repair — 2026-10-06
 
 Local, unpublished follow-up over `ef6b3df`: a player screenshot exposed a

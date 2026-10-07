@@ -4,6 +4,37 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.62 — 2026-10-06
+
+Build: `0.3.3-alpha.62` · Gameplay contract: 51 · Tutorial: 72
+
+Alpha 62 is an unpublished local water-motion update to the Living Voice playtest preview, not a public release or directive closure.
+
+### Gameplay
+
+- Relief's existing water polygons gently undulate and glint. Nearby perceived current makes the visual motion stronger and faster; no extra surface polygons are added.
+
+### Fixes
+
+- Optional water animation falls back to the existing opaque blue surface if its shader is unavailable. Broad water visibility, depth-colour disclosure and shoreline occlusion remain intact.
+
+### Balancing
+
+- There are no changes to current force, physical water level, footing, cargo, sound or the A CHALLENGING HARD ruleset.
+
+### Interface
+
+- Field Manual version 72 identifies this local update. Reduced motion keeps the water sheet still; no new controls are required.
+
+### Save changes
+
+- The current outer save version remains 50, with the same intentionally supported formats and fail-closed incompatibility policy as Alpha 61. Decorative water motion is not saved and cannot create or replay a world event.
+
+### Known limitations
+
+- This is an unpublished local playtest build. Alpha 60 remains the latest LIVE\_VERIFIED public baseline; Living Voice remains active and unfinished.
+- Motion expresses a bounded nearby perceived flow context, not an exact per-cell velocity field. Short local cost checks do not certify universal FPS, prolonged-session performance or every platform.
+
 ## 0.3.3-alpha.61 — 2026-10-05
 
 Build: `0.3.3-alpha.61` · Gameplay contract: 51 · Tutorial: 71

@@ -10,6 +10,7 @@ import {
 import { reliefTerrainDecorationHash01 } from "./terrainDecoration";
 import { reliefSurfaceMaterialColor } from "./reliefMaterialPresentation";
 import { buildSurfaceCurrentCues, buildWaterVoiceLabels } from "./currentCues";
+import { reliefWaterMotionFrame } from "./reliefWaterMotion";
 import {
   buildTerrainMesh,
   type TerrainMesh,
@@ -574,6 +575,8 @@ export function createTideweftReliefRenderer(
   let discardRetainedTerrainGeometry: (() => void) | null = null;
   let releaseRetainedPerceptionGeometry: (() => void) | null = null;
   let discardRetainedPerceptionGeometry: (() => void) | null = null;
+  let discardWaterMotionShader: (() => void) | null = null;
+  let waterMotionUnavailableForContext = false;
   // A shader/model failure can be renderer-context-wide. Once observed, keep
   // every owner on the truthful immediate path until WebGL restores rather
   // than repeatedly probing an incompatible context.
@@ -2160,12 +2163,14 @@ export function createTideweftReliefRenderer(
       // without asking p5 to delete buffers through an invalid context.
       discardRetainedTerrainGeometry?.();
       discardRetainedPerceptionGeometry?.();
+      discardWaterMotionShader?.();
       instance?.noLoop();
       options.onWebGLError?.("The 3D graphics context was lost. Chart view is active; reload to retry Relief 3D.");
     };
     const contextRestored = (): void => {
       contextLost = false;
       retainedPerceptionUnavailableForContext = false;
+      waterMotionUnavailableForContext = false;
       telemetry.setActive(active && webglSupported);
       cached = null;
       cachedPerceptionMesh = null;
@@ -2373,6 +2378,14 @@ export function createTideweftReliefRenderer(
       { quietPeriodMs: RELIEF_PERCEPTION_GEOMETRY_QUIET_PERIOD_MS },
     );
     let perceptionMaterialShader: p5.Shader | null = null;
+    let waterMotionShader: p5.Shader | null = null;
+    let waterMotionPhase = 0;
+    let lastWaterMotionTime: number | null = null;
+    discardWaterMotionShader = () => {
+      waterMotionShader = null;
+      waterMotionPhase = 0;
+      lastWaterMotionTime = null;
+    };
     releaseRetainedPerceptionGeometry = () => {
       retainedPerceptionGeometry.release();
       perceptionMaterialShader = null;
@@ -2834,7 +2847,12 @@ export function createTideweftReliefRenderer(
       p.noStroke();
     };
 
-    const drawWater = (view: TideweftView, cache: CachedReliefMesh): void => {
+    const drawWater = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      now: number,
+      cues: ReturnType<typeof buildSurfaceCurrentCues>,
+    ): void => {
       const grid = view.terrain;
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = grid.tileSize;
@@ -2843,21 +2861,19 @@ export function createTideweftReliefRenderer(
       const endColumn = clampInteger(Math.ceil((orbit.x + reach - grid.origin.x) / tileSize), 0, grid.columns - 1);
       const startRow = clampInteger(Math.floor((orbit.y - reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
       const endRow = clampInteger(Math.ceil((orbit.y + reach - grid.origin.y) / tileSize), 0, grid.rows - 1);
+      const waterBatches = buildReliefWaterMaterialBatches(grid, view.tide.level, {
+        firstColumn: startColumn,
+        lastColumn: endColumn,
+        firstRow: startRow,
+        lastRow: endRow,
+      });
       const gl = p.drawingContext as WebGLRenderingContext | WebGL2RenderingContext;
       const depthWriteWasEnabled = Boolean(gl.getParameter(gl.DEPTH_WRITEMASK));
       // The Relief sheet is fully opaque. Writing its depth removes the old
       // material-batch-order dependency where far cells could blend over near
       // cells while the camera looked along a river.
       gl.depthMask(true);
-      p.push();
-      try {
-        p.noStroke();
-        const waterBatches = buildReliefWaterMaterialBatches(grid, view.tide.level, {
-          firstColumn: startColumn,
-          lastColumn: endColumn,
-          firstRow: startRow,
-          lastRow: endRow,
-        });
+      const submitSurface = (): void => {
         for (const batch of waterBatches) {
           const opacity = reliefWaterOpacity(batch.material);
           // p5's emissiveMaterial does not replace its base fill or ambient
@@ -2898,7 +2914,72 @@ export function createTideweftReliefRenderer(
           }
           p.endShape();
         }
+      };
+      let shaderBound = false;
+      p.push();
+      try {
+        p.noStroke();
+        if (waterBatches.length > 0 && !reducedMotion && !waterMotionUnavailableForContext) {
+          const motion = reliefWaterMotionFrame(grid, cues, view.tide.surfaceCurrent, reducedMotion);
+          const elapsed = lastWaterMotionTime === null ? 0
+            : clamp((now - lastWaterMotionTime) / 1000, 0, 0.25);
+          lastWaterMotionTime = now;
+          // This bounded render-only clock cannot advance water or actor truth.
+          waterMotionPhase = (waterMotionPhase + elapsed * motion.rate) % (Math.PI * 200);
+          try {
+            waterMotionShader ??= preserveP5RuntimePolicy(p5, () => p.baseMaterialShader().modify({
+              vertexDeclarations: "OUT float waterMotionRipple;",
+              fragmentDeclarations: "IN float waterMotionRipple;",
+              uniforms: {
+                "float waterMotionTime": 0,
+                "float waterMotionAmplitude": 0,
+                "float waterMotionTileSize": 1,
+                "vec2 waterMotionOrigin": [0, 0],
+                "vec2 waterMotionDirection": [1, 0],
+                "vec2 waterMotionPhase": [0, 0],
+              },
+              "Vertex getObjectInputs": `(Vertex inputs) {
+                vec2 tile = (inputs.position.xz - waterMotionOrigin) / waterMotionTileSize;
+                vec2 crossDirection = vec2(-waterMotionDirection.y, waterMotionDirection.x);
+                float along = dot(tile, waterMotionDirection) * 1.4 + waterMotionPhase.x - waterMotionTime;
+                float across = dot(tile, crossDirection) * 2.1 + waterMotionPhase.y - waterMotionTime * 0.73;
+                float wave = 0.65 * (0.5 + 0.5 * sin(along)) + 0.35 * (0.5 + 0.5 * sin(across));
+                waterMotionRipple = wave;
+                // Raise only: never sink the opaque sheet into its warm bed.
+                inputs.position.y -= waterMotionAmplitude * wave;
+                return inputs;
+              }`,
+              "vec4 getFinalColor": `(vec4 color, vec2 texCoord) {
+                float energy = waterMotionAmplitude / min(0.65, waterMotionTileSize * 0.02);
+                // One interpolated scalar gives the unlit blue sheet a tiny
+                // moving glint, without per-pixel trigonometry or extra draws.
+                color.rgb *= 1.0 + 0.08 * energy * (waterMotionRipple - 0.5);
+                return color;
+              }`,
+            }));
+            shaderBound = true;
+            p.shader(waterMotionShader);
+            waterMotionShader.setUniform("waterMotionTime", waterMotionPhase);
+            waterMotionShader.setUniform("waterMotionAmplitude", motion.amplitude);
+            waterMotionShader.setUniform("waterMotionTileSize", motion.tileSize);
+            waterMotionShader.setUniform("waterMotionOrigin", [...motion.origin]);
+            waterMotionShader.setUniform("waterMotionDirection", [...motion.direction]);
+            waterMotionShader.setUniform("waterMotionPhase", [...motion.phase]);
+            submitSurface();
+          } catch {
+            // Optional motion must not remove water on an unsupported context.
+            waterMotionUnavailableForContext = true;
+            waterMotionShader = null;
+            p.resetShader();
+            shaderBound = false;
+            submitSurface();
+          }
+        } else {
+          lastWaterMotionTime = null;
+          submitSurface();
+        }
       } finally {
+        if (shaderBound) p.resetShader();
         // p5 retains emissive state across later draws and frames. Restore a
         // non-emissive baseline even when a WebGL call throws so water cannot
         // tint land or actors rendered afterward.
@@ -2908,11 +2989,10 @@ export function createTideweftReliefRenderer(
       }
     };
 
-    const drawSurfaceCurrents = (
+    const prepareSurfaceCurrents = (
       view: TideweftView,
-      cache: CachedReliefMesh,
       now: number,
-    ): void => {
+    ): ReturnType<typeof buildSurfaceCurrentCues> => {
       const grid = view.terrain;
       const tileSize = grid.tileSize;
       const reach = orbit.distance * 1.45;
@@ -2922,7 +3002,7 @@ export function createTideweftReliefRenderer(
         firstRow: Math.floor((orbit.y - reach - grid.origin.y) / tileSize),
         lastRow: Math.ceil((orbit.y + reach - grid.origin.y) / tileSize),
       };
-      const cues = buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
+      return buildSurfaceCurrentCues(grid, view.tide.surfaceCurrent, {
         analytical: (view.player.scanProgress ?? 0) > 0.001,
         bounds,
         focus: { x: orbit.x, y: orbit.y },
@@ -2933,6 +3013,14 @@ export function createTideweftReliefRenderer(
         maxCues: 220,
         requireDetailDisclosure: view.perception !== undefined,
       });
+    };
+
+    const drawSurfaceCurrents = (
+      view: TideweftView,
+      cache: CachedReliefMesh,
+      cues: ReturnType<typeof buildSurfaceCurrentCues>,
+    ): void => {
+      const grid = view.terrain;
       if (cues.length === 0) return;
 
       const heights = cues.map((cue) => perceivedReliefSurfaceHeightAt(
@@ -6752,10 +6840,11 @@ export function createTideweftReliefRenderer(
         -outdoorLight.keyDirection.z,
       );
       const terrain = drawTerrain(view, cache, camera, terrainMemory, now, trackCounts);
-      drawWater(view, cache);
+      const surfaceCurrents = prepareSurfaceCurrents(view, now);
+      drawWater(view, cache, now, surfaceCurrents);
       drawBiomeDetails(view, cache);
       const resourceRings = drawFieldResources(view, cache, camera, trackCounts);
-      drawSurfaceCurrents(view, cache, now);
+      drawSurfaceCurrents(view, cache, surfaceCurrents);
       drawLooseCargo(view, cache, now);
       drawRoutes(view, cache, camera);
       drawSoundings(view, cache);
@@ -6905,6 +6994,8 @@ export function createTideweftReliefRenderer(
     discardRetainedTerrainGeometry = null;
     releaseRetainedPerceptionGeometry = null;
     discardRetainedPerceptionGeometry = null;
+    discardWaterMotionShader?.();
+    discardWaterMotionShader = null;
     instance?.remove();
     instance = null;
     canvasElement = null;

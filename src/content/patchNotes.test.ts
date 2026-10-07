@@ -21,11 +21,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.61",
-      releaseDate: "2026-10-05",
-      buildIdentity: "0.3.3-alpha.61",
+      version: "0.3.3-alpha.62",
+      releaseDate: "2026-10-06",
+      buildIdentity: "0.3.3-alpha.62",
       gameplayContractVersion: 51,
-      tutorialVersion: 71,
+      tutorialVersion: 72,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -40,11 +40,12 @@ describe("canonical offline patch notes", () => {
   });
 
   it("scopes the Alpha-61 preview without claiming publication or finished Voice breadth", () => {
+    const preview = TIDEWEFT_PATCH_NOTES.releases.find((release) => release.version === "0.3.3-alpha.61")!;
     const currentCopy = PATCH_NOTE_CATEGORIES
-      .flatMap((category) => LATEST_PATCH_NOTE.categories[category])
+      .flatMap((category) => preview.categories[category])
       .join(" ");
-    expect(LATEST_PATCH_NOTE.summary).toContain("local Living Voice playtest preview");
-    expect(LATEST_PATCH_NOTE.summary).toContain("not a published release or directive closure");
+    expect(preview.summary).toContain("local Living Voice playtest preview");
+    expect(preview.summary).toContain("not a published release or directive closure");
     expect(currentCopy).toContain("about 21 characters per second");
     expect(currentCopy).toContain("one-second minimum");
     expect(currentCopy).toContain("urgent warnings may interrupt");
@@ -58,6 +59,18 @@ describe("canonical offline patch notes", () => {
     expect(currentCopy).toContain("not continuous animal conversation or universal species coverage");
     expect(currentCopy).toContain("future tool, violence and vessel actions");
     expect(currentCopy).toContain("not made playable by the shared interface");
+  });
+
+  it("scopes Alpha-62 water motion to presentation rather than new physical or released truth", () => {
+    const currentCopy = PATCH_NOTE_CATEGORIES
+      .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
+    expect(LATEST_PATCH_NOTE.summary).toContain("unpublished local water-motion update");
+    expect(currentCopy).toContain("stronger and faster");
+    expect(currentCopy).toContain("no extra surface polygons");
+    expect(currentCopy).toContain("Reduced motion keeps the water sheet still");
+    expect(currentCopy).toContain("outer save version remains 50");
+    expect(currentCopy).toContain("Alpha 60 remains the latest LIVE_VERIFIED public baseline");
+    expect(currentCopy).toContain("not an exact per-cell velocity field");
   });
 
   it("recognizes only official stable versions at or beyond the 1.0 boundary", () => {
