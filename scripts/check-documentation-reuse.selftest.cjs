@@ -10,9 +10,11 @@ const { execFileSync } = require("node:child_process");
 const {
   classifyDocumentationDelta,
   decideDocumentationReuse,
+  decideCurrentCiReuse,
   parseRawDiffZ,
   readDocumentationDelta,
   determineScope,
+  determinePagesScope,
 } = require("./check-documentation-reuse.cjs");
 
 const root = path.resolve(__dirname, "..");
@@ -237,6 +239,72 @@ test("a valid baseline is selected from otherwise irrelevant completed runs", ()
   assert.equal(result.baselineRunId, 1234);
 });
 
+function currentInput(overrides = {}) {
+  return {
+    eventName: "push", branch: "main", ref: "refs/heads/main", headSha, repository,
+    runs: [baseline({ head_sha: headSha })], ...overrides,
+  };
+}
+
+function rejectedCurrent(value) {
+  const result = decideCurrentCiReuse(value);
+  assert.equal(result.reuse, false);
+  assertReason(result);
+}
+
+test("current CI reuse needs no invented documentation delta or parent certificate", () => {
+  const value = currentInput();
+  const original = structuredClone(value);
+  const result = decideCurrentCiReuse(value);
+  assert.equal(result.reuse, true);
+  assert.equal(result.baselineRunId, 1234);
+  assert.equal(result.basis, "head");
+  assertReason(result);
+  assert.deepEqual(value, original);
+  assert.equal(decideCurrentCiReuse(currentInput({
+    runs: [baseline({ head_sha: headSha, event: "workflow_dispatch" })],
+  })).reuse, true);
+});
+
+test("current CI reuse rejects wrong event, branch, ref and commit identity", () => {
+  for (const eventName of ["pull_request", "workflow_dispatch", "workflow_run", undefined]) {
+    rejectedCurrent(currentInput({ eventName }));
+  }
+  for (const branch of ["other", "Main", undefined]) rejectedCurrent(currentInput({ branch }));
+  for (const ref of ["refs/tags/main", "refs/heads/other", "main", undefined]) {
+    rejectedCurrent(currentInput({ ref }));
+  }
+  for (const sha of ["0".repeat(40), "a".repeat(39), "A".repeat(40), "", undefined]) {
+    rejectedCurrent(currentInput({ headSha: sha }));
+  }
+  for (const value of ["", "example/tideweft/extra", "example", undefined]) {
+    rejectedCurrent(currentInput({ repository: value }));
+  }
+});
+
+test("only a native successful exact-head CI run supplies current reuse", () => {
+  for (const overrides of [
+    { head_sha: baseSha }, { head_branch: "other" }, { event: "pull_request" },
+    { path: ".github/workflows/pages.yml" }, { repository: { full_name: "other/tideweft" } },
+    { head_repository: { full_name: "other/tideweft" } }, { id: "1234" }, { id: 0 },
+    { id: Number.MAX_SAFE_INTEGER + 1 }, { status: "queued" }, { status: "in_progress" },
+    { status: "completed", conclusion: "failure" }, { conclusion: "cancelled" },
+    { conclusion: "skipped" }, { conclusion: "neutral" }, { conclusion: null },
+  ]) rejectedCurrent(currentInput({ runs: [baseline({ head_sha: headSha, ...overrides })] }));
+  for (const runs of [undefined, null, [], {}, [null], [{}]]) rejectedCurrent(currentInput({ runs }));
+});
+
+test("one valid exact-head success remains evidence among other failed and pending attempts", () => {
+  const result = decideCurrentCiReuse(currentInput({ runs: [
+    baseline({ id: 2345, head_sha: headSha, conclusion: "failure" }),
+    baseline({ id: 3456, head_sha: headSha, status: "queued", conclusion: null }),
+    baseline({ head_sha: headSha }),
+  ] }));
+  assert.equal(result.reuse, true);
+  assert.equal(result.baselineRunId, 1234);
+  assert.equal(result.basis, "head");
+});
+
 function rawEntry({ beforeMode = "100644", afterMode = "100644", beforeOid = baseSha,
   afterOid = headSha, status = "M", sourcePath = "README.md" } = {}) {
   return `:${beforeMode} ${afterMode} ${beforeOid} ${afterOid} ${status}\0${sourcePath}\0`;
@@ -412,6 +480,8 @@ test("both workflows always test the reuse policy and only conditionally omit cu
     const decision = namedStep(source, "Determine documentation validation scope");
     assert.match(decision, /id: documentation/u);
     assert.match(decision, /check-documentation-reuse\.cjs/u);
+    if (name === "pages") assert.match(decision, /run: node scripts\/check-documentation-reuse\.cjs --pages/u);
+    else assert.doesNotMatch(decision, /--pages/u);
     assert.doesNotMatch(decision, /^\s*if:/mu);
     const cumulative = namedStep(source, "Test");
     const condition = name === "ci"
@@ -444,6 +514,7 @@ test("Pages still uploads dist only and retains deployment permissions and actio
   const top = source.slice(0, source.indexOf("\njobs:"));
   assert.doesNotMatch(top, /^\s*(?:pages|id-token): write$/mu);
   const classification = namedJob(source, "validation_scope");
+  assert.match(classification, /^    timeout-minutes: 65$/mu);
   assert.match(classification, /^\s+contents: read$/mu);
   assert.match(classification, /^\s+actions: read$/mu);
   assert.doesNotMatch(classification, /^\s*(?:pages|id-token): write$/mu);
@@ -541,10 +612,187 @@ async function testScopeLookup() {
       }
     })
   ));
-  console.log(`1..${assertions}`);
 }
 
-testScopeLookup().catch((error) => {
+function withCodeGitFixture(body) {
+  return withGitFixture((fixture) => {
+    fs.writeFileSync(path.join(fixture.directory, "example.cjs"), "module.exports = 1;\n");
+    fixture.git(["add", "example.cjs"]);
+    fixture.git(["commit", "-m", "synthetic executable change"]);
+    return body({ ...fixture, after: fixture.git(["rev-parse", "HEAD"]) });
+  });
+}
+
+function responseRuns(runs) {
+  return new Response(JSON.stringify({ workflow_runs: runs }));
+}
+
+async function withoutPollingLogs(body) {
+  const original = console.log;
+  console.log = (message, ...values) => {
+    if (typeof message === "string" && message.startsWith("Waiting for successful CI at this exact commit;")) return;
+    original(message, ...values);
+  };
+  try { return await body(); } finally { console.log = original; }
+}
+
+async function testPagesLookup() {
+  await testAsync("Pages retains proven documentation-parent reuse without polling current CI", () => (
+    withGitFixture(async ({ before, after }) => {
+      let calls = 0;
+      const result = await determinePagesScope(scopeEnvironment(before, after), async (url) => {
+        calls += 1;
+        assert.equal(url.searchParams.get("head_sha"), before);
+        return responseRuns([baseline({ head_sha: before })]);
+      }, async () => { throw new Error("Parent evidence must not wait."); }, () => 0);
+      assert.equal(calls, 1);
+      assert.equal(result.reuse, true);
+      assert.equal(result.basis, undefined);
+      assert.equal(result.baselineRunId, 1234);
+    })
+  ));
+
+  await testAsync("Pages shares a successful exact-head CI for an executable delta", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      let calls = 0;
+      const result = await determinePagesScope(scopeEnvironment(before, after), async (url) => {
+        calls += 1;
+        assert.equal(url.searchParams.get("head_sha"), after);
+        assert.equal(url.searchParams.has("status"), false, "pending and failed runs must remain observable");
+        return responseRuns([baseline({ head_sha: after })]);
+      }, async () => { throw new Error("Completed CI must not wait."); }, () => 0);
+      assert.equal(calls, 1);
+      assert.equal(result.reuse, true);
+      assert.equal(result.basis, "head");
+      assert.equal(result.baselineRunId, 1234);
+    })
+  ));
+
+  await testAsync("Pages polls pending exact-head CI at bounded cadence without real sleeping", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      let clock = 0;
+      let calls = 0;
+      const sleeps = [];
+      const statuses = ["queued", "in_progress", "completed"];
+      const result = await withoutPollingLogs(() => determinePagesScope(
+        scopeEnvironment(before, after), async () => {
+          const status = statuses[calls++];
+          return responseRuns([baseline({ head_sha: after, status,
+            conclusion: status === "completed" ? "success" : null })]);
+        }, async (ms) => { sleeps.push(ms); clock += ms; }, () => clock,
+      ));
+      assert.equal(result.reuse, true);
+      assert.equal(result.basis, "head");
+      assert.equal(calls, 3);
+      assert.deepEqual(sleeps, [15000, 15000]);
+      assert.equal(clock, 30000);
+    })
+  ));
+
+  await testAsync("pending native retries may finish but unsuccessful terminal CI blocks Pages", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      for (const conclusion of ["failure", "cancelled", "skipped", "timed_out", "neutral", null]) {
+        let sleeps = 0;
+        await assert.rejects(() => determinePagesScope(scopeEnvironment(before, after),
+          async () => responseRuns([baseline({ head_sha: after, conclusion })]),
+          async () => { sleeps += 1; }, () => 0), /Pages is blocked/u);
+        assert.equal(sleeps, 0);
+      }
+      let calls = 0;
+      let clock = 0;
+      const result = await withoutPollingLogs(() => determinePagesScope(scopeEnvironment(before, after),
+        async () => {
+          calls += 1;
+          return responseRuns(calls === 1 ? [
+            baseline({ head_sha: after, conclusion: "failure" }),
+            baseline({ id: 2345, head_sha: after, status: "queued", conclusion: null }),
+          ] : [baseline({ head_sha: after })]);
+        }, async (ms) => { clock += ms; }, () => clock));
+      assert.equal(result.reuse, true);
+      assert.equal(calls, 2);
+    })
+  ));
+
+  await testAsync("an exact-head success wins without erasing contrary run history", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      const runs = [
+        baseline({ id: 2345, head_sha: after, conclusion: "failure" }),
+        baseline({ id: 3456, head_sha: after, status: "queued", conclusion: null }),
+        baseline({ head_sha: after }),
+      ];
+      const original = structuredClone(runs);
+      const result = await determinePagesScope(scopeEnvironment(before, after),
+        async () => responseRuns(runs), async () => { throw new Error("Valid success must not wait."); }, () => 0);
+      assert.equal(result.reuse, true);
+      assert.equal(result.baselineRunId, 1234);
+      assert.deepEqual(runs, original);
+    })
+  ));
+
+  await testAsync("Pages falls back to full validation for unavailable or ambiguous current CI", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      for (const lookup of [
+        async () => { throw new Error("synthetic-authentication-not-a-secret"); },
+        async () => new Response("synthetic raw error body", { status: 503 }),
+        async () => new Response("not JSON"),
+        async () => new Response(JSON.stringify({ workflow_runs: {} })),
+        async () => new Response("x".repeat(1024 * 1024 + 1)),
+        async () => responseRuns([baseline({ head_sha: after, status: "unknown-state", conclusion: null })]),
+      ]) {
+        const result = await determinePagesScope(scopeEnvironment(before, after), lookup,
+          async () => { throw new Error("Unavailable evidence must not wait."); }, () => 0);
+        assert.equal(result.reuse, false);
+        assertReason(result);
+        assert.doesNotMatch(JSON.stringify(result), /synthetic-authentication|synthetic raw error/u);
+      }
+    })
+  ));
+
+  await testAsync("Pages cannot use current CI to bypass dirty trees or non-main identity", () => (
+    withCodeGitFixture(async ({ directory, before, after }) => {
+      let calls = 0;
+      const lookup = async () => { calls += 1; return responseRuns([baseline({ head_sha: after })]); };
+      for (const overrides of [{ GITHUB_REF: "refs/tags/main" }, { TIDEWEFT_CI_EVENT: "workflow_dispatch" }, { GH_TOKEN: "" }]) {
+        const result = await determinePagesScope(scopeEnvironment(before, after, overrides), lookup,
+          async () => { throw new Error("Ineligible scope must not wait."); }, () => 0);
+        assert.equal(result.reuse, false);
+      }
+      fs.writeFileSync(path.join(directory, "example.cjs"), "module.exports = 2;\n");
+      const result = await determinePagesScope(scopeEnvironment(before, after), lookup,
+        async () => { throw new Error("Dirty scope must not wait."); }, () => 0);
+      assert.equal(result.reuse, false);
+      assert.equal(calls, 0);
+    })
+  ));
+
+  await testAsync("Pages wait is bounded by both a finite deadline and an independent attempt cap", () => (
+    withCodeGitFixture(async ({ before, after }) => {
+      for (const frozenClock of [false, true]) {
+        let calls = 0;
+        let clock = 0;
+        const sleeps = [];
+        await withoutPollingLogs(() => assert.rejects(() => determinePagesScope(
+          scopeEnvironment(before, after), async () => {
+            calls += 1;
+            return responseRuns([baseline({ head_sha: after, status: "in_progress", conclusion: null })]);
+          }, async (ms) => {
+            sleeps.push(ms);
+            if (!frozenClock) clock = 60 * 60 * 1000;
+          }, () => clock,
+        ), /bounded wait; Pages is blocked/u));
+        assert.equal(calls, frozenClock ? 241 : 2);
+        assert.equal(sleeps.length, frozenClock ? 240 : 1);
+        assert.ok(sleeps.every((ms) => ms === 15000));
+      }
+    })
+  ));
+}
+
+(async () => {
+  await testScopeLookup();
+  await testPagesLookup();
+  console.log(`1..${assertions}`);
+})().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

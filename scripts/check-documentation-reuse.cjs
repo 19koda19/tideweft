@@ -12,6 +12,17 @@ const documentationPaths = new Set([
 ]);
 const validSha = (value) => typeof value === "string" && /^[0-9a-f]{40}$/u.test(value)
   && !/^0{40}$/u.test(value);
+const validRepository = (value) => typeof value === "string"
+  && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(value);
+
+function nativeCiRun(run, sha, repository) {
+  return run && run.head_sha === sha && run.head_branch === "main"
+    && ["push", "workflow_dispatch"].includes(run.event)
+    && run.path === ".github/workflows/ci.yml"
+    && run.repository?.full_name === repository
+    && run.head_repository?.full_name === repository
+    && Number.isSafeInteger(run.id) && run.id > 0;
+}
 
 function classifyDocumentationDelta(changes) {
   if (!Array.isArray(changes) || changes.length === 0) {
@@ -32,22 +43,30 @@ function decideDocumentationReuse(input) {
     return full("Only main push attestations can reuse validation.");
   }
   if (!validSha(input.baseSha) || !validSha(input.headSha) || input.baseSha === input.headSha
-    || typeof input.repository !== "string"
-    || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(input.repository)) {
+    || !validRepository(input.repository)) {
     return full("Missing exact commit or repository identity.");
   }
   const delta = classifyDocumentationDelta(input.changes);
   if (!delta.eligible) return full(delta.reason);
   const runs = Array.isArray(input.runs) ? input.runs : [];
-  const baseline = runs.find((run) => run && run.head_sha === input.baseSha
-    && run.head_branch === "main" && run.status === "completed" && run.conclusion === "success"
-    && ["push", "workflow_dispatch"].includes(run.event)
-    && run.path === ".github/workflows/ci.yml"
-    && run.repository?.full_name === input.repository
-    && run.head_repository?.full_name === input.repository
-    && Number.isSafeInteger(run.id) && run.id > 0);
+  const baseline = runs.find((run) => nativeCiRun(run, input.baseSha, input.repository)
+    && run.status === "completed" && run.conclusion === "success");
   if (!baseline) return full("No successful same-repository CI at the exact parent commit.");
   return { reuse: true, reason: delta.reason, baselineRunId: baseline.id };
+}
+
+function decideCurrentCiReuse(input) {
+  if (!input || input.eventName !== "push" || input.branch !== "main"
+    || input.ref !== "refs/heads/main" || !validSha(input.headSha)
+    || !validRepository(input.repository)) {
+    return { reuse: false, reason: "Missing exact main-push CI identity." };
+  }
+  const runs = Array.isArray(input.runs) ? input.runs : [];
+  const baseline = runs.find((run) => nativeCiRun(run, input.headSha, input.repository)
+    && run.status === "completed" && run.conclusion === "success");
+  if (!baseline) return { reuse: false, reason: "No successful CI at the exact current commit." };
+  return { reuse: true, reason: "CI validated this exact current commit.",
+    baselineRunId: baseline.id, basis: "head" };
 }
 
 function parseRawDiffZ(raw) {
@@ -81,46 +100,54 @@ function readDocumentationDelta(baseSha, headSha, cwd = process.cwd()) {
     "--no-textconv", "-z", baseSha, headSha, "--"]));
 }
 
-async function determineScope(env = process.env, fetchImpl = fetch) {
-  const input = {
+function scopeInput(env) {
+  return {
     eventName: env.TIDEWEFT_CI_EVENT, branch: env.TIDEWEFT_CI_BRANCH, ref: env.GITHUB_REF,
     baseSha: env.TIDEWEFT_CI_BASE, headSha: env.TIDEWEFT_CI_HEAD,
     repository: env.GITHUB_REPOSITORY, changes: [], runs: [],
   };
+}
+
+async function readCiRuns(repository, sha, token, fetchImpl) {
+  const url = new URL(`https://api.github.com/repos/${repository}/actions/workflows/ci.yml/runs`);
+  url.search = new URLSearchParams({ head_sha: sha, branch: "main", per_page: "20" });
+  const response = await fetchImpl(url, {
+    headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2026-03-10" },
+    signal: AbortSignal.timeout(10000), redirect: "error",
+  });
+  if (!response.ok) throw new Error("CI lookup failed.");
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 1024 * 1024) throw new Error("Oversized CI metadata.");
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel();
+  }
+  const data = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
+  if (!Array.isArray(data.workflow_runs) || data.workflow_runs.length > 20) throw new Error("Malformed CI metadata.");
+  return data.workflow_runs;
+}
+
+async function determineScope(env = process.env, fetchImpl = fetch) {
+  const input = scopeInput(env);
   if (input.eventName !== "push" || input.branch !== "main" || input.ref !== "refs/heads/main"
     || !validSha(input.baseSha)
-    || !validSha(input.headSha) || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(input.repository || "")) {
+    || !validSha(input.headSha) || !validRepository(input.repository)) {
     return decideDocumentationReuse(input);
   }
   try {
     input.changes = readDocumentationDelta(input.baseSha, input.headSha);
     if (!classifyDocumentationDelta(input.changes).eligible) return decideDocumentationReuse(input);
     if (!env.GH_TOKEN) return { reuse: false, reason: "No read-only baseline authentication available." };
-    const url = new URL(`https://api.github.com/repos/${input.repository}/actions/workflows/ci.yml/runs`);
-    url.search = new URLSearchParams({ head_sha: input.baseSha, branch: "main", status: "success", per_page: "20" });
-    const response = await fetchImpl(url, {
-      headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${env.GH_TOKEN}`,
-        "X-GitHub-Api-Version": "2026-03-10" },
-      signal: AbortSignal.timeout(10000), redirect: "error",
-    });
-    if (!response.ok) throw new Error("Baseline lookup failed.");
-    const reader = response.body.getReader();
-    const chunks = [];
-    let bytes = 0;
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        bytes += value.byteLength;
-        if (bytes > 1024 * 1024) throw new Error("Oversized baseline metadata.");
-        chunks.push(value);
-      }
-    } finally {
-      await reader.cancel();
-    }
-    const data = JSON.parse(Buffer.concat(chunks, bytes).toString("utf8"));
-    if (!Array.isArray(data.workflow_runs) || data.workflow_runs.length > 20) throw new Error("Malformed baseline metadata.");
-    input.runs = data.workflow_runs;
+    input.runs = await readCiRuns(input.repository, input.baseSha, env.GH_TOKEN, fetchImpl);
     return decideDocumentationReuse(input);
   } catch {
     // Do not echo API bodies, headers, tokens or arbitrary git diagnostics.
@@ -128,8 +155,50 @@ async function determineScope(env = process.env, fetchImpl = fetch) {
   }
 }
 
+async function determinePagesScope(env = process.env, fetchImpl = fetch,
+  sleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  nowImpl = () => performance.now()) {
+  const documentation = await determineScope(env, fetchImpl);
+  if (documentation.reuse) return documentation;
+  const input = scopeInput(env);
+  if (input.eventName !== "push" || input.branch !== "main" || input.ref !== "refs/heads/main"
+    || !validSha(input.headSha) || !validSha(input.baseSha)
+    || !validRepository(input.repository) || !env.GH_TOKEN) return documentation;
+  try {
+    readDocumentationDelta(input.baseSha, input.headSha);
+  } catch {
+    return documentation;
+  }
+  const deadline = nowImpl() + 60 * 60 * 1000;
+  for (let attempt = 0; attempt < 241; attempt += 1) {
+    try {
+      input.runs = await readCiRuns(input.repository, input.headSha, env.GH_TOKEN, fetchImpl);
+    } catch {
+      return { reuse: false, reason: "Current CI verification unavailable; full validation required." };
+    }
+    const current = decideCurrentCiReuse(input);
+    if (current.reuse) return current;
+    const matching = input.runs.filter((run) => nativeCiRun(run, input.headSha, input.repository));
+    const pending = matching.some((run) => ["queued", "in_progress", "requested", "waiting", "pending"].includes(run.status));
+    if (!pending && matching.some((run) => run.status === "completed" && run.conclusion !== "success")) {
+      throw new Error("Exact-current-commit CI completed unsuccessfully; Pages is blocked.");
+    }
+    if (matching.some((run) => !["queued", "in_progress", "requested", "waiting", "pending", "completed"].includes(run.status))) {
+      return { reuse: false, reason: "Ambiguous current CI state; full validation required." };
+    }
+    const remaining = deadline - nowImpl();
+    if (remaining <= 0 || attempt === 240) {
+      throw new Error("Exact-current-commit CI did not succeed within the bounded wait; Pages is blocked.");
+    }
+    if (attempt % 4 === 0) console.log("Waiting for successful CI at this exact commit; no duplicate suite started.");
+    await sleepImpl(Math.min(15000, remaining));
+  }
+}
+
 async function main() {
-  const result = await determineScope();
+  const args = process.argv.slice(2);
+  if (args.length > 1 || (args.length === 1 && args[0] !== "--pages")) throw new Error("Unsupported scope option.");
+  const result = args[0] === "--pages" ? await determinePagesScope() : await determineScope();
   console.log(JSON.stringify(result));
   if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_OUTPUT) {
     fs.appendFileSync(process.env.GITHUB_OUTPUT,
@@ -137,10 +206,13 @@ async function main() {
   }
   if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-      `### Validation scope\n\n${result.reuse ? `Reusing successful parent CI run ${result.baselineRunId}; executable inputs unchanged.` : "Full cumulative validation required."}\n\n${result.reason}\n`);
+      `### Validation scope\n\n${result.reuse ? `Reusing successful ${result.basis === "head" ? "exact-current-commit" : "parent"} CI run ${result.baselineRunId}; ${result.basis === "head" ? "this commit is validated" : "executable inputs unchanged"}.` : "Full cumulative validation required."}\n\n${result.reason}\n`);
   }
 }
 
-module.exports = { classifyDocumentationDelta, decideDocumentationReuse, parseRawDiffZ,
-  readDocumentationDelta, determineScope };
-if (require.main === module) main().catch(() => { process.exitCode = 1; });
+module.exports = { classifyDocumentationDelta, decideDocumentationReuse, decideCurrentCiReuse,
+  parseRawDiffZ, readDocumentationDelta, determineScope, determinePagesScope };
+if (require.main === module) main().catch(() => {
+  console.error("Validation scope could not be established safely; deployment is blocked.");
+  process.exitCode = 1;
+});

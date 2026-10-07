@@ -18,7 +18,7 @@ jobs:
       contents: read
       actions: read
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 65
     outputs:
       reuse: ${{ steps.documentation.outputs.reuse }}
     steps:
@@ -44,7 +44,7 @@ jobs:
           TIDEWEFT_CI_BASE: ${{ github.event.before || '' }}
           TIDEWEFT_CI_HEAD: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/check-documentation-reuse.cjs
+        run: node scripts/check-documentation-reuse.cjs --pages
 
   deploy:
     needs: validation_scope

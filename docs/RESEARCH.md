@@ -157,6 +157,35 @@ failed Pages job is retried on the same commit; successful CI is retained.
 Local evidence stays in the existing ignored `voice-current49` validation
 owner. Deployment and exact-live verification remain pending at this record.
 
+The unchanged attempt2 is also TERMINAL FAILURE:364 files /4,196 tests pass,
+the same384-step proxy takes8056.472955ms against8000ms, and the complete suite
+lasts2881.92seconds. All later build/deployment steps are skipped. Its retained
+failed-job log SHA256 is
+`0c3a726745d38f4f1b57289e8502c0b1bb1ec131eb31306f6e4645cd27adfbc6`.
+This is not a second passing certificate or a render-performance measurement.
+No assertion, workload or budget is weakened. The two failed Pages attempts
+remain failed; the successful exact-commit CI and local fixture checks remain
+separate evidence, not a guarantee every hosted runner meets the wall-time bound.
+
+The user explicitly authorizes a narrower attestation workflow. Local policy
+commit `66cdc51191cfbc608a1626443e374bbe4698aea3` admits only modified existing
+allowlisted regular prose files plus a successful exact-parent CI receipt.
+Its33 focused groups, critical105, context28, synchronization39, typecheck,
+production web and nested static smoke pass; all five web asset hashes remain
+identical. Source/configuration changes still require full CI, and ambiguous
+evidence fails closed to full validation. An additional current-CI sharing
+refinement makes Pages consume successful same-repository CI at its exact
+current commit rather than rerun an identical suite. Its lookup remains
+read-only, bounded and independent of deployment permissions; known failed CI
+or an expired wait blocks deployment, while unavailable metadata retains the
+original full Pages validation. Build/static/release consistency checks and
+the existing dist-only deployment path stay mandatory. This refinement passes
+45 policy groups (including injected-clock60-minute/241-attempt bounds with no
+real sleep/network), critical6 files/105 tests, context28, synchronization39,
+typecheck, web/static and YAML checks. All five web hashes remain unchanged.
+No new remote success, deployment, timing repair, dependency change or Voice
+closure is inferred.
+
 ## Non-pausing modal announcement exposure — 2026-10-07
 
 A short native macOS arm64 observation on clean `4f3a260` reproduced a real

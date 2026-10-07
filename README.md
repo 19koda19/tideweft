@@ -418,6 +418,13 @@ missing/unverifiable baseline evidence also require full validation. Successful
 prose-only runs may form a chain because each edge preserves executable inputs.
 The job summary names the reused CI run; it does not claim the suite ran again.
 
+For other `main` pushes, Pages waits up to 60 minutes for successful CI at its
+exact current commit instead of repeating that same suite. CI still runs the
+full suite for changed source or configuration. A known failed/cancelled CI
+result or expired wait blocks deployment; unavailable metadata falls back to
+the original full Pages validation. Manual Pages dispatch retains full
+validation. Old failed attempts stay failed, not retroactively certified.
+
 Both workflows still run release synchronization, type-checking, the production
 build and static web smoke. Pages uploads only `dist/` through the existing
 deployment path. Its baseline lookup runs in a separate read-only job, without
