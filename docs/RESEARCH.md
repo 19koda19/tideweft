@@ -2673,6 +2673,24 @@ PNG SHA256
 The same controlled-scene, hardware and duration limits above still apply;
 this is not a fresh performance, crowd, assistive-device or closure certificate.
 
+Latest Alpha63 mixed recheck on clean `2878587` uses the same current50/carry14
+pre-action export and unchanged native mixed probe, with game JS SHA256
+`015495e5529937a4797eb68d6bf5aa0343f27bb294dc6c7e49329e380f6c11cd`.
+The controlled production Relief run passes: 3,028ms,20 retained states,
+421→424, no observer overflow or scheduler stop during capture. At422 all
+four real speech/whine/body/cargo candidates coexist; two separated vocal
+labels remain source-associated and lower-priority physical glyphs remain
+unplaced. Manual review of the actual bracketed PNG confirms speech, whine,
+cargo recovery label, caption and feedback remain separate. Two expiry-boundary
+current-tuple gaps resolve at the next retained render9/7ms later; they are
+reported, not hidden or claimed as new events. Current save again retains14
+units as12+1+1 and the whine learned at422; one actual cargo
+announcement, no unexpected console/lifecycle failure, owned browser/profile
+cleaned. JSON `2ff45263ce9ae78a5c3a46c5cfc1bd86f22e87f44592b5faf1fa4024e6d60044`;
+PNG `2df4b64693d9e8b23126a3c7be8635a0a05527b13bb96b2fe85cf5a700a4d654`.
+This renews the finite mixed-scene witness after the current-sight anchor fix,
+not the unchanged broader duration/hardware/crowd/performance/closure limits.
+
 #### Warning follow-up and expedition-driver limits — 2026-10-06
 
 A separate existing test exports a current quiet phase-zero save with a
