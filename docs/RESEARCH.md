@@ -20,6 +20,53 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Water-motion readability and current-sight labels — 2026-10-06
+
+Local source repair over `f1a4324`, not a release or directive closure. The
+earlier water shader genuinely animated vertices, but its ordinary 24-unit
+tile lift was only 0.072 calm / 0.1869 in the retained faster-flow fixture.
+At the ordinary camera distance this is subpixel geometry, not convincing
+visible undulation. The same shader/triangles now use a six-unit/quarter-tile
+cap, a 35% calm floor, and the unchanged lawful flow-derived rate. Blue facet
+shading is stronger; current-direction strokes clear the decorative crest.
+There is no new geometry, draw pass, physical tide or save mutation.
+
+Finite production Firefox WebGL2 check: existing ignored `water-probe.cjs
+motion-visible-v2`, served actual `/tideweft/` files, five synthetic renderer
+fixtures including broad blue water with no white current strokes. JS SHA256
+`911765194a7d969cff2a082abf5443041c15f3d92430ab597f656ff1a783fdd0`;
+actual linked lift 2.1 calm / 3.198045 faster flow. Uniform phase advances;
+reduced/hidden cases make no further shader binds. Paired images inspected;
+fixture tick/terrain unchanged, zero unexpected errors, owned browser/profile
+cleanly removed. Pixel totals also include sky and other presentation: they
+are not isolated wave, GPU-time, FPS or gameplay evidence. The first smaller
+3.6-unit-cap draft was replaced before completion; no cost claim is inherited
+from the older Alpha62 measurements below.
+
+The concurrent finite Voice audit found an exact call glyph persisting after
+current sight was lost. Projection now gates nonself vocal and heard-visible
+physical anchors through the validated current DIRECT field, retaining
+lawful captions/audio/knowledge and self/tactile localization. Characterization
+was RED before the fix; source-auth fixtures now establish real current sight,
+with heading loss, stale-mask refusal, physical/tactile and full-cone controls.
+The mixed runtime positive fixture retains its genuine fall and all four
+source/hearing/cargo assertions, but supplies a real downhill sight corridor:
+its former isolated low landing genuinely hid the guardian behind higher land.
+No actor/world admission, acoustic timing, schema or dependency changes.
+
+Focused source checks: 12 affected files/356 tests pass, plus current release/
+manual checks 2 files/30 after updating version73 assertions and explicitly
+retaining the historical Alpha62 record test. Actual mixed/pending-restore
+runtime controls 2 selected pass; late rollback/reduced-output controls 2
+selected pass. Critical105, context28, release-sync39, production typecheck/
+build and nested static smoke pass. Alpha63 metadata is a local preview only.
+The attempted compact native paired-GREET recheck times out at its title-state
+setup before any greeting, so post-repair native caption/reload proof is not
+claimed; the prior clean `f1a4324` compact pass remains pre-repair evidence.
+The user's Alpha62 app is still open and untouched; desktop replacement/smoke,
+current performance, hardware, cumulative and public release gates remain
+unrun. No dependencies, upstream source, supported formats or save policy change.
+
 ## Flow-informed decorative water motion — 2026-10-06
 
 Local Alpha62 candidate over `4f7b189`; no public release or Living Voice

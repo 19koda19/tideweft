@@ -6149,6 +6149,7 @@ describe("runtime core-ecology vertical slice", () => {
   it("composes real warning, guardian bark, fall and acquired cargo without suppressing NPC hearing", async () => {
     const { runtime, repository, crowActorId, guardianActorId, promiseLot } = await createFishCrowAlarmRuntime(
       "guardian-work",
+      true,
     );
     const observations = vi.spyOn(humanPerception, "collectExistingHumanObservations");
     try {
@@ -6265,6 +6266,17 @@ describe("runtime core-ecology vertical slice", () => {
       runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
       const mixed = runtime.getRenderView();
       expect(mixed.player.incident?.kind).toBe("fall");
+      const mixedTravel = restorePlayerRegionalTravel(
+        deserializeWorld(second.world).meta.rootSeed, second.player, second.regionalTravel,
+      );
+      const guardianPoint = mixedTravel === null ? null
+        : livingActorAddressInRegionalWindow(guardian.address, mixedTravel.window)?.point ?? null;
+      if (guardianPoint === null) throw new Error("Mixed scene lost its actual guardian anchor");
+      const guardianTileIndex = Math.floor(guardianPoint.y / WORLD_POSITION_UNITS_PER_TILE)
+        * mixed.terrain.columns + Math.floor(guardianPoint.x / WORLD_POSITION_UNITS_PER_TILE);
+      // Real current sight is required for the four-positive-candidate witness;
+      // the earlier authenticated visual receipt alone is not sufficient.
+      expect(mixed.terrain.tiles[guardianTileIndex]?.currentDetailVisibility).toBe(1);
       expect(mixed.acousticText).toEqual(expect.arrayContaining([
         expect.objectContaining({ acousticKind: "speech", sourceActorId: "player:local" }),
         expect.objectContaining({ acousticKind: "animal-call", id: bark.eventId, sourceActorId: guardianActorId }),
@@ -10047,6 +10059,7 @@ async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 |
 
 async function createFishCrowAlarmRuntime(
   mode: "single-source" | "candidate-order" | "guardian-work" = "single-source",
+  openMixedFallLandingSight = false,
 ): Promise<Readonly<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
@@ -10194,6 +10207,18 @@ async function createFishCrowAlarmRuntime(
     ridge.elevation = 600_000;
     ridge.roughness = FIXED_POINT;
     ridge.terrain = "ridge";
+    if (openMixedFallLandingSight) {
+      // The positive mixed-caption scene needs actual current sight after the
+      // fall, not merely the dog's earlier heard-visible receipt. Give the
+      // lower landing a narrow physical runout toward the guardian; otherwise
+      // the untouched 900,000 meadow immediately north conceals the dog behind
+      // a real hill. The original 1,000,000 -> 600,000 fall edge stays intact.
+      for (let offset = 1; offset <= 6; offset += 1) {
+        const runout = world.terrain.tiles[(y - offset) * world.terrain.width + x + 1];
+        if (runout === undefined) throw new Error("Mixed fall landing lost its finite sight corridor");
+        runout.elevation = 600_000;
+      }
+    }
     player.stamina = 300_000;
     player.stability = 0;
   }

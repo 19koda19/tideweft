@@ -2852,7 +2852,7 @@ export function createTideweftReliefRenderer(
       cache: CachedReliefMesh,
       now: number,
       cues: ReturnType<typeof buildSurfaceCurrentCues>,
-    ): void => {
+    ): number => {
       const grid = view.terrain;
       const outdoorLight = outdoorIlluminationPresentation(view.worldTime);
       const tileSize = grid.tileSize;
@@ -2916,6 +2916,7 @@ export function createTideweftReliefRenderer(
         }
       };
       let shaderBound = false;
+      let appliedLift = 0;
       p.push();
       try {
         p.noStroke();
@@ -2950,10 +2951,10 @@ export function createTideweftReliefRenderer(
                 return inputs;
               }`,
               "vec4 getFinalColor": `(vec4 color, vec2 texCoord) {
-                float energy = waterMotionAmplitude / min(0.65, waterMotionTileSize * 0.02);
-                // One interpolated scalar gives the unlit blue sheet a tiny
-                // moving glint, without per-pixel trigonometry or extra draws.
-                color.rgb *= 1.0 + 0.08 * energy * (waterMotionRipple - 0.5);
+                float energy = waterMotionAmplitude / min(6.0, waterMotionTileSize * 0.25);
+                // Restrained moving blue facets make the lifted sheet legible,
+                // without per-pixel trigonometry, white foam or extra draws.
+                color.rgb *= 1.0 + 0.24 * energy * (waterMotionRipple - 0.5);
                 return color;
               }`,
             }));
@@ -2966,6 +2967,7 @@ export function createTideweftReliefRenderer(
             waterMotionShader.setUniform("waterMotionDirection", [...motion.direction]);
             waterMotionShader.setUniform("waterMotionPhase", [...motion.phase]);
             submitSurface();
+            appliedLift = motion.amplitude;
           } catch {
             // Optional motion must not remove water on an unsupported context.
             waterMotionUnavailableForContext = true;
@@ -2987,6 +2989,7 @@ export function createTideweftReliefRenderer(
         p.pop();
         gl.depthMask(depthWriteWasEnabled);
       }
+      return appliedLift;
     };
 
     const prepareSurfaceCurrents = (
@@ -3019,6 +3022,7 @@ export function createTideweftReliefRenderer(
       view: TideweftView,
       cache: CachedReliefMesh,
       cues: ReturnType<typeof buildSurfaceCurrentCues>,
+      waterLift: number,
     ): void => {
       const grid = view.terrain;
       if (cues.length === 0) return;
@@ -3028,7 +3032,7 @@ export function createTideweftReliefRenderer(
         cue.center,
         cache.mesh.verticalScale,
         true,
-      ) + 1.25);
+      ) + 1.25 + waterLift);
       const strokeCue = (cue: (typeof cues)[number], surface: number): void => {
         const [start, controlA, controlB, end] = cue.streamline;
         p.line(start.x, -surface, start.y, controlA.x, -surface, controlA.y);
@@ -6841,10 +6845,10 @@ export function createTideweftReliefRenderer(
       );
       const terrain = drawTerrain(view, cache, camera, terrainMemory, now, trackCounts);
       const surfaceCurrents = prepareSurfaceCurrents(view, now);
-      drawWater(view, cache, now, surfaceCurrents);
+      const waterLift = drawWater(view, cache, now, surfaceCurrents);
       drawBiomeDetails(view, cache);
       const resourceRings = drawFieldResources(view, cache, camera, trackCounts);
-      drawSurfaceCurrents(view, cache, surfaceCurrents);
+      drawSurfaceCurrents(view, cache, surfaceCurrents, waterLift);
       drawLooseCargo(view, cache, now);
       drawRoutes(view, cache, camera);
       drawSoundings(view, cache);

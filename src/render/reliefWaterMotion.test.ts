@@ -43,8 +43,10 @@ describe("Relief water motion frame", () => {
     const rough = reliefWaterMotionFrame(roughGrid, roughCues, { x: -3, y: 4 }, false);
     expect(rough.amplitude).toBeGreaterThan(calm.amplitude);
     expect(rough.rate).toBeGreaterThan(calm.rate);
-    expect(rough.amplitude).toBeLessThanOrEqual(0.65);
-    expect(rough.amplitude).toBeLessThanOrEqual(rough.tileSize * 0.02);
+    expect(calm.amplitude).toBeGreaterThanOrEqual(2);
+    expect(rough.amplitude).toBeGreaterThan(3);
+    expect(rough.amplitude).toBeLessThanOrEqual(6);
+    expect(rough.amplitude).toBeLessThanOrEqual(rough.tileSize * 0.25);
     expect(rough.rate).toBeLessThanOrEqual(2.25);
   });
 
@@ -59,7 +61,7 @@ describe("Relief water motion frame", () => {
     expect(frame).toEqual(reliefWaterMotionFrame(terrain, first, { x: -3, y: 4 }, false));
     const strength = first.reduce((total, cue) => total + cue.strength, 0) / 8;
     const turbulence = first.reduce((total, cue) => total + cue.turbulence, 0) / 8;
-    expect(frame.amplitude).toBeCloseTo(0.48 * (0.15 + strength * 0.85), 12);
+    expect(frame.amplitude).toBeCloseTo(6 * (0.35 + strength * 0.65), 12);
     expect(frame.rate).toBeCloseTo(0.5 + strength * 1.5 + turbulence * 0.25, 12);
   });
 
@@ -90,7 +92,7 @@ describe("Relief water motion frame", () => {
         throw new Error("motion must not recover hidden flow from terrain");
       } };
     const ambient = reliefWaterMotionFrame(metadata, [], undefined, false);
-    expect(ambient.amplitude).toBeCloseTo(0.072, 12);
+    expect(ambient.amplitude).toBeCloseTo(2.1, 12);
     expect(ambient.rate).toBe(0.5);
     expect(ambient.direction).toEqual([1, 0]);
     for (const direction of [{ x: 0, y: 0 }, { x: -3, y: 4 }, { x: 1e307, y: -1e307 }]) {
@@ -109,8 +111,8 @@ describe("Relief water motion frame", () => {
     "bounds lift by world units and tile fraction at tile size %s", (tileSize) => {
       const terrain = { ...grid(), tileSize }, source = cues(grid())[0]!;
       const frame = reliefWaterMotionFrame(terrain, [{ ...source, strength: 1, turbulence: 1 }], undefined, false);
-      expect(frame.amplitude).toBeLessThanOrEqual(0.65);
-      expect(frame.amplitude).toBeLessThanOrEqual(tileSize * 0.02);
+      expect(frame.amplitude).toBeLessThanOrEqual(6);
+      expect(frame.amplitude).toBeLessThanOrEqual(tileSize * 0.25);
       expect(frame.tileSize).toBe(tileSize);
       expect(frame.rate).toBe(2.25);
     });
@@ -122,11 +124,11 @@ describe("Relief water motion frame", () => {
         worldTileOrigin: { x: -Infinity, y: NaN } },
       [{ ...source, strength: NaN, turbulence: Infinity, direction: { x: NaN, y: Infinity } }],
       { x: Infinity, y: 1 }, false);
-      expect(frame).toEqual({ amplitude: 0.003, rate: 0.5, direction: [1, 0],
+      expect(frame).toEqual({ amplitude: 0.0875, rate: 0.5, direction: [1, 0],
         phase: [0, 0], origin: [0, 0], tileSize: 1 });
     }
     const clamped = reliefWaterMotionFrame(grid(), [{ ...source, strength: 5, turbulence: -4 }], undefined, false);
-    expect(clamped.amplitude).toBe(0.48);
+    expect(clamped.amplitude).toBeCloseTo(6, 12);
     expect(clamped.rate).toBe(2);
   });
 

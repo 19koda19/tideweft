@@ -2039,6 +2039,12 @@ describe("Relief water motion", () => {
       expect(p5Harness.friendlyErrorsDisabled).toBe(true);
       const hooks = p5Harness.waterShaderHooks[0] as Record<string, unknown>;
       expect(hooks["Vertex getObjectInputs"]).toContain("inputs.position.y -= waterMotionAmplitude * wave");
+      const amplitude = p5Harness.waterShaderUniforms.find(
+        (entry) => entry.name === "waterMotionAmplitude",
+      )!.value as number;
+      expect(amplitude).toBeGreaterThanOrEqual(2);
+      expect(amplitude).toBeLessThanOrEqual(6);
+      expect(hooks["vec4 getFinalColor"]).toContain("min(6.0, waterMotionTileSize * 0.25)");
     } finally {
       harness.renderer.destroy();
     }

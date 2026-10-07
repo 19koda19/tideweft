@@ -4,6 +4,38 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.63 — 2026-10-06
+
+Build: `0.3.3-alpha.63` · Gameplay contract: 51 · Tutorial: 73
+
+Alpha 63 is an unpublished local water-readability repair to the Living Voice preview, not a public release or directive closure.
+
+### Gameplay
+
+- Blue Relief water polygons have more visible undulation and moving blue facet shading. Nearby perceived current still increases wave height and speed; the mesh and draw passes are unchanged.
+
+### Fixes
+
+- Exact floating vocal and physical-sound labels no longer remain behind the player or newly occluding terrain after current sight is lost. Lawful captions, audio, heard events and learned animal-call knowledge remain intact.
+- White current-direction strokes remain visible above the bounded decorative water crests. Reduced motion and unavailable shaders retain the still opaque sheet.
+
+### Balancing
+
+- Physical water, current force, movement, hearing, cargo and A CHALLENGING HARD rules are unchanged.
+
+### Interface
+
+- Field Manual version 73 describes this local repair. No new controls are needed.
+
+### Save changes
+
+- The current outer save remains version 50 with unchanged supported formats. Decorative waves and floating labels do not alter or replay authoritative saved events.
+
+### Known limitations
+
+- This is an unpublished local preview. Alpha 60 remains the latest LIVE\_VERIFIED public baseline; Living Voice remains active and unfinished.
+- Motion reflects bounded nearby perceived flow, not exact per-cell velocity. Finite software checks do not certify universal FPS, prolonged play, hardware accessibility or every platform.
+
 ## 0.3.3-alpha.62 — 2026-10-06
 
 Build: `0.3.3-alpha.62` · Gameplay contract: 51 · Tutorial: 72

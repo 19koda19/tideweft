@@ -434,8 +434,8 @@ export const TUTORIAL_GUIDE_SECTIONS = [
       {
         id: "whats-new-water-motion-preview",
         audience: "all",
-        title: "Alpha 62 · Water motion local preview",
-        body: "Relief water now has restrained undulation and glints, stronger and faster with nearby perceived current. It uses the same visible water, depth colours and physical tide level; animation never changes footing, current force or sound. Reduced motion keeps the sheet still. This is an unpublished local update, not completed Living Voice or a new public release; Alpha 60 remains the latest LIVE_VERIFIED public baseline.",
+        title: "Alpha 63 · Visible water motion local preview",
+        body: "The blue Relief water polygons now have more visible undulation and blue facet shading, stronger and faster with nearby perceived current. White strokes remain current-direction indicators. The same visible water, depth colours and physical tide level are retained; animation never changes footing, current force or sound. Reduced motion keeps the sheet still. Exact floating sound labels disappear when their event anchor leaves current sight, while lawful captions, audio and learned knowledge remain. This is an unpublished local update, not completed Living Voice or a new public release; Alpha 60 remains the latest LIVE_VERIFIED public baseline.",
       },
       {
         id: "whats-new-living-voice-preview",
@@ -1642,7 +1642,7 @@ export const TUTORIAL_GUIDE_SECTIONS = [
   },
 ] as const satisfies readonly TutorialGuideSection[];
 
-export const TUTORIAL_CONTENT_VERSION = 72 as const;
+export const TUTORIAL_CONTENT_VERSION = 73 as const;
 
 export const TIDEWEFT_TUTORIAL_GUIDE: TutorialGuide = {
   version: TUTORIAL_CONTENT_VERSION,

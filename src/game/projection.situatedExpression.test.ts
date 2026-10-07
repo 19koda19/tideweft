@@ -7,9 +7,11 @@ import { TILE_UNITS, createPlayer } from "./player";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
   projectGameView,
+  projectPerception,
   projectResidentWorldPosition,
   type CoreWildlifeExpressionSource,
 } from "./projection";
+import { DEFAULT_PERCEPTION_RANGES, VISIBILITY_DIRECT } from "./perception";
 import {
   appendDogActorMemory,
   createDogActorState,
@@ -23,7 +25,7 @@ import {
 } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
-import { createRegionalWorldView } from "./regionalWorldView";
+import { createRegionalWorldView, regionalWindowForWorld } from "./regionalWorldView";
 import {
   SITUATED_EXPRESSION_VERSION,
   advanceSituatedExpression,
@@ -40,6 +42,7 @@ import {
   type SituatedExpressionReception,
 } from "./situatedExpressionReception";
 import {
+  createDirectContactWorldAcousticReception,
   createHeardUnseenWorldAcousticReception,
   createHeardVisibleWorldAcousticReception,
   createSelfWorldAcousticReception,
@@ -51,6 +54,7 @@ import {
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
+  worldPositionToGlobalFixed,
 } from "./worldPosition";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createSessionState } from "./sessionTypes";
@@ -638,6 +642,24 @@ function heardVisibleReception(event: SituatedExpressionEvent): SituatedExpressi
   return reception;
 }
 
+/** Source-authentication fixtures need real current sight, not just an old receipt. */
+function observeFixtureAnchor(
+  world: ReturnType<typeof createRegionalWorldView>,
+  player: ReturnType<typeof createPlayer>,
+  position: ReturnType<typeof createWorldPosition>,
+): void {
+  const window = regionalWindowForWorld(world);
+  if (window === null) throw new Error("Source sight fixture has no regional window");
+  const point = worldPositionToGlobalFixed(position);
+  player.x = Math.round((point.x / WORLD_POSITION_UNITS_PER_TILE - window.origin.x) * TILE_UNITS);
+  player.y = Math.round((point.y / WORLD_POSITION_UNITS_PER_TILE - window.origin.y) * TILE_UNITS);
+  player.previousX = player.x;
+  player.previousY = player.y;
+  const tileIndex = Math.floor(player.y / TILE_UNITS) * world.terrain.width
+    + Math.floor(player.x / TILE_UNITS);
+  expect(projectPerception(world, player).detailVisibilityGrades[tileIndex]).toBe(VISIBILITY_DIRECT);
+}
+
 describe("situated expression game projection", () => {
   it("maps one canonical expression from signed negative regional coordinates", () => {
     const { player, window, world } = projectionFixture();
@@ -868,6 +890,7 @@ describe("situated expression game projection", () => {
     const expression = canonicalResidentWeatherHoldExpression(
       resident.identity.stableId,
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     const session = createSessionState(world.seedText);
 
@@ -1011,6 +1034,7 @@ describe("situated expression game projection", () => {
       placement.position,
       resident.identity.stableId,
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
 
     expect(projectGameView(world, player, {
@@ -1048,6 +1072,7 @@ describe("situated expression game projection", () => {
       placement.position,
       resident.identity.stableId,
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
 
     const game = projectGameView(world, player, {
@@ -1138,6 +1163,7 @@ describe("situated expression game projection", () => {
     const expression = canonicalResidentWeatherHoldExpression(
       resident.identity.stableId, placement.position,
     );
+    observeFixtureAnchor(world, player, expression.position);
     const originalExpression = structuredClone(expression);
     const faintReception = createHeardVisibleSituatedExpressionReception(expression, 42, 200_000, true);
     if (faintReception === null) throw new Error("Faint visible hearing receipt was rejected");
@@ -1231,6 +1257,7 @@ describe("situated expression game projection", () => {
     const dog = dogInWindow(window);
     const dogActorRoster = createDogActorRoster([dog]);
     const animalExpression = canonicalDogWarning(dog, "projection:faint-dog-remains-call");
+    observeFixtureAnchor(world, player, animalExpression.position);
     const animalOriginal = structuredClone(animalExpression);
     const animalReception = createHeardVisibleSituatedExpressionReception(
       animalExpression, 42, 120_000, true,
@@ -1267,6 +1294,7 @@ describe("situated expression game projection", () => {
     const dog = dogInWindow(window);
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogWarning(dog, "dog-signal:visible-warning");
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     expect(situatedExpressionSoundInterrupt(expression)).toBe("strong");
 
@@ -1312,6 +1340,7 @@ describe("situated expression game projection", () => {
     const dog = recognizableDog(dogInWindow(window));
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogWarning(dog, "dog-signal:familiar-warning");
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
 
     expect(projectGameView(world, player, {
@@ -1339,6 +1368,132 @@ describe("situated expression game projection", () => {
       situatedExpressionReception: heardVisibleReception(mismatched),
       dogActorRoster,
     }).expressions).toEqual([]);
+  });
+
+  it("stops exact animal-call anchoring when current sight is lost without erasing the heard event", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    player.facingMilliRadians = 0;
+    const seenPerception = projectPerception(world, player);
+    const sourceIndex = seenPerception.detailDirectTileIndices.find((index) => {
+      const tileX = index % world.terrain.width;
+      const tileY = Math.floor(index / world.terrain.width);
+      const distance = Math.hypot(tileX - 60, tileY - 60);
+      return tileX > 60
+        && distance > DEFAULT_PERCEPTION_RANGES.closePeripheralRange
+        && distance < 18;
+    });
+    if (sourceIndex === undefined) throw new Error("Current sight fixture has no source beyond the close circle");
+    const dog = dogInWindow(
+      window, sourceIndex % world.terrain.width, Math.floor(sourceIndex / world.terrain.width),
+    );
+    const dogActorRoster = createDogActorRoster([dog]);
+    // The existing projection contract consumes a canonical committed event
+    // and its event-time receipt. This fixture does not create a new producer.
+    const expression = canonicalDogWarning(dog, "dog-signal:current-sight-loss");
+    const reception = heardVisibleReception(expression);
+    const options = {
+      situatedExpression: expression,
+      situatedExpressionReception: reception,
+      dogActorRoster,
+    };
+    const original = structuredClone({ expression, reception, dogActorRoster });
+    expect(seenPerception.detailVisibilityGrades[sourceIndex]).toBe(VISIBILITY_DIRECT);
+    const seen = projectGameView(world, player, options);
+    expect(seen.expressions?.map(({ id }) => id)).toEqual([expression.eventId]);
+    const heardCaption = projectUIView(world, player, session, {
+      economyWorld: compatibility, ...options,
+    }).expressionCaption;
+    expect(heardCaption).toMatchObject({ animalCallKind: "bark", text: "BARK!" });
+
+    // Only the current player heading changes: no event, receipt, body, terrain,
+    // clock, sound or authoritative knowledge is rewritten to hide the source.
+    player.facingMilliRadians = Math.round(Math.PI * 1_000);
+    const unseenPerception = projectPerception(world, player);
+    expect(unseenPerception.detailVisibilityGrades[sourceIndex]).not.toBe(VISIBILITY_DIRECT);
+    const noLongerSeen = projectGameView(world, player, options);
+    expect(noLongerSeen.terrain.tiles[sourceIndex]?.currentDetailVisibility).not.toBe(1);
+    expect(projectUIView(world, player, session, {
+      economyWorld: compatibility, ...options,
+    }).expressionCaption).toEqual(heardCaption);
+    expect({ expression, reception, dogActorRoster }).toEqual(original);
+    expect(noLongerSeen.expressions).toEqual([]);
+    expect(noLongerSeen.acousticText).toEqual([]);
+    // A once-valid supplied snapshot cannot restore an exact hidden anchor.
+    expect(projectGameView(world, player, {
+      ...options, perception: seenPerception,
+    }).acousticText).toEqual([]);
+  });
+
+  it("gates a heard-visible physical cue by current sight while preserving tactile and self localization", () => {
+    const { compatibility, player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    const session = createSessionState(world.seedText);
+    player.facingMilliRadians = 0;
+    const seenPerception = projectPerception(world, player);
+    const sourceIndex = seenPerception.detailDirectTileIndices.find((index) => {
+      const x = index % world.terrain.width;
+      const y = Math.floor(index / world.terrain.width);
+      const distance = Math.hypot(x - 60, y - 60);
+      return x > 60 && distance > DEFAULT_PERCEPTION_RANGES.closePeripheralRange && distance < 18;
+    });
+    if (sourceIndex === undefined) throw new Error("Physical sight fixture has no source beyond the close circle");
+    const position = wildlifePositionInWindow(
+      window, sourceIndex % world.terrain.width, Math.floor(sourceIndex / world.terrain.width),
+    );
+    const event = canonicalPhysicalAcousticEvent(position, "physical:current-sight-loss", "object:crate");
+    const reception = createHeardVisibleWorldAcousticReception(event);
+    const options = {
+      worldAcousticEvent: event, worldAcousticEventRemainingSteps: 4, worldAcousticReception: reception,
+    };
+    const seenText = projectGameView(world, player, options).acousticText;
+    expect(seenText?.map(({ id }) => id)).toEqual([event.eventId]);
+    const captionOptions = { ...options, economyWorld: compatibility, worldAcousticRemainingSteps: 4 };
+    const heardCaption = projectUIView(world, player, session, captionOptions).expressionCaption;
+    expect(heardCaption).toMatchObject({ presentationKind: "physical", text: seenText?.[0]?.text });
+    const original = structuredClone({ event, reception });
+    player.facingMilliRadians = Math.round(Math.PI * 1_000);
+    expect(projectPerception(world, player).detailVisibilityGrades[sourceIndex]).not.toBe(VISIBILITY_DIRECT);
+    expect(projectGameView(world, player, options).acousticText).toEqual([]);
+    expect(projectGameView(world, player, { ...options, perception: seenPerception }).acousticText).toEqual([]);
+    expect(projectUIView(world, player, session, captionOptions).expressionCaption).toEqual(heardCaption);
+    expect({ event, reception }).toEqual(original);
+
+    const feltPosition = wildlifePositionInWindow(window, 60, 60);
+    const felt = canonicalPhysicalAcousticEvent(feltPosition, "physical:felt-contact", "object:handled-crate");
+    const self = canonicalPhysicalAcousticEvent(feltPosition, "physical:self-contact");
+    const selfReceipt = createSelfWorldAcousticReception(self);
+    if (selfReceipt === null) throw new Error("Self contact fixture lost its receipt");
+    const detailSuppressed = projectGameView(world, player, {
+      suppressDetailPerception: true,
+      worldAcousticPresentations: [
+        { event: felt, reception: createDirectContactWorldAcousticReception(felt), remainingSteps: 4 },
+        { event: self, reception: selfReceipt, remainingSteps: 4 },
+      ],
+    });
+    expect(detailSuppressed.terrain.tiles[60 * world.terrain.width + 60]?.currentDetailVisibility).not.toBe(1);
+    expect(detailSuppressed.acousticText?.map(({ id }) => id)).toEqual([felt.eventId, self.eventId]);
+  });
+
+  it("keeps a legitimately seen animal call in the full cone beyond the medium-copy range", () => {
+    const { player, window, world } = projectionFixture(COMPATIBILITY_REGION);
+    player.facingMilliRadians = 0;
+    const perception = projectPerception(world, player);
+    const sourceIndex = perception.detailDirectTileIndices.find((index) => {
+      const distance = Math.hypot(index % world.terrain.width - 60, Math.floor(index / world.terrain.width) - 60);
+      return distance > 26 && distance < 36;
+    });
+    if (sourceIndex === undefined) throw new Error("Full-cone fixture has no actual direct source beyond medium range");
+    const dog = dogInWindow(
+      window, sourceIndex % world.terrain.width, Math.floor(sourceIndex / world.terrain.width),
+    );
+    const expression = canonicalDogWarning(dog, "dog-signal:full-cone-label");
+    const projected = projectGameView(world, player, {
+      situatedExpression: expression,
+      situatedExpressionReception: heardVisibleReception(expression),
+      dogActorRoster: createDogActorRoster([dog]),
+    });
+    expect(projected.terrain.tiles[sourceIndex]?.currentDetailVisibility).toBe(1);
+    expect(projected.expressions?.map(({ id }) => id)).toEqual([expression.eventId]);
   });
 
   it("keeps an unseen heard bark directional but never exact-position anchored", () => {
@@ -1387,6 +1542,7 @@ describe("situated expression game projection", () => {
     const dog = dogInWindow(window);
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogDefensiveGrowl(dog, "dog-signal:visible-growl");
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
 
@@ -1460,6 +1616,7 @@ describe("situated expression game projection", () => {
     const dog = recognizableDog(dogInWindow(window));
     const dogActorRoster = createDogActorRoster([dog]);
     const expression = canonicalDogShelterWhine(dog, "dog-signal:visible-whine");
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
 
@@ -1536,6 +1693,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "fish-crow-signal:visible-alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     const coreWildlifeExpressionSources = [fishCrowSource(expression)];
 
@@ -1572,6 +1730,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "fish-crow-signal:forged-visible-source",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     const source = fishCrowSource(expression);
     const forgedSources: readonly (readonly CoreWildlifeExpressionSource[])[] = [
@@ -1643,6 +1802,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "deer-signal:alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const sources = [deerSource(expression)];
     expect(projectGameView(world, player, {
@@ -1699,6 +1859,7 @@ describe("situated expression game projection", () => {
     });
     const expression = reduction.event;
     if (expression === null) throw new Error("Chicken projection fixture rejected");
+    observeFixtureAnchor(world, player, expression.position);
     expect(expression.tone).toBe("alarmed");
     expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
     const source: CoreWildlifeExpressionSource = {
@@ -1754,6 +1915,7 @@ describe("situated expression game projection", () => {
     });
     const expression = reduction.event;
     if (expression === null) throw new Error("Goat projection fixture rejected");
+    observeFixtureAnchor(world, player, expression.position);
     const source: CoreWildlifeExpressionSource = {
       actorId: expression.sourceActorId, species: "domestic-goat", position: expression.position,
     };
@@ -1821,6 +1983,7 @@ describe("situated expression game projection", () => {
     });
     const expression = reduction.event;
     if (expression === null) throw new Error("Duck projection fixture rejected");
+    observeFixtureAnchor(world, player, expression.position);
     expect(expression.tone).toBe("alarmed");
     expect(situatedExpressionSoundInterrupt(expression)).toBe("none");
     const source: CoreWildlifeExpressionSource = {
@@ -1895,6 +2058,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "gull-signal:alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const sources = [gullSource(expression)];
     expect(projectGameView(world, player, {
@@ -1946,6 +2110,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "elk-signal:alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const source = elkSource(expression);
     const visibleOptions = {
@@ -2020,6 +2185,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "boar-signal:alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const source = boarSource(expression);
     const visibleOptions = {
@@ -2094,6 +2260,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "CAT-living-voice-projection:e:16:retreat",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const sources = [domesticCatSource(expression)];
     expect(projectGameView(world, player, {
@@ -2149,6 +2316,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "marsh-fox-signal:pursuit-start:prey-hidden",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const visible = heardVisibleReception(expression);
     const sources = [marshFoxSource(expression)];
 
@@ -2234,6 +2402,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "marsh-fox-signal:projection-is-not-learning",
     );
+    observeFixtureAnchor(world, player, expression.position);
     player.animalCallKnowledge = createPlayerAnimalCallKnowledge();
     const priorPlayer = structuredClone(player);
     const options = {
@@ -2347,6 +2516,7 @@ describe("situated expression game projection", () => {
       wildlifePositionInWindow(window),
       "marsh-rabbit-signal:visible-alarm",
     );
+    observeFixtureAnchor(world, player, expression.position);
     const reception = heardVisibleReception(expression);
     const source = marshRabbitSource(expression);
 

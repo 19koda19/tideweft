@@ -502,6 +502,7 @@ function projectSituatedExpressionView(
   event: SituatedExpressionEvent | null,
   reception: SituatedExpressionReception | null,
   tileSize: number,
+  perception: PerceptionResult,
   dogActorRoster?: DogActorRosterState,
   coreWildlifeExpressionSources?: readonly CoreWildlifeExpressionSource[],
 ): readonly SituatedExpressionView[] {
@@ -543,6 +544,17 @@ function projectSituatedExpressionView(
     );
     const point = worldPositionToSpatialFrame(frame, event.position);
     if (point === null) return Object.freeze([]);
+    const position = Object.freeze({
+      x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
+      y: point.y / WORLD_POSITION_UNITS_PER_TILE * tileSize,
+    });
+    // Event-time hearing remains valid after turning away, but it cannot keep
+    // an exact field label at an event anchor outside current sight. This affects
+    // only optional world text, not the receipt, caption, audio or knowledge.
+    if (source.sourceKind !== "player" && !perceivedWorldPoint(
+      position, world.terrain.width, world.terrain.height, tileSize,
+      perception.detailVisibilityGrades,
+    )) return Object.freeze([]);
     const callKind = animalCallKind(event.meaning);
     const embodiedSignal = event.meaning === "marsh-rabbit-alarm-thump";
     const indistinctVoice = source.sourceKind === "human"
@@ -561,10 +573,7 @@ function projectSituatedExpressionView(
       sourceKind: source.sourceKind,
       speakerLabel: source.speakerLabel,
       text: indistinctVoice ? "indistinct voice" : introduction?.text ?? realization.text,
-      position: Object.freeze({
-        x: point.x / WORLD_POSITION_UNITS_PER_TILE * tileSize,
-        y: point.y / WORLD_POSITION_UNITS_PER_TILE * tileSize,
-      }),
+      position,
       progress: 1 - event.remainingSteps / Math.max(1, event.durationSteps),
       priority: event.priority,
       salience: event.salience,
@@ -984,6 +993,7 @@ export function projectGameView(
       event,
       reception,
       tileSize,
+      perception,
       options.dogActorRoster,
       options.coreWildlifeExpressionSources,
     )
@@ -998,7 +1008,15 @@ export function projectGameView(
         }]);
   const physicalAcousticText = physicalInputs.flatMap((input) => {
     const projected = projectWorldAcousticText({ world, tileSize, ...input });
-    return projected === null ? [] : [projected];
+    if (projected === null) return [];
+    // Self/tactile localization is independent of sight. A historical visual
+    // receipt, however, must not keep an exact sound marker behind the player
+    // or newly occluding terrain; lawful caption/hearing stays independent.
+    if (input.reception?.kind === "heard-visible" && !perceivedWorldPoint(
+      projected.position, world.terrain.width, world.terrain.height, tileSize,
+      perception.detailVisibilityGrades,
+    )) return [];
+    return [projected];
   });
   const acousticText = Object.freeze([
     ...expressions,

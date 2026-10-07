@@ -787,6 +787,15 @@ audio/animation only.
 Chart and Relief now consume the same combined active-expression and eligible
 physical-acoustic candidate list. Directly visible continuing resident state
 uses ordinary non-acoustic actor presentation and spends no acoustic-text slot.
+An event-time seen/heard receipt does not retain an exact field label after
+current sight is lost. Nonself vocal anchors and heard-visible physical contact
+anchors require the validated current DIRECT field at their authenticated event
+locus; turning away, terrain occlusion and stale supplied masks fail closed.
+This uses the full sight field, not the shorter inspection tier. Self and direct
+tactile localization do not require sight. Lawful captions, committed audio,
+listener receipts and learned knowledge remain intact. Introduction/weather-hold
+events retain their existing historical-locus rule rather than tracking a moving
+human body through hidden terrain.
 One shared renderer-neutral layout ranks by priority, salience, and stable
 identity, admits at most four labels globally and one per source, tries the same
 small deterministic source-relative lanes, rejects anchors too far outside the
@@ -3918,8 +3927,12 @@ layering remains future work, not a claim made by this narrow surface repair.
 Optional Relief water motion is decoration over that same physical free-surface
 baseline. One lazily compiled GPU material moves the existing six vertices per
 wet cell, with no extra tessellation, mesh rebuild or draw pass. Positive lift
-is capped at the smaller of 0.65 world units and two percent of tile width;
-a restrained interpolated glint preserves blue depth bands and opaque alpha.
+is capped at the smaller of six world units and one quarter of tile width;
+calm motion uses 35% of that bound and disclosed stronger flow increases it.
+The former sub-unit lift was visually subpixel at the ordinary camera distance.
+A restrained interpolated blue facet tint preserves depth bands and opaque
+alpha. Current-direction strokes stay above the bounded decorative crest;
+they remain direction indicators, not the wave geometry.
 Wave rate and amplitude use at most eight nearby, already-disclosed surface
 current cues from the existing shared hydrology reading; current heading
 magnitude is not speed. No perceived cues means neutral ambient motion, not a

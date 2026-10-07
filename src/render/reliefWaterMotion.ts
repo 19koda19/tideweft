@@ -88,7 +88,10 @@ export function reliefWaterMotionFrame(
   const worldY = grid.worldTileOrigin?.y ?? 0;
   const [dx, dy] = direction;
   return {
-    amplitude: reducedMotion ? 0 : Math.min(0.65, tileSize * 0.02) * (0.15 + strength * 0.85),
+    // The old sub-unit lift projected to less than a pixel at the ordinary
+    // Relief camera distance. Keep calm water readable, and stronger flow
+    // visibly more energetic, without adding vertices or physical displacement.
+    amplitude: reducedMotion ? 0 : Math.min(6, tileSize * 0.25) * (0.35 + strength * 0.65),
     rate: 0.5 + strength * 1.5 + turbulence * 0.25,
     direction,
     phase: [phase(coordinatePhase(worldX, dx * 1.4) + coordinatePhase(worldY, dy * 1.4)),

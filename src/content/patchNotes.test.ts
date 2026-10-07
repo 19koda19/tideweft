@@ -21,11 +21,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.62",
+      version: "0.3.3-alpha.63",
       releaseDate: "2026-10-06",
-      buildIdentity: "0.3.3-alpha.62",
+      buildIdentity: "0.3.3-alpha.63",
       gameplayContractVersion: 51,
-      tutorialVersion: 72,
+      tutorialVersion: 73,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -62,9 +62,10 @@ describe("canonical offline patch notes", () => {
   });
 
   it("scopes Alpha-62 water motion to presentation rather than new physical or released truth", () => {
+    const preview = TIDEWEFT_PATCH_NOTES.releases.find((release) => release.version === "0.3.3-alpha.62")!;
     const currentCopy = PATCH_NOTE_CATEGORIES
-      .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
-    expect(LATEST_PATCH_NOTE.summary).toContain("unpublished local water-motion update");
+      .flatMap((category) => preview.categories[category]).join(" ");
+    expect(preview.summary).toContain("unpublished local water-motion update");
     expect(currentCopy).toContain("stronger and faster");
     expect(currentCopy).toContain("no extra surface polygons");
     expect(currentCopy).toContain("Reduced motion keeps the water sheet still");

@@ -192,7 +192,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "b8df5fa672ec047803ec2a7ce28cf6659c32106400ddac8efdd7b023f8a98fc2",
+      "reviewedSourceFingerprint": "8cff1ddc78b1e18c2ae9210bd81d75b81d37ceba7176f92ccf54ebdf98249610",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -212,6 +212,7 @@
         "The causal domain owns why the sound happened; presentation never creates the event.",
         "Heard-unseen receipts do not reveal exact source identity or position.",
         "Presentation suppression cannot erase lawful hearing or committed audio.",
+        "Exact nonself vocal and heard-visible contact labels require current DIRECT sight at the authenticated event anchor; historical hearing does not retain a hidden marker. Self/tactile cues and lawful captions remain independent of sight.",
         "Human dialogue text requires intelligible event-time hearing; faint lawful hearing shows only an indistinct voice, and unheard speech shows nothing.",
         "Consumed ephemeral sound presentation does not replay after save/load."
       ],
@@ -221,7 +222,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
-        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted/refused pending restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; admitted carriers suppress physical twins and only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Sparse-owner departure and an originally visible call later losing detail remain unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
+        "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted/refused pending restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; admitted carriers suppress physical twins and only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Sparse-owner departure remains unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion, ordinary/serious footing and protection/loss/recovery cargo choices retain bounded accepted history separate from consumed sound. Cargo keeps at most three origins with existing locks and loss-resolution precedence; pickup uses its action frontier, traversal its actual step. Other meanings remain interval-local, and broader sparse-choice/hours annoyance gates remain open.",
         "Architecture's Learned animal-call recognition section owns bounded player knowledge from a genuine committed seen-and-heard call. A later lawful caption may identify the learned animal kind without a hidden individual, cause or anchor; catalogs, uncommitted intent, rabbit contact and aggregate choruses do not teach species."
       ],
@@ -249,7 +250,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "b8df5fa672ec047803ec2a7ce28cf6659c32106400ddac8efdd7b023f8a98fc2",
+      "reviewedSourceFingerprint": "8cff1ddc78b1e18c2ae9210bd81d75b81d37ceba7176f92ccf54ebdf98249610",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."
