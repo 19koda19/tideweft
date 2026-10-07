@@ -20,6 +20,68 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Sparse footing reactions — 2026-10-06/07
+
+Local unpublished `2da94a8` repairs the rapid near-fall wording cluster found
+in the finite wilderness check below. The existing `playerExpressionRecency`
+owner retains the same two exact footing origins and requires 600 accepted
+steps before another fresh reaction of that meaning is eligible. Kernel
+12/16-step semantic and priority-qualified 4/6-step family locks, catalog keys,
+physical incidents/contact sounds and cargo choice remain unchanged. A first
+serious reaction may still outrank ordinary footing. Current save50/carry14/
+recency2 remain unchanged; the supported nested-v1 reader explicitly preserves
+its original 12/16-step canonical prune fence, not the new current horizon.
+
+Focused recency/effort units pass three files/30 tests; existing authority,
+traversal, kernel and causal-authority tests pass four files/49. The complete
+`npx vitest run src/game/runtime.fall.integration.test.ts --maxWorkers=1`
+passes all28 cases in98.70s, including original real storm stumbles and the
+new step30 consumed-history/current-reload proof. The original step11 exact
+chart-revision/root comparison remains intact. An initial extension guessed an
+incorrect extra publication-revision count; the final test separately compares
+step30 authoritative roots and chart facts rather than weakening the original
+proof. The post16 fresh-incident refusal is unit-proven; that runtime fixture's
+second actual stumble is still only four steps later. Existing late introduction,
+save and vocal-audio rollback passes one selected case/93 unselected;
+`npm run test:smoke` passes six files/105. Typecheck/build and static web smoke
+pass. No cumulative or whole-directive certificate follows from these checks.
+
+The unchanged command `caffeinate -i node
+artifacts/validation/voice-current49/native-play-9cc87d3.cjs 360000 wilderness`
+passes on clean `2da94a8`, fresh production JS `8ecc2a19…45153` and unchanged
+driver `aa425bdb…5a9b`. Firefox157.0.1,1440×900/DPR1; actual360.488s,
+420→885,295.978 sampled northward tiles/four rests, no ADRIFT or terminal
+recovery. Its361.497s census has2609 reads/11 retained candidates: two player
+lines, three animal calls and six physical cues. The player says **That was
+close.** at29.165s/tick449 and **Still here.** at357.896s/tick881, with no
+adjacent observed repeat. Earlier `0df578b` had five lines/two repeats; the six
+physical event IDs/copy match across the windows, while late ticks differ by
+one. Native input timing and optional vocal receipt differences mean this is
+finite observed improvement, not equal-input terminal-state equivalence,
+complete emitted-event counts, audible silence or hours acceptance. No source,
+event, actor, weather, route or save injection was used.
+
+Terminal Chart image is inspected without an active caption wall. No observer
+overflow/incomplete/raw-trace truncation, unexpected console/lifecycle failure
+or profile leak occurs; the one known CSP probe denial remains classified.
+Report `native-wilderness-2da94a8-360000-v20.json` SHA256
+`57441ac9664dfecefb2dff9ee0c4fa7d1b525ed62fcb17900f626eac480f0c93`;
+PNG `02fdd4449bbf1dce9e59c92b8701052a00bbaadb6a6f33de8b5348eb2ddcfc15`.
+Bounded history, current persistence, shared physical-acoustic and priority
+contracts are `INTEGRATED` at their existing owners; no new inheritance family,
+composition bridge or future gameplay producer is claimed. Hardware audio/AT,
+hours, crowd/performance, final cumulative and release gates remain separate.
+
+The macOS arm64 app is also rebuilt from this accepted source through
+`npm run package:desktop`, including release synchronization and the fresh
+production web build. Its runtime-only ASAR has10 entries/5,000,868 bytes,
+SHA256 `adb1beb0…5fac2`; all seven embedded manifest/main/dist files match
+current bytes. Existing `npm run smoke:desktop -- --executable
+release/tideweft-darwin-arm64/tideweft.app/Contents/MacOS/tideweft
+--no-screenshot` passes with disposable data and no renderer/navigation/resource
+failure. Real saves are untouched. This is packaged automated smoke, not manual
+audio quality, signing/install/ZIP, other-platform or published release proof.
+
 ## Ordinary learned animal-call caption check — 2026-10-06
 
 The ignored ordinary-controls observer compared raw call text with DOM copy,
