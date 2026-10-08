@@ -8,6 +8,7 @@ import {
 import { copyInventory } from "./util";
 import { currentInventoryTotals } from "./world";
 import { calculateNetworkMetrics } from "./network";
+import { canonicalizeResidentActivity, type ResidentActivity } from "./residentActivity";
 import {
   canonicalizeActorPerceptionState,
   type ActorPerceptionState,
@@ -38,6 +39,17 @@ function copyResidentCircadian(
     && resident.location.kind === "settlement"
     && resident.location.settlementId !== resident.homeSettlementId);
   if (copy === null) throw new Error("Cannot project malformed resident circadian state");
+  return copy;
+}
+
+function copyResidentActivity(resident: ResidentState, atTick: number): ResidentActivity {
+  // A projection owns a detached snapshot. Do not leak mutable loaded roots
+  // or pass construction custody across this boundary by shallow spreading.
+  const copy = canonicalizeResidentActivity(structuredClone(resident.activity), {
+    actorId: resident.identity.stableId,
+    tick: atTick,
+  });
+  if (copy === null) throw new Error("Cannot project malformed resident activity state");
   return copy;
 }
 
@@ -87,6 +99,9 @@ export function createWorldView(world: WorldState): WorldView {
       perception: copyActorPerception(resident.perception),
       ...(Object.hasOwn(resident, "circadian")
         ? { circadian: copyResidentCircadian(resident, world.meta.completedTick) }
+        : {}),
+      ...(Object.hasOwn(resident, "activity")
+        ? { activity: copyResidentActivity(resident, world.meta.completedTick) }
         : {}),
       condition: { ...resident.condition },
       playerKnowledge: {

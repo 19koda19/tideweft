@@ -6,10 +6,13 @@ import {
   type ResidentLocation,
   type ResidentState,
   type RouteState,
-  type WorldView,
+  type TerrainTile,
+  type ContractState,
+  type SettlementState,
 } from "../sim/types";
 import type { PlayerState } from "./player";
 import type { RegionalTerrainWindow } from "./regionalTravel";
+import { canonicalizeResidentActivity, residentActivityPoseAtPhase } from "../sim/residentActivity";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createSpatialFrame,
@@ -21,6 +24,21 @@ import {
 
 const COMPATIBILITY_REGION = createRegionCoord(0, 0);
 const TILE_CENTER_UNITS = WORLD_POSITION_UNITS_PER_TILE / 2;
+
+/** Placement reads the same geography/membership in a live world or its view. */
+export interface ResidentSpatialWorld {
+  readonly residents: readonly ResidentState[];
+  readonly routes: readonly RouteState[];
+  readonly contracts: readonly ContractState[];
+  readonly settlements: readonly Pick<SettlementState, "id" | "tileIndex">[];
+  readonly terrain: Readonly<{
+    width: number;
+    height: number;
+    tiles: readonly TerrainTile[];
+  }>;
+  readonly completedTick?: number;
+  readonly meta?: Readonly<{ completedTick: number }>;
+}
 
 const SETTLEMENT_RESIDENT_OFFSETS = [
   [1, 0], [0, 1], [-1, 0], [0, -1],
@@ -52,13 +70,56 @@ export interface ResidentWindowPlacement {
  * address contract rather than cloning these people into distant regions.
  */
 export function resolveResidentWorldPlacement(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
 ): ResidentWorldPlacement | null {
   if (!isCompatibilityEconomy(economy)) return null;
+  if (Object.hasOwn(resident, "activity")) {
+    const tick = economy.completedTick ?? economy.meta?.completedTick;
+    if (tick === undefined) return null;
+    const activity = canonicalizeResidentActivity(resident.activity, {
+      actorId: resident.identity.stableId,
+      tick,
+    });
+    return activity === null ? null : resolveResidentWorldPlacementAtActivityPhase(
+      economy, resident, tick, activity.poses.length - 1,
+    );
+  }
   return resident.location.kind === "route"
     ? resolveResidentRouteWorldPlacement(economy, resident)
     : resolveResidentSettlementWorldPlacement(economy, resident);
+}
+
+/** No current-pose fallback when a retained sound asks for a historical phase. */
+export function resolveResidentWorldPlacementAtActivityPhase(
+  economy: ResidentSpatialWorld,
+  resident: ResidentState,
+  atTick: number,
+  phase: number,
+): ResidentWorldPlacement | null {
+  if (!isCompatibilityEconomy(economy)
+    || !economy.residents.some(({ id, identity }) => (
+      id === resident.id && identity.stableId === resident.identity.stableId
+    ))
+  ) return null;
+  const pose = residentActivityPoseAtPhase(resident.activity, {
+    actorId: resident.identity.stableId,
+    tick: atTick,
+  }, phase);
+  if (pose === null) return null;
+  const x = Math.floor(pose.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(pose.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  return Object.freeze({
+    position: pose.position,
+    occupiedTile: createWorldPosition(pose.position.region,
+      x * WORLD_POSITION_UNITS_PER_TILE + TILE_CENTER_UNITS,
+      y * WORLD_POSITION_UNITS_PER_TILE + TILE_CENTER_UNITS),
+    compatibilityTileIndex: pose.position.region.x === 0 && pose.position.region.y === 0
+      && x < economy.terrain.width && y < economy.terrain.height
+      ? y * economy.terrain.width + x : -1,
+    facing: pose.heading / FIXED_POINT * Math.PI * 2,
+    progress: resident.location.kind === "route" ? resident.location.progress / FIXED_POINT : 0,
+  });
 }
 
 /**
@@ -67,7 +128,7 @@ export function resolveResidentWorldPlacement(
  * live ordinal is intentionally derived from the currently present group.
  */
 export function resolveResidentWorldPlacementAtEventLocation(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
   location: ResidentLocation,
   settlementOrdinal: number | null,
@@ -91,14 +152,14 @@ export function resolveResidentWorldPlacementAtEventLocation(
 
 /** Resolve only a route location, failing closed on malformed or nonlocal paths. */
 export function resolveResidentRouteWorldPlacement(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
 ): ResidentWorldPlacement | null {
   return resolveResidentRoutePlacement(economy, resident, true);
 }
 
 function resolveResidentRoutePlacement(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
   useCurrentItinerary: boolean,
 ): ResidentWorldPlacement | null {
@@ -188,7 +249,7 @@ function resolveResidentRoutePlacement(
 
 /** Same ordered leg authority that orients progress in updatePorterLocation. */
 function residentRouteTravelDirection(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
   route: RouteState,
 ): 1 | -1 | null {
@@ -288,7 +349,7 @@ export function playerWorldPositionInRegionalWindow(
 }
 
 function resolveResidentSettlementWorldPlacement(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   resident: ResidentState,
   eventOrdinal: number | null = null,
 ): ResidentWorldPlacement | null {
@@ -328,7 +389,7 @@ function resolveResidentSettlementWorldPlacement(
 }
 
 function settlementResidentTileIndex(
-  economy: WorldView,
+  economy: ResidentSpatialWorld,
   centerX: number,
   centerY: number,
   ordinal: number,
@@ -375,7 +436,7 @@ function settlementResidentTileIndex(
   return null;
 }
 
-function compatibilityTile(economy: WorldView, tileIndex: number) {
+function compatibilityTile(economy: ResidentSpatialWorld, tileIndex: number) {
   if (
     !Number.isSafeInteger(tileIndex)
     || tileIndex < 0
@@ -387,7 +448,7 @@ function compatibilityTile(economy: WorldView, tileIndex: number) {
   return tile && tile.index === tileIndex && tile.x === x && tile.y === y ? tile : null;
 }
 
-function compatibilityTileCenter(economy: WorldView, tileIndex: number): WorldPosition | null {
+function compatibilityTileCenter(economy: ResidentSpatialWorld, tileIndex: number): WorldPosition | null {
   const tile = compatibilityTile(economy, tileIndex);
   return tile
     ? createWorldPosition(
@@ -425,7 +486,7 @@ function spatialFrameForRegionalWindow(
   }
 }
 
-function isCompatibilityEconomy(economy: WorldView): boolean {
+function isCompatibilityEconomy(economy: ResidentSpatialWorld): boolean {
   return validCompatibilityDimensions(economy.terrain.width, economy.terrain.height)
     && economy.terrain.tiles.length === economy.terrain.width * economy.terrain.height;
 }

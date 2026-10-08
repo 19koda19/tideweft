@@ -9,6 +9,7 @@ import {
   type DeliveryGrade,
   type PressureMode,
   type ResidentMemory,
+  type ResidentLocation,
   type ResidentState,
   type ResourceKind,
   type RouteState,
@@ -44,6 +45,18 @@ import {
   residentCircadianUrgentPreference,
   residentCircadianWatchReference,
 } from "./livingCircadian";
+import {
+  canonicalizeResidentActivity,
+  replaceResidentActivity,
+  type ResidentActivity,
+  type ResidentBodyPose,
+} from "./residentActivity";
+import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
+import {
+  resolveResidentRouteWorldPlacement,
+  resolveResidentWorldPlacementAtEventLocation,
+} from "../game/residentSpatial";
+import { headingFromRadians } from "../game/livingActor";
 
 const WEATHER_DOMAIN = 0x5745_4154;
 const MAX_EVENT_HISTORY = 512;
@@ -1941,16 +1954,115 @@ export function createWorld(seedText: string, pressureMode: PressureMode = "stan
   return world;
 }
 
+interface ResidentActivityWorldStepSnapshot {
+  readonly actorId: string;
+  readonly activity: ResidentActivity;
+  readonly location: ResidentLocation;
+  readonly routeBinding: string | null;
+}
+
+/** Capture the closing interval before commands can change its membership. */
+function prepareResidentActivityWorldStep(
+  world: WorldState,
+): ReadonlyMap<number, ResidentActivityWorldStepSnapshot> {
+  const snapshots = new Map<number, ResidentActivityWorldStepSnapshot>();
+  for (const resident of world.residents) {
+    if (!Object.hasOwn(resident, "activity")) continue;
+    const activity = canonicalResidentActivityForWorld(world, resident);
+    if (activity === null) throw new Error(`Resident ${resident.id} has unbound physical activity`);
+    snapshots.set(resident.id, {
+      actorId: resident.identity.stableId,
+      activity,
+      location: { ...resident.location },
+      routeBinding: residentActivityRouteBinding(world, resident),
+    });
+  }
+  return snapshots;
+}
+
+function residentActivityRouteBinding(world: WorldState, resident: ResidentState): string | null {
+  if (resident.location.kind !== "route" || resident.activeContractId === null) return null;
+  const contract = activeContractForResident(world, resident);
+  if (contract === undefined) return null;
+  const leg = contract.porterRouteIds.indexOf(resident.location.routeId);
+  return `${contract.id}:${contract.status}:${leg}:${contract.porterSettlementIds[leg]}:${contract.porterSettlementIds[leg + 1]}`;
+}
+
+/**
+ * Re-anchor only current history, not the body. Existing coarse transport
+ * remains explicitly authoritative until its later physical-execution slice;
+ * only an actual macro transition may refresh that legacy placement.
+ */
+function commitResidentActivityWorldStep(
+  world: WorldState,
+  snapshots: ReadonlyMap<number, ResidentActivityWorldStepSnapshot>,
+  tick: number,
+  reconcileCoarseLocation: boolean,
+): void {
+  if (snapshots.size === 0) return;
+  const replacements: Array<Readonly<{ index: number; resident: ResidentState }>> = [];
+  for (let index = 0; index < world.residents.length; index += 1) {
+    const resident = world.residents[index]!;
+    const snapshot = snapshots.get(resident.id);
+    if (snapshot === undefined) {
+      if (Object.hasOwn(resident, "activity")) throw new Error("World step unexpectedly created resident activity");
+      continue;
+    }
+    if (snapshot.actorId !== resident.identity.stableId) throw new Error("Resident body identity changed during world step");
+    const activity = reconcileCoarseLocation
+      ? canonicalizeResidentActivity(resident.activity, { actorId: snapshot.actorId, tick })
+      : snapshot.activity;
+    if (activity === null) throw new Error("World step lost canonical resident activity");
+    let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
+    let task = activity.restTask;
+    if (task !== null && (resident.location.kind !== "settlement"
+      || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
+      task = null;
+    }
+    const priorLocation = snapshot.location;
+    const currentLocation = resident.location;
+    const changedLocation = priorLocation.kind !== currentLocation.kind
+      || (priorLocation.kind === "route" && currentLocation.kind === "route"
+        && (priorLocation.routeId !== currentLocation.routeId || priorLocation.progress !== currentLocation.progress))
+      || (priorLocation.kind === "settlement" && currentLocation.kind === "settlement"
+        && priorLocation.settlementId !== currentLocation.settlementId);
+    const changedDirection = snapshot.routeBinding !== residentActivityRouteBinding(world, resident);
+    if (reconcileCoarseLocation && (changedLocation || (currentLocation.kind === "route" && changedDirection))) {
+      const placement = currentLocation.kind === "route"
+        ? resolveResidentRouteWorldPlacement(world, resident)
+        : resolveResidentWorldPlacementAtEventLocation(world, resident, currentLocation,
+          residentSettlementEventOrdinal(world, resident));
+      if (placement === null) throw new Error("Coarse resident transition lost physical placement");
+      pose = { position: placement.position, heading: headingFromRadians(placement.facing) };
+      task = null;
+    }
+    if (task?.origin === "selected" && task.phase === "arrived"
+      && !residentRestTargetHasDrySupport(world, task.target)) {
+      task = { ...task, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1 };
+    }
+    replacements.push({ index, resident: replaceResidentActivity(resident, {
+      ...activity, tick, poses: [pose], restTask: task,
+    }) });
+  }
+  // No half-population publication if a later replacement fails validation.
+  for (const replacement of replacements) world.residents[replacement.index] = replacement.resident;
+}
+
 export function stepWorld(
   world: WorldState,
   commands: readonly SimCommand[] = [],
   perceptionFrame?: ResidentPerceptionFrame,
 ): WorldState {
   const tick = world.meta.completedTick + 1;
+  const residentActivities = prepareResidentActivityWorldStep(world);
   applyCommands(world, commands, tick);
   advanceResidentPerception(world, perceptionFrame, tick);
   world.tide = tideAtTick(tick);
   updateWeather(world, tick);
+  commitResidentActivityWorldStep(world, residentActivities, tick, false);
+  // Current support/commands may revoke rest before this tick's physiology.
+  // Absent legacy activities retain their original ordering and semantics.
+  if (residentActivities.size > 0) reconcileResidentCircadianAfterContractAdvance(world, tick);
   updateResidentConditions(world, tick);
   ageKnowledge(world, tick);
   runProduction(world, tick);
@@ -1958,6 +2070,7 @@ export function stepWorld(
   updateProjects(world, tick);
   if (tick % 60 === 0) generateDemandContracts(world, tick);
   advanceContracts(world, tick);
+  commitResidentActivityWorldStep(world, residentActivities, tick, true);
   reconcileResidentCircadianAfterContractAdvance(world, tick);
   decayRoutes(world, tick);
   pruneTerminalContracts(world);

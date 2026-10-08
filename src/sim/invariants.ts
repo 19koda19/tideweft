@@ -23,6 +23,7 @@ import {
   residentAtSettlementRestDestination,
 } from "./livingCircadian";
 import { stableStringify } from "./util";
+import { canonicalResidentActivityForWorld } from "./residentActivityWorld";
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`World invariant failed: ${message}`);
@@ -327,6 +328,13 @@ export function assertWorldInvariants(world: WorldState): void {
       stableStringify(canonicalPerception) === stableStringify(resident.perception),
       `resident ${resident.id} perception is not canonical`,
     );
+    if (Object.hasOwn(resident, "activity")) {
+      const activity = canonicalResidentActivityForWorld(world, resident);
+      invariant(activity !== null, `resident ${resident.id} activity is malformed or unbound`);
+      invariant(Object.hasOwn(resident, "circadian"), `resident ${resident.id} body has no rest admission`);
+      invariant(stableStringify(activity) === stableStringify(resident.activity),
+        `resident ${resident.id} activity is not canonical`);
+    }
     if (Object.hasOwn(resident, "circadian")) {
       const arrivedAtSettlementRest = residentAtSettlementRestDestination(resident);
       const canonicalCircadian = canonicalizeResidentCircadianState(resident.circadian, {

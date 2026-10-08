@@ -15,6 +15,7 @@ import {
   type WeatherState,
 } from "../sim/types";
 import { stableStringify } from "../sim/util";
+import { canonicalizeResidentActivity } from "../sim/residentActivity";
 import {
   canonicalizeLivingCircadianPersistentState,
   livingCircadianPersistentStateFromProjection,
@@ -110,7 +111,7 @@ export function planResidentCircadian(
   ) return null;
 
   const resident = canonicalResidentForRoutine(raw.resident, raw.atTick);
-  const duty = canonicalDuty(raw.duty);
+  const duty = canonicalizeResidentCircadianDuty(raw.duty);
   const weather = canonicalWeather(raw.weather, raw.atTick);
   if (resident === null || duty === undefined || weather === null) return null;
 
@@ -201,16 +202,26 @@ function canonicalResidentForRoutine(
     || !fixedPoint(resident.condition.exhaustion)
     || !(resident.activeContractId === null || positiveSafeInteger(resident.activeContractId))
     || !canonicalLocation(resident.location)
+    || (Object.hasOwn(resident, "activity") && canonicalizeResidentActivity(resident.activity, {
+      actorId: resident.identity.stableId,
+      tick: atTick,
+    }) === null)
   ) return null;
   return resident;
 }
 
 /** Undefined means malformed; null is a valid absence. */
-function canonicalDuty(value: unknown): ResidentCircadianDuty | null | undefined {
+export function canonicalizeResidentCircadianDuty(
+  value: unknown,
+): ResidentCircadianDuty | null | undefined {
   if (value === null) return null;
   if (
     !plainRecord(value)
+    || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)
+    || Reflect.ownKeys(value).length !== 2
     || !exactKeys(value, ["kind", "referenceId"])
+    || !Object.hasOwn(Object.getOwnPropertyDescriptor(value, "kind") ?? {}, "value")
+    || !Object.hasOwn(Object.getOwnPropertyDescriptor(value, "referenceId") ?? {}, "value")
     || value.kind !== "active-duty"
     || !validId(value.referenceId)
   ) return undefined;

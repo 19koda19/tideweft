@@ -2322,6 +2322,26 @@ keeper inspection, and conserved delivery provide real consumers; sourced
 professions, broad production, commerce, and addressable porter cargo retain
 their separate owners.
 
+Local construction now includes the optional immutable resident-owned
+`src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
+current-interval poses, and an authenticated settlement-rest task. The world
+binding validates the actual settlement target or one captured legacy refuge;
+world advancement resets interval history without relocating stationary
+people, while actual legacy transport transitions retain their explicit coarse
+owner. `src/game/residentActivityExecution.ts` stages whole-roster adoption,
+selects rest through the existing circadian priorities, and uses bounded shared
+locomotion for dry-foot approach and exact supported arrival. Direct adapter
+and lower-world tests cover blocked waiting/retry, recovery and interrupted
+continuation. The dry-foot adapter has a bounded local corridor, not a streamed
+active-window input or an owned physical shelter. Binding a previously unbound
+courier also removes its legacy macro-hold exhaustion relief: existing bound
+courier law requires actual restorative arrival, not a weather-hold flag.
+These are **local foundations, not normal-play activation or
+physical porter-travel proof**. Existing absent records remain absent on load;
+runtime adoption, supported outer-format fencing, phase-aware hearing/source
+receipts, derived-address publication and fine-step rollback remain necessary
+before enabling that motion in ordinary play. No new public release is claimed.
+
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain
 or a remote hazard cannot silently teach an actor. Navigation/body heading,

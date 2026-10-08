@@ -10,6 +10,7 @@ import {
 } from "./types";
 import { hashCanonical } from "./util";
 import { queryResidentAttentionState } from "./residentAttention";
+import { residentActivityAtRestDestination } from "./residentActivity";
 import {
   WORLD_DAWN_START_TICK,
   WORLD_DAY_START_TICK,
@@ -496,6 +497,9 @@ export function residentAtSettlementRestDestination(
       || positiveSafeInteger(residentValue.activeContractId)
     )
   ) return false;
+  if (Object.hasOwn(residentValue, "activity")) {
+    return residentActivityAtRestDestination(residentValue);
+  }
   return residentValue.location.kind === "settlement"
     && residentValue.activeContractId === null;
 }
