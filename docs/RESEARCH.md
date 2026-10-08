@@ -4089,6 +4089,58 @@ schema53/carry14, supported reader, retirement rule, dependency, release or
 completed directive changes. No performance, long-soak, manual visual, platform,
 directive-closure or publication proof follows from these correctness checks.
 
+### Core-ecology body and acoustic fixture reconciliation — 2026-10-08
+
+The uncapped cumulative on exact local
+`354227667f729ce459de618d67a9d88c4cd7fa1e` completed in1541.57s:
+395files,394passed/1failed;4770tests,4764passed/6failed/0pending.
+Its retained `artifacts/validation/3542276-cumulative.json` has SHA256
+`0ca69cec4ef97ffde6d9d7cb46efd985bd04a68596c199408379067c665b4119`.
+This is a complete **FAIL**, not certification of subsequent test bytes.
+All six failures belonged to `runtime.coreEcology.integration.test.ts`.
+Focused inspection established these fixture causes:
+
+- A remembered-deer hearing witness moved a resident's coarse location after
+  canonical body adoption. Its listener now starts on a real generated route
+  before adoption and advances normally. The repeat leaves world/body/tasks/
+  posture unchanged, retaining the exact7,000-unit hearing bound and ordinary
+  listener consequence. This is controlled initial placement, not proof of
+  spontaneous human travel.
+- Two mixed crow/warning/cargo fixtures retained lawful chicken acoustics from
+  their original home. Bounded genuine accepted intervals consume the complete
+  pending bank before controlled geography changes; no receipt is deleted.
+- A synthetic released v32 fixture retained unrelated later alarm-event loci.
+  Its separate historical graph now omits only those then-unavailable loci
+  across all canonical sibling patches. Current malformed-crow rejection
+  remains separate and unchanged; canonical commit/sealing still authenticates
+  the complete graph.
+- Synthetic v22/v23 wildlife-body saves retained future human activity fields.
+  They now reconstruct the actual pre-human-body world and independently derive
+  the same person's BIO0 address, preserving every other field and exact bytes.
+  Wildlife carcass/mortality, quantity, adoption-once and replay assertions
+  remain. Existing event-time authority cannot be silently removed.
+
+The six failed cases pass focused rechecks. The final complete affected file
+passes80tests/0failed/0unselected/0pending in724.78s:
+
+```sh
+npx vitest run src/game/runtime.coreEcology.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/core-complete.json
+```
+
+That report's SHA256 is
+`d0340fa74059479dd1bc140786957d623b7c35abb2dec4153ef0782f717cac00`.
+The frozen712 tracked non-Markdown inputs, sorted and encoded as
+`[{path,sha256},…]`, hash to
+`dd05133598ec32ecb89970afe3a189399ade37e2c23f6bed280c14d4fecc470d`;
+the changed file hashes to
+`b35019d6c565e79ac815a199dcebf77f475a2341f2e92ad26b6d3ee4d6b19f3c`.
+All other711 tracked non-Markdown files remain byte-equal to3542276.
+Maintained `npm run test:smoke` passes6files/105tests in4.34s;
+`npm run typecheck` passes. No production algorithm, schema53/carry14,
+supported reader, save-retirement rule, dependency, gameplay, completed
+directive or release changes. Full-suite PASS on these newer test bytes,
+platform/manual/performance and long-soak evidence are not claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

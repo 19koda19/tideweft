@@ -91,7 +91,7 @@ import {
   type CoreEcologyRegionalUplandHabitatAssemblage,
   type CoreEcologyTidalWebHabitatAssemblage,
 } from "./coreEcologyHabitat";
-import { deserializeBio0Ecology } from "./bio0Ecology";
+import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
 import * as expressionTrajectory from "./situatedExpressionTrajectory";
 import { createHeardVisibleSituatedExpressionReception } from "./situatedExpressionReception";
 import { projectPerception } from "./projection";
@@ -250,7 +250,8 @@ import {
   translateWorldPosition,
   worldPositionDelta,
 } from "./worldPosition";
-import { headingFromRadians, livingActorAddressInRegionalWindow } from "./livingActor";
+import { headingFromRadians, livingActorAddressForResident, livingActorAddressInRegionalWindow } from "./livingActor";
+import { RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS } from "../sim/residentActivityEventLocus";
 import { canonicalizeLivingActorPlayerChoiceState } from "./livingActorPlayerChoice";
 import type {
   CoreWildlifeAlarmExpressionAdmissionRecord,
@@ -5723,7 +5724,7 @@ describe("runtime core-ecology vertical slice", () => {
               observations: Object.freeze(batch.observations.filter(({ channel }) => channel !== "vision")),
             })));
       });
-    const fixture = await createAlarmRuntime(-4, "deer");
+    const fixture = await createAlarmRuntime(-4, "deer", createTideweftRuntime, false, true);
     let runtime = fixture.runtime;
     const { repository, alarmActorId } = fixture;
     try {
@@ -5784,53 +5785,14 @@ describe("runtime core-ecology vertical slice", () => {
         sourceObservationId === firstAlarm.observationId
       ))?.lastObservedTick).toBe(firstWorld.meta.completedTick);
       expect(repeatedSource.intent.kind).toBe("alarm");
-      const repeatedView = createWorldView(repeatedWorld);
-      const porterId = deserializeBio0Ecology(repeatedEnvelope.bio0Ecology)?.porterAddress.actorId;
-      const listener = repeatedWorld.residents.find(({ activeContractId, identity }) => (
-        activeContractId === null && identity.stableId !== porterId
+      const listener = repeatedWorld.residents.find(({ identity }) => (
+        identity.stableId === fixture.controlledListenerId
       ));
       if (listener === undefined) throw new Error("Remembered deer fixture lacks an existing free ordinary resident");
-      // The deer fled away from the residents' original points. Preserve one
-      // actual person's identity/knowledge and stage only their current route
-      // location on a real generated segment, as the existing goat fixture
-      // does. This is controlled placement, not an ordinary travel claim.
-      let routePlacement: { routeId: number; progress: number; distance: number } | undefined;
-      for (const route of repeatedWorld.routes) {
-        if (route.path.length < 2) continue;
-        for (const [offset, tileIndex] of route.path.entries()) {
-          const tile = repeatedView.terrain.tiles[tileIndex];
-          if (tile === undefined) continue;
-          const point = createWorldPosition(
-            { x: 0, y: 0 },
-            Math.round((tile.x + 0.5) * WORLD_POSITION_UNITS_PER_TILE),
-            Math.round((tile.y + 0.5) * WORLD_POSITION_UNITS_PER_TILE),
-          );
-          const delta = worldPositionDelta(point, repeatedAlarm.eventPosition);
-          const distance = Math.hypot(delta.x, delta.y);
-          if (routePlacement === undefined || distance < routePlacement.distance) routePlacement = {
-            routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance,
-          };
-        }
-      }
-      if (routePlacement === undefined || routePlacement.distance >= 7_000) {
-        throw new Error("Remembered deer fixture lacks a real nearby route segment");
-      }
-      listener.location = { kind: "route", routeId: routePlacement.routeId, progress: routePlacement.progress };
-      if (listener.circadian !== undefined) {
-        // Use the same destination-loss reconciliation as simulation contract
-        // advance: route placement cannot retain a settlement-arrival receipt.
-        const current = listener.circadian;
-        repeatedWorld.residents[repeatedWorld.residents.indexOf(listener)] = replaceResidentCircadian(listener, {
-          atTick: repeatedWorld.meta.completedTick,
-          circadian: {
-            ...current,
-            restDestinationArrived: false,
-            posture: current.posture.state === "resting" || current.posture.state === "asleep"
-              ? { state: "awake", enteredAtTick: repeatedWorld.meta.completedTick }
-              : current.posture,
-          },
-        });
-      }
+      // Its real initial route point was arranged before body adoption. The
+      // accepted body, tasks, posture and acoustic history now remain untouched.
+      expect(listener.activeContractId).toBeNull();
+      expect(listener.activity).toBeDefined();
       assertWorldInvariants(repeatedWorld);
       const listenerPlacement = resolveResidentWorldPlacement(createWorldView(repeatedWorld), listener);
       if (listenerPlacement === null) throw new Error("Remembered deer listener lost its actual route placement");
@@ -5840,6 +5802,7 @@ describe("runtime core-ecology vertical slice", () => {
         repeatedEnvelope, requiredRegionalCoreOwner(repeatedEnvelope, alarmActorId),
         { world: serializeWorld(repeatedWorld) },
       );
+      expect(stagedEnvelope.world).toBe(repeatedEnvelope.world);
       expect(requiredCoreActor(requiredRegionalCoreOwner(stagedEnvelope, alarmActorId), alarmActorId))
         .toEqual(repeatedSource);
       runtime.destroy();
@@ -7243,10 +7206,14 @@ describe("runtime core-ecology vertical slice", () => {
     }
     const commitRegionalWithSourceCrow = (
       replacementCrow: CoreWildlifeActorState,
+      historicalWithoutEventLoci = false,
     ): RegionalEcologyStateV6 | null => {
       const replacementPatch = replaceCoreEcologyAggregatePatchActor(
         sourceResident.patch,
         replacementCrow,
+      );
+      const patchFor = (patch: CoreEcologyAggregatePatchState): CoreEcologyAggregatePatchState => (
+        historicalWithoutEventLoci ? stripFixtureAlarmEventPositionsForV24(patch) : patch
       );
       const replacementBase = {
         base: {
@@ -7262,29 +7229,29 @@ describe("runtime core-ecology vertical slice", () => {
                   : {
                       sourceKey:
                         validRegional.base.base.base.base.base.settlementHome.sourceKey,
-                      patch: validRegional.base.base.base.base.base.settlementHome.patch,
+                      patch: patchFor(validRegional.base.base.base.base.base.settlementHome.patch),
                     },
                 residents: validActiveBase.residents.map(({ sourceKey, patch }) => ({
                   sourceKey,
-                  patch: sourceKey === sourceResident.sourceKey
+                  patch: patchFor(sourceKey === sourceResident.sourceKey
                     ? replacementPatch
-                    : patch,
+                    : patch),
                 })),
               },
               alpineResidents: validActive.base.base.base.base.alpineResidents.map(
-                ({ sourceKey, patch }) => ({ sourceKey, patch }),
+                ({ sourceKey, patch }) => ({ sourceKey, patch: patchFor(patch) }),
               ),
             },
             polarShoreResidents: validActive.base.base.base.polarShoreResidents.map(
-              ({ sourceKey, patch }) => ({ sourceKey, patch }),
+              ({ sourceKey, patch }) => ({ sourceKey, patch: patchFor(patch) }),
             ),
           },
           coldShoreResidents: validActive.base.base.coldShoreResidents.map(
-            ({ sourceKey, patch }) => ({ sourceKey, patch }),
+            ({ sourceKey, patch }) => ({ sourceKey, patch: patchFor(patch) }),
           ),
         },
         polarConsumerResidents: validActive.base.polarConsumerResidents.map(
-          ({ sourceKey, patch }) => ({ sourceKey, patch }),
+          ({ sourceKey, patch }) => ({ sourceKey, patch: patchFor(patch) }),
         ),
       };
       return commitRegionalEcologyStateV6ActiveProjection(
@@ -7293,7 +7260,7 @@ describe("runtime core-ecology vertical slice", () => {
         {
           base: replacementBase,
           breadthResidents: validActive.breadthResidents.map(
-            ({ sourceKey, patch }) => ({ sourceKey, patch }),
+            ({ sourceKey, patch }) => ({ sourceKey, patch: patchFor(patch) }),
           ),
         },
       );
@@ -7350,16 +7317,8 @@ describe("runtime core-ecology vertical slice", () => {
       ...sourceCrow,
       memories: sourceCrow.memories.map((memory) => {
         if (memory.eventId !== admission.triggerEventId) return memory;
-        return {
-          eventId: memory.eventId,
-          kind: memory.kind,
-          referenceId: memory.referenceId,
-          observationId: memory.observationId,
-          atTick: memory.atTick,
-          ...(memory.environmentalEvidence === undefined
-            ? {}
-            : { environmentalEvidence: memory.environmentalEvidence }),
-        };
+        const { eventPosition: _eventPosition, ...legacyMemory } = memory;
+        return legacyMemory;
       }),
     });
     if (missingLocusSourceCrow === null) {
@@ -7407,15 +7366,24 @@ describe("runtime core-ecology vertical slice", () => {
     rejectedMissingLocus.destroy();
     scheduledFrame = undefined;
 
-    // The same authenticated no-locus V6 shape is legitimate under released
+    // A separately reconstructed whole no-locus V6 graph is legitimate under released
     // outer v32/carry-v1. It adopts the durable stored body address once, saves
-    // as v50 with an empty Voice bank, and never
+    // as the current writer with an empty Voice bank, and never
     // replays a Living Voice cue on either migration load or current reload.
-    expect(serializedMissingLocusRegional).not.toContain('"eventPosition":');
+    // Current unrelated actors may retain legitimate loci. None existed in v32;
+    // do not reuse or weaken the malformed current-crow rejection above.
+    const historicalRegional = commitRegionalWithSourceCrow(missingLocusSourceCrow, true);
+    if (historicalRegional === null) throw new Error("v32 fixture could not commit its historical graph");
+    const historicalRegionalText = serializeRegionalEcologyStateV6(historicalRegional);
+    expect(historicalRegionalText).not.toContain('"eventPosition":');
+    const historicalWorld = preBodyWorldForHistoricalFixture(missingLocusEnvelope.world);
     const { integrity: _missingLocusIntegrity, playerExpressionRecency: _missingLocusPlayerExpressionRecency, ...missingLocusFields } = missingLocusEnvelope;
     const legacyV32Base = {
       ...missingLocusFields,
       version: 32,
+      world: historicalWorld,
+      bio0Ecology: preBodyBio0ForHistoricalFixture(missingLocusEnvelope, historicalWorld),
+      regionalEcology: historicalRegionalText,
       // Released v32 already owns recovery/timeAction; only Voice is absent.
       player: structuredClone(missingLocusEnvelope.player),
       perceptionCarry: legacyPerceptionCarry(ecologyOnlyCarry),
@@ -8466,11 +8434,14 @@ describe("runtime core-ecology vertical slice", () => {
     } = currentEnvelope;
     const alpha29Base = {
       ...alpha29EnvelopeRoots,
+      world: preBodyWorldForHistoricalFixture(currentEnvelope.world),
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
       perceptionCarry: legacyPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 22 as const,
       coreEcology: serializeCoreEcologyAggregatePatch(alpha29Core),
     };
+    expect(preBodyBio0ForHistoricalFixture(currentEnvelope, alpha29Base.world))
+      .toBe(currentEnvelope.bio0Ecology);
     const alpha29Record = repository.snapshot();
     await repository.save({
       ...alpha29Record,
@@ -8598,11 +8569,14 @@ describe("runtime core-ecology vertical slice", () => {
     } = currentEnvelope;
     const alpha30Base = {
       ...alpha30Roots,
+      world: preBodyWorldForHistoricalFixture(currentEnvelope.world),
       player: legacyPlayerWithoutTimeAction(currentEnvelope.player),
       perceptionCarry: legacyPerceptionCarry(currentEnvelope.perceptionCarry),
       version: 23 as const,
       coreEcology: serializeCoreEcologyAggregatePatch(alpha30Core),
     };
+    expect(preBodyBio0ForHistoricalFixture(currentEnvelope, alpha30Base.world))
+      .toBe(currentEnvelope.bio0Ecology);
     const alpha30Record = repository.snapshot();
     await repository.save({
       ...alpha30Record,
@@ -9818,10 +9792,12 @@ async function createAlarmRuntime(
   runtimeFactory: (repository: SaveRepository) => Promise<TideweftRuntime> =
     createTideweftRuntime,
   listenerAdjacentWater = false,
+  stageRememberedDeerListener = false,
 ): Promise<{
   runtime: TideweftRuntime;
   repository: MemoryRepository;
   alarmActorId: string;
+  controlledListenerId?: string;
 }> {
   const repository = new MemoryRepository();
   const initial = await runtimeFactory(repository);
@@ -9905,6 +9881,44 @@ async function createAlarmRuntime(
       * WORLD_POSITION_UNITS_PER_TILE,
     (sourceSpecies === "marsh-rabbit" ? -2 : offsetY) * WORLD_POSITION_UNITS_PER_TILE,
   );
+  let controlledListenerId: string | undefined;
+  if (stageRememberedDeerListener) {
+    if (sourceSpecies !== "deer") throw new Error("Controlled repeat listener requires the deer fixture");
+    const porterId = deserializeBio0Ecology(envelope.bio0Ecology)?.porterAddress.actorId;
+    const listener = world.residents.find(({ identity, activeContractId }) => (
+      activeContractId === null && identity.stableId !== porterId
+    ));
+    if (listener === undefined || world.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
+      throw new Error("Controlled listener placement must precede whole-roster body adoption");
+    }
+    // The measured repeat corridor is west of the initial alarm. Stage only a
+    // person's initial physical cause on the nearest existing route segment;
+    // never assign hearing, a task, threat knowledge or the later event locus.
+    const corridor = translateWorldPosition(alarmPosition, -4 * WORLD_POSITION_UNITS_PER_TILE, 0);
+    const view = createWorldView(world);
+    let placement: { routeId: number; progress: number; distance: number } | undefined;
+    for (const route of world.routes) {
+      if (route.path.length < 2) continue;
+      for (const [offset, tileIndex] of route.path.entries()) {
+        const tile = view.terrain.tiles[tileIndex];
+        if (tile === undefined) continue;
+        const point = createWorldPosition({ x: 0, y: 0 },
+          Math.round((tile.x + 0.5) * WORLD_POSITION_UNITS_PER_TILE),
+          Math.round((tile.y + 0.5) * WORLD_POSITION_UNITS_PER_TILE));
+        const delta = worldPositionDelta(point, corridor);
+        const distance = Math.hypot(delta.x, delta.y);
+        if (placement === undefined || distance < placement.distance) placement = {
+          routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance,
+        };
+      }
+    }
+    if (placement === undefined || placement.distance >= 7_000) {
+      throw new Error("Controlled listener has no generated route near the repeat corridor");
+    }
+    listener.location = { kind: "route", routeId: placement.routeId, progress: placement.progress };
+    controlledListenerId = listener.identity.stableId;
+    assertWorldInvariants(world);
+  }
   const threatPosition = translateWorldPosition(
     sourceSpecies === "marsh-rabbit" ? playerPosition : alarmPosition,
     sourceSpecies === "marsh-rabbit"
@@ -10014,7 +10028,10 @@ async function createAlarmRuntime(
   scheduledFrame = undefined;
   const runtime = await runtimeFactory(repository);
   if (sourceSpecies !== "marsh-rabbit") await runtime.save();
-  return { runtime, repository, alarmActorId: alarmActor.identity.stableId };
+  return {
+    runtime, repository, alarmActorId: alarmActor.identity.stableId,
+    ...(controlledListenerId === undefined ? {} : { controlledListenerId }),
+  };
 }
 
 async function createRememberedDeerPlayerAlarmRuntime(stepsAfterFirstAlarm: 40 | 49 = 49): Promise<{
@@ -10109,6 +10126,27 @@ async function createFishCrowAlarmRuntime(
     if (offer === undefined) throw new Error("Mixed alarm scene has no real Promise offer");
     initial.dispatchUI({ type: "contract", action: "accept", contractId: offer.id });
     advancePlayerSteps(initial, 10);
+    // Native body adoption can cause independent chicken calls here. Consume
+    // their actual interval before moving the listener/terrain for this scene;
+    // never erase receipts or downgrade acquired Promise history.
+    await initial.save();
+    let quiet = false;
+    for (let interval = 0; interval <= 8; interval += 1) {
+      const carry = requiredEnvelope(repository).perceptionCarry;
+      if (carry.playerStepsSinceWorldTick === 0
+        && carry.actorVocalizationSamples.length === 0
+        && carry.situatedExpressionChannels.channels.length === 0
+        && carry.situatedExpressionAdmissions.records.length === 0
+        && (carry.situatedExpressionCausalAuthority as Readonly<{ records: readonly unknown[] }>).records.length === 0
+        && stableStringify(carry.animalContactAcousticCarry) === stableStringify({ version: 1, records: [] })) {
+        quiet = true;
+        break;
+      }
+      if (interval === 8) break;
+      advancePlayerSteps(initial, 10);
+      await initial.save();
+    }
+    if (!quiet) throw new Error("Mixed crow scene has no genuinely consumed acoustic boundary");
   }
   await initial.save();
   const record = repository.snapshot();
@@ -11285,6 +11323,10 @@ function stripFixtureAlarmEventPositionsForV24(
     if (legacyActor === null) {
       throw new Error("v24 fixture could not remove future alarm-event loci");
     }
+    expect(legacyActor).toEqual({
+      ...actor,
+      memories: actor.memories.map(({ eventPosition: _eventPosition, ...memory }) => memory),
+    });
     patch = replaceCoreEcologyAggregatePatchActor(patch, legacyActor);
   }
   return patch;
@@ -11545,6 +11587,42 @@ function repositionFixtureActorAndCurrentAlarmLocus(
 function legacyPlayerWithoutTimeAction(player: PlayerState): PlayerState {
   const { timeAction: _futureTimeAction, ...legacyPlayer } = player;
   return legacyPlayer as PlayerState;
+}
+
+/** Synthetic historical inputs predate newly adopted humans, not wildlife bodies. */
+function preBodyWorldForHistoricalFixture(serialized: string): string {
+  const world = deserializeWorld(serialized);
+  for (const resident of world.residents) {
+    if (!Object.hasOwn(resident, "activity")) continue;
+    delete resident.activity;
+    delete resident.circadian;
+  }
+  // Never silently erase retained event-time authority to make a downgrade load.
+  expect(world.events.every(({ data }) => RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS
+    .every((key) => !Object.hasOwn(data, key)))).toBe(true);
+  return serializeWorld(world);
+}
+
+/** Rebind only the same person's derived address; retain all BIO0 custody/history. */
+function preBodyBio0ForHistoricalFixture(envelope: CurrentEnvelope, historicalWorld: string): string {
+  const state = deserializeBio0Ecology(envelope.bio0Ecology);
+  if (state === null) throw new Error("Historical fixture omitted canonical BIO0");
+  const addresses = [envelope.world, historicalWorld].map((text) => {
+    const world = deserializeWorld(text);
+    const resident = world.residents.find(({ identity }) => identity.stableId === state.porterAddress.actorId);
+    if (resident === undefined) throw new Error("Historical fixture omitted its BIO0 resident");
+    return livingActorAddressForResident(createWorldView(world), resident);
+  });
+  expect(addresses[0]).toEqual(state.porterAddress);
+  const historical = addresses[1];
+  if (historical === null || historical === undefined || historical.species !== "human") {
+    throw new Error("Historical fixture omitted its canonical pre-body address");
+  }
+  expect({ ...historical, position: state.porterAddress.position, heading: state.porterAddress.heading })
+    .toEqual(state.porterAddress);
+  const aligned = serializeBio0Ecology({ ...state, porterAddress: historical });
+  expect(deserializeBio0Ecology(aligned)).toEqual({ ...state, porterAddress: historical });
+  return aligned;
 }
 
 function legacyPerceptionCarry(
