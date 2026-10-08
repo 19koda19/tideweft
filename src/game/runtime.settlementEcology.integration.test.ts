@@ -33,7 +33,11 @@ import {
   regionLocalToGlobalTile,
 } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
-import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type WorldView } from "../sim/types";
+import { replaceResidentActivity } from "../sim/residentActivity";
+import {
+  FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH,
+  type ResidentLocation, type ResidentState, type WorldView,
+} from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
 import * as dogPhysicalAcoustics from "./dogPhysicalAcousticPerception";
 import * as humanPerception from "./humanPerception";
@@ -174,6 +178,7 @@ import {
 import {
   playerWorldPositionInRegionalWindow,
   residentPlacementInRegionalWindow,
+  resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
 import {
@@ -959,6 +964,43 @@ function withCurrentEnvelopeFields(
   };
 }
 
+/** Controlled phase-zero geography, not an autonomous route/travel claim. */
+function stageRouteHearingListener(
+  world: WorldState,
+  residentId: number,
+  location: Extract<ResidentLocation, { kind: "route" }>,
+): void {
+  const index = world.residents.findIndex(({ id }) => id === residentId);
+  const resident = world.residents[index];
+  if (resident === undefined) throw new Error("Route hearing fixture lost its native human");
+  let staged: ResidentState = { ...resident, location };
+  if (resident.activity !== undefined) {
+    // These counterfactuals start at a saved interval boundary. Never invent
+    // already-consumed poses or discard the body's required circadian root.
+    if (resident.activity.poses.length !== 1 || resident.circadian === undefined) {
+      throw new Error("Route hearing fixture requires a canonical phase-zero body");
+    }
+    const placement = resolveResidentRouteWorldPlacement(world, staged);
+    if (placement === null) throw new Error("Route hearing fixture has no native route locus");
+    staged = replaceResidentActivity(staged, {
+      ...resident.activity,
+      poses: [{ position: placement.position, heading: headingFromRadians(placement.facing) }],
+      restTask: null,
+    });
+  }
+  if (resident.circadian !== undefined) {
+    staged = replaceResidentCircadian(staged, {
+      atTick: world.meta.completedTick,
+      circadian: {
+        ...resident.circadian,
+        restDestinationArrived: false,
+        posture: { state: "awake", enteredAtTick: world.meta.completedTick },
+      },
+    });
+  }
+  world.residents[index] = staged;
+}
+
 /** Two real pending vocal sources share one bounded route/dry-crest fixture. */
 function prepareVocalSurfacePair(
   original: WorldState,
@@ -993,23 +1035,10 @@ function prepareVocalSurfacePair(
     || left.progress - right.progress).slice(0, 64);
   for (const location of candidates) {
     const clearWorld = deserializeWorld(serializeWorld(original));
+    stageRouteHearingListener(clearWorld, listener.id, {
+      kind: "route", routeId: location.routeId, progress: location.progress,
+    });
     const stagedListener = clearWorld.residents.find(({ id }) => id === listener.id)!;
-    stagedListener.location = { kind: "route", routeId: location.routeId, progress: location.progress };
-    if (stagedListener.circadian !== undefined) {
-      // A settled rest receipt cannot follow a controlled listener onto a
-      // route. Keep its real owner/policy and stage the matching awake receipt
-      // in both branches rather than discarding circadian authority.
-      clearWorld.residents[clearWorld.residents.indexOf(stagedListener)] = replaceResidentCircadian(
-        stagedListener, {
-          atTick: clearWorld.meta.completedTick,
-          circadian: {
-            ...stagedListener.circadian,
-            restDestinationArrived: false,
-            posture: { state: "awake", enteredAtTick: clearWorld.meta.completedTick },
-          },
-        },
-      );
-    }
     const economy = createWorldView(clearWorld);
     const placement = resolveResidentWorldPlacement(economy, stagedListener);
     if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) continue;
@@ -1020,6 +1049,7 @@ function prepareVocalSurfacePair(
       world: view, window, targetTick: original.meta.completedTick + 1,
       playerSamples: [], supplementalSoundSamples: [sample],
       supplementalSemanticFacts: fact === null ? [] : [fact], surfaceSoundSampleIds: [sample.id],
+      soundSamplePhases: [{ sampleId: sample.id, phase: 0 }],
     }).find(({ observerId }) => observerId === listener.identity.stableId);
     const clear = collect(clearView)?.observations.find(({ channel }) => channel === "hearing");
     if (clear?.perceivedClass !== (fact?.perceivedClass ?? sample.soundClass)) continue;
@@ -3882,6 +3912,10 @@ describe("runtime settlement ecology integration", () => {
       || sleepingCaretaker.location.settlementId !== sleepingCaretaker.homeSettlementId
       || sleepingCaretaker.activeContractId !== null
     ) throw new Error("recovery fixture could not bind the sleeping caretaker at home");
+    // Continuing sleep needs a real cause through the first accepted phase
+    // zero. The old fixture depended on a one-tick daytime wake delay.
+    sleepingCaretaker.needs = { food: 100_000, rest: 900_000, belonging: 100_000 };
+    sleepingCaretaker.condition.exhaustion = 300_000;
     sleepingWorld.residents[caretakerIndex] = replaceResidentCircadian(sleepingCaretaker, {
       atTick: sleepingWorld.meta.completedTick,
       circadian: {
@@ -3900,7 +3934,7 @@ describe("runtime settlement ecology integration", () => {
     const repository = new MemoryRepository(withCurrentEnvelopeFields(preparedRecord, {
       world: serializeWorld(sleepingWorld),
     }));
-    const runtime = await createTideweftRuntime(repository);
+    let runtime = await createTideweftRuntime(repository);
     // The harness presents current direct goat images to the raw collector.
     // Final sim admission removes them while the keeper is asleep, so the
     // secondary recovery system cannot bypass cognition and notice the split.
@@ -3910,14 +3944,39 @@ describe("runtime settlement ecology integration", () => {
       savedEnvelope(repository).settlementDomesticAnimalRecovery,
     );
     expect(sleepingRecovery?.currentCase?.phase).toBe("unnoticed");
-
-    // Day-active projection lawfully wakes the same keeper after that tick;
-    // the next admitted direct sight may then advance the existing case.
+    const sleepingRecord = repository.snapshot();
+    const continuedSleepWorld = deserializeWorld(String(savedEnvelope(repository).world));
+    const continuedCaretaker = continuedSleepWorld.residents[caretakerIndex]!;
+    expect(continuedCaretaker.circadian?.posture.state).toBe("asleep");
+    expect(continuedCaretaker.activity?.restTask?.origin).toBe("continued-admitted-rest");
+    // Remove the controlled need pressure at the actual saved phase-zero
+    // boundary. Load must not replay routine selection: this interval retains
+    // its committed sleeping task until the next normal world closure wakes
+    // and revokes it. Only the following lawful sight may open search.
+    continuedCaretaker.needs = { food: 100_000, rest: 100_000, belonging: 100_000 };
+    continuedCaretaker.condition.exhaustion = 100_000;
+    assertWorldInvariants(continuedSleepWorld);
+    runtime.destroy();
+    const awakeRepository = new MemoryRepository(withCurrentEnvelopeFields(sleepingRecord, {
+      world: serializeWorld(continuedSleepWorld),
+    }));
+    runtime = await createTideweftRuntime(awakeRepository);
     advancePlayerSteps(runtime, 10);
     expect(runtime.getUIView().saveWarning).toBeUndefined();
     await runtime.save();
-    const searchingRecord = repository.snapshot();
-    const searchingEnvelope = savedEnvelope(repository);
+    const wakingEnvelope = savedEnvelope(awakeRepository);
+    const wakingWorld = deserializeWorld(String(wakingEnvelope.world));
+    expect(wakingWorld.meta.completedTick).toBe(continuedSleepWorld.meta.completedTick + 1);
+    expect(wakingWorld.residents[caretakerIndex]?.circadian?.posture.state).toBe("awake");
+    expect(wakingWorld.residents[caretakerIndex]?.activity?.restTask).toBeNull();
+    expect(deserializeSettlementDomesticAnimalRecoveryState(
+      wakingEnvelope.settlementDomesticAnimalRecovery,
+    )?.currentCase?.phase).toBe("unnoticed");
+    advancePlayerSteps(runtime, 10);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+    await runtime.save();
+    const searchingRecord = awakeRepository.snapshot();
+    const searchingEnvelope = savedEnvelope(awakeRepository);
     const searchingRecovery = deserializeSettlementDomesticAnimalRecoveryState(
       searchingEnvelope.settlementDomesticAnimalRecovery,
     );
@@ -6148,7 +6207,7 @@ describe("runtime settlement ecology integration", () => {
     if (hearingResident === undefined || nearestRoute === undefined) {
       throw new Error("unheard guardian fixture omitted a human/route hearing locus");
     }
-    hearingResident.location = {
+    stageRouteHearingListener(hearingFixtureWorld, hearingResident.id, {
       kind: "route",
       routeId: nearestRoute.route.id,
       progress: nearestRoute.route.path.length <= 1
@@ -6156,8 +6215,7 @@ describe("runtime settlement ecology integration", () => {
         : Math.round(
             nearestRoute.offset * FIXED_POINT / (nearestRoute.route.path.length - 1),
           ),
-    };
-    delete hearingResident.circadian;
+    });
     const hearingWind = worldPositionDelta(
       guardianContact.event.sourcePosition,
       nearestRoute.position,
@@ -9372,6 +9430,10 @@ describe("runtime settlement ecology integration", () => {
       world: serializeWorld(migratedWorld),
       porterResponse: quietResponse,
     });
+    const initialBodyPositions = new Map(migratedWorld.residents.map((resident) => [
+      resident.identity.stableId,
+      resolveResidentWorldPlacement(migratedWorld, resident)!.position,
+    ]));
     migration.destroy();
 
     guardianPerceptionHarness.observerId = keeper.identity.stableId;
@@ -9381,7 +9443,7 @@ describe("runtime settlement ecology integration", () => {
     expect(runtime.getUIView().saveWarning).toBeUndefined();
 
     // Loading and saving alone preserves the legacy absence exactly. The
-    // first lawful ordinary world tick is the adoption boundary.
+    // first accepted phase-zero step is the adoption boundary.
     await runtime.save();
     let envelope = savedEnvelope(repository);
     let savedWorld = deserializeWorld(String(envelope.world));
@@ -9398,9 +9460,25 @@ describe("runtime settlement ecology integration", () => {
     const restingTick = savedWorld.meta.completedTick;
     expect(restingTick).toBe(startingTick + 1);
     expect(savedWorld.residents).toHaveLength(42);
-    expect(savedWorld.residents.every((resident) => (
-      resident.circadian !== undefined
-      && resident.circadian.restDestinationArrived
+    for (const resident of savedWorld.residents) {
+      expect(resident.activity).toBeDefined();
+      expect(resident.circadian).toBeDefined();
+      const initialPosition = initialBodyPositions.get(resident.identity.stableId)!;
+      const bodyPosition = resident.activity!.poses.at(-1)!.position;
+      const moved = worldPositionDelta(initialPosition, bodyPosition);
+      expect(Math.hypot(moved.x, moved.y)).toBeLessThanOrEqual(1_050);
+      const task = resident.activity?.restTask;
+      expect(resident.circadian?.restDestinationArrived).toBe(task?.phase === "arrived");
+      if (task?.phase === "arrived") {
+        expect(resident.activity?.poses.at(-1)?.position).toEqual(task.target);
+      } else {
+        expect(resident.circadian?.posture.state).toBe("awake");
+      }
+    }
+    // One interval is only 1,050 units of physical movement. Diagonal and
+    // farther old offsets cannot honestly all arrive by settlement membership.
+    expect(savedWorld.residents.some(({ activity }) => (
+      activity?.restTask?.phase === "approaching"
     ))).toBe(true);
     expect(savedWorld.residents.find(({ identity }) => (
       identity.stableId === visitingResident.identity.stableId
@@ -9411,8 +9489,11 @@ describe("runtime settlement ecology integration", () => {
         kind: "settlement",
         settlementId: visitorRefuge.id,
       },
-      circadian: { restDestinationArrived: true },
     });
+    const savedVisitor = savedWorld.residents.find(({ identity }) => (
+      identity.stableId === visitingResident.identity.stableId
+    ));
+    expect(savedVisitor?.activity?.restTask?.settlementId).toBe(visitorRefuge.id);
     expect(savedWorld.residents.map((resident) => ({
       id: resident.id,
       identity: resident.identity,
@@ -9427,7 +9508,7 @@ describe("runtime settlement ecology integration", () => {
     expect(restingKeeper.circadian).toMatchObject({
       policy: { profileId: "day-active", drivers: ["clock"] },
       restDestinationArrived: true,
-      posture: { state: "resting", enteredAtTick: restingTick },
+      posture: { state: "resting", enteredAtTick: startingTick },
     });
     expect(restingTick).toBe(wakeTick - 1);
 

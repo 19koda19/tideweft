@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { deserializeWorld, serializeWorld } from "../sim/public";
+import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
+import { RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
@@ -10,6 +12,8 @@ import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabit
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 import { createPlayerExpressionRecencyState } from "./playerExpressionRecency";
+import { headingFromRadians } from "./livingActor";
+import { resolveResidentWorldPlacement } from "./residentSpatial";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -109,13 +113,71 @@ function takeScheduledFrame(message: string): (now: number) => void {
   return callback;
 }
 
+/** Only the explicitly characterized stationary body-adoption delta is reversed. */
+function historicalStationaryWorld(worldJson: string, seed: string): string {
+  const current = deserializeWorld(worldJson);
+  const initial = createWorld(seed, "standard");
+  expect(current.meta.completedTick).toBe(initial.meta.completedTick + 3);
+  expect(current.residents).toHaveLength(42);
+  expect(initial.residents).toHaveLength(42);
+  for (const [index, resident] of current.residents.entries()) {
+    const original = initial.residents[index]!;
+    expect(resident.identity.stableId).toBe(original.identity.stableId);
+    const source = resolveResidentWorldPlacement(initial, original);
+    if (source === null) throw new Error("Stationary baseline lost its original resident placement");
+    const activity = canonicalResidentActivityForWorld(current, resident);
+    expect(activity).toEqual({
+      version: RESIDENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_ACTIVITY_OWNER_ID,
+      actorId: original.identity.stableId,
+      tick: current.meta.completedTick,
+      poses: [{ position: source.position, heading: headingFromRadians(source.facing) }],
+      restTask: null,
+    });
+    expect(resident.circadian).toMatchObject({
+      restDestinationArrived: false,
+      posture: { state: "awake", enteredAtTick: initial.meta.completedTick },
+    });
+    // Current bodies bind awake before the first world tick. The old unbound
+    // first tick granted exactly 2,500 legacy exhaustion relief before routine
+    // adoption. Awake membership no longer proves restorative arrival.
+    expect(resident.condition.exhaustion).toBe(original.condition.exhaustion);
+    const { activity: _body, ...historical } = resident;
+    historical.condition = {
+      ...resident.condition,
+      exhaustion: Math.max(0, resident.condition.exhaustion - 2_500),
+    };
+    historical.circadian = {
+      ...resident.circadian!,
+      restDestinationArrived: true,
+      posture: { state: "awake", enteredAtTick: initial.meta.completedTick + 1 },
+    };
+    current.residents[index] = historical;
+  }
+  return serializeWorld(current);
+}
+
+async function assertEqualUninstrumentedWork(seed: string, worldJson: string): Promise<void> {
+  const repository = new MemoryRepository();
+  const runtime = await createTideweftRuntime(repository);
+  try {
+    beginFreshWorld(runtime, seed);
+    expect(runtime.getPerformanceTelemetry().fixedStep.enabled).toBe(false);
+    expect(runtime.getPerformanceTelemetry().worldAdvanceStep.enabled).toBe(false);
+    advancePlayerSteps(runtime, 30);
+    await runtime.save();
+    expect(repository.snapshot().worldJson).toBe(worldJson);
+  } finally {
+    runtime.destroy();
+  }
+}
+
 describe("runtime performance telemetry", () => {
   it.each(["runtime baseline estuary", "breathing room regional density 8"])(
     "characterizes equal accepted work and repeated habitat encodes: %s",
     async (seed) => {
       const repository = new MemoryRepository();
       const runtime = await createTideweftRuntime(repository);
-      let worldJson: string;
       try {
         beginFreshWorld(runtime, seed);
         runtime.setPerformanceTelemetryEnabled(true);
@@ -156,7 +218,10 @@ describe("runtime performance telemetry", () => {
         expect(telemetry.fixedStep.totalCount).toBe(30);
         expect(telemetry.worldAdvanceStep.totalCount).toBe(3);
         await runtime.save();
-        worldJson = repository.snapshot().worldJson;
+        const worldJson = repository.snapshot().worldJson;
+        // Full current-save equality precedes historical normalization, so a
+        // stale historical assertion cannot prevent the observational proof.
+        await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
         if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
           seed, acceptedSteps: 30, advances: 3, saveBytes: Buffer.byteLength(worldJson), digest,
@@ -177,14 +242,15 @@ describe("runtime performance telemetry", () => {
         expect(Object.hasOwn(envelope, "playerEffortRecency")).toBe(false);
         expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
         // These stationary inputs create no effort, footing or learned-call history.
-        // Preserve the original 6215116 physical-state oracle. A matched 30-step
-        // old/current source comparison proved exactly two new player-sight
-        // consequences: estuary's witnessed stock message and density's observed
-        // event bit. Assert those outputs before reversing only that known delta;
-        // all other roots remain covered by the unchanged historical hashes.
+        // Preserve the original 6215116 oracle for unaffected state. Matched
+        // 30-step captures additionally characterize current body adoption,
+        // arrival and the retired first-tick unbound recovery. Assert those
+        // exact consequences before reversing only that known delta, beside
+        // the earlier two player-sight consequences. Original hashes stay fixed.
         const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
         const { animalCallKnowledge: _callKnowledge, ...v47Player } = player;
         v47Base.player = v47Player;
+        v47Base.world = historicalStationaryWorld(envelope.world as string, seed);
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
           expect(session.announcement).toEqual({
@@ -203,7 +269,7 @@ describe("runtime performance telemetry", () => {
             nextAnnouncementId: 2,
           };
         } else {
-          const observedWorld = deserializeWorld(envelope.world as string);
+          const observedWorld = deserializeWorld(v47Base.world as string);
           const newlyObserved = observedWorld.events.find(({ sequence }) => sequence === 7);
           expect(newlyObserved).toEqual({
             data: {
@@ -234,18 +300,6 @@ describe("runtime performance telemetry", () => {
         runtime.destroy();
       }
 
-      const controlRepository = new MemoryRepository();
-      const control = await createTideweftRuntime(controlRepository);
-      try {
-        beginFreshWorld(control, seed);
-        expect(control.getPerformanceTelemetry().fixedStep.enabled).toBe(false);
-        expect(control.getPerformanceTelemetry().worldAdvanceStep.enabled).toBe(false);
-        advancePlayerSteps(control, 30);
-        await control.save();
-        expect(controlRepository.snapshot().worldJson).toBe(worldJson);
-      } finally {
-        control.destroy();
-      }
     },
   );
 

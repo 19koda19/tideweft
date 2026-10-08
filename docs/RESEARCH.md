@@ -3649,6 +3649,47 @@ signing, other desktop targets, cumulative regression or public release.
 Canonical coverage and compatibility limits belong to
 [Architecture](./ARCHITECTURE.md#local-surface-acoustic-transmission).
 
+### Resident-body equal-work oracle reconciliation — 2026-10-08
+
+The unpublished `ec687bdecd9a30f457b8da81b641936c78caa55a` cumulative attempt
+reached its 25-minute cap, exited124 and produced no final JSON. Context28,
+synchronization39 and documentation-reuse45 selftests passed. Five failures
+were reported: two historical telemetry digests and three settlement fixtures.
+This remains **INCOMPLETE**, not a cumulative, performance or release pass.
+
+Separate synthetic captures used the ordinary runtime's same two stationary
+seeds, 30 accepted fixed steps/three world advances and existing audio mock.
+Compared with the retained authenticated `93cc63b` captures, every other root
+is exact: only outer version/seal, all42 new body roots, awake receipt entry
+420 rather than421, arrivalfalse rather than membership-derived true, and
+exactly2,500 additional exhaustion per resident differ. The latter is the
+removed first-tick unbound recovery: current adoption binds awake before that
+tick, so settlement membership cannot grant restorative relief. No production
+regression or performance improvement is inferred from these test captures.
+
+The test now explicitly validates canonical stationary bodies at completed423,
+their original source pose/heading, empty task and unchanged initial exhaustion
+before reversing just that characterized historical delta. **Both original
+v47 hashes remain unchanged.** Complete, unnormalized telemetry-on/off current
+save equality runs before the historical assertion. No old-format load promise,
+schema change or weakened current validation follows from test normalization.
+The disposable audit passed2cases11.04s and was removed from source after
+preserving its fixture/captures under ignored validation output.
+`npx vitest run src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-telemetry-body-reconciliation.json`
+passed4tests19.90s. These finite assertions do not certify production FPS,
+normal visual play, service completion, prolonged soak or directive closure.
+
+The settlement fixtures now retain actual phase-zero body/circadian roots and
+cause-owned sound timing when staging a controlled listener. Continuing sleep
+has real need pressure; removing that pressure at a cold boundary does not
+replay routine selection. Waking at the next closure precedes lawful recovery
+sight. The dawn cohort checks bounded displacement and actual task arrival,
+not instant arrival by membership; the keeper's exact dawn wake remains checked.
+`npx vitest run src/game/runtime.settlementEcology.integration.test.ts --maxWorkers=1 -t 'links a witnessed livestock split|keeps an unheard warning world-only|adopts every current settled resident|dry crest reduce understanding' --reporter=default --reporter=json --outputFile=artifacts/validation/world0-settlement-body-reconciliation-final.json`
+passed all4selected cases56.70s (37unselected), including the shared dry-crest
+hearing counterfactual. These are test-only reconciliations: production source,
+schemas, dependencies and release identity remain unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
