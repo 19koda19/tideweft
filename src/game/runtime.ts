@@ -371,6 +371,7 @@ import {
 } from "./coreWildlifePursuitExpression";
 import {
   humanDangerWarningExpressionCandidate,
+  humanDangerWarningExpressionSourceAddress,
   humanDangerWarningExpressionEventForTrigger,
   humanDangerWarningExpressionEventMatchesWorld,
   humanDangerWarningExpressionMemoryMatchesWorld,
@@ -13459,6 +13460,7 @@ export async function createTideweftRuntime(
             authority,
             admission.triggerEventId,
           );
+          historicalSourceLocus = true;
           break;
         }
         default:
@@ -22228,7 +22230,6 @@ function playerPerceptionCarryMatchesPosition(
           authority,
           economy.completedTick,
         )
-        || !residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
         || !vocalizationSampleMatchesActiveEvent(sample, event)
       ) return false;
       const eventTimeReception = humanDangerWarningReceptionAtEventTime({
@@ -22821,9 +22822,10 @@ function situatedExpressionChannelsMatchWorld(
       if (
         active.meaning !== "resident-introduction"
         && active.meaning !== "resident-weather-hold"
-        // The keeper branch below authenticates its retained body phase plus
-        // exact applied closure and event-time listener receipt independently.
+        // Keeper and warning branches below independently authenticate their
+        // retained source phase, domain cause and event-time listener receipt.
         && active.meaning !== "keeper-secure-store-response"
+        && active.meaning !== "human-danger-warning"
         && !(active.meaning === "porter-heavy-load"
           ? porterDepartureSourcePositionMatches(economy, active.triggerEventId, channel.sourceActorId, active.position)
           : residentSourcePositionMatches(economy, channel.sourceActorId, active.position))
@@ -23352,15 +23354,15 @@ function humanDangerWarningReceptionAtEventTime(
     admission,
     authority,
   } = input;
+  const sourceAddress = humanDangerWarningExpressionSourceAddress(authority);
   if (
     spatialWorld.completedTick !== admission.acceptedAtTick
     || event.eventId !== admission.eventId
     || event.sourceActorId !== admission.sourceActorId
     || event.triggerEventId !== admission.triggerEventId
     || event.meaning !== "human-danger-warning"
-    || stableStringify(event.position) !== stableStringify(
-      livingActorAddressForResident(authority.world, authority.resident)?.position,
-    )
+    || sourceAddress === null
+    || stableStringify(event.position) !== stableStringify(sourceAddress.position)
   ) return null;
   const listenerPoint = perceptionIntervalPointInWindow(window, carry.intervalStartPosition);
   if (listenerPoint === null) return null;
@@ -23404,9 +23406,7 @@ function humanDangerWarningReceptionAtEventTime(
   if (contact === null) {
     return Object.freeze({ audible: false, reception: null });
   }
-  const placement = livingActorAddressForResident(authority.world, authority.resident);
-  if (placement === null) return null;
-  const projected = livingActorAddressInRegionalWindow(placement, window);
+  const projected = livingActorAddressInRegionalWindow(sourceAddress, window);
   const directlyVisible = projected !== null
     && perceptionForReceipt(spatialWorld, {
       ...eventTimePlayer,

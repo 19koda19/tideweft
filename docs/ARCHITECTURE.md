@@ -2372,8 +2372,14 @@ from the existing admission's accepted phase0–9, while retaining applied closu
 report provenance and independent listener visibility/hearing proof. Explicit
 missing or stale body history rejects; genuine absence keeps its legacy source
 resolver. No new phase field enters saves, and later body motion cannot relocate
-the retained reply. Warning phase receipts and runtime body activation remain
-construction obligations.
+the retained reply. Human warnings likewise use the retained phase0 body address
+through their existing fresh strong belief/attention owner; source projection,
+event/memory authentication and cold listener replay share that cause. Later
+motion cannot relocate the warning, while anonymous alarms remain anonymous and
+heard human warnings cannot recursively produce warnings. Unencodable detached
+body inputs reject rather than escaping as ownership-encoding errors. Runtime
+body activation and its format/publication/rollback fences remain construction
+obligations; these source tests do not prove normal-play motion.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain

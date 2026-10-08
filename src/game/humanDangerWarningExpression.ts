@@ -4,8 +4,9 @@ import {
 } from "../sim/actorPerception";
 import type { ResidentState, WorldView } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
+import { createLivingActorAddress, headingFromRadians, type LivingActorAddress } from "./livingActor";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
-import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { resolveResidentWorldPlacement, resolveResidentWorldPlacementAtActivityPhase } from "./residentSpatial";
 import {
   SITUATED_EXPRESSION_VERSION,
   canonicalizeSituatedExpressionState,
@@ -36,7 +37,7 @@ interface HumanDangerWarningEvidence {
   readonly resident: ResidentState;
   readonly belief: ActorBelief;
   readonly knowledgeBasis: SituatedExpressionKnowledgeBasis;
-  readonly position: SituatedExpressionIntent["position"];
+  readonly address: LivingActorAddress;
 }
 
 const WARNING_CLASSES: ReadonlySet<string> = new Set([
@@ -112,6 +113,13 @@ export function humanDangerWarningExpressionCandidate(
   );
 }
 
+/** Phase-zero source projection shares the warning's exact fresh-belief proof. */
+export function humanDangerWarningExpressionSourceAddress(
+  input: HumanDangerWarningExpressionInput,
+): LivingActorAddress | null {
+  return humanDangerWarningEvidence(input, "validate-detached-input")?.address ?? null;
+}
+
 function humanDangerWarningExpressionCandidateWithOwnership(
   inputValue: HumanDangerWarningExpressionInput,
   ownership: "validate-detached-input" | "resident-sourced-from-world",
@@ -123,7 +131,7 @@ function humanDangerWarningExpressionCandidateWithOwnership(
 function candidateFromEvidence(
   evidence: HumanDangerWarningEvidence,
 ): HumanDangerWarningExpressionCandidate | null {
-  const { resident, belief, knowledgeBasis, position } = evidence;
+  const { resident, belief, knowledgeBasis, address } = evidence;
   const triggerEventId = humanDangerWarningTriggerEventId(
     resident.identity.stableId,
     belief.sourceObservationId,
@@ -143,7 +151,7 @@ function candidateFromEvidence(
     version: SITUATED_EXPRESSION_VERSION,
     sourceActorId: resident.identity.stableId,
     triggerEventId,
-    position,
+    position: address.position,
     meaning: "human-danger-warning" as const,
     family: "warning" as const,
     tone: "alarmed" as const,
@@ -260,8 +268,14 @@ function humanDangerWarningEvidence(
     if (
       owned.length !== 1
       || owned[0] === undefined
-      || stableStringify(owned[0]) !== stableStringify(resident)
     ) return null;
+    try {
+      if (stableStringify(owned[0]) !== stableStringify(resident)) return null;
+    } catch {
+      // Explicitly malformed body data must reject at this detached-input
+      // boundary, not escape as an encoding error or imply legacy absence.
+      return null;
+    }
   }
   const perception = canonicalizeActorPerceptionState(resident.perception);
   if (
@@ -288,20 +302,29 @@ function humanDangerWarningEvidence(
   )).sort(compareWarningBeliefs);
   const belief = eligible[0];
   if (belief === undefined) return null;
-  let placement: ReturnType<typeof resolveResidentWorldPlacement>;
+  let address: LivingActorAddress;
   try {
-    placement = resolveResidentWorldPlacement(world, resident);
+    // Existing warnings are committed after the world step, at phase0. Later
+    // accepted movement cannot relocate that source; absent legacy bodies keep
+    // their original resolver without invented history.
+    const placement = Object.hasOwn(resident, "activity")
+      ? resolveResidentWorldPlacementAtActivityPhase(world, resident, world.completedTick, 0)
+      : resolveResidentWorldPlacement(world, resident);
+    if (placement === null) return null;
+    address = createLivingActorAddress({
+      actorId: resident.identity.stableId, species: "human", persistence: "promoted",
+      position: placement.position, heading: headingFromRadians(placement.facing),
+    });
   } catch {
     return null;
   }
-  if (placement === null) return null;
   return Object.freeze({
     resident,
     belief,
     knowledgeBasis: belief.perceivedClass === "large-predator"
       ? "self-perceived-threat"
       : "self-heard-anonymous-alarm",
-    position: placement.position,
+    address,
   });
 }
 
