@@ -51,6 +51,7 @@ import {
   type ResidentActivity,
   type ResidentBodyPose,
   residentActivitySupportsMaterials,
+  residentActivitySupportsInspection,
   residentActivitySupportsRations,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
@@ -2066,6 +2067,7 @@ function residentDepartureActivityEventLocus(
     ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
     ...(residentActivitySupportsRations(activity) ? { rationTask: null } : {}),
     ...(residentActivitySupportsMaterials(activity) ? { materialTask: null } : {}),
+    ...(residentActivitySupportsInspection(activity) ? { inspectionTask: null } : {}),
   });
   return captureResidentActivityEventLocus(prepared, tick);
 }
@@ -2099,6 +2101,7 @@ function commitResidentActivityWorldStep(
     let task = activity.restTask;
     let rationTask = activity.rationTask ?? null;
     let materialTask = activity.materialTask ?? null;
+    let inspectionTask = activity.inspectionTask ?? null;
     if (task !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
       task = null;
@@ -2111,6 +2114,9 @@ function commitResidentActivityWorldStep(
         || settlement.project.id !== materialTask.projectId || settlement.project.resource !== materialTask.resource
         || (materialTask.phase !== "used" && settlement.project.status === "complete")) materialTask = null;
     }
+    if (inspectionTask !== null && (resident.location.kind !== "settlement"
+      || resident.location.settlementId !== inspectionTask.settlementId
+      || resident.homeSettlementId !== inspectionTask.settlementId || resident.activeContractId !== null)) inspectionTask = null;
     const priorLocation = snapshot.location;
     const currentLocation = resident.location;
     const changedLocation = priorLocation.kind !== currentLocation.kind
@@ -2124,6 +2130,7 @@ function commitResidentActivityWorldStep(
       task = null;
       rationTask = null;
       materialTask = null;
+      inspectionTask = null;
     }
     if (task?.origin === "selected" && task.phase === "arrived"
       && !residentRestTargetHasDrySupport(world, task.target)) {
@@ -2141,10 +2148,14 @@ function commitResidentActivityWorldStep(
         ...materialTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1,
       };
     }
+    if (inspectionTask?.phase === "arrived" && !residentRestTargetHasDrySupport(world, inspectionTask.target)) {
+      inspectionTask = { ...inspectionTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1 };
+    }
     replacements.push({ index, resident: replaceResidentActivity(resident, {
       ...activity, tick, poses: [pose], restTask: task,
       ...(residentActivitySupportsRations(activity) ? { rationTask } : {}),
       ...(residentActivitySupportsMaterials(activity) ? { materialTask } : {}),
+      ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.

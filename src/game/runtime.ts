@@ -103,6 +103,7 @@ import {
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
@@ -1123,7 +1124,8 @@ import {
   deriveSettlementKeeperCircadianDuty,
   planSettlementKeeperCircadian,
 } from "./settlementKeeperCircadian";
-import { collectSettlementKeeperStoreObservations, advanceSettlementKeeperStoreInspection } from "./settlementKeeperInspection";
+import { collectSettlementKeeperStoreObservations, advanceSettlementKeeperStoreInspection,
+  prepareSettlementKeeperInspectionRevocation, settlementKeeperInspectionTasksValid } from "./settlementKeeperInspection";
 import { planResidentCircadian } from "./residentCircadian";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
@@ -1387,6 +1389,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
@@ -4785,6 +4788,7 @@ function canonicalRuntimeSettlementEcology(
 ): SettlementEcologyState | null {
   const state = canonicalizeSettlementEcologyState(value);
   if (state === null || stableStringify(state) !== stableStringify(value)) return null;
+  if (!settlementKeeperInspectionTasksValid(world, state)) return null;
   if (
     state.identity.keeperActorId !== bio0.porterAddress.actorId
     || state.keeperKnowledge.some(({ learnedAtTick }) => learnedAtTick > world.meta.completedTick)
@@ -9793,7 +9797,7 @@ export function advanceRuntimeResidentCircadian(
     // leave a continued-rest task beside a newly awake receipt, adopt missing
     // bodies here, or turn malformed presence into the legacy absence path.
     return prepareResidentRestActivities(currentWorld,
-      duty === null ? [] : [{ actorId: keeper.identity.stableId, duty }])
+      duty === null ? [] : [{ actorId: keeper.identity.stableId, duty }], settlement)
       ? currentWorld : null;
   }
   const replacements: ResidentState[] = [];
@@ -16205,6 +16209,9 @@ export async function createTideweftRuntime(
       regionalEcology = acceptedRegionalEcology;
       coreEcology = regionalEcology.base.base.base.base.base.settlementHome.patch;
       physicalCargo = resolvedRegionalResources.physicalCargo;
+      const afterResourceResidents = prepareSettlementKeeperInspectionRevocation(world, settlementEcology, settlementEcologyAfterAggregate);
+      if (afterResourceResidents === null) throw new Error("Keeper inspection lost its original resource binding");
+      world.residents = afterResourceResidents;
       settlementEcology = settlementEcologyAfterAggregate;
       porterResponse = acceptedPorterResponse;
       // Legacy midinterval absence survives closure. Only the new genuine
@@ -16225,6 +16232,9 @@ export async function createTideweftRuntime(
         observations: keeperStoreObservations,
       });
       if (inspectedStore === null) throw new Error("Keeper store inspection failed its admitted action boundary");
+      const afterInspectionResidents = prepareSettlementKeeperInspectionRevocation(world, settlementEcology, inspectedStore);
+      if (afterInspectionResidents === null) throw new Error("Keeper inspection could not release its committed work");
+      world.residents = afterInspectionResidents;
       settlementEcology = inspectedStore;
       closingSituatedExpressionInterval = captureSituatedExpressionChannelBankIntervalSnapshot(
         situatedExpressionChannels,
@@ -19728,6 +19738,14 @@ export async function createTideweftRuntime(
         ? (context) => { diagnosticListeningContext = context; }
         : undefined,
     );
+    // UI interaction is outside fixed-step rollback. Prepare every fallible
+    // task/publication change before acoustic admission mutates its banks.
+    const residents = prepareSettlementKeeperInspectionRevocation(world, settlementEcology, resolution.state);
+    if (residents === null) throw new Error("Store warning lost its original inspection binding");
+    const preparedWorld = residents === world.residents ? world : { ...world, residents };
+    const publication = residents === world.residents ? null
+      : prepareRuntimeResidentActivityPublication(preparedWorld, worldView, bio0Ecology, playerStepsSinceWorldTick);
+    if (residents !== world.residents && publication === null) throw new Error("Store warning could not prepare inspection cancellation");
     const responseAdmitted = acceptSituatedExpression(
       expressionIntent,
       heard === null
@@ -19753,6 +19771,12 @@ export async function createTideweftRuntime(
       diagnosticListeningContext,
       resolution.state,
     );
+    world = preparedWorld;
+    if (publication !== null) {
+      worldView = publication.worldView;
+      economyView = publication.economyView;
+      bio0Ecology = publication.bio0Ecology;
+    }
     settlementEcology = resolution.state;
     // Authoritative closure and expression roots commit before optional
     // presentation/audio is released. A presentation failure must never leave
@@ -20441,7 +20465,8 @@ export async function createTideweftRuntime(
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
       GAME_SAVE_VERSION >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
-      GAME_SAVE_VERSION >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION)) {
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION)) {
       throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
@@ -25042,7 +25067,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     const world = deserializeWorld(decoded.world);
     if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
       decoded.version >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
-      decoded.version >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION)) {
+      decoded.version >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
+      decoded.version >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION)) {
       throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (
@@ -25063,7 +25089,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (record.playTicks !== world.meta.completedTick) {
       throw new Error("Save metadata does not match the decoded world tick");
     }
-    const compatibilityView = createWorldView(world);
+    let compatibilityView = createWorldView(world);
     const bio0Ecology = decoded.version >= BIO0_GAME_SAVE_VERSION
       ? canonicalRuntimeBio0Ecology(deserializeBio0Ecology(decoded.bio0Ecology), world, compatibilityView)
       : createRuntimeBio0Ecology(world, compatibilityView);
@@ -25518,6 +25544,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             compatibilityView,
           );
           if (accepted === null) return null;
+          const beforeRecovery = accepted;
           if (accepted.pendingLoss !== null) {
             const recovered = recoverPendingSettlementFoodLoss(accepted, coreEcology);
             if (recovered === null) return null;
@@ -25527,6 +25554,12 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             const recovered = recoverPendingSettlementDomesticFoodUse(accepted);
             if (recovered === null) return null;
             accepted = recovered.state;
+          }
+          const recoveredResidents = prepareSettlementKeeperInspectionRevocation(world, beforeRecovery, accepted);
+          if (recoveredResidents === null) return null;
+          if (recoveredResidents !== world.residents) {
+            world.residents = recoveredResidents;
+            compatibilityView = createWorldView(world);
           }
           return canonicalRuntimeSettlementEcology(
             accepted,

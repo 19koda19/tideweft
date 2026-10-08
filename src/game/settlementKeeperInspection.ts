@@ -4,7 +4,7 @@ import {
   type ActorObservation,
 } from "../sim/actorPerception";
 import { projectLivingCircadianClockPreference, residentCircadianUrgentPreference } from "../sim/livingCircadian";
-import { residentActivitySupportsMaterials } from "../sim/residentActivity";
+import { replaceResidentActivity, residentActivitySupportsMaterials, type ResidentInspectionTask } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { residentServicePriorityAvailable } from "../sim/residentRationUse";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
@@ -95,6 +95,83 @@ export interface SettlementKeeperStoreInspectionInput {
   readonly observations: readonly ActorObservation[];
 }
 
+export interface SettlementKeeperInspectionCause {
+  readonly actorId: string;
+  readonly settlementId: number;
+  readonly storeId: string;
+  readonly sourceEvidenceId: string;
+  readonly target: WorldPosition;
+  readonly learnedAtTick: number;
+}
+
+/** Retained knowledge permits an approach; it never proves current arrival or closure. */
+export function settlementKeeperInspectionCauseForWorld(
+  world: WorldState,
+  settlement: SettlementEcologyState,
+  sourceEvidenceId?: string,
+): SettlementKeeperInspectionCause | null | undefined {
+  const state = canonicalizeSettlementEcologyState(settlement);
+  const keeper = state === null ? null : boundKeeper(world, state);
+  const tick = world.meta.completedTick;
+  if (state === null || keeper === null || state.keeperKnowledge.some(({ learnedAtTick }) => learnedAtTick > tick)) return undefined;
+  const proposal = proposeSettlementKeeperStoreResponse(state, tick, sourceEvidenceId);
+  if (proposal === null) return null;
+  const evidence = state.keeperKnowledge.find(({ evidenceId }) => evidenceId === proposal.sourceEvidenceId);
+  if (evidence === undefined) return undefined;
+  return Object.freeze({
+    actorId: keeper.identity.stableId, settlementId: state.identity.settlementId,
+    storeId: state.identity.storeId, sourceEvidenceId: evidence.evidenceId,
+    target: state.identity.position, learnedAtTick: evidence.learnedAtTick,
+  });
+}
+
+/** The inner world cannot authenticate a task's separate physical-store root. */
+export function settlementKeeperInspectionTasksValid(world: WorldState, settlement: SettlementEcologyState): boolean {
+  if (settlementKeeperInspectionCauseForWorld(world, settlement) === undefined) return false;
+  for (const resident of world.residents) {
+    if (!Object.hasOwn(resident, "activity")) continue;
+    const activity = canonicalResidentActivityForWorld(world, resident);
+    if (activity === null) return false;
+    const task = activity.inspectionTask;
+    if (task === undefined || task === null) continue;
+    const cause = settlementKeeperInspectionCauseForWorld(world, settlement, task.sourceEvidenceId);
+    if (cause === null || cause === undefined || cause.actorId !== resident.identity.stableId
+      || cause.settlementId !== task.settlementId || cause.storeId !== task.storeId
+      || cause.learnedAtTick > task.selectedAtTick || !samePosition(cause.target, task.target)) return false;
+  }
+  return true;
+}
+
+/**
+ * A trusted store transaction may revoke work, not history. Validate its original
+ * tuple first; never "repair" a forged cold task by deleting it. The caller stages
+ * publication before committing this immutable roster with the new store root.
+ */
+export function prepareSettlementKeeperInspectionRevocation(
+  world: WorldState,
+  previous: SettlementEcologyState,
+  next: SettlementEcologyState,
+): ResidentState[] | null {
+  const current = canonicalizeSettlementEcologyState(previous);
+  const changed = canonicalizeSettlementEcologyState(next);
+  if (current === null || changed === null
+    || hashCanonical(current.identity) !== hashCanonical(changed.identity)
+    || !settlementKeeperInspectionTasksValid(world, current)) return null;
+  let replacements = world.residents;
+  for (let index = 0; index < world.residents.length; index += 1) {
+    const resident = world.residents[index]!;
+    const task = resident.activity?.inspectionTask;
+    if (task === undefined || task === null) continue;
+    const cause = settlementKeeperInspectionCauseForWorld(world, changed, task.sourceEvidenceId);
+    if (cause === undefined) return null;
+    if (cause === null) {
+      if (replacements === world.residents) replacements = [...world.residents];
+      replacements[index] = replaceResidentActivity(resident, { ...resident.activity!, inspectionTask: null });
+    }
+  }
+  return settlementKeeperInspectionTasksValid({ ...world, residents: replacements }, changed) ? replacements : null;
+}
+
 /**
  * Learn only after actual lower vision admission; secure only at real dry
  * contact with current routine/priority permission. The existing store owner
@@ -140,7 +217,10 @@ export function advanceSettlementKeeperStoreInspection(
     || keeper.location.kind !== "settlement" || keeper.location.settlementId !== state.identity.settlementId
     || pose === undefined || !samePosition(pose.position, state.identity.position)
     || !residentRestTargetHasDrySupport(input.world, pose.position)) return informed;
-  const proposal = proposeSettlementKeeperStoreResponse(informed, tick);
+  const inspectionTask: ResidentInspectionTask | null = activity.inspectionTask ?? null;
+  // A selected cause cannot silently turn into a different fresh observation.
+  // Fresh admitted sight still proves the actual contact/action above.
+  const proposal = proposeSettlementKeeperStoreResponse(informed, tick, inspectionTask?.sourceEvidenceId);
   if (proposal === null) return informed;
   return applySettlementKeeperStoreResponse(informed, proposal)?.state ?? null;
 }

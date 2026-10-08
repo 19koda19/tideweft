@@ -8,7 +8,7 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsInspection, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
@@ -16,6 +16,7 @@ import { RESOURCE_KINDS } from "./types";
 /** Civic mode is whole-roster authority; old v1/v2 mixtures remain supported. */
 export function residentCivicActivityCohortIsUniform(residents: readonly ResidentState[]): boolean {
   let civic = 0;
+  let inspection = 0;
   for (const resident of residents) {
     const activity = Object.getOwnPropertyDescriptor(resident, "activity");
     const version = activity !== undefined && Object.hasOwn(activity, "value")
@@ -23,9 +24,12 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
       ? Object.getOwnPropertyDescriptor(activity.value, "version") : undefined;
     if (version !== undefined && Object.hasOwn(version, "value")
       && residentActivitySupportsMaterials({ version: version.value })) civic += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsInspection({ version: version.value })) inspection += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
-  return civic === 0 || civic === residents.length;
+  return (civic === 0 || civic === residents.length)
+    && (inspection === 0 || inspection === residents.length);
 }
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */
@@ -115,11 +119,12 @@ export function canonicalResidentActivityForWorld(
       id === resident.id && identity.stableId === resident.identity.stableId
     ))
   ) return null;
-  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
   if (task === null) return activity;
   if (resident.location.kind !== "settlement"
     || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null
   ) return null;
+  if (task.kind === "settlement-inspection" && task.settlementId !== resident.homeSettlementId) return null;
   const target = task.kind === "settlement-rest"
     ? residentSettlementRestTarget(world, resident, task.legacySettlementOrdinal)
     : residentSettlementRationTarget(world, resident);

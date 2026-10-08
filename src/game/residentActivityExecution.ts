@@ -12,6 +12,9 @@ import {
   RESIDENT_ACTIVITY_MAX_PHASE,
   RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
   RESIDENT_CIVIC_ACTIVITY_VERSION,
+  RESIDENT_INSPECTION_ACTIVITY_OWNER_ID,
+  RESIDENT_INSPECTION_ACTIVITY_VERSION,
+  residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
   residentActivitySupportsRations,
   RESIDENT_REST_APPROACH_STEP_UNITS,
@@ -19,6 +22,7 @@ import {
   type ResidentRestTask,
   type ResidentRationTask,
   type ResidentMaterialTask,
+  type ResidentInspectionTask,
 } from "../sim/residentActivity";
 import {
   canonicalResidentActivityForWorld,
@@ -29,6 +33,10 @@ import {
 } from "../sim/residentActivityWorld";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
+import { projectLivingCircadianClockPreference, residentCircadianUrgentPreference } from "../sim/livingCircadian";
+import { residentServicePriorityAvailable } from "../sim/residentRationUse";
+import type { SettlementEcologyState } from "./settlementEcology";
+import { settlementKeeperInspectionCauseForWorld } from "./settlementKeeperInspection";
 import { waterDepthAt } from "../sim/terrain";
 import type { ResidentState, WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
@@ -173,12 +181,16 @@ export function adoptResidentActivities(world: WorldState, phase = 0): boolean {
 export function prepareResidentRestActivities(
   world: WorldState,
   duties: readonly ResidentActivityDuty[] = [],
+  inspectionSettlement: SettlementEcologyState | null = null,
 ): boolean {
   const tick = world.meta.completedTick;
   const dutyByActor = new Map<string, ResidentCircadianDuty>();
   if (!Array.isArray(duties) || duties.length > world.residents.length) return false;
   const replacements: ResidentState[] = [];
   try {
+    const inspectionCause = inspectionSettlement === null ? null
+      : settlementKeeperInspectionCauseForWorld(world, inspectionSettlement);
+    if (inspectionCause === undefined) return false;
     for (const record of duties) {
       if (record === null || typeof record !== "object"
         || Reflect.ownKeys(record).length !== 2
@@ -195,9 +207,15 @@ export function prepareResidentRestActivities(
       // Explicit phase-zero evolution preserves v1 cold partial intervals. It
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
-        ...priorActivity, version: RESIDENT_CIVIC_ACTIVITY_VERSION,
-        ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID, rationTask: priorActivity.rationTask ?? null,
+        ...priorActivity,
+        version: inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
+          ? RESIDENT_INSPECTION_ACTIVITY_VERSION : RESIDENT_CIVIC_ACTIVITY_VERSION,
+        ownerId: inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
+          ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
+        rationTask: priorActivity.rationTask ?? null,
         materialTask: priorActivity.materialTask ?? null,
+        ...(inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
+          ? { inspectionTask: priorActivity.inspectionTask ?? null } : {}),
       }, { actorId: resident.identity.stableId, tick });
       if (activity === null || activity.poses.length !== 1) return false;
       const duty = dutyByActor.get(resident.identity.stableId) ?? null;
@@ -243,13 +261,36 @@ export function prepareResidentRestActivities(
       } else if (task.phase === "waiting" && task.nextReassessmentAtTick <= tick) {
         task = { ...task, phase: "approaching", waitReason: null };
       }
+      let inspectionTask = activity.inspectionTask ?? null;
+      const service = residentServicePriorityAvailable(resident, world.weather, duty !== null, tick);
+      const wantsInspection = inspectionCause?.actorId === resident.identity.stableId
+        && task === null && rationTask === null && service !== null
+        && routine.effectivePreference === "active" && routine.posture.state === "awake"
+        && residentCircadianUrgentPreference({ needs: resident.needs, exhaustion: resident.condition.exhaustion }) === null
+        && projectLivingCircadianClockPreference(resident.identity.stableId, tick, service.policy) === "active";
+      if (!wantsInspection) inspectionTask = null;
+      else {
+        const retained = inspectionTask === null || inspectionSettlement === null ? null
+          : settlementKeeperInspectionCauseForWorld(world, inspectionSettlement, inspectionTask.sourceEvidenceId);
+        if (retained === undefined) return false;
+        if (inspectionTask === null || retained === null) {
+          inspectionTask = {
+            kind: "settlement-inspection", settlementId: inspectionCause.settlementId,
+            storeId: inspectionCause.storeId, sourceEvidenceId: inspectionCause.sourceEvidenceId,
+            target: inspectionCause.target, selectedAtTick: tick, lastProgressAtTick: tick,
+            nextReassessmentAtTick: tick, phase: "approaching", waitReason: null,
+          };
+        } else if (inspectionTask.phase === "waiting" && inspectionTask.nextReassessmentAtTick <= tick) {
+          inspectionTask = { ...inspectionTask, phase: "approaching", waitReason: null };
+        }
+      }
       let materialTask = activity.materialTask ?? null;
       const material = residentSettlementMaterialProject(world, resident);
-      const wantsMaterial = task === null && rationTask === null
+      const wantsMaterial = task === null && rationTask === null && inspectionTask === null
         && routine.effectivePreference === "active" && routine.posture.state === "awake"
         && residentMaterialPriorityEligible(resident, world.weather, duty !== null, tick);
       const showingUsedMaterial = materialTask?.phase === "used" && materialTask.usedAtTick === tick
-        && task === null && rationTask === null && routine.effectivePreference === "active"
+        && task === null && rationTask === null && inspectionTask === null && routine.effectivePreference === "active"
         && routine.posture.state === "awake" && plan.projection.priorityOverride === null;
       if (!showingUsedMaterial && (!wantsMaterial || material === null
         || material.project.status === "complete" || materialTask?.phase === "used")) materialTask = null;
@@ -270,7 +311,9 @@ export function prepareResidentRestActivities(
           materialTask = { ...materialTask, phase: "approaching", waitReason: null };
         }
       }
-      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask, materialTask });
+      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask, materialTask,
+        ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
+      });
       // Clearing a continued episode changes arrival and wake together. Do not
       // commit the old projection's arrived=true bit beside an awake body.
       candidate = alignCircadianArrival(candidate, tick);
@@ -314,7 +357,7 @@ export function advanceResidentRestActivities(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null) return null;
       let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
-      let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
+      let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
       if (task?.phase === "approaching") {
         if (!residentRestTargetHasDrySupport(world, task.target)) {
           task = waitForRest(task, tick, "no-traversable-route");
@@ -360,6 +403,8 @@ export function advanceResidentRestActivities(
           ? { rationTask: task?.kind === "settlement-ration" ? task : null } : {}),
         ...(residentActivitySupportsMaterials(activity)
           ? { materialTask: task?.kind === "settlement-material" ? task : null } : {}),
+        ...(residentActivitySupportsInspection(activity)
+          ? { inspectionTask: task?.kind === "settlement-inspection" ? task : null } : {}),
       });
       if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
         candidate = alignCircadianArrival(candidate, tick);
@@ -396,11 +441,11 @@ function alignCircadianArrival(resident: ResidentState, tick: number): ResidentS
   });
 }
 
-function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask>(task: T, tick: number): T {
+function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number): T {
   return { ...task, phase: "arrived", waitReason: null, lastProgressAtTick: tick, nextReassessmentAtTick: tick + 1 };
 }
 
-function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
+function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }
 

@@ -5,6 +5,7 @@ import { assertWorldInvariants, createWorldView, deserializeWorld, serializeWorl
 import { residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { tideAtTick } from "../sim/terrain";
+import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_VERSION } from "../sim/residentActivity";
 import type { PlayerState } from "./player";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -12,7 +13,7 @@ import { restorePlayerRegionalTravel, capturePlayerRegionalTravel, serializePlay
 import { regionLocalToWindowTile } from "./regionalTravel";
 import { resolveResidentWorldPlacement, playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
-import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import { CURRENT_GAME_SAVE_VERSION, FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   deserializeSettlementEcologyState, serializeSettlementEcologyState,
   stageSettlementDomesticFoodUse, resolveSettlementDomesticFoodUse,
@@ -219,8 +220,8 @@ function exhaustStoreFood(store: ReturnType<typeof deserializeSettlementEcologyS
 }
 
 /** Find the native closing interval, retaining its actual unconsumed phase9. */
-async function closingFixture() {
-  const base = await fixture();
+async function closingFixture(initialMaterialShortage = false) {
+  const base = await fixture("work", initialMaterialShortage);
   const repository = new MemoryRepository(base.record);
   const runtime = await open(repository);
   for (let interval = 0; interval < 8; interval += 1) {
@@ -243,6 +244,286 @@ async function closingFixture() {
 }
 
 describe("ordinary autonomous keeper inspection", () => {
+  it("keeps a pending inspection and every root unchanged when a normal warning's acoustic admission fails", async () => {
+    const base = await fixture("work", true);
+    const repository = new MemoryRepository(base.record);
+    const runtime = await open(repository);
+    advance(runtime, 24);
+    await runtime.save();
+    const before = decode(repository.snapshot());
+    expect(keeper(deserializeWorld(before.world), base.actorId).activity?.inspectionTask?.phase).toBe("approaching");
+    expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+    const failedAdmission = vi.spyOn(expressionChannels, "reduceSituatedExpressionChannelBank").mockReturnValueOnce({
+      accepted: false, reason: "invalid-bank", bank: null, event: null,
+    });
+    soundscapePlay.mockClear();
+    expect(() => runtime.dispatchUI({ type: "interact" })).toThrow("Situated expression channel reduction failed validation");
+    expect(failedAdmission).toHaveBeenCalledOnce();
+    await runtime.save();
+    expect(roots(decode(repository.snapshot()))).toEqual(roots(before));
+    expect(deserializeSettlementEcologyState(before.settlementEcology).closure).toBe("open");
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    failedAdmission.mockRestore();
+    runtime.dispatchUI({ type: "interact" });
+    await runtime.save();
+    const retried = decode(repository.snapshot());
+    expect(deserializeSettlementEcologyState(retried.settlementEcology).closure).toBe("secured");
+    expect(keeper(deserializeWorld(retried.world), base.actorId).activity?.inspectionTask).toBeNull();
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(1);
+  }, 60_000);
+
+  it("commits a normal player warning and cancels pending inspection without losing accepted body history", async () => {
+    const base = await fixture("work", true);
+    const repository = new MemoryRepository(base.record);
+    const runtime = await open(repository);
+    advance(runtime, 24);
+    await runtime.save();
+    const before = decode(repository.snapshot());
+    const activity = keeper(deserializeWorld(before.world), base.actorId).activity!;
+    expect(activity.inspectionTask?.phase).toBe("approaching");
+    expect(runtime.getUIView().controls?.interactLabel).toBe("Warn the store keeper");
+    soundscapePlay.mockClear();
+    runtime.dispatchUI({ type: "interact" });
+    await runtime.save();
+    const record = repository.snapshot();
+    const after = decode(record);
+    expect(deserializeSettlementEcologyState(after.settlementEcology).closure).toBe("secured");
+    expect(keeper(deserializeWorld(after.world), base.actorId).activity).toEqual({ ...activity, inspectionTask: null });
+    expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    expect(after.bio0Ecology).toBe(before.bio0Ecology);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(1);
+    close(runtime);
+    soundscapePlay.mockClear();
+    const coldRepository = new MemoryRepository(record);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(roots(decode(coldRepository.snapshot()))).toEqual(roots(after));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+  }, 60_000);
+
+  it.each([4, 9])("retains supported53 phase%s history and upgrades inspection only at a real boundary", async (phase) => {
+    const base = await fixture("work", true);
+    const stagingRepository = new MemoryRepository(base.record);
+    const staging = await open(stagingRepository);
+    advance(staging, phase);
+    await staging.save();
+    const record = stagingRepository.snapshot();
+    const legacy = decode(record);
+    const current = structuredClone(legacy);
+    const world = deserializeWorld(legacy.world);
+    for (const human of world.residents) {
+      const activity = human.activity!;
+      expect(activity.inspectionTask).toBeNull();
+      // An explicit supported-format reconstruction of actual accepted history,
+      // not an archived release or a successful inspection injected into v3.
+      const { inspectionTask: _inspection, ...body } = activity;
+      human.activity = { ...body, version: RESIDENT_CIVIC_ACTIVITY_VERSION, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID };
+    }
+    legacy.world = serializeWorld(world);
+    legacy.version = FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION;
+    close(staging);
+    const repository = new MemoryRepository(recordWith(record, legacy));
+    const runtime = await open(repository);
+    await runtime.save();
+    const loaded = decode(repository.snapshot());
+    expect(loaded.world).toBe(legacy.world);
+    expect(loaded.perceptionCarry).toEqual(legacy.perceptionCarry);
+    if (phase < 9) {
+      advance(runtime, 9 - phase);
+      await runtime.save();
+      const ninth = decode(repository.snapshot());
+      expect(deserializeWorld(ninth.world).residents.every(({ activity }) => activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION
+        && !Object.hasOwn(activity, "inspectionTask"))).toBe(true);
+    }
+    advance(runtime, 1);
+    await runtime.save();
+    const boundary = decode(repository.snapshot());
+    expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION
+      && activity.poses.length === 1 && activity.inspectionTask === null)).toBe(true);
+    close(runtime);
+    // Even nullable successor state cannot be smuggled into older outer53.
+    current.version = FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION;
+    const invalidRecord = recordWith(record, current);
+    const rejectedRepository = new MemoryRepository(invalidRecord);
+    const rejected = await createTideweftRuntime(rejectedRepository);
+    runtimes.add(rejected);
+    expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+    expect(rejectedRepository.snapshot()).toEqual(invalidRecord);
+    close(rejected);
+  }, 60_000);
+
+  it.each([true, false])("selects a dedicated evidence-owned approach without civic supply (finite food=%s)", async (foodAvailable) => {
+    const base = await fixture("work", true);
+    const envelope = decode(base.record);
+    const originalStore = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const store = foodAvailable ? originalStore : exhaustStoreFood(originalStore, base.tick);
+    envelope.settlementEcology = serializeSettlementEcologyState(store);
+    const repository = new MemoryRepository(recordWith(base.record, envelope));
+    const runtime = await open(repository);
+    soundscapePlay.mockClear();
+
+    // Sight enters after routine preparation: it cannot select work retroactively.
+    advance(runtime, 10);
+    await runtime.save();
+    const observed = decode(repository.snapshot());
+    const observedKeeper = keeper(deserializeWorld(observed.world), base.actorId);
+    expect(observedKeeper.activity?.inspectionTask).toBeNull();
+    expect(observedKeeper.activity?.poses[0]?.position).toEqual(base.source);
+
+    advance(runtime, 10);
+    await runtime.save();
+    const selected = decode(repository.snapshot());
+    const selectedKeeper = keeper(deserializeWorld(selected.world), base.actorId);
+    if (foodAvailable) {
+      const evidence = deserializeSettlementEcologyState(observed.settlementEcology).keeperKnowledge[0]!;
+      expect(selectedKeeper.activity?.inspectionTask).toMatchObject({
+        kind: "settlement-inspection", storeId: store.identity.storeId,
+        sourceEvidenceId: evidence.evidenceId, selectedAtTick: base.tick + 2,
+        phase: "approaching", target: base.target,
+      });
+      expect(evidence.learnedAtTick).toBe(base.tick + 1);
+      expect(selectedKeeper.activity?.restTask).toBeNull();
+      expect(selectedKeeper.activity?.rationTask).toBeNull();
+      expect(selectedKeeper.activity?.materialTask).toBeNull();
+    } else {
+      expect(selectedKeeper.activity?.inspectionTask).toBeNull();
+      expect(selectedKeeper.activity?.materialTask?.waitReason).toBe("no-material");
+    }
+    expect(selectedKeeper.activity?.poses[0]?.position).toEqual(base.source);
+
+    advance(runtime, 9);
+    await runtime.save();
+    const approached = decode(repository.snapshot());
+    const approachedKeeper = keeper(deserializeWorld(approached.world), base.actorId);
+    expect(approached.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(deserializeSettlementEcologyState(approached.settlementEcology).closure).toBe("open");
+    if (foodAvailable) {
+      // Nine105-unit steps approach the one1000-unit tile; step10 alone
+      // completes contact, before the same closing-step sight/transaction.
+      expect(approachedKeeper.activity?.inspectionTask?.phase).toBe("approaching");
+      expect(approachedKeeper.activity?.poses.at(-1)?.position).not.toEqual(base.source);
+      expect(approachedKeeper.activity?.poses.at(-1)?.position).not.toEqual(base.target);
+      expect(approachedKeeper.activity?.poses[0]?.position).toEqual(base.source);
+    } else {
+      for (const { position } of approachedKeeper.activity!.poses) expect(position).toEqual(base.source);
+    }
+    advance(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const world = deserializeWorld(after.world);
+    const result = deserializeSettlementEcologyState(after.settlementEcology);
+    expect(world.meta.completedTick).toBe(base.tick + 3);
+    expect(keeper(world, base.actorId).activity?.inspectionTask).toBeNull();
+    if (foodAvailable) {
+      expect(result.closure).toBe("secured");
+      expect(result.lastClosureTransactionId).not.toBeNull();
+      expect(result.carrier).toEqual(store.carrier);
+      expect(result.keeperKnowledge.at(-1)?.learnedAtTick).toBe(base.tick + 3);
+    } else {
+      expect(result).toEqual(store);
+    }
+    const home = world.settlements.find(({ id }) => id === store.identity.settlementId)!;
+    expect(home.inventory[home.project.resource]).toBe(0);
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+    assertWorldInvariants(world);
+  }, 60_000);
+
+  it.each([4, 9])("cold continues an actual inspection at phase%s with equal whole-root work", async (phase) => {
+    const base = await fixture("work", true);
+    const repository = new MemoryRepository(base.record);
+    const runtime = await open(repository);
+    advance(runtime, 20 + phase);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(phase);
+    expect(keeper(deserializeWorld(before.world), base.actorId).activity?.inspectionTask).not.toBeNull();
+    advance(runtime, 10 - phase);
+    await runtime.save();
+    const expected = decode(repository.snapshot());
+    close(runtime);
+    const resumedRepository = new MemoryRepository(beforeRecord);
+    const resumed = await open(resumedRepository);
+    await resumed.save();
+    expect(roots(decode(resumedRepository.snapshot()))).toEqual(roots(before));
+    soundscapePlay.mockClear();
+    advance(resumed, 10 - phase);
+    await resumed.save();
+    expect(roots(decode(resumedRepository.snapshot()))).toEqual(roots(expected));
+    expect(deserializeSettlementEcologyState(expected.settlementEcology).closure).toBe("secured");
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+  }, 60_000);
+
+  it("revokes actual inspection after trusted last-unit cold recovery without repairing forged provenance", async () => {
+    const base = await fixture("work", true);
+    const repository = new MemoryRepository(base.record);
+    const runtime = await open(repository);
+    advance(runtime, 24);
+    await runtime.save();
+    const record = repository.snapshot();
+    const envelope = decode(record);
+    const beforeWorld = deserializeWorld(envelope.world);
+    const beforeActivity = keeper(beforeWorld, base.actorId).activity!;
+    expect(beforeActivity.inspectionTask).not.toBeNull();
+    let store = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const custody = store.domesticCustodies.find(({ species }) => species === "domestic-chicken")!;
+    for (let use = 0; use < 8; use += 1) {
+      const staged = stageSettlementDomesticFoodUse(store, {
+        version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
+        storeId: store.identity.storeId, foodLotId: store.identity.foodLotId,
+        relationshipId: custody.relationshipId, memberActorId: custody.memberActorIds[0]!,
+        requestedQuantity: 1, causeEventId: `keeper-inspection-recovery:setup:${use}`,
+        causeEventTick: base.tick - 5 + use,
+      });
+      if (staged === null) throw new Error("Last-unit recovery fixture lost a finite source");
+      if (use === 7) store = staged.state;
+      else {
+        const resolved = resolveSettlementDomesticFoodUse(staged.state, staged.transaction);
+        if (resolved === null || !resolved.applied) throw new Error("Setup debit failed");
+        store = resolved.state;
+      }
+    }
+    envelope.settlementEcology = serializeSettlementEcologyState(store);
+    const pendingRecord = recordWith(record, envelope);
+    close(runtime);
+    const resumedRepository = new MemoryRepository(pendingRecord);
+    soundscapePlay.mockClear();
+    const resumed = await open(resumedRepository);
+    await resumed.save();
+    const afterRecord = resumedRepository.snapshot();
+    const after = decode(afterRecord);
+    const afterWorld = deserializeWorld(after.world);
+    const afterStore = deserializeSettlementEcologyState(after.settlementEcology);
+    expect(keeper(afterWorld, base.actorId).activity).toEqual({ ...beforeActivity, inspectionTask: null });
+    expect(after.perceptionCarry).toEqual(envelope.perceptionCarry);
+    expect(afterStore.keeperKnowledge).toEqual(store.keeperKnowledge);
+    expect(afterStore.carrier.lots).toEqual([]);
+    expect(afterStore.lastResolvedDomesticFoodUseOrdinal).toBe(8);
+    expect(afterStore.closure).toBe("open");
+    expect(after.bio0Ecology).toBe(envelope.bio0Ecology);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    close(resumed);
+    const replayRepository = new MemoryRepository(afterRecord);
+    const replay = await open(replayRepository);
+    await replay.save();
+    expect(roots(decode(replayRepository.snapshot()))).toEqual(roots(after));
+    close(replay);
+    for (const fault of ["storeId", "sourceEvidenceId", "selectedAtTick"] as const) {
+      const forged = structuredClone(envelope);
+      const rawWorld = structuredClone(deserializeWorld(forged.world));
+      const task = keeper(rawWorld, base.actorId).activity!.inspectionTask!;
+      Object.assign(task, { [fault]: fault === "selectedAtTick" ? base.tick : "forged-inspection-reference" });
+      forged.world = serializeWorld(rawWorld);
+      const rejectedRepository = new MemoryRepository(recordWith(pendingRecord, forged));
+      const rejected = await createTideweftRuntime(rejectedRepository);
+      runtimes.add(rejected);
+      expect(rejected.getUIView().saveWarning?.message).toBe("LOCAL AUTOSAVE UNREADABLE");
+      expect(rejectedRepository.snapshot()).toEqual(recordWith(pendingRecord, forged));
+      close(rejected);
+    }
+  }, 60_000);
+
   it.each([true, false])("admits native store evidence independently of unavailable civic material (finite food=%s)", async (foodAvailable) => {
     const base = await fixture("work", true);
     const envelope = decode(base.record);
@@ -511,8 +792,8 @@ describe("ordinary autonomous keeper inspection", () => {
     expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
   }, 60_000);
 
-  it("rolls real inspection, closure and all saved roots back when later interval closure fails", async () => {
-    const staged = await closingFixture();
+  it.each([false, true])("rolls real inspection and all saved roots back on later closure failure (dedicated=%s)", async (dedicated) => {
+    const staged = await closingFixture(dedicated);
     const repository = new MemoryRepository(staged.beforeRecord);
     const runtime = await open(repository);
     const original = keeperInspection.advanceSettlementKeeperStoreInspection;

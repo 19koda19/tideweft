@@ -2377,10 +2377,11 @@ implementation contract; construction/tests below determine its current proof.
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
 current-interval poses, and exclusive authenticated settlement-rest/ration/
-material tasks. Frozen v1 body/rest and v2 ration protocols remain deliberately
-supported; v3 requires an explicit nullable material task alongside ration.
+material/inspection tasks. Frozen v1 body/rest, v2 ration and v3 material
+protocols remain deliberately supported; v4 additionally requires an explicit
+nullable inspection task. Each protocol retains its exact field/owner mapping.
 Shared version-only capability helpers classify the deliberately recognized
-ration/material protocols across service, body reanchoring, cohort mode and
+ration/material/inspection protocols across service, body reanchoring, cohort mode and
 outer-save consumers. They never replace full shape/world authentication or
 accept an unknown version by numeric ordering; frozen codec mappings remain
 explicit.
@@ -2399,8 +2400,8 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 Normal accepted runtime steps now adopt the entire existing roster only at a
 genuine phase-zero boundary, select through the actual routine/duty owner, and
 advance exactly one bounded approach step per accepted player step. Current
-outer53 preserves the complete bodies, service use and phase0–9 history. Supported
-outer51/52 bodies preserve their exact v1/v2 partial interval, upgrading as a
+outer54 preserves the complete bodies, service use and phase0–9 history. Supported
+outer51/52/53 bodies preserve their exact v1/v2/v3 partial interval, upgrading as a
 whole cohort through the actual phase-zero routine boundary, not on load.
 Legacy absent records remain absent on load and through an already-partly-consumed interval;
 its actual closure captures the first new anchor rather than inventing old
@@ -2420,8 +2421,8 @@ and independent GREET candidate/refusal transactions on the use tick. A used
 task remains briefly observable without repeat benefit; higher priorities may
 revoke it. Render/ABOUT disclose that current committed use only through their
 existing sight/detail gates, not hunger, a planned destination or invented
-sound. Dedicated keeper approach and accountable local travel remain
-unfinished. This is local source/test evidence, not manual
+sound. Accountable local travel remains unfinished. This is local
+source/test evidence, not manual
 play, natural-rate liveness, production performance or public release proof.
 
 The bounded civic consumer uses the existing project/resource and the same
@@ -2432,10 +2433,10 @@ the existing hourly pulse. Eligibility is rechecked after command/weather/
 perception and hourly need consequences. `engine.ts`'s private
 `commitProjectMaterial` owns the one stock debit, consumed ledger entry,
 progress and existing completion effects; delivery retains its separate
-condition-qualified credit through that same owner. All-v3 civic mode removes
+condition-qualified credit through that same owner. Whole-cohort civic mode removes
 represented automatic timer credit, including when no worker/admission exists.
 Absent/v1/v2 worlds retain the explicitly supported coarse timer until actual
-whole-roster adoption. Mixed v3/non-v3 mode rejects before world mutation and
+whole-roster adoption. Mixed civic/non-civic or v3/v4 mode rejects before world mutation and
 at cold/save invariants; historical v1/v2 mixtures remain supported.
 
 No portable material lot, reservation, personal inventory, queue root or second
@@ -2465,14 +2466,34 @@ fresh response/routine reconciliation, an awake, active keeper at the exact dry
 store point may secure that same physical store through its existing transaction.
 Contract, storm, urgent need, actual watch and other duty remain higher priorities.
 
-This is a silent in-place action, not a new keeper task or fabricated report.
-Existing ration/material/rest approach can bring the body there; dedicated
-inspection-driven approach remains unfinished. Controlled native runtime tests
-prove actual approach, player independence, source absence, priority delay,
-phase9 cold equality and late-failure rollback. Current53/carry14 and the
-deliberately supported formats remain unchanged. Evidence and closure persist
-in the existing store owner; ephemeral sight is reconstructed only by actual
-world advancement, never invented on load or replayed as speech.
+The existing in-place action remains valid. A dedicated v4 inspection task now
+consumes retained evidence through the same body/approach owner, independent of
+civic material availability. `settlementKeeperInspection.ts` authenticates the
+separate store, native keeper/home/site and selected evidence before permitting
+work; the inner-world codec alone cannot prove that cross-root provenance.
+Selection follows knowledge admission at the next phase-zero preparation, not
+retroactively. Rest, ration and higher-owner duty retain priority; inspection
+and material work cannot run concurrently. Fine motion remains bounded and
+dry-foot-only. Fresh lower-admitted sight, current support and current priority
+still qualify closure; retained knowledge or arrival alone cannot secure it.
+
+The existing store receipt is completion authority, not a cached proposal or
+new work ledger. Closure, exhausted physical food or evicted selected evidence
+revokes pending inspection immutably in the same transaction, retaining body
+poses and historical knowledge. Cold recovery authenticates the original task/
+store tuple before resolving pending finite loss, then cancels only legitimately
+revoked work and refreshes the detached view; it never repairs forged provenance
+by deletion. Player Warn stages fallible resident publication before acoustic
+admission and commits cancellation with the store before releasing audio.
+
+Controlled native runtime tests prove independent inspection approach, finite-
+source contrast, player independence, priority delay, phase4/9 equal-work cold
+continuation, Warn cancellation, last-unit recovery and late-failure rollback.
+This remains local/unpublished, without manual visual, natural-rate liveness,
+performance or full-directive proof. Evidence/closure remain in the existing
+store owner; ephemeral sight is reconstructed only by actual world advancement,
+never invented on load or replayed as speech. Carry14 and supported formats
+remain intact; the explicit current outer capability is54.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -4012,7 +4033,7 @@ boundary.
 
 The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
-the current local source writer emits outer version 53. The preceding v43/carry-v11
+the current local source writer emits outer version 54. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -4108,9 +4129,21 @@ material-task capability; frozen v1/v2 shapes cannot carry the new field.
 Supported50/51/52 retain their existing readers, genuine absent/partial body
 history and phase-zero whole-roster upgrade. Current capture/load validate the
 exclusive material task, project/resource/site and completed-use marker without
-rerunning use. Civic mode is whole-roster; mixed v3/non-v3 records reject, while
+rerunning use. Civic mode is whole-roster; mixed civic/non-civic records reject, while
 supported historical v1/v2 mixtures remain valid. No release identity, carry14,
 inner-world4/rules6, generator or retirement policy changes at this boundary.
+
+`FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION` establishes outer54's explicit v4
+inspection capability. Frozen v1–v3 cannot carry its nullable task field; outer53
+cannot import v4 even when no inspection is pending. Supported50/51/52/53 keep
+their exact readers and partial histories until normal phase-zero adoption.
+Inspection mode is also whole-roster; mixed v3/v4 rejects. The task records only
+site/store/evidence, selection/progress/retry and approach/wait/arrival state.
+Capture and cold load authenticate it against the separate physical store;
+the existing closure receipt owns completion. Trusted interruption recovery
+may revoke an otherwise valid task without rewriting accepted poses, knowledge
+or consumed acoustic history. No carry14, inner-world4/rules6, generator, release,
+retirement or compatibility-lifecycle change accompanies this capability.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

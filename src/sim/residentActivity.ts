@@ -18,6 +18,9 @@ export const RESIDENT_SERVICE_ACTIVITY_OWNER_ID = "sim:resident-activity:v2" as 
 /** Frozen v1/v2 readers remain exact; only v3 owns enacted civic material use. */
 export const RESIDENT_CIVIC_ACTIVITY_VERSION = 3 as const;
 export const RESIDENT_CIVIC_ACTIVITY_OWNER_ID = "sim:resident-activity:v3" as const;
+/** Only v4 owns an evidence-bound approach to the separate physical store. */
+export const RESIDENT_INSPECTION_ACTIVITY_VERSION = 4 as const;
+export const RESIDENT_INSPECTION_ACTIVITY_OWNER_ID = "sim:resident-activity:v4" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -75,6 +78,20 @@ export interface ResidentMaterialTask {
   readonly usedAtTick: number | null;
 }
 
+export interface ResidentInspectionTask {
+  readonly kind: "settlement-inspection";
+  readonly settlementId: number;
+  readonly storeId: string;
+  /** Retained keeper knowledge; the store owner authenticates this reference. */
+  readonly sourceEvidenceId: string;
+  readonly target: WorldPosition;
+  readonly selectedAtTick: number;
+  readonly phase: "approaching" | "waiting" | "arrived";
+  readonly lastProgressAtTick: number;
+  readonly nextReassessmentAtTick: number;
+  readonly waitReason: ResidentRestTask["waitReason"];
+}
+
 /**
  * One optional resident-owned physical root, not a second actor population.
  * poses[0] is the interval anchor; poses[N] is the body after N accepted steps.
@@ -82,8 +99,8 @@ export interface ResidentMaterialTask {
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
@@ -92,6 +109,8 @@ export interface ResidentActivity {
   readonly rationTask?: ResidentRationTask | null;
   /** Absent in the frozen v1/v2 protocols; v3 requires explicit null/task. */
   readonly materialTask?: ResidentMaterialTask | null;
+  /** Absent in frozen v1–v3; v4 requires explicit null/task, never a cached result. */
+  readonly inspectionTask?: ResidentInspectionTask | null;
 }
 
 /** Explicit recognized capabilities, never numeric acceptance of future versions. */
@@ -101,7 +120,11 @@ export function residentActivitySupportsRations(activity: Pick<ResidentActivity,
 
 /** Capability classification only; shape, custody and world validation stay binding. */
 export function residentActivitySupportsMaterials(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
-  return activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
+  return activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION || residentActivitySupportsInspection(activity);
+}
+
+export function residentActivitySupportsInspection(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {
@@ -127,13 +150,16 @@ export function canonicalizeResidentActivity(
   if (!plainRecord(value)) return null;
   const versionField = Object.getOwnPropertyDescriptor(value, "version");
   if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
-  const civicCapable = value.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
+  const inspectionCapable = value.version === RESIDENT_INSPECTION_ACTIVITY_VERSION;
+  const civicCapable = value.version === RESIDENT_CIVIC_ACTIVITY_VERSION || inspectionCapable;
   const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION || civicCapable;
   if (!exactKeys(value, [
     "actorId", "ownerId", "poses", "restTask", "tick", "version",
     ...(serviceCapable ? ["rationTask"] : []),
     ...(civicCapable ? ["materialTask"] : []),
-  ]) || (civicCapable ? value.ownerId !== RESIDENT_CIVIC_ACTIVITY_OWNER_ID
+    ...(inspectionCapable ? ["inspectionTask"] : []),
+  ]) || (inspectionCapable ? value.ownerId !== RESIDENT_INSPECTION_ACTIVITY_OWNER_ID
+    : civicCapable ? value.ownerId !== RESIDENT_CIVIC_ACTIVITY_OWNER_ID
     : serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
     : value.version !== RESIDENT_ACTIVITY_VERSION || value.ownerId !== RESIDENT_ACTIVITY_OWNER_ID)
     || !validActorId(value.actorId)
@@ -160,13 +186,15 @@ export function canonicalizeResidentActivity(
   if (restTask === undefined) return null;
   const rationTask = serviceCapable ? canonicalRationTask(value.rationTask, value.tick) : null;
   const materialTask = civicCapable ? canonicalMaterialTask(value.materialTask, value.tick) : null;
-  if (rationTask === undefined || materialTask === undefined
-    || [restTask, rationTask, materialTask].filter((task) => task !== null).length > 1) return null;
+  const inspectionTask = inspectionCapable ? canonicalInspectionTask(value.inspectionTask, value.tick) : null;
+  if (rationTask === undefined || materialTask === undefined || inspectionTask === undefined
+    || [restTask, rationTask, materialTask, inspectionTask].filter((task) => task !== null).length > 1) return null;
   const body = poses[poses.length - 1]!;
   if (rationTask !== null && (rationTask.phase === "arrived" || rationTask.phase === "used")
     && !samePosition(body.position, rationTask.target)) return null;
   if (materialTask !== null && (materialTask.phase === "arrived" || materialTask.phase === "used")
     && !samePosition(body.position, materialTask.target)) return null;
+  if (inspectionTask?.phase === "arrived" && !samePosition(body.position, inspectionTask.target)) return null;
   if (restTask !== null && (
     (restTask.phase === "arrived" && !samePosition(body.position, restTask.target))
     || (restTask.origin === "continued-admitted-rest" && poses.some((pose) => (
@@ -174,14 +202,15 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
-    ownerId: civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
+    version: inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
     restTask,
     ...(serviceCapable ? { rationTask } : {}),
     ...(civicCapable ? { materialTask } : {}),
+    ...(inspectionCapable ? { inspectionTask } : {}),
   });
   CANONICAL_ACTIVITIES.add(activity);
   return activity;
@@ -249,7 +278,7 @@ export function replaceResidentActivity(
     tick: resident.perception.tick,
   });
   if (activity === null) throw new RangeError("Resident activity is malformed, foreign or mistimed");
-  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
   if (task !== null && (
     resident.location.kind !== "settlement"
     || task.settlementId !== resident.location.settlementId
@@ -387,6 +416,37 @@ function canonicalMaterialTask(value: unknown, tick: number): ResidentMaterialTa
     lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
     waitReason: value.waitReason as ResidentMaterialTask["waitReason"], usedAtTick: value.usedAtTick as number | null,
   });
+}
+
+function canonicalInspectionTask(value: unknown, tick: number): ResidentInspectionTask | null | undefined {
+  if (value === null) return null;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "kind", "lastProgressAtTick", "nextReassessmentAtTick", "phase", "selectedAtTick",
+    "settlementId", "sourceEvidenceId", "storeId", "target", "waitReason",
+  ]) || value.kind !== "settlement-inspection" || !positiveInteger(value.settlementId)
+    || !validReferenceId(value.storeId) || !validReferenceId(value.sourceEvidenceId)
+    || !isWorldPosition(value.target)
+    || !nonnegativeInteger(value.selectedAtTick) || value.selectedAtTick > tick
+    || !nonnegativeInteger(value.lastProgressAtTick)
+    || value.lastProgressAtTick < value.selectedAtTick || value.lastProgressAtTick > tick
+    || !nonnegativeInteger(value.nextReassessmentAtTick) || value.nextReassessmentAtTick < value.selectedAtTick
+    || !["approaching", "waiting", "arrived"].includes(value.phase as string)
+    || !(value.waitReason === null || value.waitReason === "no-traversable-route"
+      || value.waitReason === "outside-local-corridor")
+    || (value.phase === "waiting") !== (value.waitReason !== null)
+  ) return undefined;
+  return Object.freeze({
+    kind: "settlement-inspection", settlementId: value.settlementId, storeId: value.storeId,
+    sourceEvidenceId: value.sourceEvidenceId,
+    target: createWorldPosition(value.target.region, value.target.localX, value.target.localY),
+    selectedAtTick: value.selectedAtTick, phase: value.phase as ResidentInspectionTask["phase"],
+    lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
+    waitReason: value.waitReason as ResidentInspectionTask["waitReason"],
+  });
+}
+
+function validReferenceId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= ACTOR_ID_MAX_LENGTH && ID_PATTERN.test(value);
 }
 
 function matchesBinding(activity: ResidentActivity, binding: ResidentActivityBinding): boolean {

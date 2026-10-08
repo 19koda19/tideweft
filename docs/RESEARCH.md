@@ -4219,6 +4219,63 @@ This focused correction does not relabel the original cumulative as a pass
 or certify a later whole-suite run. Profiling/soaks, manual/platform checks,
 public release and completed gameplay expansion are not claimed.
 
+### Evidence-owned keeper inspection approach — 2026-10-08
+
+Local construction starts from `6f16a63cdcf8c24fb108e22aec76b11cbdbcccd8`,
+not a new public release. The existing forty-two resident bodies gain explicit
+v4 inspection capability under outer54, while supported50/51/52/53 retain their
+deliberate readers, absent/partial history and next-phase-zero adoption. Carry14,
+inner-world4/rules6, generator, dependency and compatibility lifecycle do not change.
+
+The controlled native fixture has an existing dry one-tile keeper/store approach,
+ordinary inputs and a declared aggregate civic-material shortage. No intended
+task, knowledge, heading, arrival or closure is injected. Actual lower-admitted
+sight at421 precedes task selection422; ten ordinary bounded motion steps then
+permit fresh sight/contact and the existing exact-once closure at423. Removing
+the independently conserved eight-unit physical food lot through real setup
+transactions removes sight, inspection and closure while retaining the same
+material shortage. This does not prove ordinary animal feeding/acquisition.
+
+Store/keeper/site/evidence provenance is authenticated separately from the inner
+body codec. Current routine/duty/rest/ration priorities remain authoritative;
+inspection excludes simultaneous material work. Closure, source exhaustion or
+selected-evidence eviction releases the immutable task, not its body/knowledge
+history. Trusted last-unit cold recovery validates the original tuple before
+revocation and refreshes the detached view. Normal Warn stages publication before
+acoustic admission; an injected admission failure leaves every saved root unchanged,
+retains pending work/open stock and releases no audio, while an ordinary retry
+commits one closure/reply. Phase4/9 continuation, forged references and late
+closing-step rollback preserve the same authoritative roots.
+
+The affected domain passes25files/499tests in92.53s. A subsequently added Warn
+failure case passes with the complete keeper file18/18 in42.05s; the other24
+files and every production byte remain unchanged. Exact commands:
+
+```sh
+npx vitest run src/sim/resident*.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentMaterialActivity.integration.test.ts src/game/residentRationActivity.integration.test.ts src/game/settlementKeeperInspection.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/runtime.keeperInspection.integration.test.ts src/game/runtime.residentRest.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/keeper-approach-domain-final.json
+npx vitest run src/game/runtime.keeperInspection.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/keeper-approach-runtime-final.json
+npx vitest run src/game/runtime.test.ts -t 'rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/keeper-approach-shared-rollback.json
+```
+
+The shared rollback case passes1/97unselected in7.78s. Maintained
+`npm run test:smoke` passes6files/105tests in5.32s; typecheck and documentation-
+reuse45checks pass. Initial failed runs exposed new fixture timing/property-order/
+inner-envelope mistakes and stale current53 assertions, not an altered simulation
+outcome; corrected tests retain arrival, conservation and exact-root comparisons.
+
+Final713 tracked-or-new non-Markdown input rows `{path,sha256}` hash
+`dfb28b36e8492f447dd95534853b7e12424ab1b9d4d7a54dff25dc03f260f5bb`.
+Domain report SHA256 is
+`026910099523e5892e4ee530c7214a0ff4a115e5c156ddccd38f1900e24f7ef9`;
+final keeper report is
+`1763cc96b319a7ca929b9827f2b62f91c9300837c4618528b0517f601555ce19`.
+These correctness durations are not performance measurements or a complete
+current cumulative certificate. No normal visual, natural-rate liveness,
+production artifact, platform, profiling/soak or release proof is claimed.
+`check:player-facing-sync` remains NOT READY for this unpublished candidate:
+unchanged release/manual identities and the pre-existing packaged smoke expected51
+are not current54 release evidence. The release gate is retained, not weakened.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

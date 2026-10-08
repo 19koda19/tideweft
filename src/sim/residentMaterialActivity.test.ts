@@ -61,8 +61,8 @@ describe("explicit civic material activity protocol", () => {
     expect(canonicalizeResidentActivity({ ...raw, materialTask: undefined }, binding)).toBeNull();
     const { materialTask: _task, ...missing } = raw;
     expect(canonicalizeResidentActivity(missing, binding)).toBeNull();
-    expect(canonicalizeResidentActivity({ ...raw, version: 4 }, binding)).toBeNull();
-    expect(residentActivitySupportsRations({ version: 4 } as unknown as typeof raw)).toBe(false);
+    expect(canonicalizeResidentActivity({ ...raw, version: 5 }, binding)).toBeNull();
+    expect(residentActivitySupportsRations({ version: 5 } as unknown as typeof raw)).toBe(false);
   });
 
   it.each([

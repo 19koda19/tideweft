@@ -11,8 +11,11 @@ export const FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION = 52 as const;
 /** First outer format authorizing enacted civic material tasks, not v2 fields. */
 export const FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION = 53 as const;
 
+/** First outer format authorizing source-bound physical-store inspection tasks. */
+export const FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION = 54 as const;
+
 /** The one outer `tideweft-session` schema emitted by this source tree. */
-export const CURRENT_GAME_SAVE_VERSION = 53 as const;
+export const CURRENT_GAME_SAVE_VERSION = 54 as const;
 
 /** Frozen Alpha64 boundary; do not move this when the current writer changes. */
 export const RELEASED_LIVING_VOICE_GAME_SAVE_VERSION = 50 as const;
