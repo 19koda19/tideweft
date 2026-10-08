@@ -52,6 +52,7 @@ import {
   type ResidentBodyPose,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
+import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -212,6 +213,9 @@ function greetResident(
       knowledgeLevel: resident.playerKnowledge.level,
       homeSettlementId: resident.homeSettlementId,
       ...residentExactEventLocus(world, resident),
+      // Commands execute before the world-step body re-anchor. This captures
+      // the closing interval's actual pose, not later membership/transport.
+      ...captureResidentActivityEventLocus(resident, world.meta.completedTick),
     });
   }
   return null;

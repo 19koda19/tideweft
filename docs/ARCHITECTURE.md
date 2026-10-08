@@ -2352,6 +2352,16 @@ diagnostic receipts. This transient metadata neither authenticates the producer
 nor becomes save authority; legacy absent bodies retain their previous reception.
 The runtime must still supply lawful event phases before activating body motion.
 
+Body-bound introductions additionally capture an exact scalar source pose in
+the committed simulation event through `residentActivityEventLocus.ts`. GREET
+captures the previous interval's actual body tick/phase before world re-anchoring;
+its player admission remains phase0 of the new interval. Strict alternate event
+keys preserve legacy macro-locus records unchanged and reject partial or mistimed
+body extensions. Later motion cannot relocate that speech, and cold presentation
+recovery acknowledges consumed audio. This local introduction bridge does not
+yet cover weather/departure sources, keeper/warning phase receipts or runtime
+body activation; those remain construction obligations.
+
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain
 or a remote hazard cannot silently teach an actor. Navigation/body heading,

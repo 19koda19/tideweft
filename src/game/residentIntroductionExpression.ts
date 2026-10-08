@@ -5,6 +5,11 @@ import type {
   WorldView,
 } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
+import {
+  RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+  hasResidentActivityEventLocus,
+  readResidentActivityEventLocus,
+} from "../sim/residentActivityEventLocus";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
 import { resolveResidentWorldPlacementAtEventLocation } from "./residentSpatial";
 import {
@@ -35,6 +40,9 @@ const INTRODUCTION_DATA_KEYS = Object.freeze([
   "homeSettlementId",
   "knowledgeLevel",
 ] as const);
+const BODY_INTRODUCTION_DATA_KEYS = Object.freeze([
+  ...INTRODUCTION_DATA_KEYS, ...RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+]);
 const INTRODUCTION_TRIGGER_PATTERN =
   /^sim-event:resident-introduced:(0|[1-9]\d*):([1-9]\d*)$/u;
 
@@ -293,7 +301,9 @@ function expressionAuthority(
     world,
     event: committedEvent,
     resident,
-    position: eventPlacement.position,
+    position: hasResidentActivityEventLocus(committedEvent.data)
+      ? readResidentActivityEventLocus(committedEvent.data)!.position
+      : eventPlacement.position,
     homeName: home.name,
   });
 }
@@ -312,12 +322,19 @@ function canonicalIntroductionEvent(value: unknown): SimEvent | null {
     || !nonnegativeSafeInteger(value.sequence)
     || !positiveSafeInteger(value.subjectId)
     || !plainRecord(value.data)
-    || !exactKeys(value.data, INTRODUCTION_DATA_KEYS)
+    || (!exactKeys(value.data, INTRODUCTION_DATA_KEYS)
+      && !exactKeys(value.data, BODY_INTRODUCTION_DATA_KEYS))
     || !validCommandId(value.data.commandId)
     || value.data.knowledgeLevel !== "acquainted"
     || !positiveSafeInteger(value.data.homeSettlementId)
     || residentIntroductionEventLocation(value as unknown as SimEvent) === null
   ) return null;
+  if (hasResidentActivityEventLocus(value.data)) {
+    const body = readResidentActivityEventLocus(value.data);
+    // GREET commits at the next world tick, before its physical re-anchor.
+    // Direct lower-world callers may close phase0; runtime ordinarily closes10.
+    if (body === null || body.tick !== value.tick - 1) return null;
+  }
   return value as unknown as SimEvent;
 }
 
