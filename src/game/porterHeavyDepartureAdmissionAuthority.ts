@@ -3,7 +3,6 @@ import { stableStringify } from "../sim/util";
 import { globalTileToRegion } from "../sim/regions";
 import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
-  livingActorAddressForResident,
   livingActorAddressInRegionalWindow,
 } from "./livingActor";
 import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
@@ -31,7 +30,10 @@ import {
   worldPositionDelta,
   worldPositionToSpatialFrame,
 } from "./worldPosition";
-import { workingPeopleExpressionEventMatchesWorld } from "./workingPeopleExpression";
+import {
+  workingPeopleExpressionEventMatchesWorld,
+  workingPeopleExpressionSourceAddressForTrigger,
+} from "./workingPeopleExpression";
 
 export interface PorterHeavyDepartureAdmissionAuthorityInput {
   /** Full compatibility economy which owns the resident and departure event. */
@@ -101,9 +103,9 @@ export function porterHeavyDepartureAdmissionMatchesEventTimePerception(
   if (sourceResidents.length !== 1) return false;
   const sourceResident = sourceResidents[0];
   if (sourceResident === undefined) return false;
-  let sourceAddress: ReturnType<typeof livingActorAddressForResident>;
+  let sourceAddress: ReturnType<typeof workingPeopleExpressionSourceAddressForTrigger>;
   try {
-    sourceAddress = livingActorAddressForResident(economyWorld, sourceResident);
+    sourceAddress = workingPeopleExpressionSourceAddressForTrigger(economyWorld, event.triggerEventId);
   } catch {
     return false;
   }

@@ -1892,6 +1892,7 @@ function advanceContracts(world: WorldState, tick: number): void {
           arrivalTick: contract.arrivalTick,
           routeHops: routePlan.routeIds.length,
           bottleneckReliability: routePlan.bottleneckReliability,
+          ...residentDepartureActivityEventLocus(world, resident, tick),
         });
       }
     }
@@ -1994,6 +1995,33 @@ function residentActivityRouteBinding(world: WorldState, resident: ResidentState
   return `${contract.id}:${contract.status}:${leg}:${contract.porterSettlementIds[leg]}:${contract.porterSettlementIds[leg + 1]}`;
 }
 
+/** The existing coarse transport owner supplies both event and final body pose. */
+function residentCoarseTransitionPose(world: WorldState, resident: ResidentState): ResidentBodyPose {
+  const placement = resident.location.kind === "route"
+    ? resolveResidentRouteWorldPlacement(world, resident)
+    : resolveResidentWorldPlacementAtEventLocation(world, resident, resident.location,
+      residentSettlementEventOrdinal(world, resident));
+  if (placement === null) throw new Error("Coarse resident transition lost physical placement");
+  return { position: placement.position, heading: headingFromRadians(placement.facing) };
+}
+
+/** Prepare the committed endpoint without publishing half a population mid-step. */
+function residentDepartureActivityEventLocus(
+  world: WorldState,
+  resident: ResidentState,
+  tick: number,
+): Readonly<Record<string, SimEventDatum>> | null {
+  if (!Object.hasOwn(resident, "activity")) return null;
+  const activity = canonicalizeResidentActivity(resident.activity, {
+    actorId: resident.identity.stableId, tick, phase: 0,
+  });
+  if (activity === null) throw new Error("Departure lost reanchored resident body");
+  const prepared = replaceResidentActivity(resident, {
+    ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
+  });
+  return captureResidentActivityEventLocus(prepared, tick);
+}
+
 /**
  * Re-anchor only current history, not the body. Existing coarse transport
  * remains explicitly authoritative until its later physical-execution slice;
@@ -2034,12 +2062,7 @@ function commitResidentActivityWorldStep(
         && priorLocation.settlementId !== currentLocation.settlementId);
     const changedDirection = snapshot.routeBinding !== residentActivityRouteBinding(world, resident);
     if (reconcileCoarseLocation && (changedLocation || (currentLocation.kind === "route" && changedDirection))) {
-      const placement = currentLocation.kind === "route"
-        ? resolveResidentRouteWorldPlacement(world, resident)
-        : resolveResidentWorldPlacementAtEventLocation(world, resident, currentLocation,
-          residentSettlementEventOrdinal(world, resident));
-      if (placement === null) throw new Error("Coarse resident transition lost physical placement");
-      pose = { position: placement.position, heading: headingFromRadians(placement.facing) };
+      pose = residentCoarseTransitionPose(world, resident);
       task = null;
     }
     if (task?.origin === "selected" && task.phase === "arrived"

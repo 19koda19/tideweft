@@ -2362,8 +2362,13 @@ recovery acknowledges consumed audio. Weather-hold speech uses the same strict
 source extension, captured at the new tick's phase0 before coarse transport;
 its retained route/contract/weather/memory and lawful reception requirements
 remain binding. Both legacy and observed event variants preserve their prior
-meaning. These local bridges do not yet cover departure sources, keeper/warning
-phase receipts or runtime body activation; those remain construction obligations.
+meaning. Heavy departure captures its committed coarse route endpoint and heading
+through the same private pose resolver used by final whole-roster publication,
+not the earlier settlement body. Its strict event alternatives retain conserved
+cargo, itinerary and exact departure-progress authority; hearing and cold channel
+checks consume that authenticated source. This is an event-time bridge, not
+physical porter travel. Keeper/warning phase receipts and runtime body activation
+remain construction obligations.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain

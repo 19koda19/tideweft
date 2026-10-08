@@ -603,6 +603,7 @@ import {
   workingPeopleExpressionEventMatchesWorld,
   workingPeopleExpressionEventForTrigger,
   workingPeopleExpressionIntent,
+  workingPeopleExpressionSourceAddressForTrigger,
   workingPeopleExpressionMemoryMatchesWorld,
 } from "./workingPeopleExpression";
 import {
@@ -13465,12 +13466,14 @@ export async function createTideweftRuntime(
             && acousticTerrainSupportForSpecies(coreWildlifeAlarmAdmissionSpecies(admission)) === "surface"
             ? [sample.id] : [];
       }
-      // Introduction and shelter owners authenticate their retained event-time
-      // route/settlement locus. A later moving body cannot relocate the sound.
+      // Each retained event owner authenticates its source. Other human channels
+      // keep their independent body/phase checks; no general resident exemption.
       if (event === null
         || !vocalizationSampleMatchesActiveEvent(sample, event)
         || (!historicalSourceLocus
-          && !residentSourcePositionMatches(economyView, sample.sourceActorId, sample.position))) {
+          && !(admission?.kind === "porter-heavy-departure"
+            ? porterDepartureSourcePositionMatches(economyView, admission.triggerEventId, sample.sourceActorId, sample.position)
+            : residentSourcePositionMatches(economyView, sample.sourceActorId, sample.position)))) {
         throw new Error("Human surface sound lost its committed source authority");
       }
       return [sample.id];
@@ -22315,7 +22318,7 @@ function playerPerceptionCarryMatchesPosition(
         === stableStringify(carry.intervalStartPosition)
       && admission.listenerFacingMilliRadians
         === carry.intervalStartFacingMilliRadians
-      && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
+      && porterDepartureSourcePositionMatches(economy, admission.triggerEventId, sample.sourceActorId, sample.position)
       && vocalizationSampleMatchesActiveEvent(sample, event)
       && porterHeavyDepartureAdmissionMatchesEventTimePerception({
         economyWorld: economy,
@@ -22814,7 +22817,9 @@ function situatedExpressionChannelsMatchWorld(
       if (
         active.meaning !== "resident-introduction"
         && active.meaning !== "resident-weather-hold"
-        && !residentSourcePositionMatches(economy, channel.sourceActorId, active.position)
+        && !(active.meaning === "porter-heavy-load"
+          ? porterDepartureSourcePositionMatches(economy, active.triggerEventId, channel.sourceActorId, active.position)
+          : residentSourcePositionMatches(economy, channel.sourceActorId, active.position))
       ) {
         return false;
       }
@@ -23227,6 +23232,17 @@ function playerPerceptionTileAtWorldPosition(
   const x = Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
   const y = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE);
   return world.terrain.tiles[y * world.terrain.width + x] ?? null;
+}
+
+function porterDepartureSourcePositionMatches(
+  economy: WorldView,
+  triggerEventId: string,
+  sourceActorId: string,
+  position: WorldPosition,
+): boolean {
+  const source = workingPeopleExpressionSourceAddressForTrigger(economy, triggerEventId);
+  return source !== null && source.actorId === sourceActorId
+    && stableStringify(source.position) === stableStringify(position);
 }
 
 function residentSourcePositionMatches(

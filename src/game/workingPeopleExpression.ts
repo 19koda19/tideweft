@@ -6,7 +6,12 @@ import {
   type WorldView,
 } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
-import { livingActorAddressForResident } from "./livingActor";
+import {
+  RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+  hasResidentActivityEventLocus,
+  readResidentActivityEventLocus,
+} from "../sim/residentActivityEventLocus";
+import { createLivingActorAddress, livingActorAddressForResident, type LivingActorAddress } from "./livingActor";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
 import {
   SITUATED_EXPRESSION_VERSION,
@@ -29,6 +34,12 @@ const OBSERVED_DEPARTURE_DATA_KEYS = Object.freeze([
   ...DEPARTURE_DATA_KEYS,
   "playerObserved",
 ] as const);
+const BODY_DEPARTURE_DATA_KEYS = Object.freeze([
+  ...DEPARTURE_DATA_KEYS, ...RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+]);
+const OBSERVED_BODY_DEPARTURE_DATA_KEYS = Object.freeze([
+  ...BODY_DEPARTURE_DATA_KEYS, "playerObserved",
+]);
 
 export interface WorkingPeopleExpressionInput {
   /** Current authoritative economy projection, never a render projection. */
@@ -51,6 +62,56 @@ const CONTRACT_DEPARTURE_TRIGGER_PATTERN =
 export function workingPeopleExpressionIntent(
   inputValue: WorkingPeopleExpressionInput,
 ): SituatedExpressionIntent | null {
+  const authority = expressionAuthority(inputValue);
+  if (authority === null) return null;
+  const { event: committedEvent, contract, address } = authority;
+  const triggerEventId = contractDepartureTriggerEventId(committedEvent);
+  const variantSeed = Number.parseInt(hashCanonical({
+    domain: "working-people-expression:v1",
+    sourceActorId: address.actorId,
+    triggerEventId,
+    atTick: committedEvent.tick,
+    resource: contract.resource,
+    quantity: contract.cargoQuantity,
+  }).slice(0, 8), 16) >>> 0;
+
+  return Object.freeze({
+    version: SITUATED_EXPRESSION_VERSION,
+    sourceActorId: address.actorId,
+    triggerEventId,
+    position: address.position,
+    meaning: "porter-heavy-load",
+    family: "work",
+    tone: "strained",
+    volume: "spoken",
+    knowledgeBasis: "self-handled-heavy-cargo",
+    priority: 240_000,
+    salience: 420_000,
+    variantSeed,
+    durationSteps: 8,
+  });
+}
+
+/** The same committed-cargo authority supplies historical source position/heading. */
+export function workingPeopleExpressionSourceAddressForTrigger(
+  world: WorldView,
+  triggerEventId: string,
+): LivingActorAddress | null {
+  if (!plainRecord(world) || !Array.isArray(world.events) || typeof triggerEventId !== "string") return null;
+  const trigger = parseContractDepartureTriggerEventId(triggerEventId);
+  if (trigger === null) return null;
+  const events = world.events.filter((event) => plainRecord(event) && event.sequence === trigger.sequence);
+  const event = events[0];
+  if (events.length !== 1 || event === undefined || event.subjectId !== trigger.contractId
+    || contractDepartureTriggerEventId(event) !== triggerEventId) return null;
+  return expressionAuthority({ world, event })?.address ?? null;
+}
+
+function expressionAuthority(inputValue: WorkingPeopleExpressionInput): Readonly<{
+  event: SimEvent;
+  contract: ContractState;
+  address: LivingActorAddress;
+}> | null {
   const input: unknown = inputValue;
   if (!plainRecord(input) || !exactKeys(input, ["event", "world"])) return null;
   const world = input.world as WorldView;
@@ -103,37 +164,18 @@ export function workingPeopleExpressionIntent(
 
   let address: ReturnType<typeof livingActorAddressForResident>;
   try {
-    address = livingActorAddressForResident(world, resident);
+    const body = hasResidentActivityEventLocus(committedEvent.data)
+      ? readResidentActivityEventLocus(committedEvent.data) : null;
+    if (hasResidentActivityEventLocus(committedEvent.data) && body === null) return null;
+    address = body === null ? livingActorAddressForResident(world, resident)
+      : createLivingActorAddress({ actorId: resident.identity.stableId, species: "human",
+        persistence: "promoted", position: body.position, heading: body.heading });
   } catch {
     return null;
   }
   if (address === null) return null;
 
-  const triggerEventId = contractDepartureTriggerEventId(committedEvent);
-  const variantSeed = Number.parseInt(hashCanonical({
-    domain: "working-people-expression:v1",
-    sourceActorId: address.actorId,
-    triggerEventId,
-    atTick: committedEvent.tick,
-    resource: contract.resource,
-    quantity: contract.cargoQuantity,
-  }).slice(0, 8), 16) >>> 0;
-
-  return Object.freeze({
-    version: SITUATED_EXPRESSION_VERSION,
-    sourceActorId: address.actorId,
-    triggerEventId,
-    position: address.position,
-    meaning: "porter-heavy-load",
-    family: "work",
-    tone: "strained",
-    volume: "spoken",
-    knowledgeBasis: "self-handled-heavy-cargo",
-    priority: 240_000,
-    salience: 420_000,
-    variantSeed,
-    durationSteps: 8,
-  });
+  return Object.freeze({ event: committedEvent, contract, address });
 }
 
 /**
@@ -341,7 +383,9 @@ function canonicalDepartureEvent(value: unknown): SimEvent | null {
   ) return null;
   if (
     (!exactKeys(value.data, DEPARTURE_DATA_KEYS)
-      && !exactKeys(value.data, OBSERVED_DEPARTURE_DATA_KEYS))
+      && !exactKeys(value.data, OBSERVED_DEPARTURE_DATA_KEYS)
+      && !exactKeys(value.data, BODY_DEPARTURE_DATA_KEYS)
+      && !exactKeys(value.data, OBSERVED_BODY_DEPARTURE_DATA_KEYS))
     || !positiveSafeInteger(value.data.residentId)
     || !positiveSafeInteger(value.data.routeHops)
     || !nonnegativeSafeInteger(value.data.arrivalTick)
@@ -349,6 +393,10 @@ function canonicalDepartureEvent(value: unknown): SimEvent | null {
     || !fixedPoint(value.data.bottleneckReliability)
     || (Object.hasOwn(value.data, "playerObserved") && value.data.playerObserved !== true)
   ) return null;
+  if (hasResidentActivityEventLocus(value.data)) {
+    const body = readResidentActivityEventLocus(value.data);
+    if (body === null || body.tick !== value.tick || body.phase !== 0) return null;
+  }
   return value as unknown as SimEvent;
 }
 
