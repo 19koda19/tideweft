@@ -4141,6 +4141,41 @@ supported reader, save-retirement rule, dependency, gameplay, completed
 directive or release changes. Full-suite PASS on these newer test bytes,
 platform/manual/performance and long-soak evidence are not claimed.
 
+### Native keeper inspection preconditions — 2026-10-08
+
+The next controlled runtime witness retains the native keeper, store, dog,
+terrain, heading and separate physical food lot. A declared initial shortage
+adjusts only the existing non-ration project's aggregate stock and initial
+ledger; delayed existing recipes/offers cannot refill it within the interval.
+No activity, intention, sight, arrival or closure result is assigned.
+
+After nine ordinary accepted steps, all ten body poses remain at the real
+one-tile dry source; the actual civic task waits for unavailable material and
+no store knowledge exists. At the tenth step, shared sight and lower admission
+create one exact identified exposed-food belief and direct keeper evidence.
+The body remains at the source and the store stays open. A matched absence
+counterfactual exhausts the physical food lot through eight existing finite
+setup transactions, retaining retired identity/accounting; the same accepted
+interval creates no food belief, keeper evidence or closure. These are source/
+knowledge preconditions, not dedicated inspection movement, ordinary animal
+feeding, player acquisition, normal visual play or complete settlement work.
+
+The full `runtime.keeperInspection.integration.test.ts` passes8tests/0failed/
+0unselected in21.47s, including its unchanged existing in-place closure,
+priority, cold and late-failure proofs:
+
+```sh
+npx vitest run src/game/runtime.keeperInspection.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/keeper-preconditions-final.json
+```
+
+Maintained `npm run test:smoke` passes6files/105tests in4.28s; typecheck
+passes. An initial2-case failure was the new test's JSON property-order
+comparison, corrected to exact structured position equality; its failed report
+is retained separately. No production/schema/reader/support/dependency change.
+Inspection-owned task selection, exclusive approach, cross-root evidence/source
+validation and cancellation remain the next implementation, not delivered by
+this fixture proof. Profiling/soaks and platform/release proof are not claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

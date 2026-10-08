@@ -133,10 +133,10 @@ function keeper(world: WorldState, actorId: string) {
 
 /**
  * Native bootstrap retains real store, identity, BIO0, custody and terrain.
- * Only pressure/weather/offer/recipe inputs are controlled. No successful
+ * Only pressure/weather/offer/recipe and optional initial supply are controlled. No successful
  * body, task, intention, sight receipt, arrival or closure is assigned.
  */
-async function fixture(mode: "work" | "rest" = "work") {
+async function fixture(mode: "work" | "rest" = "work", initialMaterialShortage = false) {
   for (const seed of ["resident activity executable rest approach", "a", "settlement keeper home night continuity"]) {
     const repository = new MemoryRepository();
     const setup = await open(repository);
@@ -175,6 +175,17 @@ async function fixture(mode: "work" | "rest" = "work") {
     for (const settlement of world.settlements) {
       for (const recipe of settlement.recipes) recipe.nextRunTick = world.meta.completedTick + 1_000;
     }
+    if (initialMaterialShortage) {
+      const home = world.settlements.find(({ id }) => id === store.identity.settlementId);
+      if (home === undefined || home.project.status !== "building"
+        || home.project.resource === "food" || home.project.resource === "freshWater") {
+        throw new Error("Keeper shortage fixture requires an existing non-ration project");
+      }
+      // Declared initial aggregate supply, not a consumption action. The
+      // independent finite physical store lot and every resident remain native.
+      world.ledger.initial[home.project.resource] -= home.inventory[home.project.resource];
+      home.inventory[home.project.resource] = 0;
+    }
     assertWorldInvariants(world);
     envelope.world = serializeWorld(world);
     const prepared = recordWith(record, envelope);
@@ -182,6 +193,29 @@ async function fixture(mode: "work" | "rest" = "work") {
     return { record: prepared, actorId: human.identity.stableId, source, target, tick: world.meta.completedTick };
   }
   throw new Error("Three native seeds lack a dry keeper approach; no geometry or arrival was invented");
+}
+
+/** Real finite setup transactions, not a claim of ordinary animal feeding. */
+function exhaustStoreFood(store: ReturnType<typeof deserializeSettlementEcologyState>, tick: number) {
+  const custody = store.domesticCustodies.find(({ species }) => species === "domestic-chicken");
+  if (custody === undefined) throw new Error("Native store lacks its authenticated domestic custody");
+  for (let use = 0; use < 8; use += 1) {
+    const staged = stageSettlementDomesticFoodUse(store, {
+      version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
+      storeId: store.identity.storeId, foodLotId: store.identity.foodLotId,
+      relationshipId: custody.relationshipId, memberActorId: custody.memberActorIds[0]!,
+      requestedQuantity: 1, causeEventId: `keeper-source-absence:setup:${use}`,
+      causeEventTick: tick - 7 + use,
+    });
+    if (staged === null) throw new Error("Finite setup use could not be staged");
+    const resolved = resolveSettlementDomesticFoodUse(staged.state, staged.transaction);
+    if (resolved === null || !resolved.applied) throw new Error("Finite setup use could not consume its real unit");
+    store = resolved.state;
+  }
+  expect(store.carrier.lots).toEqual([]);
+  expect(store.carrier.retiredLotIds).toEqual([store.identity.foodLotId]);
+  expect(store.lastResolvedDomesticFoodUseOrdinal).toBe(8);
+  return store;
 }
 
 /** Find the native closing interval, retaining its actual unconsumed phase9. */
@@ -209,6 +243,72 @@ async function closingFixture() {
 }
 
 describe("ordinary autonomous keeper inspection", () => {
+  it.each([true, false])("admits native store evidence independently of unavailable civic material (finite food=%s)", async (foodAvailable) => {
+    const base = await fixture("work", true);
+    const envelope = decode(base.record);
+    const originalStore = deserializeSettlementEcologyState(envelope.settlementEcology);
+    const initialStore = foodAvailable ? originalStore : exhaustStoreFood(originalStore, base.tick);
+    envelope.settlementEcology = serializeSettlementEcologyState(initialStore);
+    const repository = new MemoryRepository(recordWith(base.record, envelope));
+    const runtime = await open(repository);
+
+    // First interval precedes any admitted store knowledge. Its actual material
+    // shortage must prevent incidental delivery movement or synthetic arrival.
+    advance(runtime, 9);
+    await runtime.save();
+    const before = decode(repository.snapshot());
+    const beforeWorld = deserializeWorld(before.world);
+    const beforeKeeper = keeper(beforeWorld, base.actorId);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(beforeWorld.meta.completedTick).toBe(base.tick);
+    expect(beforeKeeper.intention).toBe("work");
+    expect(beforeKeeper.activity?.restTask).toBeNull();
+    expect(beforeKeeper.activity?.rationTask).toBeNull();
+    expect(beforeKeeper.activity?.materialTask).toMatchObject({
+      phase: "waiting", waitReason: "no-material", target: base.target,
+    });
+    expect(beforeKeeper.activity?.poses).toHaveLength(10);
+    expect(beforeKeeper.activity?.poses.map(({ position }) => position))
+      .toEqual(Array.from({ length: 10 }, () => base.source));
+    expect(deserializeSettlementEcologyState(before.settlementEcology).keeperKnowledge).toEqual([]);
+
+    advance(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(after.world);
+    const afterKeeper = keeper(afterWorld, base.actorId);
+    const afterStore = deserializeSettlementEcologyState(after.settlementEcology);
+    expect(afterWorld.meta.completedTick).toBe(base.tick + 1);
+    expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(afterKeeper.activity?.poses).toHaveLength(1);
+    expect(afterKeeper.activity?.poses[0]?.position).toEqual(base.source);
+    expect(afterStore.closure).toBe("open");
+    expect(afterStore.lastClosureTransactionId).toBeNull();
+    const home = afterWorld.settlements.find(({ id }) => id === originalStore.identity.settlementId);
+    if (home === undefined) throw new Error("Keeper evidence fixture lost its real settlement");
+    expect(home.inventory[home.project.resource]).toBe(0);
+    if (foodAvailable) {
+      expect(afterStore.keeperKnowledge).toHaveLength(1);
+      const knowledge = afterStore.keeperKnowledge[0]!;
+      expect(knowledge).toMatchObject({
+        source: "direct-observation", sourceActorId: base.actorId,
+        learnedAtTick: base.tick + 1,
+      });
+      expect(afterKeeper.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === knowledge.evidenceId))
+        .toMatchObject({
+          channel: "vision", perceivedClass: "exposed-food", identification: "identified",
+          subjectId: originalStore.identity.foodLotId, lastObservedTick: base.tick + 1,
+        });
+    } else {
+      expect(afterStore).toEqual(initialStore);
+      expect(afterKeeper.perception.beliefs.some(({ subjectId }) => subjectId === initialStore.identity.foodLotId)).toBe(false);
+    }
+    assertWorldInvariants(beforeWorld);
+    assertWorldInvariants(afterWorld);
+    // This verifies the producer/knowledge precondition, not dedicated
+    // inspection movement, source acquisition or rendered normal-play proof.
+  }, 60_000);
+
   it("uses a real existing material approach and direct sight to secure the unchanged physical store silently", async () => {
     const base = await fixture();
     const initialBio0 = deserializeBio0Ecology(decode(base.record).bio0Ecology);
@@ -376,28 +476,7 @@ describe("ordinary autonomous keeper inspection", () => {
   it("preserves an actually exhausted finite source as empty without inventing sight or closure", async () => {
     const base = await fixture();
     const envelope = decode(base.record);
-    let store = deserializeSettlementEcologyState(envelope.settlementEcology);
-    const custody = store.domesticCustodies.find(({ species }) => species === "domestic-chicken");
-    if (custody === undefined) throw new Error("Native store lacks its authenticated domestic custody");
-    // Explicit kernel/setup contact causes, NOT claimed ordinary animal feeding.
-    // Each real finite transaction consumes1 and records the retired source;
-    // no empty carrier, resolved ordinal or successful receipt is assigned.
-    for (let use = 0; use < 8; use += 1) {
-      const staged = stageSettlementDomesticFoodUse(store, {
-        version: SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
-        storeId: store.identity.storeId, foodLotId: store.identity.foodLotId,
-        relationshipId: custody.relationshipId, memberActorId: custody.memberActorIds[0]!,
-        requestedQuantity: 1, causeEventId: `keeper-source-absence:setup:${use}`,
-        causeEventTick: base.tick - 7 + use,
-      });
-      if (staged === null) throw new Error("Finite setup use could not be staged");
-      const resolved = resolveSettlementDomesticFoodUse(staged.state, staged.transaction);
-      if (resolved === null || !resolved.applied) throw new Error("Finite setup use could not consume its real unit");
-      store = resolved.state;
-    }
-    expect(store.carrier.lots).toEqual([]);
-    expect(store.carrier.retiredLotIds).toEqual([store.identity.foodLotId]);
-    expect(store.lastResolvedDomesticFoodUseOrdinal).toBe(8);
+    const store = exhaustStoreFood(deserializeSettlementEcologyState(envelope.settlementEcology), base.tick);
     envelope.settlementEcology = serializeSettlementEcologyState(store);
     const repository = new MemoryRepository(recordWith(base.record, envelope));
     const runtime = await open(repository);
