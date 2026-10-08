@@ -1576,6 +1576,14 @@ Random decisions use a keyed generator derived from the root seed plus domain, t
 
 The interactive host advances player motion at 100 ms fixed steps and advances the authoritative world once per ten player steps. There is no manual in-play pause command: ordinary field play advances continuously. Opening the title or Quiet Hour sets the internal paused state, saves, and halts both clocks until the player continues. A capped accumulator prevents a hidden or stalled tab from applying an unbounded catch-up burst.
 
+The host's fail-closed checkpoint restores the complete sensory interval anchor
+(position, facing and sleeping state), not merely the world tick and movement
+prefix. A failed first SLEEP boundary cannot retain the next interval's sleeping
+bit. World-advancing steps keep their complete world clone; fine resident activity
+uses the exact prior roster reference under whole-roster immutable replacement
+ownership. Fine-step owners must not mutate retained resident fields in place.
+This checkpoint preparation does not itself activate resident bodies.
+
 `src/sim/worldTime.ts` is the single versioned civil-day projection over that
 persisted world tick. Version 1 fixes tick zero at Day 1 00:00, one tick as one
 displayed minute, and 1,440 ticks per day. Night runs 00:00–06:00, dawn

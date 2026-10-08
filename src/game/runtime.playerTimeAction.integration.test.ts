@@ -270,6 +270,63 @@ function nightSettlementLegacyRecord(seed: string): SaveRecord {
 }
 
 describe("runtime player REST/SLEEP authority", () => {
+  it("restores the awake interval anchor when the first real SLEEP boundary fails late", async () => {
+    const repository = new MemoryRepository(nightSettlementLegacyRecord("player sleep dawn authority"));
+    let runtime: TideweftRuntime | null = await createTideweftRuntime(repository);
+    try {
+      // These accepted ordinary steps precede SLEEP; their phase-zero hearing
+      // anchor must remain awake even though the next interval would be asleep.
+      advanceOrdinaryFixedSteps(runtime, 9);
+      runtime.dispatchUI({ type: "recover", action: "begin" });
+      expect(recoveryControls(runtime)).toMatchObject({ recoveryActive: true, recoveryKind: "sleep" });
+      await runtime.save();
+      const before = decodeCurrent(repository.snapshot());
+      expect(playerStepPhase(before)).toBe(9);
+      expect(before.perceptionCarry.intervalStartWasSleeping).toBe(false);
+      expect(before.player.timeAction).toMatchObject({ kind: "sleep", completedSteps: 0 });
+
+      // Reject the real final closure after the world and fresh sleep anchor
+      // were provisionally advanced; no alternate tick or activation hook.
+      const close = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+        .mockReturnValue(null);
+      soundscapePlay.mockReset();
+      advanceRecoveryFrames(runtime, 1);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      expect(recoveryControls(runtime).recoveryActive).toBe(false);
+      expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+      await runtime.save();
+      const after = decodeCurrent(repository.snapshot());
+      expect(completedTick(after)).toBe(completedTick(before));
+      expect(playerStepPhase(after)).toBe(9);
+      expect(after.perceptionCarry.intervalStartWasSleeping).toBe(false);
+      expect(after.player.timeAction).toBeNull();
+      const { session: _beforeSession, integrity: _beforeIntegrity, ...beforeRoots } = before;
+      const { session: _afterSession, integrity: _afterIntegrity, ...afterRoots } = after;
+      expect(afterRoots).toEqual({ ...beforeRoots, player: { ...before.player, timeAction: null } });
+      const { paused: _beforePaused, announcement: _beforeAnnouncement, nextAnnouncementId: _beforeId, ...beforeSession } = before.session;
+      const { paused: _afterPaused, announcement: _afterAnnouncement, nextAnnouncementId: _afterId, ...afterSession } = after.session;
+      expect(afterSession).toEqual(beforeSession);
+
+      runtime.destroy();
+      runtime = null;
+      scheduledFrame = undefined;
+      soundscapePlay.mockReset();
+      runtime = await createTideweftRuntime(repository);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      expect(soundscapePlay.mock.calls).toEqual([]);
+      await runtime.save();
+      const restored = decodeCurrent(repository.snapshot());
+      const { session: _restoredSession, integrity: _restoredIntegrity, ...restoredRoots } = restored;
+      expect(restoredRoots).toEqual(afterRoots);
+      expect(restored.perceptionCarry.intervalStartWasSleeping).toBe(false);
+      expect(restored.session.sessionChanges).toEqual([]);
+    } finally {
+      runtime?.destroy();
+      scheduledFrame = undefined;
+    }
+  });
+
   it.each([false, true])("releases real SLEEP completion audio only after its final interval commits (reject=%s)", async (reject) => {
     const repository = new MemoryRepository(nightSettlementLegacyRecord("player sleep dawn authority"));
     let runtime: TideweftRuntime | null = await createTideweftRuntime(repository);

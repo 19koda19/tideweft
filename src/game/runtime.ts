@@ -20433,6 +20433,10 @@ export async function createTideweftRuntime(
     const failClosedCheckpointStartedAtMs = worldWillAdvance ? startedAtMs : null;
     const priorWorld = worldWillAdvance ? structuredClone(world) : null;
     const prior = {
+      // Fine resident activity owners stage new residents and publish one
+      // replacement roster; they must never mutate this retained root in place.
+      // Advancing world steps still use the complete clone above.
+      residents: world.residents,
       player: structuredClone(player),
       // Every admitted cargo sidecar is recursively frozen and every mutation
       // replaces its root. Retaining the exact reference is therefore a full
@@ -20460,6 +20464,7 @@ export async function createTideweftRuntime(
       situatedExpressionCausalAuthority,
       playerPerceptionIntervalStartPosition,
       playerPerceptionIntervalStartFacingMilliRadians,
+      playerPerceptionIntervalStartWasSleeping,
       commandQueue: structuredClone(commandQueue),
       playerStepsSinceWorldTick,
       playerSenseSamples: [...playerSenseSamples],
@@ -20519,6 +20524,8 @@ export async function createTideweftRuntime(
       if (priorWorld) {
         world = priorWorld;
         fieldResourceCatalog = runtimeFieldResourceCatalog(world);
+      } else {
+        world.residents = prior.residents;
       }
       player = prior.player;
       physicalCargo = prior.physicalCargo;
@@ -20545,6 +20552,7 @@ export async function createTideweftRuntime(
       playerPerceptionIntervalStartPosition = prior.playerPerceptionIntervalStartPosition;
       playerPerceptionIntervalStartFacingMilliRadians =
         prior.playerPerceptionIntervalStartFacingMilliRadians;
+      playerPerceptionIntervalStartWasSleeping = prior.playerPerceptionIntervalStartWasSleeping;
       commandQueue = prior.commandQueue;
       playerStepsSinceWorldTick = prior.playerStepsSinceWorldTick;
       playerSenseSamples = prior.playerSenseSamples;
