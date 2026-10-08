@@ -12,6 +12,7 @@ import {
 import { globalTileToRegion } from "../sim/regions";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { FIXED_POINT, type WorldView } from "../sim/types";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE } from "../sim/residentActivity";
 import {
   evaluateAudibleContact,
   evaluateVisualContact,
@@ -28,6 +29,7 @@ import {
 import {
   residentPlacementInRegionalWindow,
   resolveResidentWorldPlacement,
+  resolveResidentWorldPlacementAtActivityPhase,
   type ResidentWorldPlacement,
 } from "./residentSpatial";
 import {
@@ -168,6 +170,18 @@ export interface HumanPerceptionInput {
    * repeated here. This metadata is never save carry.
    */
   readonly surfaceSoundSampleIds?: readonly string[];
+  /**
+   * Transient event-time metadata authenticated by the caller's cause/admission
+   * owner, never inferred from sound-list order. A body-bound interval requires
+   * one entry for every supplied non-player sound. Player step ordinal n already
+   * means accepted phase n+1. This metadata does not authenticate a producer.
+   */
+  readonly soundSamplePhases?: readonly HumanSoundSamplePhase[];
+}
+
+export interface HumanSoundSamplePhase {
+  readonly sampleId: string;
+  readonly phase: number;
 }
 
 export interface HumanObservationBatch {
@@ -319,12 +333,14 @@ export function collectExistingHumanObservations(
   const hasPhysicalSounds = Object.hasOwn(value, "physicalSoundSamples");
   const hasUnadmittedAlarmSounds = Object.hasOwn(value, "unadmittedAlarmSoundSamples");
   const hasSurfaceSoundSampleIds = Object.hasOwn(value, "surfaceSoundSampleIds");
+  const hasSoundSamplePhases = Object.hasOwn(value, "soundSamplePhases");
   const expectedKeys = ["playerSamples", "targetTick", "window", "world"];
   if (hasSupplementalSounds) expectedKeys.push("supplementalSoundSamples");
   if (hasSupplementalSemanticFacts) expectedKeys.push("supplementalSemanticFacts");
   if (hasPhysicalSounds) expectedKeys.push("physicalSoundSamples");
   if (hasUnadmittedAlarmSounds) expectedKeys.push("unadmittedAlarmSoundSamples");
   if (hasSurfaceSoundSampleIds) expectedKeys.push("surfaceSoundSampleIds");
+  if (hasSoundSamplePhases) expectedKeys.push("soundSamplePhases");
   if (!exactKeys(value, expectedKeys)) return EMPTY_BATCHES;
   const { world, window, targetTick } = input;
   if (
@@ -333,6 +349,7 @@ export function collectExistingHumanObservations(
     || (hasPhysicalSounds && !Array.isArray(input.physicalSoundSamples))
     || (hasUnadmittedAlarmSounds && !Array.isArray(input.unadmittedAlarmSoundSamples))
     || (hasSurfaceSoundSampleIds && !Array.isArray(input.surfaceSoundSampleIds))
+    || (hasSoundSamplePhases && !Array.isArray(input.soundSamplePhases))
   ) return EMPTY_BATCHES;
   const rawSupplementalSounds = input.supplementalSoundSamples
     ?? EMPTY_SUPPLEMENTAL_SOUND_SAMPLES;
@@ -388,19 +405,43 @@ export function collectExistingHumanObservations(
     unadmittedAlarmSounds,
   );
   if (surfaceSoundSampleIds === null) return EMPTY_BATCHES;
+  const hasBodyResidents = world.residents.some((resident) => Object.hasOwn(resident, "activity"));
+  const soundSamplePhases = validatedSoundSamplePhases(
+    input.soundSamplePhases, supplementalSounds, physicalSounds, unadmittedAlarmSounds,
+    hasBodyResidents,
+  );
+  if (soundSamplePhases === null) return EMPTY_BATCHES;
+  const requiredPhases = new Set([
+    ...samples.map(({ sampleOrdinal }) => sampleOrdinal + 1),
+    ...soundSamplePhases.values(),
+  ]);
   const cells = buildWorldPerceptionCells(world);
   if (cells === null) return EMPTY_BATCHES;
   const semanticFactByExpressionEventId = new Map(
     supplementalSemanticFacts.map((fact) => [fact.expressionEventId, fact]),
   );
 
-  const positioned = world.residents.flatMap((resident) => {
+  const positioned: Array<{ resident: WorldView["residents"][number]; placement: ResidentWorldPlacement }> = [];
+  for (const resident of world.residents) {
     const placement = resolveResidentWorldPlacement(economy, resident);
-    if (placement === null || residentPlacementInRegionalWindow(placement, window) === null) {
-      return [];
+    if (Object.hasOwn(resident, "activity")) {
+      const activity = canonicalizeResidentActivity(resident.activity, {
+        actorId: resident.identity.stableId, tick: economy.completedTick,
+      });
+      if (activity === null || placement === null
+        || [...requiredPhases].some((phase) => phase >= activity.poses.length)) return EMPTY_BATCHES;
+      // A listener can leave the window after hearing. Selection must include
+      // its retained interval poses, not silently discard the earlier receipt.
+      const inWindow = activity.poses.some((_pose, phase) => {
+        const retained = resolveResidentWorldPlacementAtActivityPhase(economy, resident, economy.completedTick, phase);
+        return retained !== null && residentPlacementInRegionalWindow(retained, window) !== null;
+      });
+      if (inWindow) positioned.push({ resident, placement });
+    } else if (placement !== null && residentPlacementInRegionalWindow(placement, window) !== null) {
+      positioned.push({ resident, placement });
     }
-    return [{ resident, placement }];
-  }).sort((left, right) => compareText(
+  }
+  positioned.sort((left, right) => compareText(
     left.resident.identity.stableId,
     right.resident.identity.stableId,
   ) || left.resident.id - right.resident.id);
@@ -417,11 +458,30 @@ export function collectExistingHumanObservations(
       || priorState.actorId !== resident.identity.stableId
       || priorState.tick >= targetTick
     ) return EMPTY_BATCHES;
-    const projectedResident = residentPlacementInRegionalWindow(placement, window);
-    if (projectedResident === null) return EMPTY_BATCHES;
-    const ambientNoise = ambientNoiseAt(world, projectedResident.tileIndex);
-    if (ambientNoise === null) return EMPTY_BATCHES;
-    const facing = lawfulResidentFacing(priorState, placement);
+    const listeners = new Map<number, {
+      placement: ResidentWorldPlacement;
+      projected: NonNullable<ReturnType<typeof residentPlacementInRegionalWindow>>;
+      ambientNoise: number;
+      facing: number;
+    } | null>();
+    const bodyBound = Object.hasOwn(resident, "activity");
+    // An absent legacy body still has one spatial/noise projection. Do not
+    // repeat that unchanged work for every player sample in its interval.
+    for (const phase of bodyBound ? requiredPhases : [0]) {
+      const retained = bodyBound
+        ? resolveResidentWorldPlacementAtActivityPhase(economy, resident, economy.completedTick, phase)
+        : placement;
+      if (retained === null) return EMPTY_BATCHES;
+      const projected = residentPlacementInRegionalWindow(retained, window);
+      if (projected === null) { listeners.set(phase, null); continue; }
+      const ambientNoise = ambientNoiseAt(world, projected.tileIndex);
+      if (ambientNoise === null) return EMPTY_BATCHES;
+      listeners.set(phase, {
+        placement: retained, projected, ambientNoise,
+        facing: lawfulResidentFacing(priorState, retained),
+      });
+    }
+    const listenerAt = (phase: number) => listeners.get(bodyBound ? phase : 0);
     const observations: ActorObservation[] = [];
     let latestIdentifiedVisual: {
       readonly sampleOrdinal: number;
@@ -445,6 +505,7 @@ export function collectExistingHumanObservations(
     const appendHearingObservation = (
       sample: AcousticSample,
       targetPoint: SpatialFramePoint,
+      listener: NonNullable<ReturnType<typeof listeners.get>>,
       semanticFact: SituatedExpressionSemanticFact | null = null,
       diagnosticSample: SupplementalSoundSample | null = null,
       sourceSupport: "surface" | "unmodeled" = surfaceSoundSampleIds.has(sample.id)
@@ -455,10 +516,10 @@ export function collectExistingHumanObservations(
         return true;
       }
       const acousticInput = prepareTerrainAudibleContactInput({
-        listener: projectedResident.position,
+        listener: listener.projected.position,
         source: targetPoint,
         baseRange: sample.soundRangeUnits,
-        ambientNoise,
+        ambientNoise: listener.ambientNoise,
         sourceLoudness: sample.soundLoudness / FIXED_POINT,
         wind: {
           x: world.weather.windX / FIXED_POINT,
@@ -466,7 +527,7 @@ export function collectExistingHumanObservations(
         },
       }, {
         world,
-        listenerPosition: placement.position,
+        listenerPosition: listener.placement.position,
         sourcePosition: sample.position,
         sourceSupport,
         listenerSupport: "surface",
@@ -477,7 +538,7 @@ export function collectExistingHumanObservations(
         if (import.meta.env.DEV) recordListening(diagnosticSample, semanticFact, "not-heard");
         return true;
       }
-      const area = inferAnonymousHearingArea(placement.position, sample.position, heard);
+      const area = inferAnonymousHearingArea(listener.placement.position, sample.position, heard);
       if (area === null) return false;
       const hearingConfidence = scaleContact(heard.certainty);
       const perceivedClass = semanticFact !== null
@@ -504,6 +565,8 @@ export function collectExistingHumanObservations(
     };
 
     for (const sample of samples) {
+      const listener = listenerAt(sample.sampleOrdinal + 1);
+      if (listener === null || listener === undefined) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
       const targetX = Math.floor(targetPoint.x / WORLD_POSITION_UNITS_PER_TILE);
@@ -513,9 +576,9 @@ export function collectExistingHumanObservations(
         columns: world.terrain.width,
         rows: world.terrain.height,
         cells,
-        observerTileIndex: projectedResident.tileIndex,
+        observerTileIndex: listener.projected.tileIndex,
         targetTileIndex,
-        observerFacingRadians: facing,
+        observerFacingRadians: listener.facing,
         weatherVisibility: weatherVisibility(world),
         targetMovementSalience: sample.movementSalience / FIXED_POINT,
         targetLightVisibility: sample.lightVisibility / FIXED_POINT,
@@ -551,7 +614,7 @@ export function collectExistingHumanObservations(
           };
         }
       }
-      if (!appendHearingObservation(sample, targetPoint, null, null, "surface")) {
+      if (!appendHearingObservation(sample, targetPoint, listener, null, null, "surface")) {
         return EMPTY_BATCHES;
       }
     }
@@ -562,28 +625,32 @@ export function collectExistingHumanObservations(
         continue;
       }
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
-      if (targetPoint === null) {
+      const listener = listenerAt(soundSamplePhases.get(sample.id) ?? 0);
+      if (targetPoint === null || listener === null || listener === undefined) {
         if (import.meta.env.DEV) recordListening(sample, semanticFact, "unavailable");
         continue;
       }
       if (!appendHearingObservation(
         sample,
         targetPoint,
+        listener,
         semanticFact,
         sample,
       )) return EMPTY_BATCHES;
     }
     for (const sample of physicalSounds) {
+      const listener = listenerAt(soundSamplePhases.get(sample.id) ?? 0);
+      if (listener === null || listener === undefined) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
       const reception = evaluatePhysicalAcousticListener({
         observationId: observationId("h", targetTick, resident.id, sample.id),
         observerId: priorState.actorId,
-        observerPosition: placement.position,
+        observerPosition: listener.placement.position,
         observedAtTick: targetTick,
         sample,
         effectiveRangeUnits: sample.soundRangeUnits,
-        ambientNoise,
+        ambientNoise: listener.ambientNoise,
         wind: {
           x: world.weather.windX / FIXED_POINT,
           y: world.weather.windY / FIXED_POINT,
@@ -598,9 +665,11 @@ export function collectExistingHumanObservations(
     }
     for (const sample of unadmittedAlarmSounds) {
       if (sample.sourceActorId === priorState.actorId) continue;
+      const listener = listenerAt(soundSamplePhases.get(sample.id) ?? 0);
+      if (listener === null || listener === undefined) continue;
       const targetPoint = projectedSamplePoint(frame, world, sample.position);
       if (targetPoint === null) continue;
-      if (!appendHearingObservation(sample, targetPoint)) return EMPTY_BATCHES;
+      if (!appendHearingObservation(sample, targetPoint, listener)) return EMPTY_BATCHES;
     }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
@@ -789,6 +858,44 @@ function validatedSurfaceSoundSampleIds(
     surfaceIds.add(id);
   }
   return surfaceIds;
+}
+
+function validatedSoundSamplePhases(
+  value: readonly HumanSoundSamplePhase[] | undefined,
+  supplementalSounds: readonly SupplementalSoundSample[],
+  physicalSounds: readonly PhysicalSoundSample[],
+  unadmittedAlarmSounds: readonly UnadmittedAlarmSoundSample[],
+  bodyBound: boolean,
+): ReadonlyMap<string, number> | null {
+  const ids = new Set([
+    ...supplementalSounds.map(({ id }) => id),
+    ...physicalSounds.map(({ id }) => id),
+    ...unadmittedAlarmSounds.map(({ id }) => id),
+  ]);
+  if (value === undefined) {
+    // Legacy bodies have one placement, not a reconstructed phase history.
+    // New body-bound hearing may never guess event time from list order.
+    return bodyBound && ids.size > 0 ? null : new Map([...ids].map((id) => [id, 0]));
+  }
+  if (!Array.isArray(value) || value.length !== ids.size
+    || Object.getPrototypeOf(value) !== Array.prototype
+    || Reflect.ownKeys(value).length !== value.length + 1) return null;
+  const phases = new Map<string, number>();
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = Object.getOwnPropertyDescriptor(value, index);
+    if (entry?.enumerable !== true || !Object.hasOwn(entry, "value")) return null;
+    const record = entry.value;
+    if (!plainRecord(record) || Reflect.ownKeys(record).length !== 2
+      || !exactKeys(record, ["phase", "sampleId"])
+      || !Object.hasOwn(Object.getOwnPropertyDescriptor(record, "phase") ?? {}, "value")
+      || !Object.hasOwn(Object.getOwnPropertyDescriptor(record, "sampleId") ?? {}, "value")
+      || typeof record.sampleId !== "string" || !ids.has(record.sampleId)
+      || phases.has(record.sampleId) || !Number.isSafeInteger(record.phase)
+      || (record.phase as number) < 0 || (record.phase as number) > RESIDENT_ACTIVITY_MAX_PHASE
+      || Object.is(record.phase, -0)) return null;
+    phases.set(record.sampleId, record.phase as number);
+  }
+  return phases;
 }
 
 function disjointAcousticEventIds(

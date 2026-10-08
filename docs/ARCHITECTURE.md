@@ -2339,8 +2339,18 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 These are **local foundations, not normal-play activation or
 physical porter-travel proof**. Existing absent records remain absent on load;
 runtime adoption, supported outer-format fencing, phase-aware hearing/source
-receipts, derived-address publication and fine-step rollback remain necessary
-before enabling that motion in ordinary play. No new public release is claimed.
+receipt integration, derived-address publication and fine-step rollback remain
+necessary before enabling that motion in ordinary play. No new public release is claimed.
+
+The existing `humanPerception.ts` reception bridge now supports those retained
+body poses. Player sample ordinal n uses accepted pose n+1; other supplied
+sounds require a complete, bounded `soundSamplePhases` map from their actual
+cause/admission owner. Per-stimulus position, facing, terrain masking and hearing
+area use that retained pose, including a listener who has since left the window.
+Missing/malformed timing or history rejects the complete frame before publishing
+diagnostic receipts. This transient metadata neither authenticates the producer
+nor becomes save authority; legacy absent bodies retain their previous reception.
+The runtime must still supply lawful event phases before activating body motion.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain
