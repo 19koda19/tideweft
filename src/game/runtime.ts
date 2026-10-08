@@ -1123,6 +1123,7 @@ import {
   deriveSettlementKeeperCircadianDuty,
   planSettlementKeeperCircadian,
 } from "./settlementKeeperCircadian";
+import { collectSettlementKeeperStoreObservations, advanceSettlementKeeperStoreInspection } from "./settlementKeeperInspection";
 import { planResidentCircadian } from "./residentCircadian";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
@@ -15276,13 +15277,19 @@ export async function createTideweftRuntime(
       ))) {
         playerRecoveryDisturbedThisStep = true;
       }
+      const keeperStoreObservations = collectSettlementKeeperStoreObservations({
+        world: worldView, window: regionalTravel.window,
+        settlement: settlementEcology, targetTick,
+      });
+      if (keeperStoreObservations === null) throw new Error("Keeper store sight lost its physical binding");
       const porterWorldObservations = canonicalizeActorObservations([
         ...canonicalDogVisualObservations,
         ...porterCoreObservations,
+        ...keeperStoreObservations,
       ]);
       if (
         porterWorldObservations.length
-        !== canonicalDogVisualObservations.length + porterCoreObservations.length
+        !== canonicalDogVisualObservations.length + porterCoreObservations.length + keeperStoreObservations.length
       ) {
         throw new Error("Porter world observations could not be canonicalized");
       }
@@ -16213,6 +16220,12 @@ export async function createTideweftRuntime(
         throw new Error("Resident circadian states could not commit atomically");
       }
       world = circadianWorld;
+      const inspectedStore = advanceSettlementKeeperStoreInspection({
+        world, settlement: settlementEcology, porterResponse,
+        observations: keeperStoreObservations,
+      });
+      if (inspectedStore === null) throw new Error("Keeper store inspection failed its admitted action boundary");
+      settlementEcology = inspectedStore;
       closingSituatedExpressionInterval = captureSituatedExpressionChannelBankIntervalSnapshot(
         situatedExpressionChannels,
       );
@@ -19680,7 +19693,7 @@ export async function createTideweftRuntime(
         });
     const proposal = informed === null
       ? null
-      : proposeSettlementKeeperStoreResponse(informed, atTick);
+      : proposeSettlementKeeperStoreResponse(informed, atTick, report?.reportId);
     const resolution = informed === null || proposal === null
       ? null
       : applySettlementKeeperStoreResponse(informed, proposal);

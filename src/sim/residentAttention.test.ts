@@ -177,6 +177,62 @@ describe("resident appraisal of shared perception", () => {
     expect(queryResidentAttentionState(lost)).toBe("searching");
   });
 
+  it("does not make a neutrally recognized domestic dog permanent human watch duty", () => {
+    let state = createActorPerceptionState(OBSERVER_ID);
+    for (let tick = 1; tick <= 5; tick += 1) {
+      state = advance(state, tick, [sighting(tick, {
+        perceivedClass: "domestic-dog", subjectId: "dog:recognized-nearby",
+      })]);
+      const before = serializeActorPerceptionState(state);
+      expect(state.suspicion).toBe("identified");
+      expect(queryResidentAttentionState(state)).toBe(tick <= RESIDENT_NEUTRAL_GLANCE_TICKS ? "glance" : "none");
+      expect(queryActorAttention(state)[0]?.subjectId).toBe("dog:recognized-nearby");
+      expect(serializeActorPerceptionState(state)).toBe(before);
+    }
+    const lost = advance(state, 6);
+    expect(lost.suspicion).toBe("searching");
+    expect(queryActorSearch(lost)?.subjectId).toBe("dog:recognized-nearby");
+    expect(queryResidentAttentionState(deserializeActorPerceptionState(serializeActorPerceptionState(lost))))
+      .toBe("none");
+    const reacquired = advance(lost, 7, [sighting(7, {
+      perceivedClass: "domestic-dog", subjectId: "dog:recognized-nearby",
+    })]);
+    expect(queryResidentAttentionState(reacquired)).toBe("none");
+    expect(queryActorAttention(reacquired)[0]?.firstObservedTick).toBe(1);
+    const alarming = advance(state, 6, [sighting(6, {
+      perceivedClass: "domestic-dog", subjectId: "dog:recognized-nearby", interrupt: "strong",
+    })]);
+    expect(queryResidentAttentionState(alarming)).toBe("alert");
+    expect(queryResidentAttentionState(advance(state, 6, [anonymousSound(6, true)]))).toBe("alert");
+    const uncertain = advance(createActorPerceptionState(OBSERVER_ID, 5), 6, [sighting(6, {
+      perceivedClass: "animal-silhouette", subjectId: null, identification: "anonymous",
+    })]);
+    expect(queryResidentAttentionState(uncertain)).toBe(uncertain.suspicion);
+  });
+
+  it("keeps identified finite food as task knowledge rather than permanent watch or lost-source duty", () => {
+    let state = createActorPerceptionState(OBSERVER_ID);
+    for (let tick = 1; tick <= 3; tick += 1) {
+      state = advance(state, tick, [sighting(tick, {
+        perceivedClass: "exposed-food", subjectId: "STORE-FOOD-finite-lot",
+      })]);
+      const before = serializeActorPerceptionState(state);
+      expect(state.suspicion).toBe("identified");
+      expect(queryResidentAttentionState(state)).toBe("none");
+      expect(queryActorAttention(state)[0]?.subjectId).toBe("STORE-FOOD-finite-lot");
+      expect(serializeActorPerceptionState(state)).toBe(before);
+    }
+    const lost = advance(state, 4);
+    expect(lost.suspicion).toBe("searching");
+    expect(queryActorSearch(lost)?.subjectId).toBe("STORE-FOOD-finite-lot");
+    expect(queryResidentAttentionState(deserializeActorPerceptionState(serializeActorPerceptionState(lost))))
+      .toBe("none");
+    const strong = advance(state, 4, [sighting(4, {
+      perceivedClass: "exposed-food", subjectId: "STORE-FOOD-finite-lot", interrupt: "strong",
+    })]);
+    expect(queryResidentAttentionState(strong)).toBe("alert");
+  });
+
   it("keeps a more salient anonymous contact alongside recognized neutral sight as meaningful attention", () => {
     const state = advance(createActorPerceptionState(OBSERVER_ID), 1, [
       sighting(1),

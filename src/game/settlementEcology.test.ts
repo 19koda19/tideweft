@@ -734,6 +734,25 @@ describe("settlement food-store ecology kernel", () => {
     expect(canonicalizeSettlementEcologyState(savedReport)).toBeNull();
   });
 
+  it("binds a requested closure to its exact retained report instead of another same-tick sight", () => {
+    const initial = store(fixturePatch());
+    const direct = observedFood(KEEPER_ID, initial.identity, 12);
+    const informed = recordSettlementKeeperKnowledge(initial, 12, {
+      kind: "direct-observation", risk: "food-exposed", observation: direct,
+    });
+    const report = createSettlementPlayerStoreReport(initial, 12)!;
+    const mixed = recordSettlementKeeperKnowledge(informed, 12, { kind: "player-report", report })!;
+    expect(proposeSettlementKeeperStoreResponse(mixed, 12)?.source).toBe("direct-observation");
+    const response = proposeSettlementKeeperStoreResponse(mixed, 12, report.reportId);
+    expect(response).toMatchObject({ source: "player-report", sourceEvidenceId: report.reportId });
+    const secured = applySettlementKeeperStoreResponse(mixed, response);
+    expect(secured?.applied).toBe(true);
+    expect(secured?.state.carrier).toEqual(initial.carrier);
+    expect(applySettlementKeeperStoreResponse(secured?.state, response)?.applied).toBe(false);
+    expect(proposeSettlementKeeperStoreResponse(mixed, 12, "STORE-REPORT-absent")).toBeNull();
+    expect(proposeSettlementKeeperStoreResponse(mixed, 12, null)).toBeNull();
+  });
+
   it("adapts one conserved rat relocation into one transactional physical loss", () => {
     const current = attractionFixture();
     const ratsBefore = ratPopulation(current.patch);

@@ -381,7 +381,9 @@ Their existing LIVE/PARTIAL/RESERVED statuses do not change by registration.
 The local resident rest, ration and bounded civic material consumers use those same bodies,
 fixed-step locomotion, routine/duty, cause-owned hearing and current-save
 boundaries. Material use joins the existing conserved project owner, never a
-parallel work/inventory manager. Autonomous keeper inspection and physical
+parallel work/inventory manager. The silent in-place keeper consumer joins
+shared sight/admission and the same physical-store transaction; it cannot use
+player selection or invent a report. Dedicated keeper approach and physical
 traveler enactment remain pending;
 the [architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
 owns exact scope and evidence limits, not this applicability row.

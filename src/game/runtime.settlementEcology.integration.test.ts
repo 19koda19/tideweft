@@ -9963,8 +9963,17 @@ describe("runtime settlement ecology integration", () => {
       || afterStep.lastResolvedCauseEventTick === null
     ) throw new Error("resolved store loss omitted its authoritative cause");
     const interrupted = canonicalizeSettlementEcologyState({
-      ...initialStore,
-      revision: initialStore.revision + 1,
+      // Interrupt this loss only, not the independently committed keeper
+      // observations accumulated by the current runtime before/at this tick.
+      // Load recovers the pending physical transaction; it must never invent
+      // deleted historical sight to repair an inconsistent synthetic fixture.
+      ...afterStep,
+      revision: afterStep.revision - 1,
+      carrier: initialStore.carrier,
+      lastResolvedLossOrdinal: initialStore.lastResolvedLossOrdinal,
+      lastResolvedTransactionId: initialStore.lastResolvedTransactionId,
+      lastResolvedCauseEventId: initialStore.lastResolvedCauseEventId,
+      lastResolvedCauseEventTick: initialStore.lastResolvedCauseEventTick,
       pendingLoss: {
         transactionId: afterStep.lastResolvedTransactionId,
         ordinal: 1,
@@ -9978,6 +9987,10 @@ describe("runtime settlement ecology integration", () => {
       },
     });
     if (interrupted === null) throw new Error("could not construct interrupted store fixture");
+    expect(interrupted.keeperKnowledge).toEqual(afterStep.keeperKnowledge);
+    expect(interrupted.carrier.lots[0]?.payload).toMatchObject({ quantity: 8 });
+    expect(interrupted.lastResolvedLossOrdinal).toBe(0);
+    expect(interrupted.pendingLoss?.ordinal).toBe(1);
     const { integrity: _committedIntegrity, ...pendingBaseFields } = afterStepEnvelope;
     const pendingBase = {
       ...pendingBaseFields,
@@ -10011,14 +10024,30 @@ describe("runtime settlement ecology integration", () => {
 
   it("keeps an unwitnessed physical store loss out of the player's announcements", async () => {
     runtimeEcologyHarness.disableDomesticFoodInvestigation = true;
-    const repository = new MemoryRepository();
-    const runtime = await createTideweftRuntime(repository);
-    runtime.dispatchUI({
+    const setupRepository = new MemoryRepository();
+    const setup = await createTideweftRuntime(setupRepository);
+    setup.dispatchUI({
       type: "new-world",
       seed: "store loss outside direct sight",
       posture: "gale",
       sessionShape: "wander",
     });
+    await setup.save();
+    const initialRecord = setupRepository.snapshot();
+    const initial = JSON.parse(initialRecord.worldJson) as Record<string, unknown>;
+    const world = deserializeWorld(String(initial.world));
+    const store = deserializeSettlementEcologyState(initial.settlementEcology);
+    const keeper = world.residents.find(({ identity }) => identity.stableId === store.identity.keeperActorId);
+    if (keeper === undefined) throw new Error("Open-store counterfactual lost its native keeper");
+    // This loss probe deliberately delays autonomous inspection with actual
+    // higher-priority need pressure, not removed sight, bodies or closure code.
+    keeper.needs.belonging = 900_000;
+    initial.world = serializeWorld(world);
+    initial.integrity = gameSaveEnvelopeIntegrity(initial);
+    setup.destroy();
+    const repository = new MemoryRepository({ ...initialRecord, worldJson: JSON.stringify(initial) });
+    const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
     expect(moveBeyondStoreDetailVisibility(runtime)).toBe(true);
 
     settlementShadowsHarness.exposeOnlyPhysicalFood = true;

@@ -2169,14 +2169,17 @@ The main thread is sufficient at the current seven-settlement/42-resident scale.
 
 ### Resident recognition and enacted attention
 
-The local, unpublished resident-appraisal change separates knowing a person
-from sustained watch duty. `src/sim/residentAttention.ts` derives a neutral
+The local, unpublished resident-appraisal change separates recognizing a person
+or ordinary domestic dog from sustained watch duty. `src/sim/residentAttention.ts` derives a neutral
 visual glance from the persisted belief's first-observed tick: it lasts at most
 two accepted civil ticks, and repeated sight or reload cannot renew it. Losing
 that neutral contact retains the shared search/recognition evidence without
 automatically making search an active human commitment. Fresh strong signals,
-anonymous uncertainty and applicable nonhuman attention keep their existing
-rules. The shared perception schema and beliefs are not rewritten.
+anonymous uncertainty, predator attention and actual dog-related response/work
+duties keep their existing rules. Identified exposed-food sight is service
+information, not permanent watch or a lost-source search commitment. These
+appraisals preserve the exact shared beliefs and search evidence; neither the
+perception schema nor a dog's own cognition is rewritten.
 
 Circadian priority and restorative physiology consume the same appraisal;
 field sensing, Chart/Relief labels and ABOUT do not present an expired glance
@@ -2412,7 +2415,7 @@ and independent GREET candidate/refusal transactions on the use tick. A used
 task remains briefly observable without repeat benefit; higher priorities may
 revoke it. Render/ABOUT disclose that current committed use only through their
 existing sight/detail gates, not hunger, a planned destination or invented
-sound. Autonomous keeper inspection and accountable local travel remain
+sound. Dedicated keeper approach and accountable local travel remain
 unfinished. This is local source/test evidence, not manual
 play, natural-rate liveness, production performance or public release proof.
 
@@ -2445,7 +2448,26 @@ without repeating its result. Only actual current use enters existing detail-
 sight/ABOUT presentation; there is no private task disclosure or invented work
 audio. Controlled native adapter/runtime cases prove approach, shortage, duty,
 contention, completion, cold phase4/9 continuation and late-failure rollback.
-All services, normal visual play and production performance remain unproved.
+Complete settlement-service acceptance, normal visual play and production
+performance remain unproved.
+
+The local `src/game/settlementKeeperInspection.ts` consumer now samples one
+existing open-store source through actual shared sight, illumination and the
+current spatial window. Its pre-world candidate must survive lower post-command/
+sleep vision admission before it can become keeper evidence. It discloses no
+hidden loss, rat, quantity or player selection. After resource resolution and
+fresh response/routine reconciliation, an awake, active keeper at the exact dry
+store point may secure that same physical store through its existing transaction.
+Contract, storm, urgent need, actual watch and other duty remain higher priorities.
+
+This is a silent in-place action, not a new keeper task or fabricated report.
+Existing ration/material/rest approach can bring the body there; dedicated
+inspection-driven approach remains unfinished. Controlled native runtime tests
+prove actual approach, player independence, source absence, priority delay,
+phase9 cold equality and late-failure rollback. Current53/carry14 and the
+deliberately supported formats remain unchanged. Evidence and closure persist
+in the existing store owner; ephemeral sight is reconstructed only by actual
+world advancement, never invented on load or replayed as speech.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -3478,6 +3500,14 @@ acoustic perception. It replaces the former session-local resident label and
 generic UI cue without changing the settlement transaction owner. Shared
 presentation may suppress the label, and local masking may withhold the player
 receipt, but neither can undo the physical closure or manufacture later speech.
+
+The current unpublished in-place keeper consumer described in the
+[human integration boundary](#planned-bounded-existing-world-integration)
+adds autonomous direct sight and silent closure without changing that released
+report contract. A player-requested closure now names the exact retained report
+evidence when proposing its response; same-tick autonomous sight cannot replace
+the report by lexical ordering. An absent requested evidence ID fails closed,
+while ordinary callers retain the existing latest-evidence selection.
 
 This slice validates a reusable owner boundary through shared abstraction checks, a bounded signed-coordinate property sweep, exact item and aggregate conservation, deterministic migration/replay, and one representative store-rat-visible-cat composition. Existing shared bounded-fuzz and performance gates remain in the regression suite. It is not an exhaustive species or animal-pair matrix, worldwide settlement ecology, schedules, livestock, rumors, harmful attack, injury, mortality, carcasses, live-prey consumption, the full bestiary, or broader biodiversity completion.
 

@@ -1444,11 +1444,15 @@ describe("runtime BIO0 ecology persistence", () => {
   it("rolls the world and BIO0 roots back together when the ecology step rejects", async () => {
     const repository = new MemoryRepository(legacyRecord("bio0 fail closed runtime tick"));
     const runtime = await createTideweftRuntime(repository);
+    // Nine accepted fine steps may legitimately move the resident/BIO0
+    // address. Only the rejected closing step must roll back to this boundary.
+    advancePlayerSteps(runtime, 9);
     await runtime.save();
     const before = currentEnvelope(repository);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
 
     bio0StepControl.reject = true;
-    advancePlayerSteps(runtime, 10);
+    advancePlayerSteps(runtime, 1);
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "SIMULATION PAUSED SAFELY",
     });
@@ -1458,6 +1462,8 @@ describe("runtime BIO0 ecology persistence", () => {
       deserializeWorld(before.world).meta.completedTick,
     );
     expect(after.bio0Ecology).toBe(before.bio0Ecology);
+    expect(after.world).toBe(before.world);
+    expect(after.perceptionCarry).toEqual(before.perceptionCarry);
     expect(after.livingActorPlayerChoice).toEqual(before.livingActorPlayerChoice);
     expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
     runtime.destroy();
@@ -1466,11 +1472,13 @@ describe("runtime BIO0 ecology persistence", () => {
   it("rolls the world, ecology, and response roots back together when porter policy rejects", async () => {
     const repository = new MemoryRepository(legacyRecord("bio0 porter response rollback"));
     const runtime = await createTideweftRuntime(repository);
+    advancePlayerSteps(runtime, 9);
     await runtime.save();
     const before = currentEnvelope(repository);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
 
     porterResponseControl.reject = true;
-    advancePlayerSteps(runtime, 10);
+    advancePlayerSteps(runtime, 1);
     expect(runtime.getUIView().saveWarning).toMatchObject({
       message: "SIMULATION PAUSED SAFELY",
     });
@@ -1480,6 +1488,8 @@ describe("runtime BIO0 ecology persistence", () => {
       deserializeWorld(before.world).meta.completedTick,
     );
     expect(after.bio0Ecology).toBe(before.bio0Ecology);
+    expect(after.world).toBe(before.world);
+    expect(after.perceptionCarry).toEqual(before.perceptionCarry);
     expect(after.porterResponse).toEqual(before.porterResponse);
     expect(after.livingActorPlayerChoice).toEqual(before.livingActorPlayerChoice);
     expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(9);

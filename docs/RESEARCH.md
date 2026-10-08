@@ -3931,6 +3931,90 @@ local environmental/traveler execution and remaining integration acceptance
 stay unfinished. Completed directive bytes and unrelated implementation remain
 unchanged; this slice does not close the current expansion.
 
+### Lawful in-place keeper inspection — 2026-10-08
+
+Local construction on `726770e67e8b93f5ed0718d3fc370c9b09dd4bdc`
+connects the existing physical store to its keeper without a player prompt.
+`settlementKeeperInspection.ts` creates at most one pre-world visual candidate
+from the actual body, source point, shared sight/light and materialized spatial
+window. The lower post-command/sleep ingress still owns admission. Only an
+exact admitted belief becomes direct evidence; this reveals neither hidden rat
+activity, remaining quantity nor a remote loss. After current resource resolution
+and routine/response reconciliation, an eligible awake keeper at the exact dry
+store point can commit the existing idempotent closure. No cargo, report, speech,
+task root or new save schema is created.
+
+The native keeper starts one tile east of the service point, facing the
+independent dog at that point. Fifteen ordinary seed probes showed that a
+continuously identified dog could become permanent watch duty and deny all
+service; changing the geometry or deleting the dog would conceal that defect.
+The human appraisal owner now gives an ordinary identified domestic dog the
+same persisted, nonrenewing two-tick glance as a human. Identified exposed-food
+sight is task knowledge, not permanent watch. Exact beliefs/search remain;
+anonymous uncertainty, strong dog signals, predators and actual porter/working-
+animal duties retain their owners. The dog's own cognition is unchanged.
+
+Native runtime tests retain the real spawn, store, terrain and competing dog.
+Controlled need/stock/schedule conditions cause existing ration/material/rest
+approach to bring the keeper into contact; no task, arrival, observation or
+closure is assigned. They prove silent securing, player independence, urgent
+rest delay, source-removal counterfactual, phase9 cold equality and complete
+late-failure rollback. This is **in-place inspection**, not a dedicated
+inspection-driven trip, natural-rate service/liveness guarantee, complete human
+activity acceptance, normal visual play or a public release.
+
+Same-tick direct sight exposed an existing causal ambiguity in the player-report
+path: lexical latest-evidence selection could substitute autonomous sight for
+the report and fail the correct Voice response. An optional exact retained
+evidence ID now binds that response to its real report. Wrong, missing or future
+evidence fails closed; ordinary autonomous callers retain latest-evidence
+selection. Existing report expression and admission are not broadened.
+
+Current53/body-v3, carry14, world4/rules6, support/retirement policy, generator,
+release identity and dependencies remain unchanged. Evidence and closure use
+the existing store root; load cannot invent or replay incidental sight/audio.
+Two existing loss fixtures now preserve independently committed keeper history
+and use actual higher-priority belonging pressure to delay inspection. Two BIO0
+rollback fixtures capture the real phase9 boundary before rejecting the closing
+step, rather than treating nine accepted body steps as failed work. Their full
+world/carry equality assertions are stronger; no load/rollback law was weakened.
+
+Whole-current-save telemetry witnesses deliberately change with the real
+appraisal/motion/perception consequences. Exact30-step/3-advance SHA256 values:
+`ac1ddb59964936f939e905b90c40570146d1bbeb5e749c4dd5755450c35e1be5`
+(estuary) and
+`30825913a44f7e9bcee3d1aaf94007fe8fd88eee79aa70d7e4ad1bbcf68af7fb`
+(density8). The corresponding42-body hashes are
+`da2531e5b19a8c82186680c6fd81a4126c388e795ca2d8af4e66fdc78bec6fdb`
+and `e3a4f30eb04763a0d19093928b8b1a15a2696658b3fcac0d3bd785df749fbd12`.
+Full telemetry-on/off envelope equality remains exact; no body, perception,
+store, event or announcement is stripped. Prior witnesses remain historical
+evidence in the preceding records/Git. These mocked-clock tests are not
+production timing, throughput or hitch-repair measurements.
+
+Validation uses default and JSON reporters; retained local reports include
+initial characterization/fixture failures as well as the terminal results:
+
+- `npx vitest run src/game/settlementEcology.test.ts src/game/settlementKeeperInspection.test.ts src/sim/residentAttention.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-kernel-final-3.json`:50 PASS; new inspection owner25, attention10, store15.
+- `npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/runtime.keeperInspection.integration.test.ts src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-native-final.json`:21 PASS,105.11s; rest/ration/material11, new keeper6, exact telemetry4.
+- `npx vitest run src/game/runtime.settlementEcology.integration.test.ts -t 'projects and secures one directly witnessed physical store|preserves an accepted-phase keeper reply|voices the committed store closure once|migrates released v32 store state|lets a witnessed domestic chicken perceive and consume one open-store unit|consumes exactly one stored unit after the shared rat-attraction event|keeps an unwitnessed physical store loss|coexists with generated chicken calls when the visible keeper secures' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-existing-store-final-2.json`:9 PASS/32 unselected. This is not the complete41-case suite.
+- `npx vitest run src/game/runtime.bio0.integration.test.ts -t 'rolls the world' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-bio0-closing-rollback.json`:2 PASS/27 unselected; exact world/ecology/response/carry rollback. Five other selected BIO0 cadence/dog-motion/barrier/off-window/contextual-sight cases passed in the earlier7-case report; that report's stale rollback fixture failure remains recorded.
+- `npx vitest run src/game/runtime.test.ts -t 'voices one committed GREET|keeps a resident recognized when the candidate introduction is not heard|rolls back introduction facts, save, and vocal audio when later interval closure fails|rolls back the whole interval when cause-owned hearing timing is rejected|restores the complete adopted body roster after a rejected fine-step replacement' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-greet-regression.json`:5 PASS/93 unselected.
+- `npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-smoke-final.json`:maintained6 files/105 PASS. Final `npm run typecheck`:PASS. `npm run test:documentation-reuse`:45 PASS.
+
+Affected-domain command:
+
+```sh
+npx vitest run src/sim/residentAttention.test.ts src/sim/residentCircadianPhysiology.test.ts src/sim/residentRationUse.test.ts src/sim/residentMaterialActivity.test.ts src/game/residentCircadian.test.ts src/game/settlementKeeperCircadian.test.ts src/game/porterResponse.test.ts src/game/settlementWorkingAnimals.test.ts src/game/settlementWorkingAnimals.guardianInvestigation.test.ts src/game/settlementKeeperInspection.test.ts src/game/settlementKeeperStoreResponseExpression.test.ts src/game/settlementKeeperStoreResponseExpression.activity.test.ts src/game/settlementKeeperStoreResponseAdmissionAuthority.test.ts src/game/humanPerception.test.ts src/game/humanPerception.activity.test.ts src/game/humanPerception.presentation.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-keeper-domain-first.json
+```
+
+19 files/276 PASS,27.14s. This domain pass preceded the additive report-evidence
+selector; its directly affected store/report/Voice cases subsequently passed
+above. No fresh complete cumulative, production profile, web/desktop artifact,
+manual Chart/Relief, packaging or deployment result is inferred. Dedicated
+keeper approach, local environment/traveler execution and remaining acceptance
+stay unfinished. Completed directive bytes remain unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

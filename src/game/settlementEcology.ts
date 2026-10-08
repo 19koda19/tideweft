@@ -1182,15 +1182,23 @@ export function createSettlementPlayerStoreReport(
 export function proposeSettlementKeeperStoreResponse(
   stateValue: unknown,
   atTick: unknown,
+  sourceEvidenceId?: unknown,
 ): SettlementKeeperStoreResponseProposal | null {
   const state = canonicalizeSettlementEcologyState(stateValue);
   if (
     state === null
     || !nonnegativeSafeInteger(atTick)
+    || (sourceEvidenceId !== undefined && !validId(sourceEvidenceId))
     || state.closure !== "open"
     || liveFoodQuantity(state.carrier, state.identity.foodLotId) === 0
   ) return null;
-  const knowledge = state.keeperKnowledge[state.keeperKnowledge.length - 1];
+  // An in-person report may coexist with autonomous sight at the same tick.
+  // Its response must use that report's retained evidence, not whichever ID
+  // happens to sort last. Ordinary autonomous callers retain latest-evidence
+  // selection; an absent requested record never falls back to another cause.
+  const knowledge = sourceEvidenceId === undefined
+    ? state.keeperKnowledge[state.keeperKnowledge.length - 1]
+    : state.keeperKnowledge.find(({ evidenceId }) => evidenceId === sourceEvidenceId);
   if (knowledge === undefined || knowledge.learnedAtTick > atTick) return null;
   return deepFreeze({
     transactionId: closureTransactionId(state.identity.storeId, knowledge.evidenceId),

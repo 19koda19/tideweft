@@ -124,8 +124,8 @@ function assertStationaryCivicWorld(worldJson: string, seed: string): void {
     current.residents.map(({ activity }) => activity),
   )).digest("hex");
   const bodyDigests: Readonly<Record<string, string>> = {
-    "runtime baseline estuary": "b44ae9acc6b470e8dcefbb4442d2722752826985ab3693a152f34579c618cafa",
-    "breathing room regional density 8": "1a589071b871a7153296110b793a29c21a397053e071f1c171c9089027f134fe",
+    "runtime baseline estuary": "da2531e5b19a8c82186680c6fd81a4126c388e795ca2d8af4e66fdc78bec6fdb",
+    "breathing room regional density 8": "e3a4f30eb04763a0d19093928b8b1a15a2696658b3fcac0d3bd785df749fbd12",
   };
   expect(bodyDigest).toBe(bodyDigests[seed]);
   for (const [index, resident] of current.residents.entries()) {
@@ -255,11 +255,11 @@ describe("runtime performance telemetry", () => {
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
           expect(session.announcement).toEqual({
-            id: 3,
+            id: 2,
             message: "Domestic chicken eats one produce unit from the open store. The physical stock is reduced.",
             assertive: false,
           });
-          expect(session.nextAnnouncementId).toBe(4);
+          expect(session.nextAnnouncementId).toBe(3);
         } else {
           const observedWorld = deserializeWorld(envelope.world as string);
           const newlyObserved = observedWorld.events.find(({ sequence }) => sequence === 7);
@@ -278,8 +278,8 @@ describe("runtime performance telemetry", () => {
           });
         }
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "d8a06da291c52122e7cf88118ffdd7867a784ed1c0a89bffc92d0bdc2f4f38d4",
-          "breathing room regional density 8": "27ea1651058431261eb42b4c046b386840945c88c274c724dbdc3382a66cf9ce",
+          "runtime baseline estuary": "ac1ddb59964936f939e905b90c40570146d1bbeb5e749c4dd5755450c35e1be5",
+          "breathing room regional density 8": "30825913a44f7e9bcee3d1aaf94007fe8fd88eee79aa70d7e4ad1bbcf68af7fb",
         };
         expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);
       } finally {

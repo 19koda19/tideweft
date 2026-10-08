@@ -9,7 +9,7 @@ export type ResidentAttentionState = ActorSuspicionState | "glance" | "none";
 
 /**
  * Human appraisal, not a mutation of the shared perception/recognition kernel.
- * Recognizing a person is not watch duty. The saved belief's first
+ * Recognizing a person or ordinary domestic dog is not watch duty. The saved belief's first
  * observation owns a brief glance; further sight does not restart it. Strong
  * signals and searches for genuinely uncertain contacts retain their existing
  * attention law. Null means malformed input, never permission to ignore it.
@@ -27,9 +27,15 @@ export function queryResidentAttentionState(value: unknown): ResidentAttentionSt
     ({ key }) => key === perception.search?.beliefKey,
   );
   const belief = perception.suspicion === "searching" ? searched : focus;
+  // A known finite food source is task information, not a person or threat to
+  // keep watching. Retain its exact shared belief/search without pinning the
+  // human's routine after inspection or the source disappears from view.
+  if (belief?.channel === "vision" && belief.perceivedClass === "exposed-food"
+    && belief.subjectId !== null && belief.identification === "identified"
+    && !(belief.strongInterrupt && belief.lastObservedTick === perception.tick)) return "none";
   if (belief === undefined
     || belief.channel !== "vision"
-    || belief.perceivedClass !== "human"
+    || (belief.perceivedClass !== "human" && belief.perceivedClass !== "domestic-dog")
     || belief.subjectId === null
     || belief.identification !== "identified"
     || (belief.strongInterrupt && belief.lastObservedTick === perception.tick)) {
