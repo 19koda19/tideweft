@@ -4176,6 +4176,49 @@ Inspection-owned task selection, exclusive approach, cross-root evidence/source
 validation and cancellation remain the next implementation, not delivered by
 this fixture proof. Profiling/soaks and platform/release proof are not claimed.
 
+### Audio diagnostic integration watchdog — 2026-10-08
+
+The uncapped cumulative on exact local
+`d2741963f4d1e2b73c59c9c889885ee196197fe8` completed in2113.84s:
+395files,394passed/1failed;4772tests,4771passed/1failed/0pending.
+The sole failure was `runtime.expressionDiagnostics.test.ts`'s five-mode
+audio-output equivalence case: **Test timed out in15000ms**. No state, hearing,
+caption or audio-equivalence assertion failed. Its previous unchanged3542276
+case passed in11.05s; the new failure occurred at15.375s. These are correctness
+test durations, not player-performance measurements.
+
+All712 tracked non-Markdown inputs remained unchanged during the complete run;
+the sorted `{path,sha256}` aggregate remained
+`f74828ee5a0e2d3221b38823805adf77ea65c9654b7acd700d61076637516809`.
+The original `artifacts/validation/d274196-cumulative.json` is retained as
+**FAIL**, SHA256
+`98cf8803fd3d64beb29dfad84befcec7b28bfe482450252a0b16b900a46a1859`.
+Its lost observation handle was not a reason to restart: the original live
+process, final log, JSON and process termination establish the disposition.
+
+The unchanged case first passed all comparisons with a60-second command-line
+watchdog (1passed/6unselected;11.03s command duration):
+
+```sh
+npx vitest run src/game/runtime.expressionDiagnostics.test.ts -t 'preserves keeper authority, hearing and captions under reduced or blocked audio output' --maxWorkers=1 --testTimeout=60000 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/audio-watchdog-before.json
+```
+
+Only that case now declares the same60-second bounded integration watchdog
+used by runtime peers. All five normal/disabled/zero-gain/blocked modes, real
+clocks, exact save/state/hearing/caption comparisons and cleanup remain unchanged.
+No global timeout, runtime algorithm, performance assertion, schema53/carry14,
+supported reader, dependency or completed directive changed. The complete
+seven-case file then passes7/0failed/0unselected in20.15s:
+
+```sh
+npx vitest run src/game/runtime.expressionDiagnostics.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/audio-watchdog-final.json
+```
+
+Maintained `npm run test:smoke` passes6files/105tests in4.94s; typecheck passes.
+This focused correction does not relabel the original cumulative as a pass
+or certify a later whole-suite run. Profiling/soaks, manual/platform checks,
+public release and completed gameplay expansion are not claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

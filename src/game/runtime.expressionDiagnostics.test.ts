@@ -243,6 +243,9 @@ async function keeperRun(enabled: boolean, audioOptions?: {
 
 describe("development situated-expression inspector", () => {
   it("preserves keeper authority, hearing and captions under reduced or blocked audio output", async () => {
+    // Five complete production-world/audio modes share this integration case.
+    // Its watchdog is not a performance budget; retain every equality check
+    // and real clock while allowing the same bounded window as runtime peers.
     // The runtime clock stays real. Only the real delegate's bounded panner
     // disconnect timers are tracked for cleanup; unrelated timers are untouched.
     const disconnects = new Map<ReturnType<typeof setTimeout>, () => void>();
@@ -339,7 +342,7 @@ describe("development situated-expression inspector", () => {
         }
       }
     } finally { timers.mockRestore(); }
-  });
+  }, 60_000);
 
   it("records a committed keeper cause and previews its exact listening without changing state, events, saves or audio", async () => {
     const control = await keeperRun(false);
