@@ -13436,9 +13436,11 @@ export async function createTideweftRuntime(
       switch (admission?.kind) {
         case "settlement-keeper-store-response":
           event = settlementKeeperStoreResponseExpressionEventForTrigger(
-            { world: economyView, settlement: settlementEcology },
+            { world: economyView, settlement: settlementEcology,
+              sourcePhase: admission.admittedAtPlayerStepPhase },
             admission.triggerEventId,
           );
+          historicalSourceLocus = true;
           break;
         case "resident-introduction":
           event = residentIntroductionExpressionEventForTrigger(economyView, admission.triggerEventId);
@@ -19397,6 +19399,7 @@ export async function createTideweftRuntime(
     const expressionIntent = settlementKeeperStoreResponseExpressionIntent({
       world: economyView,
       settlement: resolution.state,
+      sourcePhase: playerStepsSinceWorldTick,
     });
     if (
       closure === null
@@ -22245,7 +22248,8 @@ function playerPerceptionCarryMatchesPosition(
         );
     }
     if (admission.kind === "settlement-keeper-store-response") {
-      const authority = { world: economy, settlement } as const;
+      const authority = { world: economy, settlement,
+        sourcePhase: admission.admittedAtPlayerStepPhase } as const;
       const listenerPose = acceptedPlayerPoses[admission.admittedAtPlayerStepPhase];
       const event = settlementKeeperStoreResponseExpressionEventForTrigger(
         authority,
@@ -22257,7 +22261,6 @@ function playerPerceptionCarryMatchesPosition(
           === stableStringify(listenerPose.position)
         && admission.listenerFacingMilliRadians
           === listenerPose.facingMilliRadians
-        && residentSourcePositionMatches(economy, sample.sourceActorId, sample.position)
         && vocalizationSampleMatchesActiveEvent(sample, event)
         && settlementKeeperStoreResponseAdmissionMatchesWorld({
           economyWorld: economy,
@@ -22727,7 +22730,8 @@ function situatedExpressionChannelsMatchWorld(
       const admission = keeperAdmissions[0];
       return keeperAdmissions.length !== 1 || admission === undefined
         ? null
-        : { admission, authority: { world: economy, settlement } };
+        : { admission, authority: { world: economy, settlement,
+            sourcePhase: admission.admittedAtPlayerStepPhase } };
     };
     const introductionAuthorityFor = (
       triggerEventId: string,
@@ -22817,6 +22821,9 @@ function situatedExpressionChannelsMatchWorld(
       if (
         active.meaning !== "resident-introduction"
         && active.meaning !== "resident-weather-hold"
+        // The keeper branch below authenticates its retained body phase plus
+        // exact applied closure and event-time listener receipt independently.
+        && active.meaning !== "keeper-secure-store-response"
         && !(active.meaning === "porter-heavy-load"
           ? porterDepartureSourcePositionMatches(economy, active.triggerEventId, channel.sourceActorId, active.position)
           : residentSourcePositionMatches(economy, channel.sourceActorId, active.position))
@@ -22914,7 +22921,7 @@ function situatedExpressionChannelsMatchWorld(
       }
       if (admission.kind === "settlement-keeper-store-response") {
         const event = settlementKeeperStoreResponseExpressionEventForTrigger(
-          { world: economy, settlement },
+          { world: economy, settlement, sourcePhase: admission.admittedAtPlayerStepPhase },
           admission.triggerEventId,
         );
         return event !== null && settlementKeeperStoreResponseAdmissionMatchesWorld({

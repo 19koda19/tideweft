@@ -4,7 +4,8 @@ import {
   LOCAL_PLAYER_LIVING_ACTOR_ID,
   livingSpeciesActorIdMatchesNamespace,
 } from "./livingSpeciesRegistry";
-import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { createLivingActorAddress, headingFromRadians, livingActorAddressForResident, type LivingActorAddress } from "./livingActor";
+import { resolveResidentWorldPlacementAtActivityPhase } from "./residentSpatial";
 import {
   SITUATED_EXPRESSION_VERSION,
   canonicalizeSituatedExpressionState,
@@ -31,6 +32,8 @@ export interface SettlementKeeperStoreResponseExpressionInput {
   readonly world: WorldView;
   /** Exact post-application settlement root that owns the secured transaction. */
   readonly settlement: SettlementEcologyState;
+  /** Recorded admission phase for cold reauthentication; omission uses the live body. */
+  readonly sourcePhase?: number;
 }
 
 interface SettlementKeeperStoreResponseExpressionAuthority {
@@ -38,7 +41,7 @@ interface SettlementKeeperStoreResponseExpressionAuthority {
   readonly settlement: SettlementEcologyState;
   readonly closure: SettlementKeeperStoreClosureAuthority;
   readonly keeper: ResidentState;
-  readonly position: SituatedExpressionIntent["position"];
+  readonly address: LivingActorAddress;
 }
 
 /**
@@ -51,7 +54,7 @@ export function settlementKeeperStoreResponseExpressionIntent(
 ): SituatedExpressionIntent | null {
   const authority = expressionAuthority(inputValue);
   if (authority === null) return null;
-  const { closure, position } = authority;
+  const { closure, address } = authority;
   const variantSeed = Number.parseInt(hashCanonical({
     domain: "settlement-keeper-store-response-expression:v1",
     keeperActorId: closure.keeperActorId,
@@ -64,7 +67,7 @@ export function settlementKeeperStoreResponseExpressionIntent(
     version: SITUATED_EXPRESSION_VERSION,
     sourceActorId: closure.keeperActorId,
     triggerEventId: closure.transactionId,
-    position,
+    position: address.position,
     meaning: "keeper-secure-store-response",
     family: "work",
     tone: "restrained",
@@ -75,6 +78,13 @@ export function settlementKeeperStoreResponseExpressionIntent(
     variantSeed,
     durationSteps: SETTLEMENT_KEEPER_STORE_RESPONSE_DURATION_STEPS,
   });
+}
+
+/** The same applied closure authenticates the source's retained body and heading. */
+export function settlementKeeperStoreResponseExpressionSourceAddress(
+  input: SettlementKeeperStoreResponseExpressionInput,
+): LivingActorAddress | null {
+  return expressionAuthority(input)?.address ?? null;
 }
 
 /** Reauthenticates one active event against its exact retained closure root. */
@@ -157,7 +167,10 @@ function expressionAuthority(
   inputValue: SettlementKeeperStoreResponseExpressionInput,
 ): SettlementKeeperStoreResponseExpressionAuthority | null {
   const input: unknown = inputValue;
-  if (!plainRecord(input) || !exactKeys(input, ["settlement", "world"])) return null;
+  if (!plainRecord(input) || (!exactKeys(input, ["settlement", "world"])
+    && !exactKeys(input, ["settlement", "sourcePhase", "world"]))) return null;
+  if (Object.hasOwn(input, "sourcePhase") && (!nonnegativeSafeInteger(input.sourcePhase)
+    || input.sourcePhase > 9)) return null;
   const world = input.world as WorldView;
   if (
     !plainRecord(world)
@@ -187,22 +200,35 @@ function expressionAuthority(
     keepers.length !== 1
     || keeper === undefined
     || keeper.identity.species !== "human"
+    || keeper.perception.actorId !== keeper.identity.stableId
     || !livingSpeciesActorIdMatchesNamespace(keeper.identity.stableId, "human")
     || keeper.homeSettlementId !== settlement.identity.settlementId
   ) return null;
-  let placement: ReturnType<typeof resolveResidentWorldPlacement>;
+  let address: LivingActorAddress | null;
   try {
-    placement = resolveResidentWorldPlacement(world, keeper);
+    if (Object.hasOwn(keeper, "activity") && Object.hasOwn(input, "sourcePhase")) {
+      const placement = resolveResidentWorldPlacementAtActivityPhase(
+        world, keeper, world.completedTick, input.sourcePhase as number,
+      );
+      address = placement === null ? null : createLivingActorAddress({
+        actorId: keeper.identity.stableId, species: "human", persistence: "promoted",
+        position: placement.position,
+        heading: headingFromRadians(placement.facing),
+      });
+    } else {
+      // An absent legacy body has no invented history; retain its original resolver.
+      address = livingActorAddressForResident(world, keeper);
+    }
   } catch {
     return null;
   }
-  if (placement === null) return null;
+  if (address === null) return null;
   return Object.freeze({
     world,
     settlement,
     closure,
     keeper,
-    position: placement.position,
+    address,
   });
 }
 

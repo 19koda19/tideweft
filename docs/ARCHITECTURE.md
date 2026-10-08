@@ -2367,8 +2367,13 @@ through the same private pose resolver used by final whole-roster publication,
 not the earlier settlement body. Its strict event alternatives retain conserved
 cargo, itinerary and exact departure-progress authority; hearing and cold channel
 checks consume that authenticated source. This is an event-time bridge, not
-physical porter travel. Keeper/warning phase receipts and runtime body activation
-remain construction obligations.
+physical porter travel. Keeper closure replies rederive source position/heading
+from the existing admission's accepted phase0–9, while retaining applied closure,
+report provenance and independent listener visibility/hearing proof. Explicit
+missing or stale body history rejects; genuine absence keeps its legacy source
+resolver. No new phase field enters saves, and later body motion cannot relocate
+the retained reply. Warning phase receipts and runtime body activation remain
+construction obligations.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain

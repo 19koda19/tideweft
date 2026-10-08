@@ -3,7 +3,6 @@ import { globalTileToRegion } from "../sim/regions";
 import { stableStringify } from "../sim/util";
 import { ambientNoiseAt } from "./physicalAcousticPerception";
 import {
-  livingActorAddressForResident,
   livingActorAddressInRegionalWindow,
 } from "./livingActor";
 import { evaluateAudibleContact, VISIBILITY_DIRECT } from "./perception";
@@ -21,6 +20,7 @@ import {
 } from "./settlementEcology";
 import {
   settlementKeeperStoreResponseExpressionEventMatchesWorld,
+  settlementKeeperStoreResponseExpressionSourceAddress,
 } from "./settlementKeeperStoreResponseExpression";
 import type { SituatedExpressionEvent } from "./situatedExpression";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
@@ -114,7 +114,7 @@ function settlementKeeperStoreResponseReceptionAtEventTime(
     || admission.triggerEventId !== event.triggerEventId
     || event.meaning !== "keeper-secure-store-response"
     || !settlementKeeperStoreResponseExpressionEventMatchesWorld(
-      { world: economyWorld, settlement },
+      { world: economyWorld, settlement, sourcePhase: admission.admittedAtPlayerStepPhase },
       event,
     )
   ) return undefined;
@@ -135,9 +135,11 @@ function settlementKeeperStoreResponseReceptionAtEventTime(
   ));
   const keeper = keepers[0];
   if (keepers.length !== 1 || keeper === undefined) return undefined;
-  let sourceAddress: ReturnType<typeof livingActorAddressForResident>;
+  let sourceAddress: ReturnType<typeof settlementKeeperStoreResponseExpressionSourceAddress>;
   try {
-    sourceAddress = livingActorAddressForResident(economyWorld, keeper);
+    sourceAddress = settlementKeeperStoreResponseExpressionSourceAddress({
+      world: economyWorld, settlement, sourcePhase: admission.admittedAtPlayerStepPhase,
+    });
   } catch {
     return undefined;
   }
