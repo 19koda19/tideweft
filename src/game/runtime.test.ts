@@ -1928,6 +1928,46 @@ describe("perpetual new worlds", () => {
     runtime.destroy();
   });
 
+  it("rolls back the whole interval when cause-owned hearing timing is rejected", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await createTideweftRuntime(repository);
+    let hearing: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      runtime.dispatchUI({ type: "new-world", seed: "resident interaction runtime", posture: "journey", sessionShape: "wander" });
+      const porter = runtime.getRenderView().porters[0];
+      if (porter === undefined) throw new Error("hearing rollback needs a normally visible resident");
+      runtime.dispatchRenderer({ type: "select", entity: "porter", id: porter.id, point: porter.position });
+      advancePlayerSteps(runtime, 10);
+      runtime.dispatchUI({ type: "resident", action: "greet", residentId: porter.id });
+      advancePlayerSteps(runtime, 19);
+      await runtime.save();
+      const before = decodeGameSave(repository.snapshot());
+      const carry = before.perceptionCarry as { playerStepsSinceWorldTick: number; actorVocalizationSamples: unknown[] };
+      expect(carry.playerStepsSinceWorldTick).toBe(9);
+      expect(carry.actorVocalizationSamples.length).toBeGreaterThan(0);
+      const collect = humanPerception.collectExistingHumanObservations;
+      hearing = vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementationOnce((input) => (
+        collect({ ...input, soundSamplePhases: [] })
+      ));
+      soundscapePlay.mockClear();
+      advancePlayerSteps(runtime, 1);
+      expect(hearing).toHaveBeenCalledTimes(1);
+      expect(runtime.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      // The deliberate integrity-halt notification is not committed world
+      // audio. No pending vocal, contact or movement cue may escape rollback.
+      expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+      await runtime.save();
+      const after = decodeGameSave(repository.snapshot());
+      for (const key of ["world", "player", "perceptionCarry", "physicalCargo", "regionalEcology",
+        "regionalTravel", "promiseJourney", "settlementEcology", "settlementWorkingAnimals", "dogActorRoster"] as const) {
+        expect(after[key], key).toEqual(before[key]);
+      }
+    } finally {
+      hearing?.mockRestore();
+      runtime.destroy();
+    }
+  });
+
   it.each([
     ["step", false],
     ["step", true],

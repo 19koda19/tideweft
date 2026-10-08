@@ -108,7 +108,7 @@ import {
   residentActivitySaveExtensionsAbsent,
 } from "./residentActivitySaveBoundary";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
-import { RESIDENT_ACTIVITY_MAX_PHASE } from "../sim/residentActivity";
+import { RESIDENT_ACTIVITY_MAX_PHASE, residentActivityPoseAtPhase } from "../sim/residentActivity";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
   animalCallRecognitionForVocalization,
@@ -263,6 +263,7 @@ import {
 } from "./playerExpressionAuthority";
 import {
   appendSituatedExpressionAdmissionRecord,
+  canonicalizeSituatedExpressionAdmissionLedger,
   createCoreWildlifeAlarmExpressionAdmissionRecord,
   createCoreWildlifePursuitCallExpressionAdmissionRecord,
   createCoreWildlifeWeatherDistressExpressionAdmissionRecord,
@@ -559,11 +560,13 @@ import {
   LOCAL_PLAYER_SUBJECT_ID,
   PLAYER_SENSE_SAMPLE_VERSION,
   collectExistingHumanObservations,
+  humanObservationCollectionRejected,
   createPhysicalSoundSample,
   createPlayerSenseSample,
   createSupplementalSoundSample,
   createUnadmittedAlarmSoundSample,
   type PlayerSenseSample,
+  type HumanSoundSamplePhase,
   type SupplementalSoundSample,
   type UnadmittedAlarmSoundSample,
 } from "./humanPerception";
@@ -1825,6 +1828,83 @@ type RuntimeCoreWildlifeTarget = LivingActorTargetUIView & {
 interface RuntimePorterVisualFrame {
   readonly actorId: string;
   readonly observations: readonly ActorObservation[];
+}
+
+/**
+ * Timing metadata for the already authenticated pending expression interval.
+ * Ordinals bind custody only; the admission owns occurrence time. Terminal
+ * player IDs come solely from this accepted tick, never from saved phase nine.
+ * This does not authenticate the domain cause, which the runtime still checks.
+ */
+export function prepareRuntimeSupplementalSoundSamplePhases(
+  samples: readonly SupplementalSoundSample[],
+  admissions: SituatedExpressionAdmissionLedger,
+  channels: SituatedExpressionChannelBank,
+  terminalPlayerExpressionEventIds: readonly string[] = [],
+): readonly HumanSoundSamplePhase[] | null {
+  try {
+    if (!Array.isArray(samples)
+      || samples.length > HUMAN_PERCEPTION_MAX_SUPPLEMENTAL_SOUND_SAMPLES
+      || !Array.isArray(terminalPlayerExpressionEventIds)
+      || terminalPlayerExpressionEventIds.length > 2) return null;
+    const ledger = canonicalizeSituatedExpressionAdmissionLedger(admissions);
+    const bank = canonicalizeSituatedExpressionChannelBank(channels);
+    if (ledger === null || bank === null || ledger.records.length !== samples.length) return null;
+    const terminalIds = new Set(terminalPlayerExpressionEventIds);
+    if (terminalIds.size !== terminalPlayerExpressionEventIds.length) return null;
+    const sampleIds = new Set<string>();
+    const phases: HumanSoundSamplePhase[] = [];
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = createSupplementalSoundSample(samples[index]!);
+      const admission = ledger.records[index];
+      if (sample === null || admission === undefined || admission.sampleOrdinal !== index
+        || admission.eventId !== sample.expressionEventId
+        || admission.sourceActorId !== sample.sourceActorId
+        || sampleIds.has(sample.id)
+        || !vocalizationSampleMatchesChannel(sample, bank)) return null;
+      sampleIds.add(sample.id);
+      let phase = admission.admittedAtPlayerStepPhase;
+      if (terminalIds.has(admission.eventId)) {
+        if ((admission.kind !== "player-traversal" && admission.kind !== "player-exhaustion")
+          || admission.sourceActorId !== LOCAL_PLAYER_LIVING_ACTOR_ID
+          || phase !== PLAYER_STEPS_PER_WORLD_TICK - 1) return null;
+        phase = PLAYER_STEPS_PER_WORLD_TICK;
+        terminalIds.delete(admission.eventId);
+      }
+      phases.push(Object.freeze({ sampleId: sample.id, phase }));
+    }
+    return terminalIds.size === 0 ? Object.freeze(phases) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Retained phase-zero alarms use their listener's retained body, not its later gaze/body. */
+export function residentPhaseZeroHearingAddress(
+  economy: WorldView,
+  currentAddress: LivingActorAddress,
+): LivingActorAddress | null {
+  try {
+    if (!isLivingActorAddress(currentAddress) || currentAddress.species !== "human"
+      || !Number.isSafeInteger(economy.completedTick) || economy.completedTick < 0
+      || Object.is(economy.completedTick, -0)) return null;
+    const matches = economy.residents.filter(({ identity }) => identity.stableId === currentAddress.actorId);
+    const resident = matches[0];
+    if (matches.length !== 1 || resident === undefined
+      || resident.perception.actorId !== currentAddress.actorId
+      || resident.perception.tick !== economy.completedTick) return null;
+    const derived = livingActorAddressForResident(economy, resident);
+    if (derived === null || stableStringify(derived) !== stableStringify(currentAddress)) return null;
+    if (!Object.hasOwn(resident, "activity")) return currentAddress;
+    const pose = residentActivityPoseAtPhase(resident.activity, {
+      actorId: currentAddress.actorId, tick: economy.completedTick,
+    }, 0);
+    return pose === null ? null : createLivingActorAddress({
+      ...currentAddress, position: pose.position, heading: pose.heading,
+    });
+  } catch {
+    return null;
+  }
 }
 
 function runtimeBio0Porter(economy: WorldView, actorId?: string): RuntimeBio0Porter {
@@ -13406,10 +13486,23 @@ export async function createTideweftRuntime(
     targetTick: number,
     physicalSoundSamples: readonly PhysicalSoundSample[],
     regionalProjection: RegionalEcologyStateV6ActiveProjection,
+    soundTiming: Readonly<{
+      domainSoundSamplePhases: readonly HumanSoundSamplePhase[];
+      terminalPlayerExpressionEventIds: readonly string[];
+    }>,
     porterVisual: RuntimePorterVisualFrame | null = null,
     unadmittedAlarmSoundSamples: readonly UnadmittedAlarmSoundSample[] = [],
     surfaceFallbackSoundSampleIds: readonly string[] = [],
   ): ResidentPerceptionFrame {
+    const supplementalPhases = prepareRuntimeSupplementalSoundSamplePhases(
+      actorVocalizationSamples,
+      situatedExpressionAdmissions,
+      situatedExpressionChannels,
+      soundTiming.terminalPlayerExpressionEventIds,
+    );
+    if (supplementalPhases === null) {
+      throw new Error("Pending expression sound lost its event-time admission");
+    }
     // Support is re-derived from retained authenticated causes, not persisted
     // beside sound words or guessed from actor IDs. Airborne calls remain
     // explicitly unmodeled until their domain supplies real acoustic height.
@@ -13578,6 +13671,7 @@ export async function createTideweftRuntime(
       physicalSoundSamples,
       unadmittedAlarmSoundSamples,
       surfaceSoundSampleIds: [...surfaceVocalizationSampleIds, ...surfaceFallbackSoundSampleIds],
+      soundSamplePhases: [...supplementalPhases, ...soundTiming.domainSoundSamplePhases],
     }, import.meta.env.DEV && expressionDiagnosticState?.enabled === true ? (receipts) => {
       const state = stagedExpressionDiagnosticState ?? expressionDiagnosticState;
       if (state === null) return;
@@ -13585,6 +13679,9 @@ export async function createTideweftRuntime(
       if (stagedExpressionDiagnosticState !== null) stagedExpressionDiagnosticState = next;
       else expressionDiagnosticState = next;
     } : undefined);
+    if (humanObservationCollectionRejected(batches)) {
+      throw new Error("Human perception interval failed event-time validation");
+    }
     const batchByResidentId = new Map<number, (typeof batches)[number]>();
     for (const batch of batches) {
       const resident = world.residents.find(({ id }) => id === batch.residentId);
@@ -14013,6 +14110,9 @@ export async function createTideweftRuntime(
       return Object.freeze([]);
     }
     const deferredWorldAcousticAudio: CommittedAudioCue[] = [];
+    // Only this accepted tick can distinguish a terminal phase-ten player
+    // reaction from a retained phase-nine admission. Never persist this list.
+    const terminalPlayerExpressionEventIds: string[] = [];
     activeWorldAcousticPresentations = advanceWorldAcousticPresentations(
       activeWorldAcousticPresentations,
     );
@@ -14342,6 +14442,14 @@ export async function createTideweftRuntime(
         null,
         diagnosticProducerContext,
       );
+      if (acceptedTraversal && playerStepStateSample.sampleOrdinal + 1 === PLAYER_STEPS_PER_WORLD_TICK) {
+        const admission = situatedExpressionAdmissions.records.at(-1);
+        if (admission?.kind !== "player-traversal"
+          || admission.admittedAtPlayerStepPhase !== PLAYER_STEPS_PER_WORLD_TICK - 1) {
+          throw new Error("Terminal traversal reaction lost its accepted-step admission");
+        }
+        terminalPlayerExpressionEventIds.push(admission.eventId);
+      }
       if (acceptedTraversal && (footingIntent || cargoIntent)) {
         const admission = situatedExpressionAdmissions.records.at(-1);
         const authority = situatedExpressionCausalAuthority.records.at(-1);
@@ -14414,6 +14522,13 @@ export async function createTideweftRuntime(
       );
       if (acceptedEffort) {
         const admission = situatedExpressionAdmissions.records.at(-1);
+        if (playerStepStateSample.sampleOrdinal + 1 === PLAYER_STEPS_PER_WORLD_TICK) {
+          if (admission?.kind !== "player-exhaustion"
+            || admission.admittedAtPlayerStepPhase !== PLAYER_STEPS_PER_WORLD_TICK - 1) {
+            throw new Error("Terminal effort reaction lost its accepted-step admission");
+          }
+          terminalPlayerExpressionEventIds.push(admission.eventId);
+        }
         const beforePosition = playerWorldPositionInRegionalWindow(
           priorRegionalWindow,
           { ...player, x: beforeX, y: beforeY },
@@ -14475,6 +14590,17 @@ export async function createTideweftRuntime(
       if (animalContactSoundSamples === null) {
         throw new Error("Animal-contact acoustic carry failed reauthentication");
       }
+      const retainedWorldSoundPhases = new Map<string, number>();
+      for (const sample of animalContactSoundSamples) {
+        const record = animalContactAcousticCarry.records.find(({ event }) => event.eventId === sample.acousticEventId);
+        if (record === undefined || record.event.occurredAtTick !== world.meta.completedTick
+          || retainedWorldSoundPhases.has(sample.id)) {
+          throw new Error("Animal contact lost its current phase-zero cause");
+        }
+        // Dogs move in the committed world step; contacts belong to its new
+        // interval's phase zero even when consumed at the later closure.
+        retainedWorldSoundPhases.set(sample.id, 0);
+      }
       // Only the exact reauthenticated dog-body contacts supply ground support.
       // Aggregate activity remains unmodeled; sound words do not establish pose.
       const surfaceAnimalContactSampleIds = new Set(
@@ -14525,9 +14651,11 @@ export async function createTideweftRuntime(
         .slice(0, remainingWorldSoundCapacity)
         .map((event) => {
           const sample = coreEcologyAggregateSoundSample(event);
-          if (sample === null) {
+          if (sample === null || event.occurredAtTick !== world.meta.completedTick
+            || retainedWorldSoundPhases.has(sample.id)) {
             throw new Error("Aggregate sound could not enter shared actor hearing");
           }
+          retainedWorldSoundPhases.set(sample.id, 0);
           return sample;
         });
       // Individual contact and aggregate sounds are ordinary world sounds.
@@ -14607,6 +14735,18 @@ export async function createTideweftRuntime(
         window: regionalTravel.window,
         tick: targetTick,
       };
+      const retainedPorterAddress = residentPhaseZeroHearingAddress(economyView, priorPorter.address);
+      if (retainedPorterAddress === null) throw new Error("Retained alarm listener lost its phase-zero body");
+      // Only retained alarm hearing uses the earlier porter pose. Current
+      // visual/aggregate queries and fresh next-tick alarms keep the full frame.
+      const retainedCoreAlarmPerceptionFrame = Object.freeze({
+        ...corePerceptionFrame,
+        participants: Object.freeze(corePerceptionFrame.participants.map((participant) => Object.freeze(
+          participant.address.actorId === priorPorter.address.actorId
+            ? { ...participant, address: retainedPorterAddress }
+            : participant,
+        ))),
+      });
       const coreVisualObservations = collectCoreEcologyVisualObservationBatches(
         corePerceptionFrame,
       );
@@ -14663,7 +14803,9 @@ export async function createTideweftRuntime(
           && retainedSample.sourceActorId === admission.sourceActorId
         ) return [];
         const sample = catWeatherDistressPhysicalSoundSample(expression);
-        if (sample === null) throw new Error("Cat weather call could not enter shared physical hearing");
+        if (sample === null || authority.event.atTick !== world.meta.completedTick) {
+          throw new Error("Cat weather call could not enter shared phase-zero hearing");
+        }
         const observationId = authority.event.observationId;
         if (observationId === null) {
           throw new Error("Pending cat sound lost its authenticated rain evidence");
@@ -14694,7 +14836,7 @@ export async function createTideweftRuntime(
           }
         }
         return [{ eventId: authority.event.eventId,
-          priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample,
+          priority: DOMESTIC_CAT_RAIN_DISTRESS_EXPRESSION_PRIORITY, sample, phase: 0 as const,
           surfaceSupported: hasDetailedCause
             && acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface" }];
       });
@@ -14742,8 +14884,8 @@ export async function createTideweftRuntime(
           && retainedSample.sourceActorId === admission.sourceActorId;
         if (humanHearingOwnedByExpression) return [];
         const sample = foxPursuitPhysicalSoundSample(expression);
-        if (sample === null) {
-          throw new Error("Fox pursuit could not enter shared physical hearing");
+        if (sample === null || authority.event.atTick !== world.meta.completedTick) {
+          throw new Error("Fox pursuit could not enter shared phase-zero hearing");
         }
         const resource = authority.event.resourceReference;
         const observationId = authority.event.observationId;
@@ -14781,6 +14923,7 @@ export async function createTideweftRuntime(
           eventId: authority.event.eventId,
           priority: MARSH_FOX_PURSUIT_YIP_EXPRESSION_PRIORITY,
           sample,
+          phase: 0 as const,
           surfaceSupported: hasDetailedCause
             && acousticTerrainSupportForSpecies(authority.actor.address.species) === "surface",
         }];
@@ -14814,9 +14957,9 @@ export async function createTideweftRuntime(
           : null;
         const rawPropagated = propagateCoreEcologyAlarmObservationBatches(
           alarm,
-          corePerceptionFrame,
+          retainedCoreAlarmPerceptionFrame,
         );
-        if (rawPropagated === null) {
+        if (rawPropagated === null || alarm.atTick !== world.meta.completedTick) {
           throw new Error("Core ecology alarm perception could not be resolved");
         }
         const humanSoundClass = isExpressiveAlarmSpecies(alarm.species)
@@ -14884,6 +15027,7 @@ export async function createTideweftRuntime(
       type ExpressionHearingFallback = Readonly<{
         eventId: string;
         priority: number;
+        phase: 0;
       }> & (
         | Readonly<{ kind: "physical"; sample: PhysicalSoundSample }>
         | Readonly<{ kind: "alarm"; sample: UnadmittedAlarmSoundSample }>
@@ -14901,6 +15045,7 @@ export async function createTideweftRuntime(
           const shared = {
             eventId: alarm.eventId,
             priority: coreWildlifeAlarmExpressionPriority(alarm.species),
+            phase: 0 as const,
           };
           return alarmPhysicalFallback !== null
             ? [{
@@ -14935,6 +15080,14 @@ export async function createTideweftRuntime(
           fallback.kind === "alarm" ? [fallback.sample] : []
         )),
       );
+      const domainSoundSamplePhases = Object.freeze([
+        ...selectedExpressionHearingFallbacks.map(({ sample, phase }) => Object.freeze({ sampleId: sample.id, phase })),
+        ...worldPhysicalSoundSamples.slice(0, remainingPhysicalCapacity).map(({ id }) => {
+          const phase = retainedWorldSoundPhases.get(id);
+          if (phase === undefined) throw new Error("World sound has no cause-owned occurrence phase");
+          return Object.freeze({ sampleId: id, phase });
+        }),
+      ]);
       const surfaceFallbackSampleIds = new Set([
         ...catWeatherPhysicalFallbacks.flatMap(({ sample, surfaceSupported }) => (
           surfaceSupported ? [sample.id] : []
@@ -15083,6 +15236,8 @@ export async function createTideweftRuntime(
       }
       const perceptionFrame = residentPerceptionFrame(
         targetTick, humanPhysicalSoundSamples, regionalEcologyProjectionForStep, {
+          domainSoundSamplePhases, terminalPlayerExpressionEventIds,
+        }, {
           actorId: priorPorter.address.actorId,
           observations: porterWorldObservations,
         }, humanUnadmittedAlarmSoundSamples, selectedSurfaceSoundSampleIds,

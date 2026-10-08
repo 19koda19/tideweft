@@ -4,7 +4,7 @@ import { createWorld, createWorldView, deserializeWorld, serializeWorld } from "
 import { MAX_TIDE_LEVEL } from "../sim/terrain";
 import { FIXED_POINT, type WorldState, type WorldView } from "../sim/types";
 import {
-  collectExistingHumanObservations, createPhysicalSoundSample, createPlayerSenseSample,
+  collectExistingHumanObservations, humanObservationCollectionRejected, createPhysicalSoundSample, createPlayerSenseSample,
   createSupplementalSoundSample, createUnadmittedAlarmSoundSample,
   type HumanPerceptionInput, type HumanSupplementalListeningReceipt, type PhysicalSoundSample,
 } from "./humanPerception";
@@ -197,12 +197,17 @@ describe("existing-human retained activity reception", () => {
       ...[-1, -0, 11, 0.5, Number.NaN].map((phase) => [{ ...mappings[0], phase }, ...mappings.slice(1)]),
     ];
     const receipt = vi.fn<(value: readonly HumanSupplementalListeningReceipt[]) => void>();
-    for (const soundSamplePhases of invalid) expect(collectExistingHumanObservations({ ...input, soundSamplePhases } as unknown as HumanPerceptionInput, receipt)).toEqual([]);
+    for (const soundSamplePhases of invalid) {
+      const malformed = { ...input, soundSamplePhases } as unknown as HumanPerceptionInput;
+      expect(collectExistingHumanObservations(malformed, receipt)).toEqual([]);
+      expect(humanObservationCollectionRejected(collectExistingHumanObservations(malformed, receipt))).toBe(true);
+    }
     const player = playerSample(pose(current, 1).position, 0);
     expect(collectExistingHumanObservations({ ...input, playerSamples: [player], soundSamplePhases: [...mappings, { sampleId: player.id, phase: 1 }] }, receipt)).toEqual([]);
     expect(collectExistingHumanObservations({ ...input, playerSamples: [player], soundSamplePhases: [...mappings.slice(1), { sampleId: player.id, phase: 1 }] }, receipt)).toEqual([]);
     const { soundSamplePhases: _omitted, ...missing } = input;
     expect(collectExistingHumanObservations(missing, receipt)).toEqual([]);
+    expect(humanObservationCollectionRejected(collectExistingHumanObservations(missing, receipt))).toBe(true);
     expect(receipt).not.toHaveBeenCalled();
   });
 
@@ -210,6 +215,7 @@ describe("existing-human retained activity reception", () => {
     const incomplete = fixture(4);
     const receipt = vi.fn<(value: readonly HumanSupplementalListeningReceipt[]) => void>();
     expect(collectExistingHumanObservations(inputFor(incomplete, 10), receipt)).toEqual([]);
+    expect(humanObservationCollectionRejected(collectExistingHumanObservations(inputFor(incomplete, 10), receipt))).toBe(true);
     expect(collectExistingHumanObservations({ world: incomplete.world, window: incomplete.window,
       targetTick: incomplete.state.meta.completedTick + 1, playerSamples: [playerSample(pose(incomplete, 1).position, 4)] }, receipt)).toEqual([]);
     const current = fixture();
@@ -218,6 +224,7 @@ describe("existing-human retained activity reception", () => {
     for (const malformed of [null, undefined, { ...activity, tick: activity.tick - 1 }]) {
       Object.assign(resident, { activity: malformed });
       expect(collectExistingHumanObservations(inputFor(current, 1), receipt)).toEqual([]);
+      expect(humanObservationCollectionRejected(collectExistingHumanObservations(inputFor(current, 1), receipt))).toBe(true);
     }
     Object.assign(resident, { activity });
     expect(receipt).not.toHaveBeenCalled();
@@ -245,5 +252,32 @@ describe("existing-human retained activity reception", () => {
     const original = publish({ state: current.state, stableId: current.stableId, center: current.center });
     const restored = publish({ state: restoredState, stableId: current.stableId, center: current.center });
     expect(collectExistingHumanObservations(inputFor(restored, 4))).toEqual(collectExistingHumanObservations(inputFor(original, 4)));
+  });
+
+  it("distinguishes legitimate empty observations and an out-of-window listener set from rejection", () => {
+    const current = fixture();
+    const empty = collectExistingHumanObservations({ world: current.world, window: current.window,
+      targetTick: current.state.meta.completedTick + 1, playerSamples: [] });
+    expect(humanObservationCollectionRejected(empty)).toBe(false);
+    expect(empty.length).toBeGreaterThan(0);
+    expect(empty.every(({ observations }) => observations.length === 0)).toBe(true);
+    const distant = publish({ state: current.state, stableId: current.stableId, center: current.center },
+      { x: current.center.x + 1_000, y: current.center.y + 1_000 });
+    const receipt = vi.fn<(value: readonly HumanSupplementalListeningReceipt[]) => void>();
+    const absentListeners = collectExistingHumanObservations(inputFor(distant, 1), receipt);
+    expect(absentListeners).toEqual([]);
+    expect(humanObservationCollectionRejected(absentListeners)).toBe(false);
+    expect(receipt).toHaveBeenCalledWith([]);
+  });
+
+  it("publishes no partial diagnostic receipts when a later selected listener is malformed", () => {
+    const current = fixture();
+    const receipt = vi.fn<(value: readonly HumanSupplementalListeningReceipt[]) => void>();
+    const selected = collectExistingHumanObservations(inputFor(current, 1));
+    expect(selected.length).toBeGreaterThan(1);
+    const last = current.world.residents.find(({ identity }) => identity.stableId === selected.at(-1)!.observerId)!;
+    last.perception = { ...last.perception, actorId: "H-foreign-listener" };
+    expect(humanObservationCollectionRejected(collectExistingHumanObservations(inputFor(current, 1), receipt))).toBe(true);
+    expect(receipt).not.toHaveBeenCalled();
   });
 });

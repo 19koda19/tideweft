@@ -6442,6 +6442,8 @@ describe("runtime core-ecology vertical slice", () => {
       "guardian-work",
     );
     let restored: TideweftRuntime | undefined;
+    const humanModule = await import("./humanPerception");
+    const hearing = vi.spyOn(humanModule, "collectExistingHumanObservations");
     try {
       advancePlayerSteps(runtime, 19);
       await runtime.save();
@@ -6482,6 +6484,20 @@ describe("runtime core-ecology vertical slice", () => {
       const mixed = restored.getRenderView();
       expect(mixed.tick).toBe(pendingTick + 1);
       expect(mixed.player.incident?.kind).toBe("fall");
+      const terminalFrames = hearing.mock.calls.map(([input]) => input).filter((input) => (
+        input.targetTick === pendingTick + 1
+        && input.playerSamples.some(({ sampleOrdinal }) => sampleOrdinal === 9)
+      ));
+      expect(terminalFrames).toHaveLength(1);
+      const terminalFrame = terminalFrames[0]!;
+      const playerReaction = terminalFrame.supplementalSoundSamples?.filter(({ sourceActorId }) => (
+        sourceActorId === "player:local"
+      ));
+      expect(playerReaction).toHaveLength(1);
+      expect(terminalFrame.soundSamplePhases).toEqual(expect.arrayContaining([
+        { sampleId: crowSample.id, phase: 0 },
+        { sampleId: playerReaction![0]!.id, phase: 10 },
+      ]));
       await restored.save();
       const committed = requiredEnvelope(repository);
       expect(committed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
@@ -6543,6 +6559,7 @@ describe("runtime core-ecology vertical slice", () => {
       expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-fish-crow-alarm")).toEqual([]);
       expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-dog-warning-bark")).toHaveLength(1);
     } finally {
+      hearing.mockRestore();
       restored?.destroy();
       runtime.destroy();
       scheduledFrame = undefined;

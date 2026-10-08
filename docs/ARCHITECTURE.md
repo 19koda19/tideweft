@@ -2346,8 +2346,8 @@ courier also removes its legacy macro-hold exhaustion relief: existing bound
 courier law requires actual restorative arrival, not a weather-hold flag.
 These are **local foundations, not normal-play activation or
 physical porter-travel proof**. Existing absent records remain absent on load;
-runtime adoption, a body-capable outer format, phase-aware hearing wiring,
-resident publication wiring and body-enabled fine-step rollback proof remain
+runtime adoption, a body-capable outer format, resident publication activation
+and body-enabled fine-step rollback proof remain
 necessary before enabling that motion in ordinary play. No new public release is claimed.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
@@ -2381,7 +2381,19 @@ area use that retained pose, including a listener who has since left the window.
 Missing/malformed timing or history rejects the complete frame before publishing
 diagnostic receipts. This transient metadata neither authenticates the producer
 nor becomes save authority; legacy absent bodies retain their previous reception.
-The runtime must still supply lawful event phases before activating body motion.
+Runtime reception now supplies those phases from exact sample/admission/channel
+custody, not list order. Only the current accepted terminal traversal/exhaustion
+producer may override its nonpersisting phase-nine admission to phase ten;
+the bounded event-ID list is local to that tick and disappears on rollback.
+Current dog-contact carry, aggregate activity and selected wildlife fallbacks
+retain phase zero beside their authenticated current-tick builders, through the
+independent hearing budgets. Unknown or missing timing cannot default to zero.
+The receiver's rejection sentinel is checked explicitly before constructing a
+complete resident frame; genuine empty-window success remains distinct from
+failure. Retained raw alarms use the porter's retained phase-zero address while
+current visual queries and fresh next-tick alarms keep the closure address.
+These connected timing boundaries add no saved state or producer; ordinary
+body motion and its current-save/rollback proof remain unactivated.
 
 Body-bound introductions additionally capture an exact scalar source pose in
 the committed simulation event through `residentActivityEventLocus.ts`. GREET

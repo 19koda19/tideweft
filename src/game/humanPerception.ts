@@ -699,6 +699,17 @@ export function collectExistingHumanObservations(
   return Object.freeze(batches);
 }
 
+/**
+ * Transactional callers must distinguish rejected input from a legitimate
+ * empty listener window. Keep the existing collection/receipt owner and its
+ * public empty-array compatibility contract; do not infer failure by length.
+ */
+export function humanObservationCollectionRejected(
+  batches: readonly HumanObservationBatch[],
+): boolean {
+  return batches === EMPTY_BATCHES;
+}
+
 function freezeListeningCopy<T>(value: T): T {
   if (value !== null && typeof value === "object") {
     for (const nested of Object.values(value)) freezeListeningCopy(nested);
