@@ -2190,6 +2190,15 @@ presentation timer or save root. The [rest integration boundary](#planned-bounde
 owns current approach evidence; complete services, traveler enactment and broader
 body/look presentation remain unfinished. No new public release is claimed.
 
+Current local movement copy in Chart/Relief and ABOUT derives only from the
+last two canonical body poses bound to that resident and perception tick.
+A task, destination, intention, earlier movement, or a phase0 anchor alone
+does not prove present displacement. Cold clones use the same strict body
+validator; malformed, foreign, stale and sparse history supplies no motion.
+Existing sight/detail gates, attention, restorative posture and weather-hold
+priorities remain. The restrained moving cue does not reveal why or where the
+resident is going, create an acoustic event, or change legacy coarse travel.
+
 The local route-heading correction derives increasing or decreasing direction
 from the assigned in-transit Promise's ordered leg, matching the existing
 progress owner. Bends and endpoints use that direction's physical tangent;

@@ -30,6 +30,7 @@ import {
   projectGameView,
   projectPerception,
   projectResidentWorldPosition,
+  observableResidentBodyMoving,
 } from "./projection";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
@@ -295,6 +296,92 @@ describe("existing-human perception presentation", () => {
     expect(projected.facing).toBe(bodyFacing);
   });
 
+  it("shows a real local rest approach as movement without disclosing its purpose", () => {
+    const { state, player, residentId } = restMovementFixture();
+    expect(advanceResidentRestActivities(state, 1)?.movedActorIds).toContain(
+      state.residents.find(({ id }) => id === residentId)!.identity.stableId,
+    );
+    const world = createWorldView(state);
+    const resident = world.residents.find(({ id }) => id === residentId)!;
+    const perception = projectPerception(world, player);
+    const rendered = projectGameView(world, player, { selectedResidentId: residentId, perception });
+    const porter = rendered.porters.find(({ id }) => id === String(residentId));
+    const about = projectUIView(world, player, createSessionState(world.seedText), {
+      selectedResidentId: residentId, perception,
+    }).selectedResident;
+
+    expect(queryResidentAttentionState(resident.perception)).toBe("unaware");
+    expect(porter).toMatchObject({ state: "traveling", quickLabel: "Unknown resident · moving" });
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Moving nearby" });
+    expect(rendered.acousticText).toEqual([]);
+    const copy = JSON.stringify({ quickLabel: porter?.quickLabel, observed: about?.observed });
+    expect(copy).not.toMatch(/urgent-rest|settlement-rest|approaching|restTask|localX|localY/u);
+  });
+
+  it("does not call an unstarted local approach movement merely because a task exists", () => {
+    const { state, player, residentId } = restMovementFixture();
+    const world = createWorldView(state);
+    const resident = world.residents.find(({ id }) => id === residentId)!;
+    expect(resident.activity?.restTask?.phase).toBe("approaching");
+    expect(resident.activity?.poses).toHaveLength(1);
+    expect(observableResidentBodyMoving(resident)).toBe(false);
+    const perception = projectPerception(world, player);
+    expect(projectGameView(world, player, { perception }).porters.find(({ id }) => id === String(residentId)))
+      .toMatchObject({ state: "waiting", quickLabel: "Unknown resident" });
+    expect(projectUIView(world, player, createSessionState(world.seedText), {
+      selectedResidentId: residentId, perception,
+    }).selectedResident?.observed).toContainEqual({ label: "Behavior", value: "Waiting nearby" });
+  });
+
+  it("validates cold body history and ignores private intentions and earlier movement", () => {
+    const { state, residentId } = restMovementFixture();
+    expect(advanceResidentRestActivities(state, 1)).not.toBeNull();
+    const moving = state.residents.find(({ id }) => id === residentId)!;
+    const before = serializeWorld(state);
+    expect(observableResidentBodyMoving(moving)).toBe(true);
+    const cold = structuredClone(moving);
+    expect(observableResidentBodyMoving(cold)).toBe(true);
+    // These are predicate/validation fixtures, not claimed gameplay outcomes.
+    // Neither task presence nor carry intention supplies displacement proof.
+    expect(observableResidentBodyMoving({ ...cold, activity: { ...cold.activity!, restTask: null }, intention: "rest" }))
+      .toBe(true);
+    const stopped = { ...cold, activity: { ...cold.activity!, poses: [
+      ...cold.activity!.poses, cold.activity!.poses.at(-1)!,
+    ] } };
+    expect(observableResidentBodyMoving(stopped)).toBe(false);
+    const absent = structuredClone(cold);
+    delete absent.activity;
+    absent.intention = "carry";
+    expect(observableResidentBodyMoving(absent)).toBe(false);
+    expect(observableResidentBodyMoving({ ...cold, activity: { ...cold.activity!, tick: cold.perception.tick - 1 } }))
+      .toBe(false);
+    expect(observableResidentBodyMoving({ ...cold, activity: { ...cold.activity!, actorId: state.residents.find(({ id }) => id !== residentId)!.identity.stableId } }))
+      .toBe(false);
+    const sparse = structuredClone(cold);
+    delete (sparse.activity!.poses as Array<unknown>)[0];
+    expect(observableResidentBodyMoving(sparse)).toBe(false);
+    expect(serializeWorld(state)).toBe(before);
+  });
+
+  it("withholds actual local movement when the source is outside current sight", () => {
+    const { state, player, residentId } = restMovementFixture();
+    expect(advanceResidentRestActivities(state, 1)).not.toBeNull();
+    const world = createWorldView(state);
+    const resident = world.residents.find(({ id }) => id === residentId)!;
+    expect(observableResidentBodyMoving(resident)).toBe(true);
+    player.x = (world.terrain.width - 0.5) * TILE_UNITS;
+    player.y = (world.terrain.height - 0.5) * TILE_UNITS;
+    const perception = projectPerception(world, player);
+    const placement = projectResidentWorldPosition(world, resident, TILE_UNITS);
+    expect(placement).not.toBeNull();
+    expect(perception.detailVisibilityGrades[placement!.tileIndex]).toBe(0);
+    expect(projectGameView(world, player, { perception }).porters.some(({ id }) => id === String(residentId)))
+      .toBe(false);
+    expect(projectUIView(world, player, createSessionState(world.seedText), {
+      selectedResidentId: residentId, perception,
+    }).selectedResident).toBeUndefined();
+  });
+
   it("withholds cognition, learned identity, speech, and ABOUT outside exact detail sight", () => {
     const state = createWorld("hidden attention is not player knowledge", "standard");
     const initial = createWorldView(state);
@@ -343,6 +430,43 @@ describe("existing-human perception presentation", () => {
     expect(JSON.stringify(rendered.porters)).not.toContain(resident.name);
   });
 });
+
+/** Real native source and existing rest adapter; only initial pressure is authored. */
+function restMovementFixture() {
+  const state = createWorld("resident activity executable rest approach", "standard");
+  state.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: state.meta.completedTick + 1_000 };
+  for (const resident of state.residents) {
+    resident.needs = { food: 100_000, rest: 100_000, belonging: 100_000 };
+    resident.condition.exhaustion = 100_000;
+  }
+  for (const contract of state.contracts) {
+    contract.playerExclusiveUntilTick = state.meta.completedTick + 1_000;
+    contract.dueTick = state.meta.completedTick + 2_000;
+  }
+  const native = state.residents.find((resident) => {
+    if (resident.location.kind !== "settlement" || resident.activeContractId !== null) return false;
+    const source = resolveResidentWorldPlacement(state, resident)?.position;
+    const target = residentSettlementRestTarget(state, resident);
+    if (source === undefined || target === null
+      || !residentRestTargetHasDrySupport(state, source)
+      || !residentRestTargetHasDrySupport(state, target)) return false;
+    const delta = worldPositionDelta(source, target);
+    return Math.abs(delta.x) + Math.abs(delta.y) === WORLD_POSITION_UNITS_PER_TILE;
+  });
+  if (native === undefined) throw new Error("fixture needs a native one-tile dry rest approach");
+  const source = resolveResidentWorldPlacement(state, native)!.position;
+  native.needs.rest = 900_000;
+  native.condition.exhaustion = 300_000;
+  expect(adoptResidentActivities(state)).toBe(true);
+  expect(prepareResidentRestActivities(state)).toBe(true);
+  const world = createWorldView(state);
+  const player = createPlayer(world);
+  // This projection fixture views the actual source at close range. Native
+  // runtime tests separately use the unchanged player spawn and real controls.
+  player.x = source.localX;
+  player.y = source.localY;
+  return { state, player, residentId: native.id };
+}
 
 function presentationFixture(
   cognition: PresentedCognition,

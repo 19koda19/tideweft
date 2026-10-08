@@ -105,6 +105,7 @@ import {
 } from "./perception";
 import {
   isCurrentPerceptionSnapshot,
+  observableResidentBodyMoving,
   observableResidentRestState,
   projectAdriftView,
   projectPerception,
@@ -248,11 +249,13 @@ function observableResidentBehavior(resident: ResidentState): string {
   if (restState === "resting") return "Resting here";
   return resident.condition.sheltering
     ? "Holding position in unsafe weather"
-    : resident.activeContractId !== null
-      ? "Carrying a Promise"
-      : resident.location.kind === "route"
-        ? "Traveling nearby"
-        : "Waiting nearby";
+    : observableResidentBodyMoving(resident)
+      ? "Moving nearby"
+      : resident.activeContractId !== null
+        ? "Carrying a Promise"
+        : resident.location.kind === "route"
+          ? "Traveling nearby"
+          : "Waiting nearby";
 }
 
 function projectResidentAbout(

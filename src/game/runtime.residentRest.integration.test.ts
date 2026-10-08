@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { assertWorldInvariants, createWorldView, deserializeWorld, serializeWorld, type ResidentState } from "../sim/public";
+import { assertWorldInvariants, createWorldView, deserializeWorld, FIXED_POINT, serializeWorld, type ResidentState } from "../sim/public";
 import { RESIDENT_REST_APPROACH_STEP_UNITS } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { queryResidentAttentionState } from "../sim/residentAttention";
 import { stableStringify } from "../sim/util";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { livingActorAddressForResident } from "./livingActor";
@@ -145,7 +146,7 @@ function authoritativeRoots(envelope: Envelope): unknown {
  * This is not a claim that a fresh daytime seed spontaneously needs urgent rest.
  */
 async function restFixture(
-  selection: "dry" | "wet-source" | "keeper" = "dry",
+  selection: "dry" | "wet-source" | "keeper" | "nearby" = "dry",
   seed = "resident activity executable rest approach",
 ) {
   const repository = new MemoryRepository();
@@ -169,10 +170,15 @@ async function restFixture(
     const sourceIsDry = residentRestTargetHasDrySupport(world, source);
     if (selection === "wet-source" ? sourceIsDry : !sourceIsDry) return [];
     const delta = worldPositionDelta(source, target);
-    if (selection !== "wet-source" && Math.abs(delta.x) + Math.abs(delta.y) !== WORLD_POSITION_UNITS_PER_TILE) return [];
+    const approachDistance = Math.abs(delta.x) + Math.abs(delta.y);
+    if (selection === "nearby" ? approachDistance !== 2 * WORLD_POSITION_UNITS_PER_TILE
+      : selection !== "wet-source" && approachDistance !== WORLD_POSITION_UNITS_PER_TILE) return [];
     const playerDelta = worldPositionDelta(playerPosition, source);
-    return [{ human, source, target, distance: playerDelta.x * playerDelta.x + playerDelta.y * playerDelta.y }];
-  }).sort((left, right) => right.distance - left.distance || left.human.id - right.human.id);
+    const distance = playerDelta.x * playerDelta.x + playerDelta.y * playerDelta.y;
+    if (selection === "nearby" && distance > (4 * WORLD_POSITION_UNITS_PER_TILE) ** 2) return [];
+    return [{ human, source, target, distance }];
+  }).sort((left, right) => (selection === "nearby" ? left.distance - right.distance : right.distance - left.distance)
+    || left.human.id - right.human.id);
   const selected = candidates[0];
   if (selected === undefined) {
     close(setup);
@@ -197,7 +203,7 @@ async function restFixture(
     tick: world.meta.completedTick, exhaustion: selected.human.condition.exhaustion };
 }
 
-async function firstNativeFixture(selection: "wet-source" | "keeper") {
+async function firstNativeFixture(selection: "wet-source" | "keeper" | "nearby") {
   for (const seed of ["resident activity executable rest approach", "a", "settlement keeper home night continuity"]) {
     try {
       return await restFixture(selection, seed);
@@ -259,6 +265,87 @@ describe("ordinary runtime resident rest execution", () => {
     const restored = decode(coldRepository.snapshot());
     expect(authoritativeRoots(restored)).toEqual(authoritativeRoots(middle));
     advanceOrdinaryFixedSteps(cold, 10 - phase);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+  }, 60_000);
+
+  it("keeps actual nearby player recognition from denying rest motion, arrival and cold continuation", async () => {
+    const fixture = await firstNativeFixture("nearby");
+    const repository = new MemoryRepository(fixture.record);
+    const runtime = await open(repository);
+    const initial = resident(decode(fixture.record), fixture.actorId);
+    expect(initial.perception.beliefs.some(({ subjectId }) => subjectId === "player:local")).toBe(false);
+    advanceOrdinaryFixedSteps(runtime, 10);
+    await runtime.save();
+    const recognized = decode(repository.snapshot());
+    const approaching = resident(recognized, fixture.actorId);
+    expect(deserializeWorld(recognized.world).meta.completedTick).toBe(fixture.tick + 1);
+    expect(approaching.perception.suspicion).toBe("identified");
+    expect(queryResidentAttentionState(approaching.perception)).toBe("glance");
+    expect(approaching.activity?.restTask).toMatchObject({ cause: "urgent-rest", phase: "approaching", target: fixture.target });
+    expect(approaching.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+    const firstBelief = approaching.perception.beliefs.find(({ subjectId }) => subjectId === "player:local");
+    expect(firstBelief).toMatchObject({ identification: "identified", firstObservedTick: fixture.tick + 1 });
+
+    // The native diagonal is shorter than its two-tile Manhattan distance;
+    // capture its first recognized moving phase rather than guessing arrival.
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
+    advanceOrdinaryFixedSteps(runtime, 1);
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    await runtime.save();
+    const middleRecord = repository.snapshot();
+    const middle = decode(middleRecord);
+    const moving = resident(middle, fixture.actorId);
+    expect(middle.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
+    expect({ x: middle.player.x, y: middle.player.y }).not.toEqual({ x: recognized.player.x, y: recognized.player.y });
+    expect(moving.activity?.restTask?.phase).toBe("approaching");
+    expect(moving.activity?.poses.at(-1)?.position).not.toEqual(approaching.activity?.poses[0]?.position);
+    expect(queryResidentAttentionState(moving.perception)).toBe("glance");
+    expect(moving.condition.exhaustion).toBeGreaterThanOrEqual(fixture.exhaustion);
+    const visible = runtime.getRenderView().porters.find(({ actorId }) => actorId === fixture.actorId);
+    expect(visible).toBeDefined();
+    expect(visible?.facing).toBe(moving.activity!.poses.at(-1)!.heading / FIXED_POINT * Math.PI * 2);
+
+    advanceOrdinaryFixedSteps(runtime, 9);
+    await runtime.save();
+    const arrival = decode(repository.snapshot());
+    const arrived = resident(arrival, fixture.actorId);
+    expect(deserializeWorld(arrival.world).meta.completedTick).toBe(fixture.tick + 2);
+    expect(arrived.activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(arrived.activity?.restTask?.phase).toBe("arrived");
+    expect(arrived.circadian).toMatchObject({ restDestinationArrived: true, posture: { state: "resting" } });
+    expect(arrived.condition.exhaustion).toBeLessThan(fixture.exhaustion);
+    expect(arrived.perception.beliefs.find(({ subjectId }) => subjectId === "player:local"))
+      .toMatchObject({ identification: "identified", firstObservedTick: firstBelief!.firstObservedTick });
+
+    advanceOrdinaryFixedSteps(runtime, 20);
+    await runtime.save();
+    const uninterrupted = decode(repository.snapshot());
+    const finalWorld = deserializeWorld(uninterrupted.world);
+    const continuingRest = resident(uninterrupted, fixture.actorId);
+    expect(finalWorld.meta.completedTick).toBe(fixture.tick + 4);
+    expect(continuingRest.activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(continuingRest.activity?.restTask?.phase).toBe("arrived");
+    expect(continuingRest.circadian).toMatchObject({ restDestinationArrived: true, posture: { state: "resting" } });
+    expect(continuingRest.condition.exhaustion).toBeLessThan(arrived.condition.exhaustion);
+    expect(continuingRest.perception.beliefs.find(({ subjectId }) => subjectId === "player:local"))
+      .toMatchObject({
+        identification: "identified", firstObservedTick: firstBelief!.firstObservedTick,
+        lastObservedTick: finalWorld.meta.completedTick,
+      });
+    expect(queryResidentAttentionState(continuingRest.perception)).toBe("none");
+    expect(finalWorld.events.filter(({ type }) => type === "resident-introduced")).toEqual(
+      deserializeWorld(decode(fixture.record).world).events.filter(({ type }) => type === "resident-introduced"),
+    );
+    close(runtime);
+
+    const coldRepository = new MemoryRepository(middleRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    const restored = decode(coldRepository.snapshot());
+    expect(authoritativeRoots(restored)).toEqual(authoritativeRoots(middle));
+    expect(queryResidentAttentionState(resident(restored, fixture.actorId).perception)).toBe("glance");
+    advanceOrdinaryFixedSteps(cold, 29);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
   }, 60_000);

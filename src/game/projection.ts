@@ -46,6 +46,7 @@ import {
 } from "../sim/types";
 import { residentKnowsFact } from "../sim/npcIdentity";
 import { queryResidentAttentionState, type ResidentAttentionState } from "../sim/residentAttention";
+import { canonicalizeResidentActivity } from "../sim/residentActivity";
 import {
   queryActorAttention,
   queryActorSearch,
@@ -712,6 +713,18 @@ export function observableResidentRestState(
     && (circadian.posture.state === "resting" || circadian.posture.state === "asleep")
     ? circadian.posture.state
     : null;
+}
+
+/** Latest committed displacement only; never infer a private task or destination. */
+export function observableResidentBodyMoving(resident: ResidentState): boolean {
+  const activity = canonicalizeResidentActivity(resident.activity, {
+    actorId: resident.identity.stableId,
+    tick: resident.perception.tick,
+  });
+  if (activity === null || activity.poses.length < 2) return false;
+  const current = activity.poses[activity.poses.length - 1]!;
+  const previous = activity.poses[activity.poses.length - 2]!;
+  return !sameWorldPosition(current.position, previous.position);
 }
 
 function projectResidentPlacement(
@@ -1406,6 +1419,7 @@ export function projectGameView(
       const perceptionLabel = porterPerceptionLabel(attention);
       const perceptionState = porterPerceptionState(attention);
       const restState = observableResidentRestState(resident);
+      const moving = observableResidentBodyMoving(resident);
       return [
         {
           actorId: resident.identity.stableId,
@@ -1417,7 +1431,9 @@ export function projectGameView(
               ? `${identityLabel} · ${perceptionLabel}`
               : restState
                 ? `${identityLabel} · ${restState}`
-                : identityLabel } : {}),
+                : moving && !resident.condition.sheltering
+                  ? `${identityLabel} · moving`
+                  : identityLabel } : {}),
           position: routeProjection.position,
           facing: routeProjection.facing,
           state: restState === "asleep"
@@ -1427,7 +1443,7 @@ export function projectGameView(
               ? "resting" as const
               : restState
                 ? "resting" as const
-                : resident.intention === "carry"
+                : moving || resident.intention === "carry"
                   ? "traveling" as const
                   : "waiting" as const),
           appearance: {
