@@ -636,10 +636,11 @@ function residentAttentionPlacement(
   resident: ResidentState,
   placement: ResidentWorldPlacement,
 ): ResidentWorldPlacement {
-  // A renderer without separate head/gaze geometry must not turn a traveling
-  // body (and its pack) away from its real route to imitate eye contact.
+  // A renderer without separate head/gaze geometry must not turn a canonical
+  // body (and its pack) away from its actual heading to imitate eye contact.
+  // Legacy unbound settlement placements retain their existing gaze cue.
   const attention = queryResidentAttentionState(resident.perception);
-  if (resident.location.kind === "route"
+  if (Object.hasOwn(resident, "activity") || resident.location.kind === "route"
     || attention === "unaware" || attention === "none") return placement;
   const search = queryActorSearch(resident.perception);
   const focus = search?.nextProbe ?? queryActorAttention(resident.perception)[0]?.area.center;

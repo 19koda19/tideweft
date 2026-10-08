@@ -11,10 +11,14 @@ import {
   RESIDENT_DAY_ACTIVE_CIRCADIAN_POLICY,
   createWorld,
   createWorldView,
+  FIXED_POINT,
   replaceResidentCircadian,
   residentHomeRestDestinationId,
+  serializeWorld,
   stepWorld,
 } from "../sim/public";
+import { queryResidentAttentionState } from "../sim/residentAttention";
+import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import type { ResidentState, WorldState, WorldView } from "../sim/types";
 import {
   TILE_UNITS,
@@ -28,10 +32,13 @@ import {
   projectResidentWorldPosition,
 } from "./projection";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { createSessionState } from "./sessionTypes";
 import { projectUIView } from "./uiProjection";
 import {
   translateWorldPosition,
+  WORLD_POSITION_UNITS_PER_TILE,
+  worldPositionDelta,
   type WorldPosition,
 } from "./worldPosition";
 
@@ -221,6 +228,71 @@ describe("existing-human perception presentation", () => {
 
     expect(search.nextProbe).not.toEqual(search.lastKnownArea.center);
     expect(projected.facing).toBe(placement.facing);
+  });
+
+  it("preserves a genuinely moving settlement body's heading during a lawful sideways neutral glance", () => {
+    const state = createWorld("resident activity executable rest approach", "standard");
+    state.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: state.meta.completedTick + 1_000 };
+    for (const resident of state.residents) {
+      resident.needs = { food: 100_000, rest: 100_000, belonging: 100_000 };
+      resident.condition.exhaustion = 100_000;
+    }
+    // Keep actual native contracts while isolating this short rest proof from
+    // unrelated recruitment. No body, heading, task or result is assigned.
+    for (const contract of state.contracts) {
+      contract.playerExclusiveUntilTick = state.meta.completedTick + 1_000;
+      contract.dueTick = state.meta.completedTick + 2_000;
+    }
+    const native = state.residents.find((resident) => {
+      if (resident.location.kind !== "settlement" || resident.activeContractId !== null) return false;
+      const source = resolveResidentWorldPlacement(state, resident)?.position;
+      const target = residentSettlementRestTarget(state, resident);
+      if (source === undefined || target === null
+        || !residentRestTargetHasDrySupport(state, source)
+        || !residentRestTargetHasDrySupport(state, target)) return false;
+      const delta = worldPositionDelta(source, target);
+      return Math.abs(delta.x) + Math.abs(delta.y) === WORLD_POSITION_UNITS_PER_TILE;
+    });
+    if (native === undefined) throw new Error("fixture needs a native one-tile dry rest approach");
+    const source = resolveResidentWorldPlacement(state, native)!.position;
+    const target = residentSettlementRestTarget(state, native)!;
+    const delta = worldPositionDelta(source, target);
+    const observedPoint = translateWorldPosition(source, -delta.y * 4, delta.x * 4);
+    const observationTick = state.meta.completedTick + 1;
+    stepWorld(state, [], perceptionFrame(
+      state, native, identifiedObservation(native, observedPoint, observationTick), observationTick,
+    ));
+    const selected = state.residents.find(({ id }) => id === native.id)!;
+    expect(selected.perception.suspicion).toBe("identified");
+    expect(queryResidentAttentionState(selected.perception)).toBe("glance");
+    // Pressure is set only after the legacy world interval: a newly selected
+    // rest approach must not be confused with an already admitted old rest.
+    selected.needs.rest = 900_000;
+    selected.condition.exhaustion = 300_000;
+    expect(adoptResidentActivities(state)).toBe(true);
+    expect(prepareResidentRestActivities(state)).toBe(true);
+    expect(advanceResidentRestActivities(state, 1)?.movedActorIds).toContain(native.identity.stableId);
+    const moving = state.residents.find(({ id }) => id === native.id)!;
+    const pose = moving.activity!.poses.at(-1)!;
+    expect(moving.location.kind).toBe("settlement");
+    expect(moving.activity?.restTask).toMatchObject({ cause: "urgent-rest", phase: "approaching", target });
+    expect(pose.position).not.toEqual(source);
+    expect(queryResidentAttentionState(moving.perception)).toBe("glance");
+    expect(moving.perception.beliefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ subjectId: "player:local", identification: "identified", firstObservedTick: observationTick }),
+    ]));
+
+    const world = createWorldView(state);
+    const projectedResident = world.residents.find(({ id }) => id === native.id)!;
+    const beforeProjection = serializeWorld(state);
+    const projected = projectResidentWorldPosition(world, projectedResident, TILE_UNITS);
+    if (projected === null) throw new Error("moving native resident must have a projected body");
+    expect(serializeWorld(state)).toBe(beforeProjection);
+    expect(projectedResident.perception).toEqual(moving.perception);
+    const bodyFacing = pose.heading / FIXED_POINT * Math.PI * 2;
+    const focusDelta = worldPositionDelta(pose.position, observedPoint);
+    expect(Math.abs(Math.atan2(focusDelta.y, focusDelta.x) - bodyFacing)).toBeGreaterThan(0.5);
+    expect(projected.facing).toBe(bodyFacing);
   });
 
   it("withholds cognition, learned identity, speech, and ABOUT outside exact detail sight", () => {

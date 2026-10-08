@@ -2180,11 +2180,15 @@ rules. The shared perception schema and beliefs are not rewritten.
 
 Circadian priority and restorative physiology consume the same appraisal;
 field sensing, Chart/Relief labels and ABOUT do not present an expired glance
-as permanent watching. Route-body/pack heading is not replaced by gaze in a
-renderer without a separate head representation. There is no new speech or
-audio event, presentation timer or save root. Canonical human bodies, physical
-refuge approach and the remaining enacted services are still unfinished; this
-change does not claim those consumers or a new public release.
+as permanent watching. Canonical body/pack heading, including an approaching
+settlement resident, is not replaced by gaze in a renderer without a separate
+head representation. Legacy unbound settlement placements retain their existing
+attention-facing cue. A native adapter-produced rest walker with a lawful
+sideways neutral glance proves projection preserves actual movement heading
+without mutating the body or recognition. There is no new speech/audio event,
+presentation timer or save root. The [rest integration boundary](#planned-bounded-existing-world-integration)
+owns current approach evidence; complete services, traveler enactment and broader
+body/look presentation remain unfinished. No new public release is claimed.
 
 The local route-heading correction derives increasing or decreasing direction
 from the assigned in-transit Promise's ordered leg, matching the existing
