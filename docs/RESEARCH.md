@@ -3788,6 +3788,47 @@ Material service, autonomous keeper inspection and physical delivery remain
 with the existing active owner. No dependencies, upstream sources, release
 identity, privacy policy or completed directive bytes change.
 
+### Shared civic material bookkeeping — 2026-10-08
+
+Local construction on `e6167898ee9ba7f90c423ffd0fb8c6b287c51d7e` gives
+`engine.ts`'s existing hourly project update and delivery contribution one
+private `commitProjectMaterial` bookkeeping owner. Their eligibility, amount,
+cadence and ordering remain unchanged. The hourly caller still spends one
+unit; delivery still deposits conserved cargo first, then consumes its
+condition-qualified amount capped by remaining progress and stock. Completion
+retains the same route, knowledge, stress, recovery and event effects. The
+helper is not a worker, arrival admission, claim or second inventory.
+
+Before the production edit, the new `civicProjects.integration.test.ts`
+characterized thirteen cases on the unchanged engine. Fifteen labeled complete
+world/save/ordered-event SHA256 triplets were captured and frozen before
+extraction. Controlled conditions delay unrelated recipes/offers and set finite
+initial stock, Promise terms and progress with matching conservation ledgers;
+they inject no successful task or receipt. The tests cover all five native
+project effects versus material shortage, completion once, legal headless
+pickup/deposit, zero-condition minimum, resource mismatch, remaining cap,
+already-completed project, rejected delivery replay, and exact pending-cargo
+cold/batched continuation. On tick480 the matching delivery's four-unit credit
+and hourly one-unit credit remain separate legitimate debits, not five units
+credited twice. This is lower-world transaction proof, not normal physical
+player travel or enacted resident material work.
+
+Commands and terminal results:
+
+- `npx vitest run src/sim/network.test.ts src/sim/residentRations.integration.test.ts src/game/projectEffects.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-project-accounting-before.json`: BEFORE3files10PASS1.00s.
+- `TIDEWEFT_CIVIC_PROJECT_CHARACTERIZATION=1 npx vitest run src/sim/civicProjects.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-civic-project-characterization-before.json`: BEFORE13PASS2.32s, before any engine edit. After freezing those expectations, the same selection without the diagnostic flag passes13/13 in2.30s; `world0-civic-project-frozen-before.json` retains that result.
+- `npx vitest run src/sim/civicProjects.integration.test.ts src/sim/network.test.ts src/sim/residentRations.integration.test.ts src/sim/systemComposition.integration.test.ts src/game/projectEffects.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-civic-project-accounting-after.json`: AFTER5files24PASS2.38s, all45 new hashes and12 earlier ration hashes unchanged.
+- `npm run typecheck`: PASS. `npm run test:smoke`: maintained6files105PASS4.18s.
+
+No source consumer, save schema/support set, dependency, release identity,
+production recipe, actor timing, audio or visual rule changes. The inheritance
+summary now correctly names the preceding locally connected ration consumer;
+civic material/keeper services and accountable physical travelers remain
+unfinished. No performance gain, fresh cumulative certificate, manual visual,
+packaged build, deployment or directive closure is inferred. Actual material
+service must replace its represented timer credit, validate the current
+project/resource/site and preserve this same conserved result boundary.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

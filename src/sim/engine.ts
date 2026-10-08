@@ -1455,17 +1455,31 @@ function completeProject(world: WorldState, settlement: SettlementState, tick: n
   });
 }
 
+/**
+ * Commit a caller-qualified finite contribution through one bookkeeping owner.
+ * Eligibility and quantity remain with the timer/delivery (later action)
+ * callers; this helper does not itself certify labor, arrival or a claim.
+ */
+function commitProjectMaterial(
+  world: WorldState,
+  settlement: SettlementState,
+  contribution: number,
+  tick: number,
+): number {
+  const project = settlement.project;
+  settlement.inventory[project.resource] -= contribution;
+  world.ledger.consumed[project.resource] += contribution;
+  project.progress += contribution;
+  if (project.progress >= project.target) completeProject(world, settlement, tick);
+  return contribution;
+}
+
 function updateProjects(world: WorldState, tick: number): void {
   if (tick % 60 !== 0) return;
   for (const settlement of world.settlements) {
     const project = settlement.project;
     if (project.status === "complete" || settlement.inventory[project.resource] < 1) continue;
-    settlement.inventory[project.resource] -= 1;
-    world.ledger.consumed[project.resource] += 1;
-    project.progress += 1;
-    if (project.progress >= project.target) {
-      completeProject(world, settlement, tick);
-    }
+    commitProjectMaterial(world, settlement, 1, tick);
   }
 }
 
@@ -1745,13 +1759,7 @@ function contributeDeliveryToProject(
   const remaining = settlement.project.target - settlement.project.progress;
   const contribution = Math.min(proposed, remaining, settlement.inventory[contract.resource]);
   if (contribution <= 0) return 0;
-  settlement.inventory[contract.resource] -= contribution;
-  world.ledger.consumed[contract.resource] += contribution;
-  settlement.project.progress += contribution;
-  if (settlement.project.progress >= settlement.project.target) {
-    completeProject(world, settlement, tick);
-  }
-  return contribution;
+  return commitProjectMaterial(world, settlement, contribution, tick);
 }
 
 function completeContract(

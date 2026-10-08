@@ -378,9 +378,10 @@ actor architecture. Adoption inherits `living-actor`, `perception-information`,
 `embodied-acoustics`, `save-migration`, and bounded performance where relevant.
 Their existing LIVE/PARTIAL/RESERVED statuses do not change by registration.
 
-The local resident rest consumer now uses those same bodies, fixed-step
-locomotion, routine/duty, cause-owned hearing and current-save boundaries.
-Ration/material/keeper services and physical traveler enactment remain pending;
+The local resident rest and ration consumers now use those same bodies,
+fixed-step locomotion, routine/duty, cause-owned hearing and current-save
+boundaries. Civic material/keeper services and physical traveler enactment
+remain pending;
 the [architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
 owns exact scope and evidence limits, not this applicability row.
 
