@@ -4041,6 +4041,54 @@ an optimization measurement nor full cumulative/platform/visual/release proof.
 Dedicated keeper approach and the remaining existing-human integration stay
 unfinished. Completed directive bytes are unchanged.
 
+### Resident-body integration fixture reconciliation — 2026-10-08
+
+The unpublished `4878418799cab62f4666077ae4f83d1d36a6ec9a` cumulative
+attempt terminated at its then-required1500-second cap (supervisor124/SIGKILL,
+1500.024s). Its retained log reports99 completed files/1437 tests and16
+failures across six runtime integration files; no final JSON exists. Context28,
+player-facing39 and documentation-reuse45 self-tests passed before Vitest.
+This remains **INCOMPLETE**, not a cumulative pass. The subsequent user
+instruction lifts correctness duration caps, while extended profiling and
+longitudinal soaks remain deferred; it does not relabel this historical run.
+
+Focused reproduction established fixture assumptions inconsistent with enacted
+resident bodies, rather than a reason to relax production validation:
+
+- Synthetic pre-body v5/v9/v32 worlds retained current moved-body BIO0 porter
+  addresses. Fixtures now derive the historical address through the same
+  world adapter and retain every other BIO0 field and strict canonical bytes.
+- Porter-specific silence/expiry checks incorrectly required world-wide silence.
+  They now identify the exact porter sample; independent lawful chicken calls,
+  porter hearing-once, audio, caption and forgery assertions are retained.
+- Controlled phase-zero route relocation kept settlement ration/material tasks.
+  It now revokes applicable tasks through explicit supported capabilities,
+  preserving the body/circadian roots and strict membership validation.
+- Controlled fall/seam relocation retained home-time heard-visible chicken
+  receipts. No receipt is erased: bounded genuine accepted intervals consume
+  pending acoustics before geography changes. Cold-load checks remain strict.
+- Hearing witnesses use native human bodies at authenticated sound phases,
+  not a coarse location override or forced wake. The clear world stays exactly
+  unchanged; the masked counterfactual changes one dry crest only. Regional
+  BIO0 assertions retain exact canonical equality with only the same resident's
+  position/heading independently derived from saved world authority.
+
+All16 observed cases pass in focused rechecks. The complete six-file affected
+domain then passes142tests/0failed/0unselected in729.14s, terminal exit0:
+
+```sh
+npx vitest run src/game/runtime.bio0.integration.test.ts src/game/runtime.perception.integration.test.ts src/game/runtime.settlementEcology.integration.test.ts src/game/runtime.workingPeople.integration.test.ts src/game/runtime.regional.integration.test.ts src/game/runtime.fall.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/domain-six.json
+```
+
+Focused before/after reports are retained under that same ignored diagnostic
+directory. Maintained `npm run test:smoke` passes6files/105tests in6.00s;
+`npm run typecheck` passes. The frozen712 tracked non-Markdown inputs have
+aggregateSHA256 `80599418f3d4546c455b4e7d195aa17b723c2948968af341ad580a64ae8e691d`.
+This slice changes tests and factual prose only: no production algorithm,
+schema53/carry14, supported reader, retirement rule, dependency, release or
+completed directive changes. No performance, long-soak, manual visual, platform,
+directive-closure or publication proof follows from these correctness checks.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -9,6 +9,8 @@ import {
   serializeWorld,
 } from "../sim/public";
 import { createPlayer } from "./player";
+import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
+import { livingActorAddressForResident } from "./livingActor";
 import { createSupplementalSoundSample } from "./humanPerception";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import {
@@ -429,9 +431,16 @@ describe("runtime existing-human perception path", () => {
       ...v1Carry
     } = currentCarry;
     const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentBase } = decoded;
+    const historicalWorld = preBodyWorldForHistoricalFixture(decoded.world);
+    const historicalBio0 = preBodyBio0ForHistoricalFixture(
+      decoded.bio0Ecology,
+      decoded.world,
+      historicalWorld,
+    );
     const v32Base = {
       ...currentBase,
-      world: preBodyWorldForHistoricalFixture(decoded.world),
+      world: historicalWorld,
+      bio0Ecology: historicalBio0,
       version: 32,
       perceptionCarry: { ...v1Carry, version: 1 },
     };
@@ -451,6 +460,7 @@ describe("runtime existing-human perception path", () => {
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
       version: CURRENT_GAME_SAVE_VERSION,
+      bio0Ecology: historicalBio0,
       player: { timeAction: null },
       perceptionCarry: {
         version: 14,
@@ -1268,6 +1278,41 @@ function preBodyWorldForHistoricalFixture(serialized: unknown): string {
   expect(world.events.every(({ data }) => RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS
     .every((key) => !Object.hasOwn(data, key)))).toBe(true);
   return serializeWorld(world);
+}
+
+/** Bind this synthetic older record to its world, not the removed future body. */
+function preBodyBio0ForHistoricalFixture(
+  serialized: unknown,
+  currentWorld: unknown,
+  historicalWorld: string,
+): string {
+  const state = deserializeBio0Ecology(serialized);
+  if (state === null) throw new Error("historical fixture omitted canonical BIO0");
+  const addresses = [String(currentWorld), historicalWorld].map((worldText) => {
+    const world = deserializeWorld(worldText);
+    const porter = world.residents.find(({ identity }) => (
+      identity.stableId === state.porterAddress.actorId
+    ));
+    if (porter === undefined) throw new Error("historical fixture omitted its porter");
+    return livingActorAddressForResident(createWorldView(world), porter);
+  });
+  const [currentAddress, historicalAddress] = addresses;
+  expect(currentAddress).toEqual(state.porterAddress);
+  if (historicalAddress === undefined || historicalAddress === null
+    || historicalAddress.species !== "human") {
+    throw new Error("historical fixture has no canonical pre-body porter address");
+  }
+  expect(historicalAddress).not.toEqual(state.porterAddress);
+  expect({
+    ...historicalAddress,
+    position: state.porterAddress.position,
+    heading: state.porterAddress.heading,
+  }).toEqual(state.porterAddress);
+  const aligned = serializeBio0Ecology({ ...state, porterAddress: historicalAddress });
+  expect(deserializeBio0Ecology(aligned)).toEqual({
+    ...state, porterAddress: historicalAddress,
+  });
+  return aligned;
 }
 
 function replaceWithLegacyV33Envelope(

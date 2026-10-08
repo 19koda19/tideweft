@@ -16,6 +16,9 @@ import {
   type WorldView,
 } from "../sim/types";
 import type { FieldResourceEcologyState } from "../sim/fieldResources";
+import { canonicalizeAnimalContactAcousticCarry } from "./animalContactAcousticCarry";
+import { deserializeBio0Ecology, serializeBio0Ecology } from "./bio0Ecology";
+import { livingActorAddressForResident } from "./livingActor";
 import { TILE_UNITS, type PlayerState } from "./player";
 import {
   gameSaveEnvelopeIntegrity,
@@ -62,6 +65,11 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
+import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelBank";
+import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
+import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
+import type { SupplementalSoundSample } from "./humanPerception";
+import type { WorldPosition } from "./worldPosition";
 
 vi.mock("../audio/soundscape", () => ({
   TideweftSoundscape: class {
@@ -83,7 +91,16 @@ interface CurrentGameSaveEnvelope {
   readonly physicalCargo: SerializedPhysicalCargoState;
   readonly regionalTravel: string;
   readonly promiseJourney: RegionalPromiseJourneyState;
-  readonly perceptionCarry: unknown;
+  readonly perceptionCarry: {
+    readonly intervalStartPosition: WorldPosition;
+    readonly intervalStartFacingMilliRadians: number;
+    readonly playerStepsSinceWorldTick: number;
+    readonly actorVocalizationSamples: readonly SupplementalSoundSample[];
+    readonly animalContactAcousticCarry: unknown;
+    readonly situatedExpressionChannels: SituatedExpressionChannelBank;
+    readonly situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+    readonly situatedExpressionCausalAuthority: SituatedExpressionCausalAuthorityLedger;
+  };
   readonly playerExpressionRecency: unknown;
   readonly bio0Ecology: string;
   readonly regionalEcology: string;
@@ -243,11 +260,34 @@ async function createCurrentSave(
     });
     advancePlayerSteps(runtime, 10);
   }
-  await runtime.save();
-  runtime.destroy();
+  // The later controlled seam relocation must not transplant old hearing
+  // receipts. Consume real pending intervals; never erase a committed call.
+  let saved: CurrentGameSaveEnvelope | undefined;
+  try {
+    for (let interval = 0; interval <= 8; interval += 1) {
+      await runtime.save();
+      const candidate = decodeCurrent(repository.snapshot());
+      const carry = candidate.perceptionCarry;
+      const contact = canonicalizeAnimalContactAcousticCarry(carry.animalContactAcousticCarry);
+      if (carry.playerStepsSinceWorldTick !== 0 || contact === null) {
+        throw new Error("seam setup did not reach a canonical phase-zero frontier");
+      }
+      if (carry.actorVocalizationSamples.length === 0
+        && carry.situatedExpressionChannels.channels.length === 0
+        && carry.situatedExpressionAdmissions.records.length === 0
+        && carry.situatedExpressionCausalAuthority.records.length === 0
+        && contact.records.length === 0) {
+        saved = candidate;
+        break;
+      }
+      if (interval < 8) advancePlayerSteps(runtime, 10);
+    }
+  } finally { runtime.destroy(); }
+  if (saved === undefined) {
+    throw new Error("seam setup found no genuine empty acoustic boundary in eight accepted intervals");
+  }
 
   if (contractId === null) return null;
-  const saved = decodeCurrent(repository.snapshot());
   const lot = saved.physicalCargo.carrier.lots.find(({ payload }) =>
     payload.kind === "promise" && payload.contractId === contractId);
   if (!lot) throw new Error("accepted Promise did not reach the physical carrier");
@@ -523,7 +563,7 @@ function relocateToEastSeam(
     || typeof envelope.perceptionCarry !== "object"
     || Array.isArray(envelope.perceptionCarry)
   ) throw new Error("relocated seam fixture omitted its perception carry");
-  const perceptionCarry = structuredClone(envelope.perceptionCarry) as Record<string, unknown>;
+  const perceptionCarry = structuredClone(envelope.perceptionCarry);
   if (perceptionCarry.playerStepsSinceWorldTick !== 0) {
     throw new Error("relocated seam fixture requires a phase-zero perception interval");
   }
@@ -584,6 +624,35 @@ function expectExactPromiseCustody(
   expect(state.expectedManifest).toEqual(fixture.manifest);
 }
 
+/** Travel preserves all BIO0 authority except the same resident's actual pose. */
+function expectExactBio0WithResidentPose(
+  envelope: CurrentGameSaveEnvelope,
+  initialSerialized: string,
+): void {
+  const initial = deserializeBio0Ecology(initialSerialized);
+  if (initial === null) throw new Error("Crossing fixture omitted canonical initial BIO0");
+  const economy = createWorldView(deserializeWorld(envelope.world));
+  const porter = economy.residents.find(({ identity }) => (
+    identity.stableId === initial.porterAddress.actorId
+  ));
+  if (porter === undefined) throw new Error("Crossing lost its existing BIO0 porter");
+  const address = livingActorAddressForResident(economy, porter);
+  if (address === null || address.species !== "human") {
+    throw new Error("Crossing has no canonical resident body address");
+  }
+  expect({
+    ...address,
+    position: initial.porterAddress.position,
+    heading: initial.porterAddress.heading,
+  }).toEqual(initial.porterAddress);
+  // Exact canonical bytes still protect the dog, food/cargo, history, identity,
+  // tick and every other field. Derive the pose from saved world authority.
+  expect(envelope.bio0Ecology).toBe(serializeBio0Ecology({
+    ...initial,
+    porterAddress: address,
+  }));
+}
+
 describe("runtime physical-cargo transaction cost", () => {
   it("never structured-clones the immutable regional custody root during fixed steps", async () => {
     const runtime = await createTideweftRuntime(new MemoryRepository());
@@ -624,6 +693,7 @@ describe("production signed-region crossing", () => {
     replaceEnvelope(repository, relocateToEastSeam(decodeCurrent(repository.snapshot())));
 
     const runtime = await createTideweftRuntime(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
     runtime.dispatchUI({ type: "resume-world" });
     expect(runtime.getRenderView().spatialEpoch).toBe(
       spatialEpochFor(restoredTravel(decodeCurrent(repository.snapshot()))),
@@ -654,7 +724,7 @@ describe("production signed-region crossing", () => {
       compatibilityTrace: [],
     });
     expectExactPromiseCustody(eastSave.physicalCargo, promise);
-    expect(eastSave.bio0Ecology).toBe(initialBio0Ecology);
+    expectExactBio0WithResidentPose(eastSave, initialBio0Ecology);
     const eastTerrainHash = regionContentHash(eastTravel, "r:1:0");
     const eastKnowledge = projectRegionalCartographyRegion(
       eastTravel.cartography,
@@ -681,7 +751,7 @@ describe("production signed-region crossing", () => {
     });
     expect(returnedSave.physicalCargo.activeRegion).toEqual({ x: 0, y: 0 });
     expectExactPromiseCustody(returnedSave.physicalCargo, promise);
-    expect(returnedSave.bio0Ecology).toBe(initialBio0Ecology);
+    expectExactBio0WithResidentPose(returnedSave, initialBio0Ecology);
 
     resumed.dispatchRenderer({ type: "movement", vector: { x: 1, y: 0 } });
     advancePlayerSteps(resumed, 1);
@@ -706,7 +776,7 @@ describe("production signed-region crossing", () => {
       value >= (eastKnowledge.depthSoundings[index] ?? 0))).toBe(true);
     expect(revisitedSave.physicalCargo.activeRegion).toEqual({ x: 1, y: 0 });
     expectExactPromiseCustody(revisitedSave.physicalCargo, promise);
-    expect(revisitedSave.bio0Ecology).toBe(initialBio0Ecology);
+    expectExactBio0WithResidentPose(revisitedSave, initialBio0Ecology);
     resumed.destroy();
   }, 20_000);
 

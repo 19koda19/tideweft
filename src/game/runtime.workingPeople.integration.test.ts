@@ -819,8 +819,12 @@ describe("runtime Working People heavy-porter expression", () => {
       .find(({ sourceActorId }) => sourceActorId === fixture.actorId);
     expect(channel?.state.active).toBeNull();
     expect(channel?.state.recent).toHaveLength(1);
-    expect(expired.perceptionCarry.actorVocalizationSamples).toHaveLength(1);
-    const pendingSample = expired.perceptionCarry.actorVocalizationSamples[0];
+    // Enacted resident motion may also cause independent animal calls. The
+    // receipt under test is the one exact porter event, not global silence.
+    const pendingPorterSamples = expired.perceptionCarry.actorVocalizationSamples
+      .filter(({ sourceActorId }) => sourceActorId === fixture.actorId);
+    expect(pendingPorterSamples).toHaveLength(1);
+    const pendingSample = pendingPorterSamples[0];
     if (!pendingSample) throw new Error("expired porter receipt lost its pending sound sample");
     const cueCountBeforeReload = strainedCueCount();
     runtime.destroy();
@@ -923,7 +927,11 @@ describe("runtime Working People heavy-porter expression", () => {
     expect(runtime.getRenderView().expressions ?? []).toEqual([]);
     expect(runtime.getUIView().expressionCaption).toBeUndefined();
     expect(strainedCueCount()).toBe(0);
-    expect(committed.perceptionCarry.actorVocalizationSamples).toEqual([]);
+    // A separate chicken can legitimately call without giving this light
+    // porter an expression, caption, strain cue or vocal sample.
+    expect(committed.perceptionCarry.actorVocalizationSamples.filter(
+      ({ sourceActorId }) => sourceActorId === fixture.actorId,
+    )).toEqual([]);
     expect(committed.perceptionCarry.situatedExpressionChannels.channels.some(
       ({ sourceActorId }) => sourceActorId === fixture.actorId,
     )).toBe(false);

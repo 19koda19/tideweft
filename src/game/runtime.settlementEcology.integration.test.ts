@@ -33,7 +33,11 @@ import {
   regionLocalToGlobalTile,
 } from "../sim/regions";
 import type { RootSeed } from "../sim/rng";
-import { replaceResidentActivity } from "../sim/residentActivity";
+import {
+  replaceResidentActivity,
+  residentActivitySupportsMaterials,
+  residentActivitySupportsRations,
+} from "../sim/residentActivity";
 import {
   FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH,
   type ResidentLocation, type ResidentState, type WorldView,
@@ -985,7 +989,11 @@ function stageRouteHearingListener(
     staged = replaceResidentActivity(staged, {
       ...resident.activity,
       poses: [{ position: placement.position, heading: headingFromRadians(placement.facing) }],
+      // A controlled route relocation revokes settlement service tasks just
+      // like the native coarse transition, without adding newer legacy fields.
       restTask: null,
+      ...(residentActivitySupportsRations(resident.activity) ? { rationTask: null } : {}),
+      ...(residentActivitySupportsMaterials(resident.activity) ? { materialTask: null } : {}),
     });
   }
   if (resident.circadian !== undefined) {

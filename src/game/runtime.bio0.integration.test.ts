@@ -345,7 +345,12 @@ describe("runtime BIO0 ecology persistence", () => {
 
     const currentRecord = repository.snapshot();
     const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-    const expectedBio0 = current.bio0Ecology;
+    const historicalWorld = preBodyWorldForHistoricalFixture(current.world);
+    const expectedBio0 = preBodyBio0ForHistoricalFixture(
+      current.bio0Ecology,
+      current.world,
+      historicalWorld,
+    );
     const expectedPorterResponse = current.porterResponse;
     const expectedPlayerChoice = current.livingActorPlayerChoice;
     const {
@@ -364,7 +369,7 @@ describe("runtime BIO0 ecology persistence", () => {
     } = current;
     const v5Base = {
       ...priorBase,
-      world: preBodyWorldForHistoricalFixture(current.world),
+      world: historicalWorld,
       player: legacyPlayerWithoutTimeAction(
         current.player as ReturnType<typeof createPlayer>,
       ),
@@ -1817,6 +1822,41 @@ function preBodyWorldForHistoricalFixture(serialized: unknown): string {
   return serializeWorld(world);
 }
 
+/** Bind this synthetic older record to its world, not the removed future body. */
+function preBodyBio0ForHistoricalFixture(
+  serialized: unknown,
+  currentWorld: unknown,
+  historicalWorld: string,
+): string {
+  const state = deserializeBio0Ecology(serialized);
+  if (state === null) throw new Error("historical fixture omitted canonical BIO0");
+  const addresses = [String(currentWorld), historicalWorld].map((worldText) => {
+    const world = deserializeWorld(worldText);
+    const porter = world.residents.find(({ identity }) => (
+      identity.stableId === state.porterAddress.actorId
+    ));
+    if (porter === undefined) throw new Error("historical fixture omitted its porter");
+    return livingActorAddressForResident(createWorldView(world), porter);
+  });
+  const [currentAddress, historicalAddress] = addresses;
+  expect(currentAddress).toEqual(state.porterAddress);
+  if (historicalAddress === undefined || historicalAddress === null
+    || historicalAddress.species !== "human") {
+    throw new Error("historical fixture has no canonical pre-body porter address");
+  }
+  expect(historicalAddress).not.toEqual(state.porterAddress);
+  expect({
+    ...historicalAddress,
+    position: state.porterAddress.position,
+    heading: state.porterAddress.heading,
+  }).toEqual(state.porterAddress);
+  const aligned = serializeBio0Ecology({ ...state, porterAddress: historicalAddress });
+  expect(deserializeBio0Ecology(aligned)).toEqual({
+    ...state, porterAddress: historicalAddress,
+  });
+  return aligned;
+}
+
 function legacyFixedV9Record(current: SaveRecord): SaveRecord {
   const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
   const envelope = decoded as unknown as CurrentEnvelope;
@@ -1886,9 +1926,15 @@ function legacyFixedV9Record(current: SaveRecord): SaveRecord {
     regionalEcology: _regionalEcology,
     ...currentBase
   } = decoded;
+  const historicalWorld = preBodyWorldForHistoricalFixture(envelope.world);
   const v9Base = {
     ...currentBase,
-    world: preBodyWorldForHistoricalFixture(envelope.world),
+    world: historicalWorld,
+    bio0Ecology: preBodyBio0ForHistoricalFixture(
+      envelope.bio0Ecology,
+      envelope.world,
+      historicalWorld,
+    ),
     player: legacyPlayerWithoutTimeAction(envelope.player),
     perceptionCarry: legacyPlayerPerceptionCarry(envelope.perceptionCarry),
     version: 9,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { createWorldView, deserializeWorld, replaceResidentCircadian, serializeWorld } from "../sim/public";
+import { createWorldView, deserializeWorld, serializeWorld } from "../sim/public";
 import {
   createRegionCoord,
   regionKey,
@@ -83,8 +83,9 @@ import {
   playerWorldPositionInRegionalWindow,
   residentPlacementInRegionalWindow,
   resolveResidentWorldPlacement,
+  resolveResidentWorldPlacementAtActivityPhase,
 } from "./residentSpatial";
-import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { createTideweftRuntime, prepareRuntimeSupplementalSoundSamplePhases, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
@@ -99,6 +100,7 @@ import {
 import type { PlayerStepStateAnchor, PlayerStepStateSample } from "./playerStepState";
 import type { PlayerExpressionRecencyState } from "./playerExpressionRecency";
 import type { PlayerEffortRecencyState } from "./playerEffortRecency";
+import { canonicalizeAnimalContactAcousticCarry } from "./animalContactAcousticCarry";
 import { situatedExpressionCooldownSteps } from "./situatedExpression";
 import * as expressionChannelBank from "./situatedExpressionChannelBank";
 import * as expressionDiagnostics from "./situatedExpressionDiagnostics";
@@ -281,18 +283,19 @@ function replaceEnvelope(
 function findRidgeCorner(
   world: WorldState,
   window: RegionalTerrainWindow,
-  requireNearbyVoiceRoute = false,
+  requireNearbyVoiceBody = false,
 ): RidgeCorner {
   const occupied = new Set(world.settlements.map(({ tileIndex }) => tileIndex));
   const { width, height, tiles } = world.terrain;
-  // The new hearing witnesses alone need an existing route within the quiet
-  // murmur's real reach. Select geometry, not a roll/voice outcome or new route.
-  const voiceRouteTiles = requireNearbyVoiceRoute
-    ? [...new Set(world.routes.flatMap(({ path }) => path))]
-      .flatMap((index) => {
-        const tile = tiles[index];
-        return tile !== undefined && tile.elevation >= world.tide.level && tile.elevation < 750_000
-          ? [tile] : [];
+  // Select geometry within reach of a real present human body. Changing a
+  // resident's coarse route field cannot relocate its retained fine poses.
+  const voiceView = requireNearbyVoiceBody ? createWorldView(world) : null;
+  const voicePositions = voiceView !== null
+    ? world.residents.filter(({ activeContractId }) => activeContractId === null)
+      .flatMap((resident) => {
+        const placement = resolveResidentWorldPlacement(voiceView, resident);
+        return placement !== null && placement.position.region.x === 0 && placement.position.region.y === 0
+          ? [placement.position] : [];
       })
     : [];
   for (let y = 1; y < height - 1; y += 1) {
@@ -312,8 +315,9 @@ function findRidgeCorner(
         || occupied.has(ridgeTileIndex)
         || occupied.has(diagonalTileIndex)
       ) continue;
-      if (requireNearbyVoiceRoute && !voiceRouteTiles.some((tile) => {
-        const distance = Math.hypot(tile.x + 0.5 - (x + 1.05), tile.y + 0.5 - (y + 0.999));
+      if (requireNearbyVoiceBody && !voicePositions.some((position) => {
+        const distance = Math.hypot(position.localX / WORLD_POSITION_UNITS_PER_TILE - (x + 1.05),
+          position.localY / WORLD_POSITION_UNITS_PER_TILE - (y + 0.999));
         return distance >= 1.5 && distance <= 2.5;
       })) continue;
       const point = regionLocalToWindowTile(
@@ -461,7 +465,7 @@ function rebaseFixtureRegionalEcology(
 
 function relocateToRidgeAtZeroStability(
   envelope: CurrentGameSaveEnvelope,
-  requireNearbyVoiceRoute = false,
+  requireNearbyVoiceBody = false,
 ): { readonly envelope: CurrentGameSaveEnvelope; readonly corner: RidgeCorner } {
   const world = deserializeWorld(envelope.world);
   const regionalTravel = restorePlayerRegionalTravel(
@@ -472,7 +476,7 @@ function relocateToRidgeAtZeroStability(
   if (!regionalTravel) {
     throw new Error("fixture started with an invalid v4 regional-travel sidecar");
   }
-  const corner = findRidgeCorner(world, regionalTravel.window, requireNearbyVoiceRoute);
+  const corner = findRidgeCorner(world, regionalTravel.window, requireNearbyVoiceBody);
   const startTerrain = world.terrain.tiles[corner.startTileIndex];
   const ridgeTerrain = world.terrain.tiles[corner.ridgeTileIndex];
   if (!startTerrain || !ridgeTerrain) throw new Error("ridge fixture lost its terrain pair");
@@ -599,9 +603,9 @@ function relocateToRidgeAtZeroStability(
 function relocateForDryExhaustion(
   envelope: CurrentGameSaveEnvelope,
   waterDepth = 0,
-  requireNearbyVoiceRoute = false,
+  requireNearbyVoiceBody = false,
 ): CurrentGameSaveEnvelope {
-  const relocated = relocateToRidgeAtZeroStability(envelope, requireNearbyVoiceRoute);
+  const relocated = relocateToRidgeAtZeroStability(envelope, requireNearbyVoiceBody);
   const world = deserializeWorld(relocated.envelope.world);
   const startIndex = relocated.corner.y * world.terrain.width + relocated.corner.x;
   const destinationIndex = startIndex + 1;
@@ -727,7 +731,7 @@ async function createCurrentFixture(
   repository: MemoryRepository,
   seed: string,
   acceptPromise: boolean,
-  requireNearbyVoiceRoute = false,
+  requireNearbyVoiceBody = false,
 ): Promise<{
   readonly contractId: number | null;
   readonly sourceLotId: string | null;
@@ -757,10 +761,33 @@ async function createCurrentFixture(
     // Accept and pickup settle together on the next authoritative world tick.
     advancePlayerSteps(runtime, 10);
   }
-  await runtime.save();
-  runtime.destroy();
-
-  const initial = decodeCurrent(repository.snapshot());
+  // Controlled geography cannot relocate an already witnessed phase-zero
+  // sound. Let the actual receiver consume its native frontier instead of
+  // deleting chicken calls, their hearing receipts, or physical contact facts.
+  let initial: CurrentGameSaveEnvelope | undefined;
+  try {
+    for (let interval = 0; interval <= 8; interval += 1) {
+      await runtime.save();
+      const candidate = decodeCurrent(repository.snapshot());
+      const carry = candidate.perceptionCarry;
+      const contact = canonicalizeAnimalContactAcousticCarry(carry.animalContactAcousticCarry);
+      if (carry.playerStepsSinceWorldTick !== 0 || contact === null) {
+        throw new Error("ridge setup did not reach a canonical phase-zero frontier");
+      }
+      if (carry.actorVocalizationSamples.length === 0
+        && carry.situatedExpressionChannels.channels.length === 0
+        && carry.situatedExpressionAdmissions.records.length === 0
+        && carry.situatedExpressionCausalAuthority.records.length === 0
+        && contact.records.length === 0) {
+        initial = candidate;
+        break;
+      }
+      if (interval < 8) advancePlayerSteps(runtime, 10);
+    }
+  } finally { runtime.destroy(); }
+  if (initial === undefined) {
+    throw new Error("ridge setup found no genuine empty acoustic boundary in eight accepted intervals");
+  }
   const promiseLot = contractId === null
     ? undefined
     : initial.physicalCargo.carrier.lots.find((lot) =>
@@ -768,7 +795,7 @@ async function createCurrentFixture(
   if (acceptPromise && (!promiseLot || promiseLot.payload.kind !== "promise")) {
     throw new Error("accepted Promise did not reach the physical carrier");
   }
-  const relocated = relocateToRidgeAtZeroStability(initial, requireNearbyVoiceRoute);
+  const relocated = relocateToRidgeAtZeroStability(initial, requireNearbyVoiceBody);
   replaceEnvelope(repository, relocated.envelope);
   return {
     contractId,
@@ -868,7 +895,7 @@ async function prepareStormStumbleFixture(): Promise<SaveRecord> {
     return repository.snapshot();
 }
 
-/** Retain a real pending player cause; stage only an existing route listener and one dry crest. */
+/** Retain the native event-time human bodies; stage only one dry crest. */
 function preparePlayerVocalSurfacePair(
   envelope: CurrentGameSaveEnvelope,
   sample: humanPerception.SupplementalSoundSample,
@@ -877,11 +904,14 @@ function preparePlayerVocalSurfacePair(
   const travel = restorePlayerRegionalTravel(original.meta.rootSeed, envelope.player, envelope.regionalTravel);
   const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
   if (travel === null || bio0 === null) throw new Error("Player sound fixture lost its current physical owners");
-  const listener = [...original.residents]
-    .sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : 1)
-    .find(({ identity, activeContractId }) => identity.stableId !== bio0.porterAddress.actorId
-      && activeContractId === null);
-  if (listener === undefined) throw new Error("Player sound fixture lacks an existing free listener");
+  const soundPhases = prepareRuntimeSupplementalSoundSamplePhases(
+    envelope.perceptionCarry.actorVocalizationSamples,
+    envelope.perceptionCarry.situatedExpressionAdmissions,
+    envelope.perceptionCarry.situatedExpressionChannels,
+  );
+  const soundPhase = soundPhases?.find(({ sampleId }) => sampleId === sample.id);
+  if (soundPhase === undefined) throw new Error("Player sound fixture lost its admitted event-time phase");
+  const economy = createWorldView(original);
   const sourceX = Math.floor(sample.position.localX / WORLD_POSITION_UNITS_PER_TILE);
   const sourceY = Math.floor(sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
   const retainedPlayerTiles = new Set([
@@ -890,32 +920,19 @@ function preparePlayerVocalSurfacePair(
   ].filter(({ region }) => region.x === 0 && region.y === 0).map(({ localX, localY }) => (
     `${Math.floor(localX / WORLD_POSITION_UNITS_PER_TILE)},${Math.floor(localY / WORLD_POSITION_UNITS_PER_TILE)}`
   )));
-  const candidates = original.routes.flatMap((route) => route.path.flatMap((tileIndex, offset) => {
-    const tile = original.terrain.tiles[tileIndex];
-    if (tile === undefined || route.path.length < 2) return [];
-    const distance = Math.hypot(tile.x + 0.5 - sample.position.localX / WORLD_POSITION_UNITS_PER_TILE,
-      tile.y + 0.5 - sample.position.localY / WORLD_POSITION_UNITS_PER_TILE);
-    return distance >= 1.5 && distance <= 8
-      ? [{ routeId: route.id, progress: Math.round(offset * FIXED_POINT / (route.path.length - 1)), distance }]
-      : [];
-  })).sort((left, right) => left.distance - right.distance || left.routeId - right.routeId
-    || left.progress - right.progress).slice(0, 64);
+  const candidates = original.residents.flatMap((listener) => {
+    if (listener.identity.stableId === bio0.porterAddress.actorId || listener.activeContractId !== null) return [];
+    const placement = Object.hasOwn(listener, "activity")
+      ? resolveResidentWorldPlacementAtActivityPhase(economy, listener, original.meta.completedTick, soundPhase.phase)
+      : resolveResidentWorldPlacement(economy, listener);
+    if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) return [];
+    const delta = worldPositionDelta(sample.position, placement.position);
+    const distance = Math.hypot(delta.x, delta.y) / WORLD_POSITION_UNITS_PER_TILE;
+    return distance >= 1.5 && distance <= 8 ? [{ listener, placement, distance }] : [];
+  }).sort((left, right) => left.distance - right.distance || left.listener.id - right.listener.id);
   let heardCandidates = 0;
-  for (const location of candidates) {
+  for (const { listener, placement } of candidates) {
     const clearWorld = deserializeWorld(serializeWorld(original));
-    const stagedListener = clearWorld.residents.find(({ id }) => id === listener.id)!;
-    stagedListener.location = { kind: "route", routeId: location.routeId, progress: location.progress };
-    if (stagedListener.circadian !== undefined) {
-      clearWorld.residents[clearWorld.residents.indexOf(stagedListener)] = replaceResidentCircadian(stagedListener, {
-        atTick: clearWorld.meta.completedTick,
-        circadian: {
-          ...stagedListener.circadian, restDestinationArrived: false,
-          posture: { state: "awake", enteredAtTick: clearWorld.meta.completedTick },
-        },
-      });
-    }
-    const placement = resolveResidentWorldPlacement(createWorldView(clearWorld), stagedListener);
-    if (placement === null || placement.position.region.x !== 0 || placement.position.region.y !== 0) continue;
     const listenerX = Math.floor(placement.position.localX / WORLD_POSITION_UNITS_PER_TILE);
     const listenerY = Math.floor(placement.position.localY / WORLD_POSITION_UNITS_PER_TILE);
     const clearView = createRegionalWorldView(createWorldView(clearWorld), travel.window, envelope.player);
@@ -923,6 +940,7 @@ function preparePlayerVocalSurfacePair(
     const collect = (view: ReturnType<typeof createWorldView>) => humanPerception.collectExistingHumanObservations({
       world: view, window: travel.window, targetTick: original.meta.completedTick + 1,
       playerSamples: [], supplementalSoundSamples: [sample], surfaceSoundSampleIds: [sample.id],
+      soundSamplePhases: [soundPhase],
     }).find(({ observerId }) => observerId === listener.identity.stableId)
       ?.observations.find(({ id }) => id === observationId);
     const clear = collect(clearView);
@@ -949,6 +967,7 @@ function preparePlayerVocalSurfacePair(
         expect(maskedWorld.terrain.tiles.filter((candidate, ordinal) => (
           stableStringify(candidate) !== stableStringify(clearWorld.terrain.tiles[ordinal])
         )).map(({ index: changed }) => changed)).toEqual([index]);
+        expect(serializeWorld(clearWorld)).toBe(serializeWorld(original));
         const pending = (world: WorldState, spatial: ReturnType<typeof createWorldView>) => ({
           ...envelope, world: serializeWorld(world),
           regionalEcology: rebaseFixtureRegionalEcology(envelope.regionalEcology, world.meta.rootSeed, spatial),
@@ -960,7 +979,7 @@ function preparePlayerVocalSurfacePair(
       }
     }
   }
-  throw new Error(`Real pending player sound has no bounded route/dry-crest witness: ${JSON.stringify({
+  throw new Error(`Real pending player sound has no native body/dry-crest witness: ${JSON.stringify({
     sourcePosition: sample.position, candidates: candidates.length, heardCandidates,
   })}`);
 }
@@ -972,7 +991,7 @@ describe("production terrain fall and physical cargo", () => {
       const repository = new MemoryRepository();
       if (kind === "player-exhaustion") {
         const bootstrap = await createTideweftRuntime(repository);
-        // Reuse the same known generated route geometry as the other two
+        // Reuse the same generated native-body geometry as the other two
         // witnesses; the unchanged dry movement owner still earns exhaustion.
         bootstrap.dispatchUI({ type: "new-world", seed: "fall cargo exact test", posture: "gale", sessionShape: "wander" });
         await bootstrap.save();
@@ -983,6 +1002,7 @@ describe("production terrain fall and physical cargo", () => {
       }
       const producer = await createTideweftRuntime(repository);
       try {
+        expect(producer.getUIView().saveWarning).toBeUndefined();
         producer.dispatchUI({ type: "resume-world" });
         producer.dispatchRenderer({ type: "movement", vector: kind === "player-exhaustion" ? { x: 1, y: 0 } : { x: 1, y: 1 } });
         advancePlayerSteps(producer, 1);
