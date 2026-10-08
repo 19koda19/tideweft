@@ -24,6 +24,7 @@ import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank"
 import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
 import { observableResidentRationUse, RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
 import { pressureMultiplier } from "../sim/world";
+import { tideAtTick } from "../sim/terrain";
 import { playerWorldPositionInRegionalWindow, resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
@@ -164,7 +165,7 @@ function authoritativeRoots(envelope: Envelope): unknown {
  * This is not a claim that a fresh daytime seed spontaneously needs urgent rest.
  */
 async function restFixture(
-  selection: "dry" | "wet-source" | "keeper" | "nearby" = "dry",
+  selection: "dry" | "wet-source" | "wet-target" | "keeper" | "nearby" = "dry",
   seed = "resident activity executable rest approach",
 ) {
   const repository = new MemoryRepository();
@@ -184,7 +185,11 @@ async function restFixture(
     const target = residentSettlementRestTarget(world, human);
     const isKeeper = human.identity.stableId === keeperId;
     if ((selection === "keeper" ? !isKeeper : isKeeper) || human.activeContractId !== null
-      || source === undefined || target === null || !residentRestTargetHasDrySupport(world, target)) return [];
+      || source === undefined || target === null) return [];
+    const targetIsDry = residentRestTargetHasDrySupport(world, target);
+    if (selection === "wet-target" ? targetIsDry : !targetIsDry) return [];
+    // A surveyed native witness, not an assigned body, destination or tide.
+    if (selection === "wet-target" && human.identity.stableId !== "H-v1-p0p0-19z0ujg-2-106voth") return [];
     const sourceIsDry = residentRestTargetHasDrySupport(world, source);
     if (selection === "wet-source" ? sourceIsDry : !sourceIsDry) return [];
     const delta = worldPositionDelta(source, target);
@@ -904,6 +909,91 @@ describe("ordinary runtime resident rest execution", () => {
     advanceOrdinaryFixedSteps(cold, 6);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+  }, 60_000);
+
+  it("waits on a dry bank for a native tidal target, then physically retries with equal cold continuation", async () => {
+    const fixture = await restFixture("wet-target", "marsh wait");
+    expect(fixture.actorId).toBe("H-v1-p0p0-19z0ujg-2-106voth");
+    expect(fixture.tick).toBe(420);
+    expect(fixture.source).toEqual({ region: { x: 0, y: 0 }, localX: 87_500, localY: 28_500 });
+    expect(fixture.target).toEqual({ region: { x: 0, y: 0 }, localX: 88_500, localY: 28_500 });
+    const original = deserializeWorld(decode(fixture.record).world);
+    expect(residentRestTargetHasDrySupport(original, fixture.source)).toBe(true);
+    expect(residentRestTargetHasDrySupport(original, fixture.target)).toBe(false);
+    expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(fixture.tick + 1) }, fixture.target)).toBe(false);
+    expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(fixture.tick + 2) }, fixture.target)).toBe(true);
+    const originalTerrain = stableStringify(original.terrain);
+    const repository = new MemoryRepository(fixture.record);
+    const runtime = await open(repository);
+    let acceptedSteps = 0;
+    const advanceTo = async (steps: number): Promise<SaveRecord> => {
+      advanceOrdinaryFixedSteps(runtime, steps - acceptedSteps);
+      acceptedSteps = steps;
+      await runtime.save();
+      const record = repository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(steps % 10);
+      expect(world.meta.completedTick).toBe(fixture.tick + Math.floor(steps / 10));
+      expect(world.tide).toEqual(tideAtTick(world.meta.completedTick));
+      expect(stableStringify(world.terrain)).toBe(originalTerrain);
+      expect(residentRestTargetHasDrySupport(world, fixture.source)).toBe(true);
+      assertWorldInvariants(world);
+      return record;
+    };
+
+    for (const steps of [4, 14]) {
+      const waiting = resident(decode(await advanceTo(steps)), fixture.actorId);
+      expect(waiting.activity?.restTask).toMatchObject({
+        cause: "urgent-rest", origin: "selected", phase: "waiting", target: fixture.target,
+        selectedAtTick: fixture.tick, lastProgressAtTick: fixture.tick,
+        waitReason: "no-traversable-route", nextReassessmentAtTick: fixture.tick + Math.floor(steps / 10) + 1,
+      });
+      expect(waiting.activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(fixture.source))).toBe(true);
+      expect(waiting.condition.exhaustion).toBe(fixture.exhaustion);
+      expect(waiting.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+    }
+    const waitingRecord = await advanceTo(19);
+    const waiting = decode(waitingRecord);
+    expect(resident(waiting, fixture.actorId).activity?.restTask).toMatchObject({
+      phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: fixture.tick + 2,
+    });
+    expect(residentRestTargetHasDrySupport(deserializeWorld(waiting.world), fixture.target)).toBe(false);
+
+    // The real world boundary advances tide and retries. It cannot move the
+    // body or grant recovery before subsequent accepted physical steps.
+    const dryBoundary = decode(await advanceTo(20));
+    const retrying = resident(dryBoundary, fixture.actorId);
+    expect(residentRestTargetHasDrySupport(deserializeWorld(dryBoundary.world), fixture.target)).toBe(true);
+    expect(retrying.activity?.restTask).toMatchObject({ phase: "approaching", waitReason: null, selectedAtTick: fixture.tick });
+    expect(retrying.activity?.poses[0]?.position).toEqual(fixture.source);
+    expect(retrying.condition.exhaustion).toBe(fixture.exhaustion);
+    expect(retrying.circadian?.restDestinationArrived).toBe(false);
+
+    const moving = resident(decode(await advanceTo(24)), fixture.actorId);
+    expect(moving.activity?.restTask?.phase).toBe("approaching");
+    expect(moving.activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
+    expect(moving.condition.exhaustion).toBe(fixture.exhaustion);
+    expectBoundedMotion(fixture.source, moving.activity!.poses);
+    const final = decode(await advanceTo(30));
+    const arrived = resident(final, fixture.actorId);
+    expect(arrived.activity?.restTask).toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick });
+    expect(arrived.activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(arrived.circadian).toMatchObject({ restDestinationArrived: true, posture: { state: "resting" } });
+    expect(arrived.condition.exhaustion).toBeLessThan(fixture.exhaustion);
+    close(runtime);
+
+    soundscapePlay.mockClear();
+    const coldRepository = new MemoryRepository(waitingRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(waiting));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(cold, 11);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(final));
+    // This characterizes physical legality and scheduled retry only. It does
+    // not establish observed-water knowledge, an informed hold or route choice.
   }, 60_000);
 
   it("publishes a genuinely neutral keeper's moving body into the same BIO0 address and current cold save", async () => {

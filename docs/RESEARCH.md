@@ -4341,6 +4341,37 @@ do not claim a new complete cumulative pass or certify unselected cases anew.
 No build, normal visual play, production performance, profiling/soak, deployment
 or completed-directive claim follows from these correctness durations.
 
+### Native tidal rest-target characterization — 2026-10-08
+
+On production sources from `1d9f18c`, a native `marsh wait` human has a dry
+one-tile approach to a settlement point flooded at420/421 and naturally dry
+at422. The existing runtime test fixture controls needs, weather and offer
+timing only; it assigns no terrain, tide, body, task, knowledge or arrival.
+Ordinary accepted steps4/14/19 retain the stationary dry-bank body, waiting
+reason and original request age without recovery. Step20 advances native tide
+and schedules retry without movement; subsequent bounded steps reach the
+actual target at30, then admit restorative rest. Terrain remains byte-equal
+and world conservation invariants hold at each captured boundary.
+
+A cold save at19 followed by11 accepted steps equals every authoritative saved
+root of uninterrupted30-step play; only the existing session recap/integrity
+comparison exception applies. Load releases no audio. This is **physical
+wet-target waiting and tide-enabled retry**, not observed-water knowledge,
+informed route choice, cat avoidance, manual play or completed crossing scope.
+No production, schema, support, dependency or rendering change is made.
+
+```sh
+npx vitest run src/game/runtime.residentRest.integration.test.ts -t 'waits on a dry bank for a native tidal target' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/native-tidal-target-focused.json
+npx vitest run src/game/runtime.residentRest.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/native-tidal-target-domain.json
+```
+
+Focused1PASS/11unselected in9.73s; full affected file12PASS in72.52s, including
+both hourly services, supported cold formats and failed-transaction rollback.
+Full report SHA256 is
+`b718e9b5f711a69aa63dd9a3c129581fb6b038b6f66724c1ecf73fe5fcbef378`.
+Maintained smoke6files/105PASS in4.49s and typecheckPASS. These are correctness
+durations, not production performance measurements or a new cumulative pass.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
