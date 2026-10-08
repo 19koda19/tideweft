@@ -1,4 +1,4 @@
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE } from "../sim/residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, RESIDENT_SERVICE_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { hasResidentActivityEventLocus } from "../sim/residentActivityEventLocus";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { canonicalizeResidentCircadianState, residentAtSettlementRestDestination } from "../sim/livingCircadian";
@@ -29,6 +29,7 @@ export function residentActivitySaveExtensionsAbsent(
 export function residentActivitySaveExtensionsValid(
   world: WorldState,
   supportsBodies: boolean,
+  supportsServices = false,
 ): boolean {
   if (!supportsBodies) return residentActivitySaveExtensionsAbsent(world);
   try {
@@ -48,6 +49,7 @@ export function residentActivitySaveExtensionsValid(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null
       ) return false;
+      if (!supportsServices && canonicalResidentActivityForWorld(world, resident)?.version === RESIDENT_SERVICE_ACTIVITY_VERSION) return false;
     }
     const residentIds = new Set(world.residents.map(({ id }) => id));
     for (const event of world.events) {

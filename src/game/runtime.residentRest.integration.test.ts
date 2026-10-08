@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { assertWorldInvariants, createWorldView, deserializeWorld, FIXED_POINT, serializeWorld, type ResidentState } from "../sim/public";
-import { RESIDENT_REST_APPROACH_STEP_UNITS } from "../sim/residentActivity";
+import {
+  RESIDENT_ACTIVITY_OWNER_ID,
+  RESIDENT_ACTIVITY_VERSION,
+  RESIDENT_REST_APPROACH_STEP_UNITS,
+  RESIDENT_SERVICE_ACTIVITY_VERSION,
+} from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { stableStringify } from "../sim/util";
@@ -12,11 +17,17 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import type { PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
+import * as simulation from "../sim/public";
+import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
+import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
+import { observableResidentRationUse, RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
+import { pressureMultiplier } from "../sim/world";
 import { playerWorldPositionInRegionalWindow, resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
 } from "./saveCompatibilityPolicy";
 import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta, type WorldPosition } from "./worldPosition";
@@ -101,6 +112,11 @@ function close(runtime: TideweftRuntime): void {
 
 /** Normal play has one clock-establishing RAF, then one accepted step per100ms. */
 function advanceOrdinaryFixedSteps(runtime: TideweftRuntime, count: number): void {
+  advanceOrdinaryFixedStepsForExpectedFailure(runtime, count);
+  expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+}
+
+function advanceOrdinaryFixedStepsForExpectedFailure(runtime: TideweftRuntime, count: number): void {
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
@@ -110,7 +126,6 @@ function advanceOrdinaryFixedSteps(runtime: TideweftRuntime, count: number): voi
     nextFrameTime += 100;
   }
   runtime.stop();
-  expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
 }
 
 function decode(record: SaveRecord): Envelope {
@@ -224,7 +239,8 @@ function expectBoundedMotion(source: WorldPosition, poses: readonly { position: 
 
 describe("ordinary runtime resident rest execution", () => {
   it.each([4, 9])("selects and executes real rest, preserving equal work across a phase%s cold continuation", async (phase) => {
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION);
+    expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBeLessThan(CURRENT_GAME_SAVE_VERSION);
     const fixture = await restFixture();
     const repository = new MemoryRepository(fixture.record);
     const runtime = await open(repository);
@@ -348,6 +364,196 @@ describe("ordinary runtime resident rest execution", () => {
     advanceOrdinaryFixedSteps(cold, 29);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+  }, 60_000);
+
+  it("uses a real ration after ordinary approach, preserves a phase9 cold pulse, and rolls back a late failed use", async () => {
+    const fixture = await restFixture();
+    const initial = decode(fixture.record);
+    const initialWorld = deserializeWorld(initial.world);
+    const chosen = initialWorld.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+    // Cause-only pressure controls. No task, body, arrival or benefit is assigned.
+    chosen.needs = { food: 900_000, rest: 100_000, belonging: 100_000 };
+    chosen.condition.exhaustion = 100_000;
+    initial.world = serializeWorld(initialWorld);
+    const repository = new MemoryRepository(recordWith(fixture.record, initial));
+    const runtime = await open(repository);
+    advanceOrdinaryFixedSteps(runtime, 599);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    const ready = resident(before, fixture.actorId);
+    expect(beforeWorld.meta.completedTick).toBe(fixture.tick + 59);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(ready.activity?.rationTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(ready.activity?.restTask).toBeNull();
+    expect(ready.needs.food).toBe(900_000);
+    expect(observableResidentRationUse(ready)).toBe(false);
+
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(after.world);
+    const used = resident(after, fixture.actorId);
+    const growth = Math.trunc(34_000 * pressureMultiplier(afterWorld.meta.pressureMode) / FIXED_POINT);
+    expect(afterWorld.meta.completedTick).toBe(fixture.tick + 60);
+    expect(used.activity?.rationTask).toMatchObject({
+      phase: "used", usedAtTick: fixture.tick + 60, foodUsed: true, waterUsed: true,
+    });
+    expect(used.needs.food).toBe(900_000 + growth - 76_000);
+    expect(used.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+    expect(observableResidentRationUse(used)).toBe(true);
+    expect(afterWorld.ledger.consumed.food - beforeWorld.ledger.consumed.food).toBe(1);
+    expect(afterWorld.ledger.consumed.freshWater - beforeWorld.ledger.consumed.freshWater).toBe(1);
+    assertWorldInvariants(afterWorld);
+    close(runtime);
+
+    soundscapePlay.mockClear();
+    const coldRepository = new MemoryRepository(beforeRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    const consumedRecord = coldRepository.snapshot();
+    close(cold);
+
+    const failedRepository = new MemoryRepository(beforeRecord);
+    const failed = await open(failedRepository);
+    const originalStep = simulation.stepWorld;
+    let attemptedUse = false;
+    const stepSpy = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = originalStep(...args);
+      const actor = result.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+      expect(actor.activity?.rationTask?.phase).toBe("used");
+      expect(result.ledger.consumed.food - beforeWorld.ledger.consumed.food).toBe(1);
+      attemptedUse = true;
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+      .mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attemptedUse).toBe(true);
+    expect(closure).toHaveBeenCalled();
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    await failed.save();
+    expect(authoritativeRoots(decode(failedRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+    stepSpy.mockRestore();
+    closure.mockRestore();
+    close(failed);
+
+    for (const reception of ["heard", "refused"] as const) {
+      const greetingRepository = new MemoryRepository(beforeRecord);
+      const greeting = await open(greetingRepository);
+      const view = greeting.getRenderView();
+      const nearby = view.porters.find(({ position, quickLabel }) => quickLabel !== undefined
+        && Math.hypot(position.x - view.player.position.x, position.y - view.player.position.y)
+          <= view.terrain.tileSize * RESIDENT_CONVERSATION_RANGE_TILES);
+      if (nearby === undefined) throw new Error("hourly ration fixture needs a real nearby GREET source");
+      greeting.dispatchRenderer({ type: "select", entity: "porter", id: nearby.id, point: nearby.position });
+      expect(greeting.getUIView().selectedResident).toMatchObject({ actionLabel: "GREET", actionDisabled: false });
+      const refusal = reception === "refused" ? vi.spyOn(
+        residentIntroductionAuthority, "prepareResidentIntroductionEventTimeReceipt",
+      ).mockReturnValue(null) : null;
+      const admissions: unknown[] = [];
+      const greetedStep = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+        admissions.push(args[3]);
+        const result = originalStep(...args);
+        expect(result.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.activity?.rationTask?.phase)
+          .toBe("used");
+        expect(result.ledger.consumed.food - beforeWorld.ledger.consumed.food).toBe(1);
+        return result;
+      });
+      greeting.dispatchUI({ type: "resident", action: "greet", residentId: nearby.id });
+      advanceOrdinaryFixedSteps(greeting, 1);
+      await greeting.save();
+      const greetedWorld = deserializeWorld(decode(greetingRepository.snapshot()).world);
+      const introductions = greetedWorld.events.filter(({ type }) => type === "resident-introduced");
+      expect(introductions).toHaveLength(reception === "heard" ? 1 : 0);
+      expect(admissions).toHaveLength(reception === "heard" ? 1 : 2);
+      expect(admissions.every((admission) => admission !== undefined)).toBe(true);
+      expect(new Set(admissions).size).toBe(admissions.length);
+      expect(greetedWorld.ledger.consumed.food - beforeWorld.ledger.consumed.food).toBe(1);
+      expect(greetedWorld.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.needs.food).toBe(used.needs.food);
+      assertWorldInvariants(greetedWorld);
+      greetedStep.mockRestore();
+      refusal?.mockRestore();
+      close(greeting);
+    }
+
+    const consumedRepository = new MemoryRepository(consumedRecord);
+    const consumed = await open(consumedRepository);
+    await consumed.save();
+    expect(authoritativeRoots(decode(consumedRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    advanceOrdinaryFixedSteps(consumed, 10);
+    await consumed.save();
+    const next = deserializeWorld(decode(consumedRepository.snapshot()).world);
+    expect(next.ledger.consumed).toEqual(afterWorld.ledger.consumed);
+    expect(next.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.needs.food).toBe(used.needs.food);
+    assertWorldInvariants(next);
+  }, 180_000);
+
+  it("retains supported51 phase4 body history and upgrades services only at the next genuine phase0", async () => {
+    const fixture = await restFixture();
+    const stagingRepository = new MemoryRepository(fixture.record);
+    const staging = await open(stagingRepository);
+    advanceOrdinaryFixedSteps(staging, 4);
+    await staging.save();
+    const record = stagingRepository.snapshot();
+    const legacy = decode(record);
+    const world = deserializeWorld(legacy.world);
+    // Reconstruct the deliberately supported rest-only protocol from actual
+    // accepted poses, not a fabricated movement/arrival or old released save.
+    for (const human of world.residents) {
+      const activity = human.activity;
+      if (activity === undefined || activity.rationTask !== null) throw new Error("native rest fixture gained ration use");
+      const { rationTask: _rationTask, ...body } = activity;
+      human.activity = { ...body, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
+    }
+    assertWorldInvariants(world);
+    legacy.world = serializeWorld(world);
+    legacy.version = FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION;
+    close(staging);
+
+    const repository = new MemoryRepository(recordWith(record, legacy));
+    const runtime = await open(repository);
+    await runtime.save();
+    const loaded = decode(repository.snapshot());
+    expect(loaded.world).toBe(legacy.world);
+    expect(loaded.perceptionCarry).toEqual(legacy.perceptionCarry);
+    advanceOrdinaryFixedSteps(runtime, 5);
+    await runtime.save();
+    const phase9 = decode(repository.snapshot());
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(deserializeWorld(phase9.world).residents.every((human) => (
+      human.activity?.version === RESIDENT_ACTIVITY_VERSION && human.activity.poses.length === 10
+      && !Object.hasOwn(human.activity, "rationTask")
+    ))).toBe(true);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const boundary = decode(repository.snapshot());
+    expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(deserializeWorld(boundary.world).meta.completedTick).toBe(fixture.tick + 1);
+    expect(deserializeWorld(boundary.world).residents.every((human) => (
+      // Closure itself invokes the existing phase-zero routine owner. There
+      // is no extra accepted step or invented pre-boundary history to await.
+      human.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION && human.activity.poses.length === 1
+      && human.activity.rationTask === null
+    ))).toBe(true);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const next = decode(repository.snapshot());
+    expect(next.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
+    expect(deserializeWorld(next.world).residents.every((human) => (
+      human.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION && human.activity.poses.length === 2
+      && human.activity.rationTask === null
+    ))).toBe(true);
+    expect(resident(next, fixture.actorId).activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
+    expect(stableStringify(next.physicalCargo)).toBe(stableStringify(loaded.physicalCargo));
   }, 60_000);
 
   it("retains released50 phase4 body absence until the next genuine phase0", async () => {

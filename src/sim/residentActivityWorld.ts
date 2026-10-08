@@ -57,6 +57,14 @@ export function residentRestTargetHasDrySupport(
     && waterDepthAt(tile, world.tide) === 0;
 }
 
+/** Aggregate settlement service geometry, NOT the separate physical store lot. */
+export function residentSettlementRationTarget(
+  world: ResidentSpatialWorld,
+  resident: ResidentState,
+): WorldPosition | null {
+  return residentSettlementRestTarget(world, resident);
+}
+
 /**
  * Cold/world boundary: authenticate physical source and membership separately
  * from the generic immutable activity shape. Construction custody alone is
@@ -75,14 +83,16 @@ export function canonicalResidentActivityForWorld(
       id === resident.id && identity.stableId === resident.identity.stableId
     ))
   ) return null;
-  const task = activity.restTask;
+  const task = activity.restTask ?? activity.rationTask ?? null;
   if (task === null) return activity;
   if (resident.location.kind !== "settlement"
     || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null
   ) return null;
-  const target = residentSettlementRestTarget(world, resident, task.legacySettlementOrdinal);
+  const target = task.kind === "settlement-rest"
+    ? residentSettlementRestTarget(world, resident, task.legacySettlementOrdinal)
+    : residentSettlementRationTarget(world, resident);
   if (target === null || !samePosition(target, task.target)) return null;
-  if (task.origin === "continued-admitted-rest") {
+  if (task.kind === "settlement-rest" && task.origin === "continued-admitted-rest") {
     const receipt = canonicalizeLivingCircadianPersistentState(resident.circadian);
     if (receipt === null || !receipt.restDestinationArrived
       || (receipt.posture.state !== "resting" && receipt.posture.state !== "asleep")
@@ -91,7 +101,7 @@ export function canonicalResidentActivityForWorld(
     // reusable water/shelter exemption for newly selected physical tasks.
     return activity;
   }
-  return task.phase === "arrived" && !residentRestTargetHasDrySupport(world, target)
+  return (task.phase === "arrived" || task.phase === "used") && !residentRestTargetHasDrySupport(world, target)
     ? null : activity;
 }
 

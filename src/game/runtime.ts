@@ -101,6 +101,7 @@ import {
   classifyUnsupportedSaveSchema,
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
@@ -109,7 +110,8 @@ import {
   residentActivitySaveExtensionsValid,
 } from "./residentActivitySaveBoundary";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
-import { RESIDENT_ACTIVITY_MAX_PHASE, residentActivityPoseAtPhase } from "../sim/residentActivity";
+import { RESIDENT_ACTIVITY_MAX_PHASE, RESIDENT_SERVICE_ACTIVITY_VERSION, residentActivityPoseAtPhase } from "../sim/residentActivity";
+import { prepareResidentRationUse, revokeResidentRationUse } from "../sim/residentRationUse";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
   animalCallRecognitionForVocalization,
@@ -1381,6 +1383,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   PLAYER_RECOVERY_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
@@ -13772,10 +13775,32 @@ export async function createTideweftRuntime(
     perceptionFrame: ResidentPerceptionFrame,
   ): WorldState {
     preparedResidentIntroduction = null;
+    // Each candidate owns its own exact closing admission. GREET refusal must
+    // not reuse a token consumed against the disposable candidate world.
+    const advance = (target: WorldState, commands: readonly SimCommand[]): WorldState => {
+      if ((target.meta.completedTick + 1) % 60 !== 0
+        || !target.residents.some(({ activity }) => activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION)) {
+        return stepWorld(target, commands, perceptionFrame);
+      }
+      const keeper = target.residents.find(({ identity }) => identity.stableId === settlementEcology.identity.keeperActorId);
+      const duty = keeper === undefined ? undefined : deriveSettlementKeeperCircadianDuty(
+        keeper, settlementEcology, porterResponse, target.meta.completedTick,
+      );
+      if (keeper === undefined || duty === undefined) throw new Error("Ration service lost authentic keeper duty");
+      const admission = prepareResidentRationUse(target, target.residents.map(({ identity }) => ({
+        actorId: identity.stableId, duty: identity.stableId === keeper.identity.stableId ? duty : null,
+      })));
+      if (admission === null) throw new Error("Ration service lost its exact closing body cohort");
+      try {
+        return stepWorld(target, commands, perceptionFrame, admission);
+      } finally {
+        revokeResidentRationUse(admission);
+      }
+    };
     const pending = pendingResidentGreeting;
-    if (pending === null) return stepWorld(world, commandQueue, perceptionFrame);
+    if (pending === null) return advance(world, commandQueue);
 
-    const candidate = stepWorld(structuredClone(world), commandQueue, perceptionFrame);
+    const candidate = advance(structuredClone(world), commandQueue);
     const rejected = candidate.events.some((event) => (
       event.type === "command-rejected"
       && event.data.commandId === pending.commandId
@@ -13894,7 +13919,7 @@ export async function createTideweftRuntime(
       true,
     );
     soundscape.play("warning", 0.28);
-    return stepWorld(world, commandsWithoutGreeting, perceptionFrame);
+    return advance(world, commandsWithoutGreeting);
   }
 
   function mirrorPhysicalCargoToPlayer(): void {
@@ -20399,7 +20424,8 @@ export async function createTideweftRuntime(
     const regionalTravelSnapshot = capturePlayerRegionalTravel(regionalTravel, player);
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
-    if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION)) {
+    if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION)) {
       throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
@@ -24998,7 +25024,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
     const world = deserializeWorld(decoded.world);
-    if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION)) {
+    if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+      decoded.version >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION)) {
       throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (

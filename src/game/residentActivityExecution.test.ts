@@ -235,8 +235,17 @@ describe("bounded resident rest execution adapter", () => {
     expect(prepareResidentRestActivities(world)).toBe(true);
     expect(residentAt(world, stableId).activity?.restTask).toBeNull();
     expect(residentAt(world, stableId).circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
-    expect(advanceResidentRestActivities(world, 1)?.movedActorIds).not.toContain(stableId);
-    expect(residentAt(world, stableId).activity?.poses.at(-1)?.position).toEqual(source);
+    const result = advanceResidentRestActivities(world, 1);
+    if (pressure === "urgent-food") {
+      // This now selects the distinct authorized ration approach, not rest.
+      expect(residentAt(world, stableId).activity?.rationTask?.kind).toBe("settlement-ration");
+      expect(result?.movedActorIds).toContain(stableId);
+      expect(residentAt(world, stableId).activity?.poses.at(-1)?.position).not.toEqual(source);
+    } else {
+      expect(residentAt(world, stableId).activity?.rationTask).toBeNull();
+      expect(result?.movedActorIds).not.toContain(stableId);
+      expect(residentAt(world, stableId).activity?.poses.at(-1)?.position).toEqual(source);
+    }
     assertWorldInvariants(world);
   });
 

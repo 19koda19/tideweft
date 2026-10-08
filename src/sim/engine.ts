@@ -50,10 +50,12 @@ import {
   replaceResidentActivity,
   type ResidentActivity,
   type ResidentBodyPose,
+  RESIDENT_SERVICE_ACTIVITY_VERSION,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
-import { calculateResidentRations } from "./residentRations";
+import { calculateResidentRationPulse } from "./residentRations";
+import { consumeResidentRationUse, residentRationUseEligible, type PreparedResidentRationUse } from "./residentRationUse";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -1307,7 +1309,7 @@ function runProduction(world: WorldState, tick: number): void {
   }
 }
 
-function updateResidentNeeds(world: WorldState, tick: number): void {
+function updateResidentNeeds(world: WorldState, tick: number, rationDuties: ReadonlyMap<string, boolean> | null): void {
   if (tick % 60 !== 0) return;
   const pressure = pressureMultiplier(world.meta.pressureMode);
   const time = projectWorldTime(tick);
@@ -1328,11 +1330,15 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
         : left.identity.stableId > right.identity.stableId
           ? 1
           : 0);
-    const rations = calculateResidentRations({
+    const uses = residents.map((resident) => resident.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION
+      ? residentRationUseEligible(world, resident, rationDuties, tick)
+      : true); // Explicit supported pre-service aggregate execution, not visibility.
+    const rations = calculateResidentRationPulse({
       foodStock: settlement.inventory.food,
       freshWaterStock: settlement.inventory.freshWater,
       foodNeeds: residents.map((resident) => resident.needs.food),
       hungerGrowth: Math.trunc((34_000 * pressure) / FIXED_POINT),
+      uses,
     });
     settlement.inventory.food -= rations.foodConsumed;
     world.ledger.consumed.food += rations.foodConsumed;
@@ -1341,6 +1347,20 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
 
     let totalNeed = 0;
     for (const [index, resident] of residents.entries()) {
+      const rationTask = resident.activity?.rationTask;
+      if (uses[index] && rationTask?.phase === "arrived"
+        && (rations.foodConsumed > 0 || rations.freshWaterConsumed > 0)) {
+        // Exact use and benefit share the stock transaction. Neither arrival
+        // nor a retained used receipt can debit/grant a second time.
+        const replacement = replaceResidentActivity(resident, {
+          ...resident.activity, rationTask: {
+            ...rationTask, phase: "used", usedAtTick: tick, lastProgressAtTick: tick,
+            nextReassessmentAtTick: tick + 1,
+            foodUsed: rations.foodConsumed > 0, waterUsed: rations.freshWaterConsumed > 0,
+          },
+        });
+        resident.activity = replacement.activity!;
+      }
       resident.needs.food = rations.nextFoodNeeds[index]!;
       // Supported pre-Turning-Day residents may lack the optional receipt and
       // retain the old clock-only recovery rule. Current residents bind to the
@@ -2017,6 +2037,7 @@ function residentDepartureActivityEventLocus(
   if (activity === null) throw new Error("Departure lost reanchored resident body");
   const prepared = replaceResidentActivity(resident, {
     ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
+    ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION ? { rationTask: null } : {}),
   });
   return captureResidentActivityEventLocus(prepared, tick);
 }
@@ -2048,10 +2069,13 @@ function commitResidentActivityWorldStep(
     if (activity === null) throw new Error("World step lost canonical resident activity");
     let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
     let task = activity.restTask;
+    let rationTask = activity.rationTask ?? null;
     if (task !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
       task = null;
     }
+    if (rationTask !== null && (resident.location.kind !== "settlement"
+      || resident.location.settlementId !== rationTask.settlementId || resident.activeContractId !== null)) rationTask = null;
     const priorLocation = snapshot.location;
     const currentLocation = resident.location;
     const changedLocation = priorLocation.kind !== currentLocation.kind
@@ -2063,13 +2087,21 @@ function commitResidentActivityWorldStep(
     if (reconcileCoarseLocation && (changedLocation || (currentLocation.kind === "route" && changedDirection))) {
       pose = residentCoarseTransitionPose(world, resident);
       task = null;
+      rationTask = null;
     }
     if (task?.origin === "selected" && task.phase === "arrived"
       && !residentRestTargetHasDrySupport(world, task.target)) {
       task = { ...task, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1 };
     }
+    if (rationTask !== null && (rationTask.phase === "arrived" || rationTask.phase === "used")
+      && !residentRestTargetHasDrySupport(world, rationTask.target)) {
+      rationTask = rationTask.phase === "used" ? null : {
+        ...rationTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1,
+      };
+    }
     replacements.push({ index, resident: replaceResidentActivity(resident, {
       ...activity, tick, poses: [pose], restTask: task,
+      ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION ? { rationTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.
@@ -2080,8 +2112,10 @@ export function stepWorld(
   world: WorldState,
   commands: readonly SimCommand[] = [],
   perceptionFrame?: ResidentPerceptionFrame,
+  rationAdmission?: PreparedResidentRationUse,
 ): WorldState {
   const tick = world.meta.completedTick + 1;
+  const rationDuties = rationAdmission === undefined ? null : consumeResidentRationUse(world, rationAdmission);
   const residentActivities = prepareResidentActivityWorldStep(world);
   applyCommands(world, commands, tick);
   advanceResidentPerception(world, perceptionFrame, tick);
@@ -2094,7 +2128,7 @@ export function stepWorld(
   updateResidentConditions(world, tick);
   ageKnowledge(world, tick);
   runProduction(world, tick);
-  updateResidentNeeds(world, tick);
+  updateResidentNeeds(world, tick, rationDuties);
   updateProjects(world, tick);
   if (tick % 60 === 0) generateDemandContracts(world, tick);
   advanceContracts(world, tick);

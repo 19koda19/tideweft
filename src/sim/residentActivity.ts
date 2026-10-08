@@ -11,6 +11,9 @@ import type { ResidentState } from "./types";
 
 export const RESIDENT_ACTIVITY_VERSION = 1 as const;
 export const RESIDENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v1" as const;
+/** The v1 rest/body protocol remains a deliberately supported cold format. */
+export const RESIDENT_SERVICE_ACTIVITY_VERSION = 2 as const;
+export const RESIDENT_SERVICE_ACTIVITY_OWNER_ID = "sim:resident-activity:v2" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -38,6 +41,21 @@ export interface ResidentRestTask {
   readonly waitReason: "no-traversable-route" | "outside-local-corridor" | null;
 }
 
+export interface ResidentRationTask {
+  readonly kind: "settlement-ration";
+  readonly settlementId: number;
+  readonly target: WorldPosition;
+  readonly selectedAtTick: number;
+  readonly phase: "approaching" | "waiting" | "arrived" | "used";
+  readonly lastProgressAtTick: number;
+  readonly nextReassessmentAtTick: number;
+  readonly waitReason: ResidentRestTask["waitReason"];
+  /** One committed use, not reserved food or a replayable entitlement. */
+  readonly usedAtTick: number | null;
+  readonly foodUsed: boolean;
+  readonly waterUsed: boolean;
+}
+
 /**
  * One optional resident-owned physical root, not a second actor population.
  * poses[0] is the interval anchor; poses[N] is the body after N accepted steps.
@@ -45,12 +63,14 @@ export interface ResidentRestTask {
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
   readonly restTask: ResidentRestTask | null;
+  /** Absent only in the frozen v1 protocol; v2 requires an explicit null/task. */
+  readonly rationTask?: ResidentRationTask | null;
 }
 
 export interface ResidentActivityBinding {
@@ -73,10 +93,15 @@ export function canonicalizeResidentActivity(
     const activity = value as ResidentActivity;
     return matchesBinding(activity, binding) ? activity : null;
   }
-  if (!plainRecord(value) || !exactKeys(value, [
+  if (!plainRecord(value)) return null;
+  const versionField = Object.getOwnPropertyDescriptor(value, "version");
+  if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
+  const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION;
+  if (!exactKeys(value, [
     "actorId", "ownerId", "poses", "restTask", "tick", "version",
-  ]) || value.version !== RESIDENT_ACTIVITY_VERSION
-    || value.ownerId !== RESIDENT_ACTIVITY_OWNER_ID
+    ...(serviceCapable ? ["rationTask"] : []),
+  ]) || (serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
+    : value.version !== RESIDENT_ACTIVITY_VERSION || value.ownerId !== RESIDENT_ACTIVITY_OWNER_ID)
     || !validActorId(value.actorId)
     || !nonnegativeInteger(value.tick)
     || value.actorId !== binding.actorId
@@ -99,7 +124,11 @@ export function canonicalizeResidentActivity(
   }
   const restTask = canonicalRestTask(value.restTask, value.tick);
   if (restTask === undefined) return null;
+  const rationTask = serviceCapable ? canonicalRationTask(value.rationTask, value.tick) : null;
+  if (rationTask === undefined || (restTask !== null && rationTask !== null)) return null;
   const body = poses[poses.length - 1]!;
+  if (rationTask !== null && (rationTask.phase === "arrived" || rationTask.phase === "used")
+    && !samePosition(body.position, rationTask.target)) return null;
   if (restTask !== null && (
     (restTask.phase === "arrived" && !samePosition(body.position, restTask.target))
     || (restTask.origin === "continued-admitted-rest" && poses.some((pose) => (
@@ -107,12 +136,13 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: RESIDENT_ACTIVITY_VERSION,
-    ownerId: RESIDENT_ACTIVITY_OWNER_ID,
+    version: serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
     restTask,
+    ...(serviceCapable ? { rationTask } : {}),
   });
   CANONICAL_ACTIVITIES.add(activity);
   return activity;
@@ -180,11 +210,12 @@ export function replaceResidentActivity(
     tick: resident.perception.tick,
   });
   if (activity === null) throw new RangeError("Resident activity is malformed, foreign or mistimed");
-  if (activity.restTask !== null && (
+  const task = activity.restTask ?? activity.rationTask ?? null;
+  if (task !== null && (
     resident.location.kind !== "settlement"
-    || activity.restTask.settlementId !== resident.location.settlementId
+    || task.settlementId !== resident.location.settlementId
     || resident.activeContractId !== null
-  )) throw new RangeError("Resident rest task conflicts with membership or commitment");
+  )) throw new RangeError("Resident task conflicts with membership or commitment");
   return { ...resident, activity };
 }
 
@@ -251,6 +282,39 @@ function canonicalRestTask(value: unknown, tick: number): ResidentRestTask | nul
     lastProgressAtTick: value.lastProgressAtTick,
     nextReassessmentAtTick: value.nextReassessmentAtTick,
     waitReason: value.waitReason as ResidentRestTask["waitReason"],
+  });
+}
+
+function canonicalRationTask(value: unknown, tick: number): ResidentRationTask | null | undefined {
+  if (value === null) return null;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "foodUsed", "kind", "lastProgressAtTick", "nextReassessmentAtTick", "phase",
+    "selectedAtTick", "settlementId", "target", "usedAtTick", "waitReason", "waterUsed",
+  ]) || value.kind !== "settlement-ration" || !positiveInteger(value.settlementId)
+    || !isWorldPosition(value.target)
+    || !nonnegativeInteger(value.selectedAtTick) || value.selectedAtTick > tick
+    || !nonnegativeInteger(value.lastProgressAtTick)
+    || value.lastProgressAtTick < value.selectedAtTick || value.lastProgressAtTick > tick
+    || !nonnegativeInteger(value.nextReassessmentAtTick)
+    || value.nextReassessmentAtTick < value.selectedAtTick
+    || !["approaching", "waiting", "arrived", "used"].includes(value.phase as string)
+    || !(value.waitReason === null || value.waitReason === "no-traversable-route"
+      || value.waitReason === "outside-local-corridor")
+    || (value.phase === "waiting") !== (value.waitReason !== null)
+    || typeof value.foodUsed !== "boolean" || typeof value.waterUsed !== "boolean"
+    || (value.phase === "used"
+      ? !nonnegativeInteger(value.usedAtTick) || value.usedAtTick % 60 !== 0
+        || value.usedAtTick <= value.selectedAtTick || value.usedAtTick > tick
+        || value.lastProgressAtTick !== value.usedAtTick || !(value.foodUsed || value.waterUsed)
+      : value.usedAtTick !== null || value.foodUsed || value.waterUsed)
+  ) return undefined;
+  return Object.freeze({
+    kind: "settlement-ration", settlementId: value.settlementId,
+    target: createWorldPosition(value.target.region, value.target.localX, value.target.localY),
+    selectedAtTick: value.selectedAtTick, phase: value.phase as ResidentRationTask["phase"],
+    lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
+    waitReason: value.waitReason as ResidentRationTask["waitReason"],
+    usedAtTick: value.usedAtTick as number | null, foodUsed: value.foodUsed, waterUsed: value.waterUsed,
   });
 }
 

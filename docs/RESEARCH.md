@@ -3719,6 +3719,75 @@ clamp at high/low need. This changes no save schema, supported format, dependenc
 or release identity. It prepares the existing accounting boundary, not physical
 meal/service completion, a sourced-production fix or measured FPS improvement.
 
+### Actual resident ration approach and use — 2026-10-08
+
+Local construction extends parent `45528207312e6d96938c7ebc223707d839b035e2`
+through the existing fixed-step body, circadian and hourly stock owners. Native
+geometry, IDs and player spawn remain unchanged; short-fixture needs, weather
+and contract availability are explicitly controlled. Neither selected tasks,
+arrival nor a successful meal is injected. One actual native runtime witness
+processes599 accepted100ms steps to tick479/phase9, then the same final step
+to480 uninterrupted and cold. All saved authoritative roots agree, excluding
+only the existing presentation/session recap. A later deliberate interval
+closure failure rolls back the real meal, ledger, need and task effects and
+releases no vocal cue. Actual nearby GREET acceptance and physical refusal on
+that use tick separately prepare their disposable/original-world tokens; both
+leave just one committed debit. Cold load after consumption cannot grant a
+second benefit.
+
+The service policy deliberately differs from unconditional legacy aggregate
+relief: one stable actual-present cohort sets the full `ceil(N/3)` availability
+budget independently for food/water; a group is charged once if it contains a
+legitimate user, and only users receive relief. All-user results remain the old
+batch and one final clamp; wholly unused groups cost nothing. No reservation,
+coupon, personal food inventory or conversion of the separate physical store
+lot is created. The exact hourly order remains production before needs, then
+projects/contracts. The unchanged absent/v1 aggregate branch still matches the
+four frozen whole-world/save/event witnesses. Lower-world native counterfactuals
+prove shortage and duty interruption remove the actual downstream benefit.
+
+Outer52/body-v2 explicitly versions the exclusive ration task; carry14 and
+inner-world4/rules6 are unchanged. Supported51/body-v1 retains its true phase4/9
+history and upgrades only through actual phase-zero routine reconciliation;
+released50 stays supported/pre-body. Codec/save-capability tests do not claim
+released fixture provenance or runtime gameplay. Preparation captures exact
+world, roster, resident and immutable activity identities, burns a failed or
+consumed token, and copies the complete explicit duty cohort. Review found a
+same-resident activity-replacement custody gap; the bounded identity fence and
+new characterization reject it without serializing or caching the world.
+
+The first broader runtime/save selection reported38PASS/1FAIL: the new v1 cold
+fixture wrongly expected upgrade one step after phase-zero closure. Inspecting
+the existing closure routine confirmed upgrade at that actual boundary; the
+fixture was corrected, not the implementation or invariant. Earlier temporary
+readonly fixture errors and the replaced urgent-food movement oracle are
+retained in local evidence; hunger now intentionally selects real ration
+approach instead of a stationary unused eat intention.
+
+Validation uses the maintained production owners, maxWorkers2 except the
+focused GREET selection, with default+JSON reporters:
+
+- `npx vitest run src/game/runtime.residentRest.integration.test.ts src/sim/residentRationUse.test.ts src/game/residentRationActivity.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-service-runtime-final.json`:
+  3files36PASS42.41s, including the full native fixture, exact current-save
+  continuation, supported51/released50, one-shot custody and honest close/hidden
+  render/ABOUT output. The use label is not a private hunger/destination label
+  or a manufactured acoustic event.
+- `npx vitest run src/game/runtime.test.ts -t 'voices one committed GREET|keeps a resident recognized when the candidate introduction is not heard|rolls back introduction facts, save, and vocal audio when later interval closure fails|rolls back the whole interval when cause-owned hearing timing is rejected|restores the complete adopted body roster after a rejected fine-step replacement' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-service-greet-regression.json`:
+  5PASS/93unselected20.88s. These are the exact existing Voice/body regressions,
+  not the complete98-case runtime suite.
+- `npm run typecheck`: PASS. `npm run test:smoke`: maintained6files105PASS4.12s.
+
+The final affected-domain command is
+`npx vitest run src/sim/residentRationPulse.test.ts src/sim/residentRationUse.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRations.test.ts src/sim/residentRations.integration.test.ts src/sim/residentActivity.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityEventLocus.test.ts src/sim/residentCircadianPhysiology.test.ts src/sim/systemComposition.integration.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentRationActivity.integration.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.presentation.test.ts src/game/uiProjection.test.ts src/game/projection.perception.test.ts src/game/projection.routes.test.ts src/game/projection.terrainMemo.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-service-domain-final.json`:
+22files415PASS20.36s. It covers shared body/receipt/physiology, publication,
+save and presentation boundaries; it is not complete cumulative coverage.
+The earlier capped cumulative remains incomplete. No manual visual,
+natural-rate multi-day liveness, production performance, packaging, deployment,
+directive closure or full settlement-service claim follows from these tests.
+Material service, autonomous keeper inspection and physical delivery remain
+with the existing active owner. No dependencies, upstream sources, release
+identity, privacy policy or completed directive bytes change.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -727,6 +727,15 @@ export function observableResidentBodyMoving(resident: ResidentState): boolean {
   return !sameWorldPosition(current.position, previous.position);
 }
 
+/** Committed current use only; hunger, intention and an arrival are private. */
+export function observableResidentRationUse(resident: ResidentState): boolean {
+  const activity = canonicalizeResidentActivity(resident.activity, {
+    actorId: resident.identity.stableId, tick: resident.perception.tick,
+  });
+  return activity?.rationTask?.phase === "used"
+    && activity.rationTask.usedAtTick === resident.perception.tick;
+}
+
 function projectResidentPlacement(
   world: WorldView,
   placement: ResidentWorldPlacement,
@@ -1420,6 +1429,7 @@ export function projectGameView(
       const perceptionState = porterPerceptionState(attention);
       const restState = observableResidentRestState(resident);
       const moving = observableResidentBodyMoving(resident);
+      const rationUse = observableResidentRationUse(resident);
       return [
         {
           actorId: resident.identity.stableId,
@@ -1431,9 +1441,11 @@ export function projectGameView(
               ? `${identityLabel} · ${perceptionLabel}`
               : restState
                 ? `${identityLabel} · ${restState}`
-                : moving && !resident.condition.sheltering
-                  ? `${identityLabel} · moving`
-                  : identityLabel } : {}),
+                : rationUse
+                  ? `${identityLabel} · taking a ration`
+                  : moving && !resident.condition.sheltering
+                    ? `${identityLabel} · moving`
+                    : identityLabel } : {}),
           position: routeProjection.position,
           facing: routeProjection.facing,
           state: restState === "asleep"

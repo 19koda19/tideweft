@@ -5,8 +5,11 @@ export const OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION = "1.0.0" as const;
 /** First outer format that authorizes resident bodies and retained source poses. */
 export const FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION = 51 as const;
 
+/** First outer format authorizing exclusive, persisted local ration tasks. */
+export const FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION = 52 as const;
+
 /** The one outer `tideweft-session` schema emitted by this source tree. */
-export const CURRENT_GAME_SAVE_VERSION = 51 as const;
+export const CURRENT_GAME_SAVE_VERSION = 52 as const;
 
 /** Frozen Alpha64 boundary; do not move this when the current writer changes. */
 export const RELEASED_LIVING_VOICE_GAME_SAVE_VERSION = 50 as const;

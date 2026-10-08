@@ -6,6 +6,7 @@ import {
   serializeWorld, stepWorld, STRAND_AUTOMATION_THRESHOLD,
 } from "../sim/public";
 import { RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS } from "../sim/residentActivityEventLocus";
+import { RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import type { SimEvent, WorldState } from "../sim/types";
 import { stableStringify } from "../sim/util";
@@ -14,6 +15,7 @@ import { residentActivitySaveExtensionsValid } from "./residentActivitySaveBound
 import { residentIntroductionExpressionIntent } from "./residentIntroductionExpression";
 import { residentWeatherHoldExpressionIntent } from "./residentWeatherHoldExpression";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION, FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import { workingPeopleExpressionIntent } from "./workingPeopleExpression";
 import { worldPositionDelta } from "./worldPosition";
 
@@ -53,6 +55,32 @@ function restFixture(phase = 0): WorldState {
   expect(prepareResidentRestActivities(world)).toBe(true);
   for (let step = 1; step <= phase; step += 1) {
     expect(advanceResidentRestActivities(world, step)).not.toBeNull();
+  }
+  return world;
+}
+
+function rationFixture(phase = 0): WorldState {
+  const world = restFixture();
+  const chosen = world.residents.find((resident) => resident.activity?.restTask?.cause === "urgent-rest")!;
+  chosen.needs.rest = 100_000;
+  chosen.condition.exhaustion = 100_000;
+  chosen.needs.food = 900_000;
+  expect(prepareResidentRestActivities(world)).toBe(true);
+  expect(world.residents.find(({ id }) => id === chosen.id)?.activity?.rationTask?.phase).toBe("approaching");
+  for (let step = 1; step <= phase; step += 1) {
+    expect(advanceResidentRestActivities(world, step)).not.toBeNull();
+  }
+  return world;
+}
+
+function preServiceFixture(): WorldState {
+  const world = restFixture(1);
+  // A deliberate frozen-v1 cold-format reconstruction of the genuine body/rest
+  // fixture, not a released outer-session artifact or a physical meal witness.
+  for (const resident of world.residents) {
+    const { rationTask, ...activity } = resident.activity!;
+    expect(rationTask).toBeNull();
+    resident.activity = { ...activity, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
   }
   return world;
 }
@@ -137,12 +165,97 @@ describe("resident body save capability and retained event source validation", (
     const root = world.residents;
     const restored = deserializeWorld(bytes);
     for (const candidate of [world, structuredClone(world), restored]) {
-      expect(residentActivitySaveExtensionsValid(candidate, true)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(true);
       expect(residentActivitySaveExtensionsValid(candidate, false)).toBe(false);
       expect(serializeWorld(candidate)).toBe(bytes);
     }
     expect(world.residents).toBe(root);
     expect(restored.residents[0]!.activity).not.toBe(world.residents[0]!.activity);
+  });
+
+  it("retains exact cold v1 body/rest bytes under body51 without service capability", () => {
+    const world = preServiceFixture();
+    const bytes = serializeWorld(world);
+    for (const candidate of [world, structuredClone(world), deserializeWorld(bytes)]) {
+      expect(residentActivitySaveExtensionsValid(candidate, true)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(candidate, true, false)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(candidate, false, true)).toBe(false);
+      expect(candidate.residents.every((resident) => resident.activity?.version === 1
+        && !Object.hasOwn(resident.activity!, "rationTask"))).toBe(true);
+      expect(serializeWorld(candidate)).toBe(bytes);
+    }
+  });
+
+  it("requires service52 capability for v2 rather than body51 alone", () => {
+    expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBe(51);
+    expect(FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION).toBe(52);
+    // These are the shared outer-capability predicates, not complete session
+    // envelope load/relaunch evidence.
+    for (const world of [restFixture(1), rationFixture(1)]) {
+      const bytes = serializeWorld(world);
+      for (const candidate of [world, structuredClone(world), deserializeWorld(bytes)]) {
+        expect(residentActivitySaveExtensionsValid(candidate, true)).toBe(false);
+        expect(residentActivitySaveExtensionsValid(candidate, true, false)).toBe(false);
+        expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(true);
+        expect(residentActivitySaveExtensionsValid(candidate, false, true)).toBe(false);
+        expect(serializeWorld(candidate)).toBe(bytes);
+      }
+    }
+  });
+
+  it("rejects a ration field smuggled through v1 even when it is null", () => {
+    const ration = rationFixture().residents.find((resident) => resident.activity?.rationTask != null)!.activity!.rationTask;
+    for (const rationTask of [null, ration]) {
+      const world = preServiceFixture();
+      Object.assign(world.residents[0]!.activity!, { rationTask });
+      const before = structuredClone(world);
+      expect(residentActivitySaveExtensionsValid(world, true, false)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
+      expect(world).toEqual(before);
+    }
+  });
+
+  it("rejects v2 task exclusivity, missing fields, target and timing forgeries without fallback", () => {
+    const source = rationFixture(10);
+    const index = source.residents.findIndex((resident) => resident.activity?.rationTask != null);
+    const admitted = source.residents[index]!.activity!.rationTask!;
+    expect(admitted.phase).toBe("arrived");
+    const rest = restFixture().residents.find(({ id }) => id === source.residents[index]!.id)!.activity!.restTask;
+    expect(rest).not.toBeNull();
+    const mutations: Array<(candidate: WorldState) => void> = [
+      (candidate) => { Reflect.deleteProperty(candidate.residents[index]!.activity!, "rationTask"); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!, { rationTask: undefined }); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!, { restTask: structuredClone(rest) }); },
+      (candidate) => {
+        const target = candidate.residents[index]!.activity!.rationTask!.target;
+        Object.assign(target, { localX: target.localX + 1 });
+      },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!.rationTask!, { selectedAtTick: candidate.meta.completedTick + 1 }); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!.rationTask!, { lastProgressAtTick: candidate.meta.completedTick + 1 }); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!.rationTask!, { phase: "used", usedAtTick: candidate.meta.completedTick, foodUsed: true }); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!.rationTask!, { phase: "used", usedAtTick: candidate.meta.completedTick + 60, foodUsed: true }); },
+      (candidate) => { Object.assign(candidate.residents[index]!.activity!.rationTask!, { phase: "used", usedAtTick: candidate.meta.completedTick - 1, foodUsed: true }); },
+    ];
+    for (const mutate of mutations) {
+      const candidate = structuredClone(source);
+      mutate(candidate);
+      const before = structuredClone(candidate);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(false);
+      expect(candidate).toEqual(before);
+    }
+  });
+
+  it("rejects a hostile version descriptor without executing its getter in either capability", () => {
+    const world = structuredClone(restFixture());
+    let reads = 0;
+    Object.defineProperty(world.residents[0]!.activity!, "version", {
+      enumerable: true,
+      get() { reads += 1; return 2; },
+    });
+    expect(residentActivitySaveExtensionsValid(world, true, false)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
+    expect(reads).toBe(0);
   });
 
   it("rejects partial, malformed, foreign-tick bodies and missing or contradictory rest authority without repair", () => {
@@ -163,14 +276,14 @@ describe("resident body save capability and retained event source validation", (
       const candidate = structuredClone(world);
       mutate(candidate);
       const before = structuredClone(candidate);
-      expect(residentActivitySaveExtensionsValid(candidate, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(false);
       expect(candidate).toEqual(before);
     }
   });
 
   it("accepts a genuine retained introduction after its bounded live-memory cause is absent", () => {
     const current = introductionFixture();
-    expect(residentActivitySaveExtensionsValid(current.world, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true)).toBe(true);
     const resident = current.world.residents.find(({ id }) => id === current.id)!;
     // Explicit cold-boundary counterfactual for bounded historical memory,
     // not a claim that this short fixture executes the memory pruning policy.
@@ -178,7 +291,7 @@ describe("resident body save capability and retained event source validation", (
     assertWorldInvariants(current.world);
     expect(residentIntroductionExpressionIntent({ world: createWorldView(current.world), event: current.event })).toBeNull();
     const bytes = serializeWorld(current.world);
-    expect(residentActivitySaveExtensionsValid(deserializeWorld(bytes), true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(deserializeWorld(bytes), true, true)).toBe(true);
     expect(serializeWorld(current.world)).toBe(bytes);
   });
 
@@ -186,7 +299,7 @@ describe("resident body save capability and retained event source validation", (
     const current = transportFixture();
     current.departure.data.playerObserved = true;
     current.shelter.data.playerObserved = true;
-    expect(residentActivitySaveExtensionsValid(current.world, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true)).toBe(true);
     clearWeather(current.world);
     for (let step = 0; step < 120; step += 1) {
       const contract = current.world.contracts.find(({ id }) => id === current.contractId)!;
@@ -205,7 +318,7 @@ describe("resident body save capability and retained event source validation", (
     expect(residentWeatherHoldExpressionIntent({ world: createWorldView(current.world), event: current.shelter })).toBeNull();
     const bytes = serializeWorld(current.world);
     const restored = deserializeWorld(bytes);
-    expect(residentActivitySaveExtensionsValid(restored, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(restored, true, true)).toBe(true);
     expect(residentActivitySaveExtensionsValid(restored, false)).toBe(false);
     expect(serializeWorld(restored)).toBe(bytes);
   });
@@ -228,7 +341,7 @@ describe("resident body save capability and retained event source validation", (
       const world = structuredClone(current.world);
       alter(eventAt(world, current.event.sequence));
       const before = stableStringify(world);
-      expect(residentActivitySaveExtensionsValid(world, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
       expect(stableStringify(world)).toBe(before);
     }
   });
@@ -240,7 +353,7 @@ describe("resident body save capability and retained event source validation", (
         ["playerObserved", false], ["playerObserved", "true"], ["foreignField", 1]] as const) {
         const world = structuredClone(current.world);
         eventAt(world, original.sequence).data[key] = value;
-        expect(residentActivitySaveExtensionsValid(world, true), `${original.type}:${key}`).toBe(false);
+        expect(residentActivitySaveExtensionsValid(world, true, true), `${original.type}:${key}`).toBe(false);
       }
     }
   });
@@ -249,7 +362,7 @@ describe("resident body save capability and retained event source validation", (
     const current = introductionFixture();
     const absent = structuredClone(current.world);
     for (const resident of absent.residents) delete resident.activity;
-    expect(residentActivitySaveExtensionsValid(absent, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(absent, true, true)).toBe(false);
     const initial = current.world.events.find((event) => event.type === "world-created")!;
     expect(initial).toBeDefined();
     for (const extension of [{ eventBodyVersion: 1 }, Object.fromEntries(
@@ -257,7 +370,7 @@ describe("resident body save capability and retained event source validation", (
     )]) {
       const world = structuredClone(current.world);
       Object.assign(eventAt(world, initial.sequence).data, extension);
-      expect(residentActivitySaveExtensionsValid(world, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
       expect(residentActivitySaveExtensionsValid(world, false)).toBe(false);
     }
   });

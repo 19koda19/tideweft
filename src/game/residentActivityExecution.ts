@@ -10,17 +10,20 @@ import {
   canonicalizeResidentActivity,
   replaceResidentActivity,
   RESIDENT_ACTIVITY_MAX_PHASE,
-  RESIDENT_ACTIVITY_OWNER_ID,
-  RESIDENT_ACTIVITY_VERSION,
+  RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
+  RESIDENT_SERVICE_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
   type ResidentBodyPose,
   type ResidentRestTask,
+  type ResidentRationTask,
 } from "../sim/residentActivity";
 import {
   canonicalResidentActivityForWorld,
   residentRestTargetHasDrySupport,
   residentSettlementRestTarget,
+  residentSettlementRationTarget,
 } from "../sim/residentActivityWorld";
+import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { waterDepthAt } from "../sim/terrain";
 import type { ResidentState, WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
@@ -42,7 +45,7 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 
-/** This is a local rest approach, not full-route planning or NPC watercraft. */
+/** Local dry-foot rest/ration approach, not full-route planning or watercraft. */
 const CORRIDOR_PADDING_TILES = 4;
 const MAX_CORRIDOR_AXIS_TILES = 16;
 
@@ -130,10 +133,11 @@ export function adoptResidentActivities(world: WorldState, phase = 0): boolean {
         };
       }
       const body = replaceResidentActivity(resident, {
-        version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID,
+        version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
         actorId: resident.identity.stableId, tick,
         poses: [{ position: placement.position, heading: headingFromRadians(placement.facing) }],
         restTask: task,
+        rationTask: null,
       });
       // Awake membership is not physical arrival. Only the previously admitted
       // episode survives; no new clock projection can manufacture continuation.
@@ -180,7 +184,14 @@ export function prepareResidentRestActivities(
       dutyByActor.set(actorId, duty);
     }
     for (const resident of world.residents) {
-      const activity = canonicalResidentActivityForWorld(world, resident);
+      const priorActivity = canonicalResidentActivityForWorld(world, resident);
+      if (priorActivity === null || priorActivity.poses.length !== 1) return false;
+      // Explicit phase-zero evolution preserves v1 cold partial intervals. It
+      // never invents prior poses or turns an old rest arrival into meal use.
+      const activity = canonicalizeResidentActivity({
+        ...priorActivity, version: RESIDENT_SERVICE_ACTIVITY_VERSION,
+        ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID, rationTask: priorActivity.rationTask ?? null,
+      }, { actorId: resident.identity.stableId, tick });
       if (activity === null || activity.poses.length !== 1) return false;
       const duty = dutyByActor.get(resident.identity.stableId) ?? null;
       const plan = planResidentCircadian({ resident, duty, weather: world.weather, atTick: tick });
@@ -188,7 +199,28 @@ export function prepareResidentRestActivities(
       const routine = plan.projection.routine;
       const wantsRest = routine.effectivePreference === "rest"
         && routine.posture.state !== "startled";
+      const wantsRation = !wantsRest && routine.effectivePreference === "active"
+        && routine.posture.state === "awake"
+        && residentRationPriorityEligible(resident, world.weather, duty !== null, tick);
       let task = activity.restTask;
+      let rationTask = activity.rationTask ?? null;
+      // One civil-minute of observable committed use, with no repeat benefit.
+      // A real higher priority still revokes it immediately; this is not work.
+      const showingUsedRation = rationTask?.phase === "used" && rationTask.usedAtTick === tick
+        && routine.effectivePreference === "active" && routine.posture.state === "awake"
+        && (plan.projection.priorityOverride === null || wantsRation);
+      if (!showingUsedRation && (!wantsRation || rationTask?.phase === "used")) rationTask = null;
+      if (wantsRation && rationTask === null) {
+        const target = residentSettlementRationTarget(world, resident);
+        if (target === null || resident.location.kind !== "settlement") return false;
+        rationTask = {
+          kind: "settlement-ration", settlementId: resident.location.settlementId, target,
+          selectedAtTick: tick, lastProgressAtTick: tick, nextReassessmentAtTick: tick,
+          phase: "approaching", waitReason: null, usedAtTick: null, foodUsed: false, waterUsed: false,
+        };
+      } else if (rationTask?.phase === "waiting" && rationTask.nextReassessmentAtTick <= tick) {
+        rationTask = { ...rationTask, phase: "approaching", waitReason: null };
+      }
       if (!wantsRest) task = null;
       else if (task === null) {
         const target = residentSettlementRestTarget(world, resident);
@@ -204,7 +236,7 @@ export function prepareResidentRestActivities(
       } else if (task.phase === "waiting" && task.nextReassessmentAtTick <= tick) {
         task = { ...task, phase: "approaching", waitReason: null };
       }
-      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task });
+      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask });
       // Clearing a continued episode changes arrival and wake together. Do not
       // commit the old projection's arrived=true bit beside an awake body.
       candidate = alignCircadianArrival(candidate, tick);
@@ -248,7 +280,7 @@ export function advanceResidentRestActivities(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null) return null;
       let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
-      let task = activity.restTask;
+      let task: ResidentRestTask | ResidentRationTask | null = activity.restTask ?? activity.rationTask ?? null;
       if (task?.phase === "approaching") {
         if (!residentRestTargetHasDrySupport(world, task.target)) {
           task = waitForRest(task, tick, "no-traversable-route");
@@ -260,7 +292,7 @@ export function advanceResidentRestActivities(
           else {
             maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
             const resolution = resolveLivingActorLocomotion({
-              requestId: `rest:${resident.identity.stableId}:${task.selectedAtTick}`,
+              requestId: `${task.kind}:${resident.identity.stableId}:${task.selectedAtTick}`,
               tick,
               actor: createLivingActorAddress({
                 actorId: resident.identity.stableId, species: "human", persistence: "promoted",
@@ -288,9 +320,12 @@ export function advanceResidentRestActivities(
       }
       if (task?.phase === "waiting") waitingActorIds.push(resident.identity.stableId);
       let candidate = replaceResidentActivity(resident, {
-        ...activity, poses: [...activity.poses, pose], restTask: task,
+        ...activity, poses: [...activity.poses, pose],
+        restTask: task?.kind === "settlement-rest" ? task : null,
+        ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION
+          ? { rationTask: task?.kind === "settlement-ration" ? task : null } : {}),
       });
-      if (task?.phase === "arrived" && activity.restTask?.phase !== "arrived") {
+      if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
         candidate = alignCircadianArrival(candidate, tick);
         const plan = planResidentCircadian({ resident: candidate, duty: null, weather: world.weather, atTick: tick });
         if (plan?.kind !== "projected") return null;
@@ -325,11 +360,11 @@ function alignCircadianArrival(resident: ResidentState, tick: number): ResidentS
   });
 }
 
-function arriveAtRest(task: ResidentRestTask, tick: number): ResidentRestTask {
+function arriveAtRest<T extends ResidentRestTask | ResidentRationTask>(task: T, tick: number): T {
   return { ...task, phase: "arrived", waitReason: null, lastProgressAtTick: tick, nextReassessmentAtTick: tick + 1 };
 }
 
-function waitForRest(task: ResidentRestTask, tick: number, reason: ResidentRestTask["waitReason"]): ResidentRestTask {
+function waitForRest<T extends ResidentRestTask | ResidentRationTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }
 

@@ -2344,19 +2344,39 @@ keeper inspection, and conserved delivery provide real consumers; sourced
 professions, broad production, commerce, and addressable porter cargo retain
 their separate owners.
 
-The existing hourly aggregate ration arithmetic has one small owner,
-`src/sim/residentRations.ts`. The engine still owns the actual-present sorted
-cohort, 60-tick cadence, production-before-needs order and exact inventory/ledger
-debits. Food and water independently require the full `ceil(cohort/3)` batch;
-need growth and their combined relief receive one final clamp. This is an
-accounting foundation, not enacted eating, an arrival receipt or a second food
-inventory. Physical service/use remains unfinished and must replace, not add
-to, the represented batch's debit and relief.
+The hourly ration owner is `src/sim/residentRations.ts`; the engine owns the
+actual-present stable-ID cohort, 60-tick cadence, production-before-needs order
+and exact inventory/ledger writes. The unchanged legacy aggregate calculation
+remains explicit for supported residents without service-capable activity.
+The service extension uses one atomic pulse, not reserved stock or portable
+entitlements. Food and water independently require availability for the full
+`ceil(cohort/3)` budget. Stable groups of three share one charge per resource
+when any member legitimately uses it; only actual users receive relief, with
+growth and combined relief clamped once. Local and supported aggregate users
+share those same groups, never separately rounded budgets. All-user consumption
+matches the legacy batch; wholly unused groups are not charged. This deliberate
+partial-service rule replaces the represented automatic debit/relief rather
+than adding to it. It does not reconcile the separate physical starting store.
+
+A local ration task is exclusive with rest, binds the current settlement's
+aggregate service point, and uses the same dry-foot body/approach owner. Rest
+arrival, visibility, an occupation or an intention alone cannot authorize use.
+Use requires exact supported arrival and current routine/commitment/perception
+eligibility, including the keeper's actual higher-owner duty. The runtime
+prepares a one-shot closing-world admission separately for each real/disposable
+world transaction; the simulation rechecks current command, weather and
+perception consequences before consumption. Fine steps mutate only immutable
+resident activity. Stock, ledger, need relief and the used task commit together
+at the hourly world step. An unready user waits for a later pulse; cold load
+cannot replay use or turn a consumed task into food. This is the service
+implementation contract; construction/tests below determine its current proof.
 
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
-current-interval poses, and an authenticated settlement-rest task. The world
-binding validates the actual settlement target or one captured legacy refuge;
+current-interval poses, and exclusive authenticated settlement-rest/ration
+tasks. The frozen v1 body/rest protocol remains deliberately supported; v2
+requires its explicit nullable ration task. The world binding validates the
+actual settlement target or one captured legacy refuge;
 world advancement resets interval history without relocating stationary
 people, while actual legacy transport transitions retain their explicit coarse
 owner. `src/game/residentActivityExecution.ts` stages whole-roster adoption,
@@ -2370,16 +2390,30 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 Normal accepted runtime steps now adopt the entire existing roster only at a
 genuine phase-zero boundary, select through the actual routine/duty owner, and
 advance exactly one bounded approach step per accepted player step. Current
-outer51 preserves the complete bodies and phase0–9 history. Legacy absent
-records remain absent on load and through an already-partly-consumed interval;
+outer52 preserves the complete bodies, ration use and phase0–9 history. Supported
+outer51 rest-only bodies preserve their exact partial interval, upgrading as a
+whole cohort through the actual phase-zero routine boundary, not on load.
+Legacy absent records remain absent on load and through an already-partly-consumed interval;
 its actual closure captures the first new anchor rather than inventing old
 poses. Runtime rest tests use ordinary RAF controls with explicitly controlled
 needs/weather/contracts, never injected tasks or arrival. They cover real dry
 approach, native wet-source waiting, exact arrival/recovery, moving keeper/BIO0
 binding and phase4/9 cold equal-work continuation. Fine-step replacement and
 late world-closure failures restore the complete body/carry roots. This is not
-physical porter travel, autonomous service completion, manual visual proof,
+physical porter travel, complete settlement-service scope, manual visual proof,
 performance certification or a new public release.
+
+The bounded ration consumer also executes in ordinary runtime steps, with
+controlled native needs rather than injected tasks or arrival. Tests cover
+600 accepted steps through one real hourly pulse, independent shortage/duty
+counterfactuals, phase4/9 equal-work cold continuation, a failed later closure,
+and independent GREET candidate/refusal transactions on the use tick. A used
+task remains briefly observable without repeat benefit; higher priorities may
+revoke it. Render/ABOUT disclose that current committed use only through their
+existing sight/detail gates, not hunger, a planned destination or invented
+sound. Civic material service, autonomous keeper inspection and accountable
+local travel remain unfinished. This is local source/test evidence, not manual
+play, natural-rate liveness, production performance or public release proof.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -3911,7 +3945,7 @@ boundary.
 
 The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
-the current local source writer emits outer version 51. The preceding v43/carry-v11
+the current local source writer emits outer version 52. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -3987,6 +4021,20 @@ do not require a later still-live memory, weather hold or contract. Existing
 live expression/custody validators continue to authenticate current causes;
 structural retained-event validation cannot authorize new speech or work.
 No additional save format is retired by this change.
+
+`FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION` establishes outer52's explicit
+exclusive ration-task capability. Body/rest v1 and service-capable v2 retain
+separate exact schemas; outer51 may contain only v1, while outer52 can preserve
+an authenticated supported v1 interval until its genuine phase-zero upgrade.
+Released50 remains pre-body. Current capture/load fail closed on malformed,
+partial or unsupported task authority. Used markers preserve exact committed
+food/water use without repeating stock debit, need relief or incidental sound.
+The closing admission is transient one-shot custody bound to the exact world,
+roster, resident and immutable activity identities; it is consumed before
+commands and rechecked against current consequences at the pulse, never saved
+as an entitlement. Carry14, inner-world4/rules6, released readers and explicit
+retirement of obsolete Voice development formats remain unchanged; no format
+is retired at this boundary.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic
