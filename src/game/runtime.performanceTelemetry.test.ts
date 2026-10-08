@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
-import { RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_SERVICE_ACTIVITY_OWNER_ID, RESIDENT_SERVICE_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
@@ -126,13 +126,17 @@ function historicalStationaryWorld(worldJson: string, seed: string): string {
     const source = resolveResidentWorldPlacement(initial, original);
     if (source === null) throw new Error("Stationary baseline lost its original resident placement");
     const activity = canonicalResidentActivityForWorld(current, resident);
+    // Current phase-zero adoption uses the explicit v2 ration protocol. These
+    // stationary three-minute inputs select no ration task or use; assert that
+    // exact new shape before retaining the original historical normalization.
     expect(activity).toEqual({
-      version: RESIDENT_ACTIVITY_VERSION,
-      ownerId: RESIDENT_ACTIVITY_OWNER_ID,
+      version: RESIDENT_SERVICE_ACTIVITY_VERSION,
+      ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
       actorId: original.identity.stableId,
       tick: current.meta.completedTick,
       poses: [{ position: source.position, heading: headingFromRadians(source.facing) }],
       restTask: null,
+      rationTask: null,
     });
     expect(resident.circadian).toMatchObject({
       restDestinationArrived: false,

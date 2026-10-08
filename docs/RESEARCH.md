@@ -3829,6 +3829,33 @@ packaged build, deployment or directive closure is inferred. Actual material
 service must replace its represented timer credit, validate the current
 project/resource/site and preserve this same conserved result boundary.
 
+### Current ration protocol in retained telemetry witnesses — 2026-10-08
+
+A broader native check on `01950d8d0387327469121f8732423738dbc73eb0` found
+two stale characterization expectations, not a measured performance regression:
+`historicalStationaryWorld` still required the v1 body shape after current
+phase-zero adoption deliberately moved to v2 with an explicit null ration task.
+The exact current telemetry-on/off save comparisons had already passed before
+that assertion failed. The fixture now requires the complete v2 shape for all
+forty-two bodies, with unchanged source pose/heading, no rest/ration task and
+the previously characterized circadian/exhaustion consequences. Both original
+historical hashes, normalization scope and full current-save equality remain
+unchanged. Production, schema and support bytes are untouched by this repair.
+
+The initial command was
+`npx vitest run src/game/runtime.performanceTelemetry.test.ts src/game/runtime.settlementEcology.integration.test.ts -t 'runtime performance telemetry|adopts every current settled resident atomically while preserving the keeper' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-project-native-boundaries.json`:
+3PASS/2FAIL/40unselected45.25s. The keeper's exact dawn/body adoption passes;
+that is one selected keeper case, not its complete41-case file. The two failures
+and original report remain retained, not relabeled green.
+
+After the expectation reconciliation,
+`npx vitest run src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-telemetry-final.json`
+passes all4cases20.10s, including both fixed historical hashes and equal
+accepted work. Final `npm run typecheck` passes; `npm run test:smoke` passes
+the maintained6files105tests4.30s. These mocked-clock diagnostics establish
+observational/state correctness, not production timings or a hitch improvement.
+No new cumulative, visual, platform, deployment or directive-closure claim.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
