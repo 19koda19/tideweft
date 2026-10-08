@@ -2350,6 +2350,15 @@ runtime adoption, supported outer-format fencing, phase-aware hearing/source
 receipt integration, derived-address publication and fine-step rollback remain
 necessary before enabling that motion in ordinary play. No new public release is claimed.
 
+At the runtime's phase-zero routine boundary, a present whole-roster body cohort
+now uses that same atomic rest adapter rather than committing posture alone.
+The keeper's authenticated response supplies one shared duty derivation;
+waking clears the continued-rest task and arrival admission together, without
+moving the body. Partial, malformed or later-phase cohorts reject without
+publishing replacements. Genuine body absence retains the legacy routine path.
+This direct boundary is a foundation, not runtime body adoption or permission
+to save bodies in the pre-body session formats.
+
 The existing `humanPerception.ts` reception bridge now supports those retained
 body poses. Player sample ordinal n uses accepted pose n+1; other supplied
 sounds require a complete, bounded `soundSamplePhases` map from their actual

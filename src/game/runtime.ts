@@ -1107,8 +1107,12 @@ import {
   type PorterResponseInput,
   type PorterResponseState,
 } from "./porterResponse";
-import { planSettlementKeeperCircadian } from "./settlementKeeperCircadian";
+import {
+  deriveSettlementKeeperCircadianDuty,
+  planSettlementKeeperCircadian,
+} from "./settlementKeeperCircadian";
 import { planResidentCircadian } from "./residentCircadian";
+import { prepareResidentRestActivities } from "./residentActivityExecution";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
 import {
   LIVING_ACTOR_PLAYER_CHOICE_VERSION,
@@ -9629,6 +9633,17 @@ export function advanceRuntimeResidentCircadian(
     || response.tick !== atTick
   ) return null;
   const keeper = matchingResidents[0]!;
+  if (currentWorld.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
+    const duty = deriveSettlementKeeperCircadianDuty(keeper, settlement, response, atTick);
+    if (duty === undefined) return null;
+    // The existing adapter requires a complete canonical phase-zero cohort and
+    // stages task revocation, physical arrival and posture together. Do not
+    // leave a continued-rest task beside a newly awake receipt, adopt missing
+    // bodies here, or turn malformed presence into the legacy absence path.
+    return prepareResidentRestActivities(currentWorld,
+      duty === null ? [] : [{ actorId: keeper.identity.stableId, duty }])
+      ? currentWorld : null;
+  }
   const replacements: ResidentState[] = [];
   for (const resident of currentWorld.residents) {
     const plan = resident.identity.stableId === keeper.identity.stableId

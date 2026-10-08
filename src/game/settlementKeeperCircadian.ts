@@ -114,26 +114,13 @@ export function planSettlementKeeperCircadian(
   ) return null;
 
   const resident = raw.resident as ResidentState;
-  const settlementEcology = canonicalizeSettlementEcologyState(raw.settlementEcology);
-  const porterResponse = canonicalizePorterResponseState(raw.porterResponse);
-  if (
-    settlementEcology === null
-    || porterResponse === null
-    || !plainRecord(resident)
-    || !plainRecord(resident.identity)
-    || settlementEcology.identity.keeperActorId !== resident.identity.stableId
-    || settlementEcology.identity.settlementId !== resident.homeSettlementId
-    || porterResponse.actorId !== resident.identity.stableId
-    || porterResponse.tick !== raw.atTick
-  ) return null;
-
-  const duty: ResidentCircadianDuty | null = porterResponse.intent === "wait-observe"
-    ? null
-    : Object.freeze({
-        kind: "active-duty" as const,
-        referenceId: porterResponse.lastDecisionId
-          ?? `porter-response:${porterResponse.intent}`,
-      });
+  const duty = deriveSettlementKeeperCircadianDuty(
+    resident,
+    raw.settlementEcology as SettlementEcologyState,
+    raw.porterResponse as PorterResponseState,
+    raw.atTick,
+  );
+  if (duty === undefined) return null;
   const residentPlan = planResidentCircadian({
     resident,
     duty,
@@ -163,6 +150,38 @@ export function planSettlementKeeperCircadian(
     ),
   });
   return deepFreeze({ kind: "projected" as const, projection });
+}
+
+/**
+ * The keeper's existing response owner supplies the same duty to receipt-only
+ * legacy planning and atomic body/task planning. Null is genuine neutral duty;
+ * undefined is a failed binding, never permission to erase active work.
+ */
+export function deriveSettlementKeeperCircadianDuty(
+  resident: ResidentState,
+  settlementValue: SettlementEcologyState,
+  responseValue: PorterResponseState,
+  atTick: number,
+): ResidentCircadianDuty | null | undefined {
+  const settlement = canonicalizeSettlementEcologyState(settlementValue);
+  const response = canonicalizePorterResponseState(responseValue);
+  if (
+    !nonnegativeSafeInteger(atTick)
+    || settlement === null
+    || response === null
+    || !plainRecord(resident)
+    || !plainRecord(resident.identity)
+    || settlement.identity.keeperActorId !== resident.identity.stableId
+    || settlement.identity.settlementId !== resident.homeSettlementId
+    || response.actorId !== resident.identity.stableId
+    || response.tick !== atTick
+  ) return undefined;
+  return response.intent === "wait-observe"
+    ? null
+    : Object.freeze({
+        kind: "active-duty" as const,
+        referenceId: response.lastDecisionId ?? `porter-response:${response.intent}`,
+      });
 }
 
 function presentationIntentFor(
