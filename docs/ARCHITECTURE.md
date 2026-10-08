@@ -2358,9 +2358,12 @@ captures the previous interval's actual body tick/phase before world re-anchorin
 its player admission remains phase0 of the new interval. Strict alternate event
 keys preserve legacy macro-locus records unchanged and reject partial or mistimed
 body extensions. Later motion cannot relocate that speech, and cold presentation
-recovery acknowledges consumed audio. This local introduction bridge does not
-yet cover weather/departure sources, keeper/warning phase receipts or runtime
-body activation; those remain construction obligations.
+recovery acknowledges consumed audio. Weather-hold speech uses the same strict
+source extension, captured at the new tick's phase0 before coarse transport;
+its retained route/contract/weather/memory and lawful reception requirements
+remain binding. Both legacy and observed event variants preserve their prior
+meaning. These local bridges do not yet cover departure sources, keeper/warning
+phase receipts or runtime body activation; those remain construction obligations.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain

@@ -1236,6 +1236,8 @@ function updateResidentConditions(world: WorldState, tick: number): void {
           intensity: world.weather.intensity,
           routeDelayTicks: condition.routeDelayTicks,
           ...residentRouteEventLocus(resident),
+          // Weather exposure resolves after body re-anchor, before transport.
+          ...captureResidentActivityEventLocus(resident, tick),
         });
       }
       continue;

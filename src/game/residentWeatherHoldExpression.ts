@@ -6,6 +6,11 @@ import {
   type WorldView,
 } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
+import {
+  RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+  hasResidentActivityEventLocus,
+  readResidentActivityEventLocus,
+} from "../sim/residentActivityEventLocus";
 import { livingSpeciesActorIdMatchesNamespace } from "./livingSpeciesRegistry";
 import { resolveResidentWorldPlacementAtEventLocation } from "./residentSpatial";
 import {
@@ -35,6 +40,12 @@ const OBSERVED_WEATHER_HOLD_DATA_KEYS = Object.freeze([
   ...WEATHER_HOLD_DATA_KEYS,
   "playerObserved",
 ] as const);
+const BODY_WEATHER_HOLD_DATA_KEYS = Object.freeze([
+  ...WEATHER_HOLD_DATA_KEYS, ...RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
+]);
+const OBSERVED_BODY_WEATHER_HOLD_DATA_KEYS = Object.freeze([
+  ...BODY_WEATHER_HOLD_DATA_KEYS, "playerObserved",
+]);
 const WEATHER_HOLD_TRIGGER_PATTERN =
   /^sim-event:resident-sheltered:(0|[1-9]\d*):([1-9]\d*)$/u;
 
@@ -232,7 +243,9 @@ function expressionAuthority(
     event: committedEvent,
     resident,
     contract,
-    position: eventPlacement.position,
+    position: hasResidentActivityEventLocus(committedEvent.data)
+      ? readResidentActivityEventLocus(committedEvent.data)!.position
+      : eventPlacement.position,
   });
 }
 
@@ -310,7 +323,9 @@ function canonicalWeatherHoldEvent(value: unknown): SimEvent | null {
     || !positiveSafeInteger(value.subjectId)
     || !plainRecord(value.data)
     || (!exactKeys(value.data, WEATHER_HOLD_DATA_KEYS)
-      && !exactKeys(value.data, OBSERVED_WEATHER_HOLD_DATA_KEYS))
+      && !exactKeys(value.data, OBSERVED_WEATHER_HOLD_DATA_KEYS)
+      && !exactKeys(value.data, BODY_WEATHER_HOLD_DATA_KEYS)
+      && !exactKeys(value.data, OBSERVED_BODY_WEATHER_HOLD_DATA_KEYS))
     || !positiveSafeInteger(value.data.contractId)
     || !positiveSafeInteger(value.data.eventRouteId)
     || !fixedPoint(value.data.eventRouteProgress)
@@ -319,6 +334,10 @@ function canonicalWeatherHoldEvent(value: unknown): SimEvent | null {
     || !positiveSafeInteger(value.data.routeDelayTicks)
     || (Object.hasOwn(value.data, "playerObserved") && value.data.playerObserved !== true)
   ) return null;
+  if (hasResidentActivityEventLocus(value.data)) {
+    const body = readResidentActivityEventLocus(value.data);
+    if (body === null || body.tick !== value.tick || body.phase !== 0) return null;
+  }
   return value as unknown as SimEvent;
 }
 
