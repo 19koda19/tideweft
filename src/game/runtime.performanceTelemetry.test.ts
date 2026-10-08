@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { deserializeWorld, serializeWorld } from "../sim/public";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -167,7 +168,7 @@ describe("runtime performance telemetry", () => {
           perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
         })}\n`);
         const envelope = JSON.parse(worldJson) as Record<string, unknown>;
-        expect(envelope.version).toBe(50);
+        expect(envelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
         expect(envelope.playerExpressionRecency).toEqual(createPlayerExpressionRecencyState(
           deserializeWorld(envelope.world as string).meta.rootSeed,
         ));

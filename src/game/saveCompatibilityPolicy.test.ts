@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isOfficialStableReleaseVersion } from "../content/patchNotes";
 import {
   CURRENT_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   FIRST_OFFICIAL_STABLE_GAME_SAVE_VERSION,
   OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
@@ -14,7 +15,8 @@ import {
 describe("save compatibility policy", () => {
   it("keeps the current repository in the pre-1.0 development era", () => {
     expect(OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION).toBe("1.0.0");
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(50);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(51);
+    expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBe(51);
     expect(RELEASED_LIVING_VOICE_GAME_SAVE_VERSION).toBe(50);
     expect(FIRST_OFFICIAL_STABLE_GAME_SAVE_VERSION).toBeNull();
     expect(SAVE_COMPATIBILITY_POLICY).toEqual({

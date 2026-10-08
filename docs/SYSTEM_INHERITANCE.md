@@ -370,13 +370,19 @@ Reputation may spread identity locally, but there is no global hive mind.
 
 ### Existing-human and world-response adoption
 
-**PLANNED — not implemented.** The bounded existing-world integration owner
+**PARTIAL — local construction.** The bounded existing-world integration owner
 must include legacy settlement residents and travelers in applicable shared
 actor architecture. Adoption inherits `living-actor`, `perception-information`,
 `world-time`, `circadian-routine`, `movement-visibility`, `actor-visuals`,
 `environment`, `physical-conservation`, `promise-network`, `living-voice`,
 `embodied-acoustics`, `save-migration`, and bounded performance where relevant.
 Their existing LIVE/PARTIAL/RESERVED statuses do not change by registration.
+
+The local resident rest consumer now uses those same bodies, fixed-step
+locomotion, routine/duty, cause-owned hearing and current-save boundaries.
+Ration/material/keeper services and physical traveler enactment remain pending;
+the [architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
+owns exact scope and evidence limits, not this applicability row.
 
 A stored intention or occupation is not an executable task. Applicable new
 actions require a causal source, capability-aware approach, finite claims,

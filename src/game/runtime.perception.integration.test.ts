@@ -37,8 +37,10 @@ import {
 } from "./situatedExpressionAdmissionLedger";
 import { situatedExpressionAcoustics } from "./situatedExpressionAcoustics";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import { createSessionState } from "./sessionTypes";
 import { WORLD_POSITION_UNITS_PER_TILE, type WorldPosition } from "./worldPosition";
+import { RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS } from "../sim/residentActivityEventLocus";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 
@@ -247,7 +249,7 @@ describe("runtime existing-human perception path", () => {
 
     const current = repository.snapshot();
     const decoded = JSON.parse(current.worldJson) as Record<string, unknown>;
-    expect(decoded.version).toBe(50);
+    expect(decoded.version).toBe(CURRENT_GAME_SAVE_VERSION);
     const currentCarry = currentPerceptionCarry(decoded);
     const {
       animalContactAcousticCarry: _futureAnimalContactCarry,
@@ -352,7 +354,7 @@ describe("runtime existing-human perception path", () => {
     await interrupted.save();
     const pending = savedEnvelope(interruptedRepository);
     expect(pending).toMatchObject({
-      version: 50,
+      version: CURRENT_GAME_SAVE_VERSION,
       perceptionCarry: {
         version: 14,
         intervalStartPosition: expect.any(Object),
@@ -429,6 +431,7 @@ describe("runtime existing-human perception path", () => {
     const { integrity: _currentIntegrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentBase } = decoded;
     const v32Base = {
       ...currentBase,
+      world: preBodyWorldForHistoricalFixture(decoded.world),
       version: 32,
       perceptionCarry: { ...v1Carry, version: 1 },
     };
@@ -447,7 +450,7 @@ describe("runtime existing-human perception path", () => {
     expect(migrated.getUIView().saveWarning).toBeUndefined();
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 50,
+      version: CURRENT_GAME_SAVE_VERSION,
       player: { timeAction: null },
       perceptionCarry: {
         version: 14,
@@ -505,6 +508,7 @@ describe("runtime existing-human perception path", () => {
     const { integrity: _integrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentBase } = decoded;
     const v34Base = {
       ...currentBase,
+      world: preBodyWorldForHistoricalFixture(decoded.world),
       version: 34,
       perceptionCarry: { ...v3Carry, version: 3 },
     };
@@ -613,7 +617,7 @@ describe("runtime existing-human perception path", () => {
     };
     repository.replace({
       ...current,
-      payloadVersion: 50,
+      payloadVersion: CURRENT_GAME_SAVE_VERSION,
       updatedAt: current.updatedAt + 1,
       worldJson: JSON.stringify({
         ...forgedBase,
@@ -709,7 +713,7 @@ describe("runtime existing-human perception path", () => {
     };
     const smuggledRecord = {
       ...current,
-      payloadVersion: 50,
+      payloadVersion: CURRENT_GAME_SAVE_VERSION,
       updatedAt: current.updatedAt + 1,
       worldJson: JSON.stringify({
         ...forgedBase,
@@ -804,7 +808,7 @@ describe("runtime existing-human perception path", () => {
     };
     const smuggledRecord = {
       ...current,
-      payloadVersion: 50,
+      payloadVersion: CURRENT_GAME_SAVE_VERSION,
       updatedAt: current.updatedAt + 1,
       worldJson: JSON.stringify({
         ...forgedBase,
@@ -949,7 +953,7 @@ describe("runtime existing-human perception path", () => {
     const migrated = await createTideweftRuntime(repository);
     await migrated.save();
     expect(savedEnvelope(repository)).toMatchObject({
-      version: 50,
+      version: CURRENT_GAME_SAVE_VERSION,
       perceptionCarry: {
         version: 14,
         intervalStartPosition: expect.any(Object),
@@ -1249,6 +1253,23 @@ function resealCurrentEnvelope(
   });
 }
 
+/** Only these synthetic historical records predate normal resident bodies. */
+function preBodyWorldForHistoricalFixture(serialized: unknown): string {
+  const world = deserializeWorld(String(serialized));
+  for (const resident of world.residents) {
+    if (!Object.hasOwn(resident, "activity")) continue;
+    // These short fixtures began with unbound residents. Remove the new body
+    // and its newly adopted receipt, not an authentic older rest history.
+    delete resident.activity;
+    delete resident.circadian;
+  }
+  // No historical producer is synthesized here. Never silently erase a real
+  // retained source pose merely to make a downgraded fixture load.
+  expect(world.events.every(({ data }) => RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS
+    .every((key) => !Object.hasOwn(data, key)))).toBe(true);
+  return serializeWorld(world);
+}
+
 function replaceWithLegacyV33Envelope(
   repository: MemoryRepository,
   tamperCarry?: (carry: Record<string, unknown>) => void,
@@ -1323,6 +1344,7 @@ function replaceWithLegacyV33Envelope(
   const { integrity: _integrity, playerExpressionRecency: _futurePlayerExpressionRecency, ...currentBase } = decoded;
   const legacyBase = {
     ...currentBase,
+    world: preBodyWorldForHistoricalFixture(decoded.world),
     version: 33,
     traversalFeedback: {
       version: 1,

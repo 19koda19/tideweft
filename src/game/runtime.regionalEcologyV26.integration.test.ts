@@ -25,6 +25,7 @@ import {
   type RegionalEcologyStateV6,
 } from "./regionalEcologyStateV6";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 
 export const ALPHA33_ALPINE_RUNTIME_V26_OWNER_INTENT =
   "test:alpha33-alpine-runtime-v26:v1" as const;
@@ -42,7 +43,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 50;
+  readonly version: typeof CURRENT_GAME_SAVE_VERSION;
   readonly world: string;
   readonly player: Parameters<typeof restorePlayerRegionalTravel>[1];
   readonly perceptionCarry: unknown;
@@ -276,8 +277,8 @@ function requireCurrent(record: SaveRecord): CurrentEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 50
-    || record.payloadVersion !== 50
+    || value.version !== CURRENT_GAME_SAVE_VERSION
+    || record.payloadVersion !== CURRENT_GAME_SAVE_VERSION
     || typeof value.regionalEcology !== "string"
   ) throw new Error("runtime fixture did not produce a current v50 envelope");
   const { integrity, ...base } = value;

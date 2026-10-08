@@ -59,6 +59,7 @@ import {
 import { playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import type { PorterResponseState } from "./porterResponse";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
 
@@ -73,7 +74,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 50;
+  readonly version: typeof CURRENT_GAME_SAVE_VERSION;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -166,8 +167,8 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const value = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 50
-    || record.payloadVersion !== 50
+    || value.version !== CURRENT_GAME_SAVE_VERSION
+    || record.payloadVersion !== CURRENT_GAME_SAVE_VERSION
   ) throw new Error("fixture did not produce a current v50 regional save");
   const { integrity, ...unsealed } = value;
   if (integrity !== gameSaveEnvelopeIntegrity(unsealed)) {
@@ -211,7 +212,7 @@ function replaceEnvelope(
   const prior = repository.snapshot();
   repository.replace({
     ...prior,
-    payloadVersion: 50,
+    payloadVersion: CURRENT_GAME_SAVE_VERSION,
     updatedAt: prior.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });

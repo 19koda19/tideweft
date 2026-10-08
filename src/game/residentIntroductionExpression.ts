@@ -308,6 +308,11 @@ function expressionAuthority(
   });
 }
 
+/** Retained event shape/timing only; live expression still requires its causal owner. */
+export function residentIntroductionEventSchemaValid(value: unknown): boolean {
+  return canonicalIntroductionEvent(value) !== null;
+}
+
 function canonicalIntroductionEvent(value: unknown): SimEvent | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "data",

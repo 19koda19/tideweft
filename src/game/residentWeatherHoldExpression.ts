@@ -308,6 +308,11 @@ function exactWeatherShelterMemory(resident: ResidentState, event: SimEvent): bo
     && memory.cause === "SEVERE_WEATHER";
 }
 
+/** Retained event shape/timing only; an aged event need not retain an active hold. */
+export function residentWeatherHoldEventSchemaValid(value: unknown): boolean {
+  return canonicalWeatherHoldEvent(value) !== null;
+}
+
 function canonicalWeatherHoldEvent(value: unknown): SimEvent | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "data",

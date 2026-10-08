@@ -366,6 +366,11 @@ function heavyPromiseResource(resource: ContractState["resource"]): boolean {
   return resource === "freshWater" || resource === "parts";
 }
 
+/** Retained event shape/timing only; this does not certify current cargo or work. */
+export function workingPeopleDepartureEventSchemaValid(value: unknown): boolean {
+  return canonicalDepartureEvent(value) !== null;
+}
+
 function canonicalDepartureEvent(value: unknown): SimEvent | null {
   if (!plainRecord(value) || !exactKeys(value, [
     "data",

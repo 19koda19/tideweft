@@ -182,6 +182,7 @@ import {
   type TideweftRuntime,
 } from "./runtime";
 import { createSessionState } from "./sessionTypes";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   SITUATED_EXPRESSION_SEMANTIC_FACT_MIN_CONFIDENCE,
   situatedExpressionSemanticFactForEvent,
@@ -943,8 +944,8 @@ function withCurrentEnvelopeFields(
   replacement: Readonly<Record<string, unknown>>,
 ): SaveRecord {
   const current = JSON.parse(record.worldJson) as Record<string, unknown>;
-  if (record.payloadVersion !== 50 || current.version !== 50) {
-    throw new Error("runtime fixture is not a current v50 save");
+  if (record.payloadVersion !== CURRENT_GAME_SAVE_VERSION || current.version !== CURRENT_GAME_SAVE_VERSION) {
+    throw new Error("runtime fixture is not a current writer save");
   }
   const { integrity: _integrity, ...currentFields } = current;
   const nextFields = { ...currentFields, ...replacement };
@@ -2081,7 +2082,7 @@ function downgradeCoreEcologyToDomesticPen(
 
 function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 50) throw new Error("fixture is not a current save");
+  if (current.version !== CURRENT_GAME_SAVE_VERSION) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -2112,7 +2113,7 @@ function asStorehouseV16Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 50) throw new Error("fixture is not a current save");
+  if (current.version !== CURRENT_GAME_SAVE_VERSION) throw new Error("fixture is not a current save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
   const {
     integrity: _integrity,
@@ -2143,7 +2144,7 @@ function asDomesticYardV17Record(currentRecord: SaveRecord): SaveRecord {
 
 function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
-  if (current.version !== 50 || typeof current.settlementEcology !== "string") {
+  if (current.version !== CURRENT_GAME_SAVE_VERSION || typeof current.settlementEcology !== "string") {
     throw new Error("fixture is not a current working-dog save");
   }
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2198,7 +2199,7 @@ function asDomesticPenV18Record(currentRecord: SaveRecord): SaveRecord {
 function asPaddockWatchV19Record(currentRecord: SaveRecord): SaveRecord {
   const current = JSON.parse(currentRecord.worldJson) as Record<string, unknown>;
   if (
-    current.version !== 50
+    current.version !== CURRENT_GAME_SAVE_VERSION
     || typeof current.settlementWorkingAnimals !== "string"
   ) throw new Error("fixture is not a current task-lifecycle save");
   const historicalCore = createExactV24CoreFromFreshV34(current);
@@ -2342,7 +2343,7 @@ async function createChickenAlarmRuntime(
     night.weather.nextChangeTick = night.meta.completedTick + 100_000;
     assertWorldInvariants(night);
     // Existing supported world fixture initializes fresh current ecology;
-    // all following staging and reload use current50 generated-home authority.
+    // all following staging and reload use current generated-home authority.
     nightRecord = legacyRuntimeSaveRecord(night);
   }
   const sourceRepository = new MemoryRepository(nightRecord);
@@ -2673,7 +2674,7 @@ describe("runtime settlement ecology integration", () => {
     expect(bearSources[0]?.patch.originRegion).toEqual(createRegionCoord(-6, -24));
     expect(bearSources[0]?.patch.populations.find(({ species }) => species === "brown-bear")
       ?.members.map(({ actor }) => actor.identity.stableId)).toEqual([fixture.bearActorId]);
-    expect(saved.version).toBe(50);
+    expect(saved.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect((saved.perceptionCarry as { version: number }).version).toBe(14);
     runtime.destroy();
     scheduledFrame = undefined;
@@ -4201,8 +4202,8 @@ describe("runtime settlement ecology integration", () => {
     await runtime.save();
     const record = repository.snapshot();
     const envelope = JSON.parse(record.worldJson) as Record<string, unknown>;
-    expect(record.payloadVersion).toBe(50);
-    expect(envelope.version).toBe(50);
+    expect(record.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(envelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(Object.keys(envelope).sort()).toEqual([
       "bio0Ecology",
       "dogActorRoster",
@@ -4704,7 +4705,7 @@ describe("runtime settlement ecology integration", () => {
     advancePlayerSteps(migrated, 10);
     await migrated.save();
     const migratedEnvelope = savedEnvelope(honestRepository);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migratedEnvelope.perceptionCarry).toMatchObject({
       version: 14,
       actorVocalizationSamples: [],
@@ -4858,8 +4859,8 @@ describe("runtime settlement ecology integration", () => {
     await migrated.save();
     const migratedRecord = migratedRepository.snapshot();
     const migratedEnvelope = JSON.parse(migratedRecord.worldJson) as Record<string, unknown>;
-    expect(migratedRecord.payloadVersion).toBe(50);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migratedEnvelope.settlementEcology).toBe(controlEnvelope.settlementEcology);
     for (const field of [
       "world",
@@ -4946,8 +4947,8 @@ describe("runtime settlement ecology integration", () => {
     const migratedStoreRecord = migratedStore as unknown as Record<string, unknown>;
     const migratedCore = requireCurrentCoreEcology(migratedEnvelope);
     const migratedLegacy = requireAuthenticatedLegacyCore(migratedEnvelope);
-    expect(migratedRecord.payloadVersion).toBe(50);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migratedStore.version).toBe(4);
     for (const field of PRIOR_SETTLEMENT_ECOLOGY_FIELDS) {
       expect(migratedStoreRecord[field], field).toEqual(priorStore[field]);
@@ -5120,8 +5121,8 @@ describe("runtime settlement ecology integration", () => {
         && migratedLegacy.derivation.kind !== "legacy-fixed-v1-with-habitat-v11"
       )
     ) throw new Error("v17 migration omitted its split v25 ecology authority");
-    expect(migratedRecord.payloadVersion).toBe(50);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migratedStore.version).toBe(4);
     expect(migratedStore.revision).toBe((priorStore.revision as number) + 2);
     expect(migratedStore.identity).toEqual(priorStore.identity);
@@ -5276,8 +5277,8 @@ describe("runtime settlement ecology integration", () => {
     if (roster === null || work === null || bio0 === null) {
       throw new Error("v18 migration omitted a canonical guardian authority");
     }
-    expect(migratedRecord.payloadVersion).toBe(50);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(roster.actors).toHaveLength(1);
     expect(work.assignments).toHaveLength(1);
     expect(settlement.version).toBe(4);
@@ -5392,8 +5393,8 @@ describe("runtime settlement ecology integration", () => {
       migratedEnvelope.settlementWorkingAnimals,
     );
     if (migratedWork === null) throw new Error("v19 migration omitted its adopted work root");
-    expect(migratedRecord.payloadVersion).toBe(50);
-    expect(migratedEnvelope.version).toBe(50);
+    expect(migratedRecord.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+    expect(migratedEnvelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migratedWork.assignments[0]).toMatchObject({
       assignmentId: currentWork.assignments[0]?.assignmentId,
       currentActivity: currentWork.assignments[0]?.currentActivity,

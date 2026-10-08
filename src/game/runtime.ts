@@ -100,12 +100,13 @@ import { acceptsRestartPhrase } from "./restartPolicy";
 import {
   classifyUnsupportedSaveSchema,
   CURRENT_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
 import {
   residentActivitiesMatchPerceptionInterval,
-  residentActivitySaveExtensionsAbsent,
+  residentActivitySaveExtensionsValid,
 } from "./residentActivitySaveBoundary";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { RESIDENT_ACTIVITY_MAX_PHASE, residentActivityPoseAtPhase } from "../sim/residentActivity";
@@ -1120,7 +1121,7 @@ import {
   planSettlementKeeperCircadian,
 } from "./settlementKeeperCircadian";
 import { planResidentCircadian } from "./residentCircadian";
-import { prepareResidentRestActivities } from "./residentActivityExecution";
+import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
 import {
   LIVING_ACTOR_PLAYER_CHOICE_VERSION,
@@ -11826,6 +11827,15 @@ export async function createTideweftRuntime(
     fieldResourceProjection = projectCompatibilityFieldResources(fieldResourceCatalog, worldView);
   }
 
+  /** Only an accepted resident-only change may use this unchanged physical epoch. */
+  function publishResidentActivities(phase: number): void {
+    const prepared = prepareRuntimeResidentActivityPublication(world, worldView, bio0Ecology, phase);
+    if (prepared === null) throw new Error("Resident body publication failed validation");
+    worldView = prepared.worldView;
+    economyView = prepared.economyView;
+    bio0Ecology = prepared.bio0Ecology;
+  }
+
   function settlementStoreKeeperAtPlayer(
     currentPerception: ReturnType<typeof projectPerception>,
   ): RuntimeBio0Porter | null {
@@ -14109,6 +14119,14 @@ export async function createTideweftRuntime(
     if (session.paused || session.titleVisible || session.quietHourVisible) {
       return Object.freeze([]);
     }
+    if (playerStepsSinceWorldTick === 0
+      && world.residents.every((resident) => !Object.hasOwn(resident, "activity"))) {
+      if (!adoptResidentActivities(world)) throw new Error("Resident body adoption failed validation");
+      const routineWorld = advanceRuntimeResidentCircadian(world, settlementEcology, porterResponse);
+      if (routineWorld === null) throw new Error("Adopted resident routine failed validation");
+      world = routineWorld;
+      publishResidentActivities(0);
+    }
     const deferredWorldAcousticAudio: CommittedAudioCue[] = [];
     // Only this accepted tick can distinguish a terminal phase-ten player
     // reaction from a retained phase-nine admission. Never persist this list.
@@ -14214,6 +14232,13 @@ export async function createTideweftRuntime(
       // the bounded visible frame moved. Retarget metadata in place so the
       // renderer keeps the exact same terrain/camera objects across the seam.
       rebindRegionalWorldViewWindow(worldView, regionalTransition.state.window);
+    }
+    if (world.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
+      const phase = playerStepsSinceWorldTick + 1;
+      if (advanceResidentRestActivities(world, phase) === null) {
+        throw new Error("Resident rest approach failed validation");
+      }
+      publishResidentActivities(phase);
     }
     const endingTileWaterDepth = worldView.terrain.tiles[playerTileIndex(player)]?.waterDepth;
     if (startingTileWaterDepth === undefined || endingTileWaterDepth === undefined) {
@@ -16148,6 +16173,10 @@ export async function createTideweftRuntime(
       physicalCargo = resolvedRegionalResources.physicalCargo;
       settlementEcology = settlementEcologyAfterAggregate;
       porterResponse = acceptedPorterResponse;
+      // Legacy midinterval absence survives closure. Only the new genuine
+      // phase-zero boundary may capture this cohort's first physical anchor.
+      if (world.residents.every((resident) => !Object.hasOwn(resident, "activity"))
+        && !adoptResidentActivities(world)) throw new Error("Resident interval adoption failed validation");
       const circadianWorld = advanceRuntimeResidentCircadian(
         world,
         settlementEcology,
@@ -20370,8 +20399,8 @@ export async function createTideweftRuntime(
     const regionalTravelSnapshot = capturePlayerRegionalTravel(regionalTravel, player);
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
-    if (!residentActivitySaveExtensionsAbsent(worldSnapshot)) {
-      throw new Error("Refusing to save resident body authority through a pre-body session format");
+    if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION)) {
+      throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
     const callKnowledge = Object.hasOwn(playerSnapshot, "animalCallKnowledge")
@@ -24969,8 +24998,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
     const world = deserializeWorld(decoded.world);
-    if (!residentActivitySaveExtensionsAbsent(world)) {
-      throw new Error("Pre-body session format contains future resident body authority");
+    if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION)) {
+      throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (
       decoded.version <= ANIMAL_CONTACT_GAME_SAVE_VERSION

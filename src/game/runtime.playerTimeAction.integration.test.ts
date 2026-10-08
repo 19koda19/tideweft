@@ -19,6 +19,7 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer, type PlayerState } from "./player";
 import * as playerTimeAction from "./playerTimeAction";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 
@@ -35,7 +36,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope extends Readonly<Record<string, unknown>> {
   readonly format: "tideweft-session";
-  readonly version: 50;
+  readonly version: typeof CURRENT_GAME_SAVE_VERSION;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -154,9 +155,9 @@ function advanceRecoveryFrames(runtime: TideweftRuntime, count: number): void {
 
 function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
-  expect(record.payloadVersion).toBe(50);
+  expect(record.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
   expect(envelope.format).toBe("tideweft-session");
-  expect(envelope.version).toBe(50);
+  expect(envelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
   expect(Object.keys(envelope).sort()).toEqual(CURRENT_ENVELOPE_KEYS);
   const { integrity, ...unsealed } = envelope;
   expect(integrity).toBe(gameSaveEnvelopeIntegrity(unsealed));

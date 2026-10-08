@@ -85,6 +85,7 @@ import {
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import type { PorterResponseState } from "./porterResponse";
 import type { GameSessionState } from "./sessionTypes";
 import type { TraversalFeedbackState } from "./traversalFeedback";
@@ -121,7 +122,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface CurrentGameSaveEnvelope {
   readonly format: "tideweft-session";
-  readonly version: 50;
+  readonly version: typeof CURRENT_GAME_SAVE_VERSION;
   readonly world: string;
   readonly player: PlayerState;
   readonly session: GameSessionState;
@@ -247,8 +248,8 @@ function decodeCurrent(record: SaveRecord): CurrentGameSaveEnvelope {
   const envelope = JSON.parse(record.worldJson) as CurrentGameSaveEnvelope;
   if (
     envelope.format !== "tideweft-session"
-    || envelope.version !== 50
-    || record.payloadVersion !== 50
+    || envelope.version !== CURRENT_GAME_SAVE_VERSION
+    || record.payloadVersion !== CURRENT_GAME_SAVE_VERSION
   ) {
     throw new Error("fixture did not produce a current v50 regional session save");
   }
@@ -271,7 +272,7 @@ function replaceEnvelope(
   const sealed = reseal(envelope);
   repository.replace({
     ...record,
-    payloadVersion: 50,
+    payloadVersion: CURRENT_GAME_SAVE_VERSION,
     updatedAt: record.updatedAt + 1,
     worldJson: JSON.stringify(sealed),
   });
@@ -3239,7 +3240,7 @@ describe("production terrain fall and physical cargo", () => {
     await runtime.save();
     const fallenSave = decodeCurrent(repository.snapshot());
     expect(fallenSave).toMatchObject({
-      version: 50,
+      version: CURRENT_GAME_SAVE_VERSION,
       player: {
         worldWidth: REGIONAL_TRAVEL_COLUMNS,
         worldHeight: REGIONAL_TRAVEL_ROWS,

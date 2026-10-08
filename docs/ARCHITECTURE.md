@@ -2301,9 +2301,10 @@ reusable foundations and development evidence, not additional gameplay.
 Several persisted human fields intentionally remain only partial. Resident
 relationships are symmetric, static, one-axis trust baselines whose broad live
 consumer is belonging; they are not an evolving directed social graph. Generic
-`eat`, `rest`, `connect`, and `work` intentions select state, while only
-`carry` currently has a substantial enacted work loop. Occupation informs
-identity and narrow selection; it does not yet produce goods. Some skills affect
+`eat`, `connect`, and `work` intentions select state without their own enacted
+service. Local resident rest now has a real bounded approach/arrival consumer;
+`carry` retains its existing coarse transport loop pending physical refinement.
+Occupation informs identity and narrow selection; it does not yet produce goods. Some skills affect
 weather/courier decisions, while others are profile data. Seed-derived history
 is bounded biography, not witnessed causal world history. Apparent travel-kit
 tokens support characterization and two weather modifiers, but are not stable
@@ -2315,8 +2316,8 @@ systems live.
 
 ### Planned bounded existing-world integration
 
-**PLANNED — not implemented by registration.** The existing-human integration
-owner must connect the original settlement and traveler populations to the
+**PARTIAL — local construction, not a completed or released expansion.**
+The existing-human integration owner must connect the original settlement and traveler populations to the
 applicable shared actor and world contracts. It must not create a second NPC
 population, cargo stock, dialogue manager, or story orchestrator. The current
 Living Weft boundary above remains unchanged until executable evidence closes
@@ -2344,11 +2345,19 @@ continuation. The dry-foot adapter has a bounded local corridor, not a streamed
 active-window input or an owned physical shelter. Binding a previously unbound
 courier also removes its legacy macro-hold exhaustion relief: existing bound
 courier law requires actual restorative arrival, not a weather-hold flag.
-These are **local foundations, not normal-play activation or
-physical porter-travel proof**. Existing absent records remain absent on load;
-runtime adoption, a body-capable outer format, resident publication activation
-and body-enabled fine-step rollback proof remain
-necessary before enabling that motion in ordinary play. No new public release is claimed.
+Normal accepted runtime steps now adopt the entire existing roster only at a
+genuine phase-zero boundary, select through the actual routine/duty owner, and
+advance exactly one bounded approach step per accepted player step. Current
+outer51 preserves the complete bodies and phase0–9 history. Legacy absent
+records remain absent on load and through an already-partly-consumed interval;
+its actual closure captures the first new anchor rather than inventing old
+poses. Runtime rest tests use ordinary RAF controls with explicitly controlled
+needs/weather/contracts, never injected tasks or arrival. They cover real dry
+approach, native wet-source waiting, exact arrival/recovery, moving keeper/BIO0
+binding and phase4/9 cold equal-work continuation. Fine-step replacement and
+late world-closure failures restore the complete body/carry roots. This is not
+physical porter travel, autonomous service completion, manual visual proof,
+performance certification or a new public release.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -2356,8 +2365,8 @@ The keeper's authenticated response supplies one shared duty derivation;
 waking clears the continued-rest task and arrival admission together, without
 moving the body. Partial, malformed or later-phase cohorts reject without
 publishing replacements. Genuine body absence retains the legacy routine path.
-This direct boundary is a foundation, not runtime body adoption or permission
-to save bodies in the pre-body session formats.
+The normal runtime uses this boundary after initial adoption and world closure.
+Pre-body session readers still reject bodies and source-pose extensions.
 
 Resident-only publication now has a shared staged boundary in
 `prepareRuntimeResidentActivityPublication`: authenticate the current body
@@ -2370,8 +2379,9 @@ their original physical-publication identity, allowing existing geometry/light
 caches to reuse unchanged terrain and lamps; caller copies acquire no trust.
 The accepted-step owner must prove that only residents changed. Seed and tick
 alone cannot authenticate unchanged weather, projects, terrain or streaming;
-physical changes require full publication. This is tested staging, not normal
-body activation or a measured performance improvement.
+physical changes require full publication. Each accepted resident-only step
+publishes the staged tuple before hearing/presentation; it is not a measured
+performance improvement.
 
 The existing `humanPerception.ts` reception bridge now supports those retained
 body poses. Player sample ordinal n uses accepted pose n+1; other supplied
@@ -2392,8 +2402,9 @@ The receiver's rejection sentinel is checked explicitly before constructing a
 complete resident frame; genuine empty-window success remains distinct from
 failure. Retained raw alarms use the porter's retained phase-zero address while
 current visual queries and fresh next-tick alarms keep the closure address.
-These connected timing boundaries add no saved state or producer; ordinary
-body motion and its current-save/rollback proof remain unactivated.
+These connected timing boundaries add no saved timing field or producer and
+now consume the actually moving runtime bodies. Saving and restoring the
+authoritative body history cannot replay consumed incidental sounds.
 
 Body-bound introductions additionally capture an exact scalar source pose in
 the committed simulation event through `residentActivityEventLocus.ts`. GREET
@@ -2420,9 +2431,9 @@ through their existing fresh strong belief/attention owner; source projection,
 event/memory authentication and cold listener replay share that cause. Later
 motion cannot relocate the warning, while anonymous alarms remain anonymous and
 heard human warnings cannot recursively produce warnings. Unencodable detached
-body inputs reject rather than escaping as ownership-encoding errors. Runtime
-body activation and its format/publication/rollback fences remain construction
-obligations; these source tests do not prove normal-play motion.
+body inputs reject rather than escaping as ownership-encoding errors. These
+source tests remain narrow evidence; the actual rest-motion and current-save
+proof above does not establish the remaining services or physical traveler loop.
 
 The current outer-save boundary now explicitly fences these foundations:
 `residentActivitySaveBoundary.ts` rejects any resident-owned activity or retained
@@ -2431,8 +2442,9 @@ partial presence. Capture and cold load use the same check; the inner-world
 codec remains available for foundation tests. Any present body cohort must also
 match every resident's identity, completed tick and accepted phase0–9 at the
 perception-carry boundary. Whole-roster absence stays legacy without invented
-history. Runtime adoption still requires a deliberately authorized body-capable
-outer format and the remaining publication, hearing and rollback integration.
+history. These fences distinguish released pre-body readers from the current
+body-capable format; the runtime adoption/publication/hearing/rollback evidence
+above does not authorize those extensions in an older format.
 
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain
@@ -3877,7 +3889,7 @@ boundary.
 
 The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
-the current source writer emits outer version 50. The preceding v43/carry-v11
+the current local source writer emits outer version 51. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -3915,7 +3927,8 @@ their validation are retained. Current-format source/cause, receipt, interruptio
 and conservation tests remain required; obsolete positive Voice migration
 expectations are not a substitute for them. Before official 1.0, implemented
 internal readers are not a permanent compatibility promise. Current-v50
-roundtrip and all determinism, integrity and no-overwrite laws remain mandatory.
+roundtrip remains supported; the current writer's roundtrip and all determinism,
+integrity and no-overwrite laws remain mandatory.
 This is a pre-1.0 development retirement, not a relaxation of the permanent
 official-1.0 supported-save policy.
 
@@ -3934,11 +3947,24 @@ promised. No additional outer development format is retired by this extension.
 
 `RELEASED_LIVING_VOICE_GAME_SAVE_VERSION` freezes Alpha64's supported outer50
 reader separately from the current writer. Its envelope, ecology, carry14 and
-recency reader gates must not drift when a later writer is introduced. All
-currently supported outer formats predate resident-body/activity authority;
-capture and load reject those roots and event-body extensions without silently
-repairing or overwriting a record. This does not retire a supported format,
-bump the writer, or enable ordinary human body motion.
+recency reader gates must not drift when a later writer is introduced. Its
+reader and supported predecessors reject resident-body/activity roots and
+event-body extensions without silently repairing or overwriting a record.
+
+`FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION` establishes outer51's explicit
+resident-body capability while retaining carry14, inner-world4/rules6 and the
+existing released support set. Capture/load validate all-or-none world-bound
+bodies, authentic circadian/task arrival and exact accepted-phase history.
+Genuine legacy absence is preserved until normal phase-zero adoption, not
+migrated into fictitious consumed poses. Retained source-pose extensions are
+allowed only on the three existing strict domain event schemas: introduction
+captures the preceding body tick; weather hold and departure capture their
+event tick at phase0. Partial, malformed, foreign-owner or mistimed extensions
+reject even after their optional expression is consumed. Historical events
+do not require a later still-live memory, weather hold or contract. Existing
+live expression/custody validators continue to authenticate current causes;
+structural retained-event validation cannot authorize new speech or work.
+No additional save format is retired by this change.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

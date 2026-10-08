@@ -32,6 +32,7 @@ import {
   type PlayerState,
 } from "./player";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import { createSessionState, type GameSessionState } from "./sessionTypes";
 import type { PhysicalCargoState } from "./physicalCargoState";
 
@@ -511,7 +512,7 @@ describe("runtime field-resource integration", () => {
     expect(stackQuantity(runtime, "pitchmoss")).toBe(1);
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(50);
+    expect(saved.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(saved.regionalTravel).toEqual(expect.any(String));
     expect(saved.fieldResources).toEqual(ecology.state);
     expect(saved.player.craftingInventory).toEqual(player.craftingInventory);
@@ -655,7 +656,7 @@ describe("runtime field-resource integration", () => {
     await bootstrap.save();
     bootstrap.destroy();
     const before = decodeGameSave(repository.snapshot());
-    expect(before.version).toBe(50);
+    expect(before.version).toBe(CURRENT_GAME_SAVE_VERSION);
     const sourceLot = before.physicalCargo?.carrier.lots.find(({ payload }) => (
       payload.kind === "gear"
       && payload.gearId === 61
@@ -706,7 +707,7 @@ describe("runtime field-resource integration", () => {
 
     await runtime.save();
     const saved = decodeGameSave(repository.snapshot());
-    expect(saved.version).toBe(50);
+    expect(saved.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(saved.player.craftingInventory.gear.find(({ id }) => id === 61)?.condition).toBe(0);
     expect(saved.physicalCargo?.carrier.lots.find(({ id }) => id === sourceLot.id))
       .toMatchObject({
@@ -847,7 +848,7 @@ describe("runtime field-resource integration", () => {
     )).toBe(true);
     await runtime.save();
     const migrated = decodeGameSave(repository.snapshot());
-    expect(migrated.version).toBe(50);
+    expect(migrated.version).toBe(CURRENT_GAME_SAVE_VERSION);
     expect(migrated.regionalTravel).toEqual(expect.any(String));
     expect(migrated.fieldResources).toEqual({
       version: 1,

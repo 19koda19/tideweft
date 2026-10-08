@@ -99,6 +99,7 @@ import {
 } from "./regionalWorldView";
 import { coreWildlifeTraversabilityCell } from "./coreWildlifeLocomotionProfile";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   WORLD_POSITION_UNITS_PER_TILE,
   createWorldPosition,
@@ -116,7 +117,7 @@ vi.mock("../audio/soundscape", () => ({
 
 interface V28Envelope {
   readonly format: "tideweft-session";
-  readonly version: 50;
+  readonly version: typeof CURRENT_GAME_SAVE_VERSION;
   readonly world: string;
   readonly player: PlayerState;
   readonly physicalCargo: SerializedPhysicalCargoState;
@@ -807,8 +808,8 @@ function requireV28(record: SaveRecord): V28Envelope {
   const value = JSON.parse(record.worldJson) as V28Envelope;
   if (
     value.format !== "tideweft-session"
-    || value.version !== 50
-    || record.payloadVersion !== 50
+    || value.version !== CURRENT_GAME_SAVE_VERSION
+    || record.payloadVersion !== CURRENT_GAME_SAVE_VERSION
     || typeof value.world !== "string"
     || typeof value.regionalEcology !== "string"
   ) throw new Error("fixture did not produce the current v50 regional ecology envelope");
