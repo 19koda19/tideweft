@@ -4276,6 +4276,71 @@ production artifact, platform, profiling/soak or release proof is claimed.
 unchanged release/manual identities and the pre-existing packaged smoke expected51
 are not current54 release evidence. The release gate is retained, not weakened.
 
+### Current resident telemetry characterization and GREET watchdog — 2026-10-08
+
+The uncapped cumulative on `19965f1d958df5c35c0e8997f2b1321fb08fba6e`
+finished **FAIL**, not a whole-suite certificate:396files/4797tests,
+394files/4794testsPASS,2files/3testsFAIL,0pending,2411.94s. All713
+tracked-or-new non-Markdown inputs retained the preceding `dfb28b36…` digest
+through completion. The original process/log/report were followed without a
+restart after losing the observer; its direct process exit was not recovered.
+The final log and JSON establish the result. Report
+`artifacts/validation/19965f1-cumulative.json` SHA256 is
+`749450608e6b3840bf2b57b77c78c8fb6f91b1eac588d30d79326fd943e4c399`.
+
+Two stationary telemetry fixtures still froze v3 bodies/outer53. The current
+runtime deliberately prepares v4/outer54, including an explicit nullable
+inspection field. Narrow reproduction preserved complete telemetry-on/off save
+byte equality before either failed body hash. Source inspection and opt-in
+characterization then verified the actual consequences: all42 phase-zero bodies
+retain their real motion/physiology; both keepers already reached their store
+through civic work, received direct exposed-food sight at421, and secured it
+through the existing in-place transaction. Each store retains seven of its eight
+physical food units after one domestic use, with no rat loss. No pending
+inspection remains at423. These stationary seeds therefore do **not** prove
+dedicated inspection approach; that acceptance remains with its separate
+runtime fixtures.
+
+The test now freezes that current behavior explicitly, including exact keeper
+body/BIO0 address parity and retained closure provenance. It preserves all
+accepted-step/tick, identity, pose, movement bound, need/rest, material-use,
+session announcement, event and complete body/save digest assertions. No body,
+knowledge, session, custody or integrity field is stripped or normalized into a
+legacy oracle. The current whole-save digests are
+`a2660d36c76ec55a055cd42046d5f3446e00395bcfd53ebe0515d3f6b313e30c`
+(estuary,1,844,683bytes) and
+`5efdc8695de1315d07c49a00f6431f61b4ca2f135c82984a25399aede4e0bb15`
+(dense,1,900,967bytes), reproduced with exactly30 accepted steps/3 advances.
+An initial new fixture expectation omitted the canonical BIO0 address version;
+that fixture-only error was corrected with the existing version constant,
+retaining complete address equality rather than weakening the matcher.
+
+The third cumulative failure was the existing whole-runtime GREET/tamper/
+hearing/caption-expiry/cold-reload case hitting its15000ms local watchdog
+(18955.97ms reported), not a behavioral assertion. The unchanged case first
+passes with a CLI60000ms watchdog (1PASS/97unselected,10.52s). Only that case
+now has an integration watchdog; real clocks, every accepted step, tamper
+rejection, hearing, knowledge, save, expiry and no-replay assertion stay intact.
+No production, save-reader/schema/support, dependency, platform, release or
+global timeout policy changes are made.
+
+Exact focused commands, with the final run using default-disabled diagnostics:
+
+```sh
+npx vitest run src/game/runtime.test.ts -t 'voices one committed GREET through Living Voice and reloads it without replay' --maxWorkers=1 --testTimeout=60000 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/greet-watchdog-before.json
+TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS=1 npx vitest run src/game/runtime.performanceTelemetry.test.ts -t 'characterizes equal accepted work' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/inspection-telemetry-before.json
+npx vitest run src/game/runtime.performanceTelemetry.test.ts src/game/runtime.test.ts -t 'runtime performance telemetry|voices one committed GREET through Living Voice and reloads it without replay' --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/inspection-telemetry-greet-final.json
+```
+
+The final focused run passes both files/5selected tests (97unselected) in19.60s;
+it includes all four telemetry tests. Its report SHA256 is
+`dd8bc936eb59215a3ad534a60fcf526bcb823b7298a1644cc0c35e65dc9444a4`.
+Maintained smoke passes6files/105tests in4.84s; typecheck and documentation-
+reuse45checks pass. The original cumulative remains FAIL; these focused results
+do not claim a new complete cumulative pass or certify unselected cases anew.
+No build, normal visual play, production performance, profiling/soak, deployment
+or completed-directive claim follows from these correctness durations.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

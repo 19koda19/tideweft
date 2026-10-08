@@ -3,16 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
-import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
+import { deserializeBio0Ecology } from "./bio0Ecology";
+import { LIVING_ACTOR_ADDRESS_VERSION } from "./livingActor";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 import { createPlayerExpressionRecencyState } from "./playerExpressionRecency";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import {
+  deserializeSettlementEcologyState,
+  projectSettlementKeeperStoreClosureAuthority,
+} from "./settlementEcology";
 import { worldPositionDelta } from "./worldPosition";
 
 vi.setConfig({ testTimeout: 120_000 });
@@ -113,10 +119,16 @@ function takeScheduledFrame(message: string): (now: number) => void {
   return callback;
 }
 
-/** Exact current civic bodies; movement is not reversed into a legacy oracle. */
-function assertStationaryCivicWorld(worldJson: string, seed: string): void {
-  const current = deserializeWorld(worldJson);
+/** Exact current bodies and source binding; never reversed into a legacy oracle. */
+function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: string): void {
+  const current = deserializeWorld(envelope.world as string);
   const initial = createWorld(seed, "standard");
+  const store = deserializeSettlementEcologyState(envelope.settlementEcology);
+  const bio0 = deserializeBio0Ecology(envelope.bio0Ecology);
+  const keeper = current.residents.find(({ identity }) => identity.stableId === store.identity.keeperActorId);
+  if (keeper === undefined || bio0 === null || keeper.activity === undefined) {
+    throw new Error("Stationary characterization lost its native keeper/body/BIO0 binding");
+  }
   expect(current.meta.completedTick).toBe(initial.meta.completedTick + 3);
   expect(current.residents).toHaveLength(42);
   expect(initial.residents).toHaveLength(42);
@@ -124,10 +136,19 @@ function assertStationaryCivicWorld(worldJson: string, seed: string): void {
     current.residents.map(({ activity }) => activity),
   )).digest("hex");
   const bodyDigests: Readonly<Record<string, string>> = {
-    "runtime baseline estuary": "da2531e5b19a8c82186680c6fd81a4126c388e795ca2d8af4e66fdc78bec6fdb",
-    "breathing room regional density 8": "e3a4f30eb04763a0d19093928b8b1a15a2696658b3fcac0d3bd785df749fbd12",
+    "runtime baseline estuary": "98bc98dee7d0d66c3702564b6912eaed0c0fe36182a52eefef48bb7f0282cd40",
+    "breathing room regional density 8": "5b4d5bce06510998625a4de878d1b16c93dbd4f79709815c2269c4b3e58d4c89",
   };
-  expect(bodyDigest).toBe(bodyDigests[seed]);
+  if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`resident-inspection-characterization ${JSON.stringify({
+    seed, bodyDigest, keeperId: keeper.identity.stableId, activity: keeper.activity,
+    store: {
+      closure: store.closure, keeperKnowledge: store.keeperKnowledge,
+      lastClosureTransactionId: store.lastClosureTransactionId,
+      lastResolvedLossOrdinal: store.lastResolvedLossOrdinal,
+      lastResolvedDomesticFoodUseOrdinal: store.lastResolvedDomesticFoodUseOrdinal,
+      lots: store.carrier.lots,
+    },
+  })}\n`);
   for (const [index, resident] of current.residents.entries()) {
     const original = initial.residents[index]!;
     expect(resident.identity.stableId).toBe(original.identity.stableId);
@@ -137,13 +158,15 @@ function assertStationaryCivicWorld(worldJson: string, seed: string): void {
     // Current work selection is now enacted. This three-minute fixture still
     // cannot consume project material before its first actual hourly pulse.
     expect(activity).toMatchObject({
-      version: RESIDENT_CIVIC_ACTIVITY_VERSION,
-      ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
+      version: RESIDENT_INSPECTION_ACTIVITY_VERSION,
+      ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID,
       actorId: original.identity.stableId,
       tick: current.meta.completedTick,
       restTask: null,
       rationTask: null,
+      inspectionTask: null,
     });
+    expect(Object.hasOwn(activity!, "inspectionTask")).toBe(true);
     expect(activity?.poses).toHaveLength(1);
     const pose = activity!.poses[0]!;
     // Reassessment can clear a task without teleporting its body back to the
@@ -160,6 +183,37 @@ function assertStationaryCivicWorld(worldJson: string, seed: string): void {
     // adoption. Awake membership no longer proves restorative arrival.
     expect(resident.condition.exhaustion).toBe(original.condition.exhaustion);
   }
+  expect(bio0.porterAddress).toEqual({
+    version: LIVING_ACTOR_ADDRESS_VERSION,
+    actorId: keeper.identity.stableId, species: "human", persistence: "promoted",
+    position: keeper.activity.poses[0]!.position, heading: keeper.activity.poses[0]!.heading,
+  });
+  // Both ordinary stationary seeds already reach the store through civic work.
+  // Their existing in-place closure remains legal; this is not proof of the
+  // dedicated inspection approach covered by its separate runtime fixtures.
+  expect(store).toMatchObject({
+    closure: "secured", lastResolvedLossOrdinal: 0, lastResolvedDomesticFoodUseOrdinal: 1,
+    pendingLoss: null, pendingDomesticFoodUse: null,
+  });
+  expect(store.carrier.lots).toEqual([{
+    id: store.identity.foodLotId,
+    payload: { kind: "provision", lotId: store.identity.foodLotId, provision: "fresh-produce", quantity: 7 },
+    materialState: { condition: 1_000_000, contamination: 0, decay: 0 },
+  }]);
+  expect(store.keeperKnowledge).toHaveLength(1);
+  const evidence = store.keeperKnowledge[0]!;
+  expect(evidence).toMatchObject({
+    risk: "food-exposed", source: "direct-observation", sourceActorId: keeper.identity.stableId,
+    learnedAtTick: initial.meta.completedTick + 1,
+  });
+  expect(projectSettlementKeeperStoreClosureAuthority(store)).toMatchObject({
+    transactionId: store.lastClosureTransactionId, sourceEvidenceId: evidence.evidenceId,
+    keeperActorId: keeper.identity.stableId, storeId: store.identity.storeId,
+    source: "direct-observation", sourceActorId: keeper.identity.stableId,
+    sourceEvidenceAtTick: evidence.learnedAtTick,
+  });
+  // Keep an exact full-cohort oracle after the meaningful behavior assertions.
+  expect(bodyDigest).toBe(bodyDigests[seed]);
 }
 
 async function assertEqualUninstrumentedWork(seed: string, worldJson: string): Promise<void> {
@@ -224,8 +278,8 @@ describe("runtime performance telemetry", () => {
         expect(telemetry.worldAdvanceStep.totalCount).toBe(3);
         await runtime.save();
         const worldJson = repository.snapshot().worldJson;
-        // Full current-save equality precedes historical normalization, so a
-        // stale historical assertion cannot prevent the observational proof.
+        // Complete current-save equality precedes characterization: diagnostics
+        // cannot change any world, custody, knowledge, session or integrity byte.
         await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
         if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
@@ -251,7 +305,7 @@ describe("runtime performance telemetry", () => {
         // of that older executable state (Research), not a current equality
         // promise. Freeze the entire current save without reversing bodies,
         // perception, events, session announcements or new schema fields.
-        assertStationaryCivicWorld(envelope.world as string, seed);
+        assertStationaryCivicWorld(envelope, seed);
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
           expect(session.announcement).toEqual({
@@ -278,8 +332,8 @@ describe("runtime performance telemetry", () => {
           });
         }
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "ac1ddb59964936f939e905b90c40570146d1bbeb5e749c4dd5755450c35e1be5",
-          "breathing room regional density 8": "30825913a44f7e9bcee3d1aaf94007fe8fd88eee79aa70d7e4ad1bbcf68af7fb",
+          "runtime baseline estuary": "a2660d36c76ec55a055cd42046d5f3446e00395bcfd53ebe0515d3f6b313e30c",
+          "breathing room regional density 8": "5efdc8695de1315d07c49a00f6431f61b4ca2f135c82984a25399aede4e0bb15",
         };
         expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);
       } finally {

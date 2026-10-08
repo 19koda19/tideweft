@@ -1715,7 +1715,11 @@ describe("perpetual new worlds", () => {
     await expiredReload.save();
     expect(decodeGameSave(repository.snapshot()).world).toBe(expired.world);
     expiredReload.destroy();
-  });
+    // This whole-runtime case includes tampered cold loads, retained hearing,
+    // caption expiry and a second clean reload. Keep its behavioral assertions
+    // and accepted steps intact; a shared local runner needs an integration
+    // watchdog rather than the ordinary 15-second unit-test budget.
+  }, 60_000);
 
   it("retires an outer-v40 carry containing a committed introduction without adopting it", async () => {
     const repository = new MemoryRepository();
