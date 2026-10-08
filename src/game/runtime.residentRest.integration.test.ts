@@ -6,6 +6,8 @@ import {
   RESIDENT_ACTIVITY_OWNER_ID,
   RESIDENT_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
+  RESIDENT_CIVIC_ACTIVITY_VERSION,
+  RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
   RESIDENT_SERVICE_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
@@ -27,6 +29,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
 } from "./saveCompatibilityPolicy";
@@ -239,7 +242,7 @@ function expectBoundedMotion(source: WorldPosition, poses: readonly { position: 
 
 describe("ordinary runtime resident rest execution", () => {
   it.each([4, 9])("selects and executes real rest, preserving equal work across a phase%s cold continuation", async (phase) => {
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION);
     expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBeLessThan(CURRENT_GAME_SAVE_VERSION);
     const fixture = await restFixture();
     const repository = new MemoryRepository(fixture.record);
@@ -497,6 +500,99 @@ describe("ordinary runtime resident rest execution", () => {
     assertWorldInvariants(next);
   }, 180_000);
 
+  it("uses real civic material after ordinary approach, preserves the closing cold pulse and rolls back a late failed contribution", async () => {
+    const fixture = await restFixture();
+    const initial = decode(fixture.record);
+    const world = deserializeWorld(initial.world);
+    for (const human of world.residents) {
+      human.needs = { food: 100_000, rest: 900_000, belonging: 100_000 };
+      human.condition.exhaustion = 100_000;
+    }
+    const chosen = world.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+    chosen.needs = { food: 0, rest: 0, belonging: 400_000 };
+    chosen.intention = "work";
+    if (chosen.location.kind !== "settlement") throw new Error("Native civic fixture lost its settlement");
+    const settlementId = chosen.location.settlementId;
+    const settlement = world.settlements.find(({ id }) => id === settlementId)!;
+    const projectId = settlement.project.id;
+    const resource = settlement.project.resource;
+    const initialProgress = settlement.project.progress;
+    for (const site of world.settlements) {
+      for (const recipe of site.recipes) recipe.nextRunTick = fixture.tick + 1_000;
+    }
+    initial.world = serializeWorld(world);
+    const repository = new MemoryRepository(recordWith(fixture.record, initial));
+    const runtime = await open(repository);
+    advanceOrdinaryFixedSteps(runtime, 4);
+    await runtime.save();
+    const moving = resident(decode(repository.snapshot()), fixture.actorId);
+    expect(moving.activity?.materialTask).toMatchObject({ kind: "settlement-material", phase: "approaching", projectId, resource });
+    expect(moving.activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
+    expectBoundedMotion(fixture.source, moving.activity!.poses);
+    advanceOrdinaryFixedSteps(runtime, 595);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(resident(before, fixture.actorId).activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(beforeWorld.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(after.world);
+    const completed = afterWorld.settlements.find(({ id }) => id === settlementId)!;
+    expect(completed.project.progress).toBe(initialProgress + 1);
+    expect(completed.inventory[resource]).toBe(beforeWorld.settlements.find(({ id }) => id === settlementId)!.inventory[resource] - 1);
+    expect(afterWorld.ledger.consumed[resource]).toBe(beforeWorld.ledger.consumed[resource] + 1);
+    expect(resident(after, fixture.actorId).activity?.materialTask).toMatchObject({ phase: "used", usedAtTick: fixture.tick + 60 });
+    assertWorldInvariants(afterWorld);
+    close(runtime);
+
+    const coldRepository = new MemoryRepository(beforeRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    advanceOrdinaryFixedSteps(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    const usedRecord = coldRepository.snapshot();
+    close(cold);
+
+    const failedRepository = new MemoryRepository(beforeRecord);
+    const failed = await open(failedRepository);
+    const originalStep = simulation.stepWorld;
+    let attemptedUse = false;
+    const stepSpy = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = originalStep(...args);
+      expect(result.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.activity?.materialTask?.phase).toBe("used");
+      expect(result.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress + 1);
+      attemptedUse = true;
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval").mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attemptedUse).toBe(true);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    await failed.save();
+    expect(authoritativeRoots(decode(failedRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-steady")).toHaveLength(0);
+    stepSpy.mockRestore();
+    closure.mockRestore();
+    close(failed);
+
+    const usedRepository = new MemoryRepository(usedRecord);
+    const used = await open(usedRepository);
+    await used.save();
+    expect(authoritativeRoots(decode(usedRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    advanceOrdinaryFixedSteps(used, 10);
+    await used.save();
+    const next = deserializeWorld(decode(usedRepository.snapshot()).world);
+    expect(next.ledger.consumed).toEqual(afterWorld.ledger.consumed);
+    expect(next.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress + 1);
+  }, 180_000);
+
   it("retains supported51 phase4 body history and upgrades services only at the next genuine phase0", async () => {
     const fixture = await restFixture();
     const stagingRepository = new MemoryRepository(fixture.record);
@@ -511,7 +607,7 @@ describe("ordinary runtime resident rest execution", () => {
     for (const human of world.residents) {
       const activity = human.activity;
       if (activity === undefined || activity.rationTask !== null) throw new Error("native rest fixture gained ration use");
-      const { rationTask: _rationTask, ...body } = activity;
+      const { rationTask: _rationTask, materialTask: _materialTask, ...body } = activity;
       human.activity = { ...body, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
     }
     assertWorldInvariants(world);
@@ -541,7 +637,7 @@ describe("ordinary runtime resident rest execution", () => {
     expect(deserializeWorld(boundary.world).residents.every((human) => (
       // Closure itself invokes the existing phase-zero routine owner. There
       // is no extra accepted step or invented pre-boundary history to await.
-      human.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION && human.activity.poses.length === 1
+      human.activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION && human.activity.poses.length === 1
       && human.activity.rationTask === null
     ))).toBe(true);
     advanceOrdinaryFixedSteps(runtime, 1);
@@ -549,16 +645,112 @@ describe("ordinary runtime resident rest execution", () => {
     const next = decode(repository.snapshot());
     expect(next.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
     expect(deserializeWorld(next.world).residents.every((human) => (
-      human.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION && human.activity.poses.length === 2
+      human.activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION && human.activity.poses.length === 2
       && human.activity.rationTask === null
     ))).toBe(true);
     expect(resident(next, fixture.actorId).activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
     expect(stableStringify(next.physicalCargo)).toBe(stableStringify(loaded.physicalCargo));
   }, 60_000);
 
+  it("retains supported52 phase4 ration history until the next genuine phase0 civic upgrade", async () => {
+    const fixture = await restFixture();
+    const initial = decode(fixture.record);
+    const initialWorld = deserializeWorld(initial.world);
+    for (const human of initialWorld.residents) {
+      if (human.identity.stableId === fixture.actorId) {
+        human.needs = { food: 900_000, rest: 100_000, belonging: 100_000 };
+        human.condition.exhaustion = 100_000;
+      } else {
+        // Suppress unrelated civic work by an actual priority input, without
+        // assigning a task, posture, body result or hidden keeper duty.
+        human.needs.belonging = 900_000;
+      }
+    }
+    assertWorldInvariants(initialWorld);
+    initial.world = serializeWorld(initialWorld);
+    const stagingRepository = new MemoryRepository(recordWith(fixture.record, initial));
+    const staging = await open(stagingRepository);
+    advanceOrdinaryFixedSteps(staging, 4);
+    await staging.save();
+    const record = stagingRepository.snapshot();
+    const legacy = decode(record);
+    const world = deserializeWorld(legacy.world);
+    const actual = world.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+    expect(world.meta.completedTick).toBe(fixture.tick);
+    expect(legacy.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    expect(actual.activity?.rationTask).toMatchObject({ phase: "approaching", usedAtTick: null });
+    expect(actual.activity?.restTask).toBeNull();
+    expect(actual.activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
+    expectBoundedMotion(fixture.source, actual.activity!.poses);
+    // Explicit supported-format reconstruction from genuinely accepted poses.
+    // Preserve complete ration/body content and carry; remove only the absent
+    // civic capability, not successful activity or already-consumed history.
+    for (const human of world.residents) {
+      const activity = human.activity;
+      if (activity?.version !== RESIDENT_CIVIC_ACTIVITY_VERSION || activity.materialTask !== null) {
+        throw new Error("supported52 fixture requires a genuine civic-free body prefix");
+      }
+      const { materialTask: _materialTask, ...body } = activity;
+      human.activity = { ...body, version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID };
+      const { version: _version, ownerId: _ownerId, ...retained } = human.activity;
+      const { version: _originalVersion, ownerId: _originalOwnerId, ...original } = body;
+      expect(retained).toEqual(original);
+    }
+    assertWorldInvariants(world);
+    legacy.world = serializeWorld(world);
+    legacy.version = FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION;
+    close(staging);
+
+    const repository = new MemoryRepository(recordWith(record, legacy));
+    const runtime = await open(repository);
+    await runtime.save();
+    const loaded = decode(repository.snapshot());
+    expect(loaded.world).toBe(legacy.world);
+    expect(loaded.perceptionCarry).toEqual(legacy.perceptionCarry);
+    expect(resident(loaded, fixture.actorId).activity?.rationTask).toEqual(actual.activity?.rationTask);
+    advanceOrdinaryFixedSteps(runtime, 5);
+    await runtime.save();
+    const phase9 = decode(repository.snapshot());
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(deserializeWorld(phase9.world).residents.every((human) => (
+      human.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION && human.activity.poses.length === 10
+      && !Object.hasOwn(human.activity, "materialTask")
+    ))).toBe(true);
+    const ration9 = resident(phase9, fixture.actorId).activity!;
+    expect(ration9.poses.slice(0, 5)).toEqual(actual.activity?.poses);
+    expect(ration9.rationTask).toMatchObject({ phase: "approaching", selectedAtTick: fixture.tick, usedAtTick: null });
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const boundary = decode(repository.snapshot());
+    const boundaryWorld = deserializeWorld(boundary.world);
+    expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(boundaryWorld.meta.completedTick).toBe(fixture.tick + 1);
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION
+      && human.activity.poses.length === 1 && human.activity.materialTask === null)).toBe(true);
+    expect(resident(boundary, fixture.actorId).activity?.rationTask).toMatchObject({
+      phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null,
+    });
+    expect(resident(boundary, fixture.actorId).activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(stableStringify(boundary.physicalCargo)).toBe(stableStringify(loaded.physicalCargo));
+  }, 60_000);
+
   it("retains released50 phase4 body absence until the next genuine phase0", async () => {
     const fixture = await restFixture();
-    const stagingRepository = new MemoryRepository(fixture.record);
+    const initial = decode(fixture.record);
+    const initialWorld = deserializeWorld(initial.world);
+    // Reconstruct a pre-body prefix without unrelated current civic approach.
+    // Urgent belonging suppresses ordinary material work without requesting
+    // another physical rest/ration task. Keep the selected real rest cause.
+    for (const human of initialWorld.residents) {
+      if (human.identity.stableId !== fixture.actorId) human.needs.belonging = 900_000;
+    }
+    const initialBio0 = deserializeBio0Ecology(initial.bio0Ecology);
+    if (initialBio0 === null) throw new Error("released50 fixture lost its native BIO0 root");
+    const initialKeeper = initialWorld.residents.find(({ identity }) => identity.stableId === initialBio0.porterAddress.actorId)!;
+    expect(initialBio0.porterAddress).toEqual(livingActorAddressForResident(createWorldView(initialWorld), initialKeeper));
+    assertWorldInvariants(initialWorld);
+    initial.world = serializeWorld(initialWorld);
+    const stagingRepository = new MemoryRepository(recordWith(fixture.record, initial));
     const staging = await open(stagingRepository);
     advanceOrdinaryFixedSteps(staging, 4);
     await staging.save();
@@ -570,10 +762,19 @@ describe("ordinary runtime resident rest execution", () => {
     // optional human roots, not accepted player history or any physical stock.
     expect(world.meta.completedTick).toBe(fixture.tick);
     expect(legacy.perceptionCarry.actorVocalizationSamples).toEqual([]);
+    const currentBio0 = deserializeBio0Ecology(legacy.bio0Ecology);
+    const currentKeeper = world.residents.find(({ identity }) => identity.stableId === initialBio0.porterAddress.actorId)!;
+    expect(currentBio0?.porterAddress).toEqual(initialBio0.porterAddress);
+    expect(currentKeeper.activity?.poses).toHaveLength(5);
+    for (const pose of currentKeeper.activity!.poses) {
+      expect(pose.position).toEqual(initialBio0.porterAddress.position);
+      expect(pose.heading).toBe(initialBio0.porterAddress.heading);
+    }
     for (const human of world.residents) {
       delete human.activity;
       delete human.circadian;
     }
+    expect(livingActorAddressForResident(createWorldView(world), currentKeeper)).toEqual(initialBio0.porterAddress);
     assertWorldInvariants(world);
     legacy.world = serializeWorld(world);
     legacy.version = RELEASED_LIVING_VOICE_GAME_SAVE_VERSION;

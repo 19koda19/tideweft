@@ -107,6 +107,7 @@ import {
   isCurrentPerceptionSnapshot,
   observableResidentBodyMoving,
   observableResidentRationUse,
+  observableResidentMaterialUse,
   observableResidentRestState,
   projectAdriftView,
   projectPerception,
@@ -249,6 +250,7 @@ function observableResidentBehavior(resident: ResidentState): string {
   }
   if (restState === "resting") return "Resting here";
   if (observableResidentRationUse(resident)) return "Taking a ration here";
+  if (observableResidentMaterialUse(resident)) return "Tending the project here";
   return resident.condition.sheltering
     ? "Holding position in unsafe weather"
     : observableResidentBodyMoving(resident)

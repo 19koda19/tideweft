@@ -102,6 +102,7 @@ import {
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
@@ -110,7 +111,7 @@ import {
   residentActivitySaveExtensionsValid,
 } from "./residentActivitySaveBoundary";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
-import { RESIDENT_ACTIVITY_MAX_PHASE, RESIDENT_SERVICE_ACTIVITY_VERSION, residentActivityPoseAtPhase } from "../sim/residentActivity";
+import { RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsRations, residentActivityPoseAtPhase } from "../sim/residentActivity";
 import { prepareResidentRationUse, revokeResidentRationUse } from "../sim/residentRationUse";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
@@ -1384,6 +1385,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
@@ -13779,7 +13781,7 @@ export async function createTideweftRuntime(
     // not reuse a token consumed against the disposable candidate world.
     const advance = (target: WorldState, commands: readonly SimCommand[]): WorldState => {
       if ((target.meta.completedTick + 1) % 60 !== 0
-        || !target.residents.some(({ activity }) => activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION)) {
+        || !target.residents.some(({ activity }) => residentActivitySupportsRations(activity))) {
         return stepWorld(target, commands, perceptionFrame);
       }
       const keeper = target.residents.find(({ identity }) => identity.stableId === settlementEcology.identity.keeperActorId);
@@ -20425,7 +20427,8 @@ export async function createTideweftRuntime(
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
     if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
-      GAME_SAVE_VERSION >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION)) {
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION)) {
       throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
@@ -25025,7 +25028,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     }
     const world = deserializeWorld(decoded.world);
     if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
-      decoded.version >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION)) {
+      decoded.version >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
+      decoded.version >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION)) {
       throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (

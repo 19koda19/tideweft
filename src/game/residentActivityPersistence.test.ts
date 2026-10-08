@@ -6,7 +6,7 @@ import {
   serializeWorld, stepWorld, STRAND_AUTOMATION_THRESHOLD,
 } from "../sim/public";
 import { RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS } from "../sim/residentActivityEventLocus";
-import { RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION, RESIDENT_SERVICE_ACTIVITY_OWNER_ID, RESIDENT_SERVICE_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import type { SimEvent, WorldState } from "../sim/types";
 import { stableStringify } from "../sim/util";
@@ -15,7 +15,7 @@ import { residentActivitySaveExtensionsValid } from "./residentActivitySaveBound
 import { residentIntroductionExpressionIntent } from "./residentIntroductionExpression";
 import { residentWeatherHoldExpressionIntent } from "./residentWeatherHoldExpression";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
-import { FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION, FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import { FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION, FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION, FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import { workingPeopleExpressionIntent } from "./workingPeopleExpression";
 import { worldPositionDelta } from "./worldPosition";
 
@@ -78,9 +78,18 @@ function preServiceFixture(): WorldState {
   // A deliberate frozen-v1 cold-format reconstruction of the genuine body/rest
   // fixture, not a released outer-session artifact or a physical meal witness.
   for (const resident of world.residents) {
-    const { rationTask, ...activity } = resident.activity!;
+    const { rationTask, materialTask: _materialTask, ...activity } = resident.activity!;
     expect(rationTask).toBeNull();
     resident.activity = { ...activity, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
+  }
+  return world;
+}
+
+/** Explicit v2 codec reconstruction, not a released or normal-play artifact. */
+function preCivicFixture(world: WorldState): WorldState {
+  for (const resident of world.residents) {
+    const { materialTask: _materialTask, ...activity } = resident.activity!;
+    resident.activity = { ...activity, version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID };
   }
   return world;
 }
@@ -165,7 +174,7 @@ describe("resident body save capability and retained event source validation", (
     const root = world.residents;
     const restored = deserializeWorld(bytes);
     for (const candidate of [world, structuredClone(world), restored]) {
-      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true, true)).toBe(true);
       expect(residentActivitySaveExtensionsValid(candidate, false)).toBe(false);
       expect(serializeWorld(candidate)).toBe(bytes);
     }
@@ -192,13 +201,26 @@ describe("resident body save capability and retained event source validation", (
     expect(FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION).toBe(52);
     // These are the shared outer-capability predicates, not complete session
     // envelope load/relaunch evidence.
-    for (const world of [restFixture(1), rationFixture(1)]) {
+    for (const world of [preCivicFixture(restFixture(1)), preCivicFixture(rationFixture(1))]) {
       const bytes = serializeWorld(world);
       for (const candidate of [world, structuredClone(world), deserializeWorld(bytes)]) {
         expect(residentActivitySaveExtensionsValid(candidate, true)).toBe(false);
         expect(residentActivitySaveExtensionsValid(candidate, true, false)).toBe(false);
         expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(true);
         expect(residentActivitySaveExtensionsValid(candidate, false, true)).toBe(false);
+        expect(serializeWorld(candidate)).toBe(bytes);
+      }
+    }
+  });
+
+  it("requires civic53 capability for current v3 including explicit null material state", () => {
+    expect(FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION).toBe(53);
+    for (const world of [restFixture(1), rationFixture(1)]) {
+      const bytes = serializeWorld(world);
+      for (const candidate of [world, structuredClone(world), deserializeWorld(bytes)]) {
+        expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(false);
+        expect(residentActivitySaveExtensionsValid(candidate, true, true, true)).toBe(true);
+        expect(residentActivitySaveExtensionsValid(candidate, true, false, true)).toBe(false);
         expect(serializeWorld(candidate)).toBe(bytes);
       }
     }
@@ -217,7 +239,7 @@ describe("resident body save capability and retained event source validation", (
   });
 
   it("rejects v2 task exclusivity, missing fields, target and timing forgeries without fallback", () => {
-    const source = rationFixture(10);
+    const source = preCivicFixture(rationFixture(10));
     const index = source.residents.findIndex((resident) => resident.activity?.rationTask != null);
     const admitted = source.residents[index]!.activity!.rationTask!;
     expect(admitted.phase).toBe("arrived");
@@ -255,7 +277,28 @@ describe("resident body save capability and retained event source validation", (
     });
     expect(residentActivitySaveExtensionsValid(world, true, false)).toBe(false);
     expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true)).toBe(false);
     expect(reads).toBe(0);
+  });
+
+  it("rejects mixed civic/coarse mode before mutation, while retaining supported v1/v2 mixtures", () => {
+    const current = structuredClone(restFixture(1));
+    const { materialTask: _material, ...oldService } = current.residents[0]!.activity!;
+    current.residents[0]!.activity = {
+      ...oldService, version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
+    };
+    const before = stableStringify(current);
+    expect(residentActivitySaveExtensionsValid(current, true, true, true)).toBe(false);
+    expect(() => assertWorldInvariants(current)).toThrow(/whole-roster mode/u);
+    expect(() => stepWorld(current)).toThrow(/whole-roster mode/u);
+    expect(stableStringify(current)).toBe(before);
+
+    const supported = preCivicFixture(restFixture(1));
+    const { rationTask: _ration, ...oldBody } = supported.residents[0]!.activity!;
+    supported.residents[0]!.activity = { ...oldBody, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
+    expect(() => assertWorldInvariants(supported)).not.toThrow();
+    expect(residentActivitySaveExtensionsValid(supported, true, true, true)).toBe(true);
+    expect(serializeWorld(deserializeWorld(serializeWorld(supported)))).toBe(serializeWorld(supported));
   });
 
   it("rejects partial, malformed, foreign-tick bodies and missing or contradictory rest authority without repair", () => {
@@ -276,14 +319,14 @@ describe("resident body save capability and retained event source validation", (
       const candidate = structuredClone(world);
       mutate(candidate);
       const before = structuredClone(candidate);
-      expect(residentActivitySaveExtensionsValid(candidate, true, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(candidate, true, true, true)).toBe(false);
       expect(candidate).toEqual(before);
     }
   });
 
   it("accepts a genuine retained introduction after its bounded live-memory cause is absent", () => {
     const current = introductionFixture();
-    expect(residentActivitySaveExtensionsValid(current.world, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true, true)).toBe(true);
     const resident = current.world.residents.find(({ id }) => id === current.id)!;
     // Explicit cold-boundary counterfactual for bounded historical memory,
     // not a claim that this short fixture executes the memory pruning policy.
@@ -291,7 +334,7 @@ describe("resident body save capability and retained event source validation", (
     assertWorldInvariants(current.world);
     expect(residentIntroductionExpressionIntent({ world: createWorldView(current.world), event: current.event })).toBeNull();
     const bytes = serializeWorld(current.world);
-    expect(residentActivitySaveExtensionsValid(deserializeWorld(bytes), true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(deserializeWorld(bytes), true, true, true)).toBe(true);
     expect(serializeWorld(current.world)).toBe(bytes);
   });
 
@@ -299,7 +342,7 @@ describe("resident body save capability and retained event source validation", (
     const current = transportFixture();
     current.departure.data.playerObserved = true;
     current.shelter.data.playerObserved = true;
-    expect(residentActivitySaveExtensionsValid(current.world, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true, true)).toBe(true);
     clearWeather(current.world);
     for (let step = 0; step < 120; step += 1) {
       const contract = current.world.contracts.find(({ id }) => id === current.contractId)!;
@@ -318,7 +361,7 @@ describe("resident body save capability and retained event source validation", (
     expect(residentWeatherHoldExpressionIntent({ world: createWorldView(current.world), event: current.shelter })).toBeNull();
     const bytes = serializeWorld(current.world);
     const restored = deserializeWorld(bytes);
-    expect(residentActivitySaveExtensionsValid(restored, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(restored, true, true, true)).toBe(true);
     expect(residentActivitySaveExtensionsValid(restored, false)).toBe(false);
     expect(serializeWorld(restored)).toBe(bytes);
   });
@@ -341,7 +384,7 @@ describe("resident body save capability and retained event source validation", (
       const world = structuredClone(current.world);
       alter(eventAt(world, current.event.sequence));
       const before = stableStringify(world);
-      expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true, true)).toBe(false);
       expect(stableStringify(world)).toBe(before);
     }
   });
@@ -353,7 +396,7 @@ describe("resident body save capability and retained event source validation", (
         ["playerObserved", false], ["playerObserved", "true"], ["foreignField", 1]] as const) {
         const world = structuredClone(current.world);
         eventAt(world, original.sequence).data[key] = value;
-        expect(residentActivitySaveExtensionsValid(world, true, true), `${original.type}:${key}`).toBe(false);
+        expect(residentActivitySaveExtensionsValid(world, true, true, true), `${original.type}:${key}`).toBe(false);
       }
     }
   });
@@ -362,7 +405,7 @@ describe("resident body save capability and retained event source validation", (
     const current = introductionFixture();
     const absent = structuredClone(current.world);
     for (const resident of absent.residents) delete resident.activity;
-    expect(residentActivitySaveExtensionsValid(absent, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(absent, true, true, true)).toBe(false);
     const initial = current.world.events.find((event) => event.type === "world-created")!;
     expect(initial).toBeDefined();
     for (const extension of [{ eventBodyVersion: 1 }, Object.fromEntries(
@@ -370,7 +413,7 @@ describe("resident body save capability and retained event source validation", (
     )]) {
       const world = structuredClone(current.world);
       Object.assign(eventAt(world, initial.sequence).data, extension);
-      expect(residentActivitySaveExtensionsValid(world, true, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true, true)).toBe(false);
       expect(residentActivitySaveExtensionsValid(world, false)).toBe(false);
     }
   });

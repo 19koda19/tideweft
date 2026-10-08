@@ -736,6 +736,15 @@ export function observableResidentRationUse(resident: ResidentState): boolean {
     && activity.rationTask.usedAtTick === resident.perception.tick;
 }
 
+/** Only an enacted current contribution, not private intent or project plans. */
+export function observableResidentMaterialUse(resident: ResidentState): boolean {
+  const activity = canonicalizeResidentActivity(resident.activity, {
+    actorId: resident.identity.stableId, tick: resident.perception.tick,
+  });
+  return activity?.materialTask?.phase === "used"
+    && activity.materialTask.usedAtTick === resident.perception.tick;
+}
+
 function projectResidentPlacement(
   world: WorldView,
   placement: ResidentWorldPlacement,
@@ -1430,6 +1439,7 @@ export function projectGameView(
       const restState = observableResidentRestState(resident);
       const moving = observableResidentBodyMoving(resident);
       const rationUse = observableResidentRationUse(resident);
+      const materialUse = observableResidentMaterialUse(resident);
       return [
         {
           actorId: resident.identity.stableId,
@@ -1443,7 +1453,9 @@ export function projectGameView(
                 ? `${identityLabel} · ${restState}`
                 : rationUse
                   ? `${identityLabel} · taking a ration`
-                  : moving && !resident.condition.sheltering
+                  : materialUse
+                    ? `${identityLabel} · tending the project`
+                    : moving && !resident.condition.sheltering
                     ? `${identityLabel} · moving`
                     : identityLabel } : {}),
           position: routeProjection.position,

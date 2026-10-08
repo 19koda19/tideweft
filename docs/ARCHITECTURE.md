@@ -2373,9 +2373,10 @@ implementation contract; construction/tests below determine its current proof.
 
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
-current-interval poses, and exclusive authenticated settlement-rest/ration
-tasks. The frozen v1 body/rest protocol remains deliberately supported; v2
-requires its explicit nullable ration task. The world binding validates the
+current-interval poses, and exclusive authenticated settlement-rest/ration/
+material tasks. Frozen v1 body/rest and v2 ration protocols remain deliberately
+supported; v3 requires an explicit nullable material task alongside ration.
+The world binding validates the
 actual settlement target or one captured legacy refuge;
 world advancement resets interval history without relocating stationary
 people, while actual legacy transport transitions retain their explicit coarse
@@ -2390,8 +2391,8 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 Normal accepted runtime steps now adopt the entire existing roster only at a
 genuine phase-zero boundary, select through the actual routine/duty owner, and
 advance exactly one bounded approach step per accepted player step. Current
-outer52 preserves the complete bodies, ration use and phase0–9 history. Supported
-outer51 rest-only bodies preserve their exact partial interval, upgrading as a
+outer53 preserves the complete bodies, service use and phase0–9 history. Supported
+outer51/52 bodies preserve their exact v1/v2 partial interval, upgrading as a
 whole cohort through the actual phase-zero routine boundary, not on load.
 Legacy absent records remain absent on load and through an already-partly-consumed interval;
 its actual closure captures the first new anchor rather than inventing old
@@ -2411,9 +2412,40 @@ and independent GREET candidate/refusal transactions on the use tick. A used
 task remains briefly observable without repeat benefit; higher priorities may
 revoke it. Render/ABOUT disclose that current committed use only through their
 existing sight/detail gates, not hunger, a planned destination or invented
-sound. Civic material service, autonomous keeper inspection and accountable
-local travel remain unfinished. This is local source/test evidence, not manual
+sound. Autonomous keeper inspection and accountable local travel remain
+unfinished. This is local source/test evidence, not manual
 play, natural-rate liveness, production performance or public release proof.
+
+The bounded civic consumer uses the existing project/resource and the same
+settlement-center aggregate service point, not a fabricated building, tool or
+profession. Actual work intention, active/awake routine, no urgent need or
+higher duty, finite stock and exact dry arrival qualify one contribution at
+the existing hourly pulse. Eligibility is rechecked after command/weather/
+perception and hourly need consequences. `engine.ts`'s private
+`commitProjectMaterial` owns the one stock debit, consumed ledger entry,
+progress and existing completion effects; delivery retains its separate
+condition-qualified credit through that same owner. All-v3 civic mode removes
+represented automatic timer credit, including when no worker/admission exists.
+Absent/v1/v2 worlds retain the explicitly supported coarse timer until actual
+whole-roster adoption. Mixed v3/non-v3 mode rejects before world mutation and
+at cold/save invariants; historical v1/v2 mixtures remain supported.
+
+No portable material lot, reservation, personal inventory, queue root or second
+work manager is necessary for this atomic site use. One exclusive pending task
+per actor retains project/resource/site, request age, progress and bounded
+retry/wait state. Oldest eligible pending request wins; stable actor identity
+breaks equal-age ties. A successful actor reselects with a later age while
+shortage/blocked contenders retain theirs, bounding a continuously eligible
+request behind at most N−1 competing successful uses for that project. Supply
+and higher-priority interruptions can delay eligibility; no wall-time service
+guarantee is implied. Dry-foot approach remains bounded to16×16 cells.
+Completed project or changed commitment revokes pending work; a current used
+marker can retain the now-complete project for one brief observable interval,
+without repeating its result. Only actual current use enters existing detail-
+sight/ABOUT presentation; there is no private task disclosure or invented work
+audio. Controlled native adapter/runtime cases prove approach, shortage, duty,
+contention, completion, cold phase4/9 continuation and late-failure rollback.
+All services, normal visual play and production performance remain unproved.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -3945,7 +3977,7 @@ boundary.
 
 The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
-the current local source writer emits outer version 52. The preceding v43/carry-v11
+the current local source writer emits outer version 53. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
@@ -4035,6 +4067,15 @@ commands and rechecked against current consequences at the pulse, never saved
 as an entitlement. Carry14, inner-world4/rules6, released readers and explicit
 retirement of obsolete Voice development formats remain unchanged; no format
 is retired at this boundary.
+
+`FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION` establishes outer53's explicit v3
+material-task capability; frozen v1/v2 shapes cannot carry the new field.
+Supported50/51/52 retain their existing readers, genuine absent/partial body
+history and phase-zero whole-roster upgrade. Current capture/load validate the
+exclusive material task, project/resource/site and completed-use marker without
+rerunning use. Civic mode is whole-roster; mixed v3/non-v3 records reject, while
+supported historical v1/v2 mixtures remain valid. No release identity, carry14,
+inner-world4/rules6, generator or retirement policy changes at this boundary.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

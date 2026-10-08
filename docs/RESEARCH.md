@@ -3856,6 +3856,81 @@ the maintained6files105tests4.30s. These mocked-clock diagnostics establish
 observational/state correctness, not production timings or a hitch improvement.
 No new cumulative, visual, platform, deployment or directive-closure claim.
 
+### Enacted civic material service and current trace — 2026-10-08
+
+Local construction on `cb9cd6d991107b94e0ce8fa4fc06aac223379714` connects
+the existing resident body/routine/closing transaction to one finite project
+contribution. Native identity, terrain, service site and player spawn remain
+unchanged. Controlled needs, finite supply and schedules produce actual
+selection, dry-foot approach, arrival and use; no successful task/receipt is
+assigned. One real hourly pulse spends one unit through the existing project
+bookkeeping owner, not timer plus action. Stock removal, blocked support,
+urgent needs, current hourly hunger/intention or higher duty removes the result.
+Oldest pending requests retain age through shortages; three actual contenders
+receive distinct turns, including intermittent refill. A current used marker
+may reference the now-complete project; completion occurs once. This is bounded
+material service, not physical construction, professions, tool use or sourcing
+the existing empty-input recipes.
+
+The native RAF witness runs599 accepted100ms steps to479/phase9, then one
+actual step to480. Uninterrupted and cold full authoritative roots agree;
+only session/presentation recap is excluded. A deliberately failed later
+interval closure restores stock, ledger, project, task, body and carry and
+releases no committed vocal cue. Cold load after use grants no second debit or
+progress. Sight-gated projection/ABOUT show only current committed use and
+remain pure; they do not expose private work plans or invent acoustic events.
+
+Outer53/body-v3 explicitly authorizes the exclusive material task. Supported
+50/51/52 remain; their exact absent/v1/v2 partial history upgrades only through
+the genuine whole-roster phase-zero owner. Review found that an accepted mixed
+v3/non-v3 cohort could suppress legacy project timers elsewhere; the new mode
+invariant now rejects before world mutation and at cold/save boundaries, while
+historical v1/v2 mixtures remain supported. Carry14, inner-world4/rules6,
+generator, release identity, retirement policy and dependencies do not change.
+
+The first runtime selection passed9/10: a synthetic released50 reconstruction
+removed bodies but retained a keeper address already moved by new civic work.
+Cause-only urgent belonging now prevents unrelated civic movement during that
+explicit historical-format construction; exact stationary keeper/BIO0 equality
+is proved before body removal. Production load validation was not weakened.
+Negative persistence fixtures now enable civic capability before testing other
+malformations, rather than passing trivially at the earlier version fence.
+
+The old stationary telemetry normalizer cannot erase real civic motion and its
+lawful perception consequences. Its original outer47 digests remain historical
+evidence at6215116 and the passing cb9cd6d ration checkpoint above, not current
+state promises. New exact30-step/3-advance current-save SHA256 witnesses are
+`d8a06da291c52122e7cf88118ffdd7867a784ed1c0a89bffc92d0bdc2f4f38d4`
+(estuary) and
+`27ea1651058431261eb42b4c046b386840945c88c274c724dbdc3382a66cf9ce`
+(density8). They freeze the entire current envelope without stripping bodies,
+perception, events or announcements; complete telemetry-on/off save equality
+still passes. The two exact body-cohort hashes additionally protect reassessment
+without teleporting cleared-task bodies back to old ordinal positions. Mocked
+clock diagnostics are not production performance evidence.
+
+Terminal validation, default+JSON reporters:
+
+- `npx vitest run src/game/residentMaterialActivity.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-material-service-final-2.json`:15PASS18.76s, including actual contention, intermittent stock, phase4/9 cold continuation, completion once and hidden/visible presentation. Controlled refill and projection-only camera placement are explicit, not player acquisition or ordinary travel proof.
+- `npx vitest run src/game/runtime.residentRest.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-material-runtime-final.json`:11PASS71.07s, including actual material pulse/rollback, supported52 ration history and released50 absence. Initial failed reports remain retained.
+- `npx vitest run src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-material-telemetry-final-2.json`:4PASS20.21s. Earlier characterization failures remain evidence, not relabeled green.
+- The exact five-case `runtime.test.ts` GREET/hearing/body selection documented in the preceding ration record, with output changed only to `artifacts/validation/world0-material-greet-regression.json`:5PASS/93unselected20.48s. This is not the complete98-case suite or material-specific GREET acceptance proof.
+- `npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-material-smoke-final.json`:maintained6files105PASS4.28s. Final `npm run typecheck`:PASS. `npm run test:documentation-reuse`:45PASS.
+
+Affected-domain command:
+
+```sh
+npx vitest run src/sim/residentRationPulse.test.ts src/sim/residentRationUse.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRations.test.ts src/sim/residentRations.integration.test.ts src/sim/residentActivity.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityEventLocus.test.ts src/sim/residentMaterialActivity.test.ts src/sim/residentCircadianPhysiology.test.ts src/sim/systemComposition.integration.test.ts src/sim/civicProjects.integration.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentRationActivity.integration.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.presentation.test.ts src/game/humanPerception.activity.test.ts src/game/uiProjection.test.ts src/game/projection.perception.test.ts src/game/projection.routes.test.ts src/game/projection.terrainMemo.test.ts src/game/residentSpatial.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-material-domain-first.json
+```
+
+26files470PASS25.94s, including unchanged frozen coarse civic and ration
+world/save/event witnesses. No manual Chart/Relief play, new production timing,
+natural-rate long-run service guarantee, package/build/deployment or fresh
+complete cumulative certificate is inferred. Autonomous keeper inspection,
+local environmental/traveler execution and remaining integration acceptance
+stay unfinished. Completed directive bytes and unrelated implementation remain
+unchanged; this slice does not close the current expansion.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

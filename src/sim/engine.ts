@@ -50,12 +50,14 @@ import {
   replaceResidentActivity,
   type ResidentActivity,
   type ResidentBodyPose,
-  RESIDENT_SERVICE_ACTIVITY_VERSION,
+  RESIDENT_CIVIC_ACTIVITY_VERSION,
+  residentActivitySupportsRations,
 } from "./residentActivity";
-import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
+import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
 import { calculateResidentRationPulse } from "./residentRations";
 import { consumeResidentRationUse, residentRationUseEligible, type PreparedResidentRationUse } from "./residentRationUse";
+import { selectResidentMaterialUser } from "./residentMaterialUse";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -1330,7 +1332,7 @@ function updateResidentNeeds(world: WorldState, tick: number, rationDuties: Read
         : left.identity.stableId > right.identity.stableId
           ? 1
           : 0);
-    const uses = residents.map((resident) => resident.activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION
+    const uses = residents.map((resident) => residentActivitySupportsRations(resident.activity)
       ? residentRationUseEligible(world, resident, rationDuties, tick)
       : true); // Explicit supported pre-service aggregate execution, not visibility.
     const rations = calculateResidentRationPulse({
@@ -1474,11 +1476,28 @@ function commitProjectMaterial(
   return contribution;
 }
 
-function updateProjects(world: WorldState, tick: number): void {
+function updateProjects(world: WorldState, tick: number, serviceDuties: ReadonlyMap<string, boolean> | null): void {
   if (tick % 60 !== 0) return;
+  // The explicit v3 cohort replaces represented timer labor. Missing admission
+  // or no arrived worker means no work, not a fallback into automatic credit.
+  const enacted = world.residents.some(({ activity }) => activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION);
   for (const settlement of world.settlements) {
     const project = settlement.project;
     if (project.status === "complete" || settlement.inventory[project.resource] < 1) continue;
+    if (enacted) {
+      const resident = selectResidentMaterialUser(world, settlement.id, serviceDuties, tick);
+      if (resident === null) continue;
+      const task = resident.activity!.materialTask!;
+      commitProjectMaterial(world, settlement, 1, tick);
+      resident.activity = replaceResidentActivity(resident, {
+        ...resident.activity, materialTask: {
+          ...task, phase: "used", usedAtTick: tick, lastProgressAtTick: tick,
+          nextReassessmentAtTick: tick + 1, waitReason: null,
+        },
+      }).activity!;
+      continue;
+    }
+    // Exact supported absent/v1/v2 aggregate continuation until real adoption.
     commitProjectMaterial(world, settlement, 1, tick);
   }
 }
@@ -2045,7 +2064,8 @@ function residentDepartureActivityEventLocus(
   if (activity === null) throw new Error("Departure lost reanchored resident body");
   const prepared = replaceResidentActivity(resident, {
     ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
-    ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION ? { rationTask: null } : {}),
+    ...(residentActivitySupportsRations(activity) ? { rationTask: null } : {}),
+    ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION ? { materialTask: null } : {}),
   });
   return captureResidentActivityEventLocus(prepared, tick);
 }
@@ -2078,12 +2098,19 @@ function commitResidentActivityWorldStep(
     let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
     let task = activity.restTask;
     let rationTask = activity.rationTask ?? null;
+    let materialTask = activity.materialTask ?? null;
     if (task !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
       task = null;
     }
     if (rationTask !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== rationTask.settlementId || resident.activeContractId !== null)) rationTask = null;
+    if (materialTask !== null) {
+      const settlement = residentSettlementMaterialProject(world, resident);
+      if (settlement === null || settlement.id !== materialTask.settlementId
+        || settlement.project.id !== materialTask.projectId || settlement.project.resource !== materialTask.resource
+        || (materialTask.phase !== "used" && settlement.project.status === "complete")) materialTask = null;
+    }
     const priorLocation = snapshot.location;
     const currentLocation = resident.location;
     const changedLocation = priorLocation.kind !== currentLocation.kind
@@ -2096,6 +2123,7 @@ function commitResidentActivityWorldStep(
       pose = residentCoarseTransitionPose(world, resident);
       task = null;
       rationTask = null;
+      materialTask = null;
     }
     if (task?.origin === "selected" && task.phase === "arrived"
       && !residentRestTargetHasDrySupport(world, task.target)) {
@@ -2107,9 +2135,16 @@ function commitResidentActivityWorldStep(
         ...rationTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1,
       };
     }
+    if (materialTask !== null && (materialTask.phase === "arrived" || materialTask.phase === "used")
+      && !residentRestTargetHasDrySupport(world, materialTask.target)) {
+      materialTask = materialTask.phase === "used" ? null : {
+        ...materialTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1,
+      };
+    }
     replacements.push({ index, resident: replaceResidentActivity(resident, {
       ...activity, tick, poses: [pose], restTask: task,
-      ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION ? { rationTask } : {}),
+      ...(residentActivitySupportsRations(activity) ? { rationTask } : {}),
+      ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION ? { materialTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.
@@ -2122,6 +2157,7 @@ export function stepWorld(
   perceptionFrame?: ResidentPerceptionFrame,
   rationAdmission?: PreparedResidentRationUse,
 ): WorldState {
+  if (!residentCivicActivityCohortIsUniform(world.residents)) throw new Error("Resident civic activity requires a whole-roster mode");
   const tick = world.meta.completedTick + 1;
   const rationDuties = rationAdmission === undefined ? null : consumeResidentRationUse(world, rationAdmission);
   const residentActivities = prepareResidentActivityWorldStep(world);
@@ -2137,7 +2173,7 @@ export function stepWorld(
   ageKnowledge(world, tick);
   runProduction(world, tick);
   updateResidentNeeds(world, tick, rationDuties);
-  updateProjects(world, tick);
+  updateProjects(world, tick, rationDuties);
   if (tick % 60 === 0) generateDemandContracts(world, tick);
   advanceContracts(world, tick);
   commitResidentActivityWorldStep(world, residentActivities, tick, true);

@@ -1,6 +1,6 @@
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, RESIDENT_SERVICE_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, RESIDENT_CIVIC_ACTIVITY_VERSION, residentActivitySupportsRations } from "../sim/residentActivity";
 import { hasResidentActivityEventLocus } from "../sim/residentActivityEventLocus";
-import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
+import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform } from "../sim/residentActivityWorld";
 import { canonicalizeResidentCircadianState, residentAtSettlementRestDestination } from "../sim/livingCircadian";
 import type { ResidentState, WorldState } from "../sim/types";
 import { residentIntroductionEventSchemaValid } from "./residentIntroductionExpression";
@@ -30,12 +30,14 @@ export function residentActivitySaveExtensionsValid(
   world: WorldState,
   supportsBodies: boolean,
   supportsServices = false,
+  supportsCivicService = false,
 ): boolean {
   if (!supportsBodies) return residentActivitySaveExtensionsAbsent(world);
   try {
     const present = world.residents.filter((resident) => Object.hasOwn(resident, "activity"));
     if (present.length === 0) return residentActivitySaveExtensionsAbsent(world);
     if (present.length !== world.residents.length) return false;
+    if (!residentCivicActivityCohortIsUniform(world.residents)) return false;
     for (const resident of present) {
       const descriptor = Object.getOwnPropertyDescriptor(resident, "activity");
       const circadian = Object.getOwnPropertyDescriptor(resident, "circadian");
@@ -49,7 +51,9 @@ export function residentActivitySaveExtensionsValid(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null
       ) return false;
-      if (!supportsServices && canonicalResidentActivityForWorld(world, resident)?.version === RESIDENT_SERVICE_ACTIVITY_VERSION) return false;
+      const activity = canonicalResidentActivityForWorld(world, resident);
+      if (!supportsServices && residentActivitySupportsRations(activity)) return false;
+      if (!supportsCivicService && activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION) return false;
     }
     const residentIds = new Set(world.residents.map(({ id }) => id));
     for (const event of world.events) {

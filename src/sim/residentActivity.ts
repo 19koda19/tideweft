@@ -7,13 +7,17 @@ import {
 import { headingFromRadians } from "../game/livingActor";
 import { ACTOR_ID_MAX_LENGTH } from "./actorPerception";
 import { RESIDENT_STABLE_ID_PREFIX } from "./npcIdentity";
-import type { ResidentState } from "./types";
+import type { ResidentState, ResourceKind } from "./types";
+import { RESOURCE_KINDS } from "./types";
 
 export const RESIDENT_ACTIVITY_VERSION = 1 as const;
 export const RESIDENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v1" as const;
 /** The v1 rest/body protocol remains a deliberately supported cold format. */
 export const RESIDENT_SERVICE_ACTIVITY_VERSION = 2 as const;
 export const RESIDENT_SERVICE_ACTIVITY_OWNER_ID = "sim:resident-activity:v2" as const;
+/** Frozen v1/v2 readers remain exact; only v3 owns enacted civic material use. */
+export const RESIDENT_CIVIC_ACTIVITY_VERSION = 3 as const;
+export const RESIDENT_CIVIC_ACTIVITY_OWNER_ID = "sim:resident-activity:v3" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -56,6 +60,21 @@ export interface ResidentRationTask {
   readonly waterUsed: boolean;
 }
 
+export interface ResidentMaterialTask {
+  readonly kind: "settlement-material";
+  readonly settlementId: number;
+  readonly projectId: number;
+  readonly resource: ResourceKind;
+  readonly target: WorldPosition;
+  readonly selectedAtTick: number;
+  readonly phase: "approaching" | "waiting" | "arrived" | "used";
+  readonly lastProgressAtTick: number;
+  readonly nextReassessmentAtTick: number;
+  readonly waitReason: ResidentRestTask["waitReason"] | "no-material";
+  /** Exactly one committed unit at the hourly pulse; never portable stock. */
+  readonly usedAtTick: number | null;
+}
+
 /**
  * One optional resident-owned physical root, not a second actor population.
  * poses[0] is the interval anchor; poses[N] is the body after N accepted steps.
@@ -63,14 +82,21 @@ export interface ResidentRationTask {
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
   readonly restTask: ResidentRestTask | null;
   /** Absent only in the frozen v1 protocol; v2 requires an explicit null/task. */
   readonly rationTask?: ResidentRationTask | null;
+  /** Absent in the frozen v1/v2 protocols; v3 requires explicit null/task. */
+  readonly materialTask?: ResidentMaterialTask | null;
+}
+
+/** Explicit recognized capabilities, never numeric acceptance of future versions. */
+export function residentActivitySupportsRations(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION || activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {
@@ -96,11 +122,14 @@ export function canonicalizeResidentActivity(
   if (!plainRecord(value)) return null;
   const versionField = Object.getOwnPropertyDescriptor(value, "version");
   if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
-  const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION;
+  const civicCapable = value.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
+  const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION || civicCapable;
   if (!exactKeys(value, [
     "actorId", "ownerId", "poses", "restTask", "tick", "version",
     ...(serviceCapable ? ["rationTask"] : []),
-  ]) || (serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
+    ...(civicCapable ? ["materialTask"] : []),
+  ]) || (civicCapable ? value.ownerId !== RESIDENT_CIVIC_ACTIVITY_OWNER_ID
+    : serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
     : value.version !== RESIDENT_ACTIVITY_VERSION || value.ownerId !== RESIDENT_ACTIVITY_OWNER_ID)
     || !validActorId(value.actorId)
     || !nonnegativeInteger(value.tick)
@@ -125,10 +154,14 @@ export function canonicalizeResidentActivity(
   const restTask = canonicalRestTask(value.restTask, value.tick);
   if (restTask === undefined) return null;
   const rationTask = serviceCapable ? canonicalRationTask(value.rationTask, value.tick) : null;
-  if (rationTask === undefined || (restTask !== null && rationTask !== null)) return null;
+  const materialTask = civicCapable ? canonicalMaterialTask(value.materialTask, value.tick) : null;
+  if (rationTask === undefined || materialTask === undefined
+    || [restTask, rationTask, materialTask].filter((task) => task !== null).length > 1) return null;
   const body = poses[poses.length - 1]!;
   if (rationTask !== null && (rationTask.phase === "arrived" || rationTask.phase === "used")
     && !samePosition(body.position, rationTask.target)) return null;
+  if (materialTask !== null && (materialTask.phase === "arrived" || materialTask.phase === "used")
+    && !samePosition(body.position, materialTask.target)) return null;
   if (restTask !== null && (
     (restTask.phase === "arrived" && !samePosition(body.position, restTask.target))
     || (restTask.origin === "continued-admitted-rest" && poses.some((pose) => (
@@ -136,13 +169,14 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
-    ownerId: serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
+    version: civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
     restTask,
     ...(serviceCapable ? { rationTask } : {}),
+    ...(civicCapable ? { materialTask } : {}),
   });
   CANONICAL_ACTIVITIES.add(activity);
   return activity;
@@ -210,7 +244,7 @@ export function replaceResidentActivity(
     tick: resident.perception.tick,
   });
   if (activity === null) throw new RangeError("Resident activity is malformed, foreign or mistimed");
-  const task = activity.restTask ?? activity.rationTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
   if (task !== null && (
     resident.location.kind !== "settlement"
     || task.settlementId !== resident.location.settlementId
@@ -315,6 +349,38 @@ function canonicalRationTask(value: unknown, tick: number): ResidentRationTask |
     lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
     waitReason: value.waitReason as ResidentRationTask["waitReason"],
     usedAtTick: value.usedAtTick as number | null, foodUsed: value.foodUsed, waterUsed: value.waterUsed,
+  });
+}
+
+function canonicalMaterialTask(value: unknown, tick: number): ResidentMaterialTask | null | undefined {
+  if (value === null) return null;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "kind", "lastProgressAtTick", "nextReassessmentAtTick", "phase", "projectId", "resource",
+    "selectedAtTick", "settlementId", "target", "usedAtTick", "waitReason",
+  ]) || value.kind !== "settlement-material" || !positiveInteger(value.settlementId)
+    || !positiveInteger(value.projectId) || !RESOURCE_KINDS.includes(value.resource as ResourceKind)
+    || !isWorldPosition(value.target)
+    || !nonnegativeInteger(value.selectedAtTick) || value.selectedAtTick > tick
+    || !nonnegativeInteger(value.lastProgressAtTick)
+    || value.lastProgressAtTick < value.selectedAtTick || value.lastProgressAtTick > tick
+    || !nonnegativeInteger(value.nextReassessmentAtTick) || value.nextReassessmentAtTick < value.selectedAtTick
+    || !["approaching", "waiting", "arrived", "used"].includes(value.phase as string)
+    || !(value.waitReason === null || value.waitReason === "no-traversable-route"
+      || value.waitReason === "outside-local-corridor" || value.waitReason === "no-material")
+    || (value.phase === "waiting") !== (value.waitReason !== null)
+    || (value.phase === "used"
+      ? !nonnegativeInteger(value.usedAtTick) || value.usedAtTick % 60 !== 0
+        || value.usedAtTick <= value.selectedAtTick || value.usedAtTick > tick
+        || value.lastProgressAtTick !== value.usedAtTick
+      : value.usedAtTick !== null)
+  ) return undefined;
+  return Object.freeze({
+    kind: "settlement-material", settlementId: value.settlementId, projectId: value.projectId,
+    resource: value.resource as ResourceKind,
+    target: createWorldPosition(value.target.region, value.target.localX, value.target.localY),
+    selectedAtTick: value.selectedAtTick, phase: value.phase as ResidentMaterialTask["phase"],
+    lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
+    waitReason: value.waitReason as ResidentMaterialTask["waitReason"], usedAtTick: value.usedAtTick as number | null,
   });
 }
 

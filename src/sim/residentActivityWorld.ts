@@ -8,9 +8,24 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_CIVIC_ACTIVITY_VERSION, type ResidentActivity } from "./residentActivity";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
+import { RESOURCE_KINDS } from "./types";
+
+/** Civic mode is whole-roster authority; old v1/v2 mixtures remain supported. */
+export function residentCivicActivityCohortIsUniform(residents: readonly ResidentState[]): boolean {
+  let civic = 0;
+  for (const resident of residents) {
+    const activity = Object.getOwnPropertyDescriptor(resident, "activity");
+    const version = activity !== undefined && Object.hasOwn(activity, "value")
+      && activity.value !== null && typeof activity.value === "object"
+      ? Object.getOwnPropertyDescriptor(activity.value, "version") : undefined;
+    if (version !== undefined && Object.hasOwn(version, "value") && version.value === RESIDENT_CIVIC_ACTIVITY_VERSION) civic += 1;
+  }
+  // This checks mode only. The existing shape/world validators remain binding.
+  return civic === 0 || civic === residents.length;
+}
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */
 export function residentSettlementRestTarget(
@@ -65,6 +80,22 @@ export function residentSettlementRationTarget(
   return residentSettlementRestTarget(world, resident);
 }
 
+/** One existing finite project; no fabricated building/worksite or profession. */
+export function residentSettlementMaterialProject(world: WorldState, resident: ResidentState) {
+  if (resident.location.kind !== "settlement" || resident.activeContractId !== null) return null;
+  const settlement = world.settlements.find(({ id }) => resident.location.kind === "settlement"
+    && id === resident.location.settlementId);
+  const project = settlement?.project;
+  if (settlement === undefined || project === undefined || !Number.isSafeInteger(project.id) || project.id <= 0
+    || !["beacon", "cache", "crossing", "clinic", "ferry"].includes(project.kind)
+    || !["building", "complete"].includes(project.status) || !RESOURCE_KINDS.includes(project.resource)
+    || !Number.isSafeInteger(project.target) || project.target <= 0
+    || !Number.isSafeInteger(project.progress) || project.progress < 0 || Object.is(project.progress, -0)
+    || project.progress > project.target
+    || (project.status === "complete") !== (project.progress === project.target)) return null;
+  return settlement;
+}
+
 /**
  * Cold/world boundary: authenticate physical source and membership separately
  * from the generic immutable activity shape. Construction custody alone is
@@ -83,7 +114,7 @@ export function canonicalResidentActivityForWorld(
       id === resident.id && identity.stableId === resident.identity.stableId
     ))
   ) return null;
-  const task = activity.restTask ?? activity.rationTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
   if (task === null) return activity;
   if (resident.location.kind !== "settlement"
     || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null
@@ -92,6 +123,11 @@ export function canonicalResidentActivityForWorld(
     ? residentSettlementRestTarget(world, resident, task.legacySettlementOrdinal)
     : residentSettlementRationTarget(world, resident);
   if (target === null || !samePosition(target, task.target)) return null;
+  if (task.kind === "settlement-material") {
+    const settlement = residentSettlementMaterialProject(world, resident);
+    if (settlement === null || settlement.project.id !== task.projectId || settlement.project.resource !== task.resource
+      || (task.phase !== "used" && settlement.project.status !== "building")) return null;
+  }
   if (task.kind === "settlement-rest" && task.origin === "continued-admitted-rest") {
     const receipt = canonicalizeLivingCircadianPersistentState(resident.circadian);
     if (receipt === null || !receipt.restDestinationArrived

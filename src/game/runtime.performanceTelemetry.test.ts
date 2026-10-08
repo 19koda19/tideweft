@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
-import { RESIDENT_SERVICE_ACTIVITY_OWNER_ID, RESIDENT_SERVICE_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
@@ -12,8 +12,8 @@ import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabit
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 import { createPlayerExpressionRecencyState } from "./playerExpressionRecency";
-import { headingFromRadians } from "./livingActor";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { worldPositionDelta } from "./worldPosition";
 
 vi.setConfig({ testTimeout: 120_000 });
 
@@ -113,31 +113,44 @@ function takeScheduledFrame(message: string): (now: number) => void {
   return callback;
 }
 
-/** Only the explicitly characterized stationary body-adoption delta is reversed. */
-function historicalStationaryWorld(worldJson: string, seed: string): string {
+/** Exact current civic bodies; movement is not reversed into a legacy oracle. */
+function assertStationaryCivicWorld(worldJson: string, seed: string): void {
   const current = deserializeWorld(worldJson);
   const initial = createWorld(seed, "standard");
   expect(current.meta.completedTick).toBe(initial.meta.completedTick + 3);
   expect(current.residents).toHaveLength(42);
   expect(initial.residents).toHaveLength(42);
+  const bodyDigest = createHash("sha256").update(canonicalUtil.stableStringify(
+    current.residents.map(({ activity }) => activity),
+  )).digest("hex");
+  const bodyDigests: Readonly<Record<string, string>> = {
+    "runtime baseline estuary": "b44ae9acc6b470e8dcefbb4442d2722752826985ab3693a152f34579c618cafa",
+    "breathing room regional density 8": "1a589071b871a7153296110b793a29c21a397053e071f1c171c9089027f134fe",
+  };
+  expect(bodyDigest).toBe(bodyDigests[seed]);
   for (const [index, resident] of current.residents.entries()) {
     const original = initial.residents[index]!;
     expect(resident.identity.stableId).toBe(original.identity.stableId);
     const source = resolveResidentWorldPlacement(initial, original);
     if (source === null) throw new Error("Stationary baseline lost its original resident placement");
     const activity = canonicalResidentActivityForWorld(current, resident);
-    // Current phase-zero adoption uses the explicit v2 ration protocol. These
-    // stationary three-minute inputs select no ration task or use; assert that
-    // exact new shape before retaining the original historical normalization.
-    expect(activity).toEqual({
-      version: RESIDENT_SERVICE_ACTIVITY_VERSION,
-      ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
+    // Current work selection is now enacted. This three-minute fixture still
+    // cannot consume project material before its first actual hourly pulse.
+    expect(activity).toMatchObject({
+      version: RESIDENT_CIVIC_ACTIVITY_VERSION,
+      ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
       actorId: original.identity.stableId,
       tick: current.meta.completedTick,
-      poses: [{ position: source.position, heading: headingFromRadians(source.facing) }],
       restTask: null,
       rationTask: null,
     });
+    expect(activity?.poses).toHaveLength(1);
+    const pose = activity!.poses[0]!;
+    // Reassessment can clear a task without teleporting its body back to the
+    // old ordinal source. The full cohort hash protects that exact trace too.
+    const delta = worldPositionDelta(source.position, pose.position);
+    expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(30 * 105);
+    if (activity?.materialTask !== null) expect(activity?.materialTask?.usedAtTick).toBeNull();
     expect(resident.circadian).toMatchObject({
       restDestinationArrived: false,
       posture: { state: "awake", enteredAtTick: initial.meta.completedTick },
@@ -146,19 +159,7 @@ function historicalStationaryWorld(worldJson: string, seed: string): string {
     // first tick granted exactly 2,500 legacy exhaustion relief before routine
     // adoption. Awake membership no longer proves restorative arrival.
     expect(resident.condition.exhaustion).toBe(original.condition.exhaustion);
-    const { activity: _body, ...historical } = resident;
-    historical.condition = {
-      ...resident.condition,
-      exhaustion: Math.max(0, resident.condition.exhaustion - 2_500),
-    };
-    historical.circadian = {
-      ...resident.circadian!,
-      restDestinationArrived: true,
-      posture: { state: "awake", enteredAtTick: initial.meta.completedTick + 1 },
-    };
-    current.residents[index] = historical;
   }
-  return serializeWorld(current);
 }
 
 async function assertEqualUninstrumentedWork(seed: string, worldJson: string): Promise<void> {
@@ -245,35 +246,22 @@ describe("runtime performance telemetry", () => {
         expect(player.animalCallKnowledge).toEqual(createPlayerAnimalCallKnowledge());
         expect(Object.hasOwn(envelope, "playerEffortRecency")).toBe(false);
         expect(envelope.integrity).toBe(gameSaveEnvelopeIntegrity(envelope));
-        // These stationary inputs create no effort, footing or learned-call history.
-        // Preserve the original 6215116 oracle for unaffected state. Matched
-        // 30-step captures additionally characterize current body adoption,
-        // arrival and the retired first-tick unbound recovery. Assert those
-        // exact consequences before reversing only that known delta, beside
-        // the earlier two player-sight consequences. Original hashes stay fixed.
-        const { playerExpressionRecency: _recency, integrity: _integrity, ...v47Base } = envelope;
-        const { animalCallKnowledge: _callKnowledge, ...v47Player } = player;
-        v47Base.player = v47Player;
-        v47Base.world = historicalStationaryWorld(envelope.world as string, seed);
+        // Civic work deliberately adds real motion and its lawful observation
+        // consequences. The historical 6215116/outer47 hashes remain evidence
+        // of that older executable state (Research), not a current equality
+        // promise. Freeze the entire current save without reversing bodies,
+        // perception, events, session announcements or new schema fields.
+        assertStationaryCivicWorld(envelope.world as string, seed);
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
           expect(session.announcement).toEqual({
-            id: 2,
+            id: 3,
             message: "Domestic chicken eats one produce unit from the open store. The physical stock is reduced.",
             assertive: false,
           });
-          expect(session.nextAnnouncementId).toBe(3);
-          v47Base.session = {
-            ...session,
-            announcement: {
-              id: 1,
-              message: "A new estuary settles into one possible shape. Begin by moving, then pulse the Loom.",
-              assertive: false,
-            },
-            nextAnnouncementId: 2,
-          };
+          expect(session.nextAnnouncementId).toBe(4);
         } else {
-          const observedWorld = deserializeWorld(v47Base.world as string);
+          const observedWorld = deserializeWorld(envelope.world as string);
           const newlyObserved = observedWorld.events.find(({ sequence }) => sequence === 7);
           expect(newlyObserved).toEqual({
             data: {
@@ -288,18 +276,12 @@ describe("runtime performance telemetry", () => {
             tick: 420,
             type: "contract-offered",
           });
-          if (newlyObserved === undefined) throw new Error("Density fixture lost its newly witnessed event");
-          delete newlyObserved.data.playerObserved;
-          v47Base.world = serializeWorld(observedWorld);
         }
-        v47Base.version = 47;
-        const v47Json = JSON.stringify({ ...v47Base, integrity: gameSaveEnvelopeIntegrity(v47Base) });
-        const v47Digest = createHash("sha256").update(v47Json).digest("hex");
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "6962f074f4c66d2c27ba23dfa7e49ad2cbf30d2782fa0b230f95107a6c3e96b7",
-          "breathing room regional density 8": "e8fb77bbf910afd1066049afecda4ae3d588665634c0ffc1011bb10985827f1e",
+          "runtime baseline estuary": "d8a06da291c52122e7cf88118ffdd7867a784ed1c0a89bffc92d0bdc2f4f38d4",
+          "breathing room regional density 8": "27ea1651058431261eb42b4c046b386840945c88c274c724dbdc3382a66cf9ce",
         };
-        expect(v47Digest).toBe(baselineDigests[seed]);
+        expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);
       } finally {
         runtime.destroy();
       }

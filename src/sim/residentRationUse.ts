@@ -6,7 +6,7 @@ import {
   residentCircadianWatchReference,
 } from "./livingCircadian";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
-import { RESIDENT_SERVICE_ACTIVITY_VERSION } from "./residentActivity";
+import { residentActivitySupportsRations } from "./residentActivity";
 import type { ResidentState, WeatherState, WorldState } from "./types";
 
 /** Higher owners authenticate duties; sim validates binding, not hidden causes. */
@@ -30,7 +30,7 @@ interface Custody {
 
 const PREPARED = new WeakMap<PreparedResidentRationUse, Custody>();
 
-/** One exact closing transaction, never a saved entitlement or actor result. */
+/** One exact closing service transaction (rations and civic work), never saved. */
 export function prepareResidentRationUse(
   world: WorldState,
   duties: readonly ResidentRationDuty[],
@@ -99,16 +99,16 @@ export function revokeResidentRationUse(prepared: PreparedResidentRationUse): vo
   PREPARED.delete(prepared);
 }
 
-/** Shared existing priority signals; an eat intention alone is insufficient. */
-export function residentRationPriorityEligible(
+/** Shared existing service priority; callers own food/work-specific selection. */
+export function residentServicePriorityAvailable(
   resident: ResidentState,
   weather: WeatherState,
   onDuty: boolean,
   tick: number,
-): boolean {
+) {
   if (resident.location.kind !== "settlement" || resident.activeContractId !== null || onDuty
     || weather.kind === "storm" || resident.perception.tick !== tick
-    || residentCircadianWatchReference(resident.perception) !== null) return false;
+    || residentCircadianWatchReference(resident.perception) !== null) return null;
   const circadian = canonicalizeResidentCircadianState(resident.circadian, {
     residentStableId: resident.identity.stableId, homeSettlementId: resident.homeSettlementId,
     atTick: tick, arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
@@ -116,7 +116,15 @@ export function residentRationPriorityEligible(
   if (circadian === null || resident.perception.beliefs.some((belief) => (
     belief.lastObservedTick === tick && belief.strongInterrupt
     && belief.salience >= circadian.policy.wakeSensitivity
-  ))) return false;
+  ))) return null;
+  return circadian;
+}
+
+export function residentRationPriorityEligible(
+  resident: ResidentState, weather: WeatherState, onDuty: boolean, tick: number,
+): boolean {
+  const circadian = residentServicePriorityAvailable(resident, weather, onDuty, tick);
+  if (circadian === null) return false;
   const urgent = residentCircadianUrgentPreference({ needs: resident.needs, exhaustion: resident.condition.exhaustion });
   if (urgent !== null) return urgent.referenceId === "need:food";
   return resident.intention === "eat" && projectLivingCircadianClockPreference(
@@ -132,7 +140,7 @@ export function residentRationUseEligible(
   tick: number,
 ): boolean {
   const activity = canonicalResidentActivityForWorld(world, resident, tick);
-  if (activity === null || activity.version !== RESIDENT_SERVICE_ACTIVITY_VERSION) return false;
+  if (activity === null || !residentActivitySupportsRations(activity)) return false;
   const task = activity.rationTask;
   const duty = duties?.get(resident.identity.stableId);
   return duty !== undefined && task?.phase === "arrived" && task.selectedAtTick < tick

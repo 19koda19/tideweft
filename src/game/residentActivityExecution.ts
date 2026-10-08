@@ -10,20 +10,24 @@ import {
   canonicalizeResidentActivity,
   replaceResidentActivity,
   RESIDENT_ACTIVITY_MAX_PHASE,
-  RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
-  RESIDENT_SERVICE_ACTIVITY_VERSION,
+  RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
+  RESIDENT_CIVIC_ACTIVITY_VERSION,
+  residentActivitySupportsRations,
   RESIDENT_REST_APPROACH_STEP_UNITS,
   type ResidentBodyPose,
   type ResidentRestTask,
   type ResidentRationTask,
+  type ResidentMaterialTask,
 } from "../sim/residentActivity";
 import {
   canonicalResidentActivityForWorld,
   residentRestTargetHasDrySupport,
   residentSettlementRestTarget,
   residentSettlementRationTarget,
+  residentSettlementMaterialProject,
 } from "../sim/residentActivityWorld";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
+import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
 import { waterDepthAt } from "../sim/terrain";
 import type { ResidentState, WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
@@ -45,7 +49,7 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 
-/** Local dry-foot rest/ration approach, not full-route planning or watercraft. */
+/** Local dry-foot rest/service approach, not full-route planning or watercraft. */
 const CORRIDOR_PADDING_TILES = 4;
 const MAX_CORRIDOR_AXIS_TILES = 16;
 
@@ -133,11 +137,12 @@ export function adoptResidentActivities(world: WorldState, phase = 0): boolean {
         };
       }
       const body = replaceResidentActivity(resident, {
-        version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
+        version: RESIDENT_CIVIC_ACTIVITY_VERSION, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
         actorId: resident.identity.stableId, tick,
         poses: [{ position: placement.position, heading: headingFromRadians(placement.facing) }],
         restTask: task,
         rationTask: null,
+        materialTask: null,
       });
       // Awake membership is not physical arrival. Only the previously admitted
       // episode survives; no new clock projection can manufacture continuation.
@@ -189,8 +194,9 @@ export function prepareResidentRestActivities(
       // Explicit phase-zero evolution preserves v1 cold partial intervals. It
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
-        ...priorActivity, version: RESIDENT_SERVICE_ACTIVITY_VERSION,
-        ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID, rationTask: priorActivity.rationTask ?? null,
+        ...priorActivity, version: RESIDENT_CIVIC_ACTIVITY_VERSION,
+        ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID, rationTask: priorActivity.rationTask ?? null,
+        materialTask: priorActivity.materialTask ?? null,
       }, { actorId: resident.identity.stableId, tick });
       if (activity === null || activity.poses.length !== 1) return false;
       const duty = dutyByActor.get(resident.identity.stableId) ?? null;
@@ -236,7 +242,34 @@ export function prepareResidentRestActivities(
       } else if (task.phase === "waiting" && task.nextReassessmentAtTick <= tick) {
         task = { ...task, phase: "approaching", waitReason: null };
       }
-      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask });
+      let materialTask = activity.materialTask ?? null;
+      const material = residentSettlementMaterialProject(world, resident);
+      const wantsMaterial = task === null && rationTask === null
+        && routine.effectivePreference === "active" && routine.posture.state === "awake"
+        && residentMaterialPriorityEligible(resident, world.weather, duty !== null, tick);
+      const showingUsedMaterial = materialTask?.phase === "used" && materialTask.usedAtTick === tick
+        && task === null && rationTask === null && routine.effectivePreference === "active"
+        && routine.posture.state === "awake" && plan.projection.priorityOverride === null;
+      if (!showingUsedMaterial && (!wantsMaterial || material === null
+        || material.project.status === "complete" || materialTask?.phase === "used")) materialTask = null;
+      if (wantsMaterial && !showingUsedMaterial && material?.project.status === "building") {
+        if (materialTask === null) {
+          const target = residentSettlementRationTarget(world, resident);
+          if (target === null || resident.location.kind !== "settlement") return false;
+          materialTask = {
+            kind: "settlement-material", settlementId: material.id,
+            projectId: material.project.id, resource: material.project.resource, target,
+            selectedAtTick: tick, lastProgressAtTick: tick, nextReassessmentAtTick: tick,
+            phase: "approaching", waitReason: null, usedAtTick: null,
+          };
+        }
+        if (material.inventory[materialTask.resource] < 1) {
+          materialTask = { ...materialTask, phase: "waiting", waitReason: "no-material", nextReassessmentAtTick: tick + 1 };
+        } else if (materialTask.phase === "waiting" && materialTask.nextReassessmentAtTick <= tick) {
+          materialTask = { ...materialTask, phase: "approaching", waitReason: null };
+        }
+      }
+      let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask, materialTask });
       // Clearing a continued episode changes arrival and wake together. Do not
       // commit the old projection's arrived=true bit beside an awake body.
       candidate = alignCircadianArrival(candidate, tick);
@@ -280,7 +313,7 @@ export function advanceResidentRestActivities(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null) return null;
       let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
-      let task: ResidentRestTask | ResidentRationTask | null = activity.restTask ?? activity.rationTask ?? null;
+      let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? null;
       if (task?.phase === "approaching") {
         if (!residentRestTargetHasDrySupport(world, task.target)) {
           task = waitForRest(task, tick, "no-traversable-route");
@@ -322,8 +355,10 @@ export function advanceResidentRestActivities(
       let candidate = replaceResidentActivity(resident, {
         ...activity, poses: [...activity.poses, pose],
         restTask: task?.kind === "settlement-rest" ? task : null,
-        ...(activity.version === RESIDENT_SERVICE_ACTIVITY_VERSION
+        ...(residentActivitySupportsRations(activity)
           ? { rationTask: task?.kind === "settlement-ration" ? task : null } : {}),
+        ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION
+          ? { materialTask: task?.kind === "settlement-material" ? task : null } : {}),
       });
       if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
         candidate = alignCircadianArrival(candidate, tick);
@@ -360,11 +395,11 @@ function alignCircadianArrival(resident: ResidentState, tick: number): ResidentS
   });
 }
 
-function arriveAtRest<T extends ResidentRestTask | ResidentRationTask>(task: T, tick: number): T {
+function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask>(task: T, tick: number): T {
   return { ...task, phase: "arrived", waitReason: null, lastProgressAtTick: tick, nextReassessmentAtTick: tick + 1 };
 }
 
-function waitForRest<T extends ResidentRestTask | ResidentRationTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
+function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }
 

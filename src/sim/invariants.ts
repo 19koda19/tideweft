@@ -23,7 +23,7 @@ import {
   residentAtSettlementRestDestination,
 } from "./livingCircadian";
 import { stableStringify } from "./util";
-import { canonicalResidentActivityForWorld } from "./residentActivityWorld";
+import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform } from "./residentActivityWorld";
 
 function invariant(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`World invariant failed: ${message}`);
@@ -267,6 +267,7 @@ export function assertWorldInvariants(world: WorldState): void {
     "survived-storm", "worked-another-route", "rescued-traveler", "lost-equipment", "learned-trade",
     "migrated-settlement",
   ]);
+  invariant(residentCivicActivityCohortIsUniform(world.residents), "resident civic activity requires a whole-roster mode");
   for (const resident of world.residents) {
     claimId(resident.id, `resident ${resident.id}`);
     invariant(resident.name.length > 0, `resident ${resident.id} is unnamed`);
