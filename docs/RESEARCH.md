@@ -3690,6 +3690,35 @@ passed all4selected cases56.70s (37unselected), including the shared dry-crest
 hearing counterfactual. These are test-only reconciliations: production source,
 schemas, dependencies and release identity remain unchanged.
 
+### Existing ration accounting extraction — 2026-10-08
+
+The unpublished `1025fe22fc8e14e7540a37bf7459bd5022d7a6be` engine supplied
+the BEFORE characterization for a small accounting-owner extraction. Two
+fixtures use the existing `createWorld`/`stepWorld`/serialization authority:
+untouched `first lantern`, standard, and explicitly controlled native macro
+presence/stocks/needs with the same food recipe. Both advance exactly60/120
+world steps to absolute480/540. The controlled fixture admits a visitor at its
+destination, excludes a route traveler, and makes the existing recipe's eight
+food units necessary before the same-hour two-unit ration debit. There is no
+authored successful task, body, meal, source/work livelihood or arrival receipt.
+
+The initial fixture incorrectly reversed the canonical resident root and failed
+the existing sorted-ID invariant before any step. Removing that illegal fixture
+permutation, without changing the invariant, yielded2PASS979ms:
+`TIDEWEFT_RATION_CHARACTERIZATION=1 npx vitest run src/sim/residentRations.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-accounting-canonical-before.json`.
+Four full-world/save/event SHA256 witnesses were then frozen in that public test
+before replacing the engine arithmetic. AFTER17PASS1.02s retains all twelve
+hashes exactly, plus segmented batching and cold continuation:
+`TIDEWEFT_RATION_CHARACTERIZATION=1 npx vitest run src/sim/residentRations.integration.test.ts src/sim/residentRations.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-ration-accounting-after.json`.
+
+`residentRations.ts` only computes the existing all-or-none food/water quantities
+and aligned food needs. The engine retains cadence, presence/order, actual stock
+and ledger commits, route growth, all other needs, intentions and stress. Unit
+edges include no cohort, independent exact/insufficient stocks and one final
+clamp at high/low need. This changes no save schema, supported format, dependency
+or release identity. It prepares the existing accounting boundary, not physical
+meal/service completion, a sourced-production fix or measured FPS improvement.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

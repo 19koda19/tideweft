@@ -2344,6 +2344,15 @@ keeper inspection, and conserved delivery provide real consumers; sourced
 professions, broad production, commerce, and addressable porter cargo retain
 their separate owners.
 
+The existing hourly aggregate ration arithmetic has one small owner,
+`src/sim/residentRations.ts`. The engine still owns the actual-present sorted
+cohort, 60-tick cadence, production-before-needs order and exact inventory/ledger
+debits. Food and water independently require the full `ceil(cohort/3)` batch;
+need growth and their combined relief receive one final clamp. This is an
+accounting foundation, not enacted eating, an arrival receipt or a second food
+inventory. Physical service/use remains unfinished and must replace, not add
+to, the represented batch's debit and relief.
+
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
 current-interval poses, and an authenticated settlement-rest task. The world

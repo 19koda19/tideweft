@@ -53,6 +53,7 @@ import {
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
+import { calculateResidentRations } from "./residentRations";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -1327,22 +1328,20 @@ function updateResidentNeeds(world: WorldState, tick: number): void {
         : left.identity.stableId > right.identity.stableId
           ? 1
           : 0);
-    const ration = residents.length === 0 ? 0 : Math.max(1, Math.ceil(residents.length / 3));
-    const foodServed = ration > 0 && settlement.inventory.food >= ration;
-    const waterServed = ration > 0 && settlement.inventory.freshWater >= ration;
-    if (foodServed) {
-      settlement.inventory.food -= ration;
-      world.ledger.consumed.food += ration;
-    }
-    if (waterServed) {
-      settlement.inventory.freshWater -= ration;
-      world.ledger.consumed.freshWater += ration;
-    }
+    const rations = calculateResidentRations({
+      foodStock: settlement.inventory.food,
+      freshWaterStock: settlement.inventory.freshWater,
+      foodNeeds: residents.map((resident) => resident.needs.food),
+      hungerGrowth: Math.trunc((34_000 * pressure) / FIXED_POINT),
+    });
+    settlement.inventory.food -= rations.foodConsumed;
+    world.ledger.consumed.food += rations.foodConsumed;
+    settlement.inventory.freshWater -= rations.freshWaterConsumed;
+    world.ledger.consumed.freshWater += rations.freshWaterConsumed;
 
     let totalNeed = 0;
-    for (const resident of residents) {
-      const hungerGrowth = Math.trunc((34_000 * pressure) / FIXED_POINT);
-      resident.needs.food = clampInteger(resident.needs.food + hungerGrowth - (foodServed ? 68_000 : 0) - (waterServed ? 8_000 : 0));
+    for (const [index, resident] of residents.entries()) {
+      resident.needs.food = rations.nextFoodNeeds[index]!;
       // Supported pre-Turning-Day residents may lack the optional receipt and
       // retain the old clock-only recovery rule. Current residents bind to the
       // physical settlement-rest contract; this is compatibility, not a model
