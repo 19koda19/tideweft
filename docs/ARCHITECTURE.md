@@ -2379,6 +2379,11 @@ Local construction now includes the optional immutable resident-owned
 current-interval poses, and exclusive authenticated settlement-rest/ration/
 material tasks. Frozen v1 body/rest and v2 ration protocols remain deliberately
 supported; v3 requires an explicit nullable material task alongside ration.
+Shared version-only capability helpers classify the deliberately recognized
+ration/material protocols across service, body reanchoring, cohort mode and
+outer-save consumers. They never replace full shape/world authentication or
+accept an unknown version by numeric ordering; frozen codec mappings remain
+explicit.
 The world binding validates the
 actual settlement target or one captured legacy refuge;
 world advancement resets interval history without relocating stationary

@@ -1,5 +1,5 @@
 import { projectLivingCircadianClockPreference, residentCircadianUrgentPreference } from "./livingCircadian";
-import { RESIDENT_CIVIC_ACTIVITY_VERSION } from "./residentActivity";
+import { residentActivitySupportsMaterials } from "./residentActivity";
 import {
   canonicalResidentActivityForWorld,
   residentRestTargetHasDrySupport,
@@ -27,7 +27,7 @@ export function residentMaterialUseEligible(
   const task = activity?.materialTask;
   const duty = duties?.get(resident.identity.stableId);
   const settlement = residentSettlementMaterialProject(world, resident);
-  return activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION && duty !== undefined
+  return residentActivitySupportsMaterials(activity) && duty !== undefined
     && task?.phase === "arrived" && task.selectedAtTick < tick
     && settlement?.project.status === "building" && settlement.inventory[task.resource] >= 1
     && resident.circadian?.posture.state === "awake" && residentRestTargetHasDrySupport(world, task.target)

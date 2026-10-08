@@ -50,7 +50,7 @@ import {
   replaceResidentActivity,
   type ResidentActivity,
   type ResidentBodyPose,
-  RESIDENT_CIVIC_ACTIVITY_VERSION,
+  residentActivitySupportsMaterials,
   residentActivitySupportsRations,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
@@ -1480,7 +1480,7 @@ function updateProjects(world: WorldState, tick: number, serviceDuties: Readonly
   if (tick % 60 !== 0) return;
   // The explicit v3 cohort replaces represented timer labor. Missing admission
   // or no arrived worker means no work, not a fallback into automatic credit.
-  const enacted = world.residents.some(({ activity }) => activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION);
+  const enacted = world.residents.some(({ activity }) => residentActivitySupportsMaterials(activity));
   for (const settlement of world.settlements) {
     const project = settlement.project;
     if (project.status === "complete" || settlement.inventory[project.resource] < 1) continue;
@@ -2065,7 +2065,7 @@ function residentDepartureActivityEventLocus(
   const prepared = replaceResidentActivity(resident, {
     ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
     ...(residentActivitySupportsRations(activity) ? { rationTask: null } : {}),
-    ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION ? { materialTask: null } : {}),
+    ...(residentActivitySupportsMaterials(activity) ? { materialTask: null } : {}),
   });
   return captureResidentActivityEventLocus(prepared, tick);
 }
@@ -2144,7 +2144,7 @@ function commitResidentActivityWorldStep(
     replacements.push({ index, resident: replaceResidentActivity(resident, {
       ...activity, tick, poses: [pose], restTask: task,
       ...(residentActivitySupportsRations(activity) ? { rationTask } : {}),
-      ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION ? { materialTask } : {}),
+      ...(residentActivitySupportsMaterials(activity) ? { materialTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.

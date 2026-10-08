@@ -4015,6 +4015,32 @@ manual Chart/Relief, packaging or deployment result is inferred. Dedicated
 keeper approach, local environment/traveler execution and remaining acceptance
 stay unfinished. Completed directive bytes remain unchanged.
 
+### Shared explicit resident service capabilities — 2026-10-08
+
+Behavior-preserving application cleanup on
+`320d31898c679f5cfcdd03f0e8ebd19dd425d718` centralizes the current
+material-capability classification in `residentActivitySupportsMaterials`.
+Existing civic mode, use eligibility, movement/reanchoring, outer-save fences
+and in-place keeper consumers now use that same explicit classification. Ration
+classification retains both deliberately supported v2 and current v3. This
+removes scattered consumer checks that could otherwise lose an existing
+capability during a later protocol extension; it does **not** add that extension,
+an inspection task, a new format or new gameplay. Frozen exact codec mappings,
+whole-roster validation, schema53/carry14, support and dependencies stay exact.
+Version classification is not authority to bypass shape/custody/world checks.
+
+Terminal validation:
+
+- `npx vitest run src/sim/residentActivityCapabilities.test.ts --maxWorkers=1`:7 PASS,172ms. Explicit v1/v2/v3 matrix, absent/unsupported versions and immutable minimal inputs; no numeric future-version acceptance or full-shape validation claim.
+- `npx vitest run src/sim/residentActivity.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentMaterialActivity.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRationUse.test.ts src/sim/civicProjects.integration.test.ts src/sim/residentRations.integration.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/settlementKeeperInspection.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-civic-capability-domain.json`:11 files/243 PASS,7.09s.
+- `npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/runtime.keeperInspection.integration.test.ts src/game/runtime.performanceTelemetry.test.ts src/game/residentMaterialActivity.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-civic-capability-native.json`:4 files/36 PASS,119.61s. Actual rest/ration/material/keeper selection, approach/use, priorities, fair contention, supported cold formats, exact phase4/9 continuation and late-failure rollback remain intact. Both current whole-save/body-cohort hashes in the preceding keeper record are unchanged; telemetry-on/off equality and historical coarse civic/ration digests stay exact.
+- `npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-civic-capability-smoke.json`:maintained6 files/105 PASS,4.69s. Final `npm run typecheck`:PASS.
+
+No existing test expectation, digest or runtime fixture changed. This is neither
+an optimization measurement nor full cumulative/platform/visual/release proof.
+Dedicated keeper approach and the remaining existing-human integration stay
+unfinished. Completed directive bytes are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

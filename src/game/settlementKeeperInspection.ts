@@ -4,7 +4,7 @@ import {
   type ActorObservation,
 } from "../sim/actorPerception";
 import { projectLivingCircadianClockPreference, residentCircadianUrgentPreference } from "../sim/livingCircadian";
-import { RESIDENT_CIVIC_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { residentActivitySupportsMaterials } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { residentServicePriorityAvailable } from "../sim/residentRationUse";
 import { FIXED_POINT, type ResidentState, type WorldState, type WorldView } from "../sim/types";
@@ -47,7 +47,7 @@ export function collectSettlementKeeperStoreObservations(
   if (state === null || keeper === null || input.targetTick !== economy.completedTick + 1) return null;
   // Supported older partial body protocols remain exact until phase-zero
   // adoption. No new autonomous producer is retrofitted into their history.
-  if (keeper.activity?.version !== RESIDENT_CIVIC_ACTIVITY_VERSION || state.closure !== "open") return [];
+  if (!residentActivitySupportsMaterials(keeper.activity) || state.closure !== "open") return [];
   const source = projectSettlementFoodStoreSource(state);
   if (source === null || source.source.packagingLeakage === 0) return [];
   const address = livingActorAddressForResident(economy, keeper);
@@ -129,7 +129,7 @@ export function advanceSettlementKeeperStoreInspection(
   });
   if (informed === null) return null;
   const activity = canonicalResidentActivityForWorld(input.world, keeper);
-  if (activity?.version !== RESIDENT_CIVIC_ACTIVITY_VERSION) return informed;
+  if (activity === null || !residentActivitySupportsMaterials(activity)) return informed;
   const duty = deriveSettlementKeeperCircadianDuty(keeper, informed, input.porterResponse, tick);
   if (duty === undefined) return null;
   const routine = residentServicePriorityAvailable(keeper, input.world.weather, duty !== null, tick);

@@ -96,7 +96,12 @@ export interface ResidentActivity {
 
 /** Explicit recognized capabilities, never numeric acceptance of future versions. */
 export function residentActivitySupportsRations(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
-  return activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION || activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
+  return activity?.version === RESIDENT_SERVICE_ACTIVITY_VERSION || residentActivitySupportsMaterials(activity);
+}
+
+/** Capability classification only; shape, custody and world validation stay binding. */
+export function residentActivitySupportsMaterials(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {

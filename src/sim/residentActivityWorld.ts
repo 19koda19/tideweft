@@ -8,7 +8,7 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, RESIDENT_CIVIC_ACTIVITY_VERSION, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
@@ -21,7 +21,8 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
     const version = activity !== undefined && Object.hasOwn(activity, "value")
       && activity.value !== null && typeof activity.value === "object"
       ? Object.getOwnPropertyDescriptor(activity.value, "version") : undefined;
-    if (version !== undefined && Object.hasOwn(version, "value") && version.value === RESIDENT_CIVIC_ACTIVITY_VERSION) civic += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsMaterials({ version: version.value })) civic += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
   return civic === 0 || civic === residents.length;

@@ -12,6 +12,7 @@ import {
   RESIDENT_ACTIVITY_MAX_PHASE,
   RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
   RESIDENT_CIVIC_ACTIVITY_VERSION,
+  residentActivitySupportsMaterials,
   residentActivitySupportsRations,
   RESIDENT_REST_APPROACH_STEP_UNITS,
   type ResidentBodyPose,
@@ -357,7 +358,7 @@ export function advanceResidentRestActivities(
         restTask: task?.kind === "settlement-rest" ? task : null,
         ...(residentActivitySupportsRations(activity)
           ? { rationTask: task?.kind === "settlement-ration" ? task : null } : {}),
-        ...(activity.version === RESIDENT_CIVIC_ACTIVITY_VERSION
+        ...(residentActivitySupportsMaterials(activity)
           ? { materialTask: task?.kind === "settlement-material" ? task : null } : {}),
       });
       if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
