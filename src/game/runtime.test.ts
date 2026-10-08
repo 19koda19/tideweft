@@ -53,6 +53,7 @@ import { RESIDENT_INTRODUCTION_EXPRESSION_DURATION_STEPS } from "./residentIntro
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import { adoptResidentActivities } from "./residentActivityExecution";
 import { RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
 import {
   captureSessionBaseline,
@@ -3273,6 +3274,27 @@ describe("perpetual new worlds", () => {
       },
     ],
     [
+      "resealed future resident body authority",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        const world = deserializeWorld(envelope.world);
+        expect(adoptResidentActivities(world)).toBe(true);
+        // The inner codec supports body foundations, not this outer format.
+        envelope.world = serializeWorld(world);
+        resealGameSave(envelope);
+      },
+    ],
+    [
+      "resealed partial future resident event-body authority",
+      (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
+        const world = deserializeWorld(envelope.world);
+        const event = world.events[0];
+        if (event === undefined) throw new Error("fixture needs its native initial event");
+        event.data.eventBodyVersion = 1;
+        envelope.world = serializeWorld(world);
+        resealGameSave(envelope);
+      },
+    ],
+    [
       "resealed invalid field ecology",
       (_record: SaveRecord, envelope: TestGameSaveEnvelope) => {
         if (!envelope.fieldResources)
@@ -3346,6 +3368,8 @@ describe("perpetual new worlds", () => {
     expect(rejected.getUIView().announcement?.message).toContain(
       "could not be read",
     );
+    await expect(rejected.save()).rejects.toThrow("Choose a seed before replacing");
+    expect(repository.snapshot()).toEqual(record);
     rejected.destroy();
   });
 

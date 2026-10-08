@@ -5,6 +5,9 @@ export const OFFICIAL_SAVE_COMPATIBILITY_BASELINE_VERSION = "1.0.0" as const;
 /** The one outer `tideweft-session` schema emitted by this source tree. */
 export const CURRENT_GAME_SAVE_VERSION = 50 as const;
 
+/** Frozen Alpha64 boundary; do not move this when the current writer changes. */
+export const RELEASED_LIVING_VOICE_GAME_SAVE_VERSION = 50 as const;
+
 /**
  * Set to the outer game-save schema shipped by the first official stable
  * release during the 1.0 save-compatibility freeze. Remaining null is correct

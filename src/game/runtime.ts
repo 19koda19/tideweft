@@ -100,8 +100,13 @@ import { acceptsRestartPhrase } from "./restartPolicy";
 import {
   classifyUnsupportedSaveSchema,
   CURRENT_GAME_SAVE_VERSION,
+  RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
+import {
+  residentActivitiesMatchPerceptionInterval,
+  residentActivitySaveExtensionsAbsent,
+} from "./residentActivitySaveBoundary";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
   animalCallRecognitionForVocalization,
@@ -1361,6 +1366,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   REGIONAL_ECOLOGY_V6_GAME_SAVE_VERSION,
   CIRCADIAN_RECEIPT_GAME_SAVE_VERSION,
   PLAYER_RECOVERY_GAME_SAVE_VERSION,
+  RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
@@ -20129,6 +20135,9 @@ export async function createTideweftRuntime(
     const regionalTravelSnapshot = capturePlayerRegionalTravel(regionalTravel, player);
     const needsContractWorldRepair = world.contracts.some(isAcceptedWithoutPickup);
     const worldSnapshot = needsContractWorldRepair ? structuredClone(world) : world;
+    if (!residentActivitySaveExtensionsAbsent(worldSnapshot)) {
+      throw new Error("Refusing to save resident body authority through a pre-body session format");
+    }
     const playerSnapshot = structuredClone(player);
     const callKnowledge = Object.hasOwn(playerSnapshot, "animalCallKnowledge")
       ? canonicalizePlayerAnimalCallKnowledge(playerSnapshot.animalCallKnowledge, worldSnapshot.meta.completedTick)
@@ -21748,6 +21757,9 @@ function playerPerceptionCarryMatchesPosition(
   workingAnimals: SettlementWorkingAnimalState,
   regionalEcology: RegionalEcologyStateV6,
 ): boolean {
+  if (!residentActivitiesMatchPerceptionInterval(
+    economy.residents, economy.completedTick, carry.playerStepsSinceWorldTick,
+  )) return false;
   const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
   if (position === null) return false;
   const spatialWorld = createRegionalWorldView(
@@ -24384,7 +24396,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (decoded.version < EFFORT_RECENCY_GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerEffortRecency")) {
       throw new Error("Older save version contains future effort-recency authority");
     }
-    if (decoded.version < GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerExpressionRecency")) {
+    if (decoded.version < RELEASED_LIVING_VOICE_GAME_SAVE_VERSION && Object.hasOwn(decoded, "playerExpressionRecency")) {
       throw new Error("Older save version contains future expression-recency authority");
     }
     if (decoded.version >= PHYSICAL_CARGO_GAME_SAVE_VERSION) {
@@ -24393,7 +24405,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
         || gameSaveEnvelopeIntegrity(decoded as Readonly<Record<string, unknown>>) !== decoded.integrity
       ) throw new Error("Save envelope integrity does not match its contents");
       if (
-          decoded.version === GAME_SAVE_VERSION
+          decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION
         || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
         || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
         || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
@@ -24435,7 +24447,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
             "traversalFeedback",
             "version",
             "world",
-            ...(decoded.version === GAME_SAVE_VERSION ? ["playerExpressionRecency"] : []),
+            ...(decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION ? ["playerExpressionRecency"] : []),
             ...(decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION ? ["playerEffortRecency"] : []),
           ])
           || typeof decoded.regionalTravel !== "string"
@@ -24714,6 +24726,9 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Legacy save version contains v3-only physical custody fields");
     }
     const world = deserializeWorld(decoded.world);
+    if (!residentActivitySaveExtensionsAbsent(world)) {
+      throw new Error("Pre-body session format contains future resident body authority");
+    }
     if (
       decoded.version <= ANIMAL_CONTACT_GAME_SAVE_VERSION
       && world.residents.some(({ perception }) => (
@@ -24740,7 +24755,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       throw new Error("Current save contains invalid BIO0 ecology state");
     }
     const persistedRegionalEcologyV6 = (
-      decoded.version === GAME_SAVE_VERSION
+      decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION
       || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
       || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
       || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
@@ -24776,7 +24791,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       : null;
     if (
       (
-        decoded.version === GAME_SAVE_VERSION
+        decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION
         || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
         || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION
         || decoded.version === ANIMAL_CONTACT_GAME_SAVE_VERSION
@@ -25344,7 +25359,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (livingActorPlayerChoice === null) {
       throw new Error("Current save contains invalid living-actor player choice state");
     }
-    let perceptionCarry = (decoded.version === GAME_SAVE_VERSION
+    let perceptionCarry = (decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION
       || decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION
       || decoded.version === FACTUAL_SPEECH_GAME_SAVE_VERSION)
       ? canonicalPlayerPerceptionCarry(
@@ -25781,7 +25796,7 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     ) {
       throw new Error("Current save perception interval does not match its saved physical authority");
     }
-    const playerExpressionRecency = decoded.version === GAME_SAVE_VERSION
+    const playerExpressionRecency = decoded.version >= RELEASED_LIVING_VOICE_GAME_SAVE_VERSION
       ? loadPlayerExpressionRecency(decoded.playerExpressionRecency, world, perceptionCarry)
       : (() => {
           const effort = decoded.version === EFFORT_RECENCY_GAME_SAVE_VERSION

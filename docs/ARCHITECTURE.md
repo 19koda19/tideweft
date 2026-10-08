@@ -2381,6 +2381,16 @@ body inputs reject rather than escaping as ownership-encoding errors. Runtime
 body activation and its format/publication/rollback fences remain construction
 obligations; these source tests do not prove normal-play motion.
 
+The current outer-save boundary now explicitly fences these foundations:
+`residentActivitySaveBoundary.ts` rejects any resident-owned activity or retained
+event-body scalar extension in the supported pre-body session formats, even
+partial presence. Capture and cold load use the same check; the inner-world
+codec remains available for foundation tests. Any present body cohort must also
+match every resident's identity, completed tick and accepted phase0–9 at the
+perception-carry boundary. Whole-roster absence stays legacy without invented
+history. Runtime adoption still requires a deliberately authorized body-capable
+outer format and the remaining publication, hearing and rollback integration.
+
 Environmental truth and actor knowledge remain distinct. Relevant local
 water/route observations or lawful reports may change a task, but loaded terrain
 or a remote hazard cannot silently teach an actor. Navigation/body heading,
@@ -3878,6 +3888,14 @@ malformed nested versions fail closed without overwrite, never fall back to the
 old reader. An earlier outer50 executable rejects the unknown nested v2 after
 parsing rather than at its outer future-version fence; backward loading is not
 promised. No additional outer development format is retired by this extension.
+
+`RELEASED_LIVING_VOICE_GAME_SAVE_VERSION` freezes Alpha64's supported outer50
+reader separately from the current writer. Its envelope, ecology, carry14 and
+recency reader gates must not drift when a later writer is introduced. All
+currently supported outer formats predate resident-body/activity authority;
+capture and load reject those roots and event-body extensions without silently
+repairing or overwriting a record. This does not retire a supported format,
+bump the writer, or enable ordinary human body motion.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic
