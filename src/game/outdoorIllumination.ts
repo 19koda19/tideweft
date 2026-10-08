@@ -28,6 +28,7 @@ import {
   regionalCompatibilityWorldForWorld,
   isImmutableRegionalWorldView,
   regionalTileIndexInView,
+  regionalWorldViewPhysicalPublication,
 } from "./regionalWorldView";
 
 export const SETTLEMENT_LAMP_PEAK_INTENSITY = 780_000 as const;
@@ -103,7 +104,8 @@ export interface OutdoorIlluminationField {
 const perceptionCellCache = new WeakMap<object, PerceptionCellCacheEntry>();
 /**
  * Regional views are internally constructed immutable geometry snapshots.
- * Cache their validated geometry by view identity so dozens of perception and
+ * Cache their validated geometry by authenticated physical-publication identity
+ * (including resident-only siblings) so dozens of perception and
  * presentation consumers in one world step do not each rescan 14,400 tiles.
  * Caller-owned/unmanaged views deliberately keep the full mutation-safe scan.
  */
@@ -325,8 +327,9 @@ function prepareWorldLightGeometry(
   suppliedCells?: readonly PerceptionCell[],
 ): WorldLightGeometry | null {
   const managedRegionalView = isImmutableRegionalWorldView(world);
+  const physicalPublication = regionalWorldViewPhysicalPublication(world);
   const managedCached = managedRegionalView
-    ? managedRegionalGeometryCache.get(world)
+    ? managedRegionalGeometryCache.get(physicalPublication)
     : undefined;
   if (
     managedCached !== undefined
@@ -383,7 +386,7 @@ function prepareWorldLightGeometry(
   // Never retain externally supplied arrays. The internal no-argument path
   // creates and freezes its own cells from the immutable regional snapshot.
   if (managedRegionalView && suppliedCells === undefined) {
-    managedRegionalGeometryCache.set(world, geometry);
+    managedRegionalGeometryCache.set(physicalPublication, geometry);
   }
   return geometry;
 }
@@ -433,8 +436,9 @@ function scanWorldLightGeometry(world: WorldView): WorldLightGeometryScan | null
  */
 function buildSettlementLampIndex(world: WorldView): SettlementLampIndex | null {
   const managedRegionalView = isImmutableRegionalWorldView(world);
+  const physicalPublication = regionalWorldViewPhysicalPublication(world);
   const managedCached = managedRegionalView
-    ? managedSettlementLampIndexCache.get(world)
+    ? managedSettlementLampIndexCache.get(physicalPublication)
     : undefined;
   if (managedCached !== undefined) return managedCached;
   const economy = regionalCompatibilityWorldForWorld(world) ?? world;
@@ -543,7 +547,7 @@ function buildSettlementLampIndex(world: WorldView): SettlementLampIndex | null 
       },
     )),
   });
-  if (managedRegionalView) managedSettlementLampIndexCache.set(world, index);
+  if (managedRegionalView) managedSettlementLampIndexCache.set(physicalPublication, index);
   return index;
 }
 

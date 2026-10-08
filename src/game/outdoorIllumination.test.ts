@@ -32,6 +32,8 @@ import {
   createRegionalWorldView,
   regionalAddressAt,
   regionalTileIndexInView,
+  regionalWorldViewPhysicalPublication,
+  replaceRegionalWorldViewResidents,
 } from "./regionalWorldView";
 import {
   SETTLEMENT_LAMP_PEAK_INTENSITY,
@@ -251,6 +253,94 @@ describe("game outdoor illumination bridge", () => {
     expect(buildWorldPerceptionCells(spatial)).toBe(cells);
     expect(outdoorIlluminationCacheKey(spatial, cells)).not.toBeNull();
     expect(buildOutdoorIlluminationField(spatial, cells)).not.toBeNull();
+  });
+
+  it("retains authenticated geometry and lamp indexing across resident-only publications", () => {
+    const base = flatBeaconWorld("people do not rebuild the beacon field", WORLD_NIGHT_START_TICK);
+    let projectReads = 0;
+    const economy: WorldView = {
+      ...base,
+      settlements: base.settlements.map((settlement) => new Proxy(settlement, {
+        get(target, property, receiver) {
+          if (property === "project") projectReads += 1;
+          return Reflect.get(target, property, receiver);
+        },
+      })),
+    };
+    const stream = createTerrainRegionStreamingState({ rootSeed: economy.rootSeed! });
+    const window = createRegionalTerrainWindow(economy.rootSeed!, stream);
+    const spatial = createRegionalWorldView(
+      economy, window,
+      projectRegionalCartographyWindow(createRegionalCartography(economy.rootSeed!), window),
+      { immutable: true },
+    );
+    const cells = buildWorldPerceptionCells(spatial)!;
+    projectReads = 0;
+    const key = outdoorIlluminationCacheKey(spatial, cells);
+    const field = buildOutdoorIlluminationField(spatial, cells)!;
+    expect(projectReads).toBe(economy.settlements.length);
+    const source = regionalTileIndexInView(spatial, createRegionCoord(0, 0), beaconSettlement(base).tileIndex)!;
+    const sources = deriveSettlementLampSources(spatial, source, cells);
+    const residents = structuredClone(spatial.residents);
+    residents[0]!.needs.rest = 800_000;
+    const sibling = replaceRegionalWorldViewResidents(spatial, residents);
+    const secondSibling = replaceRegionalWorldViewResidents(sibling, sibling.residents);
+
+    projectReads = 0;
+    for (const publication of [sibling, secondSibling]) {
+      expect(regionalWorldViewPhysicalPublication(publication)).toBe(spatial);
+      expect(buildWorldPerceptionCells(publication)).toBe(cells);
+      expect(outdoorIlluminationCacheKey(publication, cells)).toBe(key);
+      expect(buildOutdoorIlluminationField(publication, cells)).toBe(field);
+      expect(deriveSettlementLampSources(publication, source, cells)).toEqual(sources);
+      expect(sampleOutdoorIlluminationAtTile(publication, source, [])).toBeNull();
+    }
+    expect(projectReads).toBe(0);
+  });
+
+  it("does not reuse resident-sibling trust for changed world, time, weather, projects or windows", () => {
+    const economy = flatBeaconWorld("physical changes publish new light authority", WORLD_NIGHT_START_TICK);
+    function publish(compatibility: WorldView, center = createRegionCoord(0, 0)) {
+      const stream = createTerrainRegionStreamingState({ rootSeed: compatibility.rootSeed!, center });
+      const window = createRegionalTerrainWindow(compatibility.rootSeed!, stream);
+      return createRegionalWorldView(
+        compatibility, window,
+        projectRegionalCartographyWindow(createRegionalCartography(compatibility.rootSeed!), window),
+        { immutable: true },
+      );
+    }
+    const spatial = publish(economy);
+    const sibling = replaceRegionalWorldViewResidents(spatial, spatial.residents);
+    const originalCells = buildWorldPerceptionCells(sibling);
+    const originalKey = outdoorIlluminationCacheKey(sibling);
+    const originalField = buildOutdoorIlluminationField(sibling);
+    const rain: WorldView = { ...economy, weather: { ...economy.weather, kind: "rain", intensity: 700_000 } };
+    const building: WorldView = {
+      ...economy,
+      settlements: economy.settlements.map((settlement) => settlement.project.kind === "beacon"
+        ? { ...settlement, project: { ...settlement.project, status: "building" } }
+        : settlement),
+    };
+    const variants = [
+      publish(flatBeaconWorld("a different physical world", WORLD_NIGHT_START_TICK)),
+      publish({ ...economy, completedTick: WORLD_DAWN_START_TICK + 20 }),
+      publish(rain),
+      publish(building),
+      publish(economy, createRegionCoord(-8, 13)),
+    ];
+    for (const changed of variants) {
+      expect(regionalWorldViewPhysicalPublication(changed)).toBe(changed);
+      expect(regionalWorldViewPhysicalPublication(changed)).not.toBe(spatial);
+      expect(buildWorldPerceptionCells(changed)).not.toBe(originalCells);
+      expect(outdoorIlluminationCacheKey(changed)).not.toBe(originalKey);
+      expect(buildOutdoorIlluminationField(changed)).not.toBe(originalField);
+    }
+    const callerCopy = { ...sibling, weather: { ...sibling.weather } };
+    const callerKey = outdoorIlluminationCacheKey(callerCopy);
+    callerCopy.weather.kind = "rain";
+    callerCopy.weather.intensity = 700_000;
+    expect(regionalWorldViewPhysicalPublication(callerCopy)).toBe(callerCopy);
+    expect(outdoorIlluminationCacheKey(callerCopy)).not.toBe(callerKey);
   });
 
   it("caches the bounded full-view field by physical light state rather than raw tick", () => {

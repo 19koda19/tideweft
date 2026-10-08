@@ -107,6 +107,8 @@ import {
   residentActivitiesMatchPerceptionInterval,
   residentActivitySaveExtensionsAbsent,
 } from "./residentActivitySaveBoundary";
+import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
+import { RESIDENT_ACTIVITY_MAX_PHASE } from "../sim/residentActivity";
 import { surfaceCurrentDirection } from "./currentDirection";
 import {
   animalCallRecognitionForVocalization,
@@ -544,9 +546,11 @@ import {
   isImmutableRegionalWorldView,
   rebindRegionalWorldViewWindow,
   regionalAddressAt,
+  regionalCompatibilityWorldForWorld,
   regionalStorageRegionsInView,
   regionalTileIndexInView,
   regionalWorldCenter,
+  replaceRegionalWorldViewResidents,
 } from "./regionalWorldView";
 import {
   HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES,
@@ -1048,6 +1052,7 @@ import {
   createLivingActorAddress,
   headingFromRadians,
   headingToRadians,
+  isLivingActorAddress,
   livingActorAddressForResident,
   livingActorAddressInRegionalWindow,
   type LivingActorAddress,
@@ -1942,6 +1947,66 @@ function canonicalRuntimeBio0Ecology(
     || state.foodSource.sourceLotId !== foodIds.sourceLotId
   ) return null;
   return state;
+}
+
+/**
+ * Stage one resident-only publication and the existing porter's derived address
+ * without advancing ecology. The accepted-step caller must own the unchanged
+ * physical epoch: same seed/tick is necessary, not proof that terrain, weather,
+ * routes, projects or streaming did not change. Those changes require the full
+ * publication path. No local runtime roots are assigned until all stages pass.
+ */
+export function prepareRuntimeResidentActivityPublication(
+  world: WorldState,
+  currentSpatial: WorldView,
+  bio0: Bio0EcologyState,
+  acceptedPhase: number,
+): Readonly<{
+  worldView: WorldView;
+  economyView: WorldView;
+  bio0Ecology: Bio0EcologyState;
+}> | null {
+  if (!Number.isSafeInteger(acceptedPhase) || Object.is(acceptedPhase, -0)
+    || acceptedPhase < 0 || acceptedPhase > RESIDENT_ACTIVITY_MAX_PHASE
+    || !isImmutableRegionalWorldView(currentSpatial)) return null;
+  try {
+    const priorEconomy = regionalCompatibilityWorldForWorld(currentSpatial);
+    if (priorEconomy === null || priorEconomy.completedTick !== world.meta.completedTick
+      || currentSpatial.completedTick !== world.meta.completedTick
+      || priorEconomy.seedText !== world.meta.seedText
+      || priorEconomy.pressureMode !== world.meta.pressureMode
+      || priorEconomy.rootSeed === undefined
+      || stableStringify(priorEconomy.rootSeed) !== stableStringify(world.meta.rootSeed)) return null;
+    for (const resident of world.residents) {
+      const activity = canonicalResidentActivityForWorld(world, resident);
+      if (activity === null || activity.poses.length !== acceptedPhase + 1
+        || !Object.hasOwn(resident, "circadian")
+        || resident.perception.actorId !== resident.identity.stableId) return null;
+    }
+    // Do not repair an already stale/malformed input address by overwriting it.
+    // Spreading must not silently erase hidden, accessor or symbolic fields
+    // before the single canonical candidate validation sees the original data.
+    if (bio0 === null || typeof bio0 !== "object"
+      || (Object.getPrototypeOf(bio0) !== Object.prototype && Object.getPrototypeOf(bio0) !== null)
+      || Reflect.ownKeys(bio0).some((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(bio0, key);
+        return typeof key !== "string" || descriptor?.enumerable !== true
+          || !Object.hasOwn(descriptor, "value");
+      }) || !isLivingActorAddress(bio0.porterAddress)) return null;
+    const priorPorter = runtimeBio0Porter(priorEconomy, bio0.porterAddress.actorId);
+    if (stableStringify(priorPorter.address) !== stableStringify(bio0.porterAddress)) return null;
+    const worldView = replaceRegionalWorldViewResidents(currentSpatial, world.residents);
+    const economyView = regionalCompatibilityWorldForWorld(worldView);
+    if (economyView === null) return null;
+    const porter = runtimeBio0Porter(economyView, priorPorter.address.actorId);
+    const bio0Ecology = canonicalRuntimeBio0Ecology({
+      ...bio0, porterAddress: porter.address,
+    }, world, economyView);
+    if (bio0Ecology === null) return null;
+    return Object.freeze({ worldView, economyView, bio0Ecology });
+  } catch {
+    return null;
+  }
 }
 
 function createRuntimeCoreEcology(

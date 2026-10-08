@@ -2346,8 +2346,8 @@ courier also removes its legacy macro-hold exhaustion relief: existing bound
 courier law requires actual restorative arrival, not a weather-hold flag.
 These are **local foundations, not normal-play activation or
 physical porter-travel proof**. Existing absent records remain absent on load;
-runtime adoption, supported outer-format fencing, phase-aware hearing/source
-receipt integration, derived-address publication and fine-step rollback remain
+runtime adoption, a body-capable outer format, phase-aware hearing wiring,
+resident publication wiring and body-enabled fine-step rollback proof remain
 necessary before enabling that motion in ordinary play. No new public release is claimed.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
@@ -2358,6 +2358,20 @@ moving the body. Partial, malformed or later-phase cohorts reject without
 publishing replacements. Genuine body absence retains the legacy routine path.
 This direct boundary is a foundation, not runtime body adoption or permission
 to save bodies in the pre-body session formats.
+
+Resident-only publication now has a shared staged boundary in
+`prepareRuntimeResidentActivityPublication`: authenticate the current body
+cohort/task/accepted phase, create a registered immutable regional sibling and
+its exact compatibility view, then validate the same porter's address-only BIO0
+replacement before returning all three roots. It advances no dog, cargo, event,
+clock or RNG state. Both full views and siblings use `createResidentView` for
+the same detached perception/circadian/activity snapshot rules. Siblings retain
+their original physical-publication identity, allowing existing geometry/light
+caches to reuse unchanged terrain and lamps; caller copies acquire no trust.
+The accepted-step owner must prove that only residents changed. Seed and tick
+alone cannot authenticate unchanged weather, projects, terrain or streaming;
+physical changes require full publication. This is tested staging, not normal
+body activation or a measured performance improvement.
 
 The existing `humanPerception.ts` reception bridge now supports those retained
 body poses. Player sample ordinal n uses accepted pose n+1; other supplied

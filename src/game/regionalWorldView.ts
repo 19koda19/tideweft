@@ -1,4 +1,5 @@
 import { waterDepthAt } from "../sim/terrain";
+import { createResidentView } from "../sim/view";
 import {
   createRegionCoord,
   globalTileToRegion,
@@ -7,7 +8,7 @@ import {
   type RegionCoord,
   type RegionTileAddress,
 } from "../sim/regions";
-import { WORLD_WIDTH, type WorldView } from "../sim/types";
+import { WORLD_WIDTH, type ResidentState, type WorldView } from "../sim/types";
 import type { RegionalCartographyWindow } from "./regionalCartography";
 import {
   regionLocalToWindowTile,
@@ -19,6 +20,7 @@ const COMPATIBILITY_REGION = createRegionCoord(0, 0);
 const REGIONAL_VIEW_METADATA = new WeakMap<object, RegionalTerrainWindow>();
 const REGIONAL_VIEW_COMPATIBILITY = new WeakMap<object, WorldView>();
 const IMMUTABLE_REGIONAL_VIEWS = new WeakSet<object>();
+const REGIONAL_VIEW_PHYSICAL_PUBLICATION = new WeakMap<object, WorldView>();
 
 export interface RegionalWorldViewOptions {
   /**
@@ -140,6 +142,67 @@ export function createRegionalWorldView(
 
 export function isImmutableRegionalWorldView(world: WorldView): boolean {
   return IMMUTABLE_REGIONAL_VIEWS.has(world);
+}
+
+/**
+ * The exact unchanged physical publication behind a resident-only sibling.
+ * Caller-owned copies never inherit this private identity or cache admission.
+ */
+export function regionalWorldViewPhysicalPublication(world: WorldView): WorldView {
+  return REGIONAL_VIEW_PHYSICAL_PUBLICATION.get(world) ?? world;
+}
+
+/**
+ * Publish current residents without rebuilding the unchanged physical frame.
+ * Only an internally registered immutable view can create this trusted sibling;
+ * changing its world, time, terrain, weather, economy or roster requires a full
+ * publication through createRegionalWorldView instead.
+ */
+export function replaceRegionalWorldViewResidents(
+  world: WorldView,
+  residents: readonly ResidentState[],
+): WorldView {
+  const window = REGIONAL_VIEW_METADATA.get(world);
+  const compatibility = REGIONAL_VIEW_COMPATIBILITY.get(world);
+  if (!isImmutableRegionalWorldView(world) || window === undefined || compatibility === undefined) {
+    throw new RangeError("Resident publication requires a registered immutable regional view");
+  }
+  if (!Array.isArray(residents) || residents.length !== compatibility.residents.length) {
+    throw new RangeError("Resident publication cannot change the existing roster");
+  }
+  const byId = new Map(residents.map((resident) => [resident?.id, resident]));
+  if (byId.size !== residents.length) {
+    throw new RangeError("Resident publication cannot duplicate a roster identity");
+  }
+  const snapshots = compatibility.residents.map((prior) => {
+    const resident = byId.get(prior.id);
+    if (resident === undefined
+      || resident.identity?.stableId !== prior.identity.stableId
+      || resident.identity?.species !== prior.identity.species
+      || resident.homeSettlementId !== prior.homeSettlementId) {
+      throw new RangeError("Resident publication cannot replace a roster identity");
+    }
+    return freezeResidentSnapshot(createResidentView(resident, world.completedTick));
+  });
+  const publishedResidents = Object.freeze(snapshots);
+  const publishedCompatibility = Object.freeze({
+    ...compatibility,
+    residents: publishedResidents,
+  });
+  const view = Object.freeze({ ...world, residents: publishedResidents });
+  REGIONAL_VIEW_METADATA.set(view, window);
+  REGIONAL_VIEW_COMPATIBILITY.set(view, publishedCompatibility);
+  IMMUTABLE_REGIONAL_VIEWS.add(view);
+  REGIONAL_VIEW_PHYSICAL_PUBLICATION.set(view, regionalWorldViewPhysicalPublication(world));
+  return view;
+}
+
+function freezeResidentSnapshot<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const nested of Object.values(value)) freezeResidentSnapshot(nested);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 /** Stable address of a tile in either a floating or legacy finite view. */

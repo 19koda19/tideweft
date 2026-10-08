@@ -53,6 +53,39 @@ function copyResidentActivity(resident: ResidentState, atTick: number): Resident
   return copy;
 }
 
+/** The same detached resident snapshot for full and resident-only publication. */
+export function createResidentView(resident: ResidentState, completedTick: number): ResidentState {
+  return {
+    ...resident,
+    identity: {
+      ...resident.identity,
+      originRegion: { ...resident.identity.originRegion },
+      appearance: { ...resident.identity.appearance },
+      temperament: [...resident.identity.temperament],
+      skills: resident.identity.skills.map((skill) => ({ ...skill })),
+      visibleGear: [...resident.identity.visibleGear],
+      history: resident.identity.history.map((event) => ({ ...event })),
+    },
+    perception: copyActorPerception(resident.perception),
+    ...(Object.hasOwn(resident, "circadian")
+      ? { circadian: copyResidentCircadian(resident, completedTick) }
+      : {}),
+    ...(Object.hasOwn(resident, "activity")
+      ? { activity: copyResidentActivity(resident, completedTick) }
+      : {}),
+    condition: { ...resident.condition },
+    playerKnowledge: {
+      ...resident.playerKnowledge,
+      facts: [...resident.playerKnowledge.facts],
+    },
+    memories: resident.memories.map((memory) => ({ ...memory })),
+    traits: { ...resident.traits },
+    needs: { ...resident.needs },
+    relationships: resident.relationships.map((relationship) => ({ ...relationship })),
+    location: { ...resident.location },
+  };
+}
+
 export function createWorldView(world: WorldState): WorldView {
   return {
     completedTick: world.meta.completedTick,
@@ -85,35 +118,7 @@ export function createWorldView(world: WorldState): WorldView {
         freshness: Math.max(0, Math.min(FIXED_POINT, knowledge.confidence - knowledge.ageTicks * 200)),
       })),
     })),
-    residents: world.residents.map((resident) => ({
-      ...resident,
-      identity: {
-        ...resident.identity,
-        originRegion: { ...resident.identity.originRegion },
-        appearance: { ...resident.identity.appearance },
-        temperament: [...resident.identity.temperament],
-        skills: resident.identity.skills.map((skill) => ({ ...skill })),
-        visibleGear: [...resident.identity.visibleGear],
-        history: resident.identity.history.map((event) => ({ ...event })),
-      },
-      perception: copyActorPerception(resident.perception),
-      ...(Object.hasOwn(resident, "circadian")
-        ? { circadian: copyResidentCircadian(resident, world.meta.completedTick) }
-        : {}),
-      ...(Object.hasOwn(resident, "activity")
-        ? { activity: copyResidentActivity(resident, world.meta.completedTick) }
-        : {}),
-      condition: { ...resident.condition },
-      playerKnowledge: {
-        ...resident.playerKnowledge,
-        facts: [...resident.playerKnowledge.facts],
-      },
-      memories: resident.memories.map((memory) => ({ ...memory })),
-      traits: { ...resident.traits },
-      needs: { ...resident.needs },
-      relationships: resident.relationships.map((relationship) => ({ ...relationship })),
-      location: { ...resident.location },
-    })),
+    residents: world.residents.map((resident) => createResidentView(resident, world.meta.completedTick)),
     routes: world.routes.map((route) => ({ ...route, path: [...route.path] })),
     choirs: world.choirs.map((choir) => ({
       ...choir,
