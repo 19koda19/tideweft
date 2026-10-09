@@ -39,7 +39,7 @@ import {
   type GearBenefitId,
   type GearEffectContext,
 } from "./gearEffects";
-import { evaluateFooting, type FootingEvaluation, type FootingSurface } from "./footing";
+import { evaluateFooting, TERRAIN_DRAG_PERMILLE as TERRAIN_DRAG, type FootingEvaluation, type FootingSurface } from "./footing";
 import {
   evaluateFallRiskOnEntry,
   type FallConsequenceQuote,
@@ -270,14 +270,6 @@ const PACE_STAMINA_DRAIN: Readonly<Record<Exclude<TravelPace, "rest">, number>> 
 
 /** Maximum extra per-step effort from a pack at or beyond its rated capacity. */
 const FULL_LOAD_STAMINA_DRAIN = 2_200;
-
-const TERRAIN_DRAG: Record<WorldView["terrain"]["tiles"][number]["terrain"], number> = {
-  "deep-water": 720,
-  "tidal-flat": 610,
-  marsh: 690,
-  meadow: 930,
-  ridge: 570,
-};
 
 /**
  * Greatest stamina spend one accepted dry ordinary fixed step can cause before

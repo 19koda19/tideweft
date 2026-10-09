@@ -4,9 +4,38 @@ import { FIXED_POINT } from "../sim/types";
 import {
   FOOTING_CAUSE_ORDER,
   FOOTING_VERSION,
+  TERRAIN_DRAG_PERMILLE,
   evaluateFooting,
   type FootingInput,
 } from "./footing";
+
+describe("shared terrain movement drag", () => {
+  it("preserves the exact five existing player terrain values", () => {
+    expect(TERRAIN_DRAG_PERMILLE).toEqual({
+      "deep-water": 720,
+      "tidal-flat": 610,
+      marsh: 690,
+      meadow: 930,
+      ridge: 570,
+    });
+  });
+
+  it("keeps every multiplier finite, integral and within neutral drag", () => {
+    for (const value of Object.values(TERRAIN_DRAG_PERMILLE)) {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(Number.isSafeInteger(value)).toBe(true);
+      expect(value).toBeGreaterThan(0);
+      expect(value).toBeLessThanOrEqual(1_000);
+    }
+  });
+
+  it("cannot be changed by one consumer for another consumer", () => {
+    const before = { ...TERRAIN_DRAG_PERMILLE };
+    expect(Object.isFrozen(TERRAIN_DRAG_PERMILLE)).toBe(true);
+    expect(Reflect.set(TERRAIN_DRAG_PERMILLE, "marsh", 0)).toBe(false);
+    expect(TERRAIN_DRAG_PERMILLE).toEqual(before);
+  });
+});
 
 const BASE: FootingInput = {
   stability: 700_000,

@@ -2739,13 +2739,24 @@ load consumer below does not establish water capability or equipment.
 Current v8 future travel work derives from the same conserved Promise cargo,
 using `cargoEnvironment.ts`'s shared resource/property and unit-load mapping:
 food/reed 1000, medicine 1250, freshWater/parts 2000 milli-load per unit. Each
-accepted step permits `105 - min(ceil(cargoQuantity * unitLoadMilli / 1000), 32)`
-distance units. This monotone absolute-load abstraction has no rated NPC pack
+accepted step has a `105 - min(ceil(cargoQuantity * unitLoadMilli / 1000), 32)`
+distance ceiling. This monotone absolute-load abstraction has no rated NPC pack
 capacity; the32-unit ceiling derives from the existing player steady-walk burden
 bound, not its inventory or apparent-kit biography. Aggregate transit retains
 its positive-safe-integer quantity domain, with exact arithmetic before the
 penalty saturates. The loose-parcel quantity limit is not imported. No second
 parcel, inventory, item ID, equipment state or cargo quantity is created.
+
+Current v8 **local travel** additionally consumes the exact existing player
+ground-motion profile, now owned by `footing.ts:TERRAIN_DRAG_PERMILLE`. The
+physical source/contact tile, not a future waypoint or actor belief, determines
+`floor(cargoStepAllowance * terrainDragPermille / 1000)`. Movement is the smaller
+of that result and the unscaled remaining interval allowance; a short remaining
+quota is not charged drag twice. Actual dry flats, marsh, meadow and ridge can
+therefore change displacement without changing stock or custody. Player values
+and arithmetic are unchanged. Frozen v7, all already accepted poses and the
+explicit macro owner retain their existing behavior. This is not general grade,
+water/current, injury, mat assistance, gear or a change to service/approach pace.
 
 `residentTravelAdvance.ts` owns the narrow macro-transport exception to generic
 coarse actor immobility. One source-bound, one-shot closing admission captures

@@ -26,6 +26,7 @@ import { prepareResidentTravelAdvance, residentTravelStepUnits, revokeResidentTr
 import { findAutonomousRoutePlan } from "../sim/network";
 import type { SimCommand } from "../sim/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import { TERRAIN_DRAG_PERMILLE } from "./footing";
 import type { SupplementalSoundSample } from "./humanPerception";
 import * as humanPerception from "./humanPerception";
 import { advanceResidentRestActivities } from "./residentActivityExecution";
@@ -357,9 +358,14 @@ describe("ordinary runtime native traveler water response", () => {
     expect(carried).toMatchObject({ resource: "parts", cargoQuantity: 8 });
     const travelStepUnits = residentTravelStepUnits(dryBoundary.human.activity!, carried);
     expect(travelStepUnits).toBe(89);
-    // Actual eight-unit heavy cargo now costs16 future work units per step;
-    // uninformed physical retry still moves, while observed wet knowledge holds.
-    expect(Math.hypot(delta.x, delta.y)).toBe(observed ? 0 : 4 * travelStepUnits!);
+    const bankTile = dryBoundary.world.terrain.tiles[Math.floor(bank.localY / 1_000)
+      * dryBoundary.world.terrain.width + Math.floor(bank.localX / 1_000)]!;
+    expect(bankTile).toMatchObject({ x: 43, y: 48 });
+    const contactStepUnits = Math.floor(travelStepUnits! * TERRAIN_DRAG_PERMILLE[bankTile.terrain] / 1_000);
+    // These four steps remain on the native bank half-edge. The89 cargo
+    // ceiling is further constrained by actual ground, not exact-depth belief.
+    expect(4 * contactStepUnits).toBeLessThan(500);
+    expect(Math.hypot(delta.x, delta.y)).toBe(observed ? 0 : 4 * contactStepUnits);
     advance(runtime, 5);
     const freshPhase9 = await save();
     expect(freshPhase9.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(9);

@@ -54,6 +54,7 @@ import {
   residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
 import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
+import { TERRAIN_DRAG_PERMILLE } from "./footing";
 import type { LivingActorInteractionWindow } from "./livingActorSimulation";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
@@ -477,11 +478,22 @@ export function advanceResidentRestActivities(
           if (surface === null) travelTask = waitForTravel(travelTask, tick, "no-traversable-route");
           else {
             maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
+            // Physical contact, not path-cost preference or actor knowledge.
+            // Preserve frozen v7 work; current travel inherits the player's
+            // bare ground profile, never its gait, pack, gear or water mode.
+            const sourceX = Math.floor(pose.position.localX / WORLD_POSITION_UNITS_PER_TILE);
+            const sourceY = Math.floor(pose.position.localY / WORLD_POSITION_UNITS_PER_TILE);
+            const sourceTile = world.terrain.tiles[sourceY * world.terrain.width + sourceX];
+            if (sourceTile === undefined || sourceTile.x !== sourceX || sourceTile.y !== sourceY) return null;
+            const contactStepUnits = residentActivitySupportsTravelEnvironment(activity)
+              ? Math.floor(allowance * TERRAIN_DRAG_PERMILLE[sourceTile.terrain] / 1_000)
+              : allowance;
             const resolution = resolveLivingActorLocomotion({
               requestId: `contract-travel:${resident.identity.stableId}:${contract.id}`,
               tick, actor: createLivingActorAddress({ actorId: resident.identity.stableId, species: "human", persistence: "promoted",
                 position: pose.position, heading: pose.heading }),
-              targetArea: { center: target, radiusUnits: 0 }, maximumStepUnits, surface,
+              targetArea: { center: target, radiusUnits: 0 },
+              maximumStepUnits: Math.min(maximumStepUnits, contactStepUnits), surface,
             });
             if (resolution.kind === "moved") {
               const nextOffset = residentTravelSegmentOffset(segment, resolution.actor.position);

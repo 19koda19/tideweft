@@ -5193,6 +5193,79 @@ world-response/domain owners rather than invented outcomes or future equipment.
 No production, schema/reader/support-set, dependency/configuration, completed
 directive or release change. Existing Relief and full-Foliage deferrals remain.
 
+### Shared resident dry-ground travel — 2026-10-09
+
+Local follow-up on `5daff70bdaf9e0d5389e51b9e3239b7c312ad386` moves the exact
+existing five-value player terrain drag map into `footing.ts` and reuses it
+unchanged in player calculations. Current v8 local contract travel now uses
+actual source/contact ground to constrain future displacement beneath the
+existing conserved-cargo quota. Path preference is not kinetic authority;
+target ground cannot help before contact. The remaining interval allowance is
+not scaled twice. Frozen v7, accepted105-unit prefixes, macro transport,
+service/pickup pace, support-set/readers and schema58/carry14 remain unchanged.
+
+Source-conserving adapter contrasts prove food14's91-unit ceiling produces
+55/62/84/51 on dry flat/marsh/meadow/ridge respectively. A retained870-unit
+prefix with40remaining on ridge reaches910, not a second57% charge on40.
+The existing below/equal/above-quota histories, moving v7 and exact serialized/
+cloned phase4/9 continuation remain checked. These arranged contrasts are
+foundations, not native acquisition. The actual native tidal pickup/wait test
+derives four resumed steps from the unchanged bank tile; removing fresh sight
+still changes knowledge behavior without granting exact-depth beliefs.
+
+All three native journey cases still prove conserved pickup/handoff and equal
+cold work. Reverse phase4/9 expectations derive EVERY step's actual native
+source tile, including crossing the half-edge boundary, and check heading and
+directed distance. Witness duration bounds now derive from real cardinal-edge
+geometry and the slower of its two contact speeds, not arbitrary extra time
+or modified terrain. They do not establish general interruption/liveness bounds.
+
+Focused five-file report passes84tests. The complete affected domain passes
+31files/743tests,0failed/0pending,202.35s; full native travel3passes185.74s.
+Maintained smoke6files/105tests passes4.17s. The exact late-introduction closure
+rollback case passes, with97other runtime cases deliberately unselected.
+Initial/final typecheck pass. Exact commands for the broader/final evidence:
+
+```sh
+npx vitest run \
+  src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts \
+  src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
+  src/sim/residentActivityEventLocus.test.ts src/sim/residentSurfaceKnowledge.test.ts \
+  src/sim/residentPickupUse.test.ts src/sim/residentPickupActivity.test.ts \
+  src/sim/residentTravelRoute.test.ts src/sim/residentTravelActivity.test.ts \
+  src/sim/residentTravelAdvance.test.ts src/sim/systemComposition.integration.test.ts \
+  src/game/looseCargo.test.ts src/game/player.test.ts \
+  src/game/residentActivityExecution.test.ts src/game/residentTravelEnvironmentExecution.test.ts \
+  src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts \
+  src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.activity.test.ts \
+  src/game/humanPerception.presentation.test.ts src/game/projection.residentPickup.test.ts \
+  src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts \
+  src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentPickup.integration.test.ts \
+  src/game/runtime.residentTravel.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts \
+  src/game/footing.test.ts src/game/footing.release.audit.test.ts src/game/player.gear.integration.test.ts \
+  --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/ground-drag-domain.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/ground-drag-smoke.json
+npx vitest run src/game/runtime.test.ts --testNamePattern='rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/ground-drag-late-closure.json
+npm run typecheck
+```
+
+All731 public non-Markdown inputs and parent HEAD match before/after. Input
+SHA256 `b72779e0ab7ff96983d37ad41dc5ef05dd0833ae22b5574a8cd7c65b15fa3ca8`;
+identical manifests `7b4a6dea45b85916f7c0d55689d65f06a3351f0bb9789f23c77c6ebc92c4f49d`.
+Ignored domain report `460e74eec4c30df95c2d15c688d8007245c8ca2db1e524434aaab1c5ce1ff6a3`;
+smoke `25353f83ed80bc3eda8ff151eddf6ae9539e109be56e54097d0c6c4a7a2e96bd`;
+late closure `e8fa4e3b4cc1a2394c690256dc0193f25567974fcef379edad1b9c773487e0f9`.
+Node22.20.0/npm10.9.3 unchanged. Root integrates the disjoint frozen test patches;
+read-only review finds no production blocker, not independent execution proof.
+
+This is local/unpublished travel pacing, not all human movement, full footing,
+grade/current, mat assistance/wear, gear, injury, new knowledge or audio. The
+terrain lookup remains O(1) inside the existing at-most-two-cell corridor; no
+performance gain is claimed. Native multihop, support, known alternatives and
+legal carried failure remain unfinished. No dependency/configuration, schema,
+historical directive, artifact/platform/release or whole-directive change.
+Earlier cumulative certificates retain their exact checkpoint scope only.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

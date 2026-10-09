@@ -26,6 +26,7 @@ import {
   residentTravelSegmentPose,
 } from "../sim/residentTravelRoute";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import { TERRAIN_DRAG_PERMILLE } from "./footing";
 import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
@@ -34,6 +35,7 @@ import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank"
 import {
   createWorldPosition,
   worldPositionDelta,
+  worldPositionToGlobalFixed,
   type WorldPosition,
 } from "./worldPosition";
 
@@ -188,6 +190,19 @@ function boundedFineWork(human: ResidentState): number {
     distance += units;
   }
   return distance;
+}
+
+/** Native cardinal center-to-center edges touch only their two actual tiles. */
+function localTravelStepBound(world: WorldState, path: readonly number[], cargoAllowance: number): number {
+  const sourceSpeed = (tileIndex: number): number => {
+    const tile = world.terrain.tiles[tileIndex];
+    if (tile === undefined) throw new Error("Native travel bound lost a real route tile");
+    const speed = Math.floor(cargoAllowance * TERRAIN_DRAG_PERMILLE[tile.terrain] / 1_000);
+    expect(speed).toBeGreaterThan(0);
+    return speed;
+  };
+  return path.slice(1).reduce((steps, tileIndex, index) => steps
+    + Math.ceil(1_000 / Math.min(sourceSpeed(path[index]!), sourceSpeed(tileIndex))), 0);
 }
 
 /**
@@ -425,7 +440,9 @@ describe("ordinary runtime conserved resident travel", () => {
     let macroRecord: SaveRecord | null = null;
     let macroReference: Envelope | null = null;
     advance(runtime, 1);
-    const finalLimit = pickedWorld.meta.completedTick + 120;
+    const route = pickedWorld.routes.find(({ id }) => id === pickedContract.porterRouteIds[0])!;
+    const geometricIntervals = Math.ceil(localTravelStepBound(pickedWorld, route.path, fixture.travelStepUnits) / 10) + 2;
+    const finalLimit = pickedWorld.meta.completedTick + Math.max(120, geometricIntervals);
     while (observed.lastStatus !== "fulfilled" && runtime.getRenderView().tick < finalLimit) {
       if (macroRecord === null && primaryTrace.at(-1)?.local === false) {
         // Retain a real off-window phase9 prefix before its next macro commit.
@@ -805,11 +822,12 @@ describe("ordinary runtime conserved resident travel", () => {
     expect(reference.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     const remainingTask = actor(referenceWorld, actorId).activity?.travelTask;
     if (remainingTask?.mode !== "physical") throw new Error("Resumed journey lost its physical cursor");
-    const remainingEndpoints = nativeRoute.path.length - remainingTask.waypointIndex;
     // A step stops at each waypoint, discarding unused allowance. Distance /
-    // interval budget alone would undercount this legitimate physical work.
-    const intervalLimit = Math.ceil(remainingEndpoints
-      * Math.ceil(1_000 / fixture.travelStepUnits) / 10) + 2;
+    // interval budget alone undercounts work; actual source terrain can further
+    // reduce each local step. Bound the remaining native edges conservatively,
+    // without assigning terrain or slowing the unchanged macro owner.
+    const intervalLimit = Math.ceil(localTravelStepBound(referenceWorld,
+      nativeRoute.path.slice(remainingTask.waypointIndex - 1), fixture.travelStepUnits) / 10) + 2;
     for (let interval = 0; interval < intervalLimit && completed.tick === null; interval += 1) advance(retry, 10);
     if (completed.tick === null) throw new Error(`Resumed native journey did not hand off within ${intervalLimit} bounded intervals`);
     expect(resumedTrace.some(({ local, distance }) => local && distance > heldDistance)).toBe(true);
@@ -1090,16 +1108,32 @@ describe("ordinary runtime conserved resident travel", () => {
       expect(partialWorld.meta.completedTick).toBe(pickedWorld.meta.completedTick);
       expect(human.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
       expect(human.activity?.poses).toHaveLength(phase + 1);
-      expect(human.activity?.poses.at(-1)).toEqual(residentTravelSegmentPose(firstEdge, phase * stepUnits!));
-      expect(routeDistance(partialWorld, contract(partialWorld, offered.id), human)).toBe(phase * stepUnits!);
-      expect(boundedFineWork(human)).toBe(phase * stepUnits!);
+      // Cargo90 is the ceiling, not bare-ground speed. Derive each source
+      // contact from unchanged native geography; later steps can cross the
+      // tile boundary halfway through this first directed edge.
+      let expectedOffset = 0;
+      for (let index = 1; index <= phase; index += 1) {
+        const previous = residentTravelSegmentPose(firstEdge, expectedOffset);
+        const global = worldPositionToGlobalFixed(previous.position);
+        const sourceX = Math.floor(global.x / 1_000);
+        const sourceY = Math.floor(global.y / 1_000);
+        const tile = partialWorld.terrain.tiles[sourceY * partialWorld.terrain.width + sourceX];
+        if (tile === undefined) throw new Error("Actual reverse contact lost its native terrain tile");
+        expect(tile).toMatchObject({ x: sourceX, y: sourceY });
+        expectedOffset += Math.floor(stepUnits! * TERRAIN_DRAG_PERMILLE[tile.terrain] / 1_000);
+        expect(human.activity?.poses[index]).toEqual(residentTravelSegmentPose(firstEdge, expectedOffset));
+      }
+      expect(routeDistance(partialWorld, contract(partialWorld, offered.id), human)).toBe(expectedOffset);
+      expect(boundedFineWork(human)).toBe(expectedOffset);
+      expect(expectedOffset).toBeLessThanOrEqual(phase * stepUnits!);
       expect(contract(partialWorld, offered.id)).toMatchObject({ status: "in-transit", cargoQuantity: 12,
         assignedResidentId: selectedHuman.id });
       coldRecords.set(phase, record);
       partials.set(phase, partial);
     }
     advance(runtime, 1);
-    const finalLimit = pickedWorld.meta.completedTick + 120;
+    const geometricIntervals = Math.ceil(localTravelStepBound(pickedWorld, nativeRoute.path, stepUnits!) / 10) + 2;
+    const finalLimit = pickedWorld.meta.completedTick + Math.max(120, geometricIntervals);
     while (observed.status !== "fulfilled" && runtime.getRenderView().tick < finalLimit) advance(runtime, 10);
     if (observed.completedTick === null) throw new Error("Native reverse journey did not hand off within its bounded ordinary-work witness");
     expect(observed.completedTick).toBeGreaterThan(pickedContract.arrivalTick!);

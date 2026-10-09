@@ -1,4 +1,13 @@
-import { FIXED_POINT } from "../sim/types";
+import { FIXED_POINT, type TerrainKind } from "../sim/types";
+
+/** Existing physical ground-motion profile, shared without gait or equipment. */
+export const TERRAIN_DRAG_PERMILLE: Readonly<Record<TerrainKind, number>> = Object.freeze({
+  "deep-water": 720,
+  "tidal-flat": 610,
+  marsh: 690,
+  meadow: 930,
+  ridge: 570,
+});
 
 export const FOOTING_VERSION = 2 as const;
 

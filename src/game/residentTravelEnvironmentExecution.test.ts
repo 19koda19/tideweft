@@ -12,7 +12,7 @@ import {
 } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
-import { advanceResidentMacroTravel, consumeResidentTravelAdvance, prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
+import { advanceResidentMacroTravel, consumeResidentTravelAdvance, prepareResidentTravelAdvance, residentTravelStepUnits, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { residentTravelLocation, residentTravelSegment, residentTravelSegmentPose } from "../sim/residentTravelRoute";
 import { MAX_TIDE_LEVEL, tideAtTick } from "../sim/terrain";
 import { FIXED_POINT, type ResourceKind, type WorldState } from "../sim/types";
@@ -214,8 +214,8 @@ describe("informed next-segment water hold execution foundations", () => {
     expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
     expect(current.get().activity?.poses).toEqual([originalPose]);
     expect(advanceResidentRestActivities(current.world, 1, WINDOW)?.movedActorIds).toContain(current.actorId);
-    // One conserved food unit now costs one future travel-work unit: 104, not 105.
-    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 104).position);
+    // Cargo retains its104-unit ceiling; actual meadow contact gives96.
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 96).position);
     expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 1, assignedResidentId: current.get().id });
   });
 
@@ -257,7 +257,7 @@ describe("informed next-segment water hold execution foundations", () => {
     expect(step).not.toBeNull();
     expect(step?.movedActorIds.includes(current.actorId)).toBe(drySupport);
     expect(current.get().activity!.poses.at(-1)!.position).toEqual(drySupport
-      ? residentTravelSegmentPose(current.segment, 104).position : pose.position);
+      ? residentTravelSegmentPose(current.segment, 96).position : pose.position);
     expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 1, assignedResidentId: current.get().id });
   });
 
@@ -321,9 +321,10 @@ describe("informed next-segment water hold execution foundations", () => {
 
 describe("conserved load-aware fine travel execution foundations", () => {
   it.each([
-    ["food", 1, 104], ["food", 14, 91], ["parts", 14, 77],
-  ] as const)("moves actual %s quantity %s cargo by %s units without changing custody", (resource, quantity, stepUnits) => {
+    ["food", 1, 104, 96], ["food", 14, 91, 84], ["parts", 14, 77, 71],
+  ] as const)("moves actual %s quantity %s cargo beneath its %s-unit quota without changing custody", (resource, quantity, quota, stepUnits) => {
     const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource, quantity });
+    expect(residentTravelStepUnits(current.get().activity!, current.contract)).toBe(quota);
     const { residents: _residents, ...originalRoots } = current.world;
     const rootsBefore = stableStringify(originalRoots);
     const step = advanceResidentRestActivities(current.world, 1, WINDOW);
@@ -336,6 +337,43 @@ describe("conserved load-aware fine travel execution foundations", () => {
     expect(current.contract).toMatchObject({ resource, quantity, cargoQuantity: quantity, status: "in-transit" });
     const { residents: _nextResidents, ...nextRoots } = current.world;
     expect(stableStringify(nextRoots)).toBe(rootsBefore);
+    assertWorldInvariants(current.world);
+  });
+
+  it.each([
+    ["tidal-flat", 55], ["marsh", 62], ["meadow", 84], ["ridge", 51],
+  ] as const)("lets actual dry %s contact change the same conserved load's step to%s", (terrain, stepUnits) => {
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "food", quantity: 14 });
+    const source = current.segment.start;
+    const sourceTile = current.world.terrain.tiles[Math.floor(source.localY / 1_000)
+      * current.world.terrain.width + Math.floor(source.localX / 1_000)]!;
+    // Synthetic physical contrast, not an acquired capability or belief.
+    // The target stays meadow: its better ground cannot help before contact.
+    sourceTile.terrain = terrain;
+    expect(residentTravelStepUnits(current.get().activity!, current.contract)).toBe(91);
+    const { residents: _residents, ...originalRoots } = current.world;
+    const rootsBefore = stableStringify(originalRoots);
+    expect(advanceResidentRestActivities(current.world, 1, WINDOW)?.movedActorIds).toContain(current.actorId);
+    expect(current.get().activity!.poses.at(-1)).toEqual(residentTravelSegmentPose(current.segment, stepUnits));
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
+    const { residents: _nextResidents, ...nextRoots } = current.world;
+    expect(stableStringify(nextRoots)).toBe(rootsBefore);
+    expect(current.contract).toMatchObject({ resource: "food", quantity: 14, cargoQuantity: 14, status: "in-transit" });
+    assertWorldInvariants(current.world);
+  });
+
+  it("caps a dry-contact step by the remaining quota without scaling that remainder twice", () => {
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "food", quantity: 14 });
+    stageRetainedPrefix(current, [...Array.from({ length: 8 }, () => 105), 30]);
+    const accepted = structuredClone(current.get().activity!.poses);
+    const contact = accepted.at(-1)!.position;
+    current.world.terrain.tiles[Math.floor(contact.localY / 1_000)
+      * current.world.terrain.width + Math.floor(contact.localX / 1_000)]!.terrain = "ridge";
+    // Historical870 leaves40. Today's ridge contact permits51, not a second
+    // 57% charge on the40-unit remainder. The exact accepted prefix survives.
+    expect(advanceResidentRestActivities(current.world, 10, WINDOW)?.movedActorIds).toContain(current.actorId);
+    expect(current.get().activity!.poses.slice(0, accepted.length)).toEqual(accepted);
+    expect(current.get().activity!.poses.at(-1)).toEqual(residentTravelSegmentPose(current.segment, 910));
     assertWorldInvariants(current.world);
   });
 
@@ -404,20 +442,20 @@ describe("conserved load-aware fine travel execution foundations", () => {
   it("continues born-v8 phase4 and phase9 serialized/clone cuts with equal authoritative work", () => {
     const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "food", quantity: 14 });
     for (let phase = 1; phase <= 4; phase += 1) expect(advanceResidentRestActivities(current.world, phase, WINDOW)).not.toBeNull();
-    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 364).position);
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 336).position);
     const phase4 = serializeWorld(current.world);
     const phase4Cuts = [deserializeWorld(phase4), structuredClone(current.world)];
     for (const world of [current.world, ...phase4Cuts]) {
       for (let phase = 5; phase <= 9; phase += 1) expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
     }
     const phase9 = serializeWorld(current.world);
-    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 819).position);
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 756).position);
     for (const world of phase4Cuts) expect(serializeWorld(world)).toBe(phase9);
     const phase9Cuts = [deserializeWorld(phase9), structuredClone(current.world)];
     for (const world of [current.world, ...phase4Cuts, ...phase9Cuts]) finishInterval(world, 9);
     const terminal = serializeWorld(current.world);
     for (const world of [...phase4Cuts, ...phase9Cuts]) expect(serializeWorld(world)).toBe(terminal);
-    expect(current.get().activity?.poses).toEqual([residentTravelSegmentPose(current.segment, 910)]);
+    expect(current.get().activity?.poses).toEqual([residentTravelSegmentPose(current.segment, 840)]);
     expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
     expect(current.contract).toMatchObject({ resource: "food", quantity: 14, cargoQuantity: 14, status: "in-transit" });
   });
