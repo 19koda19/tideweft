@@ -2791,12 +2791,14 @@ authorizes v7 even with null travel work; older envelopes reject it. Save/load
 retains current cursor/body/cargo without replaying incidental sound. World4,
 rules6 and carry14 are unchanged; no supported format is retired.
 
-Native controlled-pressure runtime evidence covers an existing generated food
-offer, automatic selection, actual origin pickup, local displacement, real
-window exit, bounded macro continuation beyond the old ETA, once-only final
-handoff and exact phase4/9 cold continuation. Synthetic forward/reverse,
-multileg, clipping, cold rejection and receipt tests are foundation evidence,
-not additional native journeys or normal visual play. This does not close the
+Native controlled-pressure runtime evidence covers existing generated food and
+reverse medicine offers, automatic selection, actual origin pickup, local
+displacement, real window exit, bounded macro continuation beyond the old ETA,
+once-only final handoff and exact phase4/9 cold continuation. The reverse
+medicine witness checks actual directed body/heading and decreasing stored
+route progress, not just a reversed fixture. Synthetic multileg, clipping,
+cold rejection and receipt tests remain foundation evidence, not additional
+native journeys or normal visual play. This does not close the
 whole traveler/environment directive or prove broader crossings, addressable
 porter cargo, failure/recovery breadth, visual acceptance or performance.
 

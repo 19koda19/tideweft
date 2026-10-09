@@ -5127,6 +5127,72 @@ equipment remain their future owners. No whole-directive, cumulative-on-new-
 bytes, production performance, package or public release is claimed. Accepted
 Relief limitations and full-Foliage extended profiling/soak deferrals remain.
 
+### Native reverse medicine journey — 2026-10-09
+
+Test-only follow-up on local `7380612cca54e2180c6b55c203d6e12d3acdd597`
+adds one reverse journey to the existing ordinary-runtime travel owner. The
+actual wild density9 world independently supplies medicine offer129,
+12units from settlement4 to3, using route117 stored3→4. Original terrain,
+routes, stock, ledger, residents and all other offers remain unchanged. Only
+the selected offer's exclusivity, clear weather and declared need pressure
+are controlled, matching the forward witness's explicit fixture boundary.
+No winner, task, body, pickup, cargo, arrival or handoff result is assigned.
+
+Automatic selection finds an existing origin resident, approaches its real
+source and debits12 medicine into the same contract. Local motion checks exact
+reverse phase4/9 body and heading; ordered stored progress decreases while
+physical distance increases. The actual120×120 interaction frame contains the
+origin but not the destination. Fine and subsequent off-window macro work share
+the900-unit interval ceiling from the conserved medicine load. The75,000-unit
+journey completes at actual destination support beyond its old ETA, transfers
+12medicine once, releases commitment/task and retains the arrived body.
+
+The receiving settlement's real reed recipe and parts project do not consume
+medicine; hourly rations consume food/water. Same-step competing medicine
+departures/fulfillments are explicitly excluded by observed events rather than
+disabling consumers. The fulfillment event records zero project contribution,
+and world invariants remain checked at every delegated production step.
+Exactly one following ordinary interval executes without injecting a new job
+or suppressing subsequent legitimate activity. Cold phase4 advances five
+accepted steps to the exact saved phase9 roots; a detached phase9 then advances
+the identical suffix through handoff and that following interval. Every saved
+root compares exactly except existing session recap and envelope integrity.
+
+The initial focused case passes60.01s (two deliberately unselected cases).
+The complete affected travel file passes all3cases158.00s; maintained smoke
+6files/105tests passes4.16s; initial/final typecheck and documentation-reuse
+checks pass. All731 public non-Markdown inputs and parent HEAD match before/
+after, input SHA256
+`56b45c9dce3d5c26f668f936d76485ae06ae5d32cc9e471bbeaad6acb4404ae2`.
+Ignored final report SHA256
+`e358b1c539235d43731c2649819826bd8e634433100e1807b372d09ff8ddfc2f`;
+smoke `48f04369a6e2be9ed67bff912be3090679e5c7be8205879906b7dfb0b432cba5`;
+identical before/after manifests
+`d70c64d6ea95fec503a717caa58f41a35c8f8a2786f88615e95a2d7ac9d9ff1b`.
+Node22.20.0/npm10.9.3. Exact validation commands:
+
+```sh
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --testNamePattern='physically completes one native reverse medicine journey' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/reverse-travel-first.json
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/reverse-travel-final.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/reverse-travel-smoke.json
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+This upgrades reverse travel from arranged foundation-only evidence to one
+headless native production-authority witness. It is not manual Chart/Relief,
+audio hardware, performance, package, publication, general liveness or whole-
+directive proof. Native multihop and wider environment/alternative/recovery
+acceptance remain unfinished. Current carried resident interruptions preserve
+position/cargo and retry; no legal in-transit resident cancellation producer
+exists, so pre-pickup cancellation and player harbor return cannot certify
+carried-resident failure. Deployed mat effects are available to the player but
+resident movement and benefit-qualified atomic assisted wear remain unjoined;
+their tested kernel alone is not live support. These gaps retain their actual
+world-response/domain owners rather than invented outcomes or future equipment.
+No production, schema/reader/support-set, dependency/configuration, completed
+directive or release change. Existing Relief and full-Foliage deferrals remain.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

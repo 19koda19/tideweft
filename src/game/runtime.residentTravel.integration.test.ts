@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
-import { routeIsActive } from "../sim/network";
+import { findAutonomousRoutePlan, routeIsActive } from "../sim/network";
 import {
   assertWorldInvariants,
   deserializeWorld,
@@ -23,6 +23,7 @@ import {
   residentTravelInteractionFrame,
   residentTravelSegment,
   residentTravelSegmentOffset,
+  residentTravelSegmentPose,
 } from "../sim/residentTravelRoute";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { REGIONAL_TRAVEL_COLUMNS, REGIONAL_TRAVEL_ROWS } from "./regionalTravel";
@@ -852,5 +853,295 @@ describe("ordinary runtime conserved resident travel", () => {
     advance(phase9, remainingSteps - 1); // The reference step above is already consumed.
     await phase9.save();
     expect(authoritativeRoots(decode(phase9Repository.snapshot()))).toEqual(authoritativeRoots(terminal));
+  }, 180_000);
+
+  it("physically completes one native reverse medicine journey with conserved handoff and equal phase4/9 cold work", async () => {
+    // The survey supplies only a candidate. Independently authenticate the
+    // actual runtime's wild world, without changing route, stock or residency.
+    const bootstrapRepository = new MemoryRepository();
+    const bootstrap = await open(bootstrapRepository);
+    bootstrap.dispatchUI({ type: "new-world", seed: "breathing room regional density 9",
+      posture: "gale", sessionShape: "wander" });
+    await bootstrap.save();
+    const initialRecord = bootstrapRepository.snapshot();
+    const envelope = decode(initialRecord);
+    const world = deserializeWorld(envelope.world);
+    expect(world.meta).toMatchObject({ seedText: "breathing room regional density 9", pressureMode: "wild", completedTick: 420 });
+    expect(world.residents.every((human) => !Object.hasOwn(human, "activity"))).toBe(true);
+    const offered = world.contracts.find(({ id, status }) => id === 129 && status === "offered");
+    if (offered === undefined) throw new Error("Actual wild runtime has no native medicine offer129; do not fabricate one");
+    expect(offered).toMatchObject({ originSettlementId: 4, destinationSettlementId: 3, resource: "medicine",
+      quantity: 12, cargoQuantity: 0, carrierKind: null, assignedResidentId: null,
+      acceptedTick: null, departedTick: null, playerExclusiveUntilTick: 720, dueTick: 1_140 });
+    const origin = world.settlements.find(({ id }) => id === offered.originSettlementId)!;
+    const destination = world.settlements.find(({ id }) => id === offered.destinationSettlementId)!;
+    expect(destination.recipes).toHaveLength(1);
+    expect(destination.recipes[0]).toMatchObject({ inputs: [], outputs: [{ resource: "reed", amount: 7 }] });
+    expect(destination.project.resource).toBe("parts");
+    const nativeRoute = world.routes.find(({ id }) => id === offered.routeId)!;
+    expect(nativeRoute).toMatchObject({ id: 117, fromSettlementId: 3, toSettlementId: 4 });
+    expect(nativeRoute.path).toHaveLength(76);
+    expect(nativeRoute.path[0]).toBe(destination.tileIndex);
+    expect(nativeRoute.path.at(-1)).toBe(origin.tileIndex);
+    const center = (tileIndex: number): WorldPosition => {
+      const tile = world.terrain.tiles[tileIndex]!;
+      return createWorldPosition({ x: 0, y: 0 }, tile.x * 1_000 + 500, tile.y * 1_000 + 500);
+    };
+    expect(world.terrain.tiles[origin.tileIndex]).toMatchObject({ x: 22, y: 51 });
+    expect(world.terrain.tiles[destination.tileIndex]).toMatchObject({ x: 92, y: 46 });
+    const sourceTarget = center(origin.tileIndex);
+    const destinationPosition = center(destination.tileIndex);
+    const savedOrigin = JSON.parse(envelope.regionalTravel).origin as { x: number; y: number };
+    expect(savedOrigin).toEqual({ x: -38, y: -9 });
+    expect(bootstrap.getRenderView().terrain).toMatchObject({ columns: REGIONAL_TRAVEL_COLUMNS,
+      rows: REGIONAL_TRAVEL_ROWS, worldTileOrigin: savedOrigin });
+    const frame = residentTravelInteractionFrame({ origin: savedOrigin,
+      terrain: { width: REGIONAL_TRAVEL_COLUMNS, height: REGIONAL_TRAVEL_ROWS } });
+    if (frame === null) throw new Error("Native reverse world has no actual interaction frame");
+    expect(residentTravelBodyIsLocal(frame, sourceTarget)).toBe(true);
+    expect(residentTravelBodyIsLocal(frame, destinationPosition)).toBe(false);
+    expect(findAutonomousRoutePlan(world, origin.id, destination.id))
+      .toMatchObject({ routeIds: [117], settlementIds: [4, 3] });
+    const sources = new Map(world.residents.filter((human) => human.location.kind === "settlement"
+      && human.location.settlementId === origin.id).map((human) => {
+      const source = resolveResidentWorldPlacement(world, human)?.position;
+      if (source === undefined) throw new Error("Native reverse candidate has no original source pose");
+      return [human.id, { actorId: human.identity.stableId, source }] as const;
+    }));
+    const native = { terrain: structuredClone(world.terrain), routes: structuredClone(world.routes),
+      settlements: structuredClone(world.settlements), ledger: structuredClone(world.ledger),
+      contracts: structuredClone(world.contracts) };
+    const initialStock = origin.inventory.medicine;
+    expect(initialStock).toBeGreaterThanOrEqual(offered.quantity);
+    // Same declared causes as the forward witness: belonging urgency prevents
+    // unrelated pre-acceptance service motion, not the real accepted priority.
+    world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: 1_420 };
+    for (const human of world.residents) human.needs = { food: 100_000, rest: 100_000, belonging: 900_000 };
+    offered.playerExclusiveUntilTick = world.meta.completedTick;
+    expect(world.terrain).toEqual(native.terrain);
+    expect(world.routes).toEqual(native.routes);
+    expect(world.settlements).toEqual(native.settlements);
+    expect(world.ledger).toEqual(native.ledger);
+    expect(world.contracts).toEqual(native.contracts.map((candidate) => candidate.id === offered.id
+      ? { ...candidate, playerExclusiveUntilTick: world.meta.completedTick } : candidate));
+    expect(findAutonomousRoutePlan(world, origin.id, destination.id))
+      .toMatchObject({ routeIds: [117], settlementIds: [4, 3] });
+    assertWorldInvariants(world);
+    envelope.world = serializeWorld(world);
+    close(bootstrap);
+    const repository = new MemoryRepository(recordWith(initialRecord, envelope));
+    const runtime = await open(repository);
+    const stepUnits = residentTravelStepUnits({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION },
+      { resource: offered.resource, cargoQuantity: offered.quantity });
+    expect(stepUnits).toBe(90);
+    const totalDistance = (nativeRoute.path.length - 1) * 1_000;
+    const departures = new Set<number>();
+    const fulfillments = new Set<number>();
+    const trace: { distance: number; local: boolean; macroUnits: number; progress: number | null }[] = [];
+    const observed: { status: ContractState["status"]; completedTick: number | null } = { status: "offered", completedTick: null };
+    let actorId: string | null = null;
+    let primary = true;
+    const originalStep = simulation.stepWorld;
+    const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      if (!primary) return originalStep(...args);
+      const beforeWorld = args[0];
+      const before = contract(beforeWorld, offered.id);
+      const beforeStatus = before.status;
+      const beforeCargo = before.cargoQuantity;
+      const beforeOriginStock = beforeWorld.settlements.find(({ id }) => id === origin.id)!.inventory.medicine;
+      const receiver = beforeWorld.settlements.find(({ id }) => id === destination.id)!;
+      const beforeDestinationStock = receiver.inventory.medicine;
+      const noMedicineRecipe = receiver.recipes.every(({ inputs, outputs }) =>
+        [...inputs, ...outputs].every(({ resource }) => resource !== "medicine"));
+      const noMedicineProject = receiver.project.resource !== "medicine";
+      const beforeHuman = actorId === null ? undefined : actor(beforeWorld, actorId);
+      const beforeDistance = beforeStatus === "in-transit" && beforeHuman !== undefined
+        ? routeDistance(beforeWorld, before, beforeHuman) : null;
+      const fineUnits = beforeDistance === null ? 0 : boundedFineWork(beforeHuman!);
+      if (beforeDistance !== null) for (let index = 1; index < beforeHuman!.activity!.poses.length; index += 1) {
+        const poses = beforeHuman!.activity!.poses;
+        const delta = worldPositionDelta(poses[index - 1]!.position, poses[index]!.position);
+        expect(Math.ceil(Math.hypot(delta.x, delta.y))).toBeLessThanOrEqual(stepUnits!);
+      }
+      const firstNewSequence = beforeWorld.meta.nextEventSequence;
+      const result = originalStep(...args);
+      const after = contract(result, offered.id);
+      observed.status = after.status;
+      const freshEvents = result.events.filter(({ sequence }) => sequence >= firstNewSequence);
+      for (const event of freshEvents) if (event.subjectId === offered.id) {
+        if (event.type === "contract-departed") departures.add(event.sequence);
+        if (event.type === "contract-fulfilled") fulfillments.add(event.sequence);
+      }
+      if (beforeStatus === "accepted" && after.status === "in-transit") {
+        expect(after.cargoQuantity).toBe(offered.quantity);
+        expect(result.settlements.find(({ id }) => id === origin.id)!.inventory.medicine)
+          .toBe(beforeOriginStock - offered.quantity);
+      }
+      if (after.status === "in-transit" || (beforeStatus === "in-transit" && after.status === "fulfilled")) {
+        if (actorId === null) throw new Error("Reverse departure has no actual automatic winner");
+        const human = actor(result, actorId);
+        const distance = after.status === "fulfilled" ? totalDistance : routeDistance(result, after, human);
+        const macroUnits = beforeDistance === null ? 0 : distance - beforeDistance;
+        expect(macroUnits).toBeGreaterThanOrEqual(0);
+        expect(macroUnits + fineUnits).toBeLessThanOrEqual(10 * stepUnits!);
+        const previous = trace.at(-1);
+        if (previous !== undefined) {
+          expect(distance).toBeGreaterThanOrEqual(previous.distance);
+          expect(distance - previous.distance).toBeLessThanOrEqual(10 * stepUnits!);
+        }
+        const progress = human.location.kind === "route" ? human.location.progress : null;
+        trace.push({ distance, local: residentTravelBodyIsLocal(frame, human.activity!.poses.at(-1)!.position),
+          macroUnits, progress });
+        if (after.status === "in-transit") {
+          expect(after).toMatchObject({ cargoQuantity: offered.quantity, porterRouteIds: [117], porterSettlementIds: [4, 3] });
+          expect(human.activity?.travelTask).toMatchObject({ mode: "physical", contractId: offered.id });
+          const task = human.activity?.travelTask;
+          if (task?.mode !== "physical") throw new Error("Native reverse journey lost its physical cursor");
+          const segment = residentTravelSegment(result, after, task);
+          expect(segment?.reversed).toBe(true);
+          expect(human.location).toMatchObject({ kind: "route", routeId: 117 });
+          if (previous?.progress !== null && previous?.progress !== undefined) expect(progress!).toBeLessThanOrEqual(previous.progress);
+        } else {
+          expect(observed.completedTick).toBeNull();
+          observed.completedTick = result.meta.completedTick;
+          expect(beforeCargo).toBe(offered.quantity);
+          expect(after.cargoQuantity).toBe(0);
+          const fulfillment = freshEvents.filter(({ type, subjectId }) => type === "contract-fulfilled" && subjectId === offered.id);
+          expect(fulfillment).toHaveLength(1);
+          expect(fulfillment[0]!.data).toMatchObject({ quantity: 12, resource: "medicine", residentId: human.id,
+            originSettlementId: 4, destinationSettlementId: 3, projectContribution: 0, routeEvidence: "resident-route" });
+          // Actual receiver is reed-producing/parts-building; hourly rations
+          // consume only food/water. Never disable a consumer for this equality.
+          expect(noMedicineRecipe).toBe(true);
+          expect(noMedicineProject).toBe(true);
+          expect(freshEvents.filter((event) => {
+            if (event.subjectId === offered.id || (event.type !== "contract-departed" && event.type !== "contract-fulfilled")) return false;
+            const other = result.contracts.find(({ id }) => id === event.subjectId);
+            return other?.resource === "medicine" && (event.type === "contract-departed"
+              ? other.originSettlementId === destination.id : other.destinationSettlementId === destination.id);
+          })).toHaveLength(0);
+          expect(result.settlements.find(({ id }) => id === destination.id)!.inventory.medicine)
+            .toBe(beforeDestinationStock + beforeCargo);
+          expect(human.activeContractId).toBeNull();
+          expect(human.location).toEqual({ kind: "settlement", settlementId: destination.id });
+          expect(human.activity?.travelTask).toBeNull();
+          expect(human.activity?.poses.at(-1)?.position).toEqual(destinationPosition);
+        }
+      }
+      assertWorldInvariants(result);
+      return result;
+    });
+
+    advance(runtime, 10);
+    await runtime.save();
+    const acceptedWorld = deserializeWorld(decode(repository.snapshot()).world);
+    const accepted = contract(acceptedWorld, offered.id);
+    expect(accepted).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null,
+      carrierKind: "resident", acceptedTick: 421 });
+    const source = accepted.assignedResidentId === null ? undefined : sources.get(accepted.assignedResidentId);
+    if (source === undefined) throw new Error("Actual reverse winner is not a native origin resident");
+    actorId = source.actorId;
+    const selectedHuman = actor(acceptedWorld, actorId);
+    expect(selectedHuman.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+    expect(selectedHuman.activity?.poses[0]?.position).toEqual(source.source);
+    expect(selectedHuman.activity?.pickupTask).toMatchObject({ contractId: offered.id, phase: "approaching", target: sourceTarget });
+    expect(worldPositionDelta(source.source, sourceTarget)).not.toEqual({ x: 0, y: 0 });
+    expect(residentRestTargetHasDrySupport(acceptedWorld, source.source)).toBe(true);
+    expect(residentRestTargetHasDrySupport(acceptedWorld, sourceTarget)).toBe(true);
+    expect(acceptedWorld.settlements.find(({ id }) => id === origin.id)!.inventory.medicine).toBe(initialStock);
+    expect(departures.size).toBe(0);
+    let picked: Envelope | null = null;
+    for (let interval = 0; interval < 4; interval += 1) {
+      advance(runtime, 10);
+      await runtime.save();
+      const candidate = decode(repository.snapshot());
+      const candidateWorld = deserializeWorld(candidate.world);
+      if (contract(candidateWorld, offered.id).status === "in-transit") { picked = candidate; break; }
+      expect(contract(candidateWorld, offered.id)).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+      expect(candidateWorld.settlements.find(({ id }) => id === origin.id)!.inventory.medicine).toBe(initialStock);
+    }
+    if (picked === null) throw new Error("Native reverse winner did not actually approach and pick up within four intervals");
+    const pickedWorld = deserializeWorld(picked.world);
+    const pickedContract = contract(pickedWorld, offered.id);
+    const pickedHuman = actor(pickedWorld, actorId);
+    expect(pickedHuman.activity?.poses[0]?.position).toEqual(sourceTarget);
+    expect(pickedHuman.activity?.pickupTask).toBeNull();
+    expect(pickedHuman.activity?.travelTask).toMatchObject({ mode: "physical", legIndex: 0, waypointIndex: 1, phase: "approaching" });
+    expect(pickedContract).toMatchObject({ cargoQuantity: 12, porterRouteIds: [117], porterSettlementIds: [4, 3] });
+    expect(routeDistance(pickedWorld, pickedContract, pickedHuman)).toBe(0);
+    const pickedTask = pickedHuman.activity?.travelTask;
+    if (pickedTask?.mode !== "physical") throw new Error("Actual reverse pickup lacks a physical cursor");
+    const firstEdge = residentTravelSegment(pickedWorld, pickedContract, pickedTask);
+    if (firstEdge === null) throw new Error("Actual reverse pickup has no exact first directed edge");
+    expect(firstEdge.reversed).toBe(true);
+    expect(firstEdge.start).toEqual(center(nativeRoute.path.at(-1)!));
+    expect(firstEdge.end).toEqual(center(nativeRoute.path.at(-2)!));
+    expect(departures.size).toBe(1);
+    const coldRecords = new Map<number, SaveRecord>();
+    const partials = new Map<number, Envelope>();
+    for (const [phase, count] of [[4, 4], [9, 5]] as const) {
+      advance(runtime, count);
+      await runtime.save();
+      const record = repository.snapshot();
+      const partial = decode(record);
+      const partialWorld = deserializeWorld(partial.world);
+      const human = actor(partialWorld, actorId);
+      expect(partial.perceptionCarry.playerStepsSinceWorldTick).toBe(phase);
+      expect(partialWorld.meta.completedTick).toBe(pickedWorld.meta.completedTick);
+      expect(human.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+      expect(human.activity?.poses).toHaveLength(phase + 1);
+      expect(human.activity?.poses.at(-1)).toEqual(residentTravelSegmentPose(firstEdge, phase * stepUnits!));
+      expect(routeDistance(partialWorld, contract(partialWorld, offered.id), human)).toBe(phase * stepUnits!);
+      expect(boundedFineWork(human)).toBe(phase * stepUnits!);
+      expect(contract(partialWorld, offered.id)).toMatchObject({ status: "in-transit", cargoQuantity: 12,
+        assignedResidentId: selectedHuman.id });
+      coldRecords.set(phase, record);
+      partials.set(phase, partial);
+    }
+    advance(runtime, 1);
+    const finalLimit = pickedWorld.meta.completedTick + 120;
+    while (observed.status !== "fulfilled" && runtime.getRenderView().tick < finalLimit) advance(runtime, 10);
+    if (observed.completedTick === null) throw new Error("Native reverse journey did not hand off within its bounded ordinary-work witness");
+    expect(observed.completedTick).toBeGreaterThan(pickedContract.arrivalTick!);
+    expect(trace.some(({ local, distance }) => local && distance > 0)).toBe(true);
+    expect(trace.some(({ local, macroUnits }) => !local && macroUnits > 0)).toBe(true);
+    expect(trace.at(-1)?.distance).toBe(totalDistance);
+    expect(departures.size).toBe(1);
+    expect(fulfillments.size).toBe(1);
+    advance(runtime, 10); // Exactly one real following interval, not a new assigned job.
+    await runtime.save();
+    const terminal = decode(repository.snapshot());
+    const terminalWorld = deserializeWorld(terminal.world);
+    expect(terminalWorld.meta.completedTick).toBe(observed.completedTick + 1);
+    expect(terminal.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(contract(terminalWorld, offered.id)).toMatchObject({ status: "fulfilled", cargoQuantity: 0,
+      completedTick: observed.completedTick, assignedResidentId: selectedHuman.id });
+    expect(departures.size).toBe(1);
+    expect(fulfillments.size).toBe(1);
+    assertWorldInvariants(terminalWorld);
+    close(runtime);
+    primary = false;
+    for (const phase of [4, 9] as const) {
+      const coldRepository = new MemoryRepository(coldRecords.get(phase)!);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(partials.get(phase)!));
+      if (phase === 4) {
+        advance(cold, 5);
+        await cold.save();
+        expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(partials.get(9)!));
+        // Exact phase4→phase9 join plus the detached phase9 suffix below proves
+        // the same whole continuation without running that suffix twice.
+        close(cold);
+        continue;
+      }
+      const remainingSteps = 10 * (terminalWorld.meta.completedTick - pickedWorld.meta.completedTick) - 9;
+      expect(remainingSteps).toBeGreaterThan(0);
+      advance(cold, remainingSteps);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
+      close(cold);
+    }
+    step.mockRestore();
   }, 180_000);
 });
