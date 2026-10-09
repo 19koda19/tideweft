@@ -5410,6 +5410,83 @@ changed. Timing describes correctness runs only. No new cumulative, platform,
 release or whole-directive closure is claimed; native-runtime multi-leg,
 broader environment/alternatives and legal carried-failure consumers remain open.
 
+### Shared source footing for unladen pickup — 2026-10-09
+
+Local, unpublished follow-up on `31ae8bff0402532ea3b30d66088c45b10cd99565`
+extends the existing source-contact calculation to current-v8 contract-pickup
+approach. The same player ground profile and optional finite source mat apply
+beneath the unladen105-unit ceiling; cargo is not created until the existing
+origin transaction. Loaded travel retains its exact prior arithmetic. Frozen
+v6/v7 pickup and unrelated rest/ration/material/inspection pace stay unchanged.
+[Architecture](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service)
+owns contact, paid path distance, qualified wear and atomic body/aid publication.
+Schemas58/carry14, accepted history and deliberately supported readers remain
+unchanged; no equipment, inventory, knowledge or new transaction is introduced.
+
+Twelve new lower-owner foundations cover four dry source profiles, full/setting
+mat support and12,000/6,000 entry wear, destination-only/no-entry/clipped work,
+absent aid parity, actual wet rejection, frozen-v6/v7 pacing, positive service
+versus later malformed-roster rejection, and phase4/9 cloned/serialized world
+plus detached aid continuation through a once-only real stock transfer. These
+source-terrain contrasts and finite kernel deployment are explicitly synthetic
+foundations, not ordinary player F placement or native positive pickup-mat proof.
+
+The native estuary courier's actual source and target remain meadow. Its
+1000-unit approach pays97 per accepted step, reaches the target on step11 and
+debits only at the second closing boundary, tick423. The first real interval
+retains970 paid units, cargo0 and unchanged source stock; no body, task, winner,
+terrain or arrival is assigned to obtain this result. Existing sensory and
+four-leg coarse cases now close this genuine extra interval and derive departure
+timing. The runtime phase4/9 cold suffix processes the same20 total approach
+steps; later-failure rollback starts from the real arrived-but-not-debited
+phase9 prefix. Cancel/expiry and deliberately supported55/56 witnesses keep
+their truthful older timing. All native tidal, stock/route absence, source-bound
+sound and post-pickup mat checks remain intact and pass.
+
+The complete modified lower file passes18tests in8.15s. The affected35-file
+domain passes827tests,0failed/0pending,252.36s, including all14 native pickup,
+all3 native journey and all14 rest/service cases. Maintained smoke passes
+6files/105tests in4.83s; existing late Voice-closure rollback and F-sounding/
+reclaim checks pass2tests/96deliberately unselected in14.70s. Frozen-input
+typecheck and45 documentation-reuse self-tests pass. Commands:
+
+```sh
+npx vitest run src/sim/residentPickupUse.test.ts --maxWorkers=1
+npx vitest run \
+  src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts \
+  src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
+  src/sim/residentActivityEventLocus.test.ts src/sim/residentSurfaceKnowledge.test.ts \
+  src/sim/residentPickupUse.test.ts src/sim/residentPickupActivity.test.ts \
+  src/sim/residentTravelRoute.test.ts src/sim/residentTravelActivity.test.ts \
+  src/sim/residentTravelAdvance.test.ts src/sim/systemComposition.integration.test.ts \
+  src/game/looseCargo.test.ts src/game/player.test.ts \
+  src/game/residentActivityExecution.test.ts src/game/residentTravelEnvironmentExecution.test.ts \
+  src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts \
+  src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.activity.test.ts \
+  src/game/humanPerception.presentation.test.ts src/game/projection.residentPickup.test.ts \
+  src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts \
+  src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentPickup.integration.test.ts \
+  src/game/runtime.residentTravel.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts \
+  src/game/footing.test.ts src/game/footing.release.audit.test.ts src/game/player.gear.integration.test.ts \
+  src/game/wayknots.test.ts src/game/wayknots.integration.test.ts src/game/regionalWayknots.test.ts \
+  src/render/wayknots.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.test.ts \
+  --testNamePattern='rolls back introduction facts, save, and vocal audio when later interval closure fails|requires a sounding before binding a flooded non-channel anchor but still permits reclaim' \
+  --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+All731 public non-Markdown inputs and parent HEAD match before/after, digest
+`b10d3d2d34d0e4251cf9e841acdce200df94733b5a5d1e9d3ee584401e943499`.
+Timing describes correctness runs, not production performance. Queries remain
+bounded by the existing six aids and local corridor; no optimization is claimed.
+No new cumulative certificate, normal visual/platform build, public release or
+whole-directive closure is inferred. Broader crossing/current/alternatives,
+legal carried failure and normal acquisition/placement proof remain open.
+Dependency and configuration changes: none. Historical directives are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

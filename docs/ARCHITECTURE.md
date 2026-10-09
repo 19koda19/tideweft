@@ -2756,8 +2756,16 @@ quota is not charged drag twice. Actual dry flats, marsh, meadow and ridge can
 therefore change displacement without changing stock or custody. Player values
 and arithmetic are unchanged. Frozen v7, all already accepted poses and the
 explicit macro owner retain their existing behavior. This is not general grade,
-water/current, injury, gear or a change to service/approach pace. The narrow
-shared mat consumer below adds support without changing these ground values.
+water/current, injury, gear or a change to unrelated service/approach pace.
+The narrow shared mat consumer below adds support without changing these ground values.
+
+Current v8 **contract-pickup approach** shares that same dry source/contact
+profile beneath its existing unladen105-unit ceiling. It has no cargo before
+the real origin handoff, so no load penalty applies yet. Ground/support changes
+future accepted locomotion only; arrival still requires the actual target and
+pickup still waits for the normal closing transaction. Retained v6/v7 pickup
+intervals and rest/ration/material/inspection pace remain unchanged. No saved
+pose, task, quantity, schema or deliberately supported format is rewritten.
 
 `residentTravelAdvance.ts` owns the narrow macro-transport exception to generic
 coarse actor immobility. One source-bound, one-shot closing admission captures
@@ -2821,12 +2829,13 @@ porter cargo, failure/recovery breadth, visual acceptance or performance.
 
 #### Source-qualified resident reed-mat service
 
-Current local/unpublished v8 dry contract travel can use the already accepted
-`player.wayknots` root, not an NPC inventory or new aid authority. The bounded
+Current local/unpublished v8 dry contract travel and pickup approach can use
+the already accepted `player.wayknots` root, not an NPC inventory or new aid authority. The bounded
 six-piece query uses the actual source/contact tile and the existing
 setup-scaled movement benefit. Its added ground allowance is capped at 1000
-permille before applying the same cargo-qualified step ceiling and unscaled
-remaining interval quota. Frozen v7, macro transport and other approaches do
+permille before applying the same cargo-qualified travel ceiling and unscaled
+remaining interval quota, or the unladen105 pickup ceiling. Frozen v6/v7,
+macro transport and unrelated approaches do
 not gain this interaction. Terrain indexing uses its actual width; persistent
 regional aid addresses retain 96×72 even for supported 64×48 lower-world terrain.
 
@@ -2837,7 +2846,9 @@ kernel: nominally 12,000 full-strength or 6,000 while setting, with setup scalin
 applied once and remaining condition clamped at zero. Queries, standing,
 repeated fine samples without entry, zero-benefit clipping and a destination
 mat not yet contacted spend no condition. Positive pre-event condition supplies
-that resolved step; breakage follows it.
+that resolved step; breakage follows it. Pickup compares actual path distance
+paid by shared locomotion, not a straight-line chord or travel cursor; a short
+target below the bare allowance cannot qualify as added work.
 
 All candidate bodies and the immutable aid successor are staged together;
 runtime publishes them under the existing fail-closed player/world transaction.

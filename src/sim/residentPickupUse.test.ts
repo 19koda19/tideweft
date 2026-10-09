@@ -9,6 +9,8 @@ import {
 } from "../game/residentActivityExecution";
 import { resolveResidentWorldPlacement } from "../game/residentSpatial";
 import { createSettlementEcologyState } from "../game/settlementEcology";
+import { TERRAIN_DRAG_PERMILLE } from "../game/footing";
+import { createWayknotState, placeWayknot, type WayknotState } from "../game/wayknots";
 import { worldPositionDelta } from "../game/worldPosition";
 import type { LivingActorInteractionWindow } from "../game/livingActorSimulation";
 import { createActorObservation, type ActorObservation } from "./actorPerception";
@@ -22,6 +24,10 @@ import {
 } from "./public";
 import { createRegionCoord } from "./regions";
 import {
+  RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
+  RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
   RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
   replaceResidentActivity,
   type ResidentActivity,
@@ -31,13 +37,13 @@ import { prepareResidentRationUse, revokeResidentRationUse } from "./residentRat
 import { prepareResidentTravelAdvance, residentTravelStepUnits, revokeResidentTravelAdvance } from "./residentTravelAdvance";
 import { residentTravelLocation, residentTravelSegment, residentTravelSegmentOffset, residentTravelSegmentPose } from "./residentTravelRoute";
 import * as residentTravelRoute from "./residentTravelRoute";
-import { FIXED_POINT, RESOURCE_KINDS, type ResidentState, type ResourceKind, type WorldState } from "./types";
+import { FIXED_POINT, RESOURCE_KINDS, WORLD_WIDTH, type ResidentState, type ResourceKind, type TerrainKind, type WorldState } from "./types";
 import { stableStringify } from "./util";
 import { currentInventoryTotals } from "./world";
 
 // Lower-engine/production-adapter integration only, not runtime autonomy or an
-// acoustic producer witness. Native stock, offer, automatic assignment, terrain,
-// body, approach and arrival are preserved. The sensory contrasts below are
+// acoustic producer witness. Native cases preserve stock, offer, assignment,
+// terrain, body, approach and arrival. The sensory contrasts below are
 // explicit trusted lower-frame fixtures; they do not establish real audibility.
 const BASE = createWorld("runtime baseline estuary", "wild");
 const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({
@@ -67,7 +73,7 @@ function residentAt(world: WorldState, actorId: string): ResidentState {
   return resident;
 }
 
-function arrivedFixture() {
+function acceptedFixture() {
   const world = structuredClone(BASE);
   const initialTick = world.meta.completedTick;
   world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: initialTick + 1_000 };
@@ -110,6 +116,12 @@ function arrivedFixture() {
   expect(prepareResidentRestActivities(world, [], store)).toBe(true);
   expect(residentAt(world, actorId).activity).toMatchObject({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
     pickupTask: { contractId: contract.id, phase: "approaching", target: binding.target } });
+  return { world, actorId, contract, origin, stock, source, target: binding.target, store };
+}
+
+function arrivedFixture() {
+  const current = acceptedFixture();
+  const { world, actorId, contract, origin, stock, source, target, store } = current;
   let moved = false;
   for (let phase = 1; phase <= 10; phase += 1) {
     const result = advanceResidentRestActivities(world, phase);
@@ -118,14 +130,35 @@ function arrivedFixture() {
     expect(origin.inventory[contract.resource]).toBe(stock);
     expect(contract.cargoQuantity).toBe(0);
   }
+  // Native meadow contact is 97 units/step, not the former bare105. The
+  // genuine first closure must preserve this unfinished one-tile approach.
+  const initialDistance = worldPositionDelta(source, target);
+  expect(Math.hypot(initialDistance.x, initialDistance.y)).toBe(1_000);
+  expect(residentAt(world, actorId).activity?.pickupTask?.phase).toBe("approaching");
+  const retained = residentAt(world, actorId).activity!.poses.at(-1)!.position;
+  expect(retained).not.toEqual(target);
+  const firstWork = worldPositionDelta(source, retained);
+  expect(Math.hypot(firstWork.x, firstWork.y)).toBe(970);
+  closeCurrentInterval(world);
+  expect(contract).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+  expect(origin.inventory[contract.resource]).toBe(stock);
+  expect(world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === contract.id)).toHaveLength(0);
+  expect(residentAt(world, actorId).activity?.poses[0]?.position).toEqual(retained);
+  expect(prepareResidentRestActivities(world, [], store)).toBe(true);
+  for (let phase = 1; phase <= 10; phase += 1) {
+    expect(advanceResidentRestActivities(world, phase)).not.toBeNull();
+    if (phase === 1) expect(residentAt(world, actorId).activity?.pickupTask?.phase).toBe("arrived");
+    expect(origin.inventory[contract.resource]).toBe(stock);
+    expect(contract.cargoQuantity).toBe(0);
+  }
   const arrived = residentAt(world, actorId);
   expect(moved).toBe(true);
   expect(arrived.activity?.pickupTask).toMatchObject({ contractId: contract.id, phase: "arrived" });
   expect(arrived.activity?.poses).toHaveLength(11);
-  expect(arrived.activity?.poses.at(-1)?.position).toEqual(binding.target);
+  expect(arrived.activity?.poses.at(-1)?.position).toEqual(target);
   expect(arrived.circadian?.posture.state).toBe("awake");
   assertWorldInvariants(world);
-  return { world, actorId, contract, origin, stock, target: binding.target, store };
+  return current;
 }
 
 function sensoryFrame(
@@ -239,11 +272,227 @@ describe("resident origin pickup commit-time eligibility", () => {
   });
 });
 
+// Controlled physical-source contrasts only: native acceptance, body and task
+// selection still run, but the named source terrain is synthetic. Finite kernel
+// deployment below is not ordinary player F placement or NPC aid acquisition.
+function groundFixture(terrain: TerrainKind = "marsh") {
+  const current = acceptedFixture();
+  const x = Math.floor(current.source.localX / 1_000);
+  const y = Math.floor(current.source.localY / 1_000);
+  const tile = current.world.terrain.tiles[y * current.world.terrain.width + x]!;
+  tile.terrain = terrain;
+  expect(residentRestTargetHasDrySupport(current.world, current.source)).toBe(true);
+  assertWorldInvariants(current.world);
+  return { ...current, sourceTile: tile };
+}
+
+function deployedMat(current: ReturnType<typeof groundFixture>, setting = false, destination = false) {
+  const position = destination ? current.target : current.source;
+  const x = Math.floor(position.localX / 1_000);
+  const y = Math.floor(position.localY / 1_000);
+  const tile = current.world.terrain.tiles[y * current.world.terrain.width + x]!;
+  if (destination) tile.terrain = "marsh";
+  const result = placeWayknot(createWayknotState(), "reed-mat", {
+    tileIndex: y * WORLD_WIDTH + x, terrain: tile.terrain, waterDepth: 0, windExposed: false,
+  }, current.world.meta.completedTick - (setting ? 0 : 3), position.region);
+  expect(result.ok).toBe(true);
+  if (!result.ok || result.wayknot === null) throw new Error("Synthetic pickup source lacks finite mat deployment");
+  return { state: result.state, id: result.wayknot.id };
+}
+
+function fineWithAid(world: WorldState, phase: number, state: WayknotState): WayknotState {
+  const result = advanceResidentRestActivities(world, phase, undefined, state);
+  expect(result).not.toBeNull();
+  if (result?.wayknots === undefined) throw new Error("Accepted aid input lacks its staged successor");
+  return result.wayknots;
+}
+
+function pickupPosition(current: ReturnType<typeof acceptedFixture>) {
+  return residentAt(current.world, current.actorId).activity!.poses.at(-1)!.position;
+}
+
+function sameTile(left: ReturnType<typeof pickupPosition>, right: ReturnType<typeof pickupPosition>): boolean {
+  return left.region.x === right.region.x && left.region.y === right.region.y
+    && Math.floor(left.localX / 1_000) === Math.floor(right.localX / 1_000)
+    && Math.floor(left.localY / 1_000) === Math.floor(right.localY / 1_000);
+}
+
+describe("source-qualified unladen pickup approach foundations", () => {
+  it.each(["meadow", "marsh", "tidal-flat", "ridge"] as const)("uses the same dry %s source profile beneath the unladen105 ceiling", (terrain) => {
+    const current = groundFixture(terrain);
+    const before = structuredClone(current.world);
+    expect(advanceResidentRestActivities(current.world, 1)).not.toBeNull();
+    const direction = worldPositionDelta(current.source, current.target);
+    const units = Math.floor(105 * TERRAIN_DRAG_PERMILLE[terrain] / 1_000);
+    expect(worldPositionDelta(current.source, pickupPosition(current)))
+      .toEqual({ x: Math.sign(direction.x) * units, y: Math.sign(direction.y) * units });
+    expect(current.contract).toEqual(before.contracts.find(({ id }) => id === current.contract.id));
+    expect(current.world.ledger).toEqual(before.ledger);
+    expect(current.origin.inventory).toEqual(before.settlements.find(({ id }) => id === current.origin.id)!.inventory);
+  });
+
+  it.each([[false, 105, 12_000], [true, 95, 6_000]] as const)("charges setting=%s mat only at the actual helped entry, using%s units and%s wear", (setting, units, wear) => {
+    const current = groundFixture();
+    const mat = deployedMat(current, setting);
+    const originalAid = stableStringify(mat.state);
+    const initialCondition = mat.state.wayknots.find(({ id }) => id === mat.id)!.condition;
+    let state = mat.state;
+    let entered = false;
+    for (let phase = 1; phase <= 10; phase += 1) {
+      const before = pickupPosition(current);
+      const wasSource = sameTile(before, current.source);
+      state = fineWithAid(current.world, phase, state);
+      const next = pickupPosition(current);
+      const displacement = worldPositionDelta(before, next);
+      if (wasSource) expect(Math.hypot(displacement.x, displacement.y)).toBe(units);
+      entered ||= wasSource && !sameTile(before, next);
+      expect(state.wayknots.find(({ id }) => id === mat.id)!.condition).toBe(initialCondition - (entered ? wear : 0));
+      expect(current.contract).toMatchObject({ status: "accepted", cargoQuantity: 0 });
+    }
+    expect(entered).toBe(true);
+    expect(stableStringify(mat.state)).toBe(originalAid);
+    expect(state.wayknots.filter(({ id }) => id !== mat.id)).toEqual(mat.state.wayknots.filter(({ id }) => id !== mat.id));
+    assertWorldInvariants(current.world);
+  });
+
+  it("does not grant a destination mat before contact or charge a clipped zero-extra arrival", () => {
+    const current = groundFixture();
+    const mat = deployedMat(current, true, true);
+    let state = mat.state;
+    for (let phase = 1; phase <= 10; phase += 1) state = fineWithAid(current.world, phase, state);
+    // The source has no mat: first seven72-unit samples reach504, not525.
+    const seventh = residentAt(current.world, current.actorId).activity!.poses[7]!.position;
+    const delta = worldPositionDelta(current.source, seventh);
+    expect(Math.hypot(delta.x, delta.y)).toBe(504);
+    expect(state).toBe(mat.state);
+    closeCurrentInterval(current.world);
+    expect(prepareResidentRestActivities(current.world, [], current.store)).toBe(true);
+    for (let phase = 1; phase <= 10; phase += 1) {
+      const before = pickupPosition(current);
+      state = fineWithAid(current.world, phase, state);
+      if (phase === 3) {
+        const clipped = worldPositionDelta(before, pickupPosition(current));
+        expect(Math.hypot(clipped.x, clipped.y)).toBe(21);
+      }
+    }
+    expect(pickupPosition(current)).toEqual(current.target);
+    expect(residentAt(current.world, current.actorId).activity?.pickupTask?.phase).toBe("arrived");
+    // Target contact aids the approach, but there is no next tile entry and
+    // final distance below bare72 cannot certify any additional service.
+    expect(state).toBe(mat.state);
+  });
+
+  it.each([6, 7] as const)("preserves frozen-v%s pickup105 with a supplied source mat", (version) => {
+    const current = groundFixture();
+    // Explicit whole-roster frozen protocol contrast, not a migrated runtime
+    // save: retain every native body/task and strip only v6's forbidden field.
+    current.world.residents = current.world.residents.map((resident) => {
+      const activity = resident.activity!;
+      if (version === RESIDENT_PICKUP_ACTIVITY_VERSION) {
+        const { travelTask: _travelTask, ...prefix } = activity;
+        return replaceResidentActivity(resident, { ...prefix, version, ownerId: RESIDENT_PICKUP_ACTIVITY_OWNER_ID });
+      }
+      return replaceResidentActivity(resident, { ...activity, version: RESIDENT_TRAVEL_ACTIVITY_VERSION, ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID });
+    });
+    const mat = deployedMat(current);
+    let state = mat.state;
+    for (let phase = 1; phase <= 10; phase += 1) state = fineWithAid(current.world, phase, state);
+    expect(pickupPosition(current)).toEqual(current.target);
+    expect(residentAt(current.world, current.actorId).activity?.pickupTask?.phase).toBe("arrived");
+    expect(state).toBe(mat.state);
+    assertWorldInvariants(current.world);
+  });
+
+  it("preserves absent/no-effect aid parity and rejects actual wet source support", () => {
+    const current = groundFixture();
+    const noAid = structuredClone(current.world);
+    const empty = createWayknotState();
+    expect(advanceResidentRestActivities(noAid, 1)).not.toHaveProperty("wayknots");
+    expect(fineWithAid(current.world, 1, empty)).toBe(empty);
+    expect(serializeWorld(current.world)).toBe(serializeWorld(noAid));
+
+    const wet = groundFixture();
+    const mat = deployedMat(wet);
+    wet.sourceTile.elevation = wet.world.tide.level - 1;
+    const position = pickupPosition(wet);
+    expect(fineWithAid(wet.world, 1, mat.state)).toBe(mat.state);
+    expect(pickupPosition(wet)).toEqual(position);
+    expect(residentAt(wet.world, wet.actorId).activity?.pickupTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route" });
+    expect(wet.contract).toMatchObject({ status: "accepted", cargoQuantity: 0 });
+    expect(wet.origin.inventory.parts).toBe(wet.stock);
+  });
+
+  it("publishes no earlier helped body entry or aid wear when a later roster actor is malformed", () => {
+    const current = groundFixture();
+    const mat = deployedMat(current);
+    let state = mat.state;
+    for (let phase = 1; phase <= 4; phase += 1) state = fineWithAid(current.world, phase, state);
+    const valid = structuredClone(current.world);
+    const helped = fineWithAid(valid, 5, state);
+    expect(helped.wayknots.find(({ id }) => id === mat.id)!.condition)
+      .toBe(state.wayknots.find(({ id }) => id === mat.id)!.condition - 12_000);
+    const chosenIndex = current.world.residents.findIndex(({ identity }) => identity.stableId === current.actorId);
+    const later = current.world.residents.at(-1)!;
+    expect(chosenIndex).toBeLessThan(current.world.residents.length - 1);
+    const { pickupTask: _pickupTask, ...malformed } = later.activity!;
+    later.activity = malformed as ResidentActivity;
+    const residents = current.world.residents;
+    const before = stableStringify(current.world);
+    const aidBefore = stableStringify(state);
+    expect(advanceResidentRestActivities(current.world, 5, undefined, state)).toBeNull();
+    expect(current.world.residents).toBe(residents);
+    expect(stableStringify(current.world)).toBe(before);
+    expect(stableStringify(state)).toBe(aidBefore);
+  });
+
+  it("continues current phase4/9 cold body and detached aid roots without replayed service", () => {
+    const current = groundFixture();
+    const mat = deployedMat(current);
+    const ledger = structuredClone(current.world.ledger);
+    let state = mat.state;
+    for (let phase = 1; phase <= 4; phase += 1) state = fineWithAid(current.world, phase, state);
+    const restored = deserializeWorld(serializeWorld(current.world));
+    const cloned = structuredClone(current.world);
+    let restoredAid = structuredClone(state);
+    let clonedAid = structuredClone(state);
+    expect(serializeWorld(restored)).toBe(serializeWorld(current.world));
+    for (let phase = 5; phase <= 9; phase += 1) {
+      state = fineWithAid(current.world, phase, state);
+      restoredAid = fineWithAid(restored, phase, restoredAid);
+      clonedAid = fineWithAid(cloned, phase, clonedAid);
+      expect(serializeWorld(restored)).toBe(serializeWorld(current.world));
+      expect(serializeWorld(cloned)).toBe(serializeWorld(current.world));
+      expect(restoredAid).toEqual(state);
+      expect(clonedAid).toEqual(state);
+    }
+    const cold9 = deserializeWorld(serializeWorld(current.world));
+    const cold9Aid = structuredClone(state);
+    const finalAid = fineWithAid(current.world, 10, state);
+    expect(fineWithAid(restored, 10, restoredAid)).toEqual(finalAid);
+    expect(fineWithAid(cloned, 10, clonedAid)).toEqual(finalAid);
+    expect(fineWithAid(cold9, 10, cold9Aid)).toEqual(finalAid);
+    closeCurrentInterval(current.world);
+    closeCurrentInterval(restored);
+    closeCurrentInterval(cloned);
+    closeCurrentInterval(cold9);
+    expect(serializeWorld(restored)).toBe(serializeWorld(current.world));
+    expect(serializeWorld(cloned)).toBe(serializeWorld(current.world));
+    expect(serializeWorld(cold9)).toBe(serializeWorld(current.world));
+    expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 8 });
+    expect(current.origin.inventory.parts).toBe(current.stock - 8);
+    expect(current.world.ledger).toEqual(ledger);
+    expect(current.world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === current.contract.id)).toHaveLength(1);
+    expect(finalAid.wayknots.find(({ id }) => id === mat.id)!.condition)
+      .toBe(mat.state.wayknots.find(({ id }) => id === mat.id)!.condition - 12_000);
+  });
+});
+
 describe("native conserved multi-leg coarse logistics foundation", () => {
   it("continues one native four-leg pickup through three exact joins and handoff with equal cloned and saved work", () => {
     const { world, actorId, contract, origin, stock, target, store } = arrivedFixture();
     closeCurrentInterval(world);
-    expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: 8, departedTick: 422,
+    const departureTick = world.meta.completedTick;
+    expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: 8, departedTick: departureTick,
       porterRouteIds: [121, 117, 112, 106], porterSettlementIds: [5, 4, 3, 2, 1] });
     expect(origin.inventory.parts).toBe(stock - 8);
     expect(residentAt(world, actorId).activity?.poses[0]?.position).toEqual(target);
@@ -461,7 +710,7 @@ describe("native conserved multi-leg coarse logistics foundation", () => {
     } finally { waypoint.mockRestore(); }
     if (terminalTick === null || phase9 === null || phase4 === null) throw new Error("Native finite multi-leg journey did not establish its handoff and partial cold cuts");
     expect(joins).toEqual([{ from: 0, to: 1, reversed: true }, { from: 1, to: 2, reversed: true }, { from: 2, to: 3, reversed: true }]);
-    expect(world.meta.completedTick).toBeLessThanOrEqual(422 + intervalBound);
+    expect(world.meta.completedTick).toBeLessThanOrEqual(departureTick + intervalBound);
     expect(contract.dueTick).toBe(dueTick);
     const completedContract = structuredClone(contract);
     for (let phase = 1; phase <= 10; phase += 1) expect(advanceResidentRestActivities(world, phase)).not.toBeNull();

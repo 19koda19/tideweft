@@ -248,6 +248,11 @@ async function acceptedFixture() {
   expect(assigned.activity?.poses[0]?.position).toEqual(source.source);
   const sourceDelta = worldPositionDelta(source.source, source.target);
   expect(Math.hypot(sourceDelta.x, sourceDelta.y)).toBe(WORLD_POSITION_UNITS_PER_TILE);
+  expect(sourceDelta).toEqual({ x: -WORLD_POSITION_UNITS_PER_TILE, y: 0 });
+  const sourceTile = acceptedWorld.terrain.tiles[Math.floor(source.source.localY / WORLD_POSITION_UNITS_PER_TILE)
+    * acceptedWorld.terrain.width + Math.floor(source.source.localX / WORLD_POSITION_UNITS_PER_TILE)]!;
+  expect(sourceTile).toMatchObject({ x: 38, y: 55, terrain: "meadow" });
+  expect(acceptedWorld.terrain.tiles[origin.tileIndex]).toMatchObject({ x: 37, y: 55, terrain: "meadow" });
   expect(residentRestTargetHasDrySupport(acceptedWorld, source.source)).toBe(true);
   expect(residentRestTargetHasDrySupport(acceptedWorld, source.target)).toBe(true);
   expect(assigned.activity?.pickupTask).toMatchObject({ kind: "contract-pickup", contractId: contract.id,
@@ -259,6 +264,57 @@ async function acceptedFixture() {
   return { repository, runtime, accepted, acceptedRecord, actorId: source.actorId,
     source: source.source, target: source.target, contractId: contract.id, originId: origin.id,
     resource: contract.resource, quantity: contract.quantity, stock };
+}
+
+/**
+ * The native unladen meadow approach spends 97 of its 105-unit ceiling per step.
+ * Eleven actual fine steps reach the origin; only the second world closure can
+ * debit stock. No task, position, arrival, assignment or source is introduced.
+ */
+async function completeNativeOriginApproach(
+  fixture: Awaited<ReturnType<typeof acceptedFixture>>,
+  acceptedPrefixPhase = 0,
+) {
+  expect(Number.isSafeInteger(acceptedPrefixPhase) && acceptedPrefixPhase >= 0 && acceptedPrefixPhase <= 9).toBe(true);
+  const acceptedWorld = deserializeWorld(fixture.accepted.world);
+  const acceptedTick = acceptedWorld.meta.completedTick;
+  const terrain = stableStringify(acceptedWorld.terrain);
+  // Counterfactual callers may have lawfully removed source stock or route
+  // availability. Compare against their actual retained input, not the original
+  // fixture quantity, without granting an arrival or successful transaction.
+  const initialWorld = deserializeWorld(decode(fixture.repository.snapshot()).world);
+  const initialStock = initialWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource];
+  let completed: { record: SaveRecord; envelope: Envelope; world: WorldState; human: ResidentState } | null = null;
+  for (let interval = 0; interval < 2; interval += 1) {
+    advance(fixture.runtime, interval === 0 ? 10 - acceptedPrefixPhase : 10);
+    await fixture.runtime.save();
+    const record = fixture.repository.snapshot();
+    const envelope = decode(record);
+    const world = deserializeWorld(envelope.world);
+    const human = actor(world, fixture.actorId);
+    expect(world.meta.completedTick).toBe(acceptedTick + interval + 1);
+    expect(world.tide).toEqual(tideAtTick(world.meta.completedTick));
+    expect(stableStringify(world.terrain)).toBe(terrain);
+    expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    if (interval === 0) {
+      const contactUnits = Math.floor(RESIDENT_REST_APPROACH_STEP_UNITS * TERRAIN_DRAG_PERMILLE.meadow / 1_000);
+      expect(contactUnits).toBe(97);
+      expect(worldPositionDelta(fixture.source, human.activity!.poses[0]!.position))
+        .toEqual({ x: -10 * contactUnits, y: 0 });
+      expect(human.activity?.pickupTask).toMatchObject({ phase: "approaching", target: fixture.target });
+      expect(world.contracts.find(({ id }) => id === fixture.contractId))
+        .toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+      expect(world.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(initialStock);
+      expect(world.ledger).toEqual(initialWorld.ledger);
+      expect(departedEvents(world, fixture.contractId)).toHaveLength(0);
+    } else {
+      expect(human.activity?.poses[0]?.position).toEqual(fixture.target);
+    }
+    assertWorldInvariants(world);
+    completed = { record, envelope, world, human };
+  }
+  if (completed === null) throw new Error("Native approach did not execute its bounded two intervals");
+  return completed;
 }
 
 
@@ -303,11 +359,10 @@ describe("ordinary runtime native traveler water response", () => {
       expect(stableStringify(world.terrain)).toBe(terrain);
       return { record, envelope, world, human: actor(world, fixture.actorId) };
     };
-    advance(runtime, 10);
-    let current = await save();
-    expect(current.world.meta.completedTick).toBe(422);
+    let current = await completeNativeOriginApproach(fixture);
+    const departedTick = current.world.meta.completedTick;
     expect(current.world.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(current.human.activity?.poses[0]?.position).toEqual(fixture.target);
     const departure = current.human.activity!.poses[0]!.position;
     let firstBankTick: number | null = null;
@@ -396,7 +451,7 @@ describe("ordinary runtime native traveler water response", () => {
       expect(final.human.activity?.poses.at(-1)?.position).not.toEqual(bank);
     }
     expect(final.world.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(final.world.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(fixture.stock - fixture.quantity);
     expect(departedEvents(final.world, fixture.contractId)).toHaveLength(1);
@@ -521,18 +576,19 @@ describe("ordinary runtime resident origin pickup", () => {
     expect(middleWorld.contracts.find(({ id }) => id === fixture.contractId)).toMatchObject({ status: "accepted", cargoQuantity: 0 });
     expect(middleWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(fixture.stock);
 
-    advance(runtime, 10 - phase);
-    await runtime.save();
-    const picked = decode(repository.snapshot());
-    const pickedWorld = deserializeWorld(picked.world);
+    const approach = await completeNativeOriginApproach(fixture, phase);
+    const picked = approach.envelope;
+    const pickedWorld = approach.world;
     const carrying = actor(pickedWorld, fixture.actorId);
     const contract = pickedWorld.contracts.find(({ id }) => id === fixture.contractId)!;
-    expect(pickedWorld.meta.completedTick).toBe(422);
+    const departedTick = pickedWorld.meta.completedTick;
+    const pickupAcceptedSteps = 10 * (departedTick - middleWorld.meta.completedTick);
+    expect(pickupAcceptedSteps).toBe(20);
     expect(picked.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(carrying.activity?.poses[0]?.position).toEqual(fixture.target);
     expect(carrying.activity?.pickupTask).toBeNull();
-    expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
-    expect(contract.arrivalTick).toBeGreaterThan(423);
+    expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
+    expect(contract.arrivalTick).toBeGreaterThan(departedTick + 1);
     expect(pickedWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(fixture.stock - fixture.quantity);
     expect(pickedWorld.ledger).toEqual(deserializeWorld(fixture.accepted.world).ledger);
@@ -543,9 +599,9 @@ describe("ordinary runtime resident origin pickup", () => {
     await runtime.save();
     const uninterrupted = decode(repository.snapshot());
     const nextWorld = deserializeWorld(uninterrupted.world);
-    expect(nextWorld.meta.completedTick).toBe(423);
+    expect(nextWorld.meta.completedTick).toBe(departedTick + 1);
     expect(nextWorld.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(nextWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(fixture.stock - fixture.quantity);
     expect(departedEvents(nextWorld, fixture.contractId)).toHaveLength(1);
@@ -556,7 +612,7 @@ describe("ordinary runtime resident origin pickup", () => {
     const cold = await open(coldRepository);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(middle));
-    advance(cold, 10 - phase);
+    advance(cold, pickupAcceptedSteps - phase);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(picked));
     advance(cold, 10);
@@ -567,9 +623,7 @@ describe("ordinary runtime resident origin pickup", () => {
   it.each([4, 9])("keeps the real heavy departure sound at its source through moving phase%s cold work", async (phase) => {
     const fixture = await acceptedFixture();
     const { runtime, repository } = fixture;
-    advance(runtime, 10);
-    await runtime.save();
-    const departure = decode(repository.snapshot());
+    const departure = (await completeNativeOriginApproach(fixture)).envelope;
     const samples = departure.perceptionCarry.actorVocalizationSamples.filter(({ sourceActorId }) => sourceActorId === fixture.actorId);
     expect(samples).toHaveLength(1);
     expect(samples[0]?.position).toEqual(fixture.target);
@@ -607,17 +661,26 @@ describe("ordinary runtime resident origin pickup", () => {
   it("rolls back the actual stock-to-cargo pickup when later interval closure fails", async () => {
     const fixture = await acceptedFixture();
     const { runtime, repository } = fixture;
-    advance(runtime, 9);
+    // The real eleven-step approach has arrived in the second interval. Its
+    // phase9 prefix still holds no cargo until the next world closure commits.
+    advance(runtime, 19);
     await runtime.save();
     const beforeRecord = repository.snapshot();
     const before = decode(beforeRecord);
-    expect(actor(deserializeWorld(before.world), fixture.actorId).activity?.pickupTask?.phase).toBe("approaching");
+    const beforeWorld = deserializeWorld(before.world);
+    const departedTick = beforeWorld.meta.completedTick + 1;
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(actor(beforeWorld, fixture.actorId).activity?.pickupTask?.phase).toBe("arrived");
+    expect(actor(beforeWorld, fixture.actorId).activity?.poses.at(-1)?.position).toEqual(fixture.target);
+    expect(beforeWorld.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+    expect(beforeWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(fixture.stock);
     const originalStep = simulation.stepWorld;
     let attemptedPickup = false;
     const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
       const result = originalStep(...args);
       expect(result.contracts.find(({ id }) => id === fixture.contractId))
-        .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+        .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
       expect(result.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
         .toBe(fixture.stock - fixture.quantity);
       expect(departedEvents(result, fixture.contractId)).toHaveLength(1);
@@ -646,7 +709,7 @@ describe("ordinary runtime resident origin pickup", () => {
     await cold.save();
     const recovered = deserializeWorld(decode(coldRepository.snapshot()).world);
     expect(recovered.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(recovered.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(fixture.stock - fixture.quantity);
     expect(departedEvents(recovered, fixture.contractId)).toHaveLength(1);
@@ -686,9 +749,7 @@ describe("ordinary runtime resident origin pickup", () => {
     controlled.world = serializeWorld(world);
     const repository = new MemoryRepository(recordWith(fixture.acceptedRecord, controlled));
     const runtime = await open(repository);
-    advance(runtime, 10);
-    await runtime.save();
-    const waiting = deserializeWorld(decode(repository.snapshot()).world);
+    const waiting = (await completeNativeOriginApproach({ ...fixture, runtime, repository })).world;
     const courier = actor(waiting, fixture.actorId);
     expect(courier.activity?.poses[0]?.position).toEqual(fixture.target);
     expect(courier.activity?.pickupTask).toMatchObject({ contractId: fixture.contractId,
@@ -706,7 +767,8 @@ describe("ordinary runtime resident origin pickup", () => {
     const continuingRecord = repository.snapshot();
     const continuingEnvelope = decode(continuingRecord);
     const continuing = deserializeWorld(continuingEnvelope.world);
-    expect(continuing.meta.completedTick).toBe(423);
+    const continuingTick = continuing.meta.completedTick;
+    expect(continuingTick).toBe(waiting.meta.completedTick + 1);
     expect(continuing.contracts.find(({ id }) => id === fixture.contractId))
       .toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
     expect(continuing.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(availableStock);
@@ -755,12 +817,12 @@ describe("ordinary runtime resident origin pickup", () => {
     expect(restored.world).toBe(continuingEnvelope.world);
     expect(restored.perceptionCarry).toEqual(continuingEnvelope.perceptionCarry);
     expect(departedEvents(deserializeWorld(restored.world), fixture.contractId)).toHaveLength(0);
-    // The real phase-zero retry is already due at423. A genuine fine step
-    // reaffirms arrival, but neither cold load nor that arrival debits stock.
+    // The real phase-zero retry is already due at this continuing boundary.
+    // A genuine fine step reaffirms arrival; neither cold load nor arrival debits stock.
     advance(recovery, 1);
     await recovery.save();
     const arrived = deserializeWorld(decode(recoveryRepository.snapshot()).world);
-    expect(arrived.meta.completedTick).toBe(423);
+    expect(arrived.meta.completedTick).toBe(continuingTick);
     expect(actor(arrived, fixture.actorId).activity?.pickupTask)
       .toMatchObject({ phase: "arrived", selectedAtTick: 421, target: fixture.target });
     expect(arrived.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(replenishedStock);
@@ -769,9 +831,10 @@ describe("ordinary runtime resident origin pickup", () => {
     advance(recovery, 9);
     await recovery.save();
     const picked = deserializeWorld(decode(recoveryRepository.snapshot()).world);
-    expect(picked.meta.completedTick).toBe(424);
+    const departedTick = continuingTick + 1;
+    expect(picked.meta.completedTick).toBe(departedTick);
     expect(picked.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 424 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(picked.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(replenishedStock - fixture.quantity);
     if (donor !== null) expect(picked.settlements.find(({ id }) => id === donor.id)!.inventory[fixture.resource]).toBe(donor.remaining);
@@ -781,9 +844,9 @@ describe("ordinary runtime resident origin pickup", () => {
     advance(recovery, 10);
     await recovery.save();
     const next = deserializeWorld(decode(recoveryRepository.snapshot()).world);
-    expect(next.meta.completedTick).toBe(425);
+    expect(next.meta.completedTick).toBe(departedTick + 1);
     expect(next.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 424 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(next.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(replenishedStock - fixture.quantity);
     expect(next.ledger).toEqual(controlledLedger);
@@ -1020,11 +1083,10 @@ describe("runtime resident source-mat service", () => {
   it("commits real helped entry and finite mat wear, cold restores it, and rolls both back on later publication failure", async () => {
     const fixture = await acceptedFixture();
     const { runtime, repository } = fixture;
-    advance(runtime, 10);
-    await runtime.save();
-    const picked = deserializeWorld(decode(repository.snapshot()).world);
+    const picked = (await completeNativeOriginApproach(fixture)).world;
+    const departedTick = picked.meta.completedTick;
     const commitment = picked.contracts.find(({ id }) => id === fixture.contractId)!;
-    expect(commitment).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+    expect(commitment).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(picked.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
       .toBe(fixture.stock - fixture.quantity);
     const route = picked.routes.find(({ id }) => id === commitment.porterRouteIds[0])!;
@@ -1243,7 +1305,7 @@ describe("runtime resident source-mat service", () => {
     expect(actor(servicedWorld, fixture.actorId).activity?.poses.at(-1)).toEqual(ready.expectedPose);
     expect((serviced.player as PlayerState).wayknots).toEqual(ready.service.state);
     expect(servicedWorld.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     // Native production and other lawful stock work continue during the ebb
     // wait. Aid service must conserve the same stock/ledger as equal-work bare
     // play, not freeze those owners at their initial pickup quantities.

@@ -502,49 +502,25 @@ export function advanceResidentRestActivities(
             // Physical contact, not path-cost preference or actor knowledge.
             // Preserve frozen v7 work; current travel inherits the player's
             // bare ground profile, never its gait, pack, gear or water mode.
-            const sourceX = Math.floor(pose.position.localX / WORLD_POSITION_UNITS_PER_TILE);
-            const sourceY = Math.floor(pose.position.localY / WORLD_POSITION_UNITS_PER_TILE);
-            const sourceTile = world.terrain.tiles[sourceY * world.terrain.width + sourceX];
-            if (sourceTile === undefined || sourceTile.x !== sourceX || sourceTile.y !== sourceY) return null;
-            const bareContactStepUnits = residentActivitySupportsTravelEnvironment(activity)
-              ? Math.floor(allowance * TERRAIN_DRAG_PERMILLE[sourceTile.terrain] / 1_000)
-              : allowance;
-            let contactStepUnits = bareContactStepUnits;
-            let winningMatId: number | null = null;
-            if (residentActivitySupportsTravelEnvironment(activity) && nextWayknots !== undefined) {
-              const effects = queryWayknotEffects(nextWayknots, {
-                tileIndex: sourceY * WORLD_WIDTH + sourceX, terrain: sourceTile.terrain,
-                waterDepth: 0, windExposed: false,
-              }, TRAVEL_WAYKNOT_GRID, tick, pose.position.region);
-              if (effects.movementCostPermille < WAYKNOT_PERMILLE) {
-                // Query strength is already setup-scaled. Do not halve again
-                // or let support exceed the same cargo-qualified step quota.
-                const winner = effects.influences.find((influence) => influence.kind === "reed-mat"
-                  && influence.movementCostPermille === effects.movementCostPermille);
-                if (winner === undefined) return null;
-                winningMatId = winner.id;
-                const drag = Math.min(WAYKNOT_PERMILLE,
-                  TERRAIN_DRAG_PERMILLE[sourceTile.terrain] + WAYKNOT_PERMILLE - effects.movementCostPermille);
-                contactStepUnits = Math.floor(allowance * drag / WAYKNOT_PERMILLE);
-              }
-            }
+            const contact = dryContactStep(world, pose.position, allowance,
+              residentActivitySupportsTravelEnvironment(activity), nextWayknots);
+            if (contact === null) return null;
             const resolution = resolveLivingActorLocomotion({
               requestId: `contract-travel:${resident.identity.stableId}:${contract.id}`,
               tick, actor: createLivingActorAddress({ actorId: resident.identity.stableId, species: "human", persistence: "promoted",
                 position: pose.position, heading: pose.heading }),
               targetArea: { center: target, radiusUnits: 0 },
-              maximumStepUnits: Math.min(maximumStepUnits, contactStepUnits), surface,
+              maximumStepUnits: Math.min(maximumStepUnits, contact.stepUnits), surface,
             });
             if (resolution.kind === "moved") {
               const nextOffset = residentTravelSegmentOffset(segment, resolution.actor.position);
               if (nextOffset === null || nextOffset <= offset || nextOffset > targetOffset) return null;
-              const enteredTile = Math.floor(resolution.actor.position.localX / WORLD_POSITION_UNITS_PER_TILE) !== sourceX
-                || Math.floor(resolution.actor.position.localY / WORLD_POSITION_UNITS_PER_TILE) !== sourceY;
-              const bareDistance = Math.min(maximumStepUnits, bareContactStepUnits, targetOffset - offset);
-              if (winningMatId !== null && nextWayknots !== undefined && enteredTile && nextOffset - offset > bareDistance) {
+              const enteredTile = enteredContactTile(contact, resolution.actor.position);
+              const bareDistance = Math.min(maximumStepUnits, contact.bareStepUnits, targetOffset - offset);
+              if (contact.winningMatId !== null && nextWayknots !== undefined && enteredTile && nextOffset - offset > bareDistance) {
                 // One actual entry helped by this SOURCE mat, not a query,
                 // repeated fine sample or a destination aid not yet contacted.
-                const service = applyWayknotServiceWear(nextWayknots, winningMatId, tick,
+                const service = applyWayknotServiceWear(nextWayknots, contact.winningMatId, tick,
                   WAYKNOT_FULL_STRENGTH, pose.position.region);
                 if (!service.ok) return null;
                 nextWayknots = service.state;
@@ -579,6 +555,13 @@ export function advanceResidentRestActivities(
           if (surface === null) task = waitForRest(task, tick, "outside-local-corridor");
           else {
             maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
+            // Pickup is unladen until the existing closing stock transfer.
+            // Older supported intervals and unrelated approaches keep105.
+            const currentPickup = task.kind === "contract-pickup"
+              && residentActivitySupportsTravelEnvironment(activity);
+            const contact = currentPickup ? dryContactStep(world, pose.position,
+              RESIDENT_REST_APPROACH_STEP_UNITS, true, nextWayknots) : null;
+            if (currentPickup && contact === null) return null;
             const resolution = resolveLivingActorLocomotion({
               requestId: `${task.kind}:${resident.identity.stableId}:${task.selectedAtTick}`,
               tick,
@@ -589,10 +572,20 @@ export function advanceResidentRestActivities(
               targetArea: { center: task.target, radiusUnits: 0 },
               // Shared locomotion charges each integer segment's ceil length;
               // the exact existing steady-walk bound needs no local rounding.
-              maximumStepUnits: RESIDENT_REST_APPROACH_STEP_UNITS,
+              maximumStepUnits: contact?.stepUnits ?? RESIDENT_REST_APPROACH_STEP_UNITS,
               surface,
             });
             if (resolution.kind === "moved") {
+              if (contact !== null && contact.winningMatId !== null && nextWayknots !== undefined
+                && enteredContactTile(contact, resolution.actor.position)
+                && resolution.distanceUnits > contact.bareStepUnits) {
+                // Shared locomotion pays path distance, not a shortcut chord.
+                // Goal clipping or movement within the source tile is no use.
+                const service = applyWayknotServiceWear(nextWayknots, contact.winningMatId, tick,
+                  WAYKNOT_FULL_STRENGTH, pose.position.region);
+                if (!service.ok) return null;
+                nextWayknots = service.state;
+              }
               pose = { position: resolution.actor.position, heading: resolution.actor.heading };
               task = { ...task, lastProgressAtTick: tick };
               movedActorIds.push(resident.identity.stableId);
@@ -641,6 +634,53 @@ export function advanceResidentRestActivities(
     maximumSurfaceCells,
     ...(wayknots === undefined ? {} : { wayknots: nextWayknots! }),
   });
+}
+
+interface DryContactStep {
+  readonly sourceX: number;
+  readonly sourceY: number;
+  readonly bareStepUnits: number;
+  readonly stepUnits: number;
+  readonly winningMatId: number | null;
+}
+
+/** Same source-qualified dry contact for loaded travel and unladen pickup. */
+function dryContactStep(
+  world: WorldState, position: WorldPosition, allowance: number,
+  currentGround: boolean, wayknots: WayknotState | undefined,
+): DryContactStep | null {
+  const sourceX = Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const sourceY = Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const sourceTile = world.terrain.tiles[sourceY * world.terrain.width + sourceX];
+  if (sourceTile === undefined || sourceTile.x !== sourceX || sourceTile.y !== sourceY) return null;
+  const bareStepUnits = currentGround
+    ? Math.floor(allowance * TERRAIN_DRAG_PERMILLE[sourceTile.terrain] / WAYKNOT_PERMILLE)
+    : allowance;
+  let stepUnits = bareStepUnits;
+  let winningMatId: number | null = null;
+  if (currentGround && wayknots !== undefined) {
+    const effects = queryWayknotEffects(wayknots, {
+      tileIndex: sourceY * WORLD_WIDTH + sourceX, terrain: sourceTile.terrain,
+      waterDepth: 0, windExposed: false,
+    }, TRAVEL_WAYKNOT_GRID, world.meta.completedTick, position.region);
+    if (effects.movementCostPermille < WAYKNOT_PERMILLE) {
+      // Query strength is already setup-scaled. Support cannot exceed the
+      // same unladen/cargo ceiling or halve setting strength a second time.
+      const winner = effects.influences.find((influence) => influence.kind === "reed-mat"
+        && influence.movementCostPermille === effects.movementCostPermille);
+      if (winner === undefined) return null;
+      winningMatId = winner.id;
+      const drag = Math.min(WAYKNOT_PERMILLE,
+        TERRAIN_DRAG_PERMILLE[sourceTile.terrain] + WAYKNOT_PERMILLE - effects.movementCostPermille);
+      stepUnits = Math.floor(allowance * drag / WAYKNOT_PERMILLE);
+    }
+  }
+  return { sourceX, sourceY, bareStepUnits, stepUnits, winningMatId };
+}
+
+function enteredContactTile(contact: DryContactStep, position: WorldPosition): boolean {
+  return Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE) !== contact.sourceX
+    || Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE) !== contact.sourceY;
 }
 
 function waitForTravel(task: ResidentPhysicalTravelTask, tick: number, waitReason: ResidentPhysicalTravelTask["waitReason"]): ResidentPhysicalTravelTask {
