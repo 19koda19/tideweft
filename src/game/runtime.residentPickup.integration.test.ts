@@ -12,17 +12,25 @@ import * as simulation from "../sim/public";
 import {
   RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+  RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
   RESIDENT_PICKUP_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { findAutonomousRoutePlan } from "../sim/network";
 import type { SimCommand } from "../sim/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
+import type { SupplementalSoundSample } from "./humanPerception";
 import { advanceResidentRestActivities } from "./residentActivityExecution";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
-import { CURRENT_GAME_SAVE_VERSION, FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import {
+  CURRENT_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
+} from "./saveCompatibilityPolicy";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
@@ -41,7 +49,10 @@ interface Envelope extends Record<string, unknown> {
   format: "tideweft-session";
   version: number;
   world: string;
-  perceptionCarry: { playerStepsSinceWorldTick: number };
+  perceptionCarry: {
+    playerStepsSinceWorldTick: number;
+    actorVocalizationSamples: readonly SupplementalSoundSample[];
+  };
   integrity: string;
 }
 
@@ -213,7 +224,7 @@ async function acceptedFixture() {
   if (source === undefined) throw new Error("actual automatic winner is not a native origin resident");
   const assigned = actor(acceptedWorld, source.actorId);
   expect(assigned.activeContractId).toBe(contract.id);
-  expect(assigned.activity?.version).toBe(RESIDENT_PICKUP_ACTIVITY_VERSION);
+  expect(assigned.activity?.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
   expect(assigned.activity?.poses).toHaveLength(1);
   expect(assigned.activity?.poses[0]?.position).toEqual(source.source);
   const sourceDelta = worldPositionDelta(source.source, source.target);
@@ -231,8 +242,9 @@ async function acceptedFixture() {
     resource: contract.resource, quantity: contract.quantity, stock };
 }
 
-// Pickup-only runtime evidence. Existing coarse route ETA/handoff is deliberately
-// not converted into a claim of physical route execution or destination arrival.
+// Pickup evidence only. Full physical route execution/destination handoff has
+// its separate runtime.residentTravel.integration.test.ts owner; a grandfathered
+// old journey below is deliberately not represented as physical route work.
 describe("ordinary runtime resident origin pickup", () => {
   it.each([4, 9])("executes a native automatic offer through real approach and equal phase%s cold work", async (phase) => {
     const fixture = await acceptedFixture();
@@ -293,6 +305,46 @@ describe("ordinary runtime resident origin pickup", () => {
     advance(cold, 10);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+  }, 90_000);
+
+  it.each([4, 9])("keeps the real heavy departure sound at its source through moving phase%s cold work", async (phase) => {
+    const fixture = await acceptedFixture();
+    const { runtime, repository } = fixture;
+    advance(runtime, 10);
+    await runtime.save();
+    const departure = decode(repository.snapshot());
+    const samples = departure.perceptionCarry.actorVocalizationSamples.filter(({ sourceActorId }) => sourceActorId === fixture.actorId);
+    expect(samples).toHaveLength(1);
+    expect(samples[0]?.position).toEqual(fixture.target);
+    const strainedCount = () => soundscapePlay.mock.calls.filter(([cue]) => cue === "vocalization-strained").length;
+    const released = strainedCount();
+    expect(released).toBeGreaterThan(0);
+
+    advance(runtime, phase);
+    await runtime.save();
+    const middleRecord = repository.snapshot();
+    const middle = decode(middleRecord);
+    const world = deserializeWorld(middle.world);
+    expect(middle.perceptionCarry.playerStepsSinceWorldTick).toBe(phase);
+    expect(actor(world, fixture.actorId).activity?.travelTask).toMatchObject({ mode: "physical", contractId: fixture.contractId });
+    expect(actor(world, fixture.actorId).activity?.poses.at(-1)?.position).not.toEqual(fixture.target);
+    expect(middle.perceptionCarry.actorVocalizationSamples.filter(({ sourceActorId }) => sourceActorId === fixture.actorId)).toEqual(samples);
+    expect(strainedCount()).toBe(released);
+    advance(runtime, 10 - phase);
+    await runtime.save();
+    const uninterrupted = decode(repository.snapshot());
+    close(runtime);
+
+    const beforeCold = strainedCount();
+    const coldRepository = new MemoryRepository(middleRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(middle));
+    expect(strainedCount()).toBe(beforeCold);
+    advance(cold, 10 - phase);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+    expect(strainedCount()).toBe(beforeCold);
   }, 90_000);
 
   it("rolls back the actual stock-to-cargo pickup when later interval closure fails", async () => {
@@ -486,9 +538,9 @@ describe("ordinary runtime resident origin pickup", () => {
     const fixture = await acceptedFixture();
     close(fixture.runtime);
     const world = deserializeWorld(fixture.accepted.world);
-    // Lower-owner command/closure evidence from the actual runtime body. This
-    // intentionally does not claim a public UI for cancelling another courier,
-    // nor a complete ten-step runtime interval after these four adapter steps.
+    // Lower-owner command/closure evidence, not a public UI for cancelling
+    // another courier. A controlled physical obstruction stops the actual
+    // approach after four steps; the remaining accepted steps must really wait.
     for (let phase = 1; phase <= 4; phase += 1) expect(advanceResidentRestActivities(world, phase)).not.toBeNull();
     const moving = actor(world, fixture.actorId);
     const poseBefore = structuredClone(moving.activity!.poses.at(-1)!);
@@ -498,12 +550,28 @@ describe("ordinary runtime resident origin pickup", () => {
     const contract = world.contracts.find(({ id }) => id === fixture.contractId)!;
     const ledgerBefore = structuredClone(world.ledger);
     const stockBefore = world.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource];
+    const targetTile = world.terrain.tiles[world.settlements.find(({ id }) => id === fixture.originId)!.tileIndex]!;
+    targetTile.terrain = "deep-water";
+    expect(residentRestTargetHasDrySupport(world, fixture.target)).toBe(false);
+    for (let phase = 5; phase <= 10; phase += 1) {
+      expect(advanceResidentRestActivities(world, phase)).not.toBeNull();
+      expect(actor(world, fixture.actorId).activity?.poses.at(-1)).toEqual(poseBefore);
+    }
+    expect(actor(world, fixture.actorId).activity?.pickupTask)
+      .toMatchObject({ phase: "waiting", waitReason: "no-traversable-route" });
+    expect(world.residents.every(({ activity }) => activity?.poses.length === 11)).toBe(true);
     const commands: readonly SimCommand[] = terminal === "cancelled"
       ? [{ id: "native-pickup-cancel", type: "cancel-contract", contractId: fixture.contractId }]
       : [];
     if (terminal === "expired") contract.dueTick = world.meta.completedTick;
     assertWorldInvariants(world);
-    simulation.stepWorld(world, commands);
+    const admission = prepareResidentTravelAdvance(world, null);
+    expect(admission).not.toBeNull();
+    try {
+      simulation.stepWorld(world, commands, undefined, undefined, admission!);
+    } finally {
+      revokeResidentTravelAdvance(admission!);
+    }
     const released = actor(world, fixture.actorId);
     expect(world.contracts.find(({ id }) => id === fixture.contractId))
       .toMatchObject({ status: terminal, cargoQuantity: 0, departedTick: null, completedTick: 422 });
@@ -518,25 +586,45 @@ describe("ordinary runtime resident origin pickup", () => {
     assertWorldInvariants(world);
   }, 90_000);
 
-  it("retains supported55 phase4 bodies after real pickup and upgrades only at genuine phasezero", async () => {
-    const fixture = await acceptedFixture();
-    advance(fixture.runtime, 14);
-    await fixture.runtime.save();
-    const phase4Record = fixture.repository.snapshot();
+  it("retains supported55 pickup/travel-free phase4 bodies and upgrades only at genuine phasezero", async () => {
+    const bootstrapRepository = new MemoryRepository();
+    const bootstrap = await open(bootstrapRepository);
+    bootstrap.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "gale", sessionShape: "wander" });
+    await bootstrap.save();
+    const originalRecord = bootstrapRepository.snapshot();
+    const prepared = decode(originalRecord);
+    const sourceWorld = deserializeWorld(prepared.world);
+    expect(sourceWorld.residents.every((human) => !Object.hasOwn(human, "activity"))).toBe(true);
+    // Explicit short-fixture offer deferral leaves native stock, terrain and
+    // body placement intact, without introducing an accepted commitment.
+    for (const contract of sourceWorld.contracts) {
+      contract.playerExclusiveUntilTick = sourceWorld.meta.completedTick + 1_000;
+      contract.dueTick = sourceWorld.meta.completedTick + 2_000;
+    }
+    assertWorldInvariants(sourceWorld);
+    prepared.world = serializeWorld(sourceWorld);
+    close(bootstrap);
+    const currentRepository = new MemoryRepository(recordWith(originalRecord, prepared));
+    const current = await open(currentRepository);
+    advance(current, 14);
+    await current.save();
+    const phase4Record = currentRepository.snapshot();
     const legacy = decode(phase4Record);
     const world = deserializeWorld(legacy.world);
-    expect(world.meta.completedTick).toBe(422);
+    expect(world.meta.completedTick).toBe(421);
     expect(legacy.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
-    expect(world.contracts.find(({ id }) => id === fixture.contractId))
-      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+    expect(world.residents.every(({ activeContractId }) => activeContractId === null)).toBe(true);
     for (const human of world.residents) {
       const activity = human.activity;
-      if (activity === undefined || activity.pickupTask !== null) throw new Error("cannot reconstruct v5 with current pickup work");
-      expect(activity.version).toBe(RESIDENT_PICKUP_ACTIVITY_VERSION);
+      if (activity === undefined || activity.pickupTask !== null || activity.travelTask !== null) {
+        throw new Error("cannot reconstruct v5 while current pickup or travel work exists");
+      }
+      expect(activity.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
       expect(activity.poses).toHaveLength(5);
-      // Exact frozen-v5 reconstruction from genuine retained poses, only after
-      // all real pickup tasks are gone. Never erase a pending v6 commitment.
-      const { pickupTask: _pickupTask, ...body } = activity;
+      // Only null successor fields may be removed from this task-free native
+      // prefix. A physical v7 traveler cannot be downcast into a legacy journey:
+      // its real cursor and motion history are authoritative, not disposable.
+      const { pickupTask: _pickupTask, travelTask: _travelTask, ...body } = activity;
       human.activity = { ...body, version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION, ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID };
     }
     assertWorldInvariants(world);
@@ -544,10 +632,10 @@ describe("ordinary runtime resident origin pickup", () => {
     legacy.version = FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION;
     const legacyRecord = recordWith(phase4Record, legacy);
 
-    advance(fixture.runtime, 6);
-    await fixture.runtime.save();
-    const uninterrupted = decode(fixture.repository.snapshot());
-    close(fixture.runtime);
+    advance(current, 6);
+    await current.save();
+    const uninterrupted = decode(currentRepository.snapshot());
+    close(current);
 
     const repository = new MemoryRepository(legacyRecord);
     const runtime = await open(repository);
@@ -560,15 +648,112 @@ describe("ordinary runtime resident origin pickup", () => {
     const phase9 = decode(repository.snapshot());
     expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
     expect(deserializeWorld(phase9.world).residents.every((human) => human.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION
-      && human.activity.poses.length === 10 && !Object.hasOwn(human.activity, "pickupTask"))).toBe(true);
+      && human.activity.poses.length === 10 && !Object.hasOwn(human.activity, "pickupTask")
+      && !Object.hasOwn(human.activity, "travelTask"))).toBe(true);
     advance(runtime, 1);
     await runtime.save();
     const boundary = decode(repository.snapshot());
     const boundaryWorld = deserializeWorld(boundary.world);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
-    expect(boundaryWorld.meta.completedTick).toBe(423);
-    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION
-      && human.activity.poses.length === 1 && human.activity.pickupTask === null)).toBe(true);
+    expect(boundaryWorld.meta.completedTick).toBe(422);
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
+      && human.activity.poses.length === 1 && human.activity.pickupTask === null && human.activity.travelTask === null)).toBe(true);
+    expect(authoritativeRoots(boundary)).toEqual(authoritativeRoots(uninterrupted));
+    assertWorldInvariants(boundaryWorld);
+  }, 90_000);
+
+  it("continues a supported56 real pickup prefix into an explicit legacy journey without inventing physical travel", async () => {
+    const fixture = await acceptedFixture();
+    advance(fixture.runtime, 4);
+    await fixture.runtime.save();
+    const phase4Record = fixture.repository.snapshot();
+    const legacy = decode(phase4Record);
+    const world = deserializeWorld(legacy.world);
+    expect(world.meta.completedTick).toBe(421);
+    expect(legacy.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    const moving = actor(world, fixture.actorId);
+    expect(moving.activity?.pickupTask).toMatchObject({ contractId: fixture.contractId, phase: "approaching", target: fixture.target });
+    expectBoundedMotion(fixture.source, moving.activity!.poses);
+    const pickupBefore = structuredClone(moving.activity!.pickupTask);
+    const posesBefore = structuredClone(moving.activity!.poses);
+    for (const human of world.residents) {
+      const activity = human.activity;
+      if (activity === undefined || activity.travelTask !== null) {
+        throw new Error("cannot reconstruct v6 while a current journey exists");
+      }
+      expect(activity.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+      expect(activity.poses).toHaveLength(5);
+      // The genuine pickup task and every accepted pose remain unchanged.
+      // This older protocol has not departed yet; removing a null travel field
+      // does not fabricate or erase any physical journey.
+      const { travelTask: _travelTask, ...body } = activity;
+      human.activity = { ...body, version: RESIDENT_PICKUP_ACTIVITY_VERSION, ownerId: RESIDENT_PICKUP_ACTIVITY_OWNER_ID };
+    }
+    expect(actor(world, fixture.actorId).activity?.pickupTask).toEqual(pickupBefore);
+    expect(actor(world, fixture.actorId).activity?.poses).toEqual(posesBefore);
+    assertWorldInvariants(world);
+    legacy.world = serializeWorld(world);
+    legacy.version = FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION;
+    const legacyRecord = recordWith(phase4Record, legacy);
+    close(fixture.runtime);
+
+    // Both continuations start from the identical frozen-v6 phase4 prefix.
+    // Do not compare this old coarse departure with a current v7 physical one.
+    const uninterruptedRepository = new MemoryRepository(legacyRecord);
+    const uninterruptedRuntime = await open(uninterruptedRepository);
+    await uninterruptedRuntime.save();
+    expect(decode(uninterruptedRepository.snapshot()).world).toBe(legacy.world);
+    advance(uninterruptedRuntime, 6);
+    await uninterruptedRuntime.save();
+    const uninterrupted = decode(uninterruptedRepository.snapshot());
+    close(uninterruptedRuntime);
+
+    const repository = new MemoryRepository(legacyRecord);
+    const runtime = await open(repository);
+    await runtime.save();
+    const loaded = decode(repository.snapshot());
+    expect(loaded.world).toBe(legacy.world);
+    expect(loaded.perceptionCarry).toEqual(legacy.perceptionCarry);
+    advance(runtime, 5);
+    await runtime.save();
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
+    const phase9World = deserializeWorld(phase9.world);
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(phase9World.residents.every((human) => human.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION
+      && human.activity.poses.length === 10 && !Object.hasOwn(human.activity, "travelTask"))).toBe(true);
+    expect(actor(phase9World, fixture.actorId).activity?.pickupTask).toMatchObject({ contractId: fixture.contractId });
+    expect(phase9World.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+    expect(phase9World.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(fixture.stock);
+    expect(departedEvents(phase9World, fixture.contractId)).toHaveLength(0);
+    close(runtime);
+
+    const boundaryRepository = new MemoryRepository(phase9Record);
+    const boundaryRuntime = await open(boundaryRepository);
+    await boundaryRuntime.save();
+    const restoredPhase9 = decode(boundaryRepository.snapshot());
+    expect(restoredPhase9.world).toBe(phase9.world);
+    expect(restoredPhase9.perceptionCarry).toEqual(phase9.perceptionCarry);
+    advance(boundaryRuntime, 1);
+    await boundaryRuntime.save();
+    const boundary = decode(boundaryRepository.snapshot());
+    const boundaryWorld = deserializeWorld(boundary.world);
+    const carrying = actor(boundaryWorld, fixture.actorId);
+    expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(boundaryWorld.meta.completedTick).toBe(422);
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
+      && human.activity.poses.length === 1)).toBe(true);
+    expect(carrying.activity?.pickupTask).toBeNull();
+    expect(carrying.activity?.travelTask).toEqual({
+      kind: "contract-travel", mode: "legacy-coarse", contractId: fixture.contractId, adoptedAtTick: 422,
+    });
+    expect(boundaryWorld.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+    expect(boundaryWorld.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
+      .toBe(fixture.stock - fixture.quantity);
+    expect(boundaryWorld.ledger).toEqual(deserializeWorld(fixture.accepted.world).ledger);
+    expect(departedEvents(boundaryWorld, fixture.contractId)).toHaveLength(1);
     expect(authoritativeRoots(boundary)).toEqual(authoritativeRoots(uninterrupted));
     assertWorldInvariants(boundaryWorld);
   }, 90_000);

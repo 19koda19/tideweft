@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
-import { RESIDENT_PICKUP_ACTIVITY_OWNER_ID, RESIDENT_PICKUP_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_TRAVEL_ACTIVITY_OWNER_ID, RESIDENT_TRAVEL_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
@@ -136,8 +136,8 @@ function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: str
     current.residents.map(({ activity }) => activity),
   )).digest("hex");
   const bodyDigests: Readonly<Record<string, string>> = {
-    "runtime baseline estuary": "361686dd661dd408a55cede7909aa0f3f7680578fee9649bdde4d2afe379b95e",
-    "breathing room regional density 8": "cd68f164398e4d6f66e36ae68fb3717e647bb26479a51a6f02a8733d93b4ffd5",
+    "runtime baseline estuary": "749665c8dbc3f778c696a52bb21793e3b3d7f65e89608ba87ac935fb8e40ddb7",
+    "breathing room regional density 8": "f367dad06ef2f123e18e024ffb9731c8064d07d42f55a1c2e776b95de081e3bf",
   };
   if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`resident-inspection-characterization ${JSON.stringify({
     seed, bodyDigest, keeperId: keeper.identity.stableId, activity: keeper.activity,
@@ -158,14 +158,15 @@ function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: str
     // Current work selection is now enacted. This three-minute fixture still
     // cannot consume project material before its first actual hourly pulse.
     expect(activity).toMatchObject({
-      version: RESIDENT_PICKUP_ACTIVITY_VERSION,
-      ownerId: RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
+      version: RESIDENT_TRAVEL_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
       actorId: original.identity.stableId,
       tick: current.meta.completedTick,
       restTask: null,
       rationTask: null,
       inspectionTask: null,
       pickupTask: null,
+      travelTask: null,
     });
     expect(Object.hasOwn(activity!, "inspectionTask")).toBe(true);
     expect(activity?.poses).toHaveLength(1);
@@ -307,6 +308,9 @@ describe("runtime performance telemetry", () => {
         // promise. Independent real d85/v5 and candidate/v6 captures additionally
         // establish only protocol/null-pickup metadata changes in these scenarios
         // (Research): no synthetic downgrade/reseal replaces current truth.
+        // Independent fd19430/v6 and current/v7 captures likewise differ only
+        // in version, owner, nullable travel metadata and enclosing checksums;
+        // the stationary work has no accepted journey to change behavior.
         // Freeze the entire current save, including all meaningful consequences.
         assertStationaryCivicWorld(envelope, seed);
         if (seed === "runtime baseline estuary") {
@@ -335,8 +339,8 @@ describe("runtime performance telemetry", () => {
           });
         }
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "b549c127533a6243637de686955bb6561ac413bc8a39906cc3b5971085ddccc7",
-          "breathing room regional density 8": "4a71fe51ce48607cb759f96daab9c2f7c606999609539437b22ee80745a01412",
+          "runtime baseline estuary": "15b9d5991721d9f6653ed726b162da561443ddfa410c5e8be2340a33a3b469d0",
+          "breathing room regional density 8": "79a5539feda95734a73489abb762556f706f26c5dd8779333d314405e8e804fa",
         };
         expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);
       } finally {

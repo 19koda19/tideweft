@@ -8,7 +8,8 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsPickup, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsPickup, residentActivitySupportsTravel, type ResidentActivity } from "./residentActivity";
+import { residentTravelLocation, residentTravelPosesAreAccountable, residentTravelSegment, residentTravelSegmentOffset } from "./residentTravelRoute";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
@@ -19,6 +20,7 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
   let inspection = 0;
   let environment = 0;
   let pickup = 0;
+  let travel = 0;
   for (const resident of residents) {
     const activity = Object.getOwnPropertyDescriptor(resident, "activity");
     const version = activity !== undefined && Object.hasOwn(activity, "value")
@@ -32,12 +34,15 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
       && residentActivitySupportsEnvironment({ version: version.value })) environment += 1;
     if (version !== undefined && Object.hasOwn(version, "value")
       && residentActivitySupportsPickup({ version: version.value })) pickup += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsTravel({ version: version.value })) travel += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
   return (civic === 0 || civic === residents.length)
     && (inspection === 0 || inspection === residents.length)
     && (environment === 0 || environment === residents.length)
-    && (pickup === 0 || pickup === residents.length);
+    && (pickup === 0 || pickup === residents.length)
+    && (travel === 0 || travel === residents.length);
 }
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */
@@ -91,6 +96,31 @@ export function residentAcceptedPickupBinding(world: WorldState, resident: Resid
     || contract.acceptedTick < 0 || Object.is(contract.acceptedTick, -0)) return null;
   const target = settlementCenter(world, contract.originSettlementId);
   return target === null ? null : Object.freeze({ contract, target });
+}
+
+/** Existing transit custody/assignment, independent of activity shape. */
+export function residentTravelContractBinding(world: WorldState, resident: ResidentState) {
+  if (resident.activeContractId === null || resident.location.kind !== "route") return null;
+  const candidates = world.contracts.filter((contract) => contract.id === resident.activeContractId
+    || (contract.carrierKind === "resident" && contract.assignedResidentId === resident.id
+      && (contract.status === "accepted" || contract.status === "in-transit")));
+  if (candidates.length !== 1) return null;
+  const contract = candidates[0]!;
+  if (contract.id !== resident.activeContractId || contract.status !== "in-transit"
+    || contract.carrierKind !== "resident" || contract.assignedResidentId !== resident.id
+    || !Number.isSafeInteger(contract.quantity) || contract.quantity <= 0
+    || contract.cargoQuantity !== contract.quantity
+    || contract.acceptedTick === null || contract.departedTick === null || contract.arrivalTick === null
+    || ![contract.acceptedTick, contract.departedTick, contract.arrivalTick].every((tick) => Number.isSafeInteger(tick) && tick >= 0)
+    || contract.acceptedTick >= contract.departedTick
+    || contract.porterRouteIds.length === 0
+    || contract.porterSettlementIds.length !== contract.porterRouteIds.length + 1
+    || contract.porterSettlementIds[0] !== contract.originSettlementId
+    || contract.porterSettlementIds.at(-1) !== contract.destinationSettlementId
+    || new Set(contract.porterRouteIds).size !== contract.porterRouteIds.length
+    || new Set(contract.porterSettlementIds).size !== contract.porterSettlementIds.length
+    || !contract.porterRouteIds.includes(resident.location.routeId)) return null;
+  return contract;
 }
 
 /** New physical rest requires dry support, not merely a locomotion no-move. */
@@ -150,6 +180,30 @@ export function canonicalResidentActivityForWorld(
       id === resident.id && identity.stableId === resident.identity.stableId
     ))
   ) return null;
+  if (residentActivitySupportsTravel(activity) && activity.travelTask === null && resident.location.kind === "route") return null;
+  if (residentActivitySupportsTravel(activity) && activity.travelTask !== null) {
+    const travel = activity.travelTask;
+    if (travel === undefined) return null;
+    const contract = residentTravelContractBinding(world, resident);
+    if (contract === null || contract.id !== travel.contractId || contract.departedTick! > atTick) return null;
+    if (travel.mode === "legacy-coarse") {
+      return contract.departedTick! <= travel.adoptedAtTick && travel.adoptedAtTick <= atTick ? activity : null;
+    }
+    if (travel.selectedAtTick !== contract.departedTick
+      || !residentTravelPosesAreAccountable(world, contract, travel, activity.poses, atTick)) return null;
+    const segment = residentTravelSegment(world, contract, travel);
+    const body = activity.poses.at(-1)!.position;
+    const offset = segment === null ? null : residentTravelSegmentOffset(segment, body);
+    const location = segment === null ? null : residentTravelLocation(segment, travel, body);
+    if (offset === null || location === null || location.kind !== "route"
+      || resident.location.kind !== "route" || resident.location.routeId !== location.routeId
+      || resident.location.progress !== location.progress) return null;
+    const final = travel.legIndex === contract.porterRouteIds.length - 1
+      && travel.waypointIndex === segment!.route.path.length - 1 && offset === WORLD_POSITION_UNITS_PER_TILE;
+    if ((travel.phase === "arrived") !== final) return null;
+    // Reached intermediate waypoints must already have advanced the cursor.
+    return offset === WORLD_POSITION_UNITS_PER_TILE && !final ? null : activity;
+  }
   const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? activity.pickupTask ?? null;
   if (task === null) return activity;
   if (task.kind === "contract-pickup") {

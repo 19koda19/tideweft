@@ -6,6 +6,12 @@ import {
   type WorldView,
 } from "../sim/types";
 import { hashCanonical, stableStringify } from "../sim/util";
+import { canonicalizeResidentActivity, residentActivitySupportsTravel } from "../sim/residentActivity";
+import {
+  residentTravelLocation,
+  residentTravelPosesAreAccountable,
+  residentTravelSegment,
+} from "../sim/residentTravelRoute";
 import {
   RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
   hasResidentActivityEventLocus,
@@ -62,7 +68,14 @@ const CONTRACT_DEPARTURE_TRIGGER_PATTERN =
 export function workingPeopleExpressionIntent(
   inputValue: WorkingPeopleExpressionInput,
 ): SituatedExpressionIntent | null {
-  const authority = expressionAuthority(inputValue);
+  return expressionIntent(inputValue, false);
+}
+
+function expressionIntent(
+  inputValue: WorkingPeopleExpressionInput,
+  retained: boolean,
+): SituatedExpressionIntent | null {
+  const authority = expressionAuthority(inputValue, retained);
   if (authority === null) return null;
   const { event: committedEvent, contract, address } = authority;
   const triggerEventId = contractDepartureTriggerEventId(committedEvent);
@@ -104,10 +117,10 @@ export function workingPeopleExpressionSourceAddressForTrigger(
   const event = events[0];
   if (events.length !== 1 || event === undefined || event.subjectId !== trigger.contractId
     || contractDepartureTriggerEventId(event) !== triggerEventId) return null;
-  return expressionAuthority({ world, event })?.address ?? null;
+  return expressionAuthority({ world, event }, true)?.address ?? null;
 }
 
-function expressionAuthority(inputValue: WorkingPeopleExpressionInput): Readonly<{
+function expressionAuthority(inputValue: WorkingPeopleExpressionInput, retained: boolean): Readonly<{
   event: SimEvent;
   contract: ContractState;
   address: LivingActorAddress;
@@ -153,20 +166,32 @@ function expressionAuthority(inputValue: WorkingPeopleExpressionInput): Readonly
   if (
     firstRoute === null
     || resident.location.kind !== "route"
-    || resident.location.routeId !== firstRoute.id
   ) return null;
   const departureProgress = firstRoute.fromSettlementId === contract.originSettlementId
     ? 0
     : firstRoute.toSettlementId === contract.originSettlementId
       ? FIXED_POINT
       : null;
-  if (departureProgress === null || resident.location.progress !== departureProgress) return null;
+  if (departureProgress === null) return null;
 
   let address: ReturnType<typeof livingActorAddressForResident>;
   try {
     const body = hasResidentActivityEventLocus(committedEvent.data)
       ? readResidentActivityEventLocus(committedEvent.data) : null;
     if (hasResidentActivityEventLocus(committedEvent.data) && body === null) return null;
+    const atDeparture = resident.location.routeId === firstRoute.id
+      && resident.location.progress === departureProgress;
+    // New speech still requires the actual departure. Only reauthentication
+    // may follow an already captured source while its body moves in that same
+    // interval; legacy coarse records retain their original endpoint checks.
+    const physical = resident.activity !== undefined
+      && residentActivitySupportsTravel(resident.activity)
+      && resident.activity.travelTask?.mode === "physical";
+    if (physical && body === null) return null;
+    if (physical && body !== null) {
+      if (!retainedPhysicalDepartureMatches(world, resident, contract, committedEvent)) return null;
+      if (!retained && (!atDeparture || resident.activity!.poses.length !== 1)) return null;
+    } else if (!atDeparture) return null;
     address = body === null ? livingActorAddressForResident(world, resident)
       : createLivingActorAddress({ actorId: resident.identity.stableId, species: "human",
         persistence: "promoted", position: body.position, heading: body.heading });
@@ -178,12 +203,37 @@ function expressionAuthority(inputValue: WorkingPeopleExpressionInput): Readonly
   return Object.freeze({ event: committedEvent, contract, address });
 }
 
+/** Validate the captured phase-zero cause, not the porter's later pose. */
+function retainedPhysicalDepartureMatches(
+  world: WorldView, resident: ResidentState, contract: ContractState, event: SimEvent,
+): boolean {
+  const body = readResidentActivityEventLocus(event.data);
+  const activity = canonicalizeResidentActivity(resident.activity, {
+    actorId: resident.identity.stableId, tick: world.completedTick,
+  });
+  if (body === null || world.completedTick !== event.tick || activity === null
+    || !residentActivitySupportsTravel(activity)) return false;
+  const task = activity.travelTask;
+  if (task === null || task === undefined || task.mode !== "physical" || task.contractId !== contract.id
+    || task.selectedAtTick !== event.tick
+    || stableStringify(activity.poses[0]) !== stableStringify({ position: body.position, heading: body.heading })
+    || !residentTravelPosesAreAccountable(world, contract, task, activity.poses, world.completedTick)) return false;
+  const origin = residentTravelSegment(world, contract, { ...task, legIndex: 0, waypointIndex: 1 });
+  const current = residentTravelSegment(world, contract, task);
+  return origin !== null && current !== null
+    && stableStringify(body.position) === stableStringify(origin.start)
+    && stableStringify(resident.location)
+      === stableStringify(residentTravelLocation(current, task, activity.poses.at(-1)!.position));
+}
+
 /**
  * Reauthenticates one persisted porter expression against current simulation
  * authority. The expression kernel owns generic schema/event-ID validation;
  * this adapter additionally proves that the trigger names the exact retained
  * departure and that re-deriving it from current contract, cargo, resident,
- * route, identity, and position facts produces the same immutable event.
+ * route and identity facts produces the same immutable event. A current
+ * physical journey authenticates the captured phase-zero source separately
+ * from its later body; this cannot select a fresh delayed utterance.
  *
  * `remainingSteps` and `audioAcknowledged` are deliberately excluded because
  * fixed-step expiry and exact-once audio acknowledgement lawfully evolve them.
@@ -272,7 +322,7 @@ function deriveWorkingPeopleExpression(
     || contractDepartureTriggerEventId(committedEvent) !== triggerEventId
   ) return null;
 
-  const intent = workingPeopleExpressionIntent({ world, event: committedEvent });
+  const intent = expressionIntent({ world, event: committedEvent }, true);
   if (intent === null) return null;
   const reduction = reduceSituatedExpression(createSituatedExpressionState(), intent);
   const memory = reduction.state?.recent[0];

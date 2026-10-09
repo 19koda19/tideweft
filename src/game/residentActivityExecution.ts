@@ -18,6 +18,9 @@ import {
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
   RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
   RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  residentActivitySupportsTravel,
   residentActivitySupportsEnvironment,
   residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
@@ -31,6 +34,7 @@ import {
   type ResidentInspectionTask,
   type ResidentPickupTask,
   type ResidentPhysicalWaitReason,
+  type ResidentPhysicalTravelTask,
 } from "../sim/residentActivity";
 import {
   canonicalResidentActivityForWorld,
@@ -39,9 +43,17 @@ import {
   residentSettlementRationTarget,
   residentSettlementMaterialProject,
   residentAcceptedPickupBinding,
+  residentTravelContractBinding,
 } from "../sim/residentActivityWorld";
+import {
+  advanceResidentTravelWaypoint, residentTravelBodyIsLocal, residentTravelInteractionFrame,
+  residentTravelLocation, residentTravelSegment, residentTravelSegmentOffset,
+  residentTravelSegmentPose, residentTravelWindowInterval,
+} from "../sim/residentTravelRoute";
+import type { LivingActorInteractionWindow } from "./livingActorSimulation";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
+import { routeIsActive } from "../sim/network";
 import { projectLivingCircadianClockPreference, residentCircadianUrgentPreference } from "../sim/livingCircadian";
 import { residentServicePriorityAvailable } from "../sim/residentRationUse";
 import type { SettlementEcologyState } from "./settlementEcology";
@@ -218,11 +230,13 @@ export function prepareResidentRestActivities(
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
         ...priorActivity,
-        version: inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
+        version: inspectionSettlement !== null || residentActivitySupportsTravel(priorActivity)
+          ? RESIDENT_TRAVEL_ACTIVITY_VERSION : residentActivitySupportsPickup(priorActivity)
           ? RESIDENT_PICKUP_ACTIVITY_VERSION : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_VERSION : RESIDENT_CIVIC_ACTIVITY_VERSION,
-        ownerId: inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
+        ownerId: inspectionSettlement !== null || residentActivitySupportsTravel(priorActivity)
+          ? RESIDENT_TRAVEL_ACTIVITY_OWNER_ID : residentActivitySupportsPickup(priorActivity)
           ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
@@ -232,6 +246,11 @@ export function prepareResidentRestActivities(
           ? { inspectionTask: priorActivity.inspectionTask ?? null } : {}),
         ...(inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
           ? { pickupTask: priorActivity.pickupTask ?? null } : {}),
+        ...(inspectionSettlement !== null || residentActivitySupportsTravel(priorActivity)
+          ? { travelTask: residentActivitySupportsTravel(priorActivity) ? priorActivity.travelTask
+            : resident.location.kind === "route" ? {
+              kind: "contract-travel", mode: "legacy-coarse", contractId: resident.activeContractId, adoptedAtTick: tick,
+            } : null } : {}),
       }, { actorId: resident.identity.stableId, tick });
       if (activity === null || activity.poses.length !== 1) return false;
       const duty = dutyByActor.get(resident.identity.stableId) ?? null;
@@ -351,9 +370,25 @@ export function prepareResidentRestActivities(
       } else if (pickupTask.phase === "waiting" && pickupTask.nextReassessmentAtTick <= tick) {
         pickupTask = { ...pickupTask, phase: "approaching", waitReason: null };
       }
+      let travelTask = activity.travelTask ?? null;
+      if (travelTask?.mode === "physical" && travelTask.phase !== "arrived") {
+        const contract = residentTravelContractBinding(world, resident);
+        const segment = contract === null ? null : residentTravelSegment(world, contract, travelTask);
+        if (segment === null) return false;
+        const disturbed = resident.perception.beliefs.some((belief) => belief.lastObservedTick === tick
+          && belief.strongInterrupt && belief.salience >= routine.wakeSensitivity);
+        if (!routeIsActive(segment.route) || resident.condition.sheltering || routine.posture.state !== "awake" || disturbed) {
+          travelTask = { ...travelTask, phase: "waiting", waitReason: resident.condition.sheltering ? "weather-hold"
+            : !routeIsActive(segment.route) ? "no-active-route" : "disturbed",
+            nextReassessmentAtTick: tick + 1 };
+        } else if (travelTask.phase === "waiting" && travelTask.nextReassessmentAtTick <= tick) {
+          travelTask = { ...travelTask, phase: "approaching", waitReason: null };
+        }
+      }
       let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask, materialTask,
         ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
         ...(residentActivitySupportsPickup(activity) ? { pickupTask } : {}),
+        ...(residentActivitySupportsTravel(activity) ? { travelTask } : {}),
       });
       // Clearing a continued episode changes arrival and wake together. Do not
       // commit the old projection's arrived=true bit beside an awake body.
@@ -379,6 +414,7 @@ export function prepareResidentRestActivities(
 export function advanceResidentRestActivities(
   world: WorldState,
   phase: number,
+  window?: LivingActorInteractionWindow,
 ): ResidentRestActivityStepResult | null {
   if (!Number.isSafeInteger(phase) || phase < 1 || phase > RESIDENT_ACTIVITY_MAX_PHASE) return null;
   const tick = world.meta.completedTick;
@@ -388,6 +424,8 @@ export function advanceResidentRestActivities(
   const waitingActorIds: string[] = [];
   let maximumSurfaceCells = 0;
   try {
+    const travelFrame = window === undefined ? null : residentTravelInteractionFrame(window);
+    if (window !== undefined && travelFrame === null) return null;
     for (const resident of world.residents) {
       const activity = canonicalResidentActivityForWorld(world, resident);
       if (activity === null || activity.poses.length !== phase
@@ -398,6 +436,52 @@ export function advanceResidentRestActivities(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null) return null;
       let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
+      let travelTask = activity.travelTask ?? null;
+      let travelLocation = resident.location;
+      if (travelTask?.mode === "physical" && travelTask.phase === "approaching" && travelFrame !== null
+        && residentTravelBodyIsLocal(travelFrame, pose.position)) {
+        const contract = residentTravelContractBinding(world, resident);
+        const segment = contract === null ? null : residentTravelSegment(world, contract, travelTask);
+        const offset = segment === null ? null : residentTravelSegmentOffset(segment, pose.position);
+        const span = segment === null ? null : residentTravelWindowInterval(travelFrame, segment);
+        if (contract === null || segment === null || offset === null || span === null) return null;
+        const targetOffset = Math.min(WORLD_POSITION_UNITS_PER_TILE, span.last);
+        if (!routeIsActive(segment.route)) {
+          travelTask = waitForTravel(travelTask, tick, "no-active-route");
+        } else if (targetOffset > offset) {
+          const target = residentTravelSegmentPose(segment, targetOffset).position;
+          const surface = travelApproachSurface(world, resident, pose.position, target);
+          if (surface === null) travelTask = waitForTravel(travelTask, tick, "no-traversable-route");
+          else {
+            maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
+            const resolution = resolveLivingActorLocomotion({
+              requestId: `contract-travel:${resident.identity.stableId}:${contract.id}`,
+              tick, actor: createLivingActorAddress({ actorId: resident.identity.stableId, species: "human", persistence: "promoted",
+                position: pose.position, heading: pose.heading }),
+              targetArea: { center: target, radiusUnits: 0 }, maximumStepUnits: RESIDENT_REST_APPROACH_STEP_UNITS, surface,
+            });
+            if (resolution.kind === "moved") {
+              const nextOffset = residentTravelSegmentOffset(segment, resolution.actor.position);
+              if (nextOffset === null || nextOffset <= offset || nextOffset > targetOffset) return null;
+              pose = { position: resolution.actor.position, heading: resolution.actor.heading };
+              travelTask = { ...travelTask, lastProgressAtTick: tick };
+              const next = advanceResidentTravelWaypoint(world, contract, travelTask, pose.position, tick);
+              if (next === null) return null;
+              travelTask = next;
+              const nextSegment = residentTravelSegment(world, contract, travelTask);
+              const location = nextSegment === null ? null : residentTravelLocation(nextSegment, travelTask, pose.position);
+              if (location === null) return null;
+              travelLocation = location;
+              movedActorIds.push(resident.identity.stableId);
+              if (travelTask.phase === "arrived") arrivedActorIds.push(resident.identity.stableId);
+            } else {
+              if (resolution.reason === "invalid-input") return null;
+              travelTask = waitForTravel(travelTask, tick, "no-traversable-route");
+            }
+          }
+        }
+      }
+      if (travelTask?.mode === "physical" && travelTask.phase === "waiting") waitingActorIds.push(resident.identity.stableId);
       let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | ResidentPickupTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? activity.pickupTask ?? null;
       if (task?.phase === "approaching") {
         if (!residentRestTargetHasDrySupport(world, task.target)) {
@@ -437,7 +521,7 @@ export function advanceResidentRestActivities(
         if (task.phase === "arrived") arrivedActorIds.push(resident.identity.stableId);
       }
       if (task?.phase === "waiting") waitingActorIds.push(resident.identity.stableId);
-      let candidate = replaceResidentActivity(resident, {
+      let candidate = replaceResidentActivity({ ...resident, location: travelLocation }, {
         ...activity, poses: [...activity.poses, pose],
         restTask: task?.kind === "settlement-rest" ? task : null,
         ...(residentActivitySupportsRations(activity)
@@ -448,6 +532,7 @@ export function advanceResidentRestActivities(
           ? { inspectionTask: task?.kind === "settlement-inspection" ? task : null } : {}),
         ...(residentActivitySupportsPickup(activity)
           ? { pickupTask: task?.kind === "contract-pickup" ? task : null } : {}),
+        ...(residentActivitySupportsTravel(activity) ? { travelTask } : {}),
       });
       if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
         candidate = alignCircadianArrival(candidate, tick);
@@ -469,6 +554,31 @@ export function advanceResidentRestActivities(
     arrivedActorIds: Object.freeze(arrivedActorIds), waitingActorIds: Object.freeze(waitingActorIds),
     maximumSurfaceCells,
   });
+}
+
+function waitForTravel(task: ResidentPhysicalTravelTask, tick: number, waitReason: ResidentPhysicalTravelTask["waitReason"]): ResidentPhysicalTravelTask {
+  return { ...task, phase: "waiting", waitReason, nextReassessmentAtTick: tick + 1 };
+}
+
+/** Two cardinal route cells only; detours cannot silently change the cursor. */
+function travelApproachSurface(world: WorldState, resident: ResidentState, from: WorldPosition, to: WorldPosition): LivingActorTraversabilitySurface | null {
+  if (from.region.x !== 0 || from.region.y !== 0 || to.region.x !== 0 || to.region.y !== 0) return null;
+  const minX = Math.floor(Math.min(from.localX, to.localX) / WORLD_POSITION_UNITS_PER_TILE);
+  const minY = Math.floor(Math.min(from.localY, to.localY) / WORLD_POSITION_UNITS_PER_TILE);
+  const maxX = Math.floor(Math.max(from.localX, to.localX) / WORLD_POSITION_UNITS_PER_TILE);
+  const maxY = Math.floor(Math.max(from.localY, to.localY) / WORLD_POSITION_UNITS_PER_TILE);
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  if (width * height > 2 || minX < 0 || minY < 0 || maxX >= world.terrain.width || maxY >= world.terrain.height) return null;
+  const codes: number[] = [];
+  for (let y = minY; y <= maxY; y += 1) for (let x = minX; x <= maxX; x += 1) {
+    const tile = world.terrain.tiles[y * world.terrain.width + x];
+    if (tile === undefined || tile.x !== x || tile.y !== y) return null;
+    codes.push(tile.terrain === "deep-water" || waterDepthAt(tile, world.tide) > 0 ? -1 : Math.max(1, Math.min(1_000_000, tile.baseTravelCost)));
+  }
+  return createLivingActorTraversabilitySurface({ forActorId: resident.identity.stableId, sampledAtTick: world.meta.completedTick,
+    origin: createWorldPosition({ x: 0, y: 0 }, minX * WORLD_POSITION_UNITS_PER_TILE, minY * WORLD_POSITION_UNITS_PER_TILE),
+    widthTiles: width, heightTiles: height, cells: createLivingActorTraversabilityCellsFromCodes(codes) });
 }
 
 function alignCircadianArrival(resident: ResidentState, tick: number): ResidentState {

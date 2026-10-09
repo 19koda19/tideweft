@@ -392,8 +392,12 @@ transaction; it cannot use player selection or invent a report. Its task/store
 provenance and same-transaction cancellation join current-save/rollback law.
 Contract-bound origin pickup joins the same body/approach and existing conserved
 stock-to-cargo transaction; current-save binding and optional Voice presentation
-cannot create a second quantity or substitute for arrival. Route execution and
-destination handoff remain pending;
+cannot create a second quantity or substitute for arrival. Current new journeys
+also join exact ordered route/body progress, shared fine/macro work budgets,
+one-shot closing custody and position-qualified handoff, without offscreen
+sensing or ETA-certified arrival. Older in-transit formats retain explicit
+legacy continuation rather than invented physical history. Broader crossing,
+load and failure/recovery acceptance remains pending;
 the [architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
 owns exact scope and evidence limits, not this applicability row.
 

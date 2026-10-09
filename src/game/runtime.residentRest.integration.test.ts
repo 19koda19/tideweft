@@ -6,7 +6,7 @@ import {
   RESIDENT_ACTIVITY_OWNER_ID,
   RESIDENT_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
-  RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
   RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
   RESIDENT_SERVICE_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
@@ -32,7 +32,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
-  FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
 } from "./saveCompatibilityPolicy";
@@ -250,7 +250,7 @@ function expectBoundedMotion(source: WorldPosition, poses: readonly { position: 
 
 describe("ordinary runtime resident rest execution", () => {
   it.each([4, 9])("selects and executes real rest, preserving equal work across a phase%s cold continuation", async (phase) => {
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION);
     expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBeLessThan(CURRENT_GAME_SAVE_VERSION);
     const fixture = await restFixture();
     const repository = new MemoryRepository(fixture.record);
@@ -617,8 +617,9 @@ describe("ordinary runtime resident rest execution", () => {
       if (activity === undefined || activity.rationTask !== null) throw new Error("native rest fixture gained ration use");
       expect(activity.inspectionTask).toBeNull();
       expect(activity.pickupTask).toBeNull();
+      expect(activity.travelTask).toBeNull();
       const { rationTask: _rationTask, materialTask: _materialTask, inspectionTask: _inspectionTask,
-        pickupTask: _pickupTask, ...body } = activity;
+        pickupTask: _pickupTask, travelTask: _travelTask, ...body } = activity;
       human.activity = { ...body, version: RESIDENT_ACTIVITY_VERSION, ownerId: RESIDENT_ACTIVITY_OWNER_ID };
     }
     assertWorldInvariants(world);
@@ -648,7 +649,7 @@ describe("ordinary runtime resident rest execution", () => {
     expect(deserializeWorld(boundary.world).residents.every((human) => (
       // Closure itself invokes the existing phase-zero routine owner. There
       // is no extra accepted step or invented pre-boundary history to await.
-      human.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION && human.activity.poses.length === 1
+      human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION && human.activity.poses.length === 1
       && human.activity.rationTask === null
     ))).toBe(true);
     advanceOrdinaryFixedSteps(runtime, 1);
@@ -656,7 +657,7 @@ describe("ordinary runtime resident rest execution", () => {
     const next = decode(repository.snapshot());
     expect(next.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
     expect(deserializeWorld(next.world).residents.every((human) => (
-      human.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION && human.activity.poses.length === 2
+      human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION && human.activity.poses.length === 2
       && human.activity.rationTask === null
     ))).toBe(true);
     expect(resident(next, fixture.actorId).activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
@@ -698,11 +699,12 @@ describe("ordinary runtime resident rest execution", () => {
     // civic capability, not successful activity or already-consumed history.
     for (const human of world.residents) {
       const activity = human.activity;
-      if (activity?.version !== RESIDENT_PICKUP_ACTIVITY_VERSION || activity.materialTask !== null
-        || activity.inspectionTask !== null || activity.pickupTask !== null) {
+      if (activity?.version !== RESIDENT_TRAVEL_ACTIVITY_VERSION || activity.materialTask !== null
+        || activity.inspectionTask !== null || activity.pickupTask !== null || activity.travelTask !== null) {
         throw new Error("supported52 fixture requires a genuine civic-free body prefix");
       }
-      const { materialTask: _materialTask, inspectionTask: _inspectionTask, pickupTask: _pickupTask, ...body } = activity;
+      const { materialTask: _materialTask, inspectionTask: _inspectionTask, pickupTask: _pickupTask,
+        travelTask: _travelTask, ...body } = activity;
       human.activity = { ...body, version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID };
       const { version: _version, ownerId: _ownerId, ...retained } = human.activity;
       const { version: _originalVersion, ownerId: _originalOwnerId, ...original } = body;
@@ -737,7 +739,7 @@ describe("ordinary runtime resident rest execution", () => {
     const boundaryWorld = deserializeWorld(boundary.world);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(boundaryWorld.meta.completedTick).toBe(fixture.tick + 1);
-    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
       && human.activity.poses.length === 1 && human.activity.materialTask === null)).toBe(true);
     expect(resident(boundary, fixture.actorId).activity?.rationTask).toMatchObject({
       phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null,

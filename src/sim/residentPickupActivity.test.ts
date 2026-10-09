@@ -11,6 +11,8 @@ import {
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
   RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
   RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
   canonicalizeResidentActivity,
   replaceResidentActivity,
   residentActivitySupportsEnvironment,
@@ -156,12 +158,27 @@ describe("explicit contract-pickup activity protocol foundations", () => {
   it("rejects version-only relabeling, mismatched ownership and genuinely unknown successors", () => {
     const { raw, binding } = fixture();
     expect(canonicalizeResidentActivity({ ...raw, ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID }, binding)).toBeNull();
-    for (const version of [7, 99, Number.MAX_SAFE_INTEGER]) {
+    // v7 is recognized, but merely relabeling a frozen v6 root cannot supply
+    // the successor's required explicit nullable travel field.
+    expect(canonicalizeResidentActivity({ ...raw, version: RESIDENT_TRAVEL_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID }, binding)).toBeNull();
+    for (const version of [8, 99, Number.MAX_SAFE_INTEGER]) {
       expect(canonicalizeResidentActivity({ ...raw, version, ownerId: `sim:resident-activity:v${version}` }, binding)).toBeNull();
       expect(residentActivitySupportsPickup({ version } as unknown as Pick<ResidentActivity, "version">)).toBe(false);
     }
     expect(residentActivitySupportsPickup(null)).toBe(false);
     expect(residentActivitySupportsPickup(undefined)).toBe(false);
+  });
+
+  it("retains the frozen v6 pickup shape in an explicitly complete v7 root", () => {
+    const { raw, binding } = fixture();
+    const successor = { ...raw, version: RESIDENT_TRAVEL_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID, travelTask: null };
+    const before = stableStringify(successor);
+    expect(residentActivitySupportsPickup({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION })).toBe(true);
+    expect(canonicalizeResidentActivity(successor, binding)).toEqual(successor);
+    expect(canonicalizeResidentActivity(structuredClone(successor), binding)).toEqual(successor);
+    expect(stableStringify(successor)).toBe(before);
   });
 
   it.each([

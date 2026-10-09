@@ -211,6 +211,40 @@ export function worldPositionToSpatialFrame(
   return Object.freeze({ x: Number(delta.x), y: Number(delta.y) });
 }
 
+/**
+ * Included integer distances along one directed cardinal segment in a half-open
+ * frame. This is physical geometry, not floating-point renderer clipping.
+ * Valid distant segments return null without flattening segmented coordinates.
+ */
+export function cardinalSegmentSpatialFrameSpan(
+  frame: SpatialFrame,
+  from: WorldPosition,
+  to: WorldPosition,
+): Readonly<{ firstIncludedDistanceUnits: number; lastIncludedDistanceUnits: number }> | null {
+  const currentFrame = canonicalSpatialFrame(frame);
+  const start = canonicalWorldPosition(from);
+  const end = canonicalWorldPosition(to);
+  const direction = worldPositionDeltaBigInt(start, end);
+  if ((direction.x === 0n) === (direction.y === 0n)) throw new RangeError("Physical segment must be nonzero and cardinal");
+  const horizontal = direction.x !== 0n;
+  const signedLength = horizontal ? direction.x : direction.y;
+  const length = signedLength < 0n ? -signedLength : signedLength;
+  if (length > MAX_SAFE_BIGINT) throw new RangeError("Physical segment length exceeds exact distance range");
+  const relative = worldPositionDeltaBigInt(currentFrame.origin, start);
+  const cross = horizontal ? relative.y : relative.x;
+  const crossLimit = BigInt(horizontal ? currentFrame.height : currentFrame.width);
+  if (cross < 0n || cross >= crossLimit) return null;
+  const axis = horizontal ? relative.x : relative.y;
+  const limit = BigInt(horizontal ? currentFrame.width : currentFrame.height);
+  const entered = signedLength > 0n ? -axis : axis - (limit - 1n);
+  const exited = signedLength > 0n ? limit - 1n - axis : axis;
+  const first = entered > 0n ? entered : 0n;
+  const last = exited < length ? exited : length;
+  return first <= last ? Object.freeze({
+    firstIncludedDistanceUnits: Number(first), lastIncludedDistanceUnits: Number(last),
+  }) : null;
+}
+
 /** Lifts one in-bounds frame point back into authoritative segmented world space. */
 export function spatialFrameToWorldPosition(
   frame: SpatialFrame,

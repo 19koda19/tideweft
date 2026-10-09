@@ -2560,12 +2560,16 @@ recovery acknowledges consumed audio. Weather-hold speech uses the same strict
 source extension, captured at the new tick's phase0 before coarse transport;
 its retained route/contract/weather/memory and lawful reception requirements
 remain binding. Both legacy and observed event variants preserve their prior
-meaning. Heavy departure captures its committed coarse route endpoint and heading
-through the same private pose resolver used by final whole-roster publication,
-not the earlier settlement body. Its strict event alternatives retain conserved
-cargo, itinerary and exact departure-progress authority; hearing and cold channel
-checks consume that authenticated source. This is an event-time bridge, not
-physical porter travel. Keeper closure replies rederive source position/heading
+meaning. Heavy departure captures the actual committed source and heading,
+not the earlier settlement roster placement. Current physical selection requires
+the exact departure endpoint and phase-zero body. Retained same-interval validation for a
+current physical journey separately authenticates that captured pose against
+its canonical phase-zero history, itinerary origin, bounded current cursor/body
+and unchanged cargo/custody; later motion cannot relocate or repeat the utterance.
+Legacy coarse/no-body records keep their original exact endpoint checks. Missing
+source, later intervals and released custody cannot use the physical exception.
+Hearing and cold channel checks share that source owner, not a runtime exemption.
+Keeper closure replies rederive source position/heading
 from the existing admission's accepted phase0–9, while retaining applied closure,
 report provenance and independent listener visibility/hearing proof. Explicit
 missing or stale body history rejects; genuine absence keeps its legacy source
@@ -2705,7 +2709,72 @@ and late-failure rollback. This closes origin pickup only, not nearby addressabl
 porter cargo, physical route execution, destination handoff, general water/load
 response, normal visual play, performance or public release. Existing coarse
 transport and its downstream consumers remain explicit partial integration
-until their own accountable traveler work is completed.
+until their own accountable traveler work is completed. The following local
+extension replaces timetable arrival for newly departed current journeys.
+
+### Accountable ordered resident travel
+
+The local, unpublished v7/outer57 extension binds each new resident journey to
+the existing Promise's ordered route/settlement itinerary, a leg and next
+waypoint, and the same retained body. `residentTravelRoute.ts` authenticates
+forward/reverse cardinal edges; membership/progress is derived from the exact
+cursor and body, never used to reconstruct or snap a physical traveler. Final
+arrival requires the last waypoint and actual destination support. ETA remains
+an estimate and cannot authorize current physical handoff. The existing
+`completeContract` transaction still owns the one cargo-to-stock transfer and
+its need, project, trust, route and history consequences; no second parcel,
+inventory, stock receipt or profession is introduced.
+
+Accepted local steps use shared locomotion with the existing 105-unit bound,
+bounded one/two-cell dry support and the actual physical interaction window.
+That window is not a visibility cone or merely the set of loaded regions.
+Each step stops at its waypoint before entering the next edge. Inactive routes,
+unsupported local ground, applicable weather holds and strong disturbance can
+stop work without moving the body. Reassessment retains existing routine and
+commitment priority; route eligibility is checked again on each entered leg.
+General crossing/current/load/support appraisal and known alternative-route
+response remain unfinished, not implied by this dry-route consumer.
+
+`residentTravelAdvance.ts` owns the narrow macro-transport exception to generic
+coarse actor immobility. One source-bound, one-shot closing admission captures
+the real window and subtracts committed fine distance from the same ten-step
+1050-unit budget. Remaining work advances only ordered portions outside that
+window, stopping at its first included integer point; a local-boundary exit
+costs its actual unit of distance. No full-rate offscreen brain, terrain scan,
+encounter, perception, acoustic event or new hazard knowledge is invented.
+Receipts are consumed before candidate mutation and revoked on failure; each
+disposable command candidate needs its own receipt. This is bounded network
+transport, not authority for arbitrary unloaded actor motion.
+
+Cold validation checks all retained poses against a monotone, bounded itinerary
+suffix, including exact corner/leg joins. Backtracking, off-route history,
+diagonal shortcuts and impossible progress exceeding elapsed accepted work
+are rejected; a structurally plausible final body is insufficient. This also
+protects event-time source/listener positions. Macro and fine work share exact
+distance rather than using render time. Successful handoff retains the actual
+destination body instead of resetting a settlement ordinal.
+
+Outer50–56 and frozen body1–6 remain deliberately supported. Decoding does not
+upgrade a partial interval or infer precise history from rounded old progress.
+At genuine whole-roster phase zero, an already in-transit older journey gains
+an explicit `legacy-coarse` mode and retains its old timetable authority until
+that journey ends. Accepted-but-not-departed commitments at v7 adoption and all
+subsequent v7 departures use physical mode. A deliberately supported frozen v6
+interval may finish its existing pickup/departure before that adoption; the
+then-in-transit journey receives the explicit legacy mode, not invented physical
+history. No new v7 work may fall back to it. Outer57 explicitly
+authorizes v7 even with null travel work; older envelopes reject it. Save/load
+retains current cursor/body/cargo without replaying incidental sound. World4,
+rules6 and carry14 are unchanged; no supported format is retired.
+
+Native controlled-pressure runtime evidence covers an existing generated food
+offer, automatic selection, actual origin pickup, local displacement, real
+window exit, bounded macro continuation beyond the old ETA, once-only final
+handoff and exact phase4/9 cold continuation. Synthetic forward/reverse,
+multileg, clipping, cold rejection and receipt tests are foundation evidence,
+not additional native journeys or normal visual play. This does not close the
+whole traveler/environment directive or prove broader crossings, addressable
+porter cargo, failure/recovery breadth, visual acceptance or performance.
 
 ## First porter-dog living web
 

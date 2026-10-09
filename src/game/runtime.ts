@@ -106,6 +106,7 @@ import {
   FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
@@ -1130,6 +1131,8 @@ import { collectSettlementKeeperStoreObservations, advanceSettlementKeeperStoreI
   prepareSettlementKeeperInspectionRevocation, settlementKeeperInspectionTasksValid } from "./settlementKeeperInspection";
 import { planResidentCircadian } from "./residentCircadian";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
+import { residentActivitySupportsTravel } from "../sim/residentActivity";
+import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
 import {
   LIVING_ACTOR_PLAYER_CHOICE_VERSION,
@@ -1394,6 +1397,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
   FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
@@ -13789,23 +13793,30 @@ export async function createTideweftRuntime(
     // Each candidate owns its own exact closing admission. GREET refusal must
     // not reuse a token consumed against the disposable candidate world.
     const advance = (target: WorldState, commands: readonly SimCommand[]): WorldState => {
-      if ((target.meta.completedTick + 1) % 60 !== 0
-        || !target.residents.some(({ activity }) => residentActivitySupportsRations(activity))) {
-        return stepWorld(target, commands, perceptionFrame);
-      }
-      const keeper = target.residents.find(({ identity }) => identity.stableId === settlementEcology.identity.keeperActorId);
-      const duty = keeper === undefined ? undefined : deriveSettlementKeeperCircadianDuty(
-        keeper, settlementEcology, porterResponse, target.meta.completedTick,
-      );
-      if (keeper === undefined || duty === undefined) throw new Error("Ration service lost authentic keeper duty");
-      const admission = prepareResidentRationUse(target, target.residents.map(({ identity }) => ({
-        actorId: identity.stableId, duty: identity.stableId === keeper.identity.stableId ? duty : null,
-      })));
-      if (admission === null) throw new Error("Ration service lost its exact closing body cohort");
+      const travel = target.residents.some(({ activity }) => residentActivitySupportsTravel(activity))
+        ? prepareResidentTravelAdvance(target, regionalTravel.window) : undefined;
+      if (travel === null) throw new Error("Travel lost its exact closing body cohort/window");
       try {
-        return stepWorld(target, commands, perceptionFrame, admission);
+        if ((target.meta.completedTick + 1) % 60 !== 0
+          || !target.residents.some(({ activity }) => residentActivitySupportsRations(activity))) {
+          return stepWorld(target, commands, perceptionFrame, undefined, travel);
+        }
+        const keeper = target.residents.find(({ identity }) => identity.stableId === settlementEcology.identity.keeperActorId);
+        const duty = keeper === undefined ? undefined : deriveSettlementKeeperCircadianDuty(
+          keeper, settlementEcology, porterResponse, target.meta.completedTick,
+        );
+        if (keeper === undefined || duty === undefined) throw new Error("Ration service lost authentic keeper duty");
+        const admission = prepareResidentRationUse(target, target.residents.map(({ identity }) => ({
+          actorId: identity.stableId, duty: identity.stableId === keeper.identity.stableId ? duty : null,
+        })));
+        if (admission === null) throw new Error("Ration service lost its exact closing body cohort");
+        try {
+          return stepWorld(target, commands, perceptionFrame, admission, travel);
+        } finally {
+          revokeResidentRationUse(admission);
+        }
       } finally {
-        revokeResidentRationUse(admission);
+        if (travel !== undefined) revokeResidentTravelAdvance(travel);
       }
     };
     const pending = pendingResidentGreeting;
@@ -14271,7 +14282,7 @@ export async function createTideweftRuntime(
     }
     if (world.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
       const phase = playerStepsSinceWorldTick + 1;
-      if (advanceResidentRestActivities(world, phase) === null) {
+      if (advanceResidentRestActivities(world, phase, regionalTravel.window) === null) {
         throw new Error("Resident rest approach failed validation");
       }
       publishResidentActivities(phase);
@@ -20472,7 +20483,8 @@ export async function createTideweftRuntime(
       GAME_SAVE_VERSION >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
       GAME_SAVE_VERSION >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
       GAME_SAVE_VERSION >= FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
-      GAME_SAVE_VERSION >= FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION)) {
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION)) {
       throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
@@ -25076,7 +25088,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
       decoded.version >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
       decoded.version >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
       decoded.version >= FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
-      decoded.version >= FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION)) {
+      decoded.version >= FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION,
+      decoded.version >= FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION)) {
       throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (

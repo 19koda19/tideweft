@@ -20,8 +20,11 @@ export const FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION = 55 as const;
 /** First outer format authorizing persisted accepted-Promise origin approach. */
 export const FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION = 56 as const;
 
+/** First outer format authorizing exact itinerary/legacy journey tasks. */
+export const FIRST_RESIDENT_TRAVEL_GAME_SAVE_VERSION = 57 as const;
+
 /** The one outer `tideweft-session` schema emitted by this source tree. */
-export const CURRENT_GAME_SAVE_VERSION = 56 as const;
+export const CURRENT_GAME_SAVE_VERSION = 57 as const;
 
 /** Frozen Alpha64 boundary; do not move this when the current writer changes. */
 export const RELEASED_LIVING_VOICE_GAME_SAVE_VERSION = 50 as const;

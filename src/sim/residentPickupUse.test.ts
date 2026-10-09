@@ -19,11 +19,12 @@ import {
 } from "./public";
 import { createRegionCoord } from "./regions";
 import {
-  RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
   replaceResidentActivity,
   type ResidentActivity,
 } from "./residentActivity";
 import { residentAcceptedPickupBinding, residentRestTargetHasDrySupport } from "./residentActivityWorld";
+import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "./residentTravelAdvance";
 import type { ResidentState, WorldState } from "./types";
 import { stableStringify } from "./util";
 
@@ -100,7 +101,7 @@ function arrivedFixture() {
   });
   expect(adoptResidentActivities(world)).toBe(true);
   expect(prepareResidentRestActivities(world, [], store)).toBe(true);
-  expect(residentAt(world, actorId).activity).toMatchObject({ version: RESIDENT_PICKUP_ACTIVITY_VERSION,
+  expect(residentAt(world, actorId).activity).toMatchObject({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION,
     pickupTask: { contractId: contract.id, phase: "approaching", target: binding.target } });
   let moved = false;
   for (let phase = 1; phase <= 10; phase += 1) {
@@ -149,6 +150,16 @@ function sensoryFrame(
   };
 }
 
+function closeCurrentInterval(world: WorldState, frame?: ResidentPerceptionFrame): WorldState {
+  const admission = prepareResidentTravelAdvance(world, null);
+  expect(admission).not.toBeNull();
+  try {
+    return stepWorld(world, [], frame, undefined, admission!);
+  } finally {
+    revokeResidentTravelAdvance(admission!);
+  }
+}
+
 describe("resident origin pickup commit-time eligibility", () => {
   it("admits fresh strong perception before debit and preserves the arrived body without creating cargo", () => {
     const current = arrivedFixture();
@@ -156,7 +167,7 @@ describe("resident origin pickup commit-time eligibility", () => {
     const sensitivity = residentAt(world, actorId).circadian!.policy.wakeSensitivity;
     const { frame, observation } = sensoryFrame(world, actorId, "strong", sensitivity);
     const targetTick = world.meta.completedTick + 1;
-    stepWorld(world, [], frame);
+    closeCurrentInterval(world, frame);
     const observed = residentAt(world, actorId);
     expect(observed.perception.beliefs).toEqual(expect.arrayContaining([expect.objectContaining({
       sourceObservationId: observation.id, lastObservedTick: targetTick,
@@ -180,7 +191,7 @@ describe("resident origin pickup commit-time eligibility", () => {
     const { frame, observation } = sensoryFrame(world, actorId,
       kind === "weak-strong" ? "strong" : "none", kind === "weak-strong" ? sensitivity - 1 : sensitivity);
     const ledger = structuredClone(world.ledger);
-    stepWorld(world, [], frame);
+    closeCurrentInterval(world, frame);
     expect(residentAt(world, actorId).perception.beliefs.some(({ sourceObservationId }) => sourceObservationId === observation.id)).toBe(true);
     expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: contract.quantity,
       departedTick: world.meta.completedTick });
@@ -196,7 +207,7 @@ describe("resident origin pickup commit-time eligibility", () => {
     const index = world.residents.findIndex(({ identity }) => identity.stableId === actorId);
     const resident = world.residents[index]!;
     world.residents[index] = replaceResidentActivity(resident, { ...resident.activity!, pickupTask: null });
-    stepWorld(world);
+    closeCurrentInterval(world);
     expect(contract).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
     expect(origin.inventory[contract.resource]).toBe(stock);
     expect(residentAt(world, actorId).activity?.poses.at(-1)?.position).toEqual(target);
@@ -211,7 +222,10 @@ describe("resident origin pickup commit-time eligibility", () => {
     // Deliberate malformed cold-shape contrast, never a successful action fixture.
     resident.activity = malformed as ResidentActivity;
     const before = stableStringify(world);
-    expect(() => stepWorld(world)).toThrow(/unbound physical activity/u);
+    // The malformed source cannot acquire the v7 closing capability at all;
+    // calling the engine without it must fail before any command or debit.
+    expect(prepareResidentTravelAdvance(world, null)).toBeNull();
+    expect(() => stepWorld(world)).toThrow(/exact closing travel admission/u);
     expect(stableStringify(world)).toBe(before);
     expect(origin.inventory[contract.resource]).toBe(stock);
     expect(contract.cargoQuantity).toBe(0);

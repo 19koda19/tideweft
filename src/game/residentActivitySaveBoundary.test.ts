@@ -7,6 +7,8 @@ import {
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
   RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
   RESIDENT_PICKUP_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import {
   captureResidentActivityEventLocus,
@@ -127,6 +129,30 @@ function pickupFixture(phase: number) {
 }
 
 describe("resident activity save capability and interval boundary", () => {
+  it.each([0, 4, 9])("requires explicit travel envelope capability at retained phase %s even without a journey", (phase) => {
+    const world = pickupFixture(phase);
+    for (const resident of world.residents) {
+      const activity = canonicalizeResidentActivity({ ...resident.activity,
+        version: RESIDENT_TRAVEL_ACTIVITY_VERSION, ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID, travelTask: null,
+      }, { actorId: resident.identity.stableId, tick: world.meta.completedTick, phase });
+      if (activity === null) throw new Error("Travel boundary fixture lost its real retained poses");
+      resident.activity = activity;
+    }
+    const before = serializeWorld(world);
+    const clone = structuredClone(world);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(clone, true, true, true, true, true, true, true)).toBe(true);
+    expect(residentActivitiesMatchPerceptionInterval(clone.residents, world.meta.completedTick, phase)).toBe(true);
+    for (let omitted = 0; omitted < 7; omitted += 1) {
+      const flags: [boolean, boolean, boolean, boolean, boolean, boolean, boolean] = [true, true, true, true, true, true, true];
+      flags[omitted] = false;
+      expect(residentActivitySaveExtensionsValid(world, ...flags)).toBe(false);
+    }
+    expect(serializeWorld(world)).toBe(before);
+    expect(serializeWorld(clone)).toBe(before);
+  });
+
   it.each([0, 1, 9])("keeps genuinely absent legacy bodies absent at accepted phase %s", (phase) => {
     const world = freshWorld();
     const residents = world.residents;

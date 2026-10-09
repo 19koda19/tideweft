@@ -22,7 +22,7 @@ import {
 import { clampInteger, compareText } from "./util";
 import { createInitialWorld, findRouteBetween, pressureMultiplier } from "./world";
 import { projectWorldTime } from "./worldTime";
-import { findAutonomousRoutePlan } from "./network";
+import { findAutonomousRoutePlan, routeIsActive } from "./network";
 import {
   MAX_RESIDENT_MEMORIES,
   residentRainProtection,
@@ -54,12 +54,15 @@ import {
   residentActivitySupportsInspection,
   residentActivitySupportsPickup,
   residentActivitySupportsRations,
+  residentActivitySupportsTravel,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentAcceptedPickupBinding, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
 import { calculateResidentRationPulse } from "./residentRations";
 import { consumeResidentRationUse, residentRationUseEligible, type PreparedResidentRationUse } from "./residentRationUse";
 import { selectResidentMaterialUser } from "./residentMaterialUse";
+import { advanceResidentMacroTravel, consumeResidentTravelAdvance, type PreparedResidentTravelAdvance, type ResidentTravelAdvanceAdmission } from "./residentTravelAdvance";
+import { residentTravelSegment, residentTravelSegmentOffset } from "./residentTravelRoute";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -1890,7 +1893,7 @@ function completeContract(
   });
 }
 
-function advanceContracts(world: WorldState, tick: number): void {
+function advanceContracts(world: WorldState, tick: number, travelAdmission: ResidentTravelAdvanceAdmission | null): void {
   for (const contract of [...world.contracts].sort((left, right) => left.id - right.id)) {
     if ((contract.status === "offered" || contract.status === "accepted") && tick > contract.dueTick) {
       contract.status = "expired";
@@ -1965,18 +1968,69 @@ function advanceContracts(world: WorldState, tick: number): void {
           routeId: firstRoute.id,
           progress: firstRoute.fromSettlementId === contract.originSettlementId ? 0 : FIXED_POINT,
         };
+        let departingResident = resident;
+        if (residentActivitySupportsTravel(resident.activity)) {
+          const activity = canonicalizeResidentActivity(resident.activity, { actorId: resident.identity.stableId, tick, phase: 0 });
+          if (activity === null) throw new Error("Physical departure lost its committed origin body");
+          const task = {
+            kind: "contract-travel" as const, mode: "physical" as const, contractId: contract.id,
+            legIndex: 0, waypointIndex: 1, selectedAtTick: tick, lastProgressAtTick: tick,
+            nextReassessmentAtTick: tick, phase: "approaching" as const, waitReason: null,
+          };
+          const segment = residentTravelSegment(world, contract, task);
+          if (segment === null || residentTravelSegmentOffset(segment, activity.poses[0]!.position) !== 0) {
+            throw new Error("Physical departure itinerary does not begin at the actual pickup body");
+          }
+          departingResident = replaceResidentActivity(resident, { ...activity, pickupTask: null, travelTask: task });
+          world.residents[world.residents.indexOf(resident)] = departingResident;
+        }
         emitEvent(world, tick, "contract-departed", contract.id, {
           residentId: resident.id,
           arrivalTick: contract.arrivalTick,
           routeHops: routePlan.routeIds.length,
           bottleneckReliability: routePlan.bottleneckReliability,
-          ...residentDepartureActivityEventLocus(world, resident, tick),
+          ...residentDepartureActivityEventLocus(world, departingResident, tick),
         });
       }
     }
 
     if (contract.status === "in-transit" && contract.departedTick !== null && contract.arrivalTick !== null) {
       const resident = contract.assignedResidentId === null ? undefined : residentById(world, contract.assignedResidentId);
+      if (resident !== undefined && residentActivitySupportsTravel(resident.activity)) {
+        const activity = canonicalResidentActivityForWorld(world, resident, tick);
+        if (activity === null || activity.travelTask === null || activity.travelTask === undefined
+          || activity.travelTask.contractId !== contract.id || travelAdmission === null) {
+          throw new Error("Current traveler lost its bound route work or closing admission");
+        }
+        if (activity.travelTask.mode === "physical") {
+          let task = activity.travelTask;
+          const segment = residentTravelSegment(world, contract, task);
+          if (segment === null) throw new Error("Physical traveler lost its ordered route segment");
+          const disturbed = resident.perception.beliefs.some((belief) => belief.lastObservedTick === tick
+            && belief.strongInterrupt && belief.salience >= (resident.circadian?.policy.wakeSensitivity ?? 0));
+          if (task.phase !== "arrived" && (!routeIsActive(segment.route) || resident.condition.sheltering
+            || resident.circadian?.posture.state !== "awake" || disturbed)) {
+            task = { ...task, phase: "waiting", waitReason: resident.condition.sheltering ? "weather-hold"
+              : !routeIsActive(segment.route) ? "no-active-route" : "disturbed", nextReassessmentAtTick: tick + 1 };
+          }
+          const remaining = travelAdmission.remainingUnitsByActor.get(resident.identity.stableId);
+          if (remaining === undefined) throw new Error("Physical traveler has no closing work budget");
+          const result = advanceResidentMacroTravel(world, contract, task, activity.poses[0]!, travelAdmission.frame,
+            contract.departedTick < tick ? remaining : 0, tick);
+          if (result === null) throw new Error("Accountable macro route continuation failed");
+          const next = replaceResidentActivity({ ...resident, location: result.location }, {
+            ...activity, poses: [result.pose], travelTask: result.task,
+          });
+          world.residents[world.residents.indexOf(resident)] = next;
+          if (result.task.phase === "arrived" && residentRestTargetHasDrySupport(world, result.pose.position)) {
+            const deliveredCondition = clampInteger(routeConditionForContract(world, contract)
+              - Math.trunc(world.weather.intensity / 8), 180_000, FIXED_POINT);
+            completeContract(world, contract, tick, deliveredCondition);
+          }
+          continue; // physical progress/handoff never falls back to ETA
+        }
+        // Only an explicitly grandfathered journey keeps the old timetable.
+      }
       if (resident !== undefined && resident.location.kind === "route") {
         updatePorterLocation(world, contract, tick, resident);
       }
@@ -2094,6 +2148,7 @@ function residentDepartureActivityEventLocus(
     actorId: resident.identity.stableId, tick, phase: 0,
   });
   if (activity === null) throw new Error("Departure lost reanchored resident body");
+  if (activity.travelTask?.mode === "physical") return captureResidentActivityEventLocus(resident, tick);
   const prepared = replaceResidentActivity(resident, {
     ...activity, poses: [residentCoarseTransitionPose(world, resident)], restTask: null,
     ...(residentActivitySupportsRations(activity) ? { rationTask: null } : {}),
@@ -2105,9 +2160,9 @@ function residentDepartureActivityEventLocus(
 }
 
 /**
- * Re-anchor only current history, not the body. Existing coarse transport
- * remains explicitly authoritative until its later physical-execution slice;
- * only an actual macro transition may refresh that legacy placement.
+ * Re-anchor interval history, not a physical journey's body. Explicit old
+ * coarse journeys retain their existing placement authority; only their
+ * actual macro membership transition may refresh that legacy placement.
  */
 function commitResidentActivityWorldStep(
   world: WorldState,
@@ -2135,6 +2190,9 @@ function commitResidentActivityWorldStep(
     let materialTask = activity.materialTask ?? null;
     let inspectionTask = activity.inspectionTask ?? null;
     let pickupTask = activity.pickupTask ?? null;
+    let travelTask = activity.travelTask ?? null;
+    const physicalJourney = travelTask?.mode === "physical" || snapshot.activity.travelTask?.mode === "physical";
+    if (travelTask !== null && (resident.location.kind !== "route" || resident.activeContractId !== travelTask.contractId)) travelTask = null;
     if (task !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
       task = null;
@@ -2163,7 +2221,7 @@ function commitResidentActivityWorldStep(
       || (priorLocation.kind === "settlement" && currentLocation.kind === "settlement"
         && priorLocation.settlementId !== currentLocation.settlementId);
     const changedDirection = snapshot.routeBinding !== residentActivityRouteBinding(world, resident);
-    if (reconcileCoarseLocation && (changedLocation || (currentLocation.kind === "route" && changedDirection))) {
+    if (!physicalJourney && reconcileCoarseLocation && (changedLocation || (currentLocation.kind === "route" && changedDirection))) {
       pose = residentCoarseTransitionPose(world, resident);
       task = null;
       rationTask = null;
@@ -2199,6 +2257,7 @@ function commitResidentActivityWorldStep(
       ...(residentActivitySupportsMaterials(activity) ? { materialTask } : {}),
       ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
       ...(residentActivitySupportsPickup(activity) ? { pickupTask } : {}),
+      ...(residentActivitySupportsTravel(activity) ? { travelTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.
@@ -2210,10 +2269,15 @@ export function stepWorld(
   commands: readonly SimCommand[] = [],
   perceptionFrame?: ResidentPerceptionFrame,
   rationAdmission?: PreparedResidentRationUse,
+  travelAdmission?: PreparedResidentTravelAdvance,
 ): WorldState {
   if (!residentCivicActivityCohortIsUniform(world.residents)) throw new Error("Resident civic activity requires a whole-roster mode");
   const tick = world.meta.completedTick + 1;
   const rationDuties = rationAdmission === undefined ? null : consumeResidentRationUse(world, rationAdmission);
+  const travel = travelAdmission === undefined ? null : consumeResidentTravelAdvance(world, travelAdmission);
+  if (travel === null && world.residents.some(({ activity }) => residentActivitySupportsTravel(activity))) {
+    throw new Error("Current human route mode requires an exact closing travel admission");
+  }
   const residentActivities = prepareResidentActivityWorldStep(world);
   applyCommands(world, commands, tick);
   advanceResidentPerception(world, perceptionFrame, tick);
@@ -2229,7 +2293,7 @@ export function stepWorld(
   updateResidentNeeds(world, tick, rationDuties);
   updateProjects(world, tick, rationDuties);
   if (tick % 60 === 0) generateDemandContracts(world, tick);
-  advanceContracts(world, tick);
+  advanceContracts(world, tick, travel);
   commitResidentActivityWorldStep(world, residentActivities, tick, true);
   reconcileResidentCircadianAfterContractAdvance(world, tick);
   decayRoutes(world, tick);

@@ -4608,6 +4608,130 @@ soaks remain deferred to full Living Foliage; the accepted Relief/world hitch
 and the requested VoiceOver testing hold are unchanged. Completed directive
 bytes remain immutable; no gameplay-order transition is implied.
 
+### Accountable ordered resident travel — 2026-10-08
+
+Local unpublished extension from `fd194300accb11ddcb1699d1e7f2c61d0619296f`;
+not a directive closure, production performance result or release. The parent
+cumulative independently passed404files/4922tests in2282.87s with all722 public
+non-Markdown inputs unchanged. That certificate belongs only to the parent,
+not these executable edits. Current validation uses Node22.20.0/npm10.9.3 and
+the unchanged installed dependencies. No platform/configuration/dependency,
+renderer or upstream change is part of this slice.
+
+The v7/outer57 extension binds new conserved resident journeys to an ordered
+leg/next-waypoint cursor and the retained body. Shared local locomotion spends
+at most105units per accepted step. One-shot source-bound closing custody
+permits only the remaining part of the same1050-unit interval budget outside
+the real interaction window, stopping at its first included point. Actual
+final waypoint/support gates the existing handoff; ETA cannot certify arrival.
+All retained poses receive monotone, bounded route validation. Supported
+outer50–56/frozen body1–6 remain exact until genuine phase-zero evolution;
+already in-transit old journeys retain explicit per-journey legacy continuation.
+No format is retired. World4/rules6/carry14 and the one aggregate cargo owner
+remain unchanged. [Architecture](./ARCHITECTURE.md#accountable-ordered-resident-travel)
+owns geometry, custody, invalidation, support and legacy law.
+
+The ordinary-runtime witness uses the existing density8 native food133 offer,
+generated route126 and resident94. It controls exclusivity, weather and need
+pressure, not task, body, route geometry, pickup or successful outcome. Real
+automatic acceptance leads to dry origin approach, one stock-to-cargo debit,
+local movement, actual window exit, bounded macro continuation beyond the old
+ETA, and once-only stock/need/trust/history consequences with retained
+destination body. Detached phase4→phase9→terminal work equals uninterrupted
+authoritative roots. Only the existing session recap is excluded from those
+root comparisons; body/cursor/cargo, economy, events, perception, ecology,
+knowledge and other authoritative save roots are not excluded.
+
+The same witness captures a real off-window phase9, confirms lower-world macro
+progress actually occurred in the candidate, then rejects later expression
+interval closure. All authoritative roots roll back and only the integrity
+warning audio releases. A cold retry obtains fresh custody and equals an
+independently accepted reference, without duplicate motion, cargo or handoff.
+Synthetic fixtures separately exercise forward/reverse and multileg geometry,
+corner/leg joins, exact signed clipping, inactive legs, waits, receipt reuse/
+revocation, malformed history and old-format capability fences. These are not
+additional native journeys or manual visual proof.
+
+Integration initially exposed a real heavy-departure Voice regression: the
+retained event was reauthenticated against CURRENT departure progress after
+genuine fine movement. The narrow shared source-owner repair keeps fresh
+selection phase-zero-only and validates retained same-interval speech against
+its original captured phase-zero body, authenticated itinerary and current
+cursor/custody. It cannot move/repeat the source or survive a later interval or
+released custody; legacy checks remain strict. New real phase4/9 cold cases,
+seventeen malformed authority contrasts and genuine interval expiry prove the
+distinction. No emitter, caption rule or general runtime exemption was added.
+
+Final affected validation is a union of51files/879passing tests, not a fabricated
+single invocation. The broad48-file invocation passed47files/845tests and
+failed only the newly authored native test helper: it expected no save warning
+after deliberately causing a safe integrity halt. The correction asserts that
+exact warning and retains every rollback/cold/conservation assertion. Its
+independent rerun passes1test in60.45s. The other47 files' inputs did not change.
+The separately passing3-file source/pickup selection contributes33tests; only
+the unrelated new native test changed afterward. Original failures remain
+failed reports, not relabeled certificates.
+
+Exact broad command:
+
+```sh
+npx vitest run src/sim/residentAttention.test.ts src/sim/residentCircadian.persistence.test.ts src/sim/residentMaterialActivity.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRationPulse.test.ts src/sim/residentPickupActivity.test.ts src/sim/residentActivity.test.ts src/sim/residentActivityCapabilities.test.ts src/sim/residentSurfaceKnowledge.test.ts src/sim/residentRationUse.test.ts src/sim/residentActivityEventLocus.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentRations.test.ts src/sim/residentInspectionActivity.test.ts src/sim/residentRations.integration.test.ts src/sim/residentCircadianPhysiology.test.ts src/sim/phase8.test.ts src/sim/systemComposition.integration.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentEnvironmentExecution.test.ts src/game/residentRationActivity.integration.test.ts src/game/residentMaterialActivity.integration.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentSoundPhases.test.ts src/game/runtime.residentAlarmLocus.test.ts src/game/runtime.workingPeople.integration.test.ts src/game/residentSpatial.test.ts src/game/residentCircadian.test.ts src/game/workingPeopleExpression.test.ts src/game/residentIntroductionExpression.activity.test.ts src/game/residentWeatherHoldExpression.activity.test.ts src/game/projection.perception.test.ts src/game/projection.residentPickup.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.restSurface.test.ts src/game/runtime.residentRest.integration.test.ts src/game/runtime.performanceTelemetry.test.ts src/game/runtime.keeperInspection.integration.test.ts src/sim/residentTravelActivity.test.ts src/sim/residentTravelAdvance.test.ts src/sim/residentTravelRoute.test.ts src/game/runtime.residentTravel.integration.test.ts src/game/worldPosition.test.ts src/sim/network.test.ts src/sim/engine.perception.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-domain-final.json
+```
+
+Final source and failed-test correction commands:
+
+```sh
+npx vitest run src/game/workingPeopleExpression.activity.test.ts src/game/runtime.residentPickup.integration.test.ts src/sim/residentPickupUse.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-heavy-source-final.json
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-native-rollback-corrected.json
+npx vitest run src/game/runtime.test.ts src/game/runtime.wait.integration.test.ts src/game/runtime.playerTimeAction.integration.test.ts --testNamePattern='voices one committed GREET|keeps a resident recognized|rolls back introduction facts|rolls back the whole interval when|restores the complete adopted body roster|releases fixed-step .* audio only after interval commit|loads and rewrites the current schema|produces identical authoritative state across two ordinary render cadences|commits exactly 100 RAF-driven fixed steps|preserves partial progress on cancel|restores the awake interval anchor|releases real SLEEP|advances REST through ordinary fixed steps|saves a real settlement SLEEP' --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-runtime-rollback-cadence.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-smoke-final.json
+npm run typecheck
+```
+
+Existing runtime timing/rollback/cadence selection passes18tests across3files,
+92unselected,68.40s. It includes real GREET/no-replay, introduction rollback,
+whole-interval hearing rejection, complete roster rollback, fixed-step audio
+commit/rejection, current saves, equal render cadences, ordinary WAIT and real
+REST/SLEEP continuation/late failure. Maintained smoke passes6files/105tests
+in6.22s; final typecheck passes. None substitutes for a new cumulative,
+production artifact, manual play, performance, mobile or release gate.
+
+Broad pre-validation manifest728inputs has SHA256
+`5631c15e71ef391e7b1006aa3ecccaee7b0d13c51f0602bf16bac2a4edc62cbf`.
+Corrected final manifest728inputs is
+`cda38eac98a177fadc0a966db18757b8406fc5d6f2450a0d9565cef2506facde`;
+the only delta is the new native test helper above. All production, existing
+test, configuration and asset bytes are unchanged across those invocations.
+Broad original report SHA256
+`d543f094e1ee68f8a5b844adff4a3e4b46c13900f680616971881442bbc9dad3`;
+corrected native report
+`b03c74f466c81ed214d3bfb3a0188dcd3529ccd2215c612f175c09893ca46f84`;
+source/pickup report
+`35570fce32d273602b0e2368497801abe6dd3e3f436b705fe67350e5b3ff5d30`.
+Original reports/manifests remain local under the same ignored validation owner.
+
+Independent stationary production-runtime captures compare actual parent v6
+and candidate v7, not synthesized/resealed saves, at the same30fixed steps/
+3world advances/3human observation collections/completed423. Estuary and
+density8 each show129expected version/null-task/seal differences,0unexpected,
+and840additional bytes. Candidate saves are1846363/1902647bytes, SHA256
+`15b9d5991721d9f6653ed726b162da561443ddfa410c5e8be2340a33a3b469d0`
+and `79a5539feda95734a73489abb762556f706f26c5dd8779333d314405e8e804fa`.
+This characterizes unchanged stationary authority and current telemetry
+witnesses, not save-growth bounds or timing gains.
+
+Inheritance: shared body/locomotion, fixed-step authority, physical conservation,
+lawful Voice sources, current-save validation and bounded work are INTEGRATED
+for this bounded journey. General water/current/load/known-alternative response,
+native reverse/multihop and full/coarse/full acceptance, cancellation/failure/
+recovery breadth, subsequent-task liveness and normal Chart/Relief play remain
+with current existing-world work. Addressable porter lots retain arrival-economy
+owners; broad gear, injury, maritime and professions are NOT APPLICABLE to this
+slice and keep their existing future owners. Composition remains PARTIAL.
+No whole traveler/directive completion, cat-water fix, new performance pass,
+release or gameplay-order transition is claimed. Extended profiling/soaks remain
+deferred until full Living Foliage, and the accepted Relief/world hitch remains.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
