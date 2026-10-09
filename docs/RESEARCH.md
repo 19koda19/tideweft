@@ -5761,6 +5761,64 @@ Typecheck passes on the final inputs. No schema/support-set, dependency, timing,
 configuration, historical-directive or release change; no new cumulative,
 production performance, platform artifact or whole-directive certificate.
 
+### Familiar-origin cumulative checkpoint — 2026-10-09
+
+Clean committed `92e14ecc5b09a1da417fd4cc4d920b179fc60fa9` subsequently passes
+`npm run test:ci`: 413 files / 5,238 tests, zero failed or pending, 2,287.64s.
+The context-index28, player-facing39 and documentation-reuse45 selftests also
+pass. All734 public non-Markdown inputs, including tests/configuration/assets,
+and HEAD match before/after; the input digest is the familiar-origin digest
+above. No public source or documentation edits occurred while the run certified
+that tree. The retained JSON report SHA256 is
+`cc736b80d1d265e2942ed61b4e6c12b1ba0a2c613b3982d054f26293ddcc9ccc`.
+Default and JSON reporters were used; the ignored report is
+`artifacts/validation/world0-cumulative-diagnosis/familiar-origin-cumulative.json`.
+
+The same source passes `npm run build:web` and `npm run smoke:web` against the
+actual `/tideweft/` static artifact: five files,4,871,417 served bytes. The
+existing large-chunk warning remains. This is cumulative correctness and static
+artifact evidence, not interactive browser/desktop play, hardware performance,
+deferred production profiling/soak, publication or whole-integration closure.
+No dependency, schema, support-set, gameplay-policy or historical-directive change
+is inferred. Later changed inputs need their own applicable validation.
+
+### Untouched-world second-hour ration use — 2026-10-09
+
+At parent `92e14ec`, one additive runtime test keeps the generated estuary's
+needs, weather, recipes, stock, contracts, terrain, bodies and task selection
+untouched. As in the first-hour material witness, the current new-world owner
+forces hard/wild despite the legacy `journey` command field. There is no seed
+search, assigned user or injected successful action.
+
+1,199 accepted ordinary fixed steps reach tick539/phase9; the actual closing
+step reaches540. At least one resident uses rations after prior authenticated
+arrival. A read-only observer calls the original lower step once and captures
+its actual input/output, independently checking production-before-needs, the
+complete stable-order cohort's shared groups, stock/ledger and final-clamped
+need relief. Civic material use shares that same conserved closing transaction.
+All42 identities and zero-cargo contracts remain intact. Cold outer58 loading
+of the539 prefix produces exactly the same saved roots after one step, excluding
+only the existing session recap/integrity comparison fields. Consumed540 reload
+replays no audio or benefit, and541 adds no duplicate service debit or relief.
+
+Focused1case passes46.36s; the complete affected7-file/94-test set passes148.31s;
+maintained6-file/105-test smoke passes5.25s. Typecheck and45 documentation-reuse
+selftests pass. All734 public non-Markdown inputs match before/after, digest
+`4945878a33e946f9ef919abdc90f26d4ea766804a85ee7988897596c26568eee`.
+
+```sh
+npx vitest run src/game/runtime.residentRest.integration.test.ts -t 'uses native second-hour rations without authored pressure' --maxWorkers=1
+npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/residentRationActivity.integration.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRationUse.test.ts src/sim/residentRationPulse.test.ts src/sim/residentRations.test.ts src/sim/residentRations.integration.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+This is one native runtime meal pulse with mocked RAF/audio, not general
+fairness/liveness, rendered play, performance, platform, release or whole-system
+closure. Production, schemas, supported formats and dependencies are unchanged;
+the prior full cumulative certificate belongs to its own exact inputs.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

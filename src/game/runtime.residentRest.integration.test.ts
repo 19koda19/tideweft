@@ -1270,4 +1270,224 @@ describe("ordinary runtime resident rest execution", () => {
     assertWorldInvariants(continued);
     // Mocked-clock runtime correctness, not rendered play or performance proof.
   }, 180_000);
+
+  it("uses native second-hour rations without authored pressure and preserves exact cold closing work", async () => {
+    // One untouched seed, not a survey or an assigned successful service. Native
+    // needs, weather, recipes, contracts, stock, terrain, bodies and tasks stay live.
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "journey", sessionShape: "wander" });
+    await runtime.save();
+    const initial = decode(repository.snapshot());
+    const initialWorld = deserializeWorld(initial.world);
+    expect(initial.version).toBe(FIRST_RESIDENT_TRAVEL_ENVIRONMENT_GAME_SAVE_VERSION);
+    expect(initialWorld.meta.completedTick).toBe(420);
+    expect(initial.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(initialWorld.residents.every((human) => !Object.hasOwn(human, "activity"))).toBe(true);
+    const cohort = initialWorld.residents.map(({ id, identity }) => ({ id, identity }));
+    assertWorldInvariants(initialWorld);
+
+    advanceOrdinaryFixedSteps(runtime, 1_199);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    expect(beforeWorld.meta.completedTick).toBe(539);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(beforeWorld.residents.map(({ id, identity }) => ({ id, identity }))).toEqual(cohort);
+    expect(beforeWorld.residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION))
+      .toBe(true);
+    expect(beforeWorld.residents.some(({ activity }) => activity?.rationTask?.phase === "arrived"
+      && activity.rationTask.usedAtTick === null)).toBe(true);
+    assertWorldInvariants(beforeWorld);
+
+    // Observe only the original closing call. Its input contains the accepted
+    // phase10 poses; output contains the actual recipe, ration and civic commits.
+    const capture = (world: ReturnType<typeof deserializeWorld>) => structuredClone({
+      tick: world.meta.completedTick,
+      residents: world.residents.map(({ id, identity, location, needs, activity }) => ({
+        id, actorId: identity.stableId, location, needs,
+        materialTask: activity?.materialTask ?? null,
+        rationTask: activity?.rationTask ?? null,
+        pose: activity?.poses.at(-1) ?? null,
+      })),
+      settlements: world.settlements.map(({ id, inventory, project, recipes }) => ({ id, inventory, project, recipes })),
+      ledger: world.ledger,
+    });
+    let closingInput: ReturnType<typeof capture> | undefined;
+    let closingOutput: ReturnType<typeof capture> | undefined;
+    const originalStep = simulation.stepWorld;
+    const observer = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      expect(args[0].meta.completedTick).toBe(539);
+      expect(closingInput).toBeUndefined();
+      closingInput = capture(args[0]);
+      const result = originalStep(...args);
+      closingOutput = capture(result);
+      return result;
+    });
+    try {
+      advanceOrdinaryFixedSteps(runtime, 1);
+    } finally {
+      observer.mockRestore();
+    }
+    expect(closingInput).toBeDefined();
+    expect(closingOutput).toBeDefined();
+    const source = closingInput!;
+    const committed = closingOutput!;
+    expect(source.tick).toBe(539);
+    expect(committed.tick).toBe(540);
+    await runtime.save();
+    const afterRecord = repository.snapshot();
+    const after = decode(afterRecord);
+    const afterWorld = deserializeWorld(after.world);
+    expect(afterWorld.meta.completedTick).toBe(540);
+    expect(after.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(afterWorld.residents.map(({ id, identity }) => ({ id, identity }))).toEqual(cohort);
+    expect(capture(afterWorld).settlements).toEqual(committed.settlements);
+    expect(afterWorld.ledger).toEqual(committed.ledger);
+    expect(afterWorld.events.filter(({ type }) => type === "contract-fulfilled"))
+      .toEqual(initialWorld.events.filter(({ type }) => type === "contract-fulfilled"));
+    expect(afterWorld.contracts.every(({ cargoQuantity }) => cargoQuantity === 0)).toBe(true);
+    expect(committed.residents.map(({ id, actorId, location }) => ({ id, actorId, location })))
+      .toEqual(source.residents.map(({ id, actorId, location }) => ({ id, actorId, location })));
+
+    const users = committed.residents.filter(({ rationTask }) => rationTask?.phase === "used"
+      && rationTask.usedAtTick === committed.tick);
+    expect(users.length).toBeGreaterThan(0);
+    for (const user of users) {
+      const task = user.rationTask!;
+      const prior = source.residents.find(({ actorId }) => actorId === user.actorId)!;
+      expect(prior.rationTask).toMatchObject({
+        kind: "settlement-ration", phase: "arrived", usedAtTick: null,
+        selectedAtTick: task.selectedAtTick, settlementId: task.settlementId, target: task.target,
+        foodUsed: false, waterUsed: false,
+      });
+      expect(task.selectedAtTick).toBeLessThan(committed.tick);
+      expect(prior.pose?.position).toEqual(task.target);
+      expect(user.pose?.position).toEqual(task.target);
+      expect(user.location).toEqual({ kind: "settlement", settlementId: task.settlementId });
+      expect(residentRestTargetHasDrySupport(afterWorld, task.target)).toBe(true);
+      expect(resident(after, user.actorId).activity?.rationTask).toEqual(task);
+      expect(observableResidentRationUse(resident(after, user.actorId))).toBe(true);
+    }
+
+    const materialUsers = committed.residents.filter(({ materialTask }) => materialTask?.phase === "used"
+      && materialTask.usedAtTick === committed.tick);
+    const productionConsumed = { ...source.ledger.consumed };
+    const productionProduced = { ...productionConsumed };
+    const serviceConsumed = { ...productionConsumed };
+    for (const resource of simulation.RESOURCE_KINDS) {
+      productionConsumed[resource] = 0;
+      productionProduced[resource] = 0;
+      serviceConsumed[resource] = 0;
+    }
+    const growth = Math.trunc(34_000 * pressureMultiplier(afterWorld.meta.pressureMode) / FIXED_POINT);
+    for (const site of source.settlements) {
+      const next = committed.settlements.find(({ id }) => id === site.id)!;
+      const stock = { ...site.inventory };
+      // Production precedes needs and civic work; preserve its real source costs.
+      for (const recipe of site.recipes) {
+        if (recipe.nextRunTick > committed.tick) continue;
+        if (recipe.inputs.every(({ resource, amount }) => stock[resource] >= amount)) {
+          for (const { resource, amount } of recipe.inputs) {
+            stock[resource] -= amount;
+            productionConsumed[resource] += amount;
+          }
+          for (const { resource, amount } of recipe.outputs) {
+            stock[resource] += amount;
+            productionProduced[resource] += amount;
+          }
+        }
+        expect(next.recipes.find(({ id }) => id === recipe.id)?.nextRunTick)
+          .toBe(recipe.nextRunTick + recipe.intervalTicks);
+      }
+
+      const present = source.residents.filter(({ location }) => location.kind === "settlement"
+        && location.settlementId === site.id)
+        .sort((left, right) => left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0);
+      const siteUsers = users.filter(({ rationTask }) => rationTask!.settlementId === site.id);
+      const usedIds = new Set(siteUsers.map(({ actorId }) => actorId));
+      const budget = Math.ceil(present.length / 3);
+      const foodAvailable = budget > 0 && stock.food >= budget;
+      const waterAvailable = budget > 0 && stock.freshWater >= budget;
+      let groupsUsed = 0;
+      for (let start = 0; start < present.length; start += 3) {
+        if (present.slice(start, start + 3).some(({ actorId }) => usedIds.has(actorId))) groupsUsed += 1;
+      }
+      const foodConsumed = foodAvailable ? groupsUsed : 0;
+      const waterConsumed = waterAvailable ? groupsUsed : 0;
+      stock.food -= foodConsumed;
+      stock.freshWater -= waterConsumed;
+      serviceConsumed.food += foodConsumed;
+      serviceConsumed.freshWater += waterConsumed;
+      for (const prior of present) {
+        const nextResident = committed.residents.find(({ actorId }) => actorId === prior.actorId)!;
+        const used = usedIds.has(prior.actorId);
+        const relief = used ? (foodAvailable ? 68_000 : 0) + (waterAvailable ? 8_000 : 0) : 0;
+        expect(nextResident.needs.food).toBe(Math.max(0, Math.min(FIXED_POINT, prior.needs.food + growth - relief)));
+        if (used) {
+          expect(nextResident.rationTask).toMatchObject({ foodUsed: foodAvailable, waterUsed: waterAvailable });
+          expect(foodAvailable || waterAvailable).toBe(true);
+        }
+      }
+
+      const workers = materialUsers.filter(({ materialTask }) => materialTask!.settlementId === site.id);
+      const contribution = next.project.progress - site.project.progress;
+      expect([0, 1]).toContain(contribution);
+      expect(workers).toHaveLength(contribution);
+      expect(next.project.id).toBe(site.project.id);
+      if (contribution === 1) {
+        const task = workers[0]!.materialTask!;
+        const prior = source.residents.find(({ actorId }) => actorId === workers[0]!.actorId)!;
+        expect(prior.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null, target: task.target });
+        expect(prior.pose?.position).toEqual(task.target);
+        expect(task.projectId).toBe(site.project.id);
+        expect(task.resource).toBe(site.project.resource);
+        expect(stock[task.resource]).toBeGreaterThanOrEqual(1);
+        stock[task.resource] -= 1;
+        serviceConsumed[task.resource] += 1;
+      }
+      expect(next.inventory).toEqual(stock);
+    }
+    expect(source.residents.every(({ location }) => location.kind === "settlement")).toBe(true);
+    expect(committed.ledger.initial).toEqual(source.ledger.initial);
+    for (const resource of simulation.RESOURCE_KINDS) {
+      expect(committed.ledger.produced[resource] - source.ledger.produced[resource]).toBe(productionProduced[resource]);
+      expect(committed.ledger.consumed[resource] - source.ledger.consumed[resource])
+        .toBe(productionConsumed[resource] + serviceConsumed[resource]);
+    }
+    assertWorldInvariants(afterWorld);
+    close(runtime);
+
+    soundscapePlay.mockClear();
+    const coldRepository = new MemoryRepository(beforeRecord);
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    close(cold);
+
+    soundscapePlay.mockClear();
+    const usedRepository = new MemoryRepository(afterRecord);
+    const used = await open(usedRepository);
+    await used.save();
+    expect(authoritativeRoots(decode(usedRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(used, 10);
+    await used.save();
+    const continued = deserializeWorld(decode(usedRepository.snapshot()).world);
+    expect(continued.meta.completedTick).toBe(541);
+    expect(continued.ledger).toEqual(afterWorld.ledger);
+    expect(continued.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })))
+      .toEqual(afterWorld.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })));
+    for (const user of users) {
+      expect(continued.residents.find(({ identity }) => identity.stableId === user.actorId)!.needs.food).toBe(user.needs.food);
+    }
+    assertWorldInvariants(continued);
+    // One native meal pulse and deterministic restore, not a general fairness,
+    // rendered-play, performance or long-session closure certificate.
+  }, 180_000);
 });
