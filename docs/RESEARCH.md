@@ -5589,6 +5589,50 @@ The earlier complete `58c1a157` certificate does not certify this added test.
 No complete suite, artifact build, platform smoke or release run is claimed
 for this ordinary test-only slice. Historical directives remain unchanged.
 
+### Current-body ABOUT and pickup motion parity — 2026-10-09
+
+At local parent `ee1fe88d`, the shared scene projection correctly withheld
+travel/carry copy for a stationary accepted courier, but ABOUT still said
+`Carrying a Promise` from `activeContractId` alone. The existing native-offer
+lower-adapter fixture establishes acceptance with zero cargo, actual approach
+displacement and a later physically blocked step. New ABOUT assertions reproduce
+the mismatch in both stationary cases before the correction:2failed,
+3deliberately unselected. This is controlled projection evidence, not ordinary
+runtime play, visual QA or a new custody capability.
+
+`uiProjection.ts` now preserves sleep, lawful attention, rest, committed service,
+weather-hold and current-motion priorities, then describes an adopted stationary
+body as `Waiting nearby`. Only genuinely body-absent legacy presentation retains
+coarse commitment/membership copy, matching the scene projection. Positive cargo
+would establish custody, not knowledge of the person's private Promise purpose;
+no contract lookup, task disclosure or new player knowledge is added. The same
+five existing pickup cases now check ABOUT: accepted zero-cargo waiting, actual
+movement, real stopped movement, absent legacy body and unseen source. All
+original fixtures/assertions remain, including exact world-byte nonmutation.
+
+Affected projection/ABOUT/attention/Voice tests pass5files/84tests in7.20s;
+existing ration/material integration passes2files/20tests in19.25s, preserving
+actual-use copy and stock/current-save proofs. Maintained smoke passes6files/
+105tests in4.18s; typecheck passes. The projection run also included two unmatched
+old filename patterns; they executed no tests and are not additional coverage.
+The actual commands, excluding reporter/output arguments, were:
+
+```sh
+npx vitest run src/game/projection.residentPickup.test.ts src/game/npcAbout.audit.test.ts src/game/humanPerception.presentation.test.ts src/game/projection.situatedExpression.test.ts src/game/projection.residentRation.test.ts src/game/projection.residentMaterial.test.ts src/game/uiProjection.test.ts --maxWorkers=2
+npx vitest run src/game/residentRationActivity.integration.test.ts src/game/residentMaterialActivity.integration.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+```
+
+All731 public non-Markdown inputs match before/after validation at the parent,
+digest `e162e57c345e86d4f8b70082b6d93f4e4f125fe004ad3d3832033c585736d86f`.
+Only shared ABOUT copy and its existing projection tests change executable
+inputs. Simulation, timing, custody, schemas, accepted formats, dependencies and
+renderers remain unchanged. Earlier cumulative evidence belongs to its original
+inputs, not this candidate. No new build, platform, normal-visual, performance,
+release or whole-integration closure is claimed; historical directives remain
+unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

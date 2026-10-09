@@ -251,15 +251,17 @@ function observableResidentBehavior(resident: ResidentState): string {
   if (restState === "resting") return "Resting here";
   if (observableResidentRationUse(resident)) return "Taking a ration here";
   if (observableResidentMaterialUse(resident)) return "Tending the project here";
-  return resident.condition.sheltering
-    ? "Holding position in unsafe weather"
-    : observableResidentBodyMoving(resident)
-      ? "Moving nearby"
-      : resident.activeContractId !== null
-        ? "Carrying a Promise"
-        : resident.location.kind === "route"
-          ? "Traveling nearby"
-          : "Waiting nearby";
+  if (resident.condition.sheltering) return "Holding position in unsafe weather";
+  if (observableResidentBodyMoving(resident)) return "Moving nearby";
+  // An adopted body describes enacted activity, not its private commitment.
+  // Keep coarse copy only for genuinely body-absent legacy presentation, as
+  // the shared porter projection does; invalid activity cannot grant fallback.
+  if (Object.hasOwn(resident, "activity")) return "Waiting nearby";
+  return resident.activeContractId !== null
+    ? "Carrying a Promise"
+    : resident.location.kind === "route"
+      ? "Traveling nearby"
+      : "Waiting nearby";
 }
 
 function projectResidentAbout(

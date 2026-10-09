@@ -29,6 +29,8 @@ import {
   projectResidentWorldPosition,
 } from "./projection";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
+import { createSessionState } from "./sessionTypes";
+import { projectUIView } from "./uiProjection";
 import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta } from "./worldPosition";
 
 /**
@@ -122,7 +124,10 @@ function presentation(world: WorldState, actorId: string, hidden = false) {
   const perception = projectPerception(view, player);
   const scene = projectGameView(view, player, { perception, selectedResidentId: current.id });
   const porter = scene.porters.find(({ actorId: id }) => id === actorId);
-  return { view, current, point, perception, scene, porter };
+  const about = projectUIView(view, player, createSessionState(view.seedText), {
+    perception, selectedResidentId: current.id,
+  }).selectedResident;
+  return { view, current, point, perception, scene, porter, about };
 }
 
 function expectNoPrivatePickup(porter: unknown) {
@@ -135,7 +140,8 @@ describe("knowledge-honest resident pickup motion projection", () => {
   it("does not describe a stationary current accepted carry commitment as moving or traveling", () => {
     const { world, actorId } = fixture();
     const bytes = serializeWorld(world);
-    const { current, point, perception, porter } = presentation(world, actorId);
+    const { current, point, perception, porter, about } = presentation(world, actorId);
+    expect(world.contracts.find(({ id }) => id === 127)).toMatchObject({ status: "accepted", cargoQuantity: 0 });
     expect(current.intention).toBe("carry");
     expect(current.activity?.poses).toHaveLength(1);
     expect(observableResidentBodyMoving(current)).toBe(false);
@@ -145,6 +151,9 @@ describe("knowledge-honest resident pickup motion projection", () => {
     expect(porter?.quickLabel).toBeDefined();
     expect(porter?.quickLabel).not.toMatch(/moving|traveling|pickup|carrying|promise/iu);
     expectNoPrivatePickup(porter);
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Waiting nearby" });
+    expectNoPrivatePickup(about);
+    expect(JSON.stringify(about?.observed)).not.toMatch(/pickup|carrying|promise|contract/iu);
     expect(serializeWorld(world)).toBe(bytes);
   });
 
@@ -153,7 +162,7 @@ describe("knowledge-honest resident pickup motion projection", () => {
     const result = advanceResidentRestActivities(world, 1);
     expect(result?.movedActorIds).toContain(actorId);
     const bytes = serializeWorld(world);
-    const { current, point, perception, porter } = presentation(world, actorId);
+    const { current, point, perception, porter, about } = presentation(world, actorId);
     expect(current.activity?.poses).toHaveLength(2);
     expect(current.activity?.poses.at(-1)?.position).not.toEqual(source);
     expect(current.activity?.pickupTask?.phase).toBe("approaching");
@@ -162,6 +171,9 @@ describe("knowledge-honest resident pickup motion projection", () => {
     expect(porter?.state).toBe("traveling");
     expect(porter?.quickLabel).toMatch(/· moving$/u);
     expectNoPrivatePickup(porter);
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Moving nearby" });
+    expectNoPrivatePickup(about);
+    expect(JSON.stringify(about?.observed)).not.toMatch(/pickup|carrying|promise|contract/iu);
     expect(serializeWorld(world)).toBe(bytes);
   });
 
@@ -176,7 +188,7 @@ describe("knowledge-honest resident pickup motion projection", () => {
     expect(stopped).not.toBeNull();
     expect(stopped?.movedActorIds).not.toContain(actorId);
     const bytes = serializeWorld(world);
-    const { current, porter } = presentation(world, actorId);
+    const { current, porter, about } = presentation(world, actorId);
     expect(current.activity?.poses).toHaveLength(3);
     expect(current.activity?.poses[1]?.position).toEqual(current.activity?.poses[2]?.position);
     expect(current.activity?.pickupTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route" });
@@ -185,6 +197,9 @@ describe("knowledge-honest resident pickup motion projection", () => {
     expect(porter?.state).toBe("waiting");
     expect(porter?.quickLabel).not.toMatch(/moving|traveling/iu);
     expectNoPrivatePickup(porter);
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Waiting nearby" });
+    expectNoPrivatePickup(about);
+    expect(JSON.stringify(about?.observed)).not.toMatch(/pickup|carrying|promise|contract/iu);
     expect(serializeWorld(world)).toBe(bytes);
   });
 
@@ -194,21 +209,24 @@ describe("knowledge-honest resident pickup motion projection", () => {
     expect(Object.hasOwn(resident, "activity")).toBe(false);
     expect(resident.intention).toBe("carry");
     const bytes = serializeWorld(world);
-    const { current, porter } = presentation(world, resident.identity.stableId);
+    const { current, porter, about } = presentation(world, resident.identity.stableId);
     expect(observableResidentBodyMoving(current)).toBe(false);
     expect(porter).toBeDefined();
     expect(porter?.state).toBe("traveling");
     expect(porter?.quickLabel).not.toMatch(/moving|pickup/iu);
     expectNoPrivatePickup(porter);
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Carrying a Promise" });
+    expectNoPrivatePickup(about);
     expect(serializeWorld(world)).toBe(bytes);
   });
 
   it("does not reveal an unseen accepted courier or their private task", () => {
     const { world, actorId } = fixture();
     const bytes = serializeWorld(world);
-    const { point, perception, porter } = presentation(world, actorId, true);
+    const { point, perception, porter, about } = presentation(world, actorId, true);
     expect(perception.detailVisibilityGrades[point.tileIndex]).toBe(VISIBILITY_HIDDEN);
     expect(porter).toBeUndefined();
+    expect(about).toBeUndefined();
     expect(serializeWorld(world)).toBe(bytes);
   });
 });

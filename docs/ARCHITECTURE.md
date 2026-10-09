@@ -2207,6 +2207,10 @@ validator; malformed, foreign, stale and sparse history supplies no motion.
 Existing sight/detail gates, attention, restorative posture and weather-hold
 priorities remain. The restrained moving cue does not reveal why or where the
 resident is going, create an acoustic event, or change legacy coarse travel.
+ABOUT likewise cannot label a stationary canonical body as carrying a Promise
+or traveling from its commitment or route membership alone. Genuinely
+body-absent legacy copy retains its explicit coarse exception; that copy is
+not evidence of observed cargo custody or learned task purpose.
 
 The local route-heading correction derives increasing or decreasing direction
 from the assigned in-transit Promise's ordered leg, matching the existing
