@@ -18,12 +18,18 @@ import {
   RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { residentRestSurfaceKnowledge, residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
+import { residentTravelSegment } from "../sim/residentTravelRoute";
+import { tideAtTick } from "../sim/terrain";
+import { stableStringify } from "../sim/util";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { findAutonomousRoutePlan } from "../sim/network";
 import type { SimCommand } from "../sim/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import type { SupplementalSoundSample } from "./humanPerception";
+import * as humanPerception from "./humanPerception";
 import { advanceResidentRestActivities } from "./residentActivityExecution";
+import * as residentActivityExecution from "./residentActivityExecution";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
@@ -242,9 +248,236 @@ async function acceptedFixture() {
     resource: contract.resource, quantity: contract.quantity, stock };
 }
 
-// Pickup evidence only. Full physical route execution/destination handoff has
-// its separate runtime.residentTravel.integration.test.ts owner; a grandfathered
-// old journey below is deliberately not represented as physical route work.
+
+describe("ordinary runtime native traveler water response", () => {
+  it.each([true, false])("waits at a native tidal endpoint with observed-water=%s, then cold continues equal work", async (observed) => {
+    const fixture = await acceptedFixture();
+    const { runtime, repository } = fixture;
+    const endpoint: WorldPosition = { region: { x: 0, y: 0 }, localX: 43_500, localY: 47_500 };
+    const bank: WorldPosition = { region: { x: 0, y: 0 }, localX: 43_500, localY: 48_500 };
+    const original = deserializeWorld(fixture.accepted.world);
+    const terrain = stableStringify(original.terrain);
+    expect(residentRestTargetHasDrySupport(original, bank)).toBe(true);
+    expect(residentRestTargetHasDrySupport(original, endpoint)).toBe(false);
+    expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(449) }, endpoint)).toBe(false);
+    expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(450) }, endpoint)).toBe(true);
+    const observationId = residentRestSurfaceObservationId(fixture.actorId, endpoint);
+    let removedSight = 0;
+    if (!observed) {
+      // Remove only this actor+locus information receipt. Geometry, native
+      // tide, task/body/cargo, all other observations and hearing stay real.
+      const collect = humanPerception.collectExistingHumanObservations;
+      vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementation((...args) => {
+        const batches = collect(...args);
+        if (humanPerception.humanObservationCollectionRejected(batches)) return batches;
+        return batches.map((batch) => batch.observerId !== fixture.actorId ? batch : {
+          ...batch,
+          observations: batch.observations.filter((observation) => {
+            if (observation.id !== observationId) return true;
+            removedSight += 1;
+            return false;
+          }),
+        });
+      });
+    }
+    const save = async () => {
+      await runtime.save();
+      const record = repository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      assertWorldInvariants(world);
+      expect(world.tide).toEqual(tideAtTick(world.meta.completedTick));
+      expect(stableStringify(world.terrain)).toBe(terrain);
+      return { record, envelope, world, human: actor(world, fixture.actorId) };
+    };
+    advance(runtime, 10);
+    let current = await save();
+    expect(current.world.meta.completedTick).toBe(422);
+    expect(current.world.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+    expect(current.human.activity?.poses[0]?.position).toEqual(fixture.target);
+    const departure = current.human.activity!.poses[0]!.position;
+    let firstBankTick: number | null = null;
+    while (current.world.meta.completedTick < 449) {
+      advance(runtime, 10);
+      current = await save();
+      const task = current.human.activity?.travelTask;
+      if (firstBankTick === null && task?.mode === "physical" && task.waypointIndex === 14) {
+        const contract = current.world.contracts.find(({ id }) => id === fixture.contractId)!;
+        const segment = residentTravelSegment(current.world, contract, task);
+        expect(segment?.route.id).toBe(121);
+        expect(segment?.end).toEqual(endpoint);
+        expect(current.human.activity?.poses[0]?.position).toEqual(bank);
+        expect(task.phase).toBe(observed ? "waiting" : "approaching");
+        expect(task.waitReason).toBe(observed ? "observed-water" : null);
+        firstBankTick = current.world.meta.completedTick;
+      }
+      if (firstBankTick !== null) {
+        // The uninformed physical retry is legitimately due at phase0; its
+        // no-traversable-route wait is asserted during fine steps below.
+        expect(current.human.activity?.travelTask).toMatchObject({ mode: "physical",
+          phase: observed ? "waiting" : "approaching",
+          waitReason: observed ? "observed-water" : null, legIndex: 0, waypointIndex: 14 });
+        expect(current.human.activity?.poses[0]?.position).toEqual(bank);
+        expect(current.world.contracts.find(({ id }) => id === fixture.contractId))
+          .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity });
+      }
+    }
+    expect(firstBankTick).not.toBeNull();
+    expect(firstBankTick).toBeLessThan(449);
+    expect(departure).not.toEqual(bank);
+    expect(residentRestSurfaceKnowledge(current.human.perception, endpoint, 449)).toBe(observed ? "wet" : "unknown");
+
+    advance(runtime, 4);
+    const phase4 = await save();
+    expect(phase4.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    expect(phase4.human.activity?.travelTask).toMatchObject({ phase: "waiting",
+      waitReason: observed ? "observed-water" : "no-traversable-route" });
+    expect(phase4.human.activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(bank))).toBe(true);
+    advance(runtime, 5);
+    const phase9 = await save();
+    expect(phase9.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    advance(runtime, 1);
+    const dryBoundary = await save();
+    expect(dryBoundary.world.meta.completedTick).toBe(450);
+    expect(residentRestTargetHasDrySupport(dryBoundary.world, endpoint)).toBe(true);
+    expect(dryBoundary.human.activity?.poses[0]?.position).toEqual(bank);
+    expect(dryBoundary.human.activity?.travelTask).toMatchObject({
+      phase: observed ? "waiting" : "approaching", waitReason: observed ? "observed-water" : null,
+    });
+    if (observed) {
+      // Boundary450 admitted sight of physical449: now-dry terrain is not
+      // fresh dry knowledge. Neither loading nor ordinary fine steps erase it.
+      expect(residentRestSurfaceKnowledge(dryBoundary.human.perception, endpoint, 450)).toBe("wet");
+    } else expect(removedSight).toBeGreaterThan(0);
+    advance(runtime, 4);
+    const afterDryPhysics = await save();
+    const delta = worldPositionDelta(bank, afterDryPhysics.human.activity!.poses.at(-1)!.position);
+    expect(Math.hypot(delta.x, delta.y)).toBe(observed ? 0 : 4 * RESIDENT_REST_APPROACH_STEP_UNITS);
+    advance(runtime, 5);
+    const freshPhase9 = await save();
+    expect(freshPhase9.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    advance(runtime, 1);
+    const freshBoundary = await save();
+    expect(freshBoundary.world.meta.completedTick).toBe(451);
+    if (observed) {
+      expect(residentRestSurfaceKnowledge(freshBoundary.human.perception, endpoint, 451)).toBe("dry");
+      expect(freshBoundary.human.activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
+      expect(freshBoundary.human.activity?.poses[0]?.position).toEqual(bank);
+    }
+    advance(runtime, 4);
+    const final = await save();
+    if (observed) {
+      expectBoundedMotion(bank, final.human.activity!.poses);
+      expect(final.human.activity?.poses.at(-1)?.position).not.toEqual(bank);
+    }
+    expect(final.world.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick: 422 });
+    expect(final.world.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource])
+      .toBe(fixture.stock - fixture.quantity);
+    expect(departedEvents(final.world, fixture.contractId)).toHaveLength(1);
+    expect(final.world.events.filter((event) => event.type === "contract-fulfilled" && event.subjectId === fixture.contractId)).toHaveLength(0);
+    close(runtime);
+
+    for (const prefix of [phase4, phase9]) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(prefix.record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix.envelope));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advance(cold, 24 - prefix.envelope.perceptionCarry.playerStepsSinceWorldTick);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
+      close(cold);
+    }
+
+    if (observed) {
+      // Counterfactual starts AFTER genuine wet knowledge is already held.
+      // Remove only its now-dry endpoint receipt; ordinary physical drying,
+      // closing work and every other observation still occur on schedule.
+      const collect = humanPerception.collectExistingHumanObservations;
+      const removed: { perceivedClass: string; tick: number }[] = [];
+      const missingDry = vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementation((...args) => {
+        const batches = collect(...args);
+        if (humanPerception.humanObservationCollectionRejected(batches)) return batches;
+        return batches.map((batch) => batch.observerId !== fixture.actorId ? batch : {
+          ...batch,
+          observations: batch.observations.filter((observation) => {
+            if (observation.id !== observationId) return true;
+            removed.push({ perceivedClass: observation.perceivedClass, tick: observation.observedAtTick });
+            return false;
+          }),
+        });
+      });
+      const missingRepository = new MemoryRepository(freshPhase9.record);
+      const missing = await open(missingRepository);
+      advance(missing, 1);
+      await missing.save();
+      const missingBoundary = decode(missingRepository.snapshot());
+      const missingWorld = deserializeWorld(missingBoundary.world);
+      const missingHuman = actor(missingWorld, fixture.actorId);
+      const heldTask = freshPhase9.human.activity?.travelTask;
+      if (heldTask?.mode !== "physical") throw new Error("Native held prefix lost physical travel authority");
+      expect(removed).toEqual([{ perceivedClass: "dry-ground", tick: 451 }]);
+      expect(residentRestTargetHasDrySupport(missingWorld, endpoint)).toBe(true);
+      expect(residentRestSurfaceKnowledge(missingHuman.perception, endpoint, 451)).toBe("unknown");
+      expect(missingHuman.activity?.travelTask).toMatchObject({ phase: "waiting", waitReason: "observed-water",
+        selectedAtTick: heldTask.selectedAtTick, legIndex: 0, waypointIndex: 14 });
+      expect(missingWorld.contracts.find(({ id }) => id === fixture.contractId))
+        .toEqual(freshBoundary.world.contracts.find(({ id }) => id === fixture.contractId));
+      advance(missing, 4);
+      await missing.save();
+      const missingAfter = actor(deserializeWorld(decode(missingRepository.snapshot()).world), fixture.actorId);
+      expect(missingAfter.activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(bank))).toBe(true);
+      close(missing);
+      missingDry.mockRestore();
+
+      const rollbackRepository = new MemoryRepository(freshPhase9.record);
+      const rollback = await open(rollbackRepository);
+      const prepare = residentActivityExecution.prepareResidentRestActivities;
+      let attemptedRelease: unknown = null;
+      const preparation = vi.spyOn(residentActivityExecution, "prepareResidentRestActivities").mockImplementation((...args) => {
+        const result = prepare(...args);
+        if (result && args[0].meta.completedTick === 451) {
+          const human = actor(args[0], fixture.actorId);
+          attemptedRelease = { knowledge: residentRestSurfaceKnowledge(human.perception, endpoint, 451),
+            task: human.activity?.travelTask, position: human.activity?.poses[0]?.position };
+        }
+        return result;
+      });
+      const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval").mockReturnValueOnce(null);
+      soundscapePlay.mockClear();
+      advance(rollback, 1, false);
+      expect(attemptedRelease).toMatchObject({ knowledge: "dry", position: bank,
+        task: { phase: "approaching", waitReason: null, legIndex: 0, waypointIndex: 14 } });
+      expect(closure).toHaveBeenCalled();
+      expect(rollback.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+      await rollback.save();
+      const rolledBack = rollbackRepository.snapshot();
+      expect(authoritativeRoots(decode(rolledBack))).toEqual(authoritativeRoots(freshPhase9.envelope));
+      preparation.mockRestore();
+      closure.mockRestore();
+      close(rollback);
+      soundscapePlay.mockClear();
+      const retryRepository = new MemoryRepository(rolledBack);
+      const retry = await open(retryRepository);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advance(retry, 1);
+      await retry.save();
+      expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(freshBoundary.envelope));
+      advance(retry, 4);
+      await retry.save();
+      expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
+    }
+  }, 180_000);
+});
+
+
+// Full delivery has its runtime.residentTravel.integration.test.ts owner.
+// These native pickup and first-endpoint water witnesses do not replace it;
+// a grandfathered journey below is explicitly not physical-route evidence.
 describe("ordinary runtime resident origin pickup", () => {
   it.each([4, 9])("executes a native automatic offer through real approach and equal phase%s cold work", async (phase) => {
     const fixture = await acceptedFixture();

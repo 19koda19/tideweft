@@ -4849,6 +4849,66 @@ cumulative, performance, publication or directive closure is claimed.
 Extended profiling/soaks remain deferred to full Living Foliage; accepted
 Relief/world hitch and VoiceOver hold persist.
 
+### Native traveler tidal hold and evidence-qualified retry — 2026-10-08
+
+Test-only follow-up on `f2d04ddbc61b19ad0d5697ad99fce32d994419cb`; no
+production, schema, dependency, configuration or renderer change. The existing
+estuary/wild parts127 fixture supplies a generated offer, native assignment,
+unchanged terrain/routes and finite eight-unit source. Only offer exclusivity,
+weather and need pressure are controlled. No body, task, belief, tide or
+successful result is assigned.
+
+Actual acceptance→approach→pickup→route121 movement reaches the native dry
+bank(43,48), next endpoint(43,47), before449. Native tide still covers that
+endpoint449 and exposes it450. Observed wet support holds the same body/cursor/
+cargo after450 physics becomes dry, because closing sight still describes449.
+Fresh dry sight451 permits subsequent bounded fine motion. Removing only that
+actor+locus receipt from a genuinely held450phase9 fork leaves dry physical
+support but unknown current knowledge, preserving observed-water and zero
+motion. A second native branch removes only this endpoint sight throughout;
+physical obstruction blocks fine steps, but uninformed phase-zero retry moves
+as soon as450 support is dry. Thus the information source changes behavior
+without modifying physical conditions or manufacturing another inventory.
+
+Both branches cold restore actual449phase4 andphase9 saves without audio,
+then process exactly20/15 further accepted steps to equal451phase4 roots.
+Comparison excludes only session recap/integrity, not world, body/cursor,
+cargo, economy, events, perception, hearing carry, ecology or knowledge.
+An external preparation observer confirms real451 fresh-dry release before
+deliberate late expression-closure rejection. Every root rolls back to450phase9,
+only integrity-warning audio releases, and cold retry equals the independent
+successful451 boundary and four-step continuation. Cargo remains8, origin
+stock remains debited once and departure count is1; there is no fulfillment.
+The following endpoint remains wet, so this proves first-endpoint response,
+not a complete flood journey or known alternative.
+
+Initial new selection passes the observed case and fails the uninformed
+fixture's phase-zero wait assumption. That physical-only retry is legitimately
+due at each new boundary; asserting its actual partial-phase blocked state
+instead preserves bank immobility and every cargo/sight assertion. Initial
+helper type errors used a nonexistent event spelling and an unnarrowed legacy/
+physical union; both corrected in the test only. Original failed report is
+retained as FAIL. Corrected selection2PASS/11unselected42.37s; final full file
+13PASS71.83s, smoke6files105PASS4.18s, typecheckPASS:
+
+```sh
+npm run typecheck
+npx vitest run src/game/runtime.residentPickup.integration.test.ts --testNamePattern='waits at a native tidal endpoint' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-native-corrected.json
+npx vitest run src/game/runtime.residentPickup.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-native-full.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-native-smoke.json
+```
+
+All731 public non-Markdown inputs match before/after, digest
+`3b6c52c8913c1c4e01cae0481718f2e01ff7c6517dcdb144736a9970b2f78c38`.
+Full report SHA256
+`7e5028893d51ee7c86cc8f516c42d43cbf6cf3dad31ebc40a8b018b9b6049a16`;
+smoke `28678cbf3a893e13b188a4f229e54935305175c15ebf0d290f57d200d0566d80`.
+Composition is PARTIAL/MODERATE, upgrading foundation-only evidence for this
+one native consumer. This is headless ordinary-runtime authority, not manual
+Chart/Relief, natural-rate liveness, current/load/alternative-route breadth,
+performance, package, cumulative, release or whole-directive completion.
+Existing accepted limitations and future-owner boundaries are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
