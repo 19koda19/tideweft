@@ -5819,6 +5819,36 @@ fairness/liveness, rendered play, performance, platform, release or whole-system
 closure. Production, schemas, supported formats and dependencies are unchanged;
 the prior full cumulative certificate belongs to its own exact inputs.
 
+### Released pickup work continues without reset — 2026-10-09
+
+At parent `effc6dc`, the existing controlled pre-pickup cancellation/expiry
+cases now continue their actual tick422 released world through routine
+preparation, ten fine steps, a fresh one-shot closing admission and423
+preparation. Original, serialized/deserialized and plain-cloned branches have
+identical complete inner-world bytes. The partial approach pose, identity,
+membership, terminal contract and zero cargo remain intact; no stale pickup,
+departure, fulfillment, second terminal event or extra stock debit appears.
+The fixture's urgent belonging legitimately yields awake ordinary activity,
+not an assigned successful service. Production code required no repair.
+
+Focused2cases pass; affected4files/62tests pass142.27s, maintained smoke105
+passes4.72s and typecheck passes. All734 public non-Markdown inputs match,
+digest `b7ef2a32715ef9d3a701291771f0fd880779ce256bfdaea82c9cedbc39027893`.
+
+```sh
+npx vitest run src/game/runtime.residentPickup.integration.test.ts -t 'work at its real partial approach pose without a source snap' --maxWorkers=1
+npx vitest run src/game/runtime.residentPickup.integration.test.ts src/game/residentActivityExecution.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentPickupUse.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+```
+
+This is lower-owner foundation evidence with controlled obstruction, not a
+public cancellation control, in-transit cargo failure, outer58 relaunch,
+productive subsequent service, rendered play or long-run liveness. The old
+outer fixture belongs to421 and is deliberately not resealed around a422 world
+with mismatched carry/ecology/expression roots. Schemas, supported readers,
+dependencies and gameplay policy remain unchanged; no broader closure follows.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

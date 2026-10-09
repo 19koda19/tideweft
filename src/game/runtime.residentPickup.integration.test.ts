@@ -904,6 +904,63 @@ describe("ordinary runtime resident origin pickup", () => {
     expect(departedEvents(world, fixture.contractId)).toHaveLength(0);
     expect(world.events.filter((event) => event.type === `contract-${terminal}` && event.subjectId === fixture.contractId)).toHaveLength(1);
     assertWorldInvariants(world);
+
+    // Inner-world continuation of this lower-owner release, not an outer58
+    // relaunch or a public cancellation control. The old outer fixture still
+    // belongs to tick421 and must not receive this tick422 world alone.
+    const releasedBytes = serializeWorld(world);
+    const releasedTick = world.meta.completedTick;
+    const terminalContract = structuredClone(world.contracts.find(({ id }) => id === fixture.contractId)!);
+    const continuations = [world, deserializeWorld(releasedBytes), structuredClone(world)];
+    let continuedBytes: string | undefined;
+    for (const current of continuations) {
+      expect(serializeWorld(current)).toBe(releasedBytes);
+      expect(actor(current, fixture.actorId).perception.tick).toBe(releasedTick);
+      expect(residentActivityExecution.prepareResidentRestActivities(current)).toBe(true);
+      const prepared = actor(current, fixture.actorId);
+      // Retained urgent belonging lawfully prefers awake ordinary activity;
+      // do not manufacture a ration/material task or successful future work.
+      expect(prepared.intention).toBe("work");
+      expect(prepared.circadian?.posture.state).toBe("awake");
+      expect(prepared.activity?.poses).toEqual([poseBefore]);
+      expect(prepared.activity?.pickupTask).toBeNull();
+      expect(prepared.activity?.travelTask).toBeNull();
+      for (let phase = 1; phase <= 10; phase += 1) {
+        expect(advanceResidentRestActivities(current, phase)).not.toBeNull();
+        const continuing = actor(current, fixture.actorId);
+        expect(continuing.activeContractId).toBeNull();
+        expect(continuing.activity?.pickupTask).toBeNull();
+        expect(continuing.activity?.travelTask).toBeNull();
+        expect(continuing.activity?.poses.at(-1)).toEqual(poseBefore);
+        expectBoundedMotion(poseBefore.position, continuing.activity!.poses);
+      }
+      const continuationAdmission = prepareResidentTravelAdvance(current, null);
+      expect(continuationAdmission).not.toBeNull();
+      try {
+        simulation.stepWorld(current, [], undefined, undefined, continuationAdmission!);
+      } finally {
+        revokeResidentTravelAdvance(continuationAdmission!);
+      }
+      expect(current.meta.completedTick).toBe(releasedTick + 1);
+      expect(residentActivityExecution.prepareResidentRestActivities(current)).toBe(true);
+      const continued = actor(current, fixture.actorId);
+      expect(continued.perception.tick).toBe(releasedTick + 1);
+      expect(continued.activeContractId).toBeNull();
+      expect(continued.location).toEqual({ kind: "settlement", settlementId: fixture.originId });
+      expect(continued.activity?.poses).toEqual([poseBefore]);
+      expect(continued.activity?.pickupTask).toBeNull();
+      expect(continued.activity?.travelTask).toBeNull();
+      expect(current.contracts.find(({ id }) => id === fixture.contractId)).toEqual(terminalContract);
+      expect(current.settlements.find(({ id }) => id === fixture.originId)!.inventory[fixture.resource]).toBe(stockBefore);
+      expect(current.ledger).toEqual(ledgerBefore);
+      expect(departedEvents(current, fixture.contractId)).toHaveLength(0);
+      expect(current.events.filter((event) => event.type === "contract-fulfilled" && event.subjectId === fixture.contractId)).toHaveLength(0);
+      expect(current.events.filter((event) => event.type === `contract-${terminal}` && event.subjectId === fixture.contractId)).toHaveLength(1);
+      assertWorldInvariants(current);
+      const actualBytes = serializeWorld(current);
+      if (continuedBytes === undefined) continuedBytes = actualBytes;
+      else expect(actualBytes).toBe(continuedBytes);
+    }
   }, 90_000);
 
   it("retains supported55 pickup/travel-free phase4 bodies and upgrades only at genuine phasezero", async () => {
