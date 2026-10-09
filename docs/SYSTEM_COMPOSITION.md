@@ -524,16 +524,19 @@ and closure truth.
 | 13 | Trust/stress/travel cost ↔ actor and offer decisions | SPECIFIED | Living Weft + settlements + Promise/economy | `S1` and later offer owners | An already-produced value changes a lawful decision or opportunity through a bounded transparent rule. |
 | 14 | Civic project output ↔ stable physical tool | BYPASS | infrastructure + physical items | `P1A` service / HARD aid | A project transfers one source-owned stable-ID tool with condition, custody, loss, and repair. |
 | 15 | Autonomous porter cargo ↔ nearby addressable custody | PARTIAL | cargo + actor visuals + coarse simulation | `P1C` + `VIS0-CORE` | Full/near/coarse transitions preserve one conserved quantity while nearby custody becomes inspectable and recoverable. |
-| 16 | Existing human intent ↔ executable settlement service and delivery | PARTIAL | shared actor actions + settlement stock/project/store + Promise network | active bounded existing-world integration | Local ration/material approach and use change conserved stock and needs/project once; evidence-owned keeper approach and fresh inspection change the same closure. Accountable physical delivery remains required. Complete scope must approach authenticated targets, complete/fail domain-owned work, release finite claims and continue. |
-| 17 | Locally observed water/route condition ↔ human task response | SPECIFIED | environment + perception/knowledge + shared locomotion/actions | PLANNED — bounded existing-world integration | A legitimate observation/report changes relevant waiting, route or progress; contrasting water conditions permit reassessment, while an unknown remote hazard grants no knowledge. |
+| 16 | Existing human intent ↔ executable settlement service and delivery | PARTIAL | shared actor actions + settlement stock/project/store + Promise network | active bounded existing-world integration | Local ration/material use changes conserved stock and needs/project once; evidence-owned keeper work changes the same closure. Native pickup, local/coarse travel and once-only handoff have scoped runtime evidence. Broader environment/failure and normal-play closure remain required, including authenticated approach, domain-owned completion/failure, finite-claim release and continuation. |
+| 17 | Locally observed water/route condition ↔ human task response | PARTIAL | environment + perception/knowledge + shared locomotion/actions | active bounded existing-world integration | Native selected-rest and next-endpoint sight can hold actual work; fresh dry sight plus independent support permits reassessment, while withholding fresh dry sight retains an informed hold. General current/crossing and known-alternative behavior remain required. Unknown remote conditions grant no knowledge. |
 | 18 | Recognition/interaction ↔ bounded attention and behavior-owned expression | PARTIAL | shared perception/appraisal + actor visuals + Living Voice | bounded existing-world integration | Neutral recognition already has a local bounded glance/rest consumer; complete moving-body/look projection and behavior-owned activity expression remain with the existing integration owner. Optional speech must follow committed causes without repeated proximity emission. |
 
 The ordering prioritizes reusable architecture bridges over content count. A
 future owner may refine order when dependencies change, but it must update this
 registry rather than silently dropping the obligation.
 
-Service is `PARTIAL` through bounded local ration/material and inspection-owned keeper consumers; observed
-crossing remains `SPECIFIED`. Attention and bounded rest are also `PARTIAL`.
+Service and delivery are `PARTIAL` through their bounded native consumers.
+Observed-water response is also `PARTIAL`, not merely specified: selected-rest
+and next-endpoint holds have native cold/rollback and observation-removal
+evidence. This does not establish general crossing/current capability or known
+alternatives. Attention and bounded rest remain `PARTIAL`.
 Registration itself
 implements no gameplay. Their bounded scope and current evidence limits belong to the
 [canonical architecture owner](./ARCHITECTURE.md#planned-bounded-existing-world-integration).

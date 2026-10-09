@@ -5520,6 +5520,15 @@ All731 public non-Markdown inputs match before/after, digest
 This proves the affected Voice boundary, not a new complete regression pass,
 visual/platform/performance result, release or major-directive closure.
 
+Subsequent complete recertification at
+`58c1a157f4c33c3cdd167775f234a5f911d346bc` passes all411files/5193tests,
+0failed/0pending, in2352.58s using `npm run test:ci` (including28context,
+39player-facing and45documentation-reuse self-tests). All731 non-Markdown
+inputs match before/after with the same digest above; the tracked tree stayed
+clean. This certifies that exact checkpoint, not later executable changes,
+normal visual/platform play, production performance, publication or closure.
+The earlier `b497f055` full-suite failure remains historical evidence.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
