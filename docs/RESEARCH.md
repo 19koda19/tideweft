@@ -4772,6 +4772,83 @@ Corrected report SHA256
 No current cumulative, build, manual, performance, release or directive-closure
 claim follows from these finite correctness witnesses.
 
+### Observed next-segment travel support — 2026-10-08
+
+Local unpublished extension from `3bb2fdf17d87e3b131eab5476e96d70ed8a7cfa7`.
+The existing optional actor+locus ground observation now also serves an
+authenticated physical traveler's next endpoint, not its whole itinerary.
+Shared window, facing, terrain sight, outdoor light and remaining observation
+capacity govern the qualitative fact. It is information, not threat pressure
+or an exact sounding. Observed wet support retains a waiting cause through
+missing/stale evidence and route/weather/disturbance blocks. Only eligible
+fresh same-locus dry knowledge plus independent support clears it. Closing
+sight describes pre-world terrain; falling tide alone cannot clear knowledge.
+Macro transport cannot erase that cause or invent observation.
+[Architecture](./ARCHITECTURE.md#observed-next-segment-travel-support) owns exact law.
+
+Body8/outer58 explicitly versions this meaning. Frozen v7/outer57 rejects the
+new reason and remains deliberately supported, including exact phase4/9
+history until genuine phase-zero evolution. Mixed v7/v8 cohorts and lower
+envelopes carrying even all-null v8 reject. World4/rules6/carry14, generator,
+one cargo owner, dependencies, configuration, renderer and Voice emitters are
+unchanged; no format is retired.
+
+Producer/execution fixtures prove qualitative sight, source authentication,
+pre-tide wet admission, fresh-dry recovery, blockers, macro suppression and
+isolated v7 behavior. Their initial transit/body/terrain is explicitly
+arranged: foundation evidence, not native flood response or normal play.
+The initial24PASS/1FAIL came from malformed legacy absence before collection;
+removing both adopted activity and its bound circadian arrival corrected the
+setup without changing guards or outcomes. Corrected25PASS is included in the
+broad run. A synthetic compatibility fixture preserves exact v7 phase4→9→
+closing body/cargo/cursor and equal continuation, upgrades only at genuine
+phase-zero, and proves lower57 rejects v8 without overwrite. Existing native
+dry delivery/interruption/reentry and retained departure audio still pass;
+they do not prove native water response.
+
+Affected-domain union59 distinct files/1,014PASS comprises52files/832tests in
+217.13s, separate codec5files/176tests in3.71s and native travel/telemetry2files/
+6tests in100.47s. Typecheck PASS; maintained smoke6files/105PASS4.15s;
+documentation-reuse45PASS. Exact52-file membership is retained in
+`artifacts/validation/world0-cumulative-diagnosis/travel-water-domain.json`;
+the lead ran that list through `npx vitest run --maxWorkers=2` with default/JSON
+reporters. Separately reproducible commands:
+
+```sh
+npx vitest run src/sim/residentActivityCapabilities.test.ts src/sim/residentTravelActivity.test.ts src/sim/residentPickupActivity.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/saveCompatibilityPolicy.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-codecs.json
+npx vitest run src/game/runtime.residentTravel.integration.test.ts src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-native-telemetry.json
+npm run typecheck
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-water-smoke.json
+npm run test:documentation-reuse
+```
+
+All731 public non-Markdown inputs match before/after final validation, SHA256
+`c1b72951f920fa9461e111436db898d6dac691985051202d9e75b28ba5451389`.
+Broad report SHA256
+`a88307784fceeb11e09f3d72bd15e0445036b9c3e45208ea75d0c79aa7e0a572`;
+codec report `50cc20bd633538dba7bda3b9726e384ea44f5a2e57e5f02f0a5c2976fb2c23d1`;
+native/telemetry `d0bbc740cf9bd2ee22a9af7a2378e0fe21e986cd776f342856558662ccc3ada0`.
+Original failed fixture report is retained, not relabeled.
+
+Independent actual v7/v8 stationary runtime captures, each30 accepted steps/
+3advances/completed423, show exactly87 expected body-owner/version, envelope
+and checksum differences per seed and no other root differences. Each performs
+three human collections with zero optional information receipts. Save sizes
+remain1,846,363bytes estuary and1,902,647bytes density8. Captures were not
+synthesized or resealed to update an oracle; telemetry hashes changed only
+after comparing those actual records. This is equal stationary work and
+current-save characterization, not performance or long-run growth.
+
+Inheritance is INTEGRATED for bounded observation, execution, conservation,
+fixed-step/cold/rollback authority and save fences. Composition stays
+PARTIAL/WEAK pending native water response. General crossing/current/load/
+known alternatives, reverse/multihop, subsequent-task liveness and normal
+Chart/Relief play remain unfinished. Addressable porter lots, injury, gear
+and maritime work retain their owners. No cat fix, build/package, visual,
+cumulative, performance, publication or directive closure is claimed.
+Extended profiling/soaks remain deferred to full Living Foliage; accepted
+Relief/world hitch and VoiceOver hold persist.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -15,7 +15,7 @@ import {
   RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
   RESIDENT_PICKUP_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
-  RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
@@ -224,7 +224,7 @@ async function acceptedFixture() {
   if (source === undefined) throw new Error("actual automatic winner is not a native origin resident");
   const assigned = actor(acceptedWorld, source.actorId);
   expect(assigned.activeContractId).toBe(contract.id);
-  expect(assigned.activity?.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+  expect(assigned.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
   expect(assigned.activity?.poses).toHaveLength(1);
   expect(assigned.activity?.poses[0]?.position).toEqual(source.source);
   const sourceDelta = worldPositionDelta(source.source, source.target);
@@ -619,10 +619,10 @@ describe("ordinary runtime resident origin pickup", () => {
       if (activity === undefined || activity.pickupTask !== null || activity.travelTask !== null) {
         throw new Error("cannot reconstruct v5 while current pickup or travel work exists");
       }
-      expect(activity.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+      expect(activity.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
       expect(activity.poses).toHaveLength(5);
       // Only null successor fields may be removed from this task-free native
-      // prefix. A physical v7 traveler cannot be downcast into a legacy journey:
+      // prefix. A current physical traveler cannot be downcast into a legacy journey:
       // its real cursor and motion history are authoritative, not disposable.
       const { pickupTask: _pickupTask, travelTask: _travelTask, ...body } = activity;
       human.activity = { ...body, version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION, ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID };
@@ -656,7 +656,7 @@ describe("ordinary runtime resident origin pickup", () => {
     const boundaryWorld = deserializeWorld(boundary.world);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(boundaryWorld.meta.completedTick).toBe(422);
-    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
       && human.activity.poses.length === 1 && human.activity.pickupTask === null && human.activity.travelTask === null)).toBe(true);
     expect(authoritativeRoots(boundary)).toEqual(authoritativeRoots(uninterrupted));
     assertWorldInvariants(boundaryWorld);
@@ -681,7 +681,7 @@ describe("ordinary runtime resident origin pickup", () => {
       if (activity === undefined || activity.travelTask !== null) {
         throw new Error("cannot reconstruct v6 while a current journey exists");
       }
-      expect(activity.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+      expect(activity.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
       expect(activity.poses).toHaveLength(5);
       // The genuine pickup task and every accepted pose remain unchanged.
       // This older protocol has not departed yet; removing a null travel field
@@ -698,7 +698,7 @@ describe("ordinary runtime resident origin pickup", () => {
     close(fixture.runtime);
 
     // Both continuations start from the identical frozen-v6 phase4 prefix.
-    // Do not compare this old coarse departure with a current v7 physical one.
+    // Do not compare this old coarse departure with a current physical one.
     const uninterruptedRepository = new MemoryRepository(legacyRecord);
     const uninterruptedRuntime = await open(uninterruptedRepository);
     await uninterruptedRuntime.save();
@@ -742,7 +742,7 @@ describe("ordinary runtime resident origin pickup", () => {
     const carrying = actor(boundaryWorld, fixture.actorId);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(boundaryWorld.meta.completedTick).toBe(422);
-    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
       && human.activity.poses.length === 1)).toBe(true);
     expect(carrying.activity?.pickupTask).toBeNull();
     expect(carrying.activity?.travelTask).toEqual({

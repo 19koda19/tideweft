@@ -20,7 +20,10 @@ import {
   RESIDENT_PICKUP_ACTIVITY_VERSION,
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
   RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
   residentActivitySupportsTravel,
+  residentActivitySupportsTravelEnvironment,
   residentActivitySupportsEnvironment,
   residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
@@ -230,12 +233,14 @@ export function prepareResidentRestActivities(
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
         ...priorActivity,
-        version: inspectionSettlement !== null || residentActivitySupportsTravel(priorActivity)
+        version: inspectionSettlement !== null || residentActivitySupportsTravelEnvironment(priorActivity)
+          ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION : residentActivitySupportsTravel(priorActivity)
           ? RESIDENT_TRAVEL_ACTIVITY_VERSION : residentActivitySupportsPickup(priorActivity)
           ? RESIDENT_PICKUP_ACTIVITY_VERSION : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_VERSION : RESIDENT_CIVIC_ACTIVITY_VERSION,
-        ownerId: inspectionSettlement !== null || residentActivitySupportsTravel(priorActivity)
+        ownerId: inspectionSettlement !== null || residentActivitySupportsTravelEnvironment(priorActivity)
+          ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID : residentActivitySupportsTravel(priorActivity)
           ? RESIDENT_TRAVEL_ACTIVITY_OWNER_ID : residentActivitySupportsPickup(priorActivity)
           ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : residentActivitySupportsInspection(priorActivity)
@@ -377,10 +382,22 @@ export function prepareResidentRestActivities(
         if (segment === null) return false;
         const disturbed = resident.perception.beliefs.some((belief) => belief.lastObservedTick === tick
           && belief.strongInterrupt && belief.salience >= routine.wakeSensitivity);
-        if (!routeIsActive(segment.route) || resident.condition.sheltering || routine.posture.state !== "awake" || disturbed) {
-          travelTask = { ...travelTask, phase: "waiting", waitReason: resident.condition.sheltering ? "weather-hold"
-            : !routeIsActive(segment.route) ? "no-active-route" : "disturbed",
-            nextReassessmentAtTick: tick + 1 };
+        const knowledge = residentActivitySupportsTravelEnvironment(activity)
+          ? residentRestSurfaceKnowledge(resident.perception, segment.end, tick) : "unknown";
+        if (knowledge === null) return false;
+        const informedHold = travelTask.waitReason === "observed-water";
+        if (knowledge === "wet" || (informedHold && (knowledge !== "dry"
+          || !residentRestTargetHasDrySupport(world, segment.end)))) {
+          travelTask = waitForTravel(travelTask, tick, "observed-water");
+        } else if (!routeIsActive(segment.route) || resident.condition.sheltering || routine.posture.state !== "awake" || disturbed) {
+          // A temporary blocker must not erase the still-unresolved knowledge
+          // gate. Retain it until a later eligible fresh-dry reassessment.
+          if (informedHold) travelTask = waitForTravel(travelTask, tick, "observed-water");
+          else {
+            travelTask = { ...travelTask, phase: "waiting", waitReason: resident.condition.sheltering ? "weather-hold"
+              : !routeIsActive(segment.route) ? "no-active-route" : "disturbed",
+              nextReassessmentAtTick: tick + 1 };
+          }
         } else if (travelTask.phase === "waiting" && travelTask.nextReassessmentAtTick <= tick) {
           travelTask = { ...travelTask, phase: "approaching", waitReason: null };
         }

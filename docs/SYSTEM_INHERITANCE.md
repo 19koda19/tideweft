@@ -124,7 +124,9 @@ The bounded local rest consumer also joins
 [observed settlement-rest support](./ARCHITECTURE.md#observed-settlement-rest-support):
 qualitative local sight is task information, not threat pressure; stale or absent
 knowledge cannot erase an observed hold, and fresh evidence never replaces
-independent physical legality. This does not grant general crossing, support,
+independent physical legality. The same contract applies to the authenticated
+[next physical travel endpoint](./ARCHITECTURE.md#observed-next-segment-travel-support),
+without giving frozen v7 or coarse journeys remote sight. This does not grant general crossing, support,
 equipment, route knowledge or remote perception.
 
 ## Mandatory feature inheritance audit

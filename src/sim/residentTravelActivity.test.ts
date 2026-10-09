@@ -7,6 +7,8 @@ import {
   RESIDENT_PICKUP_ACTIVITY_VERSION,
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
   RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
   canonicalizeResidentActivity,
   replaceResidentActivity,
   residentActivitySupportsEnvironment,
@@ -15,6 +17,7 @@ import {
   residentActivitySupportsPickup,
   residentActivitySupportsRations,
   residentActivitySupportsTravel,
+  residentActivitySupportsTravelEnvironment,
   type ResidentActivity,
   type ResidentPhysicalTravelTask,
   type ResidentTravelTask,
@@ -89,13 +92,16 @@ describe("explicit resident travel activity protocol foundations", () => {
       residentActivitySupportsInspection, residentActivitySupportsEnvironment,
       residentActivitySupportsPickup, residentActivitySupportsTravel]) {
       expect(supports({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION })).toBe(true);
-      for (const version of [8, 99, Number.MAX_SAFE_INTEGER]) {
+      expect(supports({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION })).toBe(true);
+      for (const version of [9, 99, Number.MAX_SAFE_INTEGER]) {
         expect(supports({ version } as Pick<ResidentActivity, "version">)).toBe(false);
       }
     }
     expect(residentActivitySupportsTravel({ version: RESIDENT_PICKUP_ACTIVITY_VERSION })).toBe(false);
     expect(residentActivitySupportsTravel(null)).toBe(false);
     expect(residentActivitySupportsTravel(undefined)).toBe(false);
+    expect(residentActivitySupportsTravelEnvironment({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION })).toBe(false);
+    expect(residentActivitySupportsTravelEnvironment({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION })).toBe(true);
   });
 
   it("requires the explicit nullable field without treating null as a journey", () => {
@@ -160,7 +166,7 @@ describe("explicit resident travel activity protocol foundations", () => {
     expect(residentActivitySupportsTravel({ version })).toBe(false);
   });
 
-  it.each([8, 99, Number.MAX_SAFE_INTEGER])("rejects genuinely unknown protocol %s", (version) => {
+  it.each([9, 99, Number.MAX_SAFE_INTEGER])("rejects genuinely unknown protocol %s", (version) => {
     const { raw, binding } = fixture();
     expect(canonicalizeResidentActivity({ ...raw, version, ownerId: `sim:resident-activity:v${version}` }, binding)).toBeNull();
   });
@@ -183,6 +189,75 @@ describe("explicit resident travel activity protocol foundations", () => {
     const { raw, binding } = fixture();
     const candidate = { ...raw, travelTask: { ...raw.travelTask, phase: "waiting", waitReason } };
     expect(canonicalizeResidentActivity(candidate, binding)).toEqual(candidate);
+  });
+
+  it.each([0, 4, 9])("reserves an exact observed-water travel hold for v8 at retained phase%s", (phase) => {
+    const { resident, raw, binding } = fixture(phase);
+    const waiting = { ...raw.travelTask, phase: "waiting", waitReason: "observed-water" } as const;
+    const frozen = { ...raw, travelTask: waiting };
+    // Frozen v7 supports physical obstruction, not an informed water hold.
+    expect(canonicalizeResidentActivity(frozen, binding)).toBeNull();
+    const candidate = { ...frozen, version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID };
+    const before = stableStringify(candidate);
+    const activity = canonicalizeResidentActivity(candidate, binding);
+    expect(activity).toEqual(candidate);
+    expect(activity?.travelTask).toEqual(waiting);
+    expect(Object.isFrozen(activity)).toBe(true);
+    expect(Object.isFrozen(activity?.travelTask)).toBe(true);
+    expect(Object.isFrozen(activity?.poses.at(-1)?.position)).toBe(true);
+    const cold = structuredClone(activity);
+    expect(cold).not.toBe(activity);
+    expect(canonicalizeResidentActivity(cold, binding)).toEqual(activity);
+    expect(replaceResidentActivity(resident, cold).activity).toEqual(activity);
+    expect(canonicalizeResidentActivity(cold, { ...binding, phase: phase + 1 })).toBeNull();
+    expect(stableStringify(candidate)).toBe(before);
+  });
+
+  it("keeps v8 keys, null work and legacy permission exact without fabricating a water hold", () => {
+    for (const original of [fixture(), legacyActivity()]) {
+      const { raw, binding } = original;
+      const candidate = { ...raw, version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+        ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID };
+      const before = stableStringify(candidate);
+      expect(canonicalizeResidentActivity(candidate, binding)).toEqual(candidate);
+      expect(canonicalizeResidentActivity(structuredClone(candidate), binding)).toEqual(candidate);
+      expect(Object.keys(candidate).sort()).toEqual(Object.keys(raw).sort());
+      expect(Object.keys(candidate.travelTask).sort()).toEqual(Object.keys(raw.travelTask).sort());
+      expect(canonicalizeResidentActivity({ ...candidate, travelTask: null }, binding)).toEqual({ ...candidate, travelTask: null });
+      const { travelTask: _task, ...missing } = candidate;
+      expect(canonicalizeResidentActivity(missing, binding)).toBeNull();
+      expect(canonicalizeResidentActivity({ ...candidate, travelTask: undefined }, binding)).toBeNull();
+      expect(canonicalizeResidentActivity({ ...candidate, ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID }, binding)).toBeNull();
+      expect(canonicalizeResidentActivity({ ...raw, ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID }, binding)).toBeNull();
+      expect(stableStringify(candidate)).toBe(before);
+    }
+    const { raw, binding } = legacyActivity();
+    const legacy = { ...raw, version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+      travelTask: { ...raw.travelTask, phase: "waiting", waitReason: "observed-water" } };
+    expect(canonicalizeResidentActivity(legacy, binding)).toBeNull();
+  });
+
+  it("limits the new travel wait reason to physical waiting without widening other tasks", () => {
+    const current = fixture();
+    const raw = { ...current.raw, version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID };
+    for (const phase of ["approaching", "arrived"] as const) {
+      expect(canonicalizeResidentActivity({ ...raw,
+        travelTask: { ...raw.travelTask, phase, waitReason: "observed-water" },
+      }, current.binding), phase).toBeNull();
+    }
+    for (const [name, task] of Object.entries(previousTasks(current))) {
+      const priorOnly = { ...raw, travelTask: null, [name]: task };
+      expect(canonicalizeResidentActivity(priorOnly, current.binding), name).not.toBeNull();
+      expect(canonicalizeResidentActivity({ ...raw, [name]: task }, current.binding), name).toBeNull();
+      const waiting = { ...(task as Record<string, unknown>), phase: "waiting", waitReason: "observed-water" };
+      // Selected rest already owns this cause in v5 onward; the four other
+      // task families must not acquire it merely because travel now can.
+      expect(canonicalizeResidentActivity({ ...priorOnly, [name]: waiting }, current.binding) !== null, name)
+        .toBe(name === "restTask");
+    }
   });
 
   it.each(["approaching", "arrived"] as const)("retains %s as shape only, without inventing world arrival proof", (phase) => {

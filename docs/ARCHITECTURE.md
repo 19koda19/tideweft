@@ -2501,7 +2501,7 @@ performance or full-directive proof. Evidence/closure remain in the existing
 store owner; ephemeral sight is reconstructed only by actual world advancement,
 never invented on load or replayed as speech. Carry14 and supported formats
 remain intact; inspection's first outer capability remains54, supported by
-the current56 writer.
+the current writer. Each later capability retains its separate reader fence.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -2775,6 +2775,49 @@ multileg, clipping, cold rejection and receipt tests are foundation evidence,
 not additional native journeys or normal visual play. This does not close the
 whole traveler/environment directive or prove broader crossings, addressable
 porter cargo, failure/recovery breadth, visual acceptance or performance.
+
+### Observed next-segment travel support
+
+The local v8/outer58 successor reuses the selected-rest qualitative ground-fact
+owner for a physical travel task's **next endpoint**, derived from its existing
+authenticated contract, ordered cursor and actual body/location. It stores no
+second target, itinerary, water field or knowledge root. Frozen v7 physical
+travel and explicit legacy-coarse journeys gain no new sensory producer.
+
+`humanPerception.ts` admits at most the same one optional non-threat ground
+fact through actual window, facing, LOS, weather and outdoor light, using only
+remaining capacity in the unchanged48-observation frame. Hearing retains its
+place. An unavailable endpoint is missing sight, not remote dry/wet knowledge;
+invalid contract/cursor/custody/location references reject the batch. The fact
+identifies qualitative ground, not an actor, exact depth, hidden cargo or an
+alternative route. Existing actor+locus IDs and fresh same-tick interpretation
+in `residentSurfaceKnowledge.ts` remain unchanged despite their rest-specific
+function names.
+
+Fresh wet sight can commit a physical `observed-water` travel hold at the normal
+closing observation/contract boundary. It describes the observed interval's
+surface before the next tide update. Phase-zero preparation cannot clear that
+cause using physical drying alone, missing/stale/foreign/evicted knowledge,
+temporary network/weather/disturbance changes, or coarse transport. Due release
+requires fresh same-endpoint dry sight **and** independently legal dry support,
+an active route and current awake/undisturbed eligibility. Fine locomotion
+still checks actual support. Uninformed physical obstruction retains its old
+retry; macro work cannot invent sight or overwrite the informed hold.
+
+Body v8 has v7's exact field set and exclusive task/cargo ownership, with the
+new reason authorized only for physical waiting. Outer58 explicitly gates this
+capability even with every task null; outer57 remains deliberately supported
+and rejects v8. Frozen v7 partial histories retain their semantics through the
+genuine interval boundary; normal whole-roster phase-zero preparation, not
+decoding, adopts v8 while preserving an existing physical cursor. World4,
+rules6, carry14, item/cargo identity and the save lifecycle are unchanged. No
+format is retired; cold load adds no observation, time, motion or replayed sound.
+
+This is a bounded local/unpublished consumer, not general water/current/load
+appraisal, known alternatives, support equipment, cat evacuation or normal-play
+certification. Representative producer/execution fixtures distinguish their
+arranged inputs from native autonomy; Research owns actual validation and
+remaining gameplay evidence.
 
 ## First porter-dog living web
 

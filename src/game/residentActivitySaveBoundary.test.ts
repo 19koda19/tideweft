@@ -9,12 +9,14 @@ import {
   RESIDENT_PICKUP_ACTIVITY_VERSION,
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
   RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import {
   captureResidentActivityEventLocus,
   RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
 } from "../sim/residentActivityEventLocus";
-import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import type { WorldState } from "../sim/types";
 import {
   adoptResidentActivities,
@@ -128,6 +130,23 @@ function pickupFixture(phase: number) {
   return world;
 }
 
+function travelEnvironmentFixture(phase: number) {
+  const world = pickupFixture(phase);
+  world.residents = world.residents.map((resident) => {
+    // Capability fixture only: retain real accepted body poses, with no task
+    // or claim that this resident has seen water or executed a journey.
+    const activity = canonicalizeResidentActivity({ ...resident.activity,
+      version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+      restTask: null, rationTask: null, materialTask: null,
+      inspectionTask: null, pickupTask: null, travelTask: null,
+    }, { actorId: resident.identity.stableId, tick: world.meta.completedTick, phase });
+    if (activity === null) throw new Error("Travel-environment fixture lost its retained body history");
+    return { ...resident, activity };
+  });
+  return world;
+}
+
 describe("resident activity save capability and interval boundary", () => {
   it.each([0, 4, 9])("requires explicit travel envelope capability at retained phase %s even without a journey", (phase) => {
     const world = pickupFixture(phase);
@@ -151,6 +170,49 @@ describe("resident activity save capability and interval boundary", () => {
     }
     expect(serializeWorld(world)).toBe(before);
     expect(serializeWorld(clone)).toBe(before);
+  });
+
+  it.each([0, 4, 9])("requires explicit travel-environment support at retained phase %s even with every task null", (phase) => {
+    const world = travelEnvironmentFixture(phase);
+    const residents = world.residents;
+    const before = serializeWorld(world);
+    const clone = structuredClone(world);
+    expect(residents.every((resident) => resident.activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
+      && [resident.activity.restTask, resident.activity.rationTask, resident.activity.materialTask,
+        resident.activity.inspectionTask, resident.activity.pickupTask, resident.activity.travelTask]
+        .every((task) => task === null))).toBe(true);
+    expect(residentCivicActivityCohortIsUniform(residents)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true, true, false)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(clone, true, true, true, true, true, true, true, true)).toBe(true);
+    for (let omitted = 0; omitted < 8; omitted += 1) {
+      const flags: [boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean] =
+        [true, true, true, true, true, true, true, true];
+      flags[omitted] = false;
+      expect(residentActivitySaveExtensionsValid(world, ...flags), `capability ${omitted}`).toBe(false);
+    }
+    expect(residentActivitiesMatchPerceptionInterval(clone.residents, world.meta.completedTick, phase)).toBe(true);
+    expect(world.residents).toBe(residents);
+    expect(clone).toEqual(world);
+    expect(serializeWorld(world)).toBe(before);
+    expect(serializeWorld(clone)).toBe(before);
+  });
+
+  it.each([0, 4, 9])("rejects a mixed frozen-v7/v8 roster at retained phase %s without repairing it", (phase) => {
+    const world = travelEnvironmentFixture(phase);
+    const last = world.residents.at(-1)!;
+    const frozen = canonicalizeResidentActivity({ ...last.activity,
+      version: RESIDENT_TRAVEL_ACTIVITY_VERSION, ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+    }, { actorId: last.identity.stableId, tick: world.meta.completedTick, phase });
+    expect(frozen).not.toBeNull();
+    last.activity = frozen!;
+    const before = structuredClone(world);
+    expect(residentActivitiesMatchPerceptionInterval(world.residents, world.meta.completedTick, phase)).toBe(true);
+    expect(residentCivicActivityCohortIsUniform(world.residents)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(structuredClone(world), true, true, true, true, true, true, true, true)).toBe(false);
+    expect(world).toEqual(before);
   });
 
   it.each([0, 1, 9])("keeps genuinely absent legacy bodies absent at accepted phase %s", (phase) => {

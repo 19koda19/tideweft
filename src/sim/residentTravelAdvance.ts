@@ -125,6 +125,11 @@ export function advanceResidentMacroTravel(
     if (segment === null || offset === null) return null;
     const location = residentTravelLocation(segment, task, pose.position);
     if (location === null) return null;
+    // Network availability cannot overwrite a retained knowledge gate. Only
+    // the local informed reassessment owner can clear this reason.
+    if (task.phase === "waiting" && task.waitReason === "observed-water") {
+      return Object.freeze({ pose, task, location, advancedUnits });
+    }
     if (task.phase !== "arrived" && !routeIsActive(segment.route)) {
       task = { ...task, phase: "waiting", waitReason: "no-active-route", nextReassessmentAtTick: tick + 1 };
       return Object.freeze({ pose, task, location, advancedUnits });

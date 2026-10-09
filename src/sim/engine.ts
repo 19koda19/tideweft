@@ -55,6 +55,7 @@ import {
   residentActivitySupportsPickup,
   residentActivitySupportsRations,
   residentActivitySupportsTravel,
+  residentActivitySupportsTravelEnvironment,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentAcceptedPickupBinding, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
@@ -63,6 +64,7 @@ import { consumeResidentRationUse, residentRationUseEligible, type PreparedResid
 import { selectResidentMaterialUser } from "./residentMaterialUse";
 import { advanceResidentMacroTravel, consumeResidentTravelAdvance, type PreparedResidentTravelAdvance, type ResidentTravelAdvanceAdmission } from "./residentTravelAdvance";
 import { residentTravelSegment, residentTravelSegmentOffset } from "./residentTravelRoute";
+import { residentRestSurfaceKnowledge } from "./residentSurfaceKnowledge";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -2008,7 +2010,15 @@ function advanceContracts(world: WorldState, tick: number, travelAdmission: Resi
           if (segment === null) throw new Error("Physical traveler lost its ordered route segment");
           const disturbed = resident.perception.beliefs.some((belief) => belief.lastObservedTick === tick
             && belief.strongInterrupt && belief.salience >= (resident.circadian?.policy.wakeSensitivity ?? 0));
-          if (task.phase !== "arrived" && (!routeIsActive(segment.route) || resident.condition.sheltering
+          if (task.phase !== "arrived" && residentActivitySupportsTravelEnvironment(activity)) {
+            const knowledge = residentRestSurfaceKnowledge(resident.perception, segment.end, tick);
+            if (knowledge === null) throw new Error("Physical traveler lost current sensory authority");
+            if (knowledge === "wet") task = { ...task, phase: "waiting", waitReason: "observed-water",
+              nextReassessmentAtTick: tick + 1 };
+          }
+          // Closing sight precedes the new tide. Retain the informed gate here;
+          // phase-zero preparation separately requires fresh dry sight/support.
+          if (task.phase !== "arrived" && task.waitReason !== "observed-water" && (!routeIsActive(segment.route) || resident.condition.sheltering
             || resident.circadian?.posture.state !== "awake" || disturbed)) {
             task = { ...task, phase: "waiting", waitReason: resident.condition.sheltering ? "weather-hold"
               : !routeIsActive(segment.route) ? "no-active-route" : "disturbed", nextReassessmentAtTick: tick + 1 };

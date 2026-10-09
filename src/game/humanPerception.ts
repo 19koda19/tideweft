@@ -12,8 +12,9 @@ import {
 import { globalTileToRegion } from "../sim/regions";
 import { queryResidentAttentionState, residentAttentionFocus } from "../sim/residentAttention";
 import { FIXED_POINT, type WorldView } from "../sim/types";
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment } from "../sim/residentActivity";
-import { residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment, residentActivitySupportsTravelEnvironment } from "../sim/residentActivity";
+import { residentSettlementRestTarget, residentTravelContractBinding } from "../sim/residentActivityWorld";
+import { residentTravelLocation, residentTravelSegment } from "../sim/residentTravelRoute";
 import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
 import {
   evaluateAudibleContact,
@@ -449,13 +450,16 @@ export function collectExistingHumanObservations(
   ) || left.resident.id - right.resident.id);
   const selected = positioned.slice(0, HUMAN_PERCEPTION_MAX_RESIDENTS);
   if (!uniqueResidents(selected)) return EMPTY_BATCHES;
-  const hasRestSurfaceTargets = selected.some(({ resident }) => {
+  const hasTaskSurfaceTargets = selected.some(({ resident }) => {
     const task = resident.activity?.restTask;
-    return residentActivitySupportsEnvironment(resident.activity)
-      && task?.origin === "selected" && task.phase !== "arrived";
+    const travel = resident.activity?.travelTask;
+    return (residentActivitySupportsEnvironment(resident.activity)
+      && task?.origin === "selected" && task.phase !== "arrived")
+      || (residentActivitySupportsTravelEnvironment(resident.activity)
+        && travel?.mode === "physical" && travel.phase !== "arrived");
   });
-  const illumination = hasRestSurfaceTargets ? buildOutdoorIlluminationField(world, cells) : null;
-  if (hasRestSurfaceTargets && illumination === null) return EMPTY_BATCHES;
+  const illumination = hasTaskSurfaceTargets ? buildOutdoorIlluminationField(world, cells) : null;
+  if (hasTaskSurfaceTargets && illumination === null) return EMPTY_BATCHES;
 
   const batches: HumanObservationBatch[] = [];
   const listeningReceipts: HumanSupplementalListeningReceipt[] | null = import.meta.env.DEV
@@ -684,15 +688,28 @@ export function collectExistingHumanObservations(
       observations.push(latestIdentifiedVisual.observation);
     }
     const restTask = resident.activity?.restTask;
+    const travelTask = resident.activity?.travelTask;
+    let target: WorldPosition | null = null;
     // One qualitative task sight uses remaining bounded capacity. Never
     // displace lawful hearing or reject a full frame to append a ground fact;
     // unavailable information conservatively retains an existing held task.
     if (residentActivitySupportsEnvironment(resident.activity)
       && restTask?.origin === "selected" && restTask.phase !== "arrived") {
-      const target = residentSettlementRestTarget(economy, resident);
+      target = residentSettlementRestTarget(economy, resident);
       if (target === null || target.region.x !== restTask.target.region.x
         || target.region.y !== restTask.target.region.y || target.localX !== restTask.target.localX
         || target.localY !== restTask.target.localY) return EMPTY_BATCHES;
+    } else if (residentActivitySupportsTravelEnvironment(resident.activity)
+      && travelTask?.mode === "physical" && travelTask.phase !== "arrived") {
+      const contract = residentTravelContractBinding(economy, resident);
+      const segment = contract === null ? null : residentTravelSegment(economy, contract, travelTask);
+      const location = segment === null ? null : residentTravelLocation(segment, travelTask, placement.position);
+      if (contract === null || contract.id !== travelTask.contractId || segment === null
+        || location?.kind !== "route" || resident.location.kind !== "route"
+        || resident.location.routeId !== location.routeId || resident.location.progress !== location.progress) return EMPTY_BATCHES;
+      target = segment.end;
+    }
+    if (target !== null) {
       const observer = residentPlacementInRegionalWindow(placement, window);
       const point = projectedSamplePoint(frame, world, target);
       if (observer !== null && point !== null

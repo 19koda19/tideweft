@@ -8,10 +8,10 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsPickup, residentActivitySupportsTravel, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsPickup, residentActivitySupportsTravel, residentActivitySupportsTravelEnvironment, type ResidentActivity } from "./residentActivity";
 import { residentTravelLocation, residentTravelPosesAreAccountable, residentTravelSegment, residentTravelSegmentOffset } from "./residentTravelRoute";
 import { waterDepthAt } from "./terrain";
-import type { ResidentState, TideState, WorldState } from "./types";
+import type { ContractState, ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
 
 /** Civic mode is whole-roster authority; old v1/v2 mixtures remain supported. */
@@ -21,6 +21,7 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
   let environment = 0;
   let pickup = 0;
   let travel = 0;
+  let travelEnvironment = 0;
   for (const resident of residents) {
     const activity = Object.getOwnPropertyDescriptor(resident, "activity");
     const version = activity !== undefined && Object.hasOwn(activity, "value")
@@ -36,13 +37,16 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
       && residentActivitySupportsPickup({ version: version.value })) pickup += 1;
     if (version !== undefined && Object.hasOwn(version, "value")
       && residentActivitySupportsTravel({ version: version.value })) travel += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsTravelEnvironment({ version: version.value })) travelEnvironment += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
   return (civic === 0 || civic === residents.length)
     && (inspection === 0 || inspection === residents.length)
     && (environment === 0 || environment === residents.length)
     && (pickup === 0 || pickup === residents.length)
-    && (travel === 0 || travel === residents.length);
+    && (travel === 0 || travel === residents.length)
+    && (travelEnvironment === 0 || travelEnvironment === residents.length);
 }
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */
@@ -99,7 +103,7 @@ export function residentAcceptedPickupBinding(world: WorldState, resident: Resid
 }
 
 /** Existing transit custody/assignment, independent of activity shape. */
-export function residentTravelContractBinding(world: WorldState, resident: ResidentState) {
+export function residentTravelContractBinding(world: Readonly<{ contracts: readonly ContractState[] }>, resident: ResidentState) {
   if (resident.activeContractId === null || resident.location.kind !== "route") return null;
   const candidates = world.contracts.filter((contract) => contract.id === resident.activeContractId
     || (contract.carrierKind === "resident" && contract.assignedResidentId === resident.id

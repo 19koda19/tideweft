@@ -4,7 +4,7 @@ import { findAutonomousRoutePlan } from "../sim/network";
 import { createRegionCoord } from "../sim/regions";
 import {
   RESIDENT_ACTIVITY_OWNER_ID, RESIDENT_ACTIVITY_VERSION,
-  RESIDENT_TRAVEL_ACTIVITY_VERSION, type ResidentPhysicalTravelTask,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, type ResidentPhysicalTravelTask,
 } from "../sim/residentActivity";
 import { residentAcceptedPickupBinding, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
@@ -46,7 +46,7 @@ import {
 import { worldPositionDelta } from "./worldPosition";
 
 // The original fixtures cover native acceptance/departure and coarse placement.
-// The later v7 fixture adds lower-engine/adaptor physical pickup and same-interval
+// The current fixture adds lower-engine/adaptor physical pickup and same-interval
 // route motion, not runtime activation, a complete journey or destination handoff.
 const BASE = createWorld("first lantern", "standard");
 const LEGACY_KEYS = ["arrivalTick", "bottleneckReliability", "residentId", "routeHops"] as const;
@@ -177,7 +177,7 @@ function physicalDepartureFixture() {
   });
   expect(adoptResidentActivities(state)).toBe(true);
   expect(prepareResidentRestActivities(state, [], store)).toBe(true);
-  expect(state.residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION)).toBe(true);
+  expect(state.residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION)).toBe(true);
   expect(residentAt(state, id).activity?.pickupTask).toMatchObject({ contractId: contract.id, phase: "approaching" });
   let moved = false;
   for (let phase = 1; phase <= 10; phase += 1) {

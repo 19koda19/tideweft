@@ -13,7 +13,7 @@ import {
 import * as simulation from "../sim/public";
 import {
   RESIDENT_REST_APPROACH_STEP_UNITS,
-  RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import {
@@ -353,7 +353,7 @@ describe("ordinary runtime conserved resident travel", () => {
     if (source === undefined) throw new Error("actual automatic winner is not an existing native origin resident");
     actorId = source.actorId;
     const acceptedHuman = actor(acceptedWorld, actorId);
-    expect(acceptedHuman.activity?.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+    expect(acceptedHuman.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
     expect(acceptedHuman.activity?.poses[0]?.position).toEqual(source.source);
     expect(acceptedHuman.activity?.pickupTask).toMatchObject({ contractId: fixture.contractId, phase: "approaching", target: source.target });
     expect(acceptedHuman.activity?.travelTask).toBeNull();

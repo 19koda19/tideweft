@@ -19,7 +19,7 @@ import {
 } from "./public";
 import { createRegionCoord } from "./regions";
 import {
-  RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
   replaceResidentActivity,
   type ResidentActivity,
 } from "./residentActivity";
@@ -101,7 +101,7 @@ function arrivedFixture() {
   });
   expect(adoptResidentActivities(world)).toBe(true);
   expect(prepareResidentRestActivities(world, [], store)).toBe(true);
-  expect(residentAt(world, actorId).activity).toMatchObject({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  expect(residentAt(world, actorId).activity).toMatchObject({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
     pickupTask: { contractId: contract.id, phase: "approaching", target: binding.target } });
   let moved = false;
   for (let phase = 1; phase <= 10; phase += 1) {
@@ -222,7 +222,7 @@ describe("resident origin pickup commit-time eligibility", () => {
     // Deliberate malformed cold-shape contrast, never a successful action fixture.
     resident.activity = malformed as ResidentActivity;
     const before = stableStringify(world);
-    // The malformed source cannot acquire the v7 closing capability at all;
+    // The malformed source cannot acquire the current closing capability at all;
     // calling the engine without it must fail before any command or debit.
     expect(prepareResidentTravelAdvance(world, null)).toBeNull();
     expect(() => stepWorld(world)).toThrow(/exact closing travel admission/u);

@@ -30,6 +30,9 @@ export const RESIDENT_PICKUP_ACTIVITY_OWNER_ID = "sim:resident-activity:v6" as c
 /** v7 retains an explicit itinerary cursor or a grandfathered old journey. */
 export const RESIDENT_TRAVEL_ACTIVITY_VERSION = 7 as const;
 export const RESIDENT_TRAVEL_ACTIVITY_OWNER_ID = "sim:resident-activity:v7" as const;
+/** v8 retains a travel hold caused by legitimately observed ground water. */
+export const RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION = 8 as const;
+export const RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v8" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -132,7 +135,7 @@ export type ResidentTravelTask = Readonly<{
   lastProgressAtTick: number;
   nextReassessmentAtTick: number;
   phase: "approaching" | "waiting" | "arrived";
-  waitReason: ResidentPhysicalWaitReason | "no-active-route" | "weather-hold" | "disturbed";
+  waitReason: ResidentPhysicalWaitReason | "no-active-route" | "weather-hold" | "disturbed" | "observed-water";
 }>;
 
 export type ResidentPhysicalTravelTask = Extract<ResidentTravelTask, { mode: "physical" }>;
@@ -144,8 +147,8 @@ export type ResidentPhysicalTravelTask = Extract<ResidentTravelTask, { mode: "ph
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION | typeof RESIDENT_ENVIRONMENT_ACTIVITY_VERSION | typeof RESIDENT_PICKUP_ACTIVITY_VERSION | typeof RESIDENT_TRAVEL_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID | typeof RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID | typeof RESIDENT_PICKUP_ACTIVITY_OWNER_ID | typeof RESIDENT_TRAVEL_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION | typeof RESIDENT_ENVIRONMENT_ACTIVITY_VERSION | typeof RESIDENT_PICKUP_ACTIVITY_VERSION | typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID | typeof RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID | typeof RESIDENT_PICKUP_ACTIVITY_OWNER_ID | typeof RESIDENT_TRAVEL_ACTIVITY_OWNER_ID | typeof RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
@@ -185,7 +188,11 @@ export function residentActivitySupportsPickup(activity: Pick<ResidentActivity, 
 }
 
 export function residentActivitySupportsTravel(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
-  return activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION;
+  return activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION || residentActivitySupportsTravelEnvironment(activity);
+}
+
+export function residentActivitySupportsTravelEnvironment(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {
@@ -211,7 +218,8 @@ export function canonicalizeResidentActivity(
   if (!plainRecord(value)) return null;
   const versionField = Object.getOwnPropertyDescriptor(value, "version");
   if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
-  const travelCapable = value.version === RESIDENT_TRAVEL_ACTIVITY_VERSION;
+  const travelEnvironmentCapable = value.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION;
+  const travelCapable = value.version === RESIDENT_TRAVEL_ACTIVITY_VERSION || travelEnvironmentCapable;
   const pickupCapable = value.version === RESIDENT_PICKUP_ACTIVITY_VERSION || travelCapable;
   const environmentCapable = value.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION || pickupCapable;
   const inspectionCapable = value.version === RESIDENT_INSPECTION_ACTIVITY_VERSION || environmentCapable;
@@ -224,7 +232,8 @@ export function canonicalizeResidentActivity(
     ...(inspectionCapable ? ["inspectionTask"] : []),
     ...(pickupCapable ? ["pickupTask"] : []),
     ...(travelCapable ? ["travelTask"] : []),
-  ]) || (travelCapable ? value.ownerId !== RESIDENT_TRAVEL_ACTIVITY_OWNER_ID
+  ]) || (travelEnvironmentCapable ? value.ownerId !== RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID
+    : travelCapable ? value.ownerId !== RESIDENT_TRAVEL_ACTIVITY_OWNER_ID
     : pickupCapable ? value.ownerId !== RESIDENT_PICKUP_ACTIVITY_OWNER_ID
     : environmentCapable ? value.ownerId !== RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID
     : inspectionCapable ? value.ownerId !== RESIDENT_INSPECTION_ACTIVITY_OWNER_ID
@@ -257,7 +266,7 @@ export function canonicalizeResidentActivity(
   const materialTask = civicCapable ? canonicalMaterialTask(value.materialTask, value.tick) : null;
   const inspectionTask = inspectionCapable ? canonicalInspectionTask(value.inspectionTask, value.tick) : null;
   const pickupTask = pickupCapable ? canonicalPickupTask(value.pickupTask, value.tick) : null;
-  const travelTask = travelCapable ? canonicalTravelTask(value.travelTask, value.tick) : null;
+  const travelTask = travelCapable ? canonicalTravelTask(value.travelTask, value.tick, travelEnvironmentCapable) : null;
   if (rationTask === undefined || materialTask === undefined || inspectionTask === undefined
     || pickupTask === undefined || travelTask === undefined
     || [restTask, rationTask, materialTask, inspectionTask, pickupTask, travelTask].filter((task) => task !== null).length > 1) return null;
@@ -278,8 +287,8 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: travelCapable ? RESIDENT_TRAVEL_ACTIVITY_VERSION : pickupCapable ? RESIDENT_PICKUP_ACTIVITY_VERSION : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
-    ownerId: travelCapable ? RESIDENT_TRAVEL_ACTIVITY_OWNER_ID : pickupCapable ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
+    version: travelEnvironmentCapable ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION : travelCapable ? RESIDENT_TRAVEL_ACTIVITY_VERSION : pickupCapable ? RESIDENT_PICKUP_ACTIVITY_VERSION : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: travelEnvironmentCapable ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID : travelCapable ? RESIDENT_TRAVEL_ACTIVITY_OWNER_ID : pickupCapable ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
@@ -554,7 +563,7 @@ function canonicalPickupTask(value: unknown, tick: number): ResidentPickupTask |
   });
 }
 
-function canonicalTravelTask(value: unknown, tick: number): ResidentTravelTask | null | undefined {
+function canonicalTravelTask(value: unknown, tick: number, environmentCapable: boolean): ResidentTravelTask | null | undefined {
   if (value === null) return null;
   if (!plainRecord(value) || value.kind !== "contract-travel" || !positiveInteger(value.contractId)) return undefined;
   if (value.mode === "legacy-coarse") {
@@ -571,7 +580,8 @@ function canonicalTravelTask(value: unknown, tick: number): ResidentTravelTask |
     || value.lastProgressAtTick < value.selectedAtTick || value.lastProgressAtTick > tick
     || !nonnegativeInteger(value.nextReassessmentAtTick) || value.nextReassessmentAtTick < value.selectedAtTick
     || !["approaching", "waiting", "arrived"].includes(value.phase as string)
-    || ![null, "no-traversable-route", "outside-local-corridor", "no-active-route", "weather-hold", "disturbed"].includes(value.waitReason as null | string)
+    || !([null, "no-traversable-route", "outside-local-corridor", "no-active-route", "weather-hold", "disturbed"].includes(value.waitReason as null | string)
+      || (environmentCapable && value.waitReason === "observed-water"))
     || (value.phase === "waiting") !== (value.waitReason !== null)
   ) return undefined;
   return Object.freeze({ kind: "contract-travel", contractId: value.contractId, mode: "physical",

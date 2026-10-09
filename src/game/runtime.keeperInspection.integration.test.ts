@@ -5,7 +5,7 @@ import { assertWorldInvariants, createWorldView, deserializeWorld, serializeWorl
 import { residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { tideAtTick } from "../sim/terrain";
-import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION, RESIDENT_TRAVEL_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION, RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
 import type { PlayerState } from "./player";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -350,7 +350,7 @@ describe("ordinary autonomous keeper inspection", () => {
     await runtime.save();
     const boundary = decode(repository.snapshot());
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
-    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION
+    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
       && activity.poses.length === 1 && activity.inspectionTask === null)).toBe(true);
     close(runtime);
     // Even nullable successor state cannot be smuggled into older outer53.
