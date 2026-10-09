@@ -5681,6 +5681,41 @@ Production, timing, schemas, supported formats, dependencies and configuration
 are unchanged. Prior cumulative evidence certifies its own inputs only; no new
 cumulative, artifact/platform, release or historical-directive change is claimed.
 
+### Informed water at the local-to-macro boundary — 2026-10-09
+
+Two additive adapter-foundation cases at parent `8e0dec9` contrast a real local
+wet-support obstruction with a kernel-admitted qualitative water hold. Both
+close stationary at421. Due phase-zero preparation retries only the uninformed
+obstruction; missing fresh dry sight retains `observed-water`. A controlled,
+valid nonintersecting interaction window then accepts ten stationary samples
+and the actual source-bound closing receipt at422. The uninformed network-only
+continuation spends its1040-unit cargo-qualified allowance; the informed case
+retains exact pose, cursor and cargo with zero macro work. Directed cursor
+distance, not straight displacement across a corner, measures the paid work.
+
+The same inner-world serialized and cloned boundaries produce exact terminal
+bytes. Stocks, ledger, cohort, contract and departure/fulfillment events remain
+unchanged; only ordinary perception decay occurs, with no refreshed sight or
+new hazard knowledge. Original fixtures/cases are unchanged. This verifies the
+existing documented macro abstraction, not native player/window movement,
+general crossing, known alternatives, outer-session relaunch or visual play.
+
+Focused2cases pass; affected5files/194tests pass6.09s; maintained smoke
+6files/105tests passes5.00s; typecheck passes. Relevant commands:
+
+```sh
+npx vitest run src/game/residentTravelEnvironmentExecution.test.ts -t 'keeps informed=' --maxWorkers=1
+npx vitest run src/game/residentTravelEnvironmentExecution.test.ts src/game/residentEnvironmentExecution.test.ts src/sim/residentTravelAdvance.test.ts src/sim/residentTravelActivity.test.ts src/sim/residentSurfaceKnowledge.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+```
+
+All731 public non-Markdown inputs match before/after, digest
+`3381b084a72a61eac93cd6dbf4845824274649be0325db413baf1695d69381a8`.
+Production, canonical policy, schemas, supported formats, dependencies and
+configuration are unchanged. No new cumulative/platform/performance/release
+or whole-directive closure is inferred; historical directives remain untouched.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

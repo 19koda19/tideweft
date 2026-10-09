@@ -13,7 +13,7 @@ import {
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
 import { advanceResidentMacroTravel, consumeResidentTravelAdvance, prepareResidentTravelAdvance, residentTravelStepUnits, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
-import { residentTravelLocation, residentTravelSegment, residentTravelSegmentPose } from "../sim/residentTravelRoute";
+import { residentTravelBodyIsLocal, residentTravelInteractionFrame, residentTravelLocation, residentTravelSegment, residentTravelSegmentOffset, residentTravelSegmentPose, residentTravelWindowInterval } from "../sim/residentTravelRoute";
 import { MAX_TIDE_LEVEL, tideAtTick } from "../sim/terrain";
 import { FIXED_POINT, LEGACY_WORLD_HEIGHT, LEGACY_WORLD_WIDTH, WORLD_WIDTH, type ResourceKind, type TerrainKind, type WorldState } from "../sim/types";
 import { stableStringify } from "../sim/util";
@@ -802,5 +802,129 @@ describe("source-conserving reed-mat resident service foundations", () => {
     expect(advanceResidentRestActivities(current.world, 1, WINDOW, malformed)).toBeNull();
     expect(stableStringify(current.world)).toBe(before);
     expect(stableStringify(malformed)).toBe(aidBefore);
+  });
+});
+
+describe("uninformed and informed local-to-macro retry boundary foundations", () => {
+  it.each([false, true])("keeps informed=%s authority through actual obstruction, due preparation and an offscreen closing interval", (informed) => {
+    // This existing synthetic adapter fixture arranges transit, terrain and
+    // optional kernel-admitted sight. The caller's changed window is controlled
+    // admission, not native player movement, a crossing or a known alternative.
+    const current = fixture();
+    const tick = current.world.meta.completedTick;
+    const originalPose = structuredClone(current.get().activity!.poses[0]!);
+    const originalTask = current.get().activity!.travelTask!;
+    if (originalTask.mode !== "physical") throw new Error("Expected an arranged physical traveler");
+    const custody = structuredClone(current.contract);
+    const cohort = current.world.residents.map(({ id, identity }) => ({ id, identity }));
+    const stocks = current.world.settlements.map(({ id, inventory }) => ({ id, inventory: { ...inventory } }));
+    const ledger = structuredClone(current.world.ledger);
+    const commitmentEvents = current.world.events.filter(({ type }) => type === "contract-departed" || type === "contract-fulfilled");
+    current.setPhysicalSupport(false);
+    if (informed) current.hold();
+    else expect(prepareResidentRestActivities(current.world)).toBe(true);
+    const first = advanceResidentRestActivities(current.world, 1, WINDOW);
+    expect(first).not.toBeNull();
+    expect(first?.movedActorIds).not.toContain(current.actorId);
+    expect(current.get().activity?.poses).toEqual([originalPose, originalPose]);
+    const waitReason = informed ? "observed-water" : "no-traversable-route";
+    expect(current.get().activity?.travelTask).toMatchObject({
+      phase: "waiting", waitReason, selectedAtTick: originalTask.selectedAtTick,
+      nextReassessmentAtTick: tick + 1,
+    });
+    finishInterval(current.world, 1);
+    expect(current.world.meta.completedTick).toBe(tick + 1);
+    expect(current.get().activity?.poses).toEqual([originalPose]);
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "waiting", waitReason });
+    expect(residentRestTargetHasDrySupport(current.world, current.target)).toBe(false);
+
+    const phaseZero = serializeWorld(current.world);
+    const continuations = [current.world, deserializeWorld(phaseZero), structuredClone(current.world)];
+    // Every route tile lies inside the simulation terrain. This valid but far
+    // interaction window excludes the real body and its next ordered segment;
+    // it changes no geometry, task, custody or actor position.
+    const outsideWindow = { origin: { x: current.world.terrain.width + WINDOW.terrain.width,
+      y: current.world.terrain.height + WINDOW.terrain.height }, terrain: WINDOW.terrain };
+    const outsideFrame = residentTravelInteractionFrame(outsideWindow);
+    if (outsideFrame === null) throw new Error("Controlled offscreen admission must be a valid interaction frame");
+    for (const world of continuations) {
+      expect(serializeWorld(world)).toBe(phaseZero);
+      const get = () => world.residents.find(({ identity }) => identity.stableId === current.actorId)!;
+      expect(world.residents.every((resident) => canonicalResidentActivityForWorld(world, resident) !== null)).toBe(true);
+      expect(prepareResidentRestActivities(world)).toBe(true);
+      expect(get().activity?.poses).toEqual([originalPose]);
+      expect(get().activity?.travelTask).toMatchObject(informed
+        ? { phase: "waiting", waitReason: "observed-water", nextReassessmentAtTick: tick + 2 }
+        : { phase: "approaching", waitReason: null });
+      const task = get().activity!.travelTask!;
+      if (task.mode !== "physical") throw new Error("Due preparation must retain the physical commitment");
+      expect(task.selectedAtTick).toBe(originalTask.selectedAtTick);
+      expect(task.legIndex).toBe(originalTask.legIndex);
+      expect(task.waypointIndex).toBe(originalTask.waypointIndex);
+      const contract = world.contracts.find(({ id }) => id === custody.id)!;
+      const segment = residentTravelSegment(world, contract, task);
+      if (segment === null) throw new Error("Due task lost its actual ordered edge");
+      expect(residentTravelBodyIsLocal(outsideFrame, originalPose.position)).toBe(false);
+      expect(residentTravelWindowInterval(outsideFrame, segment)).toBeNull();
+      const perception = structuredClone(get().perception);
+      const observationTimes = perception.beliefs.map(({ sourceObservationId, lastObservedTick }) => ({ sourceObservationId, lastObservedTick }));
+      if (informed) expect(observationTimes).toContainEqual({
+        sourceObservationId: residentRestSurfaceObservationId(current.actorId, current.target), lastObservedTick: tick,
+      });
+      else expect(observationTimes).toEqual([]);
+      for (let phase = 1; phase <= 10; phase += 1) {
+        const step = advanceResidentRestActivities(world, phase, outsideWindow);
+        expect(step).not.toBeNull();
+        expect(step?.movedActorIds).not.toContain(current.actorId);
+        expect(get().activity!.poses.at(-1)).toEqual(originalPose);
+      }
+      expect(get().activity!.poses).toEqual(Array.from({ length: 11 }, () => originalPose));
+      const intervalAllowance = residentTravelStepUnits(get().activity!, contract)! * 10;
+      expect(intervalAllowance).toBe(1_040);
+      const admission = prepareResidentTravelAdvance(world, outsideWindow);
+      expect(admission).not.toBeNull();
+      try { stepWorld(world, [], undefined, undefined, admission!); }
+      finally { revokeResidentTravelAdvance(admission!); }
+      expect(world.meta.completedTick).toBe(tick + 2);
+      const completed = get();
+      const completedTask = completed.activity!.travelTask!;
+      if (completedTask.mode !== "physical") throw new Error("Closing must preserve physical rather than ETA authority");
+      const completedSegment = residentTravelSegment(world, contract, completedTask);
+      const pose = completed.activity!.poses[0]!;
+      const offset = completedSegment === null ? null : residentTravelSegmentOffset(completedSegment, pose.position);
+      if (completedSegment === null || offset === null) throw new Error("Closing body must bind to its real directed cursor");
+      // Derive paid path distance through the cursor, including the first
+      // waypoint/corner, rather than assuming a straight1040-unit translation.
+      expect(completedTask.legIndex).toBe(0);
+      const distance = (completedTask.waypointIndex - 1) * 1_000 + offset;
+      expect(distance).toBe(informed ? 0 : intervalAllowance);
+      expect(completed.location).toEqual(residentTravelLocation(completedSegment, completedTask, pose.position));
+      expect(completed.activity!.poses).toHaveLength(1);
+      if (informed) {
+        expect(pose).toEqual(originalPose);
+        expect(completedTask).toEqual(task);
+      } else {
+        expect(completedTask).toMatchObject({ phase: "approaching", waitReason: null,
+          selectedAtTick: originalTask.selectedAtTick, lastProgressAtTick: tick + 2 });
+        expect(pose).toEqual(residentTravelSegmentPose(completedSegment, offset));
+      }
+      // Network-only macro does not sense the wet endpoint or refresh a stale
+      // receipt. Ordinary kernel decay is the only cognition change here.
+      expect(completed.perception).toEqual(stepActorPerception(perception, { tick: tick + 2, observations: [] }));
+      expect(completed.perception.beliefs.map(({ sourceObservationId, lastObservedTick }) => ({ sourceObservationId, lastObservedTick })))
+        .toEqual(observationTimes);
+      expect(contract).toEqual(custody);
+      expect(world.residents.map(({ id, identity }) => ({ id, identity }))).toEqual(cohort);
+      expect(world.settlements.map(({ id, inventory }) => ({ id, inventory }))).toEqual(stocks);
+      expect(world.ledger).toEqual(ledger);
+      expect(world.events.filter(({ type }) => type === "contract-departed" || type === "contract-fulfilled"))
+        .toEqual(commitmentEvents);
+      expect(world.residents.every((resident) => canonicalResidentActivityForWorld(world, resident) !== null)).toBe(true);
+      assertWorldInvariants(world);
+    }
+    const terminal = serializeWorld(current.world);
+    for (const cold of continuations.slice(1)) expect(serializeWorld(cold)).toBe(terminal);
+    // Inner-world clone/load and controlled admission only, not outer-session
+    // relaunch, autonomous native travel, broad water policy or visual proof.
   });
 });
