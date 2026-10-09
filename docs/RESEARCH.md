@@ -5314,7 +5314,8 @@ Commands:
 ```sh
 npx vitest run src/game/runtime.residentPickup.integration.test.ts \
   --testNamePattern='commits real helped entry and finite mat wear, cold restores it, and rolls both back on later publication failure' \
-  --maxWorkers=1
+  --maxWorkers=1 --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-service-shallow/shallow-civic-runtime-domain.json
 npx vitest run \
   src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts \
   src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
@@ -6066,6 +6067,58 @@ rendered crowd, cat-water fix, meaningful current-force response, new platform
 artifact, measured performance gain, cumulative certificate or release. Main's
 separate frozen parent regression does not certify this executable delta.
 Remaining work retains its existing owners; no directive transition.
+
+### Shallow-origin civic approach reaches the existing contribution — 2026-10-09
+
+At isolated parent `a2c176ceaad41648e09a3c97e32397c760849b40`, the
+shallow-service adapter already proves initial material motion. One additive
+runtime case now follows that real approach to its existing hourly consumer.
+It uses `firstNativeFixture("wet-source")` and asserts the native work
+intention rather than assigning it. Generated terrain, tide, actor/body source,
+finite stock, project and destination remain intact. The inherited fixture
+controls weather and offer timing; this case also controls competing need
+pressure and recipe schedules. No selected task, pose, arrival, contribution,
+receipt or success is authored. This is controlled native geometry, not an
+untouched population-autonomy witness.
+
+Actual phase4/9 motion occurs before the source dries and stays within the
+occupied wet cell or dry ground; no project/inventory/ledger result occurs
+during approach. Real dry arrival precedes the hourly contribution.600 accepted
+steps reach tick480: stock−1, consumed ledger+1, project progress+1 and the
+existing used marker. Cold4/9 branches compare every authoritative root at
+421; an independent479-phase9 cold branch reaches the exact480 result. Actual
+use followed by rejected expression-bank closure rolls all roots back;
+cold retry matches successful work. Consumed reload is silent and the next
+ten accepted steps add neither debit nor credit. This is not one uninterrupted
+cold branch through the entire hour.
+
+Initial focused case passes1/18 unselected54.79s. Only its fixture-provenance
+comment is clarified afterward; final validation retains the same assertions.
+Affected material/source-egress selection passes4 files/67 tests47.85s:
+`residentServiceShallowEgress`, `residentRestShallowEgress`, material
+activity integration and lower material-activity tests, two workers. Final
+runtime selection passes3 cases/16 unselected160.56s: the new shallow-origin
+case, existing controlled dry-material case and untouched first-hour civic
+case. Exact command:
+
+```sh
+npx vitest run src/game/runtime.residentRest.integration.test.ts \
+  -t 'completes native shallow-origin civic approach|uses real civic material after ordinary approach|uses native first-hour civic material without authored pressure' \
+  --maxWorkers=1
+```
+
+Default/JSON reporters retain exact local results. Maintained smoke passes
+6 files/105 tests10.27s; typecheck and documentation-reuse45 pass. All738 public
+non-Markdown final inputs match before/after, digest
+`7881669b2c9dea02b5a693292f76d1d1d0bd788a6d70c974c0627059f9f2c774`.
+Parent cumulative overlaps in wall time; these are correctness timings, not
+production performance or a new full cumulative certificate.
+
+No production owner, algorithm, schema, supported reader, task protocol,
+inventory, control, dependency or release changes. Current native shallow
+keeper autonomy, cat evacuation, current-force response, normal rendered play,
+performance and major closure remain unproved. Main's separate frozen parent
+cumulative result does not certify this additive test/canonical delta.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 

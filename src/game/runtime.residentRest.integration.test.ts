@@ -920,6 +920,158 @@ describe("ordinary runtime resident rest execution", () => {
     expect(next.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress + 1);
   }, 180_000);
 
+  it("completes native shallow-origin civic approach through real hourly stock and project work, preserving cold use and rollback", async () => {
+    const fixture = await firstNativeFixture("wet-source");
+    const initial = decode(fixture.record);
+    const initialWorld = deserializeWorld(initial.world);
+    for (const human of initialWorld.residents) {
+      human.needs = { food: 100_000, rest: 900_000, belonging: 100_000 };
+      human.condition.exhaustion = 100_000;
+    }
+    const chosen = initialWorld.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+    // Native work disposition, stock and project are retained. The existing
+    // fixture controls weather and offer timing; this case also controls
+    // competing need pressure and recipes. No task/result/pose or tide is
+    // assigned. This is not untouched population autonomy.
+    expect(chosen.intention).toBe("work");
+    chosen.needs = { food: 0, rest: 0, belonging: 400_000 };
+    if (chosen.location.kind !== "settlement") throw new Error("Native wet civic source lost its settlement");
+    const settlementId = chosen.location.settlementId;
+    const site = initialWorld.settlements.find(({ id }) => id === settlementId)!;
+    const projectId = site.project.id;
+    const resource = site.project.resource;
+    const initialProgress = site.project.progress;
+    const sourceTile = initialWorld.terrain.tiles[Math.floor(fixture.source.localY / 1_000)
+      * initialWorld.terrain.width + Math.floor(fixture.source.localX / 1_000)]!;
+    expect(waterDepthAt(sourceTile, initialWorld.tide)).toBeGreaterThan(0);
+    expect(waterDepthAt(sourceTile, initialWorld.tide)).toBeLessThanOrEqual(PLAYER_FOOT_MAX_WATER_DEPTH);
+    expect(residentRestTargetHasDrySupport(initialWorld, fixture.target)).toBe(true);
+    for (const settlement of initialWorld.settlements) {
+      for (const recipe of settlement.recipes) recipe.nextRunTick = fixture.tick + 1_000;
+    }
+    assertWorldInvariants(initialWorld);
+    initial.world = serializeWorld(initialWorld);
+    const repository = new MemoryRepository(recordWith(fixture.record, initial));
+    const runtime = await open(repository);
+    const prefixes: Array<Readonly<{ record: SaveRecord; envelope: Envelope }>> = [];
+    for (const steps of [4, 5]) {
+      advanceOrdinaryFixedSteps(runtime, steps);
+      await runtime.save();
+      const record = repository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      const moving = resident(envelope, fixture.actorId);
+      expect(moving.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+      expect(moving.activity?.materialTask).toMatchObject({ phase: "approaching", projectId, resource, usedAtTick: null });
+      expect(moving.activity?.restTask).toBeNull();
+      expect(moving.activity?.rationTask).toBeNull();
+      expect(moving.activity!.poses.at(-1)!.position).not.toEqual(fixture.source);
+      expectBoundedMotion(fixture.source, moving.activity!.poses);
+      expect(world.meta.completedTick).toBe(fixture.tick);
+      expect(waterDepthAt(sourceTile, world.tide)).toBeGreaterThan(0);
+      expect(world.settlements.map(({ inventory, project }) => ({ inventory, project })))
+        .toEqual(initialWorld.settlements.map(({ inventory, project }) => ({ inventory, project })));
+      expect(world.ledger).toEqual(initialWorld.ledger);
+      for (const { position } of moving.activity!.poses) {
+        const tile = world.terrain.tiles[Math.floor(position.localY / 1_000)
+          * world.terrain.width + Math.floor(position.localX / 1_000)]!;
+        if (waterDepthAt(tile, world.tide) > 0) expect(tile.index).toBe(sourceTile.index);
+      }
+      prefixes.push({ record, envelope });
+    }
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const closed = decode(repository.snapshot());
+    expect(deserializeWorld(closed.world).meta.completedTick).toBe(fixture.tick + 1);
+    advanceOrdinaryFixedSteps(runtime, 10);
+    await runtime.save();
+    const arrived = resident(decode(repository.snapshot()), fixture.actorId);
+    expect(arrived.activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(arrived.activity?.poses[0]?.position).toEqual(fixture.target);
+    advanceOrdinaryFixedSteps(runtime, 579);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    expect(beforeWorld.meta.completedTick).toBe(fixture.tick + 59);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(resident(before, fixture.actorId).activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(beforeWorld.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(after.world);
+    const contributed = afterWorld.settlements.find(({ id }) => id === settlementId)!;
+    expect(resident(after, fixture.actorId).activity?.materialTask).toMatchObject({ phase: "used", usedAtTick: fixture.tick + 60 });
+    expect(contributed.project.progress).toBe(initialProgress + 1);
+    expect(contributed.inventory[resource]).toBe(beforeWorld.settlements.find(({ id }) => id === settlementId)!.inventory[resource] - 1);
+    expect(afterWorld.ledger.consumed[resource]).toBe(beforeWorld.ledger.consumed[resource] + 1);
+    assertWorldInvariants(afterWorld);
+    close(runtime);
+
+    for (const { record, envelope } of prefixes) {
+      const coldRepository = new MemoryRepository(record);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(envelope));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, 10 - envelope.perceptionCarry.playerStepsSinceWorldTick);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+      close(cold);
+    }
+    const coldRepository = new MemoryRepository(beforeRecord);
+    const cold = await open(coldRepository);
+    advanceOrdinaryFixedSteps(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    const usedRecord = coldRepository.snapshot();
+    close(cold);
+
+    const failedRepository = new MemoryRepository(beforeRecord);
+    const failed = await open(failedRepository);
+    const actualStep = simulation.stepWorld;
+    let attemptedUse = false;
+    const stepSpy = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = actualStep(...args);
+      expect(result.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.activity?.materialTask?.phase).toBe("used");
+      expect(result.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress + 1);
+      attemptedUse = true;
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval").mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attemptedUse).toBe(true);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    stepSpy.mockRestore();
+    closure.mockRestore();
+    close(failed);
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    const retry = await open(retryRepository);
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    close(retry);
+
+    const consumedRepository = new MemoryRepository(usedRecord);
+    soundscapePlay.mockClear();
+    const consumed = await open(consumedRepository);
+    await consumed.save();
+    expect(authoritativeRoots(decode(consumedRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(consumed, 10);
+    await consumed.save();
+    const next = deserializeWorld(decode(consumedRepository.snapshot()).world);
+    expect(next.ledger.consumed).toEqual(afterWorld.ledger.consumed);
+    expect(next.settlements.find(({ id }) => id === settlementId)!.project.progress).toBe(initialProgress + 1);
+  }, 180_000);
+
   it("retains supported51 phase4 body history and upgrades services only at the next genuine phase0", async () => {
     const fixture = await restFixture();
     const stagingRepository = new MemoryRepository(fixture.record);

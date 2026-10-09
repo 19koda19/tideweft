@@ -2691,10 +2691,16 @@ continuation and late-failure rollback. The additional runtime ration witness
 selects from controlled food pressure on generated wet geometry, leaves before
 natural drying and reaches the dry service, then uses the unchanged hourly
 group debit/need relief. Phase4/9 cold egress, hourly cold use, consumed silence
-and late-use rollback are checked. Civic/inspection shallow-source adapters
-prove approach without premature credit or closure; their arranged disposition
-or keeper/store binding remains foundation-only, not native bootstrap autonomy
-or consummated shallow-origin work. Research owns exact evidence and limits.
+and late-use rollback are checked. A separate civic runtime witness retains
+native work disposition on the same wet geometry, with declared pressure,
+weather/offer and recipe controls. It reaches actual dry arrival and the
+existing hourly stock debit/project contribution, with cold prefixes, closing
+use, late-failure rollback/retry and consumed non-replay. This is not untouched
+population autonomy or a cold run through the entire hour. The inspection
+shallow-source adapter proves approach without premature closure; its
+constructed keeper/store binding remains foundation-only, not native bootstrap
+autonomy or consummated shallow-origin inspection. Research owns exact evidence
+and limits.
 This remains partial capability, not ordinary untouched crowd/visual proof,
 general wading/crossing, meaningful current-force response or animal evacuation.
 Shared flow is zero within this foot band; the35k bound must not be cited as a
