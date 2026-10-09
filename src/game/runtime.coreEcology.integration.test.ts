@@ -23,7 +23,18 @@ import {
   serializeWorld,
 } from "../sim/public";
 import { regionLocalToGlobalTile } from "../sim/regions";
-import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH } from "../sim/types";
+import {
+  FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH,
+  type ResidentLocation, type ResidentState, type WorldState,
+} from "../sim/types";
+import {
+  replaceResidentActivity,
+  residentActivitySupportsInspection,
+  residentActivitySupportsMaterials,
+  residentActivitySupportsPickup,
+  residentActivitySupportsRations,
+  residentActivitySupportsTravel,
+} from "../sim/residentActivity";
 import { compareText, hashCanonical, stableStringify } from "../sim/util";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
@@ -238,8 +249,10 @@ import {
 import { createRegionalWorldView } from "./regionalWorldView";
 import {
   playerWorldPositionInRegionalWindow,
+  resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
+import { adoptResidentActivities } from "./residentActivityExecution";
 import { ADRIFT_STAND_DEPTH } from "./adrift";
 import {
   REGION_HEIGHT_UNITS,
@@ -3944,8 +3957,9 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 
   it.each([[false, false, 500], [true, false, 500], [true, true, 500], [true, false, 2_000]] as const)("carries one genuine cat rain call to a real human independently of optional captions (refuse=%s, reject=%s, distance=%s)", async (refuse, reject, listenerDistance) => {
-    // Stage only initial physical placement of one generated free resident
-    // on a real generated route. Cognition, rain, sound and hearing are real.
+    // Stage only the phase-zero physical pose of one generated free resident
+    // at a real route point, not route membership or a travel commitment.
+    // Cognition, rain, sound and hearing are real.
     const prepared = await createCatWeatherRuntime("rain-distress", 1, listenerDistance);
     const preparedRecord = prepared.repository.snapshot();
     const { catActorId, listenerActorId } = prepared;
@@ -5789,8 +5803,8 @@ describe("runtime core-ecology vertical slice", () => {
         identity.stableId === fixture.controlledListenerId
       ));
       if (listener === undefined) throw new Error("Remembered deer fixture lacks an existing free ordinary resident");
-      // Its real initial route point was arranged before body adoption. The
-      // accepted body, tasks, posture and acoustic history now remain untouched.
+      // Its initial phase-zero body pose was arranged after historical ecology
+      // adoption. Accepted body, tasks, posture and acoustic history are now untouched.
       expect(listener.activeContractId).toBeNull();
       expect(listener.activity).toBeDefined();
       assertWorldInvariants(repeatedWorld);
@@ -9559,6 +9573,55 @@ describe("runtime core-ecology vertical slice", () => {
   }, 45_000);
 });
 
+/** Controlled hearing geography, not autonomous travel or a fabricated task. */
+function stageHumanHearingBodyAtRoutePoint(
+  world: WorldState,
+  residentId: number,
+  location: Extract<ResidentLocation, { kind: "route" }>,
+): ResidentState {
+  if (world.residents.every((resident) => !Object.hasOwn(resident, "activity"))) {
+    // Genuine pre-body fixtures need the complete cohort's real phase-zero
+    // adoption. Never strip an existing root or invent consumed pose history.
+    expect(adoptResidentActivities(world, 0)).toBe(true);
+  }
+  if (world.residents.some(({ activity }) => activity?.poses.length !== 1)) {
+    throw new Error("Human hearing fixture requires a complete phase-zero body cohort");
+  }
+  const index = world.residents.findIndex(({ id }) => id === residentId);
+  const resident = world.residents[index];
+  if (resident === undefined || resident.location.kind !== "settlement"
+    || resident.activeContractId !== null || resident.activity === undefined
+    || resident.circadian === undefined) {
+    throw new Error("Human hearing fixture requires a free settlement resident with a body");
+  }
+  // Route geometry selects a real point only. Assigning route membership would
+  // claim an in-transit Promise and fail the current travel binding correctly.
+  const placement = resolveResidentRouteWorldPlacement(world, { ...resident, location });
+  if (placement === null) throw new Error("Human hearing fixture has no generated route point");
+  const pose = { position: placement.position, heading: headingFromRadians(placement.facing) };
+  const body = replaceResidentActivity(resident, {
+    ...resident.activity,
+    poses: [pose],
+    restTask: null,
+    ...(residentActivitySupportsRations(resident.activity) ? { rationTask: null } : {}),
+    ...(residentActivitySupportsMaterials(resident.activity) ? { materialTask: null } : {}),
+    ...(residentActivitySupportsInspection(resident.activity) ? { inspectionTask: null } : {}),
+    ...(residentActivitySupportsPickup(resident.activity) ? { pickupTask: null } : {}),
+    ...(residentActivitySupportsTravel(resident.activity) ? { travelTask: null } : {}),
+  });
+  const staged = replaceResidentCircadian(body, {
+    atTick: world.meta.completedTick,
+    circadian: { ...resident.circadian, restDestinationArrived: false,
+      posture: { state: "awake", enteredAtTick: world.meta.completedTick } },
+  });
+  world.residents[index] = staged;
+  expect(staged.location).toEqual(resident.location);
+  expect(staged.activeContractId).toBeNull();
+  expect(staged.activity?.poses).toEqual([pose]);
+  assertWorldInvariants(world);
+  return staged;
+}
+
 async function createCatWeatherRuntime(
   mode: "rain-distress" | "non-rain-control",
   catOffsetTiles: 1 | 2 = 1,
@@ -9666,22 +9729,15 @@ async function createCatWeatherRuntime(
       }
     }
     if (routePlacement === undefined) throw new Error("Cat hearing fixture lacks a generated route");
-    listener.location = { kind: "route", routeId: routePlacement.routeId, progress: routePlacement.progress };
-    if (listener.circadian !== undefined) {
-      const current = listener.circadian;
-      world.residents[world.residents.indexOf(listener)] = replaceResidentCircadian(listener, {
-        atTick: world.meta.completedTick,
-        circadian: { ...current, restDestinationArrived: false,
-          posture: current.posture.state === "resting" || current.posture.state === "asleep"
-            ? { state: "awake", enteredAtTick: world.meta.completedTick } : current.posture },
-      });
-    }
-    const placement = resolveResidentWorldPlacement(createWorldView(world), listener);
-    if (placement === null) throw new Error("Cat hearing fixture could not resolve its real route placement");
+    const stagedListener = stageHumanHearingBodyAtRoutePoint(world, listener.id, {
+      kind: "route", routeId: routePlacement.routeId, progress: routePlacement.progress,
+    });
+    const placement = resolveResidentWorldPlacement(createWorldView(world), stagedListener);
+    if (placement === null) throw new Error("Cat hearing fixture could not resolve its physical pose");
     catPosition = translateWorldPosition(placement.position, stageNearbyHuman, 0);
     const away = worldPositionDelta(playerPosition, catPosition);
     catHeading = headingFromRadians(Math.atan2(away.y, away.x));
-    listenerActorId = listener.identity.stableId;
+    listenerActorId = stagedListener.identity.stableId;
     assertWorldInvariants(world);
   }
 
@@ -9882,6 +9938,10 @@ async function createAlarmRuntime(
     (sourceSpecies === "marsh-rabbit" ? -2 : offsetY) * WORLD_POSITION_UNITS_PER_TILE,
   );
   let controlledListenerId: string | undefined;
+  let controlledListenerPlacement: {
+    residentId: number;
+    location: Extract<ResidentLocation, { kind: "route" }>;
+  } | undefined;
   if (stageRememberedDeerListener) {
     if (sourceSpecies !== "deer") throw new Error("Controlled repeat listener requires the deer fixture");
     const porterId = deserializeBio0Ecology(envelope.bio0Ecology)?.porterAddress.actorId;
@@ -9891,9 +9951,10 @@ async function createAlarmRuntime(
     if (listener === undefined || world.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
       throw new Error("Controlled listener placement must precede whole-roster body adoption");
     }
-    // The measured repeat corridor is west of the initial alarm. Stage only a
-    // person's initial physical cause on the nearest existing route segment;
-    // never assign hearing, a task, threat knowledge or the later event locus.
+    // The measured repeat corridor is west of the initial alarm. Select its
+    // real route point now, but defer the body edit until the existing
+    // historical ecology input has genuinely adopted into the current format.
+    // Never assign hearing, a task, threat knowledge or the later event locus.
     const corridor = translateWorldPosition(alarmPosition, -4 * WORLD_POSITION_UNITS_PER_TILE, 0);
     const view = createWorldView(world);
     let placement: { routeId: number; progress: number; distance: number } | undefined;
@@ -9915,7 +9976,8 @@ async function createAlarmRuntime(
     if (placement === undefined || placement.distance >= 7_000) {
       throw new Error("Controlled listener has no generated route near the repeat corridor");
     }
-    listener.location = { kind: "route", routeId: placement.routeId, progress: placement.progress };
+    controlledListenerPlacement = { residentId: listener.id,
+      location: { kind: "route", routeId: placement.routeId, progress: placement.progress } };
     controlledListenerId = listener.identity.stableId;
     assertWorldInvariants(world);
   }
@@ -10026,8 +10088,28 @@ async function createAlarmRuntime(
   await repository.save(recordWithEnvelope(record, nextEnvelope));
   initial.destroy();
   scheduledFrame = undefined;
-  const runtime = await runtimeFactory(repository);
+  let runtime = await runtimeFactory(repository);
   if (sourceSpecies !== "marsh-rabbit") await runtime.save();
+  if (controlledListenerPlacement !== undefined) {
+    // Bodies are a current-format capability, not a field to smuggle through
+    // this fixture's synthetic historical envelope. Neither cold stage takes
+    // an accepted step or manufactures a hearing receipt/source event.
+    const currentRecord = repository.snapshot();
+    const current = requiredEnvelope(repository);
+    expect(current.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const currentWorld = deserializeWorld(current.world);
+    stageHumanHearingBodyAtRoutePoint(currentWorld, controlledListenerPlacement.residentId,
+      controlledListenerPlacement.location);
+    const staged = resealedEnvelope(current, { world: serializeWorld(currentWorld) });
+    const { world: _originalWorld, integrity: _originalIntegrity, ...originalRoots } = current;
+    const { world: _stagedWorld, integrity: _stagedIntegrity, ...stagedRoots } = staged;
+    expect(stagedRoots).toEqual(originalRoots);
+    runtime.destroy();
+    scheduledFrame = undefined;
+    await repository.save(recordWithEnvelope(currentRecord, staged));
+    runtime = await runtimeFactory(repository);
+    expect(runtime.getUIView().saveWarning).toBeUndefined();
+  }
   return {
     runtime, repository, alarmActorId: alarmActor.identity.stableId,
     ...(controlledListenerId === undefined ? {} : { controlledListenerId }),
@@ -13254,7 +13336,7 @@ function advancePlayerSteps(
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
-    if (!callback) throw new Error("runtime did not schedule its next frame");
+    if (!callback) throw new Error(`runtime did not schedule its next frame: ${runtime.getUIView().announcement?.message ?? "no announcement"}`);
     scheduledFrame = undefined;
     callback(nextFrameTime);
     afterFrame?.();
@@ -13268,7 +13350,7 @@ function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
   runtime.start();
   for (let frame = 0; frame < count; frame += 1) {
     const callback = scheduledFrame;
-    if (!callback) throw new Error("runtime did not schedule its next WAIT frame");
+    if (!callback) throw new Error(`runtime did not schedule its next WAIT frame: ${runtime.getUIView().announcement?.message ?? "no announcement"}`);
     scheduledFrame = undefined;
     callback(nextFrameTime);
     nextFrameTime += 100;

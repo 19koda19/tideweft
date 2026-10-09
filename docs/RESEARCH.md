@@ -4909,6 +4909,72 @@ Chart/Relief, natural-rate liveness, current/load/alternative-route breadth,
 performance, package, cumulative, release or whole-directive completion.
 Existing accepted limitations and future-owner boundaries are unchanged.
 
+### Route-bound human hearing fixture reconciliation — 2026-10-09
+
+The exact clean local `b51bef3e474426218ae2e04d696afece2fd31da6` cumulative
+run is terminal **FAIL**, not a certificate:411files (409passed/2failed),
+5104tests (5095passed/9failed/0pending),2205.56s. All731 public non-Markdown
+source/test/configuration/asset inputs and HEAD are unchanged before/after,
+digest `3b6c52c8913c1c4e01cae0481718f2e01ff7c6517dcdb144736a9970b2f78c38`.
+The retained `artifacts/validation/b51bef3-cumulative.json` has SHA256
+`2aa9f4bbc7e9f69a406fd12d1bc086d3484a5fb7af1146b0a912903215ddf3c8`.
+
+All nine failures belong to the two unchanged ecology integration tests.
+Focused reproduction preserves every assertion and adds only the actual
+announcement to a missing-frame error. It reproduces9FAIL in70.47s: eight
+stop at adopted-routine validation and one directly rejects an unbound human
+body. These fixtures put an uncommitted person on a route; current physical
+travel correctly requires a bound in-transit Promise. Coarse membership is
+also no longer an independent acoustic-listener position setter.
+
+The correction changes controlled test geography only. The same free human
+retains settlement membership, identity, knowledge, needs and custody. An
+existing generated route selects a real point/tangent on a temporary copy;
+the actual phase-zero pose and awake/arrival state use the activity/circadian
+owners. Only a genuinely absent complete roster is adopted; partial cohorts,
+consumed histories and unknown capabilities are not repaired. Applicable
+tasks are cleared for the controlled relocation without changing their
+supported versions or suppressing subsequent native selection/movement.
+Real cat rain, goat alarm, keeper reply, guardian warning and remembered-deer
+sources retain their existing producers and exact hearing/refusal, anonymity,
+audio, cold/replay, tamper and rollback checks. No hearing result is injected.
+
+The first corrected selection passes8cases but rejects the deer fixture's
+newly staged current body inside its synthetic historical envelope. The final
+deer-only ordering correction first completes that unchanged historical
+ecology adoption, then stages the body in a current world-only reseal. Every
+non-world/non-integrity root remains exact; no accepted step occurs between
+the two cold stages. Deer subsequently passes its original case in21.98s;
+the original cumulative and intermediate failed reports remain FAIL.
+
+Complete affected-domain validation passes both files, all121tests, in863.53s;
+maintained smoke passes6files/105tests in5.46s. Typecheck and all45 documentation
+reuse checks pass. The731 public non-Markdown inputs and parent HEAD match
+exactly before/after, digest
+`819b7784b1a17ca37537ed7e69c87b4e48c0b85c9e4b8bb7278e48b6dbed2084`.
+Reports in the existing ignored validation owner are
+`hearing-fixture-domain.json` (SHA256
+`23aa7de233962446c1942ed003f4ae5c995b54422c061737c168d970dbf4400d`) and
+`hearing-fixture-smoke.json` (SHA256
+`ef7a9a9e0866535743652c151e613638191aa27d0d5cdc0e1d0841dbe5ef3202`).
+The identical before/after input manifests have SHA256
+`31e644cbbcafa9144ba2166a3a3ca6a11e9c8d7588b24f366191ac56aaecce4a`.
+This repairs the nine reproduced failures without recertifying the complete
+cumulative suite. No manual visual, performance, package, release or
+directive-closure result is claimed. Validation uses unchanged
+Node22.20.0/npm10.9.3 dependencies:
+
+```sh
+npm run typecheck
+npx vitest run src/game/runtime.coreEcology.integration.test.ts src/game/runtime.settlementEcology.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/hearing-fixture-domain.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/hearing-fixture-smoke.json
+```
+
+No production algorithm, body v8/outer58/carry14 schema, supported reader,
+retirement policy, platform/dependency/configuration, game behavior or completed
+directive changes. The repair does not certify cat flood avoidance, general
+NPC equipment, completed travel/environment scope or a new public release.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

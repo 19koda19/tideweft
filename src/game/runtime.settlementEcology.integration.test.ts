@@ -35,8 +35,11 @@ import {
 import type { RootSeed } from "../sim/rng";
 import {
   replaceResidentActivity,
+  residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
+  residentActivitySupportsPickup,
   residentActivitySupportsRations,
+  residentActivitySupportsTravel,
 } from "../sim/residentActivity";
 import {
   FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH,
@@ -185,6 +188,7 @@ import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacement,
 } from "./residentSpatial";
+import { adoptResidentActivities } from "./residentActivityExecution";
 import {
   advanceRuntimeResidentCircadian,
   createTideweftRuntime,
@@ -744,7 +748,7 @@ function advancePlayerSteps(
   runtime.start();
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
-    if (!callback) throw new Error("runtime did not schedule its next frame");
+    if (!callback) throw new Error(`runtime did not schedule its next frame: ${runtime.getUIView().announcement?.message ?? "no announcement"}`);
     scheduledFrame = undefined;
     callback(nextFrameTime);
     afterFrame?.();
@@ -758,7 +762,7 @@ function advanceWaitFrames(runtime: TideweftRuntime, count: number): void {
   runtime.start();
   for (let frame = 0; frame < count; frame += 1) {
     const callback = scheduledFrame;
-    if (!callback) throw new Error("runtime did not schedule its next WAIT frame");
+    if (!callback) throw new Error(`runtime did not schedule its next WAIT frame: ${runtime.getUIView().announcement?.message ?? "no announcement"}`);
     scheduledFrame = undefined;
     callback(nextFrameTime);
     nextFrameTime += 100;
@@ -968,48 +972,82 @@ function withCurrentEnvelopeFields(
   };
 }
 
-/** Controlled phase-zero geography, not an autonomous route/travel claim. */
+/**
+ * Controlled phase-zero BODY placement near generated route geometry, not
+ * route membership, autonomous travel, a Promise or a cargo claim.
+ */
 function stageRouteHearingListener(
   world: WorldState,
   residentId: number,
   location: Extract<ResidentLocation, { kind: "route" }>,
 ): void {
+  const contracts = world.contracts;
+  const events = world.events;
+  const ledger = world.ledger;
+  const bodies = world.residents.filter((resident) => Object.hasOwn(resident, "activity"));
+  if (bodies.length === 0) {
+    // These callers own a genuine saved interval boundary. Adopt the complete
+    // absent cohort through its real owner; never manufacture consumed poses,
+    // downgrade present bodies or erase someone else's continued rest receipt.
+    if (!adoptResidentActivities(world, 0)) {
+      throw new Error("Hearing fixture could not adopt its complete absent body cohort");
+    }
+  } else if (bodies.length !== world.residents.length) {
+    throw new Error("Hearing fixture cannot repair a partial body cohort");
+  }
+  if (!world.residents.every(({ activity }) => activity?.poses.length === 1)) {
+    throw new Error("Hearing fixture requires a genuine phase-zero body cohort");
+  }
+  // Adoption replaces the roster atomically, so do not retain an older slot.
   const index = world.residents.findIndex(({ id }) => id === residentId);
   const resident = world.residents[index];
   if (resident === undefined) throw new Error("Route hearing fixture lost its native human");
-  let staged: ResidentState = { ...resident, location };
-  if (resident.activity !== undefined) {
-    // These counterfactuals start at a saved interval boundary. Never invent
-    // already-consumed poses or discard the body's required circadian root.
-    if (resident.activity.poses.length !== 1 || resident.circadian === undefined) {
-      throw new Error("Route hearing fixture requires a canonical phase-zero body");
-    }
-    const placement = resolveResidentRouteWorldPlacement(world, staged);
-    if (placement === null) throw new Error("Route hearing fixture has no native route locus");
-    staged = replaceResidentActivity(staged, {
-      ...resident.activity,
-      poses: [{ position: placement.position, heading: headingFromRadians(placement.facing) }],
-      // A controlled route relocation revokes settlement service tasks just
-      // like the native coarse transition, without adding newer legacy fields.
-      restTask: null,
-      ...(residentActivitySupportsRations(resident.activity) ? { rationTask: null } : {}),
-      ...(residentActivitySupportsMaterials(resident.activity) ? { materialTask: null } : {}),
-    });
+  if (resident.location.kind !== "settlement" || resident.activeContractId !== null
+    || resident.activity === undefined || resident.circadian === undefined) {
+    throw new Error("Hearing fixture needs an existing free settlement member with a canonical body");
   }
-  if (resident.circadian !== undefined) {
-    staged = replaceResidentCircadian(staged, {
-      atTick: world.meta.completedTick,
-      circadian: {
-        ...resident.circadian,
-        restDestinationArrived: false,
-        posture: { state: "awake", enteredAtTick: world.meta.completedTick },
-      },
-    });
-  }
+  // The temporary copy asks the existing geography owner for a real point and
+  // tangent. It does not enter the world or grant travel/custody authority.
+  const placement = resolveResidentRouteWorldPlacement(world, { ...resident, location });
+  if (placement === null) throw new Error("Route hearing fixture has no native route locus");
+  const pose = { position: placement.position, heading: headingFromRadians(placement.facing) };
+  let staged = replaceResidentActivity(resident, {
+    ...resident.activity,
+    poses: [pose],
+    restTask: null,
+    ...(residentActivitySupportsRations(resident.activity) ? { rationTask: null } : {}),
+    ...(residentActivitySupportsMaterials(resident.activity) ? { materialTask: null } : {}),
+    ...(residentActivitySupportsInspection(resident.activity) ? { inspectionTask: null } : {}),
+    ...(residentActivitySupportsPickup(resident.activity) ? { pickupTask: null } : {}),
+    ...(residentActivitySupportsTravel(resident.activity) ? { travelTask: null } : {}),
+  });
+  staged = replaceResidentCircadian(staged, {
+    atTick: world.meta.completedTick,
+    circadian: {
+      ...resident.circadian,
+      restDestinationArrived: false,
+      posture: { state: "awake", enteredAtTick: world.meta.completedTick },
+    },
+  });
   world.residents[index] = staged;
+  assertWorldInvariants(world);
+  expect(staged.location).toBe(resident.location);
+  expect(staged.activeContractId).toBeNull();
+  expect(staged.identity).toBe(resident.identity);
+  expect(staged.perception).toBe(resident.perception);
+  expect(staged.needs).toBe(resident.needs);
+  expect(staged.condition).toBe(resident.condition);
+  expect(staged.activity?.version).toBe(resident.activity.version);
+  expect(staged.activity?.ownerId).toBe(resident.activity.ownerId);
+  expect(staged.activity?.poses).toEqual([pose]);
+  expect(staged.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+  expect(world.contracts).toBe(contracts);
+  expect(world.events).toBe(events);
+  expect(world.ledger).toBe(ledger);
+  expect(resolveResidentWorldPlacement(world, staged)?.position).toEqual(placement.position);
 }
 
-/** Two real pending vocal sources share one bounded route/dry-crest fixture. */
+/** Two real pending vocal sources share one bounded body/dry-crest fixture. */
 function prepareVocalSurfacePair(
   original: WorldState,
   window: RegionalTerrainWindow,
@@ -2551,10 +2589,9 @@ async function createGoatAlarmRuntime(
       && identity.stableId !== bio0?.porterAddress.actorId
     ));
     if (listener === undefined) throw new Error("Goat fixture lacks an existing free human");
-    // Compatibility humans have a settlement/route location owner, not an
-    // arbitrary world-point setter. Stage this same finite resident on an
-    // actual generated route's closest real segment; preserve all knowledge,
-    // identity, needs and custody. This is controlled placement, not travel.
+    // Use the actual generated route's closest real segment only as geometry
+    // for this finite human's controlled body placement. Its legitimate civic
+    // membership, knowledge, identity, needs and custody remain unchanged.
     let placement: { routeId: number; progress: number; distance: number } | undefined;
     for (const route of world.routes) for (const [offset, tileIndex] of route.path.entries()) {
       if (route.path.length < 2) continue;
@@ -2569,11 +2606,15 @@ async function createGoatAlarmRuntime(
     if (placement === undefined || placement.distance > 10_000) {
       throw new Error("Goat fixture lacks a real nearby human route segment");
     }
-    listener.location = { kind: "route", routeId: placement.routeId, progress: placement.progress };
-    assertWorldInvariants(world);
+    expect((envelope.perceptionCarry as { playerStepsSinceWorldTick: number }).playerStepsSinceWorldTick).toBe(0);
+    stageRouteHearingListener(world, listener.id, {
+      kind: "route", routeId: placement.routeId, progress: placement.progress,
+    });
     listenerActorId = listener.identity.stableId;
-    const physical = resolveResidentWorldPlacement(createWorldView(world), listener);
-    if (physical === null) throw new Error("Goat fixture could not resolve its real human route place");
+    const placedListener = world.residents.find(({ id }) => id === listener.id);
+    if (placedListener === undefined) throw new Error("Goat fixture lost its adopted finite human");
+    const physical = resolveResidentWorldPlacement(createWorldView(world), placedListener);
+    if (physical === null) throw new Error("Goat fixture could not resolve its controlled human body");
     const delta = worldPositionDelta(position, physical.position);
     expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(10_000);
   }
@@ -2818,7 +2859,7 @@ describe("runtime settlement ecology integration", () => {
       const sourceGoats = requireCurrentCoreEcology(saved).populations
         .find(({ species }) => species === "domestic-goat")?.members.map(({ actor }) => actor);
       if (sourceGoats === undefined) throw new Error("Goat hearing fixture lost its finite source");
-      // The same resident's existing route location establishes physical range;
+      // The same resident's existing body pose establishes physical range;
       // only the ensuing ordinary simulation may create a hearing receipt.
       const view = createWorldView(sourceWorld);
       const listener = sourceWorld.residents.find(({ identity }) => (
@@ -2826,7 +2867,7 @@ describe("runtime settlement ecology integration", () => {
       ));
       if (listener === undefined) throw new Error("Goat pen lacks a genuine nearby human listener");
       const placement = resolveResidentWorldPlacement(view, listener);
-      if (placement === null) throw new Error("Goat listener lost its physical route place");
+      if (placement === null) throw new Error("Goat listener lost its controlled physical body");
       const distance = worldPositionDelta(placement.position, sourceGoats[0]!.address.position);
       expect(Math.hypot(distance.x, distance.y)).toBeLessThanOrEqual(10_000);
       const targetTick = sourceWorld.meta.completedTick + 1;
@@ -6323,7 +6364,7 @@ describe("runtime settlement ecology integration", () => {
     reloaded.destroy();
 
     // The already committed world-only bark, not a synthetic call: two saved
-    // route-listener worlds differ by exactly one intervening dry crest.
+    // body-listener worlds differ by exactly one intervening dry crest.
     const warningPlayer = committed.player as PlayerState;
     const warningTravel = restorePlayerRegionalTravel(
       hearingFixtureWorld.meta.rootSeed, warningPlayer, String(committed.regionalTravel),
