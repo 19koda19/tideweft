@@ -4632,8 +4632,9 @@ remain unchanged. [Architecture](./ARCHITECTURE.md#accountable-ordered-resident-
 owns geometry, custody, invalidation, support and legacy law.
 
 The ordinary-runtime witness uses the existing density8 native food133 offer,
-generated route126 and resident94. It controls exclusivity, weather and need
-pressure, not task, body, route geometry, pickup or successful outcome. Real
+generated route126 and the production-selected origin resident. It controls
+exclusivity, weather and need pressure, not task, body, route geometry, pickup
+or successful outcome. Real
 automatic acceptance leads to dry origin approach, one stock-to-cargo debit,
 local movement, actual window exit, bounded macro continuation beyond the old
 ETA, and once-only stock/need/trust/history consequences with retained
@@ -4731,6 +4732,45 @@ slice and keep their existing future owners. Composition remains PARTIAL.
 No whole traveler/directive completion, cat-water fix, new performance pass,
 release or gameplay-order transition is claimed. Extended profiling/soaks remain
 deferred until full Living Foliage, and the accepted Relief/world hitch remains.
+
+### Native traveler interruption and moving-window reentry — 2026-10-08
+
+Test-only follow-up on local `b483199`; production, schemas, dependencies and
+platform configuration are unchanged. An independent native offer/pickup prefix
+reaches a real outside-window body. Explicitly changing only route126's trace
+availability holds that body, heading, cursor, assignment and conserved cargo
+past ETA, with no handoff. Ordinary westward player input rebases the actual
+window from x18 to x2 and admits that same stationary body. Restoring only the
+original availability permits scheduled reassessment, then positive bounded
+local motion. Phase4→9 and phase9→closure cold continuations equal every saved
+root except the existing session recap and integrity field.
+
+This is environmental input, not a claimed player repair. It proves moving-
+window admission and one resumed local interval, not macro entry into a fixed
+window, resumed final handoff, informed-water response or normal visual play.
+The preceding independent native test retains full handoff/rollback coverage.
+
+The first file invocation passed that unchanged original case in54.03s and
+failed the new test's unverified assumption that the survey's resident94 must
+win. Actual production selection chose resident99. The correction follows the
+authenticated native winner without assigning it; all hold/motion/cargo/cold
+assertions remain. A new test helper's closure narrowing was also corrected.
+The original failed report remains failed. The corrected new case passes in
+30.79s,33.03s total, with the original case deliberately unselected:
+
+```sh
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --testNamePattern='holds the same native cargo' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-native-reentry-corrected.json
+npm run typecheck
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-reentry-smoke.json
+```
+
+Typecheck PASS; smoke6files105PASS,4.33s. All728 non-Markdown inputs match before/
+after corrected validation, digest
+`ef607d5e3fd505c68cf597968de8dd6e6e6603f13cba2871084195f6daaaa5d7`.
+Corrected report SHA256
+`c9bc697728784b07057b019fa144ac805de5f3aea57d643ca2a22d7112962e19`.
+No current cumulative, build, manual, performance, release or directive-closure
+claim follows from these finite correctness witnesses.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 

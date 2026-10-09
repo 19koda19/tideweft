@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
+import { routeIsActive } from "../sim/network";
 import {
   assertWorldInvariants,
   deserializeWorld,
@@ -140,6 +141,11 @@ function authoritativeRoots(envelope: Envelope): unknown {
   // perception, custody, ecology, player and every other saved root must agree.
   const { integrity: _integrity, session: _session, ...roots } = envelope;
   return roots;
+}
+
+function recordWith(record: SaveRecord, envelope: Envelope): SaveRecord {
+  envelope.integrity = gameSaveEnvelopeIntegrity(envelope);
+  return { ...record, payloadVersion: envelope.version, worldJson: JSON.stringify(envelope) };
 }
 
 function contract(world: WorldState, id: number): ContractState {
@@ -503,5 +509,220 @@ describe("ordinary runtime conserved resident travel", () => {
     await retry.save();
     expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(macroReference));
     step.mockRestore();
+  }, 180_000);
+
+  it("holds the same native cargo and body past ETA, reenters through ordinary player motion and retries with equal cold work", async () => {
+    const fixture = await nativeFixture();
+    const { runtime, repository } = fixture;
+    advance(runtime, 10);
+    await runtime.save();
+    const accepted = deserializeWorld(decode(repository.snapshot()).world);
+    const acceptedContract = contract(accepted, fixture.contractId);
+    expect(acceptedContract).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+    if (acceptedContract.assignedResidentId === null) throw new Error("Native acceptance did not choose a courier");
+    const residentId = acceptedContract.assignedResidentId;
+    const source = fixture.sources.get(residentId);
+    if (source === undefined) throw new Error("Automatic winner is not a native source resident");
+    // Follow the production selector's native winner, not the earlier route
+    // survey's candidate; no resident assignment is controlled by this test.
+    const actorId = source.actorId;
+    const originalStep = simulation.stepWorld;
+    const observed = { offWindow: false };
+    const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = originalStep(...args);
+      const commitment = contract(result, fixture.contractId);
+      const human = actor(result, actorId);
+      if (commitment.status === "in-transit"
+        && !residentTravelBodyIsLocal(fixture.frame, human.activity!.poses.at(-1)!.position)) {
+        observed.offWindow = true;
+      }
+      return result;
+    });
+    // Reproduce only the native prefix needed by this independent witness.
+    // The original test above owns full journey/handoff and rollback coverage.
+    for (let interval = 0; interval < 120 && !observed.offWindow; interval += 1) advance(runtime, 10);
+    expect(observed.offWindow).toBe(true);
+    await runtime.save();
+    const offWindowRecord = repository.snapshot();
+    const offWindowEnvelope = decode(offWindowRecord);
+    const offWindow = deserializeWorld(offWindowEnvelope.world);
+    expect(offWindowEnvelope.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const traveling = contract(offWindow, fixture.contractId);
+    const nativeHuman = actor(offWindow, actorId);
+    expect(traveling).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity,
+      carrierKind: "resident", assignedResidentId: residentId, porterRouteIds: [126] });
+    expect(nativeHuman.activity?.travelTask).toMatchObject({ mode: "physical", phase: "approaching" });
+    const heldPose = nativeHuman.activity!.poses[0]!;
+    const originalBody = structuredClone(nativeHuman.activity);
+    const heldLocation = structuredClone(nativeHuman.location);
+    const heldDistance = routeDistance(offWindow, traveling, nativeHuman);
+    const heldTask = nativeHuman.activity!.travelTask;
+    if (heldTask?.mode !== "physical") throw new Error("Native journey has no physical cursor");
+    expect(residentTravelBodyIsLocal(fixture.frame, heldPose.position)).toBe(false);
+    expect(heldDistance).toBeGreaterThan(0);
+    const nativeRoute = offWindow.routes.find(({ id }) => id === 126)!;
+    expect(routeIsActive(nativeRoute)).toBe(true);
+    const originalTrace = nativeRoute.traceStrength;
+    close(runtime);
+    step.mockRestore();
+
+    // Explicit environment-availability input, not a player repair operation.
+    // Keep native path, terrain, stock, identity, custody, body and task intact.
+    nativeRoute.traceStrength = 0;
+    expect(routeIsActive(nativeRoute)).toBe(false);
+    expect(actor(offWindow, actorId).activity).toEqual(originalBody);
+    assertWorldInvariants(offWindow);
+    offWindowEnvelope.world = serializeWorld(offWindow);
+    const blockedInput = recordWith(offWindowRecord, offWindowEnvelope);
+    const blockedRepository = new MemoryRepository(blockedInput);
+    const blocked = await open(blockedRepository);
+    await blocked.save();
+    expect(authoritativeRoots(decode(blockedRepository.snapshot()))).toEqual(authoritativeRoots(offWindowEnvelope));
+
+    const expectHeld = (world: WorldState): void => {
+      const commitment = contract(world, fixture.contractId);
+      const human = actor(world, actorId);
+      expect(commitment).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity,
+        carrierKind: "resident", assignedResidentId: residentId, departedTick: traveling.departedTick,
+        arrivalTick: traveling.arrivalTick, completedTick: null });
+      expect(human.activeContractId).toBe(fixture.contractId);
+      expect(human.identity.stableId).toBe(actorId);
+      expect(human.activity?.poses.length).toBeGreaterThan(0);
+      for (const pose of human.activity!.poses) expect(pose).toEqual(heldPose);
+      expect(human.location).toEqual(heldLocation);
+      expect(routeDistance(world, commitment, human)).toBe(heldDistance);
+      expect(human.activity?.travelTask).toMatchObject({ mode: "physical", contractId: fixture.contractId,
+        legIndex: heldTask.legIndex, waypointIndex: heldTask.waypointIndex,
+        selectedAtTick: heldTask.selectedAtTick, lastProgressAtTick: heldTask.lastProgressAtTick,
+        phase: "waiting", waitReason: "no-active-route" });
+      expect(world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === fixture.contractId)).toHaveLength(1);
+      expect(world.events.filter(({ type, subjectId }) => type === "contract-fulfilled" && subjectId === fixture.contractId)).toHaveLength(0);
+      assertWorldInvariants(world);
+    };
+
+    advance(blocked, 10);
+    await blocked.save();
+    const held = deserializeWorld(decode(blockedRepository.snapshot()).world);
+    expectHeld(held);
+    expect(held.meta.completedTick).toBeGreaterThan(traveling.arrivalTick!);
+    const startView = blocked.getRenderView();
+    const startOrigin = startView.terrain.worldTileOrigin;
+    if (startOrigin === undefined) throw new Error("Native player has no regional frame");
+    const initialPlayerX = startOrigin.x + startView.player.position.x / startView.terrain.tileSize;
+    const initialPlayerY = startOrigin.y + startView.player.position.y / startView.terrain.tileSize;
+    expect(startOrigin).toEqual({ x: 18, y: -1 });
+    expect(Math.floor(initialPlayerX)).toBe(78);
+    expect(Math.floor(initialPlayerY)).toBe(59);
+    blocked.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+    let movingSteps = 0;
+    while (blocked.getRenderView().terrain.worldTileOrigin?.x === 18 && movingSteps < 200) {
+      advance(blocked, 1);
+      movingSteps += 1;
+    }
+    blocked.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    expect(movingSteps).toBeGreaterThan(0);
+    expect(movingSteps).toBeLessThan(200);
+    const movedView = blocked.getRenderView();
+    const movedOrigin = movedView.terrain.worldTileOrigin;
+    expect(movedOrigin).toEqual({ x: 2, y: -1 });
+    expect(movedView.terrain).toMatchObject({ columns: 120, rows: 120 });
+    expect(movedOrigin!.x + movedView.player.position.x / movedView.terrain.tileSize).toBeLessThan(70);
+    expect(movedOrigin!.y + movedView.player.position.y / movedView.terrain.tileSize).toBe(initialPlayerY);
+    await blocked.save();
+    const rebased = decode(blockedRepository.snapshot());
+    expectHeld(deserializeWorld(rebased.world));
+    expect(JSON.parse(rebased.regionalTravel).origin).toEqual(movedOrigin);
+    const actualFrame = residentTravelInteractionFrame({ origin: movedOrigin!,
+      terrain: { width: movedView.terrain.columns, height: movedView.terrain.rows } });
+    if (actualFrame === null) throw new Error("Ordinary player motion did not supply a physical frame");
+    expect(residentTravelBodyIsLocal(actualFrame, heldPose.position)).toBe(true);
+    // Physical admission is not direct sight; the test grants no observation,
+    // actor identification or player knowledge for this distant traveler.
+    const remaining = (10 - rebased.perceptionCarry.playerStepsSinceWorldTick) % 10;
+    if (remaining > 0) advance(blocked, remaining);
+    await blocked.save();
+    const readyRecord = blockedRepository.snapshot();
+    const ready = decode(readyRecord);
+    const readyWorld = deserializeWorld(ready.world);
+    expect(ready.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expectHeld(readyWorld);
+    expect(readyWorld.routes.find(({ id }) => id === 126)?.traceStrength).toBe(0);
+    close(blocked);
+
+    // Restore only the saved native availability, never the task, body, clock,
+    // successful work or an imagined physical repair receipt.
+    const readyBody = structuredClone(actor(readyWorld, actorId).activity);
+    readyWorld.routes.find(({ id }) => id === 126)!.traceStrength = originalTrace;
+    expect(routeIsActive(readyWorld.routes.find(({ id }) => id === 126)!)).toBe(true);
+    expect(actor(readyWorld, actorId).activity).toEqual(readyBody);
+    assertWorldInvariants(readyWorld);
+    ready.world = serializeWorld(readyWorld);
+    const retryRepository = new MemoryRepository(recordWith(readyRecord, ready));
+    const retry = await open(retryRepository);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(ready));
+    advance(retry, 9);
+    await retry.save();
+    const duePrefix = decode(retryRepository.snapshot());
+    expect(duePrefix.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expectHeld(deserializeWorld(duePrefix.world));
+    advance(retry, 1);
+    await retry.save();
+    const reassessed = deserializeWorld(decode(retryRepository.snapshot()).world);
+    expect(reassessed.meta.completedTick).toBe(readyWorld.meta.completedTick + 1);
+    const reassessedHuman = actor(reassessed, actorId);
+    expect(reassessedHuman.activity?.poses[0]).toEqual(heldPose);
+    expect(reassessedHuman.location).toEqual(heldLocation);
+    expect(reassessedHuman.activity?.travelTask).toMatchObject({ mode: "physical", phase: "approaching",
+      waitReason: null, selectedAtTick: heldTask.selectedAtTick,
+      legIndex: heldTask.legIndex, waypointIndex: heldTask.waypointIndex });
+    expect(contract(reassessed, fixture.contractId).cargoQuantity).toBe(fixture.quantity);
+
+    const coldRecords = new Map<number, SaveRecord>();
+    const partials = new Map<number, Envelope>();
+    for (const [phase, count] of [[4, 4], [9, 5]] as const) {
+      advance(retry, count);
+      await retry.save();
+      const record = retryRepository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      const human = actor(world, actorId);
+      expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(phase);
+      expect(human.activity?.poses).toHaveLength(phase + 1);
+      expect(human.activity?.poses[0]).toEqual(heldPose);
+      expect(human.activity?.poses.at(-1)?.position).not.toEqual(heldPose.position);
+      expect(residentTravelBodyIsLocal(actualFrame, human.activity!.poses.at(-1)!.position)).toBe(true);
+      expect(boundedFineWork(human)).toBeGreaterThan(0);
+      expect(routeDistance(world, contract(world, fixture.contractId), human)).toBeGreaterThan(heldDistance);
+      expect(routeDistance(world, contract(world, fixture.contractId), human) - heldDistance)
+        .toBeLessThanOrEqual(phase * RESIDENT_REST_APPROACH_STEP_UNITS);
+      expect(human.activity?.travelTask).toMatchObject({ mode: "physical", selectedAtTick: heldTask.selectedAtTick });
+      expect(contract(world, fixture.contractId)).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity });
+      expect(world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === fixture.contractId)).toHaveLength(1);
+      expect(world.events.filter(({ type, subjectId }) => type === "contract-fulfilled" && subjectId === fixture.contractId)).toHaveLength(0);
+      assertWorldInvariants(world);
+      coldRecords.set(phase, record);
+      partials.set(phase, envelope);
+    }
+    advance(retry, 1);
+    await retry.save();
+    const reference = decode(retryRepository.snapshot());
+    close(retry);
+
+    const phase4Repository = new MemoryRepository(coldRecords.get(4)!);
+    const phase4 = await open(phase4Repository);
+    await phase4.save();
+    expect(authoritativeRoots(decode(phase4Repository.snapshot()))).toEqual(authoritativeRoots(partials.get(4)!));
+    advance(phase4, 5);
+    await phase4.save();
+    expect(authoritativeRoots(decode(phase4Repository.snapshot()))).toEqual(authoritativeRoots(partials.get(9)!));
+    close(phase4);
+    const phase9Repository = new MemoryRepository(coldRecords.get(9)!);
+    const phase9 = await open(phase9Repository);
+    await phase9.save();
+    expect(authoritativeRoots(decode(phase9Repository.snapshot()))).toEqual(authoritativeRoots(partials.get(9)!));
+    advance(phase9, 1);
+    await phase9.save();
+    expect(authoritativeRoots(decode(phase9Repository.snapshot()))).toEqual(authoritativeRoots(reference));
   }, 180_000);
 });
