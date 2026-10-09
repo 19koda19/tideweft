@@ -5633,6 +5633,54 @@ inputs, not this candidate. No new build, platform, normal-visual, performance,
 release or whole-integration closure is claimed; historical directives remain
 unchanged.
 
+### Untouched-world first-hour material work — 2026-10-09
+
+A test-only runtime witness at local parent `9c0572c13786f2ad55362d3050ef8b6d08138a97`
+starts `runtime baseline estuary` through ordinary `new-world`. The command's
+legacy `journey` field does not change the current runtime's forced hard/gale,
+wild-pressure perpetual preset. No needs, weather, stock, recipe, offer, body,
+task, route, worker or decision result is assigned. The original fourteen cases
+and their helpers remain unchanged.
+
+599 accepted fixed steps reach tick479/phase9 without civic project credit.
+The next real step closes480 and at least one previously arrived resident uses
+the actual project's finite material at its dry authenticated site. A read-only
+observer captures that single production `stepWorld` call; it neither runs a
+second simulator nor alters ordering or RNG. Every site's project delta is0/1
+and matches its actual used worker. Stock and ledger accounting includes native
+due recipes, then the one-unit contribution: scheduled production is not
+disabled or misreported as physical labor. All generated resident identities
+remain unchanged; no Promise fulfillment or transit cargo is invented.
+
+Detached479/phase9 load plus the same one accepted step matches every saved
+authoritative root except the existing session recap and outer integrity
+exclusions. A consumed480 reload neither replays audio nor duplicates credit;
+the next ordinary interval preserves stock, projects and ledger. This is one
+stationary seed's mocked-clock first hourly material pulse, not native ration,
+all-service/fairness acceptance, rendered play, performance or directive closure.
+
+Focused1case passes26.16s; full affected runtime/material integration passes
+2files/30tests in107.68s, with the native case23.89s. Lower material tests pass
+19cases; maintained smoke passes6files/105tests in4.11s; typecheck and
+45documentation-reuse self-tests pass. Actual commands, excluding reporters:
+
+```sh
+npx vitest run src/game/runtime.residentRest.integration.test.ts -t 'uses native first-hour civic material' --maxWorkers=1
+npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/residentMaterialActivity.integration.test.ts src/sim/residentMaterialUse.test.ts --maxWorkers=2
+npx vitest run src/sim/residentMaterialActivity.test.ts --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+The domain command's unmatched `residentMaterialUse.test.ts` pattern supplies
+no coverage; the following real lower test owner supplies the19cases. All731
+public non-Markdown inputs match before/after, digest
+`3d58832f712ca5546fa230103eadd0a9d3bba98831551f1ea3a825a243e49ac6`.
+Production, timing, schemas, supported formats, dependencies and configuration
+are unchanged. Prior cumulative evidence certifies its own inputs only; no new
+cumulative, artifact/platform, release or historical-directive change is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
